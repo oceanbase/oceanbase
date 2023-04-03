@@ -65,7 +65,32 @@ TEST(OB_ADDR, TEST1)
   ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
 }
 
-int main(int argc, char* argv[])
+TEST(OB_ADDR, TEST_UNIX_PATH)
+{
+  ObAddr addr;
+  char buffer[128];
+
+  EXPECT_FALSE(addr.set_unix_addr(NULL));
+  EXPECT_FALSE(addr.is_valid());
+  
+  char path0[] = "";
+  EXPECT_TRUE(addr.set_unix_addr(path0));
+  EXPECT_FALSE(addr.is_valid());
+  addr.ip_to_string(buffer, sizeof(buffer));
+  ASSERT_EQ(strcmp("unix:", buffer), 0);
+
+  char path1[] = "/path/to/file";
+  EXPECT_TRUE(addr.set_unix_addr(path1));
+  EXPECT_TRUE(addr.is_valid());
+  ASSERT_EQ(strcmp(path1, addr.get_unix_path()), 0);
+  addr.ip_to_string(buffer, sizeof(buffer));
+  ASSERT_EQ(strcmp("unix:/path/to/file", buffer), 0);
+
+  char path2[] = "1234567890123456"; // strlen(path2) = 16
+  EXPECT_FALSE(addr.set_unix_addr(path2));
+}
+
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

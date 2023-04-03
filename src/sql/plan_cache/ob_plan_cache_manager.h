@@ -17,42 +17,51 @@
 #include "lib/hash/ob_hashmap.h"
 #include "ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-namespace test {
+namespace test
+{
 void test_plan_cache_manager();
 }
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObPlanCache;
 
-class ObPlanCacheManager {
+class ObPlanCacheManager
+{
 public:
-  typedef common::hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
-  typedef common::hash::ObHashMap<uint64_t, ObPsCache*> PsPlanCacheMap;
+  typedef common::hash::ObHashMap<uint64_t, ObPlanCache *> PlanCacheMap;
+  typedef common::hash::ObHashMap<uint64_t, ObPsCache *> PsPlanCacheMap;
 
-  class ObPlanCacheEliminationTask : public common::ObTimerTask {
+  class ObPlanCacheEliminationTask : public common::ObTimerTask
+  {
   public:
-    ObPlanCacheEliminationTask() : plan_cache_manager_(NULL), run_task_counter_(0)
-    {}
+    ObPlanCacheEliminationTask() : plan_cache_manager_(NULL),
+                                   run_task_counter_(0)
+    {
+    }
     // main routine
     void runTimerTask(void);
-
   private:
     void run_plan_cache_task();
     void run_ps_cache_task();
     void run_free_cache_obj_task();
-
+    void run_auto_flush_plan_cache_task();
   public:
-    ObPlanCacheManager* plan_cache_manager_;
+    ObPlanCacheManager *plan_cache_manager_;
     int64_t run_task_counter_;
   };
 
-  struct ObGetAllCacheKeyOp {
-    explicit ObGetAllCacheKeyOp(common::ObIArray<uint64_t>* key_array) : key_array_(key_array)
-    {}
+  struct ObGetAllCacheKeyOp
+  {
+    explicit ObGetAllCacheKeyOp(common::ObIArray<uint64_t> *key_array)
+      : key_array_(key_array)
+    {
+    }
 
-    template <class T>
-    int operator()(common::hash::HashMapPair<uint64_t, T*>& entry)
+    template<class T>
+    int operator()(common::hash::HashMapPair<uint64_t, T *> &entry)
     {
       int ret = common::OB_SUCCESS;
       if (OB_ISNULL(key_array_)) {
@@ -64,61 +73,53 @@ public:
       return ret;
     }
 
-    common::ObIArray<uint64_t>* key_array_;
+    common::ObIArray<uint64_t> *key_array_;
   };
 
 public:
-  ObPlanCacheManager()
-      : partition_location_cache_(NULL), tg_id_(-1), inited_(false), destroyed_(false), plan_cache_id_(0){};
-  virtual ~ObPlanCacheManager()
-  {
-    destroy();
-  }
+  ObPlanCacheManager():tg_id_(-1),
+                       inited_(false),
+                       destroyed_(false),
+                       plan_cache_id_(0)
+  {};
+  virtual ~ObPlanCacheManager() { destroy(); }
 
-  int init(share::ObIPartitionLocationCache* plc, common::ObAddr addr);
+  int init(common::ObAddr addr);
   void destroy();
 
   // get tenant plan cache, if not exists, create a new plan cache
-  ObPlanCache* get_or_create_plan_cache(uint64_t tenant_id, const ObPCMemPctConf& pc_mem_conf);
-  ObPsCache* get_or_create_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf& pc_mem_conf);
+  ObPlanCache *get_or_create_plan_cache(uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
+  ObPsCache *get_or_create_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
 
-  int validate_plan_cache(const uint64_t& tenant_id);
-  int revert_plan_cache(const uint64_t& tenant_id);
-  int revert_ps_cache(const uint64_t& tenant_id);
+  int revert_plan_cache(const uint64_t &tenant_id);
+  int revert_ps_cache(const uint64_t &tenant_id);
   int flush_all_plan_cache();
+  int flush_all_lib_cache();
+  int flush_all_lib_cache_by_ns(ObLibCacheNameSpace ns);
   int flush_plan_cache(const uint64_t tenant_id);
+  int flush_plan_cache_by_sql_id(uint64_t tenant_id, uint64_t db_id, common::ObString sql_id);
   int flush_all_pl_cache();
   int flush_pl_cache(const uint64_t tenant_id);
   int flush_all_ps_cache();
   int flush_ps_cache(const uint64_t tenant_id);
+  int flush_lib_cache(const uint64_t tenant_id);
+  int flush_lib_cache_by_ns(const uint64_t tenant_id, const ObLibCacheNameSpace ns);
+  int evict_plan_by_table_name(uint64_t tenant_id, uint64_t database_id, common::ObString tab_name);
 
-  // load baseline from plan cache
-  int load_baseline_from_all_pc();
-  int load_baseline_from_pc(const uint64_t& tenant_id);
-  int load_baseline_from_pc(const obrpc::ObLoadBaselineArg& arg);
 
-  PlanCacheMap& get_plan_cache_map()
-  {
-    return pcm_;
-  }
-  PsPlanCacheMap& get_ps_cache_map()
-  {
-    return ps_pcm_;
-  }
+  PlanCacheMap &get_plan_cache_map() {return pcm_;}
+  PsPlanCacheMap &get_ps_cache_map() {return ps_pcm_; }
   // get tenant plan cache, if not exists, return NULL
   // only used when revert plan cache
-  ObPlanCache* get_plan_cache(uint64_t tenant_id);
-  ObPsCache* get_ps_cache(const uint64_t tenant_id);
-
+  ObPlanCache *get_plan_cache(uint64_t tenant_id);
+  ObPsCache *get_ps_cache(const uint64_t tenant_id);
 private:
-  enum PlanCacheGCStrategy { INVALID = -1, OFF = 0, REPORT = 1, AUTO = 2 };
+enum PlanCacheGCStrategy { INVALID = -1, OFF = 0, REPORT = 1, AUTO = 2};
 
   static int get_plan_cache_gc_strategy();
   friend void ::test::test_plan_cache_manager();
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheManager);
-
 private:
-  share::ObIPartitionLocationCache* partition_location_cache_;
   common::ObAddr self_addr_;
   PlanCacheMap pcm_;
   PsPlanCacheMap ps_pcm_;
@@ -127,18 +128,17 @@ private:
   bool inited_;
   bool destroyed_;
   volatile uint64_t plan_cache_id_;
-};  // end of class ObPlanCaeManager
+}; // end of class ObPlanCaeManager
 
-class ObPlanCacheManagerAtomic {
+class ObPlanCacheManagerAtomic
+{
 public:
-  typedef common::hash::HashMapPair<uint64_t, ObPlanCache*> MapKV;
-
+  typedef common::hash::HashMapPair<uint64_t, ObPlanCache *> MapKV;
 public:
-  ObPlanCacheManagerAtomic() : plan_cache_(NULL){};
-  virtual ~ObPlanCacheManagerAtomic(){};
+  ObPlanCacheManagerAtomic():plan_cache_(NULL) {};
+  virtual ~ObPlanCacheManagerAtomic() {};
 
-  int operator()(MapKV& entry)
-  {
+  int operator() (MapKV &entry) {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(entry.second)) {
       ret = common::OB_INVALID_ARGUMENT;
@@ -150,27 +150,24 @@ public:
     return ret;
   }
 
-  ObPlanCache* get_plan_cache()
+  ObPlanCache *get_plan_cache()
   {
     return plan_cache_;
   }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheManagerAtomic);
-
 private:
-  ObPlanCache* plan_cache_;
-};  // end of class ObPlanCacheManagerAtomic
+  ObPlanCache *plan_cache_;
+}; // end of class ObPlanCacheManagerAtomic
 
-class ObPsCacheManagerAtomic {
+class ObPsCacheManagerAtomic
+{
 public:
-  typedef common::hash::HashMapPair<uint64_t, ObPsCache*> MapKV;
-  ObPsCacheManagerAtomic() : ps_cache_(NULL){};
-  virtual ~ObPsCacheManagerAtomic()
-  {}
+  typedef common::hash::HashMapPair<uint64_t, ObPsCache *> MapKV;
+  ObPsCacheManagerAtomic() : ps_cache_(NULL) {};
+  virtual ~ObPsCacheManagerAtomic() {}
 
-  int operator()(MapKV& entry)
-  {
+  int operator() (MapKV &entry) {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(entry.second)) {
       ret = common::OB_INVALID_ARGUMENT;
@@ -181,17 +178,13 @@ public:
     }
     return ret;
   }
-  ObPsCache* get_ps_cache() const
-  {
-    return ps_cache_;
-  }
-
+  ObPsCache *get_ps_cache() const { return ps_cache_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPsCacheManagerAtomic);
-  ObPsCache* ps_cache_;
+  ObPsCache *ps_cache_;
 };
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} // end of namespace sql
+} // end of namespace oceanbase
 
 #endif /* _OB_PLAN_CACHE_MANAGER_H_ */

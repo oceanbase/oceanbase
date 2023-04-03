@@ -16,27 +16,29 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_se_array.h"
 #include "share/ob_rpc_struct.h"
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObPartition;
 class ObSubPartition;
-}  // namespace schema
-}  // namespace share
-namespace sql {
+}
+}
+namespace sql
+{
 class ObRawExpr;
 
-#define DEF_SIMPLE_EXECUTOR(name)                      \
-  class name##Executor {                               \
-  public:                                              \
-    name##Executor()                                   \
-    {}                                                 \
-    virtual ~name##Executor()                          \
-    {}                                                 \
-    int execute(ObExecContext& ctx, name##Stmt& stmt); \
-                                                       \
-  private:                                             \
-    DISALLOW_COPY_AND_ASSIGN(name##Executor);          \
+#define DEF_SIMPLE_EXECUTOR(name)                          \
+  class name##Executor                                     \
+  {                                                        \
+  public:                                                  \
+    name##Executor() {}                                    \
+    virtual ~name##Executor() {}                           \
+    int execute(ObExecContext &ctx, name##Stmt &stmt);     \
+  private:                                                 \
+    DISALLOW_COPY_AND_ASSIGN(name##Executor);              \
   }
 
 class ObExecContext;
@@ -47,16 +49,16 @@ class ObDropTablegroupStmt;
 DEF_SIMPLE_EXECUTOR(ObDropTablegroup);
 
 class ObAlterTablegroupStmt;
-class ObAlterTablegroupExecutor {
+class ObAlterTablegroupExecutor
+{
 public:
-  ObAlterTablegroupExecutor()
-  {}
-  virtual ~ObAlterTablegroupExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObAlterTablegroupStmt& stmt);
-
+  ObAlterTablegroupExecutor() {}
+  virtual ~ObAlterTablegroupExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterTablegroupStmt &stmt);
 private:
-  int check_alter_partition(ObExecContext& ctx, ObAlterTablegroupStmt& stmt, const obrpc::ObAlterTablegroupArg& arg);
+  int check_alter_partition(ObExecContext &ctx,
+                            ObAlterTablegroupStmt &stmt,
+                            const obrpc::ObAlterTablegroupArg &arg);
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupExecutor);
 };
 

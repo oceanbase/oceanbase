@@ -17,14 +17,20 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-ObSessionVariables::ObSessionVariables() : ObVirtualTableScannerIterator(), sys_variable_schema_(NULL)
-{}
+ObSessionVariables::ObSessionVariables()
+    : ObVirtualTableScannerIterator(),
+      sys_variable_schema_(NULL)
+{
+}
 
 ObSessionVariables::~ObSessionVariables()
-{}
+{
+}
 
 void ObSessionVariables::reset()
 {
@@ -32,57 +38,60 @@ void ObSessionVariables::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObSessionVariables::inner_get_next_row(ObNewRow*& row)
+int ObSessionVariables::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator_) || OB_ISNULL(session_) || OB_ISNULL(sys_variable_schema_) || OB_ISNULL(cur_row_.cells_)) {
+  if (OB_ISNULL(allocator_)
+      || OB_ISNULL(session_)
+      || OB_ISNULL(sys_variable_schema_)
+      || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(
         WARN, "data member is NULL", K(ret), K(allocator_), K(session_), K_(sys_variable_schema), K(cur_row_.cells_));
   } else if (OB_UNLIKELY(cur_row_.count_ < output_column_ids_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN,
-        "cells count is less than output column count",
-        K(ret),
-        K(cur_row_.count_),
-        K(output_column_ids_.count()));
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN,
+                   "cells count is less than output column count",
+                   K(ret),
+                   K(cur_row_.count_),
+                   K(output_column_ids_.count()));
   } else {
     if (!start_to_read_) {
-      ObObj* cells = cur_row_.cells_;
+      ObObj *cells = cur_row_.cells_;
       ObString sys_var_show_str;
       for (int64_t i = 0; OB_SUCC(ret) && i < session_->get_sys_var_count(); ++i) {
-        const ObBasicSysVar* sys_var = NULL;
+        const ObBasicSysVar *sys_var = NULL;
         if (OB_UNLIKELY(NULL == (sys_var = session_->get_sys_var(i)))) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "sys var is NULL", K(ret), K(i));
         } else if (sys_var->is_invisible()) {
           // invisible, skip
         } else if (sys_var->is_oracle_only() && !session_->is_oracle_compatible()) {
-          // skip oracle variable in mysql mode
+          //skip oracle variable in mysql mode
         } else if (sys_var->is_mysql_only() && session_->is_oracle_compatible()) {
-          // skip mysql variable in oracle mode
+          //skip mysql variable in oracle mode
         } else {
           uint64_t cell_idx = 0;
           for (int64_t j = 0; OB_SUCC(ret) && j < output_column_ids_.count(); ++j) {
             uint64_t col_id = output_column_ids_.at(j);
-            switch (col_id) {
+            switch(col_id) {
               case OB_APP_MIN_COLUMN_ID: {
                 cells[cell_idx].set_varchar(sys_var->get_name());
                 cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                 break;
               }
               case OB_APP_MIN_COLUMN_ID + 1: {
-                // deal with read_only
+                //deal with read_only
                 if (share::SYS_VAR_READ_ONLY == sys_var->get_type()) {
-                  // replace with tenant schema
+                  //replace with tenant schema
                   if (sys_variable_schema_->is_read_only()) {
                     cells[cell_idx].set_varchar("ON");
                   } else {
                     cells[cell_idx].set_varchar("OFF");
                   }
-                } else if (share::SYS_VAR_OB_PLAN_CACHE_PERCENTAGE == sys_var->get_type() ||
-                           share::SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE == sys_var->get_type() ||
-                           share::SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE == sys_var->get_type()) {
+                } else if (share::SYS_VAR_OB_PLAN_CACHE_PERCENTAGE == sys_var->get_type()
+                           || share::SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE == sys_var->get_type()
+                           || share::SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE == sys_var->get_type()) {
                   if (OB_FAIL(set_pc_conf(sys_var, cells[cell_idx]))) {
                     SERVER_LOG(WARN, "fail to set plan cache conf", K(ret), K(*sys_var));
                   }
@@ -95,8 +104,7 @@ int ObSessionVariables::inner_get_next_row(ObNewRow*& row)
                   }
                 }
                 if (OB_SUCC(ret)) {
-                  cells[cell_idx].set_collation_type(
-                      ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                  cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                 }
                 break;
               }
@@ -133,20 +141,20 @@ int ObSessionVariables::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-int ObSessionVariables::set_pc_conf(const ObBasicSysVar* sys_var, ObObj& cell)
+int ObSessionVariables::set_pc_conf(const ObBasicSysVar *sys_var, ObObj &cell)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sys_var) || OB_ISNULL(allocator_) || OB_ISNULL(session_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(sys_var), K(session_), K(ret));
   } else {
-    char* buff = NULL;
+    char *buff = NULL;
     int64_t pos = 0;
-    ObPlanCache* pc = session_->get_plan_cache();
+    ObPlanCache *pc = session_->get_plan_cache();
     if (OB_ISNULL(pc)) {
       ret = OB_INVALID_ARGUMENT;
       SERVER_LOG(WARN, "invalid argument", K(pc), K(ret));
-    } else if (NULL == (buff = static_cast<char*>(allocator_->alloc(OB_MAX_CONFIG_VALUE_LEN)))) {
+    } else if (NULL == (buff = static_cast<char *>(allocator_->alloc(OB_MAX_CONFIG_VALUE_LEN)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SERVER_LOG(ERROR, "fail to alloc mem for plan cache conf", K(ret));
     } else if (share::SYS_VAR_OB_PLAN_CACHE_PERCENTAGE == sys_var->get_type()) {
@@ -178,5 +186,5 @@ int ObSessionVariables::set_pc_conf(const ObBasicSysVar* sys_var, ObObj& cell)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

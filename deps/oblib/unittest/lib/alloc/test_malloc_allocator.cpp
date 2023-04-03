@@ -16,59 +16,51 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-TEST(TestMallocAllocator, create_tenant_ctx_allocator)
+TEST(TestMallocAllocator, create_and_add_tenant_allocator)
 {
-  ObMallocAllocator* malloc_allocator = ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->init());
+  ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
   const int64_t limit = 10 * 1000 * 1000;
   const uint64_t small_tenant_id = 200;
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(small_tenant_id, 0));
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(small_tenant_id));
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_limit(small_tenant_id, limit));
   ASSERT_EQ(limit, malloc_allocator->get_tenant_limit(small_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(small_tenant_id, 0));
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(small_tenant_id));
   ASSERT_EQ(limit, malloc_allocator->get_tenant_limit(small_tenant_id));
 
   const uint64_t big_tenant_id = 20000 + 10000;
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(big_tenant_id, 0));
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(big_tenant_id));
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_limit(big_tenant_id, limit));
   ASSERT_EQ(limit, malloc_allocator->get_tenant_limit(big_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(big_tenant_id, 0));
+  ASSERT_EQ(OB_ENTRY_EXIST, malloc_allocator->create_and_add_tenant_allocator(big_tenant_id));
   ASSERT_EQ(limit, malloc_allocator->get_tenant_limit(big_tenant_id));
 
   const uint64_t tenant_id = 20000;
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(tenant_id, 0));
-  ObTenantCtxAllocator* tenant_allocator = malloc_allocator->get_tenant_ctx_allocator(big_tenant_id, 0);
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
+  auto tenant_allocator = malloc_allocator->get_tenant_ctx_allocator(big_tenant_id, ObCtxIds::DEFAULT_CTX_ID);
   ASSERT_TRUE(NULL != tenant_allocator);
 
-  // dump meta
-  system("rm -rf log");
-  system("mkdir log");
-  const static char* file_name = "log/MMETA";
-  ASSERT_EQ(OB_INVALID_ARGUMENT, malloc_allocator->dump_meta(nullptr));
-  int ret = malloc_allocator->dump_meta(file_name);
-  ASSERT_EQ(ret, OB_SUCCESS);
-  system("rm -rf log");
 }
 
 TEST(TestMallocAllocator, idle)
 {
-  ObMallocAllocator* malloc_allocator = ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->init());
-  const uint64_t tenant_id = 200;
+  ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
+  const uint64_t tenant_id = 201;
   const uint64_t ctx_id = 1;
 
-  ASSERT_EQ(OB_TENANT_NOT_EXIST, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id, OB_MALLOC_BIG_BLOCK_SIZE));
+  ASSERT_EQ(OB_TENANT_NOT_EXIST, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id,
+                                                                       OB_MALLOC_BIG_BLOCK_SIZE));
 
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_tenant_ctx_allocator(tenant_id, ctx_id));
-  ObTenantCtxAllocator* ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
+  auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, ctx_id);
   ASSERT_TRUE(NULL != ta);
   ta->set_tenant_memory_mgr();
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_limit(tenant_id, 1024 * 1024 * 1024));
 
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id, OB_MALLOC_BIG_BLOCK_SIZE));
+  ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id,
+                                                              OB_MALLOC_BIG_BLOCK_SIZE));
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
   OB_LOGGER.set_file_name("t.log", true, true);

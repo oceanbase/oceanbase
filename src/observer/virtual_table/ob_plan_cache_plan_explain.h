@@ -10,41 +10,43 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_PLAN_CACHE_PLAN_EXPLAIN_H_
-#define _OB_PLAN_CACHE_PLAN_EXPLAIN_H_
+#ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_PLAN_CACHE_PLAN_EXPLAIN_
+#define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_PLAN_CACHE_PLAN_EXPLAIN_
+
 
 #include "share/ob_virtual_table_scanner_iterator.h"
-#include "sql/engine/ob_phy_operator.h"
-#include "sql/engine/ob_single_child_phy_operator.h"
-#include "sql/engine/ob_double_children_phy_operator.h"
-#include "sql/engine/ob_multi_children_phy_operator.h"
-#include "sql/engine/ob_no_children_phy_operator.h"
 #include "sql/engine/ob_operator.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObExpVisitor {
+class ObExpVisitor
+{
 public:
-  ObExpVisitor(common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
-      : output_column_ids_(output_column_ids),
-        cur_row_(cur_row),
-        scanner_(scanner),
-        tenant_id_(common::OB_INVALID_ID),
-        plan_id_(common::OB_INVALID_ID),
-        allocator_(NULL)
-  {}
+  ObExpVisitor(common::ObIArray<uint64_t> &output_column_ids,
+                common::ObNewRow &cur_row,
+                common::ObScanner &scanner)
+  : output_column_ids_(output_column_ids),
+    cur_row_(cur_row),
+    scanner_(scanner),
+    tenant_id_(common::OB_INVALID_ID),
+    plan_id_(common::OB_INVALID_ID),
+    allocator_(NULL) {}
 
-  template <class Op>
-  int add_row(const Op& cur_op);
+  template<class Op>
+  int add_row(const Op &cur_op);
 
-  template <class Op>
-  int get_table_name(const Op& cur_op, common::ObString& tbl_name);
+  template<class Op>
+  int get_table_name(const Op &cur_op, common::ObString &tbl_name);
 
-  template <class Op>
-  int get_property(const Op& cur_op, common::ObString& property);
+  template<class Op>
+  int get_property(const Op &cur_op, common::ObString &property);
 
-  int init(const uint64_t tenant_id, const uint64_t plan_id, common::ObIAllocator* allocator)
+  int init(const uint64_t tenant_id,
+           const uint64_t plan_id,
+           common::ObIAllocator *allocator)
   {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(allocator)) {
@@ -56,117 +58,49 @@ public:
     }
     return ret;
   }
-
 private:
-  int get_table_access_desc(bool is_idx_access, const ObQueryFlag& scan_flag, ObString& tab_name,
-      const ObString& index_name, ObString& ret_name);
-
+  int get_table_access_desc(bool is_idx_access, const ObQueryFlag &scan_flag, ObString &tab_name, 
+                            const ObString &index_name, ObString &ret_name);
 protected:
-  common::ObIArray<uint64_t>& output_column_ids_;
-  common::ObNewRow& cur_row_;
-  common::ObScanner& scanner_;
+  common::ObIArray<uint64_t> &output_column_ids_;
+  common::ObNewRow &cur_row_;
+  common::ObScanner &scanner_;
   int64_t tenant_id_;
   int64_t plan_id_;
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObExpVisitor);
 };
 
-class ObPhyOpExpVisitor : public sql::ObPhyOperatorVisitor, public ObExpVisitor {
+class ObOpSpecExpVisitor: public sql::ObOpSpecVisitor, public ObExpVisitor
+{
 public:
-  ObPhyOpExpVisitor(
-      common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
-      : ObExpVisitor(output_column_ids, cur_row, scanner)
-  {}
-  virtual ~ObPhyOpExpVisitor()
-  {}
-  int add_row(const sql::ObPhyOperator& op);
-  inline int init(int64_t tenant_id, int64_t plan_id, common::ObIAllocator* allocator)
+  ObOpSpecExpVisitor(common::ObIArray<uint64_t> &output_column_ids,
+                     common::ObNewRow &cur_row,
+                     common::ObScanner &scanner)
+    : ObExpVisitor(output_column_ids, cur_row, scanner) {}
+  virtual ~ObOpSpecExpVisitor() {}
+  int init(const uint64_t tenant_id,
+           const uint64_t plan_id,
+           common::ObIAllocator *allocator)
   {
     return ObExpVisitor::init(tenant_id, plan_id, allocator);
   }
-
-private:
-  int pre_visit(const sql::ObSingleChildPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int post_visit(const sql::ObSingleChildPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int pre_visit(const sql::ObDoubleChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int post_visit(const sql::ObDoubleChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int pre_visit(const sql::ObMultiChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int post_visit(const sql::ObMultiChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int pre_visit(const sql::ObNoChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int post_visit(const sql::ObNoChildrenPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int pre_visit(const sql::ObPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  int post_visit(const sql::ObPhyOperator& op)
-  {
-    UNUSED(op);
-    return common::OB_SUCCESS;
-  }
-  DISALLOW_COPY_AND_ASSIGN(ObPhyOpExpVisitor);
-};
-
-class ObOpSpecExpVisitor : public sql::ObOpSpecVisitor, public ObExpVisitor {
-public:
-  ObOpSpecExpVisitor(
-      common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
-      : ObExpVisitor(output_column_ids, cur_row, scanner)
-  {}
-  virtual ~ObOpSpecExpVisitor()
-  {}
-  int init(const uint64_t tenant_id, const uint64_t plan_id, common::ObIAllocator* allocator)
-  {
-    return ObExpVisitor::init(tenant_id, plan_id, allocator);
-  }
-  int add_row(const sql::ObOpSpec& spec);
-  virtual int pre_visit(const sql::ObOpSpec& spec) override
+  int add_row(const sql::ObOpSpec &spec);
+  virtual int pre_visit(const sql::ObOpSpec &spec) override
   {
     return add_row(spec);
   }
-  virtual int post_visit(const sql::ObOpSpec& spec) override
+  virtual int post_visit(const sql::ObOpSpec &spec) override
   {
     UNUSED(spec);
     return common::OB_SUCCESS;
   }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpecExpVisitor);
 };
 
-class ObPlanCachePlanExplain : public common::ObVirtualTableScannerIterator {
+class ObPlanCachePlanExplain : public common::ObVirtualTableScannerIterator
+{
 public:
   enum {
     TENANT_ID_COL = 16,
@@ -182,23 +116,23 @@ public:
     PLAN_LINE_ID_COL,
   };
   ObPlanCachePlanExplain()
-      : tenant_id_(common::OB_INVALID_INDEX),
-        plan_id_(common::OB_INVALID_INDEX),
-        explain_visitor_(output_column_ids_, cur_row_, scanner_),
-        static_engine_exp_visitor_(output_column_ids_, cur_row_, scanner_)
-  {}
+    : tenant_id_(common::OB_INVALID_INDEX),
+      plan_id_(common::OB_INVALID_INDEX),
+      static_engine_exp_visitor_(output_column_ids_,
+                                 cur_row_,
+                                 scanner_)
+      {}
   virtual ~ObPlanCachePlanExplain();
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  int set_tenant_plan_id(const common::ObIArray<common::ObNewRange>& ranges);
+  int set_tenant_plan_id(const common::ObIArray<common::ObNewRange> &ranges);
   int64_t tenant_id_;
   int64_t plan_id_;
-  ObPhyOpExpVisitor explain_visitor_;
   ObOpSpecExpVisitor static_engine_exp_visitor_;
   DISALLOW_COPY_AND_ASSIGN(ObPlanCachePlanExplain);
 };
-}  // namespace observer
-}  // namespace oceanbase
-#endif  //_OB_PLAN_CACHE_PLAN_EXPLAIN_H_
+}
+}
+
+#endif

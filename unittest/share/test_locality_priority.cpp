@@ -14,21 +14,22 @@
 #include "share/ob_locality_priority.h"
 #include <gtest/gtest.h>
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 
-class TestLocalityPriority : public ::testing::Test {
+class TestLocalityPriority : public ::testing::Test
+{
 public:
   virtual void SetUp();
   virtual void TearDown();
-  void get_primary_region_prioriry(const char* primary_zone,
-      const common::ObIArray<ObLocalityRegion>& locality_region_array,
-      common::ObIArray<ObLocalityRegion>& tenant_locality_region);
-
+  void get_primary_region_prioriry(const char *primary_zone,
+      const common::ObIArray<ObLocalityRegion> &locality_region_array,
+      common::ObIArray<ObLocalityRegion> &tenant_locality_region);
 private:
   typedef common::ObFixedLengthString<common::MAX_ZONE_LENGTH> Zone;
-
 protected:
   common::ObSEArray<ObLocalityRegion, 5> locality_region_array_;
 };
@@ -58,7 +59,7 @@ void TestLocalityPriority::SetUp()
   region.zone_array_.push_back(zone5);
   locality_region_array_.push_back(region);
 
-  SHARE_LOG(INFO, "locality_region", K_(locality_region_array));
+  SHARE_LOG(INFO,"locality_region", K_(locality_region_array));
 }
 
 void TestLocalityPriority::TearDown()
@@ -66,14 +67,14 @@ void TestLocalityPriority::TearDown()
   locality_region_array_.reset();
 }
 
-void TestLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
-    const common::ObIArray<ObLocalityRegion>& locality_region_array,
-    common::ObIArray<ObLocalityRegion>& tenant_locality_region)
+void TestLocalityPriority::get_primary_region_prioriry(const char *primary_zone,
+      const common::ObIArray<ObLocalityRegion> &locality_region_array,
+      common::ObIArray<ObLocalityRegion> &tenant_locality_region)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(ObLocalityPriority::get_primary_region_prioriry(
-          primary_zone, locality_region_array, tenant_locality_region))) {
+  if (OB_FAIL(ObLocalityPriority::get_primary_region_prioriry(primary_zone,
+          locality_region_array, tenant_locality_region))) {
     SHARE_LOG(WARN, "ObLocalityPriority::get_primary_region_prioriry error", K(ret));
   } else {
     SHARE_LOG(INFO, "ObLocalityPriority::get_primary_region_prioriry success", K(tenant_locality_region));
@@ -82,7 +83,7 @@ void TestLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_three_region)
 {
-  const char* tenant_primary_zone = "hz1,hz2;sh1,sh2;sz1";
+  const char *tenant_primary_zone = "hz1,hz2;sh1,sh2;sz1";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -195,7 +196,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_three_region)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_one_region)
 {
-  const char* tenant_primary_zone = "hz1";
+  const char *tenant_primary_zone = "hz1";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
 
@@ -259,7 +260,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_one_region)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_two_region)
 {
-  const char* tenant_primary_zone = "hz1;sh2";
+  const char *tenant_primary_zone = "hz1;sh2";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -306,7 +307,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_two_region)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_same_region)
 {
-  const char* tenant_primary_zone = "hz1;hz2";
+  const char *tenant_primary_zone = "hz1;hz2";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -361,7 +362,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_same_region)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_diff_region)
 {
-  const char* tenant_primary_zone = "  hz1  ,  sh1  ; hz2   ";
+  const char *tenant_primary_zone = "  hz1  ,  sh1  ; hz2   ";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -416,7 +417,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_diff_region)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_one_empty)
 {
-  const char* tenant_primary_zone = "  ;  hz1";
+  const char *tenant_primary_zone = "  ;  hz1";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -439,7 +440,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_one_empty)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_two_empty)
 {
-  const char* tenant_primary_zone = "  ;  ";
+  const char *tenant_primary_zone = "  ;  ";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -462,7 +463,7 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_two_empty)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_all_empty)
 {
-  const char* tenant_primary_zone = "      ";
+  const char *tenant_primary_zone = "      ";
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
   get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   {
@@ -485,17 +486,16 @@ TEST_F(TestLocalityPriority, get_region_priority_primary_all_empty)
 
 TEST_F(TestLocalityPriority, get_region_priority_primary_NULL)
 {
-  const char* tenant_primary_zone = NULL;
+  const char *tenant_primary_zone = NULL;
   ObSEArray<ObLocalityRegion, 5> tenant_locality_region;
-  int ret = ObLocalityPriority::get_primary_region_prioriry(
-      tenant_primary_zone, locality_region_array_, tenant_locality_region);
+  int ret = ObLocalityPriority::get_primary_region_prioriry(tenant_primary_zone, locality_region_array_, tenant_locality_region);
   EXPECT_EQ(common::OB_INVALID_ARGUMENT, ret);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

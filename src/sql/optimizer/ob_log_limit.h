@@ -14,109 +14,81 @@
 #define OCEANBASE_SQL_OB_LOG_LIMIT_H
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_set.h"
-namespace oceanbase {
-namespace sql {
-class ObLogLimit : public ObLogicalOperator {
-public:
-  ObLogLimit(ObLogPlan& plan)
-      : ObLogicalOperator(plan),
-        is_calc_found_rows_(false),
-        has_union_child_(false),
-        is_top_limit_(false),
-        is_fetch_with_ties_(false),
-        limit_count_(NULL),
-        limit_offset_(NULL),
-        limit_percent_(NULL)
-  {}
-  virtual ~ObLogLimit()
-  {}
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  inline ObRawExpr* get_limit_count() const
+namespace oceanbase
+{
+namespace sql
+{
+  class ObLogLimit : public ObLogicalOperator
   {
-    return limit_count_;
-  }
-  inline ObRawExpr* get_limit_offset() const
-  {
-    return limit_offset_;
-  }
-  inline ObRawExpr* get_limit_percent() const
-  {
-    return limit_percent_;
-  }
-  inline void set_limit_count(ObRawExpr* limit_count)
-  {
-    limit_count_ = limit_count;
-  }
-  inline void set_limit_offset(ObRawExpr* limit_offset)
-  {
-    limit_offset_ = limit_offset;
-  }
-  inline void set_limit_percent(ObRawExpr* limit_percent)
-  {
-    limit_percent_ = limit_percent;
-  }
-  void set_calc_found_rows(bool found_rows)
-  {
-    is_calc_found_rows_ = found_rows;
-  }
-  int need_calc_found_rows(bool& need_calc)
-  {
-    int ret = common::OB_SUCCESS;
-    need_calc = false;
-    if (is_top_limit_ && is_calc_found_rows_) {
-      need_calc = true;
-    } else if (is_top_limit_ && has_union_child_) {
-      need_calc = true;
-    } else { /* Do nothing */
+  public:
+    ObLogLimit(ObLogPlan &plan)
+        : ObLogicalOperator(plan),
+          is_calc_found_rows_(false),
+          is_top_limit_(false),
+          is_fetch_with_ties_(false),
+          limit_expr_(NULL),
+          offset_expr_(NULL),
+          percent_expr_(NULL)
+    {}
+    virtual ~ObLogLimit() {}
+    virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    inline ObRawExpr *get_limit_expr() const { return limit_expr_; }
+    inline ObRawExpr *get_offset_expr() const { return offset_expr_;}
+    inline ObRawExpr *get_percent_expr() const { return percent_expr_;}
+    inline void set_limit_expr(ObRawExpr *limit_expr) { limit_expr_ = limit_expr; }
+    inline void set_offset_expr(ObRawExpr *offset_expr) { offset_expr_ = offset_expr; }
+    inline void set_percent_expr(ObRawExpr *percent_expr) { percent_expr_ = percent_expr; }
+    inline int set_ties_ordering(const common::ObIArray<OrderItem> &order_items)
+    {
+      return order_items_.assign(order_items);
     }
-    return ret;
-  }
-  void set_has_union_child(bool has_union_child)
-  {
-    has_union_child_ = has_union_child;
-  }
-  void set_top_limit(bool is_top_limit)
-  {
-    is_top_limit_ = is_top_limit;
-  }
-  inline bool is_top_limit()
-  {
-    return is_top_limit_;
-  }
-  bool has_union_child()
-  {
-    return has_union_child_;
-  }
-  virtual int est_cost() override;
-  virtual int allocate_granule_pre(AllocGIContext &ctx) override;
-  virtual int allocate_granule_post(AllocGIContext &ctx) override;
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int transmit_op_ordering() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
+    inline ObIArray<OrderItem> &get_ties_ordering() { return order_items_; }
+    void set_is_calc_found_rows(bool found_rows)
+    {
+      is_calc_found_rows_ = found_rows;
+    }
+    int get_is_calc_found_rows()
+    {
+      return is_calc_found_rows_;
+    }
+    void set_top_limit(bool is_top_limit)
+    {
+      is_top_limit_ = is_top_limit;
+    }
+    inline bool is_top_limit()
+    {
+      return is_top_limit_;
+    }
+    virtual int est_cost() override;
+    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    virtual int inner_est_cost(double child_card, 
+                               double &child_cost, 
+                               bool need_re_est_child_cost, 
+                               double &re_estimate_card, 
+                               double &op_cost);
+    int check_output_dep_specific(ObRawExprCheckDep &checker);
+    void set_fetch_with_ties(bool is_fetch_with_ties)
+    {
+      is_fetch_with_ties_ = is_fetch_with_ties;
+    }
+    inline bool is_fetch_with_ties()
+    {
+      return is_fetch_with_ties_;
+    }
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  private:
+    bool is_calc_found_rows_;
+    bool is_top_limit_;
+    bool is_fetch_with_ties_;
+    ObRawExpr *limit_expr_;
+    ObRawExpr *offset_expr_;
+    ObRawExpr *percent_expr_;
+    ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> order_items_;
 
-  virtual uint64_t hash(uint64_t seed) const override;
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  void set_fetch_with_ties(bool is_fetch_with_ties)
-  {
-    is_fetch_with_ties_ = is_fetch_with_ties;
-  }
-  inline bool is_fetch_with_ties()
-  {
-    return is_fetch_with_ties_;
-  }
-
-private:
-  bool is_calc_found_rows_;
-  bool has_union_child_;
-  bool is_top_limit_;
-  bool is_fetch_with_ties_;
-  ObRawExpr* limit_count_;
-  ObRawExpr* limit_offset_;
-  ObRawExpr* limit_percent_;
-};
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_LOG_LIMIT_H
+  };
+}
+}
+#endif // OCEANBASE_SQL_OB_LOG_LIMIT_H

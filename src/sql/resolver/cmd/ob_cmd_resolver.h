@@ -16,15 +16,15 @@
 #include "share/schema/ob_table_schema.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ob_resolver_define.h"
-namespace oceanbase {
-namespace sql {
-class ObCMDResolver : public ObStmtResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCMDResolver : public ObStmtResolver
+{
 public:
-  explicit ObCMDResolver(ObResolverParams& params) : ObStmtResolver(params)
-  {}
-  virtual ~ObCMDResolver()
-  {}
-
+  explicit ObCMDResolver(ObResolverParams &params) : ObStmtResolver(params) {}
+  virtual ~ObCMDResolver() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCMDResolver);
 };

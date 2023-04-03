@@ -14,37 +14,73 @@
 #define _OB_RAW_EXPR_REPLACER_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace sql {
-class ObRawExprReplacer : public ObRawExprVisitor {
+namespace oceanbase
+{
+namespace sql
+{
+
+/**
+ * difference between ObRawExprReplacer::replace and ObTransformUtils::replace_expr:
+ * 1. ObColumnRefRawExpr::dependant_expr_ is not replaced when visit ObColumnRefRawExpr;
+ * 2. ObExecParamRawExpr::outer_expr is not replaced when visit ObExecParamRawExpr,
+ *    it is replaced when visit ObQueryRefRawExpr;
+ * 3. the replaced expr and its children will be skipped when traverse the expr tree, for example
+ *    with replace rule [{c1 -> c1+c2+1}, {c2 -> c1+c2+2}]
+ *    select c1, c2 from t1 will be transfromed into select c1+c2+1, c1+c2+2 from t1
+ *    In constrast, ObTransformUtils::replace_expr will return OB_SIZE_OVERFLOW unexpectedly;
+ */
+class ObRawExprReplacer: public ObRawExprVisitor
+{
 public:
-  ObRawExprReplacer(ObRawExpr* old_expr, ObRawExpr* new_expr);
+  ObRawExprReplacer();
   virtual ~ObRawExprReplacer();
 
-  int replace(ObRawExpr& expr);
-  virtual int visit(ObConstRawExpr& expr);
-  virtual int visit(ObVarRawExpr& expr);
-  virtual int visit(ObQueryRefRawExpr& expr);
-  virtual int visit(ObColumnRefRawExpr& expr);
-  virtual int visit(ObOpRawExpr& expr);
-  virtual int visit(ObCaseOpRawExpr& expr);
-  virtual int visit(ObAggFunRawExpr& expr);
-  virtual int visit(ObSysFunRawExpr& expr);
-  virtual int visit(ObSetOpRawExpr& expr);
-  virtual int visit(ObWinFunRawExpr& expr);
+  int replace(ObRawExpr *&expr);
+  virtual int visit(ObConstRawExpr &expr) override;
+  virtual int visit(ObExecParamRawExpr &expr) override;
+  virtual int visit(ObVarRawExpr &expr) override;
+  virtual int visit(ObOpPseudoColumnRawExpr &expr) override;
+  virtual int visit(ObQueryRefRawExpr &expr) override;
+  virtual int visit(ObColumnRefRawExpr &expr) override;
+  virtual int visit(ObOpRawExpr &expr) override;
+  virtual int visit(ObCaseOpRawExpr &expr) override;
+  virtual int visit(ObAggFunRawExpr &expr) override;
+  virtual int visit(ObSysFunRawExpr &expr) override;
+  virtual int visit(ObSetOpRawExpr &expr) override;
+  virtual int visit(ObWinFunRawExpr &expr) override;
+  virtual int visit(ObPlQueryRefRawExpr &expr) override;
+  virtual int visit(ObAliasRefRawExpr &expr) override;
+  virtual int visit(ObPseudoColumnRawExpr &expr) override;
+
+  virtual bool skip_child(ObRawExpr &expr) override;
+  bool get_replace_happened() const { return replace_happened_; }
+  int add_replace_expr(ObRawExpr *from_expr,
+                       ObRawExpr *to_expr);
+  int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
+                        const ObIArray<ObRawExpr *> &to_exprs);
+  int add_replace_exprs(const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &to_replace_exprs);
 
 private:
   // types and constants
 private:
+  int check_from_expr_existed(const ObRawExpr *from_expr,
+                              const ObRawExpr *to_expr,
+                              bool &is_existed);
+  int check_skip_expr(const ObRawExpr &expr, bool &skip_expr);
+  int check_need_replace(const ObRawExpr *old_expr,
+                         ObRawExpr *&new_expr,
+                         bool &need_replace);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprReplacer);
   // function members
 private:
-  ObRawExpr* old_expr_;
-  ObRawExpr* new_expr_;
+  hash::ObHashSet<uint64_t> to_exprs_;
+  hash::ObHashMap<uint64_t, uint64_t> expr_replace_map_;
+
+  bool replace_happened_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_RAW_EXPR_REPLACER_H */

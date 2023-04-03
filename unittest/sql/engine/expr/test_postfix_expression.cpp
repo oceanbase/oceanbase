@@ -18,23 +18,22 @@
 #include "sql/engine/expr/ob_expr_concat.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-class TestPostfixExpression : public ::testing::Test {
+class TestPostfixExpression: public ::testing::Test
+{
 public:
   TestPostfixExpression();
   virtual ~TestPostfixExpression();
   virtual void SetUp();
   virtual void TearDown();
-  inline static int64_t get_usec()
-  {
+   inline static int64_t get_usec()
+      {
     struct timeval time_val;
     gettimeofday(&time_val, NULL);
-    return time_val.tv_sec * 1000000 + time_val.tv_usec;
+    return time_val.tv_sec*1000000 + time_val.tv_usec;
   }
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestPostfixExpression);
-
 protected:
   // function members
 protected:
@@ -42,16 +41,20 @@ protected:
 };
 
 TestPostfixExpression::TestPostfixExpression()
-{}
+{
+}
 
 TestPostfixExpression::~TestPostfixExpression()
-{}
+{
+}
 
 void TestPostfixExpression::SetUp()
-{}
+{
+}
 
 void TestPostfixExpression::TearDown()
-{}
+{
+}
 
 // concat("ABC", 123 + C1, 10.1)
 TEST_F(TestPostfixExpression, item_serialization)
@@ -72,11 +75,11 @@ TEST_F(TestPostfixExpression, item_serialization)
   ASSERT_EQ(OB_SUCCESS, dec.from("10.1", allocator));
   obj3.set_unumber(dec);
   COMMON_LOG(INFO, "decimal", K(dec.get_length()), K(dec));
-  ObExprOperator* op_cnn = NULL;
+  ObExprOperator *op_cnn = NULL;
   factory.alloc(T_OP_CNN, op_cnn);
   op_cnn->set_real_param_num(2);
   ASSERT_TRUE(NULL != op_cnn);
-  ObExprOperator* op_add = NULL;
+  ObExprOperator *op_add = NULL;
   factory.alloc(T_OP_ADD, op_add);
   op_add->set_real_param_num(2);
   ASSERT_TRUE(NULL != op_add);
@@ -131,9 +134,9 @@ TEST_F(TestPostfixExpression, item_calc)
   ObObj obj2;
   obj2.set_int(321);
 
-  ObExprOperator* op_add = NULL;
+  ObExprOperator *op_add = NULL;
   factory.alloc(T_OP_ADD, op_add);
-  op_add->set_real_param_num(2);
+  op_add->set_real_param_num(2); 
   ObExprResType result_type;
   result_type.set_calc_type(ObIntType);
   op_add->set_result_type(result_type);
@@ -157,19 +160,21 @@ TEST_F(TestPostfixExpression, item_calc)
   int64_t time_1 = get_usec();
   int64_t t = 5000000;
   for (int64_t i = 0; i < t; i++)
-    ASSERT_EQ(OB_SUCCESS, expr.calc(expr_ctx, input_row, result_val));
+     ASSERT_EQ(OB_SUCCESS, expr.calc(expr_ctx, input_row, result_val));
 
+  
   int64_t time_2 = get_usec();
-  std::cout << "# of exec:" << t << std::endl;
+  std::cout << "# of exec:" << t<< std::endl;
   std::cout << "total time:" << time_2 - time_1 << std::endl;
   COMMON_LOG(INFO, "result", K(result_val));
+  
 
   // teardown
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_postfix_expression.log", true);
   return RUN_ALL_TESTS();

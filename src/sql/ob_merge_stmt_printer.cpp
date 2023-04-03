@@ -17,7 +17,7 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-void ObMergeStmtPrinter::init(char* buf, int64_t buf_len, int64_t* pos, ObMergeStmt* stmt)
+void ObMergeStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObMergeStmt *stmt)
 {
   ObDMLStmtPrinter::init(buf, buf_len, pos, stmt);
 }
@@ -25,17 +25,14 @@ void ObMergeStmtPrinter::init(char* buf, int64_t buf_len, int64_t* pos, ObMergeS
 int ObMergeStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, print_params_);
+    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
-    }
+    } 
   }
   return ret;
 }
@@ -43,18 +40,29 @@ int ObMergeStmtPrinter::do_print()
 int ObMergeStmtPrinter::print()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_UNLIKELY(!stmt_->is_merge_stmt())) {
+  if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_) ||
+      OB_UNLIKELY(!stmt_->is_merge_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret), K(stmt_), K(buf_), K(pos_));
+    LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret),
+             K(stmt_), K(buf_), K(pos_));
+  } else if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
+    LOG_WARN("failed to print cte", K(ret));
   } else {
-    const ObMergeStmt* merge_stmt = static_cast<const ObMergeStmt*>(stmt_);
-    const TableItem* target_table = NULL;
-    const TableItem* source_table = NULL;
-    const ObIArray<ObRawExpr*>& match_conds = merge_stmt->get_match_condition_exprs();
-    if (OB_ISNULL(target_table = merge_stmt->get_table_item_by_id(merge_stmt->get_target_table_id())) ||
-        OB_ISNULL(source_table = merge_stmt->get_table_item_by_id(merge_stmt->get_source_table_id()))) {
+    const ObMergeStmt *merge_stmt = static_cast<const ObMergeStmt *>(stmt_);
+    const TableItem *target_table = NULL;
+    const TableItem *source_table = NULL;
+    const ObIArray<ObRawExpr *> &match_conds = merge_stmt->get_match_condition_exprs();
+    if (OB_ISNULL(target_table = merge_stmt->get_table_item_by_id(
+                    merge_stmt->get_target_table_id())) ||
+        OB_ISNULL(source_table = merge_stmt->get_table_item_by_id(
+                    merge_stmt->get_source_table_id()))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("target table or source table is null", K(ret), K(target_table), K(source_table));
+      LOG_WARN("target table or source table is null",
+               K(ret), K(target_table), K(source_table));
+    }
+    if (OB_SUCC(ret) && (print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+        OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
     }
     DATA_PRINTF("merge ");
     if (OB_SUCC(ret) && print_hint()) {
@@ -87,7 +95,7 @@ int ObMergeStmtPrinter::print()
   return ret;
 }
 
-int ObMergeStmtPrinter::print_conds(const ObIArray<ObRawExpr*>& conds)
+int ObMergeStmtPrinter::print_conds(const ObIArray<ObRawExpr *> &conds)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < conds.count(); ++i) {
@@ -100,27 +108,23 @@ int ObMergeStmtPrinter::print_conds(const ObIArray<ObRawExpr*>& conds)
   return ret;
 }
 
-int ObMergeStmtPrinter::print_update_clause(const ObMergeStmt& merge_stmt)
+int ObMergeStmtPrinter::print_update_clause(const ObMergeStmt &merge_stmt)
 {
   int ret = OB_SUCCESS;
   bool first_assign = true;
-  const ObIArray<ObRawExpr*>& update_conds = merge_stmt.get_update_condition_exprs();
-  const ObIArray<ObRawExpr*>& delete_conds = merge_stmt.get_delete_condition_exprs();
-  if (OB_UNLIKELY(merge_stmt.get_tables_assignments().empty())) {
+  const ObIArray<ObRawExpr *> &update_conds = merge_stmt.get_update_condition_exprs();
+  const ObIArray<ObRawExpr *> &delete_conds = merge_stmt.get_delete_condition_exprs();
+  const common::ObIArray<ObAssignment> &assignments = merge_stmt.get_table_assignments();
+  if (OB_UNLIKELY(assignments.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("update clause does not have assignments", K(ret));
   }
   DATA_PRINTF(" when matched then");
   if (OB_SUCC(ret)) {
     // has update assign
-    const ObTableAssignment& assigns = merge_stmt.get_tables_assignments().at(0);
-    if (OB_UNLIKELY(assigns.assignments_.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("stmt does not have column assign", K(ret));
-    }
     DATA_PRINTF(" update set ");
-    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.assignments_.count(); ++i) {
-      const ObAssignment &assign = assigns.assignments_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < assignments.count(); ++i) {
+      const ObAssignment &assign = assignments.at(i);
       ObColumnRefRawExpr *column = assign.column_expr_;
       ObRawExpr *value = assign.expr_;
       ObRawExpr *real_value = NULL;
@@ -165,16 +169,17 @@ int ObMergeStmtPrinter::print_update_clause(const ObMergeStmt& merge_stmt)
   return ret;
 }
 
-int ObMergeStmtPrinter::print_insert_clause(const ObMergeStmt& merge_stmt)
+int ObMergeStmtPrinter::print_insert_clause(const ObMergeStmt &merge_stmt)
 {
   int ret = OB_SUCCESS;
   int64_t column_count = merge_stmt.get_values_desc().count();
-  int64_t value_count = merge_stmt.get_value_vectors().count();
+  int64_t value_count = merge_stmt.get_values_vector().count();
   ObArenaAllocator allocator("PrintMergeStmt");
-  const ObIArray<ObRawExpr*>& insert_conds = merge_stmt.get_insert_condition_exprs();
+  const ObIArray<ObRawExpr *> &insert_conds = merge_stmt.get_insert_condition_exprs();
   if (OB_UNLIKELY(column_count != value_count)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column count does not equal with value count", K(ret), K(column_count), K(value_count));
+    LOG_WARN("column count does not equal with value count",
+             K(ret), K(column_count), K(value_count));
   }
   DATA_PRINTF(" when not matched then insert (");
   for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
@@ -185,13 +190,14 @@ int ObMergeStmtPrinter::print_insert_clause(const ObMergeStmt& merge_stmt)
     } else {
       ObString column_name = column->get_column_name();
       CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
-      DATA_PRINTF(" %.*s %c", LEN_AND_PTR(column_name), (i < column_count - 1 ? ',' : ')'));
+      DATA_PRINTF(" %.*s %c", LEN_AND_PTR(column_name),
+                             (i < column_count - 1 ? ',' : ')'));
     }
   }
   DATA_PRINTF(" values (");
   for (int64_t i = 0; OB_SUCC(ret) && i < value_count; ++i) {
     DATA_PRINTF(" ");
-    if (OB_FAIL(expr_printer_.do_print(merge_stmt.get_value_vectors().at(i), T_INSERT_SCOPE))) {
+    if (OB_FAIL(expr_printer_.do_print(merge_stmt.get_values_vector().at(i), T_INSERT_SCOPE))) {
       LOG_WARN("fail to print value expr", K(ret));
     }
     DATA_PRINTF(" %c", i < value_count - 1 ? ',' : ')');

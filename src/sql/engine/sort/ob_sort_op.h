@@ -19,29 +19,30 @@
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObSortSpec : public ObOpSpec {
-  OB_UNIS_VERSION_V(1);
-
+class ObSortSpec : public ObOpSpec
+{
+OB_UNIS_VERSION_V(1);
 public:
-  ObSortSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
+  ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
-  INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
-      K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort));
-
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
+    K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
+    K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
+    K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(part_cnt));
 public:
-  ObExpr* topn_expr_;
-  ObExpr* topk_limit_expr_;
-  ObExpr* topk_offset_expr_;
+  ObExpr *topn_expr_;
+  ObExpr *topk_limit_expr_;
+  ObExpr *topk_offset_expr_;
   // sort exprs + output_exprs
-  // In theory, this should contain all the rows needed by the upper operator.
-  // This mainly because if it is not included, the upper layer will not
-  // be able to get the correct value of the corresponding column. In fact,
-  // all operators should be like this. As long as there is self-generated
-  // data logic, it must essentially include all Expr of the upper operator
-  // Otherwise, the obtained may cross the Operator, and the data may be completely messed up.
+  // 理论上这里应该是包含上层Operator需要的所有行
+  // 因为如果不包含，则上层就无法得到对应列的正确值
+  // 其实是所有算子都应该这样，只要有自产生数据逻辑，本质上必须包含上层operator所有Expr
+  // 否则拿到的可能就跨Operator了，则数据可能就完全乱掉了
   ExprFixedArray all_exprs_;
   ObSortCollations sort_collations_;
   ObSortFuncs sort_cmp_funs_;
@@ -51,28 +52,29 @@ public:
   int64_t prefix_pos_;
   bool is_local_merge_sort_;
   bool is_fetch_with_ties_;
+  bool prescan_enabled_;
+  bool enable_encode_sortkey_opt_;
+  // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
+  int64_t part_cnt_;
 };
 
-class ObSortOp : public ObOperator {
+class ObSortOp : public ObOperator
+{
 public:
-  ObSortOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
+  ObSortOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
 
   virtual int inner_open() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void destroy() override;
   virtual int inner_close() override;
 
-  int64_t get_sort_row_count() const
-  {
-    return sort_row_count_;
-  }
-
+  int64_t get_sort_row_count() const { return sort_row_count_; }
 private:
   void reset();
-  int topn_sort_next();
   template <typename T>
-  int sort_component_next(T& component)
+  int sort_component_next(T &component)
   {
     return component.get_next_row(MY_SPEC.all_exprs_);
   }
@@ -86,22 +88,59 @@ private:
   {
     return sort_component_next(prefix_sort_impl_);
   }
-  int get_int_value(const ObExpr* in_val, int64_t& out_val);
-  int get_topn_count(int64_t& topn_cnt);
-  int process_sort();
 
+  template <typename T>
+  int sort_component_next_batch(T &component, const int64_t max_cnt)
+  {
+    int64_t read_rows = 0;
+    int ret = component.get_next_batch(MY_SPEC.all_exprs_, max_cnt, read_rows);
+    brs_.size_ = read_rows;
+    if (common::OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      brs_.size_ = 0;
+      brs_.end_ = true;
+    }
+    return ret;
+  }
+
+  int sort_impl_next_batch(const int64_t max_cnt)
+  {
+    return sort_component_next_batch(sort_impl_, max_cnt);
+  }
+
+  int prefix_sort_impl_next_batch(const int64_t max_cnt)
+  {
+    return sort_component_next_batch(prefix_sort_impl_, max_cnt);
+  }
+
+  int get_int_value(const ObExpr *in_val, int64_t &out_val);
+  int get_topn_count(int64_t &topn_cnt);
+  int process_sort();
+  int process_sort_batch();
+  int scan_all_then_sort();
+  int scan_all_then_sort_batch();
+  int init_prefix_sort(int64_t tenant_id,
+                       int64_t row_count,
+                       bool is_batch,
+                       int64_t topn_cnt = INT64_MAX);
+  int init_sort(int64_t tenant_id,
+                int64_t row_count,
+                bool is_batch,
+                int64_t topn_cnt = INT64_MAX);
 private:
   ObSortOpImpl sort_impl_;
   ObPrefixSortImpl prefix_sort_impl_;
-  ObInMemoryTopnSortImpl topn_sort_;
   int (ObSortOp::*read_func_)();
+  int (ObSortOp::*read_batch_func_)(const int64_t max_cnt);
   int64_t sort_row_count_;
   bool is_first_;
   int64_t ret_row_count_;
   bool iter_end_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_ENGINE_SORT_SORT_OP_H_ */
+
+

@@ -14,28 +14,29 @@
 #define OCEANBASE_ROOTSERVER_OB_RS_EVENT_HISTORY_TABLE_OPERATOR_H_
 #include "share/ob_event_history_table_operator.h"
 
-namespace oceanbase {
-namespace rootserver {
-class ObRsEventHistoryTableOperator : public share::ObEventHistoryTableOperator {
+namespace oceanbase
+{
+namespace rootserver
+{
+class ObRsEventHistoryTableOperator : public share::ObEventHistoryTableOperator
+{
 public:
-  virtual ~ObRsEventHistoryTableOperator()
-  {}
+  virtual ~ObRsEventHistoryTableOperator() {}
 
-  int init(common::ObMySQLProxy& proxy, const common::ObAddr& self_addr);
+  int init(common::ObMySQLProxy &proxy, const common::ObAddr &self_addr);
   virtual int async_delete() override;
 
-  static ObRsEventHistoryTableOperator& get_instance();
-
+  static ObRsEventHistoryTableOperator &get_instance();
 private:
-  ObRsEventHistoryTableOperator()
-  {}
+  ObRsEventHistoryTableOperator() {}
   DISALLOW_COPY_AND_ASSIGN(ObRsEventHistoryTableOperator);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} //end namespace rootserver
+} //end namespace oceanbase
 
 #define ROOTSERVICE_EVENT_INSTANCE (::oceanbase::rootserver::ObRsEventHistoryTableOperator::get_instance())
-#define ROOTSERVICE_EVENT_ADD(args...) ROOTSERVICE_EVENT_INSTANCE.add_event(args)
+#define ROOTSERVICE_EVENT_ADD(args...)                                         \
+  ROOTSERVICE_EVENT_INSTANCE.add_event(args)
 
-#endif  // OCEANBASE_ROOTSERVER_OB_RS_EVENT_HISTORY_TABLE_OPERATOR_H_
+#endif // OCEANBASE_ROOTSERVER_OB_RS_EVENT_HISTORY_TABLE_OPERATOR_H_

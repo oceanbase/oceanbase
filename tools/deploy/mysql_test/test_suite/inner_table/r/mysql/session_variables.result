@@ -1,0 +1,24 @@
+use information_schema;
+select variable_value from session_variables where variable_name = 'auto_increment_increment';
+variable_value
+1
+set @@session.auto_increment_increment = 10;
+select variable_value from session_variables where variable_name = 'auto_increment_increment';
+variable_value
+10
+set @@global.auto_increment_increment = 5;
+select variable_value from session_variables where variable_name = 'auto_increment_increment';
+variable_value
+10
+set @@global.auto_increment_increment = 1;
+set @@session.auto_increment_increment = 1;
+show create table session_variables;
+Table	Create Table
+SESSION_VARIABLES	CREATE TABLE `SESSION_VARIABLES` (
+  `VARIABLE_NAME` varchar(128) NOT NULL DEFAULT '',
+  `VARIABLE_VALUE` varchar(1024) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+desc session_variables;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(1024)	YES		NULL	

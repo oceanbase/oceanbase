@@ -1,0 +1,219 @@
+result_format: 4
+explain_protocol: 0
+
+
+set @@ob_enable_plan_cache = 0;
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30),
+    c23 varchar(30) charset utf8,
+    c24 varchar(30) charset utf16,
+    c25 varchar(30) charset gbk);
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
+
+select c1, charset(c1), collation(c1), coercibility(c1) from t1;
++------+-------------+---------------+------------------+
+| c1   | charset(c1) | collation(c1) | coercibility(c1) |
++------+-------------+---------------+------------------+
+|    1 | binary      | binary        |                5 |
+|   -1 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c2, charset(c2), collation(c2), coercibility(c2) from t1;
++------+-------------+---------------+------------------+
+| c2   | charset(c2) | collation(c2) | coercibility(c2) |
++------+-------------+---------------+------------------+
+|    2 | binary      | binary        |                5 |
+|    2 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c3, charset(c3), collation(c3), coercibility(c3) from t1;
++------+-------------+---------------+------------------+
+| c3   | charset(c3) | collation(c3) | coercibility(c3) |
++------+-------------+---------------+------------------+
+|    1 | binary      | binary        |                5 |
+|   -1 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c4, charset(c4), collation(c4), coercibility(c4) from t1;
++------+-------------+---------------+------------------+
+| c4   | charset(c4) | collation(c4) | coercibility(c4) |
++------+-------------+---------------+------------------+
+|    2 | binary      | binary        |                5 |
+|    2 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c5, charset(c5), collation(c5), coercibility(c5) from t1;
++------+-------------+---------------+------------------+
+| c5   | charset(c5) | collation(c5) | coercibility(c5) |
++------+-------------+---------------+------------------+
+|    1 | binary      | binary        |                5 |
+|   -1 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c6, charset(c6), collation(c6), coercibility(c6) from t1;
++------+-------------+---------------+------------------+
+| c6   | charset(c6) | collation(c6) | coercibility(c6) |
++------+-------------+---------------+------------------+
+|    2 | binary      | binary        |                5 |
+|    2 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c7, charset(c7), collation(c7), coercibility(c7) from t1;
++------+-------------+---------------+------------------+
+| c7   | charset(c7) | collation(c7) | coercibility(c7) |
++------+-------------+---------------+------------------+
+|    1 | binary      | binary        |                5 |
+|   -1 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c8, charset(c8), collation(c8), coercibility(c8) from t1;
++------+-------------+---------------+------------------+
+| c8   | charset(c8) | collation(c8) | coercibility(c8) |
++------+-------------+---------------+------------------+
+|    2 | binary      | binary        |                5 |
+|    2 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c9, charset(c9), collation(c9), coercibility(c9) from t1;
++------+-------------+---------------+------------------+
+| c9   | charset(c9) | collation(c9) | coercibility(c9) |
++------+-------------+---------------+------------------+
+|    1 | binary      | binary        |                5 |
+|   -1 | binary      | binary        |                5 |
++------+-------------+---------------+------------------+
+select c10, charset(c10), collation(c10), coercibility(c10) from t1;
++------+--------------+----------------+-------------------+
+| c10  | charset(c10) | collation(c10) | coercibility(c10) |
++------+--------------+----------------+-------------------+
+|    2 | binary       | binary         |                 5 |
+|    2 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c11, charset(c11), collation(c11), coercibility(c11) from t1;
++------+--------------+----------------+-------------------+
+| c11  | charset(c11) | collation(c11) | coercibility(c11) |
++------+--------------+----------------+-------------------+
+|    1 | binary       | binary         |                 5 |
+|   -1 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c12, charset(c12), collation(c12), coercibility(c12) from t1;
++------+--------------+----------------+-------------------+
+| c12  | charset(c12) | collation(c12) | coercibility(c12) |
++------+--------------+----------------+-------------------+
+|    2 | binary       | binary         |                 5 |
+|    2 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c13, charset(c13), collation(c13), coercibility(c13) from t1;
++------+--------------+----------------+-------------------+
+| c13  | charset(c13) | collation(c13) | coercibility(c13) |
++------+--------------+----------------+-------------------+
+|  3.5 | binary       | binary         |                 5 |
+| -3.5 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c14, charset(c14), collation(c14), coercibility(c14) from t1;
++------+--------------+----------------+-------------------+
+| c14  | charset(c14) | collation(c14) | coercibility(c14) |
++------+--------------+----------------+-------------------+
+|  4.5 | binary       | binary         |                 5 |
+|  4.5 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c15, charset(c15), collation(c15), coercibility(c15) from t1;
++------+--------------+----------------+-------------------+
+| c15  | charset(c15) | collation(c15) | coercibility(c15) |
++------+--------------+----------------+-------------------+
+|  5.5 | binary       | binary         |                 5 |
+| -5.5 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c16, charset(c16), collation(c16), coercibility(c16) from t1;
++------+--------------+----------------+-------------------+
+| c16  | charset(c16) | collation(c16) | coercibility(c16) |
++------+--------------+----------------+-------------------+
+|  6.5 | binary       | binary         |                 5 |
+|  6.5 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c17, charset(c17), collation(c17), coercibility(c17) from t1;
++------+--------------+----------------+-------------------+
+| c17  | charset(c17) | collation(c17) | coercibility(c17) |
++------+--------------+----------------+-------------------+
+|    8 | binary       | binary         |                 5 |
+|   -8 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c18, charset(c18), collation(c18), coercibility(c18) from t1;
++------+--------------+----------------+-------------------+
+| c18  | charset(c18) | collation(c18) | coercibility(c18) |
++------+--------------+----------------+-------------------+
+|    9 | binary       | binary         |                 5 |
+|    9 | binary       | binary         |                 5 |
++------+--------------+----------------+-------------------+
+select c19, charset(c19), collation(c19), coercibility(c19) from t1;
++---------------------+--------------+----------------+-------------------+
+| c19                 | charset(c19) | collation(c19) | coercibility(c19) |
++---------------------+--------------+----------------+-------------------+
+| 2019-12-01 12:00:00 | binary       | binary         |                 5 |
+| 2019-12-01 12:00:00 | binary       | binary         |                 5 |
++---------------------+--------------+----------------+-------------------+
+select c20, charset(c20), collation(c20), coercibility(c20) from t1;
++---------------------+--------------+----------------+-------------------+
+| c20                 | charset(c20) | collation(c20) | coercibility(c20) |
++---------------------+--------------+----------------+-------------------+
+| 2019-12-03 06:00:00 | binary       | binary         |                 5 |
+| 2019-12-03 06:00:00 | binary       | binary         |                 5 |
++---------------------+--------------+----------------+-------------------+
+select c21, charset(c21), collation(c21), coercibility(c21) from t1;
++------+--------------+--------------------+-------------------+
+| c21  | charset(c21) | collation(c21)     | coercibility(c21) |
++------+--------------+--------------------+-------------------+
+| 9.5  | utf8mb4      | utf8mb4_general_ci |                 2 |
+| -9.5 | utf8mb4      | utf8mb4_general_ci |                 2 |
++------+--------------+--------------------+-------------------+
+select c22, charset(c22), collation(c22), coercibility(c22) from t1;
++------+--------------+--------------------+-------------------+
+| c22  | charset(c22) | collation(c22)     | coercibility(c22) |
++------+--------------+--------------------+-------------------+
+| 10.5 | utf8mb4      | utf8mb4_general_ci |                 2 |
+| 10.5 | utf8mb4      | utf8mb4_general_ci |                 2 |
++------+--------------+--------------------+-------------------+
+
+// test set_collation expr
+// set_collation表达式检查charset与collate不匹配，报错
+select _utf8mb4'a' collate gbk_bin;
+ERROR 42000: COLLATION 'gbk_bin' is not valid for CHARACTER SET 'utf8mb4'
+// 下面的是等号表达式在类型推导时，进行aggregate collation发现collation不一致报错
+select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_bin;
+ERROR HY000: Illegal mix of collations
+select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_general_ci;
++---------------------------------------------------------------------------------+
+| _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_general_ci |
++---------------------------------------------------------------------------------+
+|                                                                               1 |
++---------------------------------------------------------------------------------+
+select _utf8mb4'a' collate utf8mb4_bin = _utf8mb4'A' collate utf8mb4_bin;
++-------------------------------------------------------------------+
+| _utf8mb4'a' collate utf8mb4_bin = _utf8mb4'A' collate utf8mb4_bin |
++-------------------------------------------------------------------+
+|                                                                 0 |
++-------------------------------------------------------------------+
+
+drop table t1;

@@ -15,132 +15,111 @@
 #include "lib/lock/ob_latch.h"
 #include "lib/stat/ob_latch_define.h"
 #include "lib/thread_local/ob_tsi_utils.h"
-#include "lib/time/ob_time_utility.h"
+#include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
-class DRWLock {
+namespace oceanbase
+{
+namespace common
+{
+class DRWLock
+{
 public:
-  explicit DRWLock(const uint32_t latch_id = ObLatchIds::DEFAULT_DRW_LOCK) : latches_(), latch_id_(latch_id)
-  {}
-  ~DRWLock()
-  {}
+  explicit DRWLock(const uint32_t latch_id = ObLatchIds::DEFAULT_DRW_LOCK) : latches_(), latch_id_(latch_id) {}
+  ~DRWLock() {}
   inline int rdlock();
   inline int try_rdlock();
   inline int rdunlock();
-  inline int wrlock();
-  inline int wrlock(const int64_t timeout_us);
+  inline int wrlock(int64_t timeout=INT64_MAX);
   inline int wrunlock();
   inline int try_wrlock();
-  class RDLockGuard {
+  class RDLockGuard
+  {
   public:
-    explicit RDLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
+    [[nodiscard]] explicit RDLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdlock()))) {
-        COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
       }
     }
     ~RDLockGuard()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdunlock()))) {
-          COMMON_LOG(WARN, "Fail to read unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to read unlock, ", K_(ret));
         }
       }
     }
-    inline int get_ret() const
-    {
-      return ret_;
-    }
-
+    inline int get_ret() const { return ret_; }
   private:
-    DRWLock& rwlock_;
+    DRWLock &rwlock_;
     int ret_;
-
   private:
     DISALLOW_COPY_AND_ASSIGN(RDLockGuard);
   };
-  class WRLockGuard {
+  class WRLockGuard
+  {
   public:
-    explicit WRLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
+    [[nodiscard]] explicit WRLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock()))) {
-        COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
       }
     }
     ~WRLockGuard()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrunlock()))) {
-          COMMON_LOG(WARN, "Fail to write unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write unlock, ", K_(ret));
         }
       }
     }
-    inline int get_ret() const
-    {
-      return ret_;
-    }
-
+    inline int get_ret() const { return ret_; }
   private:
-    DRWLock& rwlock_;
+    DRWLock &rwlock_;
     int ret_;
-
   private:
     DISALLOW_COPY_AND_ASSIGN(WRLockGuard);
   };
-  class WRRetryLockGuard {
+  class WRLockGuardRetryTimeout
+  {
   public:
-    WRRetryLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
+    [[nodiscard]] explicit WRLockGuardRetryTimeout(DRWLock &rwlock, int64_t timeout): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
-      const int64_t start_us = ObTimeUtility::current_time();
-      int64_t retry_timeout_us = BASE_US;
-      while (OB_SUCCESS != (ret_ = rwlock_.wrlock(retry_timeout_us))) {
-        int64_t current_us = ObTimeUtility::current_time();
-        retry_timeout_us = (retry_timeout_us + BASE_US < UPPER_US) ? (retry_timeout_us + BASE_US) : UPPER_US;
-        if (10000000 /*10s*/ < (current_us - start_us)) {
-          COMMON_LOG(WARN, "acquire wrlock use too much time, ", "total_time_us", (current_us - start_us));
+      while(OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock(timeout)))) {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+          COMMON_LOG_RET(WARN, ret_, "Fail to write lock for 10s, ", K_(ret));
         }
-        usleep(100000 /*100ms*/);
+        ob_usleep(static_cast<uint32_t>(timeout));
       }
     }
-    ~WRRetryLockGuard()
+    ~WRLockGuardRetryTimeout()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrunlock()))) {
-          COMMON_LOG(WARN, "Fail to write unlock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write unlock, ", K_(ret));
         }
       }
     }
-    inline int get_ret() const
-    {
-      return ret_;
-    }
-
+    inline int get_ret() const { return ret_; }
   private:
-    static const int64_t BASE_US = 100 * 1000;        // 100 ms
-    static const int64_t UPPER_US = 3 * 1000 * 1000;  // 3s
-  private:
-    DRWLock& rwlock_;
+    DRWLock &rwlock_;
     int ret_;
-
   private:
-    DISALLOW_COPY_AND_ASSIGN(WRRetryLockGuard);
+    DISALLOW_COPY_AND_ASSIGN(WRLockGuardRetryTimeout);
   };
-
 private:
-  struct AlignedLatch {
+  struct AlignedLatch
+  {
     ObLatch latch_;
   } CACHE_ALIGNED;
   AlignedLatch latches_[OB_MAX_CPU_NUM];
   uint32_t latch_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(DRWLock);
 };
 
 /**
- * --------------------------------------------------------Inline
- * Methods-----------------------------------------------------------
+ * --------------------------------------------------------Inline Methods-----------------------------------------------------------
  */
 inline int DRWLock::rdlock()
 {
@@ -152,35 +131,13 @@ inline int DRWLock::rdunlock()
   return latches_[get_itid() % OB_MAX_CPU_NUM].latch_.unlock();
 }
 
-inline int DRWLock::wrlock()
+inline int DRWLock::wrlock(int64_t timeout)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t i = 0;
   for (i = 0; i < OB_MAX_CPU_NUM; ++i) {
-    if (OB_FAIL(latches_[i].latch_.wrlock(latch_id_))) {
-      COMMON_LOG(WARN, "Fail to lock latch, ", K(i), K(ret));
-      break;
-    }
-  }
-  if (OB_FAIL(ret)) {
-    for (--i; i >= 0; --i) {
-      if (OB_SUCCESS != (tmp_ret = latches_[i].latch_.unlock())) {
-        COMMON_LOG(WARN, "Fail to unlock latch, ", K(i), K(tmp_ret));
-      }
-    }
-  }
-  return ret;
-}
-
-inline int DRWLock::wrlock(const int64_t timeout_us)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout_us;
-  int64_t i = 0;
-  for (i = 0; i < OB_MAX_CPU_NUM; ++i) {
-    if (OB_FAIL(latches_[i].latch_.wrlock(latch_id_, abs_timeout_us))) {
+    if (OB_FAIL(latches_[i].latch_.wrlock(latch_id_, timeout))) {
       COMMON_LOG(WARN, "Fail to lock latch, ", K(i), K(ret));
       break;
     }
@@ -234,7 +191,7 @@ inline int DRWLock::try_wrlock()
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}//common
+}//oceanbase
 
 #endif /* OB_DRW_LOCK_H_ */

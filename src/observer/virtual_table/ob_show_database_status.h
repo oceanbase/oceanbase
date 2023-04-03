@@ -17,39 +17,43 @@
 #include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObDatabaseSchema;
 }
-}  // namespace share
-namespace observer {
+}
+namespace observer
+{
 
-class ObShowDatabaseStatus : public common::ObVirtualTableScannerIterator {
+class ObShowDatabaseStatus : public common::ObVirtualTableScannerIterator
+{
 public:
   ObShowDatabaseStatus();
   virtual ~ObShowDatabaseStatus();
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
-  inline void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
 
-  int add_database_status(const common::ObAddr& server_addr, const share::schema::ObDatabaseSchema& database_schema,
-      common::ObObj* cells, const int64_t col_count);
+  int add_database_status(const common::ObAddr &server_addr,
+                          const share::schema::ObDatabaseSchema &database_schema,
+                          common::ObObj *cells,
+                          const int64_t col_count);
   int add_all_database_status();
-
 private:
   uint64_t tenant_id_;
-
 private:
-  enum DATABASE_STATUS_COLUMN {
+  enum DATABASE_STATUS_COLUMN
+  {
     DATABASE_NAME = common::OB_APP_MIN_COLUMN_ID,
     HOST,
     PORT,
@@ -60,6 +64,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObShowDatabaseStatus);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_SHOW_DATABASE_STATUS_ */

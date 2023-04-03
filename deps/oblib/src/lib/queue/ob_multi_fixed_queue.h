@@ -13,18 +13,20 @@
 #ifndef OCEANBASE_LIB_QUEUE_M_FIXED_QUEUE_H_
 #define OCEANBASE_LIB_QUEUE_M_FIXED_QUEUE_H_
 
-#include "lib/queue/ob_fixed_queue.h"  // ObFixedQueue
-#include "common/ob_queue_thread.h"    // ObCond
+#include "lib/queue/ob_fixed_queue.h"    // ObFixedQueue
+#include "common/ob_queue_thread.h"      // ObCond
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const int64_t DefaultMaxQueueNum = 32;
 const int64_t DefaultQueueNum = 0;
 template <int MAX_QUEUE_NUM = DefaultMaxQueueNum>
-class ObMultiFixedQueue {
+class ObMultiFixedQueue
+{
 public:
-  ObMultiFixedQueue() : inited_(false), queue_num_(DefaultQueueNum)
-  {}
+  ObMultiFixedQueue() : inited_(false), queue_num_(DefaultQueueNum) {}
   virtual ~ObMultiFixedQueue()
   {
     int ret = OB_SUCCESS;
@@ -37,20 +39,20 @@ public:
   int init(const int64_t queue_size, const int64_t queue_num);
   int destroy();
 
-  int push(void* data, const uint64_t hash_val, const int64_t timeout);
-  int pop(void*& data, const int64_t queue_index, const int64_t timeout);
+  int push(void *data, const uint64_t hash_val, const int64_t timeout);
+  int pop(void  *&data, const int64_t queue_index, const int64_t timeout);
 
-  int get_task_count(const int64_t queue_index, int64_t& task_count);
+  int get_task_count(const int64_t queue_index, int64_t &task_count);
 
 private:
   int init_queue_(const int64_t queue_num, const int64_t queue_size);
   void destroy_queue_(const int64_t queue_num);
 
 private:
-  bool inited_;
-  ObFixedQueue<void> queue_[MAX_QUEUE_NUM];
-  ObCond queue_conds_[MAX_QUEUE_NUM];
-  int64_t queue_num_;
+  bool                        inited_;
+  ObFixedQueue<void>          queue_[MAX_QUEUE_NUM];
+  ObCond                      queue_conds_[MAX_QUEUE_NUM];
+  int64_t                     queue_num_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiFixedQueue);
@@ -118,17 +120,17 @@ void ObMultiFixedQueue<MAX_QUEUE_NUM>::destroy_queue_(const int64_t queue_num)
 }
 
 template <int MAX_QUEUE_NUM>
-int ObMultiFixedQueue<MAX_QUEUE_NUM>::push(void* data, const uint64_t hash_val, const int64_t timeout)
+int ObMultiFixedQueue<MAX_QUEUE_NUM>::push(void *data, const uint64_t hash_val, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
-  if (!inited_) {
+  if (! inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == data) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t index = hash_val % queue_num_;
-    ObCond& cond = queue_conds_[index];
+    ObCond &cond = queue_conds_[index];
     int64_t end_time = timeout + ::oceanbase::common::ObTimeUtility::current_time();
 
     while (true) {
@@ -157,16 +159,16 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::push(void* data, const uint64_t hash_val, 
 }
 
 template <int MAX_QUEUE_NUM>
-int ObMultiFixedQueue<MAX_QUEUE_NUM>::pop(void*& data, const int64_t queue_index, const int64_t timeout)
+int ObMultiFixedQueue<MAX_QUEUE_NUM>::pop(void *&data, const int64_t queue_index, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
-  if (!inited_) {
+  if (! inited_) {
     ret = OB_NOT_INIT;
   } else if (0 > queue_index || queue_index >= MAX_QUEUE_NUM) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObCond& cond = queue_conds_[queue_index];
+    ObCond &cond = queue_conds_[queue_index];
     int64_t end_time = timeout + ::oceanbase::common::ObTimeUtility::current_time();
 
     data = NULL;
@@ -196,7 +198,7 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::pop(void*& data, const int64_t queue_index
 }
 
 template <int MAX_QUEUE_NUM>
-int ObMultiFixedQueue<MAX_QUEUE_NUM>::get_task_count(const int64_t queue_index, int64_t& task_count)
+int ObMultiFixedQueue<MAX_QUEUE_NUM>::get_task_count(const int64_t queue_index, int64_t &task_count)
 {
   int ret = OB_SUCCESS;
   task_count = 0;
@@ -210,6 +212,6 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::get_task_count(const int64_t queue_index, 
 
   return ret;
 }
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 #endif /* OCEANBASE_LIB_QUEUE_M_FIXED_QUEUE_H_ */

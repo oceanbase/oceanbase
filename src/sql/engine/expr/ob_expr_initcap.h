@@ -15,25 +15,30 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprInitcap : public ObStringExprOperator {
+class ObExprInitcap : public ObStringExprOperator
+{
 public:
-  explicit ObExprInitcap(common::ObIAllocator& alloc);
+  explicit  ObExprInitcap(common::ObIAllocator &alloc);
   virtual ~ObExprInitcap();
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result1(
-      common::ObObj& result, const common::ObObj& text_obj, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int initcap_string(const common::ObString& text, const common::ObCollationType cs_type,
-      common::ObIAllocator* allocator, common::ObString& res_str);
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                           ObExpr &rt_expr) const override;
+  static int initcap_string(const common::ObString &text,
+                                const common::ObCollationType cs_type,
+                                common::ObIAllocator *allocator,
+                                common::ObString &res_str,
+                                bool &has_first_letter);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInitcap);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_INITCAP_ */

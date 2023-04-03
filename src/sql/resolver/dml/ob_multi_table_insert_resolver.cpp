@@ -22,157 +22,96 @@
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/parser/parse_malloc.h"
 #include "ob_default_value_utils.h"
 #include "observer/ob_server.h"
+#include "pl/ob_pl_resolver.h"
 #include "common/ob_smart_call.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 using namespace share::schema;
-namespace sql {
-ObMultiTableInsertResolver::ObMultiTableInsertResolver(ObResolverParams& params) : ObInsertResolver(params)
-{}
+namespace sql
+{
+ObMultiTableInsertResolver::ObMultiTableInsertResolver(ObResolverParams &params)
+: ObDelUpdResolver(params),
+  is_oracle_tmp_table_array_(),
+  the_missing_label_se_columns_array_(),
+  the_missing_label_se_columns_()
+{
+}
 
 ObMultiTableInsertResolver::~ObMultiTableInsertResolver()
-{}
+{
+}
 
-int ObMultiTableInsertResolver::resolve(const ParseNode& parse_tree)
+int ObMultiTableInsertResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  /*Use insert stmt directly, in order not to affect the resolver of insert stmt, it is also parsed
-    separately for multi table insert situations*/
-  ObInsertStmt* insert_stmt = NULL;
-  if (OB_UNLIKELY(T_MULTI_INSERT != parse_tree.type_) || OB_UNLIKELY(4 > parse_tree.num_child_)) {
+  /*直接使用insert stmt，为了不影响insert stmt的解析，针对multi table insert情形同时也单独解析*/
+  ObInsertAllStmt *insert_all_stmt = NULL;
+  if (OB_UNLIKELY(T_MULTI_INSERT != parse_tree.type_)
+      || OB_UNLIKELY(4 > parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(parse_tree.type_), K(parse_tree.num_child_));
-  } else if (OB_ISNULL(insert_stmt = create_stmt<ObInsertStmt>())) {
+  } else if (OB_ISNULL(insert_all_stmt = create_stmt<ObInsertAllStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("create insert stmt failed", K(insert_stmt));
+    LOG_ERROR("create insert stmt failed", K(insert_all_stmt));
+  } else if (OB_FAIL(resolve_outline_data_hints())) {
+    LOG_WARN("resolve outline data hints failed", K(ret));
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(parse_tree.children_[0]));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session info", K(session_info_));
-  } else if (session_info_->use_static_typing_engine()) {  // The new engine has not been implemented. FIXME TODO
-    ret = STATIC_ENG_NOT_IMPLEMENT;
-    LOG_INFO("not implemented in sql static typing engine, "
-             "will retry the old engine automatically",
-        K(ret));
   } else if (OB_FAIL(resolve_multi_table_insert(*parse_tree.children_[0]))) {
     LOG_WARN("resolve single table insert failed", K(ret));
-    // resolve hints and inner cast
+  } else if (OB_FAIL(set_base_info_for_multi_table_insert())) {
+    LOG_WARN("failed to set base info for multi table insert", K(ret));
+  } else if (OB_FAIL(generate_insert_all_constraint())) {
+    LOG_WARN("failed to generate insert all constraint", K(ret));
+  // resolve hints and inner cast
   } else if (OB_FAIL(resolve_hints(parse_tree.children_[2]))) {
     LOG_WARN("failed to resolve hints", K(ret));
-  } else if (OB_FAIL(insert_stmt->formalize_stmt(session_info_))) {
+  } else if (OB_FAIL(insert_all_stmt->formalize_stmt(session_info_))) {
     LOG_WARN("pull stmt all expr relation ids failed", K(ret));
-  } else {
-    insert_stmt->get_check_constraint_exprs().reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_table_items().count() - 1; ++i) {
-      if (OB_FAIL(resolve_multi_table_dml_info(i))) {
-        LOG_WARN("failed to resolve multi table dml info", K(ret));
-      } else if (OB_FAIL(resolve_duplicate_key_checker(i))) {
-        LOG_WARN("resolve duplicate key checker failed", K(ret));
-      } else if (OB_FAIL(resolve_check_constraints(insert_stmt->get_table_item(i)))) {
-        LOG_WARN("resolve check constraint failed", K(ret));
-      } else {
-        RawExprArray temp_check_cst_exprs;
-        for (int64_t j = 0; OB_SUCC(ret) && j < insert_stmt->get_check_constraint_exprs().count(); ++j) {
-          ObSEArray<ObRawExpr*, 4> old_column_exprs;
-          ObSEArray<ObRawExpr*, 4> new_column_exprs;
-          ObRawExpr* check_cst_exprs = insert_stmt->get_check_constraint_exprs().at(j);
-          // Since the same stmt may involve multiple insertions of the same table, it will be
-          // resolved by the resolve_check_constraints function. The table id of the column in
-          // check_constraint_exprs is the table id of the origin table, which will cause subsequent
-          // errors in the cg phase, so need to reset the real table id of the column in
-          // check_constraint_exprs. eg:
-          //  CREATE TABLE test2(id int CHECK(id BETWEEN 2 AND 5));
-          //  INSERT ALL into test2 values(3) into test2 values(4) select 1 from dual;
-          if (OB_FAIL(ObRawExprUtils::extract_column_exprs(check_cst_exprs, old_column_exprs))) {
-            LOG_WARN("failed to extract column exprs", K(ret));
-          } else if (OB_FAIL(get_new_columns_exprs(
-                         insert_stmt, insert_stmt->get_table_item(i), old_column_exprs, new_column_exprs))) {
-            LOG_WARN("failed to get new columns exprs", K(ret));
-          } else if (new_column_exprs.count() != 0 &&
-                     OB_FAIL(check_cst_exprs->replace_expr(old_column_exprs, new_column_exprs))) {
-            LOG_WARN("failed to replace expr", K(ret));
-          } else if (OB_FAIL(temp_check_cst_exprs.push_back(check_cst_exprs))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(append(
-                    insert_stmt->get_multi_insert_table_info().at(i).check_constraint_exprs_, temp_check_cst_exprs))) {
-              LOG_WARN("failed to append expr", K(ret));
-            } else {
-              insert_stmt->get_check_constraint_exprs().reset();
-            }
-          }
-        }
-      }
-    }
-    // When opening the new engine, you need to replace the column in the shadow key with conv expr:
-    // if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
-    //   for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_all_table_columns().count(); ++i) {
-    //     ObIArray<IndexDMLInfo> &index_infos =
-    //                                   insert_stmt->get_all_table_columns().at(i).index_dml_infos_;
-    //     common::ObIArray<ObRawExpr*> &conv_columns = insert_stmt->get_multi_insert_col_conv_funcs().at(i);
-    //     const common::ObIArray<ObColumnRefRawExpr *> *table_columns = insert_stmt->get_table_columns(i);
-    //     CK(OB_NOT_NULL(table_columns));
-    //     CK(conv_columns.count() == table_columns->count());
-    //     for (int64_t j = 0; j < index_infos.count() && OB_SUCC(ret); ++j) {
-    //       IndexDMLInfo &index_info = index_infos.at(j);
-    //       for (int64_t col_idx = 0;
-    //            OB_SUCC(ret) && col_idx < index_info.column_exprs_.count();
-    //            ++col_idx) {
-    //         ObColumnRefRawExpr *col_expr = index_info.column_exprs_.at(col_idx);
-    //         CK(OB_NOT_NULL(col_expr));
-    //         if (is_shadow_column(col_expr->get_column_id())) {
-    //           ObRawExpr *spk_expr = col_expr->get_dependant_expr();
-    //           for (int64_t k = 0; OB_SUCC(ret) && k < table_columns->count(); ++k) {
-    //             OZ(ObRawExprUtils::replace_ref_column(spk_expr,
-    //                                                   table_columns->at(k),
-    //                                                   conv_columns.at(k)));
-    //           } // for assignment end
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(view_pullup_part_exprs())) {
-        LOG_WARN("pullup part exprs for view failed", K(ret));
-      }
-    }
+  } else if (OB_UNLIKELY(insert_all_stmt->get_table_items().count() - 1 !=
+                         insert_all_stmt->get_insert_all_table_info().count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(insert_all_stmt->get_table_items().count() - 1),
+                                     K(insert_all_stmt->get_insert_all_table_info().count()));
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::get_new_columns_exprs(ObInsertStmt* insert_stmt, TableItem* table_item,
-    ObIArray<ObRawExpr*>& old_column_exprs, ObIArray<ObRawExpr*>& new_column_exprs)
+int ObMultiTableInsertResolver::get_new_columns_exprs(const ObInsertAllTableInfo& table_info,
+                                                      ObIArray<ObRawExpr*> &old_column_exprs,
+                                                      ObIArray<ObRawExpr*> &new_column_exprs)
 {
   int ret = OB_SUCCESS;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
   ObSEArray<ObRawExpr*, 4> column_exprs;
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(table_item)) {
+  if (OB_ISNULL(insert_all_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(insert_stmt), K(table_item), K(ret));
+    LOG_WARN("get unexpected null", K(insert_all_stmt), K(ret));
   } else if (old_column_exprs.count() == 0) {
     /*do nothing*/
-  } else if (OB_FAIL(insert_stmt->get_column_exprs(table_item->table_id_, column_exprs))) {
+  } else if (OB_FAIL(insert_all_stmt->get_column_exprs(table_info.table_id_, column_exprs))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else {
     bool is_continued = true;
     for (int64_t i = 0; OB_SUCC(ret) && is_continued && i < old_column_exprs.count(); ++i) {
-      ObColumnRefRawExpr* old_col_expr = static_cast<ObColumnRefRawExpr*>(old_column_exprs.at(i));
+      ObColumnRefRawExpr *old_col_expr = static_cast<ObColumnRefRawExpr *>(old_column_exprs.at(i));
       if (OB_ISNULL(old_col_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(old_col_expr), K(ret));
       } else {
         bool is_found = false;
         for (int64_t j = 0; OB_SUCC(ret) && is_continued && !is_found && j < column_exprs.count(); ++j) {
-          ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(j));
+          ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(j));
           if (OB_ISNULL(col_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(col_expr), K(ret));
@@ -198,133 +137,133 @@ int ObMultiTableInsertResolver::get_new_columns_exprs(ObInsertStmt* insert_stmt,
   return ret;
 }
 /*
- * @brief resolve_multi_table_insert used to resolve multi table insert stmt
- *  1. Firstly resolve all inserted table nodes;
- *  2. Secondly resolve the subquery;
- *  3. Then parse the insert conditions, because the condition exprs comes from the subquery,
- *     so it must be parsed after the subquery, and related checks need to be performed;
- *  4. Finally, the inserted value node is parsed. Because all values come from the subquery,
- *     it must be parsed after the subquery, and related checks are required.
+ * @brief resolve_multi_table_insert用于解析multi table insert stmt
+ *  1. 首先解析所有的插入表节点;
+ *  2. 其次解析子查询;
+ *  3. 然后解析insert conditions，因为condition exprs来自于子查询，所以必须在子查询之后解析，需要进行相关的检查;
+ *  4. 最后解析插入的value值节点，因为所有value值来自于子查询，所以必须在子查询之后解析，需要进行相关的检查.
  */
-int ObMultiTableInsertResolver::resolve_multi_table_insert(const ParseNode& node)
+int ObMultiTableInsertResolver::resolve_multi_table_insert(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
-  const ParseNode* subquery_node = NULL;
-  const ParseNode* insert_node = NULL;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  insert_stmt->set_is_multi_insert_stmt(true);
-  // For all the values node nodes inserted into the table, save them temporarily, and then resolve
-  // them after the subquery is parsed
+  const ParseNode *subquery_node = NULL;
+  const ParseNode *insert_node = NULL;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  //对于所有插入表的values node节点先暂时保存，解析完子查询之后再解析
   ObSEArray<InsertValueNode, 4> multi_insert_values_node;
-  // For all insert conditions, save it first, and then resolve it after the subquery is resolved
+  //对于所有insert conditions条件先保存，等解析完子查询之后再解析
   ObSEArray<InsertConditionNode, 4> multi_insert_cond_node;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(insert_stmt) || OB_ISNULL(insert_node = node.children_[0]) ||
+  if (OB_ISNULL(session_info_) || OB_ISNULL(insert_all_stmt) ||
+      OB_ISNULL(insert_node = node.children_[0]) ||
       OB_ISNULL(subquery_node = node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(session_info_), K(insert_stmt), K(subquery_node), K(insert_node));
-    // 1.resolve all inserted table nodes
+    LOG_WARN("get unexpected null", K(ret), K(session_info_), K(insert_all_stmt),
+                                    K(subquery_node), K(insert_node));
+  //1.解析插入表节点
   } else if (insert_node->type_ == T_MULTI_CONDITION_INSERT) {
-    if (OB_FAIL(
-            resolve_multi_conditions_insert_clause(*insert_node, multi_insert_values_node, multi_insert_cond_node))) {
+    if (OB_FAIL(resolve_multi_conditions_insert_clause(*insert_node,
+                                                       multi_insert_values_node,
+                                                       multi_insert_cond_node))) {
       LOG_WARN("failed to resolve multi conditions insert clause", K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/ }
   } else if (OB_FAIL(resolve_multi_insert_clause(*insert_node, multi_insert_values_node))) {
     LOG_WARN("failed to resolve multi insert clause", K(ret));
   }
   if (OB_FAIL(ret)) {
-    // 2.resolve the subquery
+  //2.解析子查询
   } else if (OB_FAIL(resolve_multi_insert_subquey(*subquery_node))) {
     LOG_WARN("failed to resolve multi insert subbquery");
   } else {
-    // 3.resolve insert conditions
-    // For columns, it is only necessary to check whether there are corresponding columns in the
-    // generated table corresponding to the subquery, so set the relevant flags in advance
-    params_.is_multi_table_insert_ = true;
+    //3.解析insert conditions
+    //对于列只需要检测在subquery对应的generated table中是否存在对应的列,因此提前设置好相关标记
     for (int64_t i = 0; OB_SUCC(ret) && i < multi_insert_cond_node.count(); ++i) {
-      RawExprArray insert_condition_exprs;
+      ObSEArray<ObRawExpr*, 8> insert_condition_exprs;
       if (OB_UNLIKELY(multi_insert_cond_node.at(i).table_cnt_ <= 0) ||
           OB_ISNULL(multi_insert_cond_node.at(i).insert_cond_node_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error",
-            K(multi_insert_cond_node.at(i).table_cnt_),
-            K(multi_insert_cond_node.at(i).insert_cond_node_),
-            K(ret));
-      } else if (OB_FAIL(resolve_and_split_sql_expr(
-                     *multi_insert_cond_node.at(i).insert_cond_node_, insert_condition_exprs))) {
+        LOG_WARN("get unexpected error", K(multi_insert_cond_node.at(i).table_cnt_),
+                                         K(multi_insert_cond_node.at(i).insert_cond_node_), K(ret));
+      } else if (OB_FAIL(resolve_and_split_sql_expr(*multi_insert_cond_node.at(i).insert_cond_node_,
+                                                    insert_condition_exprs))) {
         LOG_WARN("failed to resolve and split sql expr", K(ret));
       } else if (OB_FAIL(check_exprs_sequence(insert_condition_exprs))) {
         LOG_WARN("failed to check exprs sequence", K(ret));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < insert_stmt->get_multi_insert_table_info().count(); ++j) {
-          if (insert_stmt->get_multi_insert_table_info().at(j).when_conds_idx_ == i) {
-            if (OB_FAIL(append(
-                    insert_stmt->get_multi_insert_table_info().at(j).when_conds_expr_, insert_condition_exprs))) {
-              LOG_WARN("failed to append expr", K(ret));
-            }
-          } else { /*do nothing*/
+        for (int64_t j = 0; OB_SUCC(ret) && j < insert_all_stmt->get_insert_all_table_info().count(); ++j) {
+          ObInsertAllTableInfo *table_info = insert_all_stmt->get_insert_all_table_info().at(j);
+          if (OB_ISNULL(table_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (table_info->when_cond_idx_ != i) {
+            // do nothing
+          } else if (OB_FAIL(table_info->when_cond_exprs_.assign(insert_condition_exprs))) {
+            LOG_WARN("failed to append expr", K(ret));
+
           }
         }
       }
     }
-    // 4.resolve insert values
+    //4.解析insert values
     for (int64_t i = 0; OB_SUCC(ret) && i < multi_insert_values_node.count(); ++i) {
       set_is_oracle_tmp_table(get_is_oracle_tmp_table_array().at(i));
-      if (OB_UNLIKELY(i != multi_insert_values_node.at(i).table_idx_)) {
+      ObInsertAllTableInfo* table_info = insert_all_stmt->get_insert_all_table_info().at(i);
+      if (OB_UNLIKELY(i != multi_insert_values_node.at(i).table_idx_) || OB_ISNULL(table_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(i), K(multi_insert_values_node.at(i).table_idx_));
-      } else if (OB_FAIL(resolve_insert_values_node(multi_insert_values_node.at(i).insert_value_node_, i))) {
+      } else if (OB_FAIL(resolve_insert_values_node(
+                                           multi_insert_values_node.at(i).insert_value_node_, i))) {
         LOG_WARN("failed to resolve insert values node", K(ret));
-        // Insert oracle temporary table needs to add session_id
-      } else if (OB_FAIL(add_new_column_for_oracle_temp_table(insert_stmt->get_insert_base_tid(i)))) {
+      //插入oracle临时表需要添加session_id
+      } else if (OB_FAIL(add_new_column_for_oracle_temp_table(table_info->ref_table_id_))) {
         LOG_WARN("failed to resolve insert values node", K(ret));
+      //处理oracle label security
+      } else if (get_the_missing_label_se_columns_array().at(i).count() <= 0) {
+        // do nothing
+      } else if (OB_FAIL(add_new_column_for_oracle_label_security_table(get_the_missing_label_se_columns_array().at(i),
+                                                                        table_info->ref_table_id_))) {
+        LOG_WARN("failed to add new column for oracle label securitytable", K(ret));
       }
       set_is_oracle_tmp_table(false);
     }
   }
-
-  if (OB_SUCC(ret)) {
-    OZ(set_base_info_for_multi_table_insert());
-  }
   return ret;
 }
 
-int ObMultiTableInsertResolver::check_exprs_sequence(const ObIArray<ObRawExpr*>& condition_exprs)
+int ObMultiTableInsertResolver::check_exprs_sequence(const ObIArray<ObRawExpr*> &condition_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < condition_exprs.count(); ++i) {
     if (OB_ISNULL(condition_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(condition_exprs.at(i)));
-    } else if (condition_exprs.at(i)->has_flag(CNT_SEQ_EXPR)) {
+    } else if (condition_exprs.at(i)->has_flag(CNT_SEQ_EXPR)) {//多表插入场景中的条件不能出现sequence
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
       LOG_WARN("sequence number not allowed here", K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode& subquery_node)
+int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode &subquery_node)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  void* select_buffer = NULL;
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(allocator_)) {
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  void *select_buffer = NULL;
+  if (OB_ISNULL(insert_all_stmt) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid stat", K(insert_stmt), K_(allocator), K(ret));
+    LOG_WARN("invalid stat", K(insert_all_stmt), K_(allocator), K(ret));
   } else if (OB_ISNULL(select_buffer = allocator_->alloc(sizeof(ObSelectResolver)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate select buffer failed", K(ret), "size", sizeof(ObSelectResolver));
   } else {
-    ObSelectStmt* select_stmt = NULL;
-    ObSelectResolver* sub_select_resolver = get_sub_select_resolver();
-    params_.is_multi_table_insert_ = false;
+    ObSelectStmt *select_stmt = NULL;
+    ObSelectResolver *sub_select_resolver = nullptr;
+    //重置状态，避免状态误判
     params_.have_same_table_name_ = false;
-    sub_select_resolver = new (select_buffer) ObSelectResolver(params_);
+    sub_select_resolver = new(select_buffer) ObSelectResolver(params_);
     sub_select_resolver->set_current_level(current_level_);
     sub_select_resolver->set_parent_namespace_resolver(NULL);
-    TableItem* sub_select_table = NULL;
+    TableItem *sub_select_table = NULL;
     ObString view_name;
     ObSEArray<ColumnItem, 4> column_items;
     if (OB_UNLIKELY(T_SELECT != subquery_node.type_)) {
@@ -335,51 +274,63 @@ int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode& su
     } else if (OB_ISNULL(select_stmt = sub_select_resolver->get_select_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt), K(ret));
-    } else if (select_stmt->has_sequence()) {
+    } else if (select_stmt->has_sequence()) {//多表插入不允许子查询中使用sequence
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
       LOG_WARN("sequence number not allowed here", K(ret));
-    } else if (is_oracle_tmp_table() && OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
+    } else if (is_oracle_tmp_table() &&
+               OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
       LOG_WARN("add session id value to select item failed", K(ret));
-    } else if (OB_FAIL(insert_stmt->generate_view_name(*allocator_, view_name))) {
+    } else if (OB_FAIL(add_new_sel_item_for_oracle_label_security_table(*select_stmt))) {
+      LOG_WARN("add label security columns to select item failed", K(ret));
+    } else if (OB_FAIL(insert_all_stmt->generate_anonymous_view_name(*allocator_, view_name))) {
       LOG_WARN("failed to generate view name", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     } else if (OB_FAIL(resolve_all_generated_table_columns(*sub_select_table, column_items))) {
       LOG_WARN("failed to resolve all generated table columns", K(ret));
-    } else if (OB_FAIL(insert_stmt->add_from_item(sub_select_table->table_id_))) {
+    } else if (OB_FAIL(insert_all_stmt->add_from_item(sub_select_table->table_id_))) {
       LOG_WARN("failed to add from item", K(ret));
     } else if (OB_FAIL(column_namespace_checker_.add_reference_table(sub_select_table))) {
       LOG_WARN("failed to add from item", K(ret));
-    } else { /*do nothing*/
+    } else {/*do nothing*/}
+    if (sub_select_resolver != nullptr) {
+      sub_select_resolver->~ObSelectResolver();
     }
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_multi_insert_clause(const ParseNode& insert_list_node,
-    ObIArray<InsertValueNode>& multi_insert_values_node, int64_t when_conds_idx /*default -1*/)
+int ObMultiTableInsertResolver::resolve_multi_insert_clause(const ParseNode &insert_list_node,
+                                                            ObIArray<InsertValueNode> &multi_insert_values_node,
+                                                            int64_t when_conds_idx /*default -1*/)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(allocator_) || OB_UNLIKELY(insert_stmt->get_table_items().count() < 0)) {
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  if (OB_ISNULL(insert_all_stmt) || OB_ISNULL(allocator_) ||
+      OB_UNLIKELY(insert_all_stmt->get_table_items().count() < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(insert_stmt), K_(allocator), K(ret));
+    LOG_WARN("get unexpected null", K(insert_all_stmt), K_(allocator), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < insert_list_node.num_child_; ++i) {
-      const ParseNode* insert_table_node = NULL;
-      if (OB_ISNULL(insert_list_node.children_[i]) || insert_list_node.children_[i]->type_ != T_SINGLE_INSERT ||
+      const ParseNode *insert_table_node = NULL;
+      if (OB_ISNULL(insert_list_node.children_[i]) ||
+          insert_list_node.children_[i]->type_ != T_SINGLE_INSERT ||
           OB_UNLIKELY(insert_list_node.children_[i]->num_child_ != 2) ||
           OB_ISNULL(insert_table_node = insert_list_node.children_[i]->children_[0])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(insert_list_node.children_[i]), K(insert_table_node), K(ret));
-      } else if (OB_FAIL(resolve_insert_table_node(*insert_table_node, when_conds_idx))) {
-        LOG_WARN("failed to resolve insert table node", K(ret));
+        LOG_WARN("get unexpected null", K(insert_list_node.children_[i]), K(insert_table_node),
+                                        K(ret));
       } else {
-        InsertValueNode insert_value_node;
-        insert_value_node.table_idx_ = insert_stmt->get_table_size() - 1;
-        insert_value_node.insert_value_node_ = insert_list_node.children_[i]->children_[1];
-        if (OB_FAIL(multi_insert_values_node.push_back(insert_value_node))) {
-          LOG_WARN("failed to push back node", K(ret));
+        bool has_value_node = (insert_list_node.children_[i]->children_[1] != NULL);
+        if (OB_FAIL(resolve_insert_table_node(*insert_table_node, has_value_node, when_conds_idx))) {
+          LOG_WARN("failed to resolve insert table node", K(ret));
+        } else {
+          InsertValueNode insert_value_node;
+          insert_value_node.table_idx_ = insert_all_stmt->get_insert_all_table_info().count() - 1;
+          insert_value_node.insert_value_node_ = insert_list_node.children_[i]->children_[1];
+          if (OB_FAIL(multi_insert_values_node.push_back(insert_value_node))) {
+            LOG_WARN("failed to push back node", K(ret));
+          }
         }
       }
     }
@@ -387,58 +338,71 @@ int ObMultiTableInsertResolver::resolve_multi_insert_clause(const ParseNode& ins
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode& insert_table_node, int64_t when_conds_idx)
+int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &insert_table_node,
+                                                          bool has_value_node,
+                                                          int64_t when_conds_idx)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  const ParseNode* table_node = NULL;
-  TableItem* table_item = NULL;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  const ParseNode *table_node = NULL;
+  TableItem *table_item = NULL;
   bool is_oracle_tmp_table = false;
-  ObInsertTableInfo insert_table_info;
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(table_node = insert_table_node.children_[0])) {
+  ObInsertAllTableInfo* table_info = nullptr;
+  if (OB_ISNULL(insert_all_stmt) || OB_ISNULL(session_info_) ||
+      OB_ISNULL(table_node = insert_table_node.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(insert_stmt), K(table_node));
+    LOG_WARN("get unexpected null", K(ret), K(insert_all_stmt), K(session_info_), K(table_node));
   } else if (OB_FAIL(resolve_basic_table(*table_node, table_item))) {
     LOG_WARN("failed to resolve basic table");
-  } else if (table_item->is_generated_table()) {
+  } else if (table_item->is_link_table()) {
+    ret = OB_ERR_DDL_ON_REMOTE_DATABASE; // behavior same as Oracle
+    LOG_WARN("dblink dml not support T_INSERT_ALL", K(OB_ERR_DDL_ON_REMOTE_DATABASE));
+  } else if (table_item->is_generated_table() || table_item->is_temp_table()) {
     ret = OB_ERR_A_VIEW_NOT_APPROPRIATE_HERE;
     LOG_WARN("a view is not appropriate here", K(ret));
   } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
     LOG_WARN("failed to resolve basic table");
   } else {
-    // Set the parsing parameters in advance. For scenarios where the same table appears for
-    // multi table insert, you need to set the parameters in advance when checking
-    params_.is_multi_table_insert_ = true;
-    insert_table_info.table_id_ = table_item->table_id_;
-    insert_table_info.when_conds_idx_ = when_conds_idx;
-    if (OB_FAIL(insert_stmt->get_multi_insert_table_info().push_back(insert_table_info))) {
-      LOG_WARN("failed to push back insert table info");
-    } else if (OB_FAIL(resolve_insert_table_columns(insert_table_node.children_[1]))) {
+    //提前设置好解析参数，对于多表插入会出现相同的表的场景，因此检查时需要提前设置好参数
+    if (OB_FAIL(generate_insert_all_table_info(*table_item, when_conds_idx, table_info))) {
+      LOG_WARN("failed to generate insert all table info", K(ret));
+    } else if (OB_ISNULL(table_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(resolve_insert_table_columns(insert_table_node.children_[1],
+                                                    *table_info, has_value_node))) {
       LOG_WARN("failed to resolve insert columns", K(ret));
     } else {
       current_scope_ = T_INSERT_SCOPE;
-      const ObTableSchema* table_schema = NULL;
+      const ObTableSchema *table_schema = NULL;
       if (TableItem::ALIAS_TABLE == table_item->type_) {
-        if (OB_FAIL(schema_checker_->get_table_schema(table_item->get_base_table_item().ref_id_, table_schema))) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item->get_base_table_item().ref_id_,
+                                                      table_schema))) {
           LOG_WARN("failed to get table schema", K(ret));
         }
       } else {
-        if (OB_FAIL(schema_checker_->get_table_schema(table_item->get_base_table_item().table_id_, table_schema))) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item->get_base_table_item().ref_id_,
+                                                      table_schema))) {
           LOG_WARN("failed to get table schema", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
         if (table_schema->is_oracle_tmp_table()) {
+          //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
           session_info_->set_has_temp_table_flag();
-          set_is_oracle_tmp_table(true);
+          set_is_oracle_tmp_table(true);//这里直接标记在解析子查询时输出行中需要包括sess_id，而不需要去数组中寻找
           is_oracle_tmp_table = true;
+          //目前临时表功能有问题，multi dml subplan 子计划插入临时表有问题，显示插入成功，但是查询结果为空，因此
+          //暂时禁掉，但所有的主体逻辑保留，等临时表功能完善之后在打开支持(直接移除报错就完成) TODO,@jiangxiu.wt
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("insert all not support temp table", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "temp table in insert all");
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(get_is_oracle_tmp_table_array().push_back(is_oracle_tmp_table))) {
-            LOG_WARN("failed to push back value", K(ret));
-          } else if (OB_FAIL(remove_dup_dep_cols_for_heap_table(*insert_stmt))) {
+             LOG_WARN("failed to push back value", K(ret));
+          } else if (OB_FAIL(remove_dup_dep_cols_for_heap_table(table_info->part_generated_col_dep_cols_,
+                                                                table_info->values_desc_))) {
             LOG_WARN("failed to remove dup dep cols for heap table", K(ret));
           }
         }
@@ -448,22 +412,22 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode& inser
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* node)
+int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode *node,
+                                                             ObInsertAllTableInfo& table_info,
+                                                             bool has_value_node)
 {
   int ret = OB_SUCCESS;
-  TableItem* table_item = NULL;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
+  TableItem *table_item = NULL;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  //由于这里是multi table insert, 因此在对每一张表检查表是否存在重复列时, 都需要先清空之前保存的上张表的
+  //insert_column_ids_,避免误判;
   get_insert_column_ids().clear();
-  if (!insert_stmt->get_values_desc().empty()) {
-    insert_stmt->get_values_desc().reset();
-  }
-  int64_t table_offset = insert_stmt->get_table_items().count() - 1;
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_) ||
-      OB_ISNULL(table_item = insert_stmt->get_table_items().at(table_offset))) {
+  if (OB_ISNULL(insert_all_stmt) || OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_) ||
+      OB_ISNULL(table_item = insert_all_stmt->get_table_item_by_id(table_info.table_id_))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid insert stmt", K(insert_stmt), K(table_offset), K(table_item), K(ret));
+    LOG_WARN("invalid insert stmt", K(insert_all_stmt), K(table_info), K(table_item), K(ret));
   } else if (NULL != node && T_COLUMN_LIST == node->type_) {
-    ParseNode* column_node = NULL;
+    ParseNode *column_node = NULL;
     if (OB_ISNULL(node->children_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid node children", K(node->children_));
@@ -471,8 +435,8 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
     for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
       column_node = node->children_[i];
       ObQualifiedName column_ref;
-      ObRawExpr* ref_expr = NULL;
-      ObColumnRefRawExpr* column_expr = NULL;
+      ObRawExpr *ref_expr = NULL;
+      ObColumnRefRawExpr *column_expr = NULL;
       ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
       bool is_duplicate = false;
       if (OB_ISNULL(column_node)) {
@@ -482,6 +446,10 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
         LOG_WARN("fail to get name case mode", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(column_node, case_mode, column_ref))) {
         LOG_WARN("failed to resolve column def", K(ret));
+      } else if (ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+                                                   column_ref.col_name_)) {
+        ret = OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
+        LOG_WARN("cannot insert rowid pseudo column", K(ret), K(column_ref));
       } else if (OB_FAIL(resolve_basic_column_ref(column_ref, ref_expr))) {
         LOG_WARN("resolve basic column reference failed", K(ret));
         report_user_error_msg(ret, ref_expr, column_ref);
@@ -492,8 +460,9 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref expr is invalid", K(ret), KPC(ref_expr));
       } else if (FALSE_IT(column_expr = static_cast<ObColumnRefRawExpr*>(ref_expr))) {
-        // do nothing
-      } else if (OB_FAIL(check_insert_column_duplicate(column_expr->get_column_id(), is_duplicate))) {
+        //do nothing
+      } else if (OB_FAIL(check_insert_column_duplicate(column_expr->get_column_id(),
+                                                       is_duplicate))) {
         LOG_WARN("check insert column duplicate failed", K(ret));
       } else if (is_duplicate) {
         ret = OB_ERR_FIELD_SPECIFIED_TWICE;
@@ -504,18 +473,10 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
       } else if (OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID == column_expr->get_column_id()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify __sess_create_time value");
-      } else if (OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_expr->get_column_id()) {
-        ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR,
-            column_expr->get_column_name().length(),
-            column_expr->get_column_name().ptr(),
-            scope_name.length(),
-            scope_name.ptr());
-      } else if (OB_FAIL(mock_values_column_ref(column_expr))) {
+      } else if (OB_FAIL(mock_values_column_ref(column_expr, table_info))) {
         LOG_WARN("mock values column reference failed", K(ret));
       }
-    }  // end for
+    }//end for
   } else {
     ObArray<ColumnItem> column_items;
     if (table_item->is_basic_table()) {
@@ -536,7 +497,7 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
         } else if (is_duplicate) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
           LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_items.at(i).column_name_));
-        } else if (OB_FAIL(mock_values_column_ref(column_items.at(i).expr_))) {
+        } else if (OB_FAIL(mock_values_column_ref(column_items.at(i).expr_, table_info))) {
           LOG_WARN("mock values column reference failed", K(ret));
         }
       }
@@ -544,51 +505,79 @@ int ObMultiTableInsertResolver::resolve_insert_table_columns(const ParseNode* no
   }
 
   if (OB_SUCC(ret)) {
-    ColRawExprArray temp_values_desc;
-    for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_values_desc().count(); ++i) {
-      if (OB_ISNULL(insert_stmt->get_values_desc().at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.values_desc_.count(); ++i) {
+      ObColumnRefRawExpr* value_desc = table_info.values_desc_.at(i);
+      if (OB_ISNULL(value_desc)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("value desc is null", K(ret), K(insert_stmt->get_values_desc().at(i)));
-      } else if (insert_stmt->get_values_desc().at(i)->is_generated_column()) {
+        LOG_WARN("value desc is null", K(ret), K(i), K(table_info.values_desc_));
+      } else if (!has_value_node && value_desc->is_generated_column()) {
         ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
-        ColumnItem* orig_col_item = insert_stmt->get_column_item_by_id(
-            insert_stmt->get_insert_table_id(table_offset), insert_stmt->get_values_desc().at(i)->get_column_id());
+        ColumnItem *orig_col_item = insert_all_stmt->get_column_item_by_id(table_info.table_id_,
+                                                                           value_desc->get_column_id());
         if (NULL != orig_col_item && orig_col_item->expr_ != NULL) {
-          const ObString& column_name = orig_col_item->expr_->get_column_name();
-          const ObString& table_name = orig_col_item->expr_->get_table_name();
+          const ObString &column_name = orig_col_item->expr_->get_column_name();
+          const ObString &table_name = orig_col_item->expr_->get_table_name();
           LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN,
-              column_name.length(),
-              column_name.ptr(),
-              table_name.length(),
-              table_name.ptr());
+                        column_name.length(), column_name.ptr(),
+                        table_name.length(), table_name.ptr());
         }
-      } else if (OB_FAIL(temp_values_desc.push_back(insert_stmt->get_values_desc().at(i)))) {
-        LOG_WARN("failed to push back expr", K(ret));
+      } else if (!has_value_node && value_desc->is_always_identity_column()) {
+        ret = OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN);
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_stmt->get_multi_values_desc().push_back(temp_values_desc))) {
-      LOG_WARN("failed to push back values desc", K(ret));
-    } else {
-      insert_stmt->get_values_desc().reset();
     }
   }
 
+  //handle label security columns
+  //统计哪些安全列没有插入，后面做特殊处理
+  if (OB_SUCC(ret)) {
+    const ObTableSchema *table_schema = NULL;
+    common::ObSEArray<uint64_t, 4> the_miss_label_se_columns;
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                  table_info.ref_table_id_, table_schema))) {
+      LOG_WARN("not find table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+    } else if (table_schema->has_label_se_column()) {
+      const ObIArray<uint64_t> &label_se_column_ids = table_schema->get_label_se_column_ids();
+      for (int64_t i = 0; OB_SUCC(ret) && i < label_se_column_ids.count(); ++i) {
+        bool label_se_column_already_handled = false;
+        uint64_t column_id = label_se_column_ids.at(i);
+        if (OB_FAIL(check_insert_column_duplicate(column_id, label_se_column_already_handled))) {
+          LOG_WARN("fail to check insert column duplicate", K(ret));
+        } else {
+          if (!label_se_column_already_handled) {
+            if (OB_FAIL(the_miss_label_se_columns.push_back(column_id))) {
+              LOG_WARN("push back to array failed", K(ret));
+            }
+          } else {
+            //do nothing
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(get_the_missing_label_se_columns_array().push_back(the_miss_label_se_columns))) {
+        LOG_WARN("failed to push back the missing label se columns", K(ret));
+      } else {/*do nothing*/ }
+    }
+  }
   return ret;
 }
 
-int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr* column_ref)
+int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_ref,
+                                                       ObInsertAllTableInfo& table_info)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* stmt = get_insert_stmt();
-  ObColumnRefRawExpr* value_desc = NULL;
-  if (OB_ISNULL(column_ref) || OB_ISNULL(stmt) || OB_ISNULL(params_.expr_factory_)) {
+  ObColumnRefRawExpr *value_desc = NULL;
+  if (OB_ISNULL(column_ref) || OB_ISNULL(params_.expr_factory_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(column_ref), K(stmt), KP_(params_.expr_factory));
+    LOG_WARN("invalid argument", K(column_ref), KP_(params_.expr_factory));
   } else {
     bool found_column = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_values_desc().count(); ++i) {
-      if (OB_ISNULL(value_desc = stmt->get_values_desc().at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.values_desc_.count(); ++i) {
+      if (OB_ISNULL(value_desc = table_info.values_desc_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("value desc is null");
       } else if (column_ref->get_column_id() == value_desc->get_column_id()) {
@@ -597,11 +586,7 @@ int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr*
       }
     }
     if (found_column) {
-      // ignore generating new column
-    } else if (stmt->get_stmt_type() == stmt::T_MERGE) {
-      if (OB_FAIL(stmt->get_values_desc().push_back(const_cast<ObColumnRefRawExpr*>(column_ref)))) {
-        LOG_WARN("failed to push back values desc", K(ret), K(*value_desc));
-      }
+      //ignore generating new column
     } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_REF_COLUMN, value_desc))) {
       LOG_WARN("create column ref raw expr failed", K(ret));
     } else if (OB_ISNULL(value_desc)) {
@@ -611,147 +596,170 @@ int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr*
       value_desc->set_result_type(column_ref->get_result_type());
       value_desc->set_result_flag(column_ref->get_result_flag());
       value_desc->set_column_flags(column_ref->get_column_flags());
-      value_desc->set_dependant_expr(const_cast<ObRawExpr*>(column_ref->get_dependant_expr()));
-      value_desc->set_ref_id(stmt->get_insert_table_id(), column_ref->get_column_id());
-      value_desc->set_expr_level(current_level_);
+      value_desc->set_dependant_expr(const_cast<ObRawExpr *>(column_ref->get_dependant_expr()));
+      value_desc->set_ref_id(table_info.table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
-      if (ob_is_enumset_tc(column_ref->get_result_type().get_type()) &&
-          OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
+      if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
+          && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
         LOG_WARN("failed to set_enum_set_values", K(*column_ref), K(ret));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_desc->add_flag(IS_COLUMN))) {
           LOG_WARN("failed to add flag IS_COLUMN", K(ret));
-        } else if (OB_FAIL(stmt->get_values_desc().push_back(value_desc))) {
+        } else if (OB_FAIL(table_info.values_desc_.push_back(value_desc))) {
           LOG_WARN("failed to push back values desc", K(ret), K(*value_desc));
-        } else { /*do nothing*/
-        }
+        } else {/*do nothing*/}
       }
     }
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_insert_values_node(const ParseNode* node, int64_t table_offset)
+int ObMultiTableInsertResolver::resolve_insert_values_node(const ParseNode *node,
+                                                           int64_t table_offset)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  RawExprArray value_row;
-  TableItem* table_item = NULL;
-  if (OB_ISNULL(insert_stmt) ||
-      OB_UNLIKELY(table_offset == common::OB_INVALID_ID || table_offset < 0 ||
-                  table_offset >= insert_stmt->get_table_items().count()) ||
-      OB_ISNULL(table_item = insert_stmt->get_table_item(table_offset)) ||
-      OB_UNLIKELY(table_offset < 0 || table_offset >= insert_stmt->get_multi_values_desc().count() ||
-                  table_offset >= get_is_oracle_tmp_table_array().count())) {
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> value_row;
+  ObInsertAllTableInfo *table_info = nullptr;
+  if (OB_ISNULL(insert_all_stmt) ||
+      OB_UNLIKELY(table_offset < 0) ||
+      OB_UNLIKELY(table_offset >= insert_all_stmt->get_insert_all_table_info().count() ||
+                  table_offset >= get_is_oracle_tmp_table_array().count() ||
+                  table_offset >= get_the_missing_label_se_columns_array().count()) ||
+      OB_ISNULL(table_info = insert_all_stmt->get_insert_all_table_info().at(table_offset))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",
-        K(insert_stmt),
-        K(table_offset),
-        K(table_item),
-        K(insert_stmt->get_table_items().count()),
-        K(table_offset),
-        K(insert_stmt->get_multi_values_desc().count()),
-        K(get_is_oracle_tmp_table_array().count()),
-        K(ret));
+    LOG_WARN("get unexpected null", K(insert_all_stmt), K(table_offset), K(table_info),
+                                    K(get_is_oracle_tmp_table_array().count()),
+                                    K(get_the_missing_label_se_columns_array().count()), K(ret));
   } else if (node != NULL) {
+    ObIArray<ObColumnRefRawExpr*>& values_desc = table_info->values_desc_;
     if (T_VALUE_VECTOR != node->type_ || OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid arguemnt", K(node->children_), K(node->type_), K(session_info_), K(ret));
-    } else if (node->num_child_ != insert_stmt->get_multi_values_desc().at(table_offset).count()) {
+    } else if (node->num_child_ != values_desc.count()) {
       ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
       LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 2l);
       LOG_WARN("Column count doesn't match value count",
-          "num_child",
-          node->num_child_,
-          "vector_count",
-          insert_stmt->get_multi_values_desc().at(table_offset).count());
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
-        ObRawExpr* expr = NULL;
-        ObRawExpr* tmp_expr = NULL;
-        const ObColumnRefRawExpr* column_expr = NULL;
-        if (OB_ISNULL(node->children_[i]) ||
-            OB_UNLIKELY(i >= insert_stmt->get_multi_values_desc().at(table_offset).count()) ||
-            OB_ISNULL(column_expr = insert_stmt->get_multi_values_desc().at(table_offset).at(i))) {
+               "num_child", node->num_child_,
+               "vector_count", values_desc.count());
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+      ObRawExpr *expr = NULL;
+      ObRawExpr *tmp_expr = NULL;
+      const ObColumnRefRawExpr *column_expr = NULL;
+      if (OB_ISNULL(node->children_[i]) ||
+          OB_ISNULL(column_expr = values_desc.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("inalid children node", K(i), K(column_expr), K(ret));
+      } else {
+        uint64_t column_id = column_expr->get_column_id();
+        ObDefaultValueUtils utils(insert_all_stmt, &params_, this);
+        bool is_generated_column = false;
+        if (OB_FAIL(resolve_sql_expr(*(node->children_[i]), expr))) {
+          LOG_WARN("resolve sql expr failed", K(ret));
+        } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("inalid children node",
-              K(i),
-              K(column_expr),
-              K(ret),
-              K(insert_stmt->get_multi_values_desc().at(table_offset).count()));
-        } else {
-          uint64_t column_id = column_expr->get_column_id();
-          ObDefaultValueUtils utils(insert_stmt, &params_, this);
-          bool is_generated_column = false;
-          if (OB_FAIL(resolve_sql_expr(*(node->children_[i]), expr))) {
-            LOG_WARN("resolve sql expr failed", K(ret));
-          } else if (OB_ISNULL(expr)) {
+          LOG_ERROR("fail to resolve sql expr", K(ret), K(expr));
+        } else if (T_DEFAULT == expr->get_expr_type()) {
+          ColumnItem *column_item = NULL;
+          if (OB_ISNULL(column_item = insert_all_stmt->get_column_item_by_id(
+                          table_info->table_id_, column_id))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("fail to resolve sql expr", K(ret), K(expr));
-          } else if (T_DEFAULT == expr->get_expr_type()) {
-            ColumnItem* column_item = NULL;
-            if (column_expr->is_generated_column()) {
-              if (OB_FAIL(ObRawExprUtils::copy_expr(
-                      *params_.expr_factory_, column_expr->get_dependant_expr(), expr, COPY_REF_DEFAULT))) {
-                LOG_WARN("copy expr failed", K(ret));
-              }
-            } else if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_item->table_id_, column_id))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get column item by id failed", K(table_item->table_id_), K(column_id), K(ret));
-            } else if (OB_FAIL(utils.resolve_default_expr(*column_item, expr, T_INSERT_SCOPE))) {
-              LOG_WARN("fail to resolve default value", K(table_item->table_id_), K(column_id), K(ret));
+            LOG_WARN("get column item by id failed",K(table_info->table_id_),
+                     K(column_id), K(ret));
+          } else if (column_expr->is_generated_column()) {
+            //values中对应的生成列出现了default关键字，我们统一将default替换成生成列对应的表达式
+            //下面的统一处理逻辑会为values中的column进行替换
+            if (OB_FAIL(copy_schema_expr(*params_.expr_factory_,
+                                         column_item->expr_->get_dependant_expr(),
+                                        expr))) {
+              LOG_WARN("copy expr failed", K(ret));
             }
-          } else if (OB_FAIL(check_basic_column_generated(column_expr, insert_stmt, is_generated_column))) {
-            LOG_WARN("check column generated failed", K(ret));
-          } else if (is_generated_column) {
-            ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
-            ColumnItem* orig_col_item = NULL;
-            if (NULL != (orig_col_item = insert_stmt->get_column_item_by_id(table_item->table_id_, column_id)) &&
-                orig_col_item->expr_ != NULL) {
-              const ObString& column_name = orig_col_item->expr_->get_column_name();
-              const ObString& table_name = orig_col_item->expr_->get_table_name();
-              LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN,
-                  column_name.length(),
-                  column_name.ptr(),
-                  table_name.length(),
-                  table_name.ptr());
-            }
+          } else if (OB_FAIL(utils.resolve_default_expr(*column_item, expr, T_INSERT_SCOPE))) {
+            LOG_WARN("fail to resolve default value", K(table_info->table_id_), K(column_id),
+                                                      K(ret));
           }
-          tmp_expr = expr;
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(tmp_expr->formalize(session_info_))) {
-              LOG_WARN("formalize value expr failed", K(ret));
-            } else if (OB_FAIL(value_row.push_back(tmp_expr))) {
-              LOG_WARN("Can not add expr_id to ObArray", K(ret));
-            }
+        } else if (OB_FAIL(check_basic_column_generated(column_expr, insert_all_stmt,
+                                                        is_generated_column))) {
+          LOG_WARN("check column generated failed", K(ret));
+        } else if (is_generated_column) {
+          ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
+          ColumnItem *orig_col_item = NULL;
+          if (NULL != (orig_col_item = insert_all_stmt->get_column_item_by_id(table_info->table_id_,
+                                                                              column_id))
+              && orig_col_item->expr_ != NULL) {
+            const ObString &column_name = orig_col_item->expr_->get_column_name();
+            const ObString &table_name = orig_col_item->expr_->get_table_name();
+            LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, column_name.length(),
+                            column_name.ptr(), table_name.length(), table_name.ptr());
           }
-        }  // end else
-      }    // end for
-      if (OB_SUCC(ret)) {
-        set_is_oracle_tmp_table(get_is_oracle_tmp_table_array().at(table_offset));
-        if (OB_FAIL(add_new_value_for_oracle_temp_table(value_row))) {
-          LOG_WARN("failed to add __session_id value", K(ret));
+        } else if (column_expr->is_always_identity_column()) {
+          ret = OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN);
         } else {
-          set_is_oracle_tmp_table(false);
+          if ((column_expr->is_table_part_key_column()
+              || column_expr->is_table_part_key_org_column())
+              && expr->has_flag(CNT_SEQ_EXPR)) {
+            insert_all_stmt->set_has_part_key_sequence(true);
+          }
         }
+        if (OB_SUCC(ret) && ObSchemaUtils::is_label_se_column(column_expr->get_column_flags())) {
+          ObSysFunRawExpr *label_value_check_expr = NULL;
+          if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_FUN_LABEL_SE_LABEL_VALUE_CHECK,
+                                                              label_value_check_expr))) {
+            LOG_WARN("fail to create raw expr", K(ret));
+          } else {
+            ObString func_name = ObString::make_string(N_OLS_LABEL_VALUE_CHECK);
+            label_value_check_expr->set_func_name(func_name);
+            if (OB_FAIL(label_value_check_expr->add_param_expr(expr))) {
+              LOG_WARN("fail to add parm", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            expr = label_value_check_expr;
+          }
+        }
+        tmp_expr = expr;
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(tmp_expr->formalize(session_info_))) {
+            LOG_WARN("formalize value expr failed", K(ret));
+          } else if (OB_FAIL(value_row.push_back(tmp_expr))) {
+            LOG_WARN("Can not add expr_id to ObArray", K(ret));
+          }
+        }
+      } //end else
+    } //end for
+    if (OB_SUCC(ret)) {
+      set_is_oracle_tmp_table(get_is_oracle_tmp_table_array().at(table_offset));
+      if (OB_FAIL(add_new_value_for_oracle_temp_table(value_row))) {
+        LOG_WARN("failed to add __session_id value", K(ret));
+      } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(*table_info,
+                                                                       get_the_missing_label_se_columns_array().at(table_offset),
+                                                                       value_row))) {
+        LOG_WARN("fail to add new value for oracle label security table", K(ret));
+      } else {
+        set_is_oracle_tmp_table(false);
       }
     }
   } else {
-    ObSelectStmt* ref_stmt = NULL;
-    if (OB_UNLIKELY(insert_stmt->get_table_items().count() <= 0) ||
-        OB_ISNULL(table_item = insert_stmt->get_table_item(insert_stmt->get_table_size() - 1)) ||
-        OB_UNLIKELY(!table_item->is_generated_table()) || OB_ISNULL(ref_stmt = table_item->ref_query_)) {
+    //未指定value时,默认将subquery输出的所有列做为输出
+    ObSelectStmt *ref_stmt = NULL;
+    TableItem* table_item = nullptr;
+    ObIArray<ObColumnRefRawExpr*>& values_desc = table_info->values_desc_;
+    if (OB_UNLIKELY(insert_all_stmt->get_table_items().count() <= 0) ||
+        OB_ISNULL(table_item = insert_all_stmt->get_table_item(insert_all_stmt->get_table_size() - 1)) ||
+        OB_UNLIKELY(!table_item->is_generated_table() && !table_item->is_temp_table()) ||
+        OB_ISNULL(ref_stmt = table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(insert_stmt->get_table_items().count()), K(table_item), K(ref_stmt));
-    } else if (ref_stmt->get_select_item_size() != insert_stmt->get_multi_values_desc().at(table_offset).count()) {
+      LOG_WARN("get unexpected null", K(ret), K(insert_all_stmt->get_table_items().count()),
+                                      K(table_item), K(ref_stmt));
+    } else if (ref_stmt->get_select_item_size() != values_desc.count()) {
       ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
       LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);
       LOG_WARN("Column count doesn't match value count",
-          "num_child",
-          ref_stmt->get_select_item_size(),
-          "vector_count",
-          insert_stmt->get_multi_values_desc().at(table_offset).count());
+               "num_child", ref_stmt->get_select_item_size(),
+               "vector_count", values_desc.count());
     } else {
       ObArray<ColumnItem> column_items;
       if (OB_FAIL(resolve_all_generated_table_columns(*table_item, column_items))) {
@@ -765,247 +773,243 @@ int ObMultiTableInsertResolver::resolve_insert_values_node(const ParseNode* node
             LOG_WARN("get unexpected null", K(ret), K(column_items.at(i).expr_));
           } else if (OB_FAIL(value_row.push_back(column_items.at(i).expr_))) {
             LOG_WARN("failed to push back expr", K(ret));
-          } else { /*do nothing*/
-          }
+          } else {/*do nothing*/}
         }
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(insert_stmt->get_multi_value_vectors().push_back(value_row))) {
-      LOG_WARN("failed to push back vector desc", K(ret));
+    if (OB_FAIL(table_info->values_vector_.assign(value_row))) {
+      LOG_WARN("failed to assign vector desc", K(ret));
     }
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::resolve_multi_conditions_insert_clause(const ParseNode& node,
-    ObIArray<InsertValueNode>& multi_insert_values_node, ObIArray<InsertConditionNode>& multi_insert_cond_node)
+int ObMultiTableInsertResolver::resolve_multi_conditions_insert_clause(
+                                              const ParseNode &node,
+                                              ObIArray<InsertValueNode> &multi_insert_values_node,
+                                              ObIArray<InsertConditionNode> &multi_insert_cond_node)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  const ParseNode* first_or_all_node = NULL;
-  const ParseNode* condition_insert_node = NULL;
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(allocator_) ||
-      OB_UNLIKELY(node.type_ != T_MULTI_CONDITION_INSERT || node.num_child_ != 3) ||
-      OB_ISNULL(first_or_all_node = node.children_[0]) || OB_ISNULL(condition_insert_node = node.children_[1])) {
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  const ParseNode *first_or_all_node = NULL;
+  const ParseNode *condition_insert_node = NULL;
+  if (OB_ISNULL(insert_all_stmt) || OB_ISNULL(allocator_) ||
+      OB_UNLIKELY(node.type_ != T_MULTI_CONDITION_INSERT ||
+                  node.num_child_ != 3) ||
+      OB_ISNULL(first_or_all_node = node.children_[0]) ||
+      OB_ISNULL(condition_insert_node = node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid stat",
-        K(insert_stmt),
-        K_(allocator),
-        K(node.type_),
-        K(node.num_child_),
-        K(first_or_all_node),
-        K(condition_insert_node),
-        K(ret));
+    LOG_WARN("invalid stat", K(insert_all_stmt), K_(allocator), K(node.type_),
+                             K(node.num_child_), K(first_or_all_node),
+                             K(condition_insert_node), K(ret));
   } else {
-    insert_stmt->set_is_multi_conditions_insert(true);
-    // 1.FIRST/ALL
-    if (first_or_all_node->type_ == T_FIRST) {
-      insert_stmt->set_is_multi_insert_first(true);
-    }
-    // 2.WHEN ... THEN ...
+    insert_all_stmt->set_is_multi_condition_insert(true);
+    //1.FIRST/ALL
+    insert_all_stmt->set_is_multi_insert_first(first_or_all_node->type_ == T_FIRST);
+
+    //2.WHEN ... THEN ...
     for (int64_t i = 0; OB_SUCC(ret) && i < condition_insert_node->num_child_; ++i) {
-      const ParseNode* when_node = NULL;
-      const ParseNode* insert_list_node = NULL;
-      const ParseNode* condition_node = NULL;
-      ObSEArray<ObInsertStmt*, 16> multi_insert_stmt;
+      const ParseNode *when_node = NULL;
+      const ParseNode *insert_list_node = NULL;
+      const ParseNode *condition_node = NULL;
       if (OB_ISNULL(condition_node = condition_insert_node->children_[i]) ||
-          OB_UNLIKELY(condition_node->type_ != T_CONDITION_INSERT || condition_node->num_child_ != 2) ||
+          OB_UNLIKELY(condition_node->type_ != T_CONDITION_INSERT ||
+                      condition_node->num_child_ != 2) ||
           OB_ISNULL(when_node = condition_node->children_[0]) ||
           OB_ISNULL(insert_list_node = condition_node->children_[1])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null",
-            K(condition_node),
-            K(condition_node->type_),
-            K(condition_node->num_child_),
-            K(when_node),
-            K(insert_list_node),
-            K(ret));
+        LOG_WARN("get unexpected null", K(condition_node), K(condition_node->type_),
+                                        K(condition_node->num_child_), K(when_node),
+                                        K(insert_list_node), K(ret));
       } else {
         InsertConditionNode insert_cond_node;
         insert_cond_node.insert_cond_node_ = when_node;
-        int64_t old_table_size = insert_stmt->get_table_size();
+        int64_t old_table_size = insert_all_stmt->get_table_size();
         if (OB_FAIL(resolve_multi_insert_clause(*insert_list_node, multi_insert_values_node, i))) {
           LOG_WARN("failed to resolve multi insert clause", K(ret));
         } else {
-          insert_cond_node.table_cnt_ = insert_stmt->get_table_size() - old_table_size;
+          insert_cond_node.table_cnt_ = insert_all_stmt->get_table_size() - old_table_size;
           if (OB_FAIL(multi_insert_cond_node.push_back(insert_cond_node))) {
             LOG_WARN("failed to push back insert cond node", K(ret));
           }
         }
       }
     }
-    // 3.ELSE ...
+    //3.ELSE ...
     if (OB_SUCC(ret)) {
       if (node.children_[2] != NULL) {
         if (OB_FAIL(resolve_multi_insert_clause(*node.children_[2], multi_insert_values_node))) {
           LOG_WARN("failed to resolve multi insert clause", K(ret));
-        } else { /*do nothing*/
-        }
+        } else {/*do nothing*/}
       }
     }
   }
   return ret;
 }
 
-/* @brief,set_base_info_for_multi_table_insert used to set base info:
- * 1.set_table_columns;
- * 2.set auto params;
- * 3.add column conv functions
- * 4.replace gen col dependent col
- * 5.set primary key ids
+/* @brief,set_base_info_for_multi_table_insert设置多表插入的基本信息:
+ * 1.set auto params;
+ * 2.add column conv functions
+ * 3.replace gen col dependent col
  */
 int ObMultiTableInsertResolver::set_base_info_for_multi_table_insert()
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_) ||
-      OB_UNLIKELY(insert_stmt->get_table_items().count() < 2)) {
+  ObInsertAllStmt *stmt = get_insert_all_stmt();
+  if (OB_ISNULL(stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_) ||
+      OB_UNLIKELY(stmt->get_table_items().count() < 2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(insert_stmt), K(schema_checker_), K(session_info_), K(ret));
+    LOG_WARN("get unexpected null", K(stmt), K(schema_checker_), K(session_info_), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_table_items().count() - 1; ++i) {
-      ObSEArray<uint64_t, 16> primary_key_ids;
-      if (OB_FAIL(set_table_columns(i))) {
-        LOG_WARN("failed to set table columns", K(ret));
-      } else if (OB_FAIL(save_autoinc_params(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_insert_all_table_info().count(); ++i) {
+      ObInsertAllTableInfo *table_info = stmt->get_insert_all_table_info().at(i);
+      if (OB_ISNULL(table_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(generate_autoinc_params(*table_info))) {
         LOG_WARN("failed to save autoinc params", K(ret));
-      } else if (OB_FAIL(add_column_conv_function(i))) {
-        LOG_WARN("failed to add column conv function", K(ret));
-      } else {
-        RawExprArray tmp_col_conv_funcs;
-        for (int64_t j = 0; OB_SUCC(ret) && j < insert_stmt->get_column_conv_functions().count(); ++j) {
-          if (OB_FAIL(tmp_col_conv_funcs.push_back(insert_stmt->get_column_conv_functions().at(j)))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else { /*do nothing */
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(insert_stmt->get_multi_insert_col_conv_funcs().push_back(tmp_col_conv_funcs))) {
-            LOG_WARN("failed to push back column conv functions", K(ret));
-            // TODO
-            // } else if (session_info_->use_static_typing_engine() &&
-            //           OB_FAIL(replace_gen_col_dependent_col(i))) {
-            //   LOG_WARN("failed to replace gen col dependent col", K(ret));
-          } else if (OB_FAIL(add_rowkey_ids(insert_stmt->get_insert_base_tid(i), primary_key_ids))) {
-            LOG_WARN("failed to add rowkey ids", K(ret));
-          } else if (OB_FAIL(insert_stmt->get_multi_insert_primary_key_ids().push_back(primary_key_ids))) {
-            LOG_WARN("failed to push back ids", K(ret));
-          } else {
-            insert_stmt->get_column_conv_functions().reset();
-          }
-        }
+      } else if (OB_FAIL(generate_column_conv_function(*table_info))) {
+        LOG_WARN("failed to generate column conv function", K(ret));
+      } else if (OB_FAIL(replace_gen_col_dependent_col(*table_info))) {
+        LOG_WARN("failed to replace gen col dependent col", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::find_value_desc(
-    uint64_t column_id, ObRawExpr*& output_expr, uint64_t index /*default 0 */)
+int ObMultiTableInsertResolver::generate_insert_all_table_info(const TableItem& table_item,
+                                                               const int64_t when_cond_idx,
+                                                               ObInsertAllTableInfo*& table_info)
 {
   int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  int64_t idx = 0;
-  if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(index >= insert_stmt->get_multi_values_desc().count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid insert stmt", K(insert_stmt), K(index), K(insert_stmt->get_multi_values_desc().count()));
+  void* ptr = nullptr;
+  table_info = nullptr;
+  ObInsertAllStmt* stmt = get_insert_all_stmt();
+  if (OB_ISNULL(allocator_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(allocator_), K(stmt));
+  } else if (OB_ISNULL(ptr = allocator_->alloc(sizeof(ObInsertAllTableInfo)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for insert all table info", K(ret));
   } else {
-    ObIArray<ObColumnRefRawExpr*>& value_desc = insert_stmt->get_multi_values_desc().at(index);
-    ObIArray<ObRawExpr*>& vector_desc = insert_stmt->get_multi_value_vectors().at(index);
-    ret = OB_ENTRY_NOT_EXIST;
-    for (int64_t i = 0; i < value_desc.count() && OB_ENTRY_NOT_EXIST == ret; i++) {
-      ObColumnRefRawExpr* expr = value_desc.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get values expr", K(i), K(value_desc), K(ret));
-      } else if (column_id == expr->get_column_id()) {
-        ret = OB_SUCCESS;
-        idx = i;
-      }
+    table_info = new(ptr) ObInsertAllTableInfo();
+    table_info->when_cond_idx_ = when_cond_idx;
+    if (OB_FAIL(generate_insert_table_info(table_item, *table_info))) {
+      LOG_WARN("failed to generate insert table info", K(ret));
+    } else if (OB_FAIL(stmt->get_insert_all_table_info().push_back(table_info))) {
+      LOG_WARN("failed to push back table info", K(ret));
     }
+  }
+  return ret;
+}
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(idx > vector_desc.count() - 1)) {
+int ObMultiTableInsertResolver::generate_insert_all_constraint()
+{
+  int ret = OB_SUCCESS;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  TableItem* table_item = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < insert_all_stmt->get_insert_all_table_info().count(); ++i) {
+    ObInsertAllTableInfo *table_info = insert_all_stmt->get_insert_all_table_info().at(i);
+    if (OB_ISNULL(table_info) ||
+        OB_ISNULL(table_item = insert_all_stmt->get_table_item_by_id(table_info->table_id_))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid index", K(idx), K(vector_desc.count()), K(ret));
+      LOG_WARN("get unexpected null", K(ret), K(table_info), K(table_item));
+    } else if (OB_FAIL(resolve_check_constraints(table_item, table_info->check_constraint_exprs_))) {
+      LOG_WARN("failed to resolve check constraints", K(ret));
+    } else if (OB_FAIL(refine_table_check_constraint(*table_info))) {
+      LOG_WARN("failed to refine table check constraint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMultiTableInsertResolver::refine_table_check_constraint(ObInsertAllTableInfo& table_info)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info.check_constraint_exprs_.count(); ++i) {
+    ObSEArray<ObRawExpr*, 4> old_column_exprs;
+    ObSEArray<ObRawExpr*, 4> new_column_exprs;
+    ObRawExpr*& check_cst_expr = table_info.check_constraint_exprs_.at(i);
+    //由于同一个stmt可能涉及同一张表的多次插入，这样会使得通过resolve_check_constraints函数解析出来的
+    //check_constraint_exprs中的列的table id都是origin table的table id，会使得后续在cg阶段报错，因此
+    //需要重新设置一下check_constraint_exprs中的列的真实的table id,eg:
+    //  CREATE TABLE test2(id int CHECK(id BETWEEN 2 AND 5));
+    //  INSERT ALL into test2 values(3) into test2 values(4) select 1 from dual;
+    //具体见bug:
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(check_cst_expr, old_column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (OB_FAIL(get_new_columns_exprs(table_info,
+                                             old_column_exprs,
+                                             new_column_exprs))) {
+      LOG_WARN("failed to get new columns exprs", K(ret));
+    } else if (new_column_exprs.count() != 0 &&
+               OB_FAIL(check_cst_expr->replace_expr(old_column_exprs, new_column_exprs))) {
+      LOG_WARN("failed to replace expr", K(ret));
     } else {
-      output_expr = vector_desc.at(idx);
+      LOG_TRACE("succeed to get check constraint expr", K(*check_cst_expr));
     }
-    if (OB_ENTRY_NOT_EXIST == ret) {
+  }
+  return ret;
+}
+int ObMultiTableInsertResolver::add_new_sel_item_for_oracle_label_security_table(ObSelectStmt &select_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
+  if (OB_ISNULL(insert_all_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(insert_all_stmt));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < insert_all_stmt->get_insert_all_table_info().count(); ++i) {
+    ObInsertAllTableInfo *table_info = insert_all_stmt->get_insert_all_table_info().at(i);
+    ObIArray<uint64_t>& column_array = the_missing_label_se_columns_array_.at(i);
+    if (OB_ISNULL(table_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObDelUpdResolver::add_new_sel_item_for_oracle_label_security_table(*table_info,
+                                                                                          column_array,
+                                                                                          select_stmt))) {
+    LOG_WARN("failed to add new sel item for oracle label security table", K(ret));
+    }
+  }
+  return ret;  
+}
+
+int ObMultiTableInsertResolver::find_value_desc(ObInsertTableInfo &table_info,
+                                                uint64_t column_id,
+                                                ObRawExpr *&column_ref)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = 0;
+  ObIArray<ObColumnRefRawExpr*> &value_desc = table_info.values_desc_;
+  int64_t value_vector_cnt = table_info.values_vector_.count();
+  ret = OB_ENTRY_NOT_EXIST;
+  for (int64_t i = 0; i < value_desc.count() && OB_ENTRY_NOT_EXIST == ret; i++) {
+    ObColumnRefRawExpr *expr = value_desc.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get values expr", K(i), K(value_desc), K(ret));
+    } else if (column_id == expr->get_column_id()) {
       ret = OB_SUCCESS;
+      idx = i;
     }
   }
-  return ret;
-}
 
-int ObMultiTableInsertResolver::replace_gen_col_dependent_col(uint64_t index)
-{
-  int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(session_info_) ||
-      OB_UNLIKELY(index >= insert_stmt->get_multi_insert_col_conv_funcs().count())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(idx > value_vector_cnt - 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",
-        K(insert_stmt),
-        K(session_info_),
-        K(index),
-        K(insert_stmt->get_multi_insert_col_conv_funcs().count()),
-        K(ret));
+    LOG_WARN("invalid index", K(idx), K(value_vector_cnt), K(value_desc.count()), K(ret));
   } else {
-    const ObIArray<ObColumnRefRawExpr*>& all_cols = *insert_stmt->get_table_columns(index);
-    ObIArray<ObRawExpr*>& conv_funcs = insert_stmt->get_multi_insert_col_conv_funcs().at(index);
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_cols.count(); i++) {
-      if (NULL != all_cols.at(i)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(all_cols.at(i)), K(ret));
-      } else if (all_cols.at(i)->is_generated_column()) {
-        if (i >= conv_funcs.count() || OB_ISNULL(conv_funcs.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid null column conv function", K(ret), K(i), K(all_cols.count()));
-        } else if (OB_FAIL(replace_col_with_new_value(conv_funcs.at(i), index))) {
-          LOG_WARN("failed replace col with new value", K(ret), K(i), K(all_cols.count()));
-        }
-      }
-    }
+    column_ref = table_info.values_vector_.at(idx);
+  }
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }
 
-int ObMultiTableInsertResolver::replace_col_with_new_value(ObRawExpr*& expr, uint64_t index)
-{
-  int ret = OB_SUCCESS;
-  ObInsertStmt* insert_stmt = get_insert_stmt();
-  if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(index >= insert_stmt->get_multi_insert_col_conv_funcs().count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",
-        K(insert_stmt),
-        K(session_info_),
-        K(index),
-        K(insert_stmt->get_multi_insert_col_conv_funcs().count()),
-        K(ret));
-  } else {
-    const ObIArray<ObColumnRefRawExpr*>& all_cols = *insert_stmt->get_table_columns(index);
-    ObIArray<ObRawExpr*>& conv_funcs = insert_stmt->get_multi_insert_col_conv_funcs().at(index);
-    for (int i = 0; OB_SUCC(ret) && i < all_cols.count(); i++) {
-      if (i >= conv_funcs.count() || OB_ISNULL(conv_funcs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid null column conv function", K(ret), K(i), K(all_cols.count()));
-      } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, all_cols.at(i), conv_funcs.at(i)))) {
-        LOG_WARN("failed to replace ref column", K(ret));
-      }
-    }  // for end
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr->formalize(session_info_))) {
-        LOG_WARN("failed to formalize expr", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase

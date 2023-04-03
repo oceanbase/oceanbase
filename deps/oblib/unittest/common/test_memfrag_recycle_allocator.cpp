@@ -17,10 +17,13 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class TestObMetaImage : public ObIRewritable, public lib::ThreadPool {
+class TestObMetaImage: public ObIRewritable, public lib::ThreadPool
+{
 public:
   TestObMetaImage();
   virtual ~TestObMetaImage();
@@ -28,33 +31,33 @@ public:
   void destroy();
   virtual int rewrite_switch();
   void run1() final;
-
 private:
   static const int64_t MAX_META_COUNT = 1024L * 1024L * 2L;
-  struct TestObMeta {
+  struct TestObMeta
+  {
     int64_t size_;
     char data_[0];
   };
   int do_work();
-  inline void* alloc(const int64_t size)
+  inline void *alloc(const int64_t size)
   {
     return allocator_.alloc(size);
   }
-  inline void free(void* ptr)
+  inline void free(void *ptr)
   {
     allocator_.free(ptr);
   }
-  inline int need_rewrite(void* ptr, bool& is_need)
+  inline int need_rewrite(void *ptr, bool &is_need)
   {
     return allocator_.need_rewrite(ptr, is_need);
   }
   ObMemfragRecycleAllocator allocator_;
-  TestObMeta** meta_array_;
+  TestObMeta **meta_array_;
 };
 
 TestObMetaImage::TestObMetaImage()
 {
-  meta_array_ = (TestObMeta**)ob_malloc(sizeof(TestObMeta*) * MAX_META_COUNT);
+  meta_array_ = (TestObMeta**) ob_malloc(sizeof(TestObMeta*) * MAX_META_COUNT);
   memset(meta_array_, 0, sizeof(TestObMeta*) * MAX_META_COUNT);
 }
 
@@ -97,7 +100,7 @@ int TestObMetaImage::do_work()
   while (!has_set_stop()) {
     loc = ObRandom::rand(0, MAX_META_COUNT - 1);
     size = ObRandom::rand(128, 1000);
-    new_meta = (TestObMeta*)alloc(size);
+    new_meta = (TestObMeta*) alloc(size);
     if (NULL == new_meta) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       break;
@@ -105,7 +108,9 @@ int TestObMetaImage::do_work()
       new_meta->size_ = size;
     }
 
-    old_meta = (TestObMeta*)ATOMIC_TAS(reinterpret_cast<volatile uint64_t*>(&meta_array_[loc]), (uint64_t)new_meta);
+    old_meta =
+        (TestObMeta*) ATOMIC_TAS(reinterpret_cast<volatile uint64_t*>(&meta_array_[loc]),
+            (uint64_t) new_meta);
     if (NULL != old_meta) {
       free(old_meta);
     }
@@ -117,9 +122,9 @@ int TestObMetaImage::do_work()
 int TestObMetaImage::rewrite_switch()
 {
   int ret = OB_SUCCESS;
-  TestObMeta* old_meta = NULL;
-  TestObMeta* new_meta = NULL;
-  TestObMeta* tmp_meta = NULL;
+  TestObMeta *old_meta = NULL;
+  TestObMeta *new_meta = NULL;
+  TestObMeta *tmp_meta = NULL;
   bool is_need = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_META_COUNT; i++) {
@@ -127,19 +132,21 @@ int TestObMetaImage::rewrite_switch()
     if (OB_SUCCESS != (ret = need_rewrite(old_meta, is_need))) {
       LIB_ALLOC_LOG(WARN, "fail to decide if need rewrite, ", "ret", ret);
     } else if (is_need) {
-      new_meta = (TestObMeta*)alloc(old_meta->size_);
+      new_meta = (TestObMeta*) alloc(old_meta->size_);
       if (NULL == new_meta) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         break;
       } else {
         new_meta->size_ = old_meta->size_;
 
-        tmp_meta = (TestObMeta*)ATOMIC_VCAS(
-            reinterpret_cast<volatile uint64_t*>(&meta_array_[i]), (uint64_t)old_meta, (uint64_t)new_meta);
+        tmp_meta =
+            (TestObMeta*) ATOMIC_VCAS(reinterpret_cast<volatile uint64_t*>(&meta_array_[i]),
+                                      (uint64_t) old_meta,
+                                      (uint64_t) new_meta);
         if (old_meta == tmp_meta) {
           free(old_meta);
         } else {
-          // retry
+          //retry
           free(new_meta);
           i--;
         }
@@ -155,35 +162,35 @@ TEST(ObMRAllocatorRecycler, test_recycle)
   int ret = OB_SUCCESS;
   ObMemfragRecycleAllocator allocator[100];
 
-  // test null argument
+// test null argument
   ret = ObMRAllocatorRecycler::get_instance().register_allocator(NULL);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test normal register
+// test normal register
   ret = ObMRAllocatorRecycler::get_instance().register_allocator(&allocator[0]);
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  // test repeatly register
+// test repeatly register
   ret = ObMRAllocatorRecycler::get_instance().register_allocator(&allocator[0]);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test normal deregister
+// test normal deregister
   ret = ObMRAllocatorRecycler::get_instance().deregister_allocator(&allocator[0]);
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  // test repeatly deregister
+// test repeatly deregister
   ret = ObMRAllocatorRecycler::get_instance().deregister_allocator(&allocator[0]);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test invalid_deregister
+// test invalid_deregister
   ret = ObMRAllocatorRecycler::get_instance().deregister_allocator(NULL);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test invalid_deregister
+// test invalid_deregister
   ret = ObMRAllocatorRecycler::get_instance().deregister_allocator(&allocator[1]);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test register limit count
+// test register limit count
   ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < 100; i++) {
     ret = ObMRAllocatorRecycler::get_instance().register_allocator(&allocator[i]);
@@ -194,6 +201,7 @@ TEST(ObMRAllocatorRecycler, test_recycle)
   for (int64_t i = 0; OB_SUCC(ret) && i < 100; i++) {
     ret = ObMRAllocatorRecycler::get_instance().deregister_allocator(&allocator[i]);
   }
+
 }
 
 TEST(ObMemfragRecycleAllocator, test_allocator)
@@ -204,11 +212,11 @@ TEST(ObMemfragRecycleAllocator, test_allocator)
   TestObMetaImage image2;
   void* data = NULL;
 
-  // test invalid argument
+// test invalid argument
   ret = allocator.init(-1, NULL, -1);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test invalid alloc, free ...
+// test invalid alloc, free ...
   data = allocator.alloc(100);
   EXPECT_TRUE(NULL == data);
   allocator.free(data);
@@ -217,40 +225,40 @@ TEST(ObMemfragRecycleAllocator, test_allocator)
   ret = allocator.switch_state();
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test thread unsafe init
+// test thread unsafe init
   ret = allocator.init(ObModIds::OB_MACRO_BLOCK_META, NULL, 0);
   EXPECT_EQ(OB_SUCCESS, ret);
-  // test invalid switch
+// test invalid switch
   ret = allocator.switch_state();
   EXPECT_NE(OB_SUCCESS, ret);
-  // test destroy
+// test destroy
   allocator.destroy();
 
-  // test normal init
+// test normal init
   ret = allocator.init(ObModIds::OB_MACRO_BLOCK_META, &image1, 0);
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  // test repeatly init
+// test repeatly init
   ret = allocator.init(ObModIds::OB_MACRO_BLOCK_META, &image2, 0);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  // test normal alloc
+// test normal alloc
   data = allocator.alloc(100);
   EXPECT_TRUE(data != NULL);
 
-  // test normal free
+// test normal free
   allocator.free(data);
 
-  // test invalid free
+// test invalid free
   allocator.free(&image1);
 
-  // test invalid need_rewrite
+// test invalid need_rewrite
   bool is_need = false;
   ret = allocator.need_rewrite(NULL, is_need);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_TRUE(!is_need);
 
-  // test normal need_rewrite
+// test normal need_rewrite
   data = allocator.alloc(100);
   ret = allocator.need_rewrite(data, is_need);
   EXPECT_EQ(OB_SUCCESS, ret);
@@ -277,10 +285,11 @@ TEST(ObMetaImage, test_image)
   image.wait();
 
   image.destroy();
+
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 int main(int argc, char** argv)
 {

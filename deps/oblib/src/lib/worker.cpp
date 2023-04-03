@@ -26,20 +26,55 @@ OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_);
 namespace oceanbase {
 namespace lib {
 
-void* __attribute__((weak)) alloc_worker()
+void * __attribute__((weak)) alloc_worker()
 {
-  static RLOCAL(ByteBuf<sizeof(Worker)>, wbuf);
-  return new (&wbuf[0]) Worker();
+  static TLOCAL(Worker, worker);
+  return (&worker);
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+void __attribute__((weak)) common_yield()
+{
+  // do nothing;
+}
 
-// static variables
-RLOCAL(Worker*, Worker::self_);
+}
+}
 
-Worker::Worker() : allocator_(nullptr), req_flag_(false), worker_level_(INT32_MAX), curr_request_level_(0), group_id_(0)
-{}
+__thread Worker *Worker::self_;
+
+Worker::Worker()
+    : allocator_(nullptr),
+      st_current_priority_(0),
+      session_(nullptr),
+      cur_request_(nullptr),
+      is_blocking_(false),
+      worker_level_(INT32_MAX),
+      curr_request_level_(0),
+      group_id_(0),
+      rpc_stat_srv_(nullptr),
+      timeout_ts_(INT64_MAX),
+      ntp_offset_(0),
+      rpc_tenant_id_(0),
+      disable_wait_(false)
+{
+  worker_node_.get_data() = this;
+}
+
+Worker::~Worker()
+{
+  if (self_ == this) {
+    // We only remove this worker not other worker since the reason
+    // described in SET stage.
+    self_ = nullptr;
+  }
+}
+
+Worker::Status Worker::check_wait()
+{
+  common_yield();
+  return WS_NOWAIT;
+}
+
 
 bool Worker::sched_wait()
 {
@@ -51,4 +86,15 @@ bool Worker::sched_run(int64_t waittime)
   UNUSED(waittime);
   check_status();
   return true;
+}
+
+
+int64_t Worker::get_timeout_remain() const
+{
+  return timeout_ts_ - ObTimeUtility::current_time();
+}
+
+bool Worker::is_timeout() const
+{
+  return ObTimeUtility::current_time() >= timeout_ts_;
 }

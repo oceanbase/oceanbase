@@ -17,18 +17,23 @@
 #include "common/object/ob_obj_compare.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprAnd::ObExprAnd(ObIAllocator& alloc)
-    : ObLogicalExprOperator(alloc, T_OP_AND, N_AND, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
+ObExprAnd::ObExprAnd(ObIAllocator &alloc):
+    ObLogicalExprOperator(alloc, T_OP_AND, N_AND, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
 {
   param_lazy_eval_ = true;
 };
 
-int ObExprAnd::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types_stack, int64_t param_num, ObExprTypeCtx& type_ctx) const
+// scale以及precision也统一下
+int ObExprAnd::calc_result_typeN(ObExprResType &type,
+                                 ObExprResType *types_stack,
+                                 int64_t param_num,
+                                 ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(types_stack);
@@ -40,90 +45,8 @@ int ObExprAnd::calc_result_typeN(
   return ret;
 }
 
-// expect obj1 and obj2 already evaluated
-int ObExprAnd::calc_result2(
-    common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-
-  bool obj1_is_true = false;
-  EXPR_SET_CAST_CTX_MODE(expr_ctx);
-  if (OB_FAIL(ObLogicalExprOperator::is_true(obj1, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, obj1_is_true))) {
-    LOG_WARN("fail to evaluate obj1", K(obj1), K(ret));
-  } else if (!obj1.is_null() && !obj1_is_true) {  // obj1 is false
-    result.set_int32(static_cast<int32_t>(false));
-  } else {
-    if (OB_UNLIKELY(obj1.is_null() && obj2.is_null())) {
-      result.set_null();
-    } else if (OB_UNLIKELY(obj1.is_null())) {
-      ret = cacl_res_with_one_param_null(result, obj1, obj2, expr_ctx);
-    } else if (OB_UNLIKELY(obj2.is_null())) {
-      ret = cacl_res_with_one_param_null(result, obj2, obj1, expr_ctx);
-    } else {
-      // obj1 must be true here.
-      bool bool_v2 = false;
-      if (OB_FAIL(ObLogicalExprOperator::is_true(obj2, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, bool_v2))) {
-        LOG_WARN("fail to evaluate obj2", K(obj2), K(ret));
-      } else {
-        result.set_int32(static_cast<int32_t>(bool_v2));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprAnd::calc_resultN(ObObj& result, const ObObj* objs, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(objs) || OB_UNLIKELY(1 >= param_num)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(objs), K(param_num));
-  } else if (OB_FAIL(param_eval(expr_ctx, objs[0], 0))) {
-    LOG_WARN("failed: eval objs[0]", K(ret));
-  } else {
-    result = objs[0];
-    if (result.is_false()) {
-      result.set_int32(static_cast<int32_t>(false));
-    }
-    for (int64_t idx = 1; idx < param_num && OB_SUCCESS == ret && !result.is_false(); ++idx) {
-      if (OB_FAIL(param_eval(expr_ctx, objs[idx], idx))) {
-        LOG_WARN("failed: eval objs[idx]", K(idx), K(ret));
-      } else {
-        ret = calc_result2(result, result, objs[idx], expr_ctx);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprAnd::cacl_res_with_one_param_null(
-    common::ObObj& res, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((!left.is_null()) || right.is_null())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(left), K(right));
-  } else {
-    // left is null while right is not null. evaluate the right obj
-    bool value = false;
-
-    EXPR_SET_CAST_CTX_MODE(expr_ctx);
-    if (OB_FAIL(ObObjEvaluator::is_true(right, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, value))) {
-      LOG_WARN("fail to evaluate obj1", K(right), K(ret));
-      // By design, compatible with mysql and oracle:
-      // null and false == false. null and true == null.
-      // see "NULL and the three-valued logic"
-      // https://en.wikipedia.org/wiki/Null_(SQL)#Comparisons_with_NULL_and_the_three-valued_logic_(3VL)
-    } else if (value) {
-      res.set_null();
-    } else {
-      res.set_int32(static_cast<int32_t>(false));
-    }
-  }
-  return ret;
-}
-
-static int calc_and_expr2(const ObDatum& left, const ObDatum& right, ObDatum& res)
+static int calc_and_expr2(const ObDatum &left, const ObDatum &right,
+                          ObDatum &res)
 {
   int ret = OB_SUCCESS;
   if (left.is_false() || right.is_false()) {
@@ -136,11 +59,12 @@ static int calc_and_expr2(const ObDatum& left, const ObDatum& right, ObDatum& re
   return ret;
 }
 
-int calc_and_exprN(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_and_exprN(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
+  LOG_DEBUG("calc and common mode");
   int ret = OB_SUCCESS;
-  ObDatum* tmp_res = NULL;
-  ObDatum* child_res = NULL;
+  ObDatum *tmp_res = NULL;
+  ObDatum *child_res = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, tmp_res))) {
     LOG_WARN("eval arg 0 failed", K(ret));
   } else if (tmp_res->is_null()) {
@@ -152,29 +76,179 @@ int calc_and_exprN(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
     for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (OB_FAIL(expr.args_[i]->eval(ctx, child_res))) {
         LOG_WARN("eval arg failed", K(ret), K(i));
-      } else if (OB_FAIL(calc_and_expr2(res_datum, *child_res, res_datum))) {
-        LOG_WARN("calc_and_expr2 failed", K(ret), K(i));
-      } else if (res_datum.is_false()) {
-        break;
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(calc_and_expr2(res_datum, *child_res, res_datum))) {
+          LOG_WARN("calc_and_expr2 failed", K(ret), K(i));
+        } else if (res_datum.is_false()) {
+          break;
+        }
       }
     }
   }
   return ret;
 }
 
-int ObExprAnd::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprAnd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   if (OB_ISNULL(rt_expr.args_) || OB_UNLIKELY(2 > rt_expr.arg_cnt_) ||
       OB_UNLIKELY(rt_expr.arg_cnt_ != raw_expr.get_param_count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("args_ is NULL or arg_cnt_ is invalid or raw_expr is invalid", K(ret), K(rt_expr), K(raw_expr));
+    LOG_WARN("args_ is NULL or arg_cnt_ is invalid or raw_expr is invalid",
+              K(ret), K(rt_expr), K(raw_expr));
   } else {
     rt_expr.eval_func_ = calc_and_exprN;
+    rt_expr.eval_batch_func_ = eval_and_batch_exprN;
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObExprAnd::eval_and_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
+                                    const ObBitVector &skip, const int64_t batch_size)
+{
+  LOG_DEBUG("eval and batch mode", K(batch_size));
+  int ret = OB_SUCCESS;
+  ObDatum* results = expr.locate_batch_datums(ctx);
+  if (OB_ISNULL(results)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr results frame is not init", K(ret));
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+    my_skip.deep_copy(skip, batch_size);
+    const int64_t real_param = batch_size - my_skip.accumulate_bit_cnt(batch_size);
+    int64_t skip_cnt = 0; //记录一个batch中skip的数量， 所有参数被skip即可结束
+
+    /*为省略对results的初始化操作以及减少对my_skip的写入，分成3段求值
+    *args_[first]需要设置eval flags，设置初始值，为false设置skip
+    *args_[middle]需要设置非true的result，和false的skip
+    *args_[last]只需要设置非true的result
+    */
+
+    //eval first
+    if (real_param == skip_cnt) {
+    } else if (OB_FAIL(expr.args_[0]->eval_batch(ctx, my_skip, batch_size))) {
+      LOG_WARN("failed to eval batch result args0", K(ret));
+    } else if (expr.args_[0]->is_batch_result()) {
+      ObDatum *curr_datum  = nullptr;
+      ObDatum *datum_array = expr.args_[0]->locate_batch_datums(ctx);
+      for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+        if (my_skip.at(j)) {
+          continue;
+        }
+        curr_datum = &datum_array[j];
+        if (curr_datum->is_null()) {
+          results[j].set_null();
+        } else if (false == curr_datum->get_bool()) {
+          results[j].set_bool(false);
+          my_skip.set(j);
+          ++skip_cnt;
+        } else {
+          results[j].set_bool(true);
+        }
+        eval_flags.set(j);
+      }
+    } else {
+      ObDatum *curr_datum = &expr.args_[0]->locate_expr_datum(ctx);
+      for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+        if (my_skip.at(j)) {
+          continue;
+        }
+        if (curr_datum->is_null()) {
+          results[j].set_null();
+        } else if (false == curr_datum->get_bool()) {
+          results[j].set_bool(false);
+          my_skip.set(j);
+          ++skip_cnt;
+        } else {
+          results[j].set_bool(true);
+        }
+        eval_flags.set(j);
+      }
+    }
+
+    //eval middle
+    int64_t arg_idx = 1;
+    for (; OB_SUCC(ret) && arg_idx < expr.arg_cnt_ - 1 && skip_cnt < real_param; ++arg_idx) {
+      if (OB_FAIL(expr.args_[arg_idx]->eval_batch(ctx, my_skip, batch_size))) {
+        LOG_WARN("failed to eval batch result", K(ret), K(arg_idx));
+      } else if (expr.args_[arg_idx]->is_batch_result()) {
+        ObDatum *curr_datum  = nullptr;
+        ObDatum *datum_array = expr.args_[arg_idx]->locate_batch_datums(ctx);
+        for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+          if (my_skip.at(j)) {
+            continue;
+          }
+          curr_datum = &datum_array[j];
+          if (curr_datum->is_null()) {
+            results[j].set_null();
+          } else if (false == curr_datum->get_bool()) {
+            results[j].set_bool(false);
+            my_skip.set(j);
+          } else {
+            //do nothing
+          }
+        }
+      } else {
+        ObDatum *curr_datum = &expr.args_[arg_idx]->locate_expr_datum(ctx);
+        for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+          if (my_skip.at(j)) {
+            continue;
+          }
+          if (curr_datum->is_null()) {
+            results[j].set_null();
+          } else if (false == curr_datum->get_bool()) {
+            results[j].set_bool(false);
+            my_skip.set(j);
+          } else {
+            //do nothing
+          }
+        }
+      }
+    }
+
+    //eval last
+    if (OB_FAIL(ret)) {
+    } else if (real_param == skip_cnt) {
+    } else if (OB_FAIL(expr.args_[arg_idx]->eval_batch(ctx, my_skip, batch_size))) {
+      LOG_WARN("failed to eval batch result args0", K(ret));
+    } else if (expr.args_[arg_idx]->is_batch_result()) {
+      ObDatum *curr_datum  = nullptr;
+      ObDatum *datum_array = expr.args_[arg_idx]->locate_batch_datums(ctx);
+      for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+        if (my_skip.at(j)) {
+          continue;
+        }
+        curr_datum = &datum_array[j];
+        if (curr_datum->is_null()) {
+          results[j].set_null();
+        } else if (false == curr_datum->get_bool()) {
+          results[j].set_bool(false);
+        } else {
+          //do nothing
+        }
+      }
+    } else {
+      ObDatum *curr_datum = &expr.args_[arg_idx]->locate_expr_datum(ctx);
+      for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+        if (my_skip.at(j)) {
+          continue;
+        }
+        if (curr_datum->is_null()) {
+          results[j].set_null();
+        } else if (false == curr_datum->get_bool()) {
+          results[j].set_bool(false);
+        } else {
+          //do nothing
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+}
+}

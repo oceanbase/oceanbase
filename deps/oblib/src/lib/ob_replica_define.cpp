@@ -12,8 +12,10 @@
 
 #include "ob_replica_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 OB_SERIALIZE_MEMBER(ObReplicaProperty, property_);
 
@@ -30,5 +32,5 @@ int ObReplicaProperty::set_memstore_percent(int64_t memstore_percent)
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase

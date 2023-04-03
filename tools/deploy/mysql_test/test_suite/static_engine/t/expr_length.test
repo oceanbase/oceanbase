@@ -1,0 +1,41 @@
+# owner: dachuan.sdc
+# owner group: SQL2
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+--sleep 2
+connection default;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 bigint, c6 bigint unsigned,
+    c7 float, c8 float unsigned,
+    c9 double, c10 double unsigned,
+    c11 decimal, c12 decimal unsigned,
+    c13 date, c14 datetime, c15 timestamp,
+    c16 varchar(30), c17 char(30));
+select * from t1;
+insert into t1 values(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+insert into t1 values(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00', '', '');
+insert into t1 values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, '0013-01-01', '0014-01-01', '0015-01-01', '16', '17');
+insert into t1 values(-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, '0013-01-01', '0014-01-01 00:00:00', '0015-01-01 00:00:00', '-16', '-17');
+insert into t1 values(1234567, 7654321, -33, 44, 555555555, 666666666, 777.777, 8888.888, 99999.999999, 10000.00000, 1111, 121212121, '0013-01-01', '0014-01-01 00:00:11', '0015-01-01 00:00:11', 'sadfsadfdsafasasdf', 'asdffdsafadsfdsafsad');
+
+connection conn_admin;
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+let $cnt=17;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select c$left, length(c$left) from t1;
+  inc $left;
+}
+
+drop table t1;
+connection conn_admin;
+--sleep 2

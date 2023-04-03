@@ -18,78 +18,57 @@
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObCreateTenantStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCreateTenantStmt : public ObDDLStmt
+{
 public:
-  explicit ObCreateTenantStmt(common::ObIAllocator* name_pool);
+  explicit ObCreateTenantStmt(common::ObIAllocator *name_pool);
   ObCreateTenantStmt();
   virtual ~ObCreateTenantStmt();
-  inline obrpc::ObCreateTenantArg& get_create_tenant_arg();
-  virtual void print(FILE* fp, int32_t level, int32_t index = 0);
+  inline obrpc::ObCreateTenantArg &get_create_tenant_arg();
+  virtual void print(FILE *fp, int32_t level, int32_t index = 0);
 
-  void set_tenant_name(const common::ObString& tenant_name);
-  int add_resource_pool(const common::ObString& res);
-  int set_resource_pool(const common::ObIArray<common::ObString>& res);
-  int add_zone(const common::ObString& zone);
-  int set_comment(const common::ObString& commont);
-  int set_locality(const common::ObString& locality);
+  void set_tenant_name(const common::ObString &tenant_name);
+  int add_resource_pool(const common::ObString &res);
+  int set_resource_pool(const common::ObIArray<common::ObString> &res);
+  int add_zone(const common::ObString &zone);
+  int set_comment(const common::ObString &commont);
+  int set_locality(const common::ObString &locality);
   int set_tcp_invited_nodes(common::ObString value);
-  void set_primary_zone(const common::ObString& zone);
+  void set_primary_zone(const common::ObString &zone);
   void set_if_not_exist(const bool is_exist);
   void set_charset_type(const common::ObCharsetType type);
   void set_collation_type(const common::ObCollationType type);
+  void set_enable_arbitration_service(const bool enable_arbitration_service);
   void set_read_only(const bool read_only)
   {
     create_tenant_arg_.tenant_schema_.set_read_only(read_only);
   }
-  void set_rewrite_merge_version(const int64_t version)
-  {
-    create_tenant_arg_.tenant_schema_.set_rewrite_merge_version(version);
-  }
-  void set_storage_format_version(const int64_t version)
-  {
-    create_tenant_arg_.tenant_schema_.set_storage_format_version(version);
-  }
-  void set_storage_format_work_version(const int64_t version)
-  {
-    create_tenant_arg_.tenant_schema_.set_storage_format_work_version(version);
-  }
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
-  int add_sys_var_node(const ObVariableSetStmt::VariableNamesSetNode& node)
-  {
-    return sys_var_nodes_.push_back(node);
-  }
-  const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& get_sys_var_nodes() const
-  {
-    return sys_var_nodes_;
-  }
-  int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& other);
-  int set_default_tablegroup_name(const common::ObString& tablegroup_name);
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return create_tenant_arg_;
-  }
-
+  virtual bool cause_implicit_commit() const { return true; }
+  int add_sys_var_node(const ObVariableSetStmt::VariableSetNode &node) { return sys_var_nodes_.push_back(node); }
+  const common::ObIArray<ObVariableSetStmt::VariableSetNode> &get_sys_var_nodes() const {return sys_var_nodes_;}
+  int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode> &other);
+  int set_default_tablegroup_name(const common::ObString &tablegroup_name);
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return create_tenant_arg_; }
 private:
   obrpc::ObCreateTenantArg create_tenant_arg_;
-  common::ObArray<ObVariableSetStmt::VariableNamesSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
+  common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTenantStmt);
 };
 
-inline obrpc::ObCreateTenantArg& ObCreateTenantStmt::get_create_tenant_arg()
+inline obrpc::ObCreateTenantArg &ObCreateTenantStmt::get_create_tenant_arg()
 {
   return create_tenant_arg_;
 }
 
-inline int ObCreateTenantStmt::assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& other)
+inline int ObCreateTenantStmt::assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode> &other)
 {
   return sys_var_nodes_.assign(other);
 }
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_CREATE_TENANT_STMT_H_
+} /* sql */
+} /* oceanbase */
+#endif //OCEANBASE_SQL_OB_CREATE_TENANT_STMT_H_

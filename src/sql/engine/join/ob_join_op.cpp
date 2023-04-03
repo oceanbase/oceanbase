@@ -14,53 +14,72 @@
 
 #include "sql/engine/join/ob_join_op.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-OB_SERIALIZE_MEMBER((ObJoinSpec, ObOpSpec), join_type_, other_join_conds_);
+OB_SERIALIZE_MEMBER((ObJoinSpec, ObOpSpec),
+                    join_type_, other_join_conds_);
 
-int ObJoinOp::rescan()
+int ObJoinOp::inner_rescan()
 {
   output_row_produced_ = false;
   left_row_joined_ = false;
-  return ObOperator::rescan();
+  return ObOperator::inner_rescan();
 }
 
-int ObJoinOp::blank_left_row()
+int ObJoinOp::blank_row(const ExprFixedArray &exprs)
 {
   int ret = OB_SUCCESS;
   // clear evaluated flag first to make sure expression evaluated with the null values.
   clear_evaluated_flag();
-  for (int64_t i = 0; i < left_->get_spec().output_.count(); i++) {
-    ObExpr* expr = left_->get_spec().output_.at(i);
+  for (int64_t i = 0; i < exprs.count(); i++) {
+    ObExpr *expr = exprs.at(i);
     expr->locate_expr_datum(eval_ctx_).set_null();
-    expr->get_eval_info(eval_ctx_).evaluated_ = true;
+    expr->set_evaluated_projected(eval_ctx_);
   }
   return ret;
 }
 
-int ObJoinOp::blank_right_row()
+void ObJoinOp::blank_row_batch(const ExprFixedArray &exprs, int64_t batch_size)
 {
-  int ret = OB_SUCCESS;
-  // clear evaluated flag first to make sure expression evaluated with the null values.
-  clear_evaluated_flag();
-  for (int64_t i = 0; i < right_->get_spec().output_.count(); i++) {
-    ObExpr* expr = right_->get_spec().output_.at(i);
-    expr->locate_expr_datum(eval_ctx_).set_null();
-    expr->get_eval_info(eval_ctx_).evaluated_ = true;
+  for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
+    ObExpr *e = exprs.at(col_idx);
+    ObDatum *datums = e->locate_batch_datums(eval_ctx_);
+    if (!e->is_batch_result()) {
+      datums[0].set_null();
+    } else {
+      for (int64_t i = 0; i < batch_size; i++) {
+        datums[i].set_null();
+      }
+    }
+    e->set_evaluated_projected(eval_ctx_);
+    e->get_eval_info(eval_ctx_).notnull_ = false;
   }
-  return ret;
 }
 
-int ObJoinOp::calc_other_conds(bool& is_match)
+void ObJoinOp::blank_row_batch_one(const ExprFixedArray &exprs)
+{
+  clear_datum_eval_flag();
+  for (int64_t i = 0; i < exprs.count(); i++) {
+    ObExpr *expr = exprs.at(i);
+    expr->locate_expr_datum(eval_ctx_).set_null();
+    expr->set_evaluated_flag(eval_ctx_);
+    if (expr->is_batch_result()) {
+      expr->get_eval_info(eval_ctx_).notnull_ = false;
+    }
+  }
+}
+
+int ObJoinOp::calc_other_conds(bool &is_match)
 {
   int ret = OB_SUCCESS;
   is_match = true;
-  const ObIArray<ObExpr*>& conds = get_spec().other_join_conds_;
-  ObDatum* cmp_res = NULL;
-  ARRAY_FOREACH(conds, i)
-  {
+  const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
+  ObDatum *cmp_res = NULL;
+  ARRAY_FOREACH(conds, i) {
     if (OB_FAIL(conds.at(i)->eval(eval_ctx_, cmp_res))) {
       LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
     } else if (cmp_res->is_null() || 0 == cmp_res->get_int()) {
@@ -92,5 +111,5 @@ int ObJoinOp::get_next_right_row()
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

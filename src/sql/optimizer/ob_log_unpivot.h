@@ -15,66 +15,50 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogUnpivot : public ObLogicalOperator {
+
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogUnpivot : public ObLogicalOperator
+{
 public:
-  ObLogUnpivot(ObLogPlan& plan)
-      : ObLogicalOperator(plan), subquery_id_(common::OB_INVALID_ID), subquery_name_(), access_exprs_()
+  ObLogUnpivot(ObLogPlan &plan)
+  : ObLogicalOperator(plan),
+    subquery_id_(common::OB_INVALID_ID),
+    subquery_name_(),
+    access_exprs_()
   {}
 
-  ~ObLogUnpivot()
-  {}
-
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  int allocate_exchange_post(AllocExchContext* ctx) override;
-
-  int calc_cost();
+  ~ObLogUnpivot() {}
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int allocate_expr_post(ObAllocExprContext &ctx);
+  virtual int compute_sharding_info() override;
   virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  int gen_filters();
-  int gen_output_columns();
-  int set_properties() override;
-  void set_subquery_id(uint64_t subquery_id)
-  {
-    subquery_id_ = subquery_id;
-  }
-  inline const uint64_t& get_subquery_id() const
-  {
-    return subquery_id_;
-  }
-  inline common::ObString& get_subquery_name()
-  {
-    return subquery_name_;
-  }
-  inline const common::ObIArray<ObRawExpr*>& get_access_exprs() const
-  {
-    return access_exprs_;
-  }
-  inline common::ObIArray<ObRawExpr*>& get_access_exprs()
-  {
-    return access_exprs_;
-  }
-  virtual int transmit_op_ordering() override;
-  virtual int transmit_local_ordering() override;
-
+  virtual int est_width() override;
+  void set_subquery_id(uint64_t subquery_id) { subquery_id_ = subquery_id; }
+  inline const uint64_t &get_subquery_id() const { return subquery_id_; }
+  inline common::ObString &get_subquery_name() { return subquery_name_; }
+  inline const common::ObIArray<ObRawExpr *> &get_access_exprs() const { return access_exprs_; }
+  inline common::ObIArray<ObRawExpr *> &get_access_exprs() { return access_exprs_; }
   virtual int compute_op_ordering() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_one_row_info() override;
-
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+private:
+  int generate_access_exprs();
 public:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
   common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> access_exprs_;
   ObUnpivotInfo unpivot_info_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogUnpivot);
 };
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} // end of namespace sql
+} // end of namespace oceanbase
+
 
 #endif /* OB_LOG_SUBQUERY_SCAN_H_ */

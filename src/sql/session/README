@@ -1,0 +1,4 @@
+See `ob_sql_session_info.h' for the interface of this module.
+
+ObBasicSessionInfo存储系统变量及其相关变量，并存储远程执行SQL task时，需要序列化到远端的状态.
+ObSQLSessionInfo存储其他状态信息，如prepared statment相关信息等.

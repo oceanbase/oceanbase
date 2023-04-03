@@ -16,64 +16,62 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_lease_struct.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 
 template <typename T>
-void try_reset(T& t)
+void try_reset(T &t)
 {
   try_reset(t, BoolType<HAS_MEMBER(T, reset)>());
 }
 
 template <typename T>
-void try_reset(T& t, const TrueType&)
+void try_reset(T &t, const TrueType &)
 {
   t.reset();
 }
 
 template <typename T>
-void try_reset(T&, const FalseType&)
+void try_reset(T &, const FalseType &)
 {
   return;
 }
 
-class TestLeaseStruct : public ::testing::Test {
+class TestLeaseStruct : public ::testing::Test
+{
 protected:
   template <typename T>
-  T* alloc(void)
+  T *alloc(void)
   {
-    void* ptr = allocator_.alloc(sizeof(T));
+    void *ptr = allocator_.alloc(sizeof(T));
     memset(ptr, 0, sizeof(T));
-    return new (ptr) T();
+    return new(ptr) T();
   }
 
   template <typename T>
-  void check_serialize(const T& t)
+  void check_serialize(const T &t)
   {
     int64_t buf_size = t.get_serialize_size();
-    char* buf = (char*)allocator_.alloc(buf_size);
+    char *buf = (char *)allocator_.alloc(buf_size);
     int64_t pos = 0;
     ASSERT_EQ(OB_SUCCESS, t.serialize(buf, buf_size, pos));
     ASSERT_EQ(buf_size, pos);
 
-    T* copy = alloc<T>();
+    T *copy = alloc<T>();
     try_reset(*copy);
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, copy->deserialize(buf, buf_size, pos));
     ASSERT_EQ(buf_size, pos);
 
+
     int cmp = memcmp(&t, copy, sizeof(T));
     if (0 != cmp) {
       LOG_WARN("copy by serialize and deserialize mismatch with original",
-          "original",
-          t,
-          "copy",
-          *copy,
-          "original_hex",
-          PHEX(&t, sizeof(T)),
-          "copy_hex",
-          PHEX(copy, sizeof(T)));
+          "original", t, "copy", *copy,
+          "original_hex", PHEX(&t, sizeof(T)), "copy_hex", PHEX(copy, sizeof(T)));
     }
     ASSERT_EQ(0, cmp);
   }
@@ -83,7 +81,7 @@ protected:
 
 TEST_F(TestLeaseStruct, ObServerResourceInfo)
 {
-  ObServerResourceInfo& res = *alloc<ObServerResourceInfo>();
+  ObServerResourceInfo &res = *alloc<ObServerResourceInfo>();
   LOG_INFO("to_string", K(res));
 
   res.cpu_ = 1;
@@ -99,7 +97,7 @@ TEST_F(TestLeaseStruct, ObServerResourceInfo)
 
 TEST_F(TestLeaseStruct, ObLeaseRequest)
 {
-  ObLeaseRequest& req = *alloc<ObLeaseRequest>();
+  ObLeaseRequest &req = *alloc<ObLeaseRequest>();
   LOG_INFO("to_string", K(req));
 
   req.version_ = 1;
@@ -114,7 +112,7 @@ TEST_F(TestLeaseStruct, ObLeaseRequest)
 
 TEST_F(TestLeaseStruct, ObLeaseResponse)
 {
-  ObLeaseResponse& res = *alloc<ObLeaseResponse>();
+  ObLeaseResponse &res = *alloc<ObLeaseResponse>();
   LOG_INFO("to_string", K(res));
 
   res.version_ = 1;
@@ -129,7 +127,7 @@ TEST_F(TestLeaseStruct, ObLeaseResponse)
 
 TEST_F(TestLeaseStruct, ObZoneLeaseInfo)
 {
-  ObZoneLeaseInfo& info = *alloc<ObZoneLeaseInfo>();
+  ObZoneLeaseInfo &info = *alloc<ObZoneLeaseInfo>();
   LOG_INFO("to_string", K(info));
 
   info.zone_ = "test";
@@ -143,10 +141,10 @@ TEST_F(TestLeaseStruct, ObZoneLeaseInfo)
   LOG_INFO("to_string", K(info));
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

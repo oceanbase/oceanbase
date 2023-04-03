@@ -12,27 +12,30 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/table/ob_table_scan_with_index_back_op.h"
-#include "storage/ob_i_partition_storage.h"
-#include "storage/ob_partition_service.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/ob_table_scan_iterator.h"
-namespace oceanbase {
+#include "storage/access/ob_table_scan_iterator.h"
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 OB_SERIALIZE_MEMBER((ObTableScanWithIndexBackSpec, ObTableScanSpec), index_scan_tree_id_);
 
-ObTableScanWithIndexBackSpec::ObTableScanWithIndexBackSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-    : ObTableScanSpec(alloc, type), index_scan_tree_id_(OB_INVALID_ID)
-{}
+ObTableScanWithIndexBackSpec::ObTableScanWithIndexBackSpec(common::ObIAllocator &alloc,
+                                                           const ObPhyOperatorType type)
+  : ObTableScanSpec(alloc, type),
+    index_scan_tree_id_(OB_INVALID_ID)
+{
+}
 
 ObTableScanWithIndexBackSpec::~ObTableScanWithIndexBackSpec()
-{}
+{
+}
 /*
 int ObTableScanWithIndexBackOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  // index scan depends on some table scan params,
-  // so we should prepare table scan param first and then open index scan
+  //index scan需要依赖table的一些参数,所以应该先prepare table scan param，再open index scan
   ObOperatorKit *op_kit = nullptr;
   if (OB_ISNULL(op_kit = ctx_.get_operator_kit(MY_SPEC.get_index_scan_tree_id()))
               || OB_ISNULL(op_kit->op_)) {
@@ -55,7 +58,8 @@ int ObTableScanWithIndexBackOp::inner_open()
   return ret;
 }
 */
-int ObTableScanWithIndexBackOp::rescan()
+
+int ObTableScanWithIndexBackOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(index_scan_tree_)) {
@@ -64,16 +68,12 @@ int ObTableScanWithIndexBackOp::rescan()
   } else if (OB_FAIL(index_scan_tree_->rescan())) {
     LOG_WARN("rescan index scan tree failed", K(ret));
 
-  } else if (OB_FAIL(ObOperator::rescan())) {
+  } else if (OB_FAIL(ObTableScanOp::inner_rescan())) {
     LOG_WARN("rescan no children physical operator failed", K(ret));
-  } else if (OB_ISNULL(table_allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table allocator is null", K(ret));
   } else {
     is_index_end_ = false;
-    table_allocator_->reuse();
     if (OB_ISNULL(result_)) {
-      // table iterator is not inited when rescan first time.
+      //第一次rescan，没有初始化table iterator
       if (OB_FAIL(do_table_scan_with_index())) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
           LOG_WARN("do table scan with index failed", K(ret));
@@ -91,7 +91,7 @@ int ObTableScanWithIndexBackOp::rescan()
 int ObTableScanWithIndexBackOp::open_index_scan()
 {
   int ret = OB_SUCCESS;
-  if (index_scan_tree_ != NULL) {
+  if (index_scan_tree_!= NULL) {
     if (OB_FAIL(index_scan_tree_->open())) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("open index scan tree failed", K(ret));
@@ -176,36 +176,36 @@ int ObTableScanWithIndexBackOp::extract_range_from_index()
 int ObTableScanWithIndexBackOp::do_table_scan_with_index()
 {
   int ret = OB_SUCCESS;
-  ObIDataAccessService* das = NULL;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get task executor ctx failed", K(ret));
-  } else if (OB_FAIL(extract_range_from_index())) {
-    LOG_WARN("extract range from index failed", K(ret));
-  } else if (scan_param_.key_ranges_.count() <= 0) {
-    // do nothing
-    read_action_ = READ_ITER_END;
-  } else if (OB_FAIL(get_partition_service(*task_exec_ctx, das))) {
-    LOG_WARN("fail to get partition service", K(ret));
-  } else if (OB_FAIL(das->table_scan(scan_param_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("fail to scan table", K(scan_param_), K(ret));
-    }
-  } else {
-    read_action_ = READ_ITERATOR;
-  }
+//  ObITabletScan *das = NULL;
+//  ObTaskExecutorCtx *task_exec_ctx = NULL;
+//  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx_))) {
+//    ret = OB_ERR_UNEXPECTED;
+//    LOG_WARN("get task executor ctx failed", K(ret));
+//  } else if (OB_FAIL(extract_range_from_index())) {
+//    LOG_WARN("extract range from index failed", K(ret));
+//  } else if (scan_param_.key_ranges_.count() <= 0) {
+//    //do nothing
+//    read_action_ = READ_ITER_END;
+//  } else if (OB_FAIL(get_partition_service(*task_exec_ctx, das))) {
+//    LOG_WARN("fail to get partition service", K(ret));
+//  } else if (OB_FAIL(das->table_scan(scan_param_, result_))) {
+//    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+//      LOG_WARN("fail to scan table", K(scan_param_), K(ret));
+//    }
+//  } else {
+//    read_action_ = READ_ITERATOR;
+//  }
   return ret;
 }
 
 int ObTableScanWithIndexBackOp::do_table_rescan_with_index()
 {
   int ret = OB_SUCCESS;
-  storage::ObTableScanIterator* table_iter = NULL;
+  storage::ObTableScanIterator *table_iter = NULL;
   if (OB_FAIL(extract_range_from_index())) {
     LOG_WARN("extract range from index failed", K(ret));
   } else if (scan_param_.key_ranges_.count() <= 0) {
-    // do nothing
+    //do nothing
     read_action_ = READ_ITER_END;
   } else if (OB_ISNULL(table_iter = static_cast<storage::ObTableScanIterator*>(result_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -223,45 +223,47 @@ int ObTableScanWithIndexBackOp::do_table_rescan_with_index()
 int ObTableScanWithIndexBackOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  ObNewRow* cur_row = NULL;
+  ObNewRow *cur_row = NULL;
   bool need_continue = true;
   if (OB_FAIL(try_check_status())) {
     LOG_WARN("check physical plan status failed", K(ret));
   }
   while (OB_SUCC(ret) && need_continue) {
     switch (read_action_) {
-      case READ_TABLE_PARTITION: {
-        if (OB_FAIL(do_table_rescan_with_index())) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-            LOG_WARN("fail to get next row from ObNewRowIterator", K(ret));
-          }
+    case READ_TABLE_PARTITION: {
+      if (OB_FAIL(do_table_rescan_with_index())) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("fail to get next row from ObNewRowIterator", K(ret));
         }
-        break;
       }
-      case READ_ITERATOR: {
-        if (OB_FAIL(result_->get_next_row(cur_row))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("fail to get next row from ObNewRowIterator", K(ret));
-          } else {
-            read_action_ = READ_TABLE_PARTITION;
-            ret = OB_SUCCESS;
-          }
+      break;
+    }
+    case READ_ITERATOR: {
+      if (OB_FAIL(result_->get_next_row(cur_row))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next row from ObNewRowIterator", K(ret));
         } else {
-          output_row_count_++;
-          need_continue = false;
-          LOG_DEBUG("get next row from domain index look up");
+          //读到了迭代器末端，从storage重新读新的数据
+          read_action_ = READ_TABLE_PARTITION;
+          ret = OB_SUCCESS;
         }
-        break;
-      }
-      case READ_ITER_END: {
-        ret = OB_ITER_END;
+      } else {
+        output_row_cnt_++;
         need_continue = false;
-        break;
+        LOG_DEBUG("get next row from domain index look up");
       }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("read action is unexpected", K_(read_action));
-        break;
+      break;
+    }
+    case READ_ITER_END: {
+      //读到了数据的末端，对调用者返回OB_ITER_END
+      ret = OB_ITER_END;
+      need_continue = false;
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("read action is unexpected", K_(read_action));
+      break;
     }
   }
   return ret;

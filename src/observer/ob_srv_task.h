@@ -16,35 +16,46 @@
 #include "rpc/ob_request.h"
 #include "observer/mysql/obmp_disconnect.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObFreeSessionCtx;
 }
-namespace observer {
+namespace observer
+{
 
-class ObSrvTask : public rpc::ObRequest {
+class ObSrvTask
+    : public rpc::ObRequest
+{
 public:
-  ObSrvTask() : ObRequest(ObRequest::OB_TASK)
+  ObSrvTask()
+      : ObRequest(ObRequest::OB_TASK)
   {}
 
-  virtual rpc::frame::ObReqProcessor& get_processor() = 0;
-};  // end of class ObSrvTask
+  virtual rpc::frame::ObReqProcessor &get_processor() = 0;
+}; // end of class ObSrvTask
 
-class ObDisconnectTask : public ObSrvTask {
+class ObDisconnectTask
+    : public ObSrvTask
+{
 public:
-  ObDisconnectTask(const sql::ObFreeSessionCtx& ctx) : proc_(ctx)
-  {}
+  ObDisconnectTask(const sql::ObFreeSessionCtx &ctx)
+       : proc_(ctx)
+  {
+  }
 
-  virtual rpc::frame::ObReqProcessor& get_processor()
+  virtual rpc::frame::ObReqProcessor &get_processor()
   {
     return proc_;
   }
 
 private:
   ObMPDisconnect proc_;
-};  // end of class ObDisconnectTAsk
+}; // end of class ObDisconnectTAsk
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_OBSERVER_OB_SRV_TASK_H_ */

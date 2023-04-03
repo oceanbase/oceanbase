@@ -14,34 +14,28 @@
 #define OCEANBASE_SQL_OB_LOG_SEQUENCE_H
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_set.h"
-namespace oceanbase {
-namespace sql {
-class ObLogSequence : public ObLogicalOperator {
-private:
-  typedef common::ObSEArray<uint64_t, 4> SequenceIdArray;
-
-public:
-  ObLogSequence(ObLogPlan& plan) : ObLogicalOperator(plan)
-  {}
-  virtual ~ObLogSequence()
-  {}
-  virtual uint64_t hash(uint64_t seed) const override;
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  int allocate_exchange_post(AllocExchContext* ctx) override;
-  const common::ObIArray<uint64_t>& get_sequence_ids() const
+namespace oceanbase
+{
+namespace sql
+{
+  class ObLogSequence : public ObLogicalOperator
   {
-    return nextval_seq_ids_;
-  }
-  common::ObIArray<uint64_t>& get_sequence_ids()
-  {
-    return nextval_seq_ids_;
-  }
-  virtual int est_cost() override;
-
-private:
-  SequenceIdArray nextval_seq_ids_;
-};
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_LOG_SEQUENCE_H
+  private:
+    typedef common::ObSEArray<uint64_t, 4> SequenceIdArray;
+  public:
+    ObLogSequence(ObLogPlan &plan) : ObLogicalOperator(plan) {}
+    virtual ~ObLogSequence() {}
+    virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    const common::ObIArray<uint64_t> &get_sequence_ids() const
+    { return nextval_seq_ids_; }
+    common::ObIArray<uint64_t> &get_sequence_ids()
+    { return nextval_seq_ids_; }
+    virtual int est_cost() override;
+    virtual int est_width() override;
+    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  private:
+    SequenceIdArray nextval_seq_ids_;
+  };
+}
+}
+#endif // OCEANBASE_SQL_OB_LOG_SEQUENCE_H

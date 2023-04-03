@@ -22,12 +22,18 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObUserProfileStmt::ObUserProfileStmt(ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_USER_PROFILE), create_profile_arg_()
-{}
+ObUserProfileStmt::ObUserProfileStmt(ObIAllocator *name_pool)
+    : ObDDLStmt(name_pool, stmt::T_USER_PROFILE),
+      create_profile_arg_()
+{
+}
 
-ObUserProfileStmt::ObUserProfileStmt() : ObDDLStmt(NULL, stmt::T_USER_PROFILE), create_profile_arg_()
-{}
+ObUserProfileStmt::ObUserProfileStmt()
+    : ObDDLStmt(NULL, stmt::T_USER_PROFILE),
+      create_profile_arg_()
+{
+}
 
 ObUserProfileStmt::~ObUserProfileStmt()
-{}
+{
+}

@@ -25,6 +25,9 @@ public:
   ObTableAPITransCb();
   virtual ~ObTableAPITransCb();
   void destroy_cb_if_no_ref();
+  void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
+protected:
+  transaction::ObTxDesc *tx_desc_;
 private:
   int32_t ref_count_;
   // disallow copy

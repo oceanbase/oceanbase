@@ -1,0 +1,203 @@
+# owner: peihan.dph
+# owner group: sql2
+# tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+sleep 2;
+set ob_enable_plan_cache = 0;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(col_int int, 
+                col_zero int,
+                col_null int, 
+                col_varchar varchar(100), 
+                col_varchar_num varchar(100),
+                col_empty_str varchar(100),
+                col_varchar_zero varchar(100));
+insert into t1 values(1, 0, null, 'abc', '1', '', '0');
+
+--explain_protocol 2
+--echo // Case1: normal test
+--echo // Case1.1: int test
+--echo //  bool expr exists, no cast expr, res is NULL
+select col_int and col_null from t1;
+--echo // same as above
+select col_null and col_int from t1;
+
+--echo // bool expr exists for col_varchar, cast expr exists, res is 0
+select col_int and col_varchar from t1;
+--echo // same as above
+select col_varchar and col_int from t1;
+
+--echo // bool expr and cast expr exists for col_varchar_num, res is 0
+select col_int and col_varchar_num from t1;
+--echo // same as above
+select col_varchar_num and col_int from t1;
+
+--echo // bool expr exists, no cast expr, res is 0
+select col_int and 0 from t1;
+--echo // same as above
+select 0 and col_int from t1;
+
+--echo // Case1.1: null test
+--echo // bool expr exists, no cast expr, res is NULL
+select col_null and col_null from t1;
+--echo // bool expr and cast expr exists for col_varchar_num, res is NULL
+select col_null and col_varchar_num from t1;
+--echo // same as above
+select col_varchar_num and col_null from t1;
+
+--echo // bool expr and cast expr exists for col_varchar_num, res is 0
+select col_null and col_varchar from t1;
+--echo // same as above
+select col_varchar and col_null from t1;
+
+--echo // same as above
+select col_null and 0 from t1;
+
+--echo // Case1.2: 0 test
+--echo // bool expr exists, no cast expr, res is 0
+select col_varchar_num and 0 from t1;
+--echo // same as above
+select col_varchar_num and 0 from t1;
+
+--echo // Case1.3: empty str test
+--echo // bool expr and cast expr exists for empty str, res is 0
+select col_int and '' from t1;
+--echo // same as above
+select '' and col_int from t1;
+
+--echo // bool expr and cast expr exists for empty str and col_varchar, res is 0
+select col_varchar and '' from t1;
+--echo // same as above
+select '' and col_varchar from t1;
+--echo // bool expr and cast expr exists for empty str and col_varchar_num, res is 0
+select col_varchar_num and '' from t1;
+
+--echo // same as above
+select '' and col_varchar_num from t1;
+
+--echo // Case2: create table as test. 因为select/explain语句对应的cast mode
+--echo // 有WARN_ON_FAIL。其他的没有，所以结果是有区别的
+--echo // TODO: 目前没法测试，建表语句还不完善
+
+--echo // Case3: or test
+--echo // Case3.1 normal test
+--echo // bool expr exists, res is 1
+select col_int or col_int from t1;
+--echo // bool expr exists, res is 0
+select col_zero or col_zero from t1;
+--echo // bool expr exists, cast expr exists res is 0
+select col_varchar_zero or col_varchar_zero from t1;
+
+--echo // Case3.2 null test
+--echo // bool expr exists, res is NULL
+select col_null or col_null from t1;
+--echo // bool expr exists, res is 1
+select col_int or col_null from t1;
+--echo // same as above
+select col_null or col_int from t1;
+
+--echo // bool expr exists, res is NULL
+select col_zero or col_null from t1;
+--echo // same as above
+select col_null or col_zero from t1;
+
+--echo // bool expr exists, res is 1
+select col_varchar_num or col_null from t1;
+--echo // same as above
+select col_null or col_varchar_num from t1;
+
+--echo // bool expr exists, res is NULL
+select col_varchar_zero or col_null from t1;
+--echo // same as above
+select col_null or col_varchar_zero from t1;
+
+--echo // Case3.3 empty str test
+--echo // bool expr exists, res is NULL
+select col_null or '' from t1;
+--echo // same as above
+select '' or col_null from t1;
+
+--echo // bool expr exists, res is 1
+select col_int or '' from t1;
+--echo // same as above
+select '' or col_int from t1;
+
+--echo // bool expr exists, res is 0
+select col_zero or '' from t1;
+--echo // same as above
+select '' or col_zero from t1;
+
+--echo // res is 0
+select col_empty_str or '' from t1;
+
+--echo // Case4: multi and test
+--echo // res is 1
+select 1 and 2 and 3 and col_int from t1;
+--echo // res is NULL
+select 1 and col_null and 3 and col_int from t1;
+--echo // res is 0
+select 1 and col_null and 3 and col_zero from t1;
+--echo // res is 0
+select 1 and col_null and 3 and col_empty_str from t1;
+
+--echo // Case5: multi or test
+--echo // res is 1
+select 1 or 2 or col_int from t1;
+--echo // res is NULL
+select 1 or 2 or col_null from t1;
+--echo // res is 0
+select '' or 0 or col_null from t1;
+
+--echo // Case6: 0, 1, null三个值组合测试，结果跟不开新引擎的结果进行对比
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+--explain_protocol 0
+create table t1 (c1 int, c2 int, c3 int, 
+                 c4 float, c5 float, c6 float,
+                 c7 double, c8 double, c9 double,
+                 c10 decimal, c11 decimal, c12 decimal,
+                 c13 datetime, c14 datetime, c15 datetime,
+                 c16 timestamp, c17 timestamp, c18 timestamp,
+                 c19 date, c20 date, c21 date,
+                 c22 varchar(10), c23 varchar(10), c24 varchar(10),
+                 c25 char(11), c26 char(11), c27 char(12),
+                 c28 char(10), c29 char(10), c30 char(10));
+insert into t1 values(0, 1, null,
+                      0.0, 1.0, null,
+                      0.0, 1.0, null,
+                      0.0, 1.0, null,
+                      0, '2019-01-01 00:00:00', null,
+                      0, '2019-01-01 00:00:00', null,
+                      0, '2019-01-01', null,
+                      '0', '123', null,
+                      '0', '123', null,
+                      '0', 'abc', null);
+
+--explain_protocol 2
+set @@ob_enable_plan_cache = 0;
+
+let $cnt=3;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, c$left and c$right from t1;
+    eval select c$left, c$right, c$left or c$right from t1;
+    
+    inc $right;
+  }
+  inc $left;
+}
+
+--sleep 2

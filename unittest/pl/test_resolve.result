@@ -1,0 +1,7 @@
+***************   Case 1   ***************
+
+SQL: create procedure p(x bigint) begin declare i bigint default 1; if(i=1) then select 42 from dual; end if; end 
+
+{name:"p", body:{type:0, label:"", stmts:[{type:0, label:"", stmts:[{type:1, label:"", idx:[1], default_:0}, {type:0, label:"", stmts:[{type:4, label:"", cond:1, then:{type:0, label:"", stmts:[{type:11, label:"", sql:"select 42 from dual", params:[], ps_id:1, stmt_type:1, into:[], data_type:[], bulk:false}]}, else_:null}]}]}]}, symbol_table:{count:2, variables:{name:"x", type:{type:1, obj_type:"?ÿÿÿÿÿÿÿÿÿ", default_:null}}, condition_table:{count:0, conditions:{name:"", value:{type:-1, error_code:0, sql_state:null, str_len:0, stmt_id:0, signal:false}}}}
+*************** Case 1(end)  ************** 
+

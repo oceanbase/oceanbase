@@ -1,0 +1,1590 @@
+result_format: 4
+
+alter system flush plan cache global;
+
+set ob_enable_plan_cache=false;
+
+drop table if exists t;
+create table t (tinyint_t tinyint,
+                smallint_t smallint,
+                mediumint_t mediumint,
+                int32_t integer,
+                bigint_t bigint,
+                utinyint_t tinyint unsigned,
+                usmallint_t smallint unsigned,
+                umedium_t mediumint unsigned,
+                uint32_t integer unsigned,
+                ubigint_t bigint unsigned,
+                float_t float,
+                ufloat_t float unsigned,
+                double_t double,
+                udouble_t double unsigned,
+                number_t number,
+                unumber_t number unsigned,
+                datetime_t datetime,
+                timestamp_t timestamp,
+                date_t date,
+                time_t time,
+                year_t year,
+                varchar_t varchar(255),
+                char_t char(255),
+                tinytext_t tinytext,
+                mediumtext_t mediumtext,
+                longtext_t longtext,
+                bit_t bit,
+                enum_t enum('a', 'b', 'c'),
+                set_t set('a', 'b', 'c'));
+
+insert into t values (NULL, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.0, 1.00, 1.000, 1.0000, 1.00000, 1.000000, 
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '1.0', '1.00', '1.000', '1.0000',
+                     '1.00000', 1, 'b', 'b');
+explain_protocol: 2
+EXPLAIN select NULL = tinyint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.tinyint_t]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = tinyint_t from t limit 1;
++------------------+
+| NULL = tinyint_t |
++------------------+
+|             NULL |
++------------------+
+EXPLAIN select NULL =  smallint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.smallint_t]), filter(nil), rowset=256
+      access([t.smallint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  smallint_t from t limit 1;
++--------------------+
+| NULL =  smallint_t |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select NULL =  mediumint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.mediumint_t]), filter(nil), rowset=256
+      access([t.mediumint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  mediumint_t from t limit 1;
++---------------------+
+| NULL =  mediumint_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select NULL =  int32_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.int32_t]), filter(nil), rowset=256
+      access([t.int32_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  int32_t from t limit 1;
++-----------------+
+| NULL =  int32_t |
++-----------------+
+|            NULL |
++-----------------+
+EXPLAIN select NULL =  bigint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.bigint_t]), filter(nil), rowset=256
+      access([t.bigint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  bigint_t from t limit 1;
++------------------+
+| NULL =  bigint_t |
++------------------+
+|             NULL |
++------------------+
+EXPLAIN select NULL = utinyint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.utinyint_t]), filter(nil), rowset=256
+      access([t.utinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = utinyint_t from t limit 1;
++-------------------+
+| NULL = utinyint_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL =  usmallint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.usmallint_t]), filter(nil), rowset=256
+      access([t.usmallint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  usmallint_t from t limit 1;
++---------------------+
+| NULL =  usmallint_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select NULL =  umedium_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.umedium_t]), filter(nil), rowset=256
+      access([t.umedium_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  umedium_t from t limit 1;
++-------------------+
+| NULL =  umedium_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL =  uint32_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.uint32_t]), filter(nil), rowset=256
+      access([t.uint32_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  uint32_t from t limit 1;
++------------------+
+| NULL =  uint32_t |
++------------------+
+|             NULL |
++------------------+
+EXPLAIN select NULL =  ubigint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.ubigint_t]), filter(nil), rowset=256
+      access([t.ubigint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  ubigint_t from t limit 1;
++-------------------+
+| NULL =  ubigint_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL = float_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.float_t]), filter(nil), rowset=256
+      access([t.float_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = float_t from t limit 1;
++----------------+
+| NULL = float_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL =  ufloat_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.ufloat_t]), filter(nil), rowset=256
+      access([t.ufloat_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  ufloat_t from t limit 1;
++------------------+
+| NULL =  ufloat_t |
++------------------+
+|             NULL |
++------------------+
+EXPLAIN select NULL = double_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.double_t]), filter(nil), rowset=256
+      access([t.double_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = double_t from t limit 1;
++-----------------+
+| NULL = double_t |
++-----------------+
+|            NULL |
++-----------------+
+EXPLAIN select NULL =  udouble_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.udouble_t]), filter(nil), rowset=256
+      access([t.udouble_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  udouble_t from t limit 1;
++-------------------+
+| NULL =  udouble_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL = number_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.number_t]), filter(nil), rowset=256
+      access([t.number_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = number_t from t limit 1;
++-----------------+
+| NULL = number_t |
++-----------------+
+|            NULL |
++-----------------+
+EXPLAIN select NULL =  unumber_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.unumber_t]), filter(nil), rowset=256
+      access([t.unumber_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  unumber_t from t limit 1;
++-------------------+
+| NULL =  unumber_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL = datetime_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.datetime_t]), filter(nil), rowset=256
+      access([t.datetime_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = datetime_t from t limit 1;
++-------------------+
+| NULL = datetime_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select NULL =  timestamp_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.timestamp_t]), filter(nil), rowset=256
+      access([t.timestamp_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  timestamp_t from t limit 1;
++---------------------+
+| NULL =  timestamp_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select NULL =  date_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.date_t]), filter(nil), rowset=256
+      access([t.date_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  date_t from t limit 1;
++----------------+
+| NULL =  date_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL =  time_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.time_t]), filter(nil), rowset=256
+      access([t.time_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  time_t from t limit 1;
++----------------+
+| NULL =  time_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL =  year_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.year_t]), filter(nil), rowset=256
+      access([t.year_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  year_t from t limit 1;
++----------------+
+| NULL =  year_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL = varchar_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.varchar_t]), filter(nil), rowset=256
+      access([t.varchar_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = varchar_t from t limit 1;
++------------------+
+| NULL = varchar_t |
++------------------+
+|             NULL |
++------------------+
+EXPLAIN select NULL =  char_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.char_t]), filter(nil), rowset=256
+      access([t.char_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  char_t from t limit 1;
++----------------+
+| NULL =  char_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL =  tinytext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.tinytext_t]), filter(nil), rowset=256
+      access([t.tinytext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  tinytext_t from t limit 1;
++--------------------+
+| NULL =  tinytext_t |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select NULL =  mediumtext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.mediumtext_t]), filter(nil)
+      access([t.mediumtext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  mediumtext_t from t limit 1;
++----------------------+
+| NULL =  mediumtext_t |
++----------------------+
+|                 NULL |
++----------------------+
+EXPLAIN select NULL =  longtext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.longtext_t]), filter(nil)
+      access([t.longtext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  longtext_t from t limit 1;
++--------------------+
+| NULL =  longtext_t |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select NULL = bit_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.bit_t]), filter(nil), rowset=256
+      access([t.bit_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL = bit_t from t limit 1;
++--------------+
+| NULL = bit_t |
++--------------+
+|         NULL |
++--------------+
+EXPLAIN select NULL =  enum_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.enum_t]), filter(nil), rowset=256
+      access([t.enum_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  enum_t from t limit 1;
++----------------+
+| NULL =  enum_t |
++----------------+
+|           NULL |
++----------------+
+EXPLAIN select NULL =  set_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([NULL = t.set_t]), filter(nil), rowset=256
+      access([t.set_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select NULL =  set_t from t limit 1;
++---------------+
+| NULL =  set_t |
++---------------+
+|          NULL |
++---------------+
+
+EXPLAIN select tinyint_t = tinyint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.tinyint_t]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = tinyint_t from t limit 1;
++-----------------------+
+| tinyint_t = tinyint_t |
++-----------------------+
+|                  NULL |
++-----------------------+
+EXPLAIN select tinyint_t =  smallint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.smallint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.smallint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  smallint_t from t limit 1;
++-------------------------+
+| tinyint_t =  smallint_t |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select tinyint_t =  mediumint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.mediumint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.mediumint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  mediumint_t from t limit 1;
++--------------------------+
+| tinyint_t =  mediumint_t |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select tinyint_t =  int32_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.int32_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.int32_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  int32_t from t limit 1;
++----------------------+
+| tinyint_t =  int32_t |
++----------------------+
+|                 NULL |
++----------------------+
+EXPLAIN select tinyint_t =  bigint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.bigint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.bigint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  bigint_t from t limit 1;
++-----------------------+
+| tinyint_t =  bigint_t |
++-----------------------+
+|                  NULL |
++-----------------------+
+EXPLAIN select tinyint_t = utinyint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.utinyint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.utinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = utinyint_t from t limit 1;
++------------------------+
+| tinyint_t = utinyint_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t =  usmallint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.usmallint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.usmallint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  usmallint_t from t limit 1;
++--------------------------+
+| tinyint_t =  usmallint_t |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select tinyint_t =  umedium_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.umedium_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.umedium_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  umedium_t from t limit 1;
++------------------------+
+| tinyint_t =  umedium_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t =  uint32_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.uint32_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.uint32_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  uint32_t from t limit 1;
++-----------------------+
+| tinyint_t =  uint32_t |
++-----------------------+
+|                  NULL |
++-----------------------+
+EXPLAIN select tinyint_t =  ubigint_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.ubigint_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.ubigint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  ubigint_t from t limit 1;
++------------------------+
+| tinyint_t =  ubigint_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t = float_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.float_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.float_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = float_t from t limit 1;
++---------------------+
+| tinyint_t = float_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t =  ufloat_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.ufloat_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.ufloat_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  ufloat_t from t limit 1;
++-----------------------+
+| tinyint_t =  ufloat_t |
++-----------------------+
+|                  NULL |
++-----------------------+
+EXPLAIN select tinyint_t = double_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = t.double_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.double_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = double_t from t limit 1;
++----------------------+
+| tinyint_t = double_t |
++----------------------+
+|                 NULL |
++----------------------+
+EXPLAIN select tinyint_t =  udouble_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.udouble_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.udouble_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  udouble_t from t limit 1;
++------------------------+
+| tinyint_t =  udouble_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t = number_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = t.number_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.number_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = number_t from t limit 1;
++----------------------+
+| tinyint_t = number_t |
++----------------------+
+|                 NULL |
++----------------------+
+EXPLAIN select tinyint_t =  unumber_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.unumber_t, DECIMAL(10, 0))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.unumber_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  unumber_t from t limit 1;
++------------------------+
+| tinyint_t =  unumber_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t = datetime_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DATETIME(-1, -1)) = t.datetime_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.datetime_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = datetime_t from t limit 1;
++------------------------+
+| tinyint_t = datetime_t |
++------------------------+
+|                   NULL |
++------------------------+
+EXPLAIN select tinyint_t =  timestamp_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, TIMESTAMP(-1, -1)) = t.timestamp_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.timestamp_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  timestamp_t from t limit 1;
++--------------------------+
+| tinyint_t =  timestamp_t |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select tinyint_t =  date_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DATE(-1, -1)) = t.date_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.date_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  date_t from t limit 1;
++---------------------+
+| tinyint_t =  date_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t =  time_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, TIME(-1, -1)) = t.time_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.time_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  time_t from t limit 1;
++---------------------+
+| tinyint_t =  time_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t =  year_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.year_t, DECIMAL(4, 0))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.year_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  year_t from t limit 1;
++---------------------+
+| tinyint_t =  year_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t = varchar_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.varchar_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.varchar_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = varchar_t from t limit 1;
++-----------------------+
+| tinyint_t = varchar_t |
++-----------------------+
+|                  NULL |
++-----------------------+
+EXPLAIN select tinyint_t =  char_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.char_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.char_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  char_t from t limit 1;
++---------------------+
+| tinyint_t =  char_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t =  tinytext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.tinytext_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.tinytext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  tinytext_t from t limit 1;
++-------------------------+
+| tinyint_t =  tinytext_t |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select tinyint_t =  mediumtext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.mediumtext_t, DECIMAL(-1, -1))]), filter(nil)
+      access([t.tinyint_t], [t.mediumtext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  mediumtext_t from t limit 1;
++---------------------------+
+| tinyint_t =  mediumtext_t |
++---------------------------+
+|                      NULL |
++---------------------------+
+EXPLAIN select tinyint_t =  longtext_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.longtext_t, DECIMAL(-1, -1))]), filter(nil)
+      access([t.tinyint_t], [t.longtext_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  longtext_t from t limit 1;
++-------------------------+
+| tinyint_t =  longtext_t |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select tinyint_t = bit_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.bit_t, DECIMAL(1, 0))]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.bit_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t = bit_t from t limit 1;
++-------------------+
+| tinyint_t = bit_t |
++-------------------+
+|              NULL |
++-------------------+
+EXPLAIN select tinyint_t =  enum_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.enum_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.enum_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  enum_t from t limit 1;
++---------------------+
+| tinyint_t =  enum_t |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select tinyint_t =  set_t from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.tinyint_t = t.set_t]), filter(nil), rowset=256
+      access([t.tinyint_t], [t.set_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select tinyint_t =  set_t from t limit 1;
++--------------------+
+| tinyint_t =  set_t |
++--------------------+
+|               NULL |
++--------------------+
+
+Row With NULL
+EXPLAIN select (1, 1) = (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) = (1, NULL)]), filter(nil)
+      values({(1, 1) = (1, NULL)})
+select (1, 1) = (1, null) from dual;
++--------------------+
+| (1, 1) = (1, null) |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select (1, 1) = (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) = (2, NULL)]), filter(nil)
+      values({(1, 1) = (2, NULL)})
+select (1, 1) = (2, null) from dual;
++--------------------+
+| (1, 1) = (2, null) |
++--------------------+
+|                  0 |
++--------------------+
+
+EXPLAIN select (1, 1) < (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) < (1, NULL)]), filter(nil)
+      values({(1, 1) < (1, NULL)})
+select (1, 1) < (1, null) from dual;
++--------------------+
+| (1, 1) < (1, null) |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select (1, 1) < (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) < (2, NULL)]), filter(nil)
+      values({(1, 1) < (2, NULL)})
+select (1, 1) < (2, null) from dual;
++--------------------+
+| (1, 1) < (2, null) |
++--------------------+
+|                  1 |
++--------------------+
+
+EXPLAIN select (1, 1) <= (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) <= (1, NULL)]), filter(nil)
+      values({(1, 1) <= (1, NULL)})
+select (1, 1) <= (1, null) from dual;
++---------------------+
+| (1, 1) <= (1, null) |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select (1, 1) <= (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) <= (2, NULL)]), filter(nil)
+      values({(1, 1) <= (2, NULL)})
+select (1, 1) <= (2, null) from dual;
++---------------------+
+| (1, 1) <= (2, null) |
++---------------------+
+|                   1 |
++---------------------+
+
+EXPLAIN select (1, 1) > (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) > (1, NULL)]), filter(nil)
+      values({(1, 1) > (1, NULL)})
+select (1, 1) > (1, null) from dual;
++--------------------+
+| (1, 1) > (1, null) |
++--------------------+
+|               NULL |
++--------------------+
+EXPLAIN select (1, 1) > (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) > (2, NULL)]), filter(nil)
+      values({(1, 1) > (2, NULL)})
+select (1, 1) > (2, null) from dual;
++--------------------+
+| (1, 1) > (2, null) |
++--------------------+
+|                  0 |
++--------------------+
+
+EXPLAIN select (1, 1) >= (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) >= (1, NULL)]), filter(nil)
+      values({(1, 1) >= (1, NULL)})
+select (1, 1) >= (1, null) from dual;
++---------------------+
+| (1, 1) >= (1, null) |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select (1, 1) >= (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) >= (2, NULL)]), filter(nil)
+      values({(1, 1) >= (2, NULL)})
+select (1, 1) >= (2, null) from dual;
++---------------------+
+| (1, 1) >= (2, null) |
++---------------------+
+|                   0 |
++---------------------+
+
+EXPLAIN select (1, 1) != (1, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) != (1, NULL)]), filter(nil)
+      values({(1, 1) != (1, NULL)})
+select (1, 1) != (1, null) from dual;
++---------------------+
+| (1, 1) != (1, null) |
++---------------------+
+|                NULL |
++---------------------+
+EXPLAIN select (1, 1) != (2, null) from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) != (2, NULL)]), filter(nil)
+      values({(1, 1) != (2, NULL)})
+select (1, 1) != (2, null) from dual;
++---------------------+
+| (1, 1) != (2, null) |
++---------------------+
+|                   1 |
++---------------------+
+
+EXPLAIN select (1, 1) = (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) = (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) = (1, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) = (1, tinyint_t) |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select (1, 1) = (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) = (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) = (2, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) = (2, tinyint_t) |
++-------------------------+
+|                       0 |
++-------------------------+
+
+EXPLAIN select (1, 1) < (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) < (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) < (1, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) < (1, tinyint_t) |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select (1, 1) < (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) < (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) < (2, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) < (2, tinyint_t) |
++-------------------------+
+|                       1 |
++-------------------------+
+
+EXPLAIN select (1, 1) <= (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) <= (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) <= (1, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) <= (1, tinyint_t) |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select (1, 1) <= (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) <= (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) <= (2, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) <= (2, tinyint_t) |
++--------------------------+
+|                        1 |
++--------------------------+
+
+EXPLAIN select (1, 1) > (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) > (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) > (1, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) > (1, tinyint_t) |
++-------------------------+
+|                    NULL |
++-------------------------+
+EXPLAIN select (1, 1) > (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) > (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) > (2, tinyint_t) from t limit 1;
++-------------------------+
+| (1, 1) > (2, tinyint_t) |
++-------------------------+
+|                       0 |
++-------------------------+
+
+EXPLAIN select (1, 1) >= (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) >= (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) >= (1, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) >= (1, tinyint_t) |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select (1, 1) >= (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) >= (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) >= (2, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) >= (2, tinyint_t) |
++--------------------------+
+|                        0 |
++--------------------------+
+
+EXPLAIN select (1, 1) != (1, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) != (1, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) != (1, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) != (1, tinyint_t) |
++--------------------------+
+|                     NULL |
++--------------------------+
+EXPLAIN select (1, 1) != (2, tinyint_t) from t limit 1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(1, 1) != (2, t.tinyint_t)]), filter(nil), rowset=256
+      access([t.tinyint_t]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select (1, 1) != (2, tinyint_t) from t limit 1;
++--------------------------+
+| (1, 1) != (2, tinyint_t) |
++--------------------------+
+|                        1 |
++--------------------------+
+

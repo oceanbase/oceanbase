@@ -23,14 +23,16 @@
 
 using ::testing::_;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(TestWorkingSet, common)
 {
   ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init());
   ObWorkingSetMgr ws_mgr;
   ASSERT_EQ(OB_SUCCESS, ws_mgr.init(ObKVGlobalCache::get_instance().store_));
-  ObFixedQueue<WorkingSetMB>& ws_mb_pool = ws_mgr.ws_mb_pool_;
+  ObFixedQueue<WorkingSetMB> &ws_mb_pool = ws_mgr.ws_mb_pool_;
   ObWorkingSet working_set;
 
   // not init
@@ -40,17 +42,17 @@ TEST(TestWorkingSet, common)
   ws_list_key.cache_id_ = 0;
   ObKVCacheInstHandle inst_handle;
   ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().insts_.get_cache_inst(ws_list_key, inst_handle));
-  ObKVCacheInst& inst = *inst_handle.get_inst();
+  ObKVCacheInst &inst = *inst_handle.get_inst();
   TestKVCacheKey<SIZE> key;
   TestKVCacheValue<SIZE> value;
-  ObKVCachePair* kvpair = NULL;
-  ObKVMemBlockHandle* mb_handle = NULL;
-  WorkingSetMB* mb_wrapper = NULL;
+  ObKVCachePair *kvpair = NULL;
+  ObKVMemBlockHandle *mb_handle = NULL;
+  WorkingSetMB *mb_wrapper = NULL;
 
-  const int64_t limit = 10 * 1024 * 1024;  // 10MB
+  const int64_t limit = 10 * 1024 * 1024; // 10MB
   ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().store_.alloc_mbhandle(ws_list_key, mb_handle));
-  ASSERT_EQ(
-      OB_SUCCESS, working_set.init(ws_list_key, limit, mb_handle, ws_mb_pool, ObKVGlobalCache::get_instance().store_));
+  ASSERT_EQ(OB_SUCCESS, working_set.init(ws_list_key, limit, mb_handle,
+      ws_mb_pool, ObKVGlobalCache::get_instance().store_));
   ASSERT_TRUE(working_set.is_valid());
 
   const int64_t kv_cnt = 2 * limit / SIZE;
@@ -65,8 +67,8 @@ TEST(TestWorkingSet, common)
   working_set.reset();
 
   // do again
-  ASSERT_EQ(
-      OB_SUCCESS, working_set.init(ws_list_key, limit, mb_handle, ws_mb_pool, ObKVGlobalCache::get_instance().store_));
+  ASSERT_EQ(OB_SUCCESS, working_set.init(ws_list_key, limit, mb_handle,
+      ws_mb_pool, ObKVGlobalCache::get_instance().store_));
   ASSERT_TRUE(working_set.is_valid());
   for (int64_t i = 0; i < kv_cnt; ++i) {
     key.v_ = i;
@@ -85,10 +87,10 @@ TEST(TestWorkingSetList, common)
   ObWorkingSetMgr::WorkingSetList ws_list;
   ObWorkingSetMgr ws_mgr;
   ASSERT_EQ(OB_SUCCESS, ws_mgr.init(ObKVGlobalCache::get_instance().store_));
-  ObKVCacheStore& store = ObKVGlobalCache::get_instance().store_;
+  ObKVCacheStore &store = ObKVGlobalCache::get_instance().store_;
   // not init
   ObWorkingSet ws;
-  ObKVMemBlockHandle* mb_handle = NULL;
+  ObKVMemBlockHandle *mb_handle = NULL;
   ASSERT_EQ(OB_NOT_INIT, ws_list.add_ws(&ws));
   ASSERT_EQ(OB_NOT_INIT, ws_list.del_ws(&ws));
   ASSERT_EQ(OB_NOT_INIT, ws_list.pop_mb_handle(mb_handle));
@@ -104,21 +106,22 @@ TEST(TestWorkingSetList, common)
   ASSERT_EQ(OB_INIT_TWICE, ws_list.init(list_key, store));
 
   ObArenaAllocator allocator;
-  ObArray<ObWorkingSet*> working_sets;
+  ObArray<ObWorkingSet *> working_sets;
   const int64_t limit = 1024;
   const int64_t count = 100;
   int64_t sum_limit = 0;
   ObKVMemBlockHandle new_mb_handle;
   new_mb_handle.handle_ref_.inc_ref_cnt();
-  ObFixedQueue<WorkingSetMB>& ws_mb_pool = ws_mgr.ws_mb_pool_;
+  ObFixedQueue<WorkingSetMB> &ws_mb_pool = ws_mgr.ws_mb_pool_;
 
   for (int64_t i = 0; i < count; ++i) {
-    void* buf = allocator.alloc(sizeof(ObWorkingSet));
+    void *buf = allocator.alloc(sizeof(ObWorkingSet));
     ASSERT_TRUE(NULL != buf);
-    ObWorkingSet* ws = new (buf) ObWorkingSet();
-    ObKVMemBlockHandle* mb_handle = NULL;
+    ObWorkingSet *ws = new (buf) ObWorkingSet();
+    ObKVMemBlockHandle *mb_handle = NULL;
     ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().store_.alloc_mbhandle(list_key, mb_handle));
-    ASSERT_EQ(OB_SUCCESS, ws->init(list_key, limit, mb_handle, ws_mb_pool, ObKVGlobalCache::get_instance().store_));
+    ASSERT_EQ(OB_SUCCESS, ws->init(list_key, limit, mb_handle,
+        ws_mb_pool, ObKVGlobalCache::get_instance().store_));
     ASSERT_EQ(OB_SUCCESS, working_sets.push_back(ws));
     sum_limit += limit;
   }
@@ -139,7 +142,7 @@ TEST(TestWorkingSetList, common)
     ASSERT_EQ(OB_SUCCESS, ws_list.push_mb_handle(&new_mb_handle));
   }
   ASSERT_EQ(OB_SIZE_OVERFLOW, ws_list.push_mb_handle(&new_mb_handle));
-  ObKVMemBlockHandle* rt_handle = NULL;
+  ObKVMemBlockHandle *rt_handle = NULL;
   for (int64_t i = 0; i < ObWorkingSetMgr::WorkingSetList::FREE_ARRAY_SIZE; ++i) {
     ASSERT_EQ(OB_SUCCESS, ws_list.pop_mb_handle(rt_handle));
     ASSERT_EQ(rt_handle, &new_mb_handle);
@@ -159,8 +162,8 @@ TEST(TestWorkingSetMgr, common)
   ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init());
   uint64_t tenant_id = 1;
   uint64_t cache_id = 1;
-  ObArray<ObWorkingSet*> ws_array;
-  ObWorkingSet* ws = NULL;
+  ObArray<ObWorkingSet *> ws_array;
+  ObWorkingSet *ws = NULL;
   const int64_t limit = 1024;
   WSListKey key;
   ASSERT_EQ(OB_NOT_INIT, mgr.create_working_set(key, limit, ws));
@@ -191,10 +194,10 @@ TEST(TestWorkingSetMgr, common)
   ObKVGlobalCache::get_instance().destroy();
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

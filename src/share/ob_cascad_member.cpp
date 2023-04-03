@@ -12,15 +12,20 @@
 
 #include "ob_cascad_member.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace share {
-ObCascadMember::ObCascadMember() : server_(), cluster_id_(common::INVALID_CLUSTER_ID)
+namespace share
+{
+ObCascadMember::ObCascadMember() : server_(),
+                                   cluster_id_(common::INVALID_CLUSTER_ID)
 {}
 
-ObCascadMember::ObCascadMember(const common::ObAddr& server, const int64_t cluster_id)
-    : server_(server), cluster_id_(cluster_id)
+ObCascadMember::ObCascadMember(const common::ObAddr &server,
+                               const int64_t cluster_id)
+    : server_(server),
+      cluster_id_(cluster_id)
 {}
 
 OB_SERIALIZE_MEMBER(ObCascadMember, server_, cluster_id_);
@@ -31,7 +36,7 @@ void ObCascadMember::reset()
   cluster_id_ = common::INVALID_CLUSTER_ID;
 }
 
-ObCascadMember& ObCascadMember::operator=(const ObCascadMember& rhs)
+ObCascadMember &ObCascadMember::operator=(const ObCascadMember &rhs)
 {
   server_ = rhs.server_;
   cluster_id_ = rhs.cluster_id_;
@@ -43,7 +48,7 @@ bool ObCascadMember::is_valid() const
   return server_.is_valid();
 }
 
-int ObCascadMember::set_server(const common::ObAddr& server)
+int ObCascadMember::set_server(const common::ObAddr &server)
 {
   int ret = OB_SUCCESS;
   if (!server.is_valid()) {
@@ -59,5 +64,5 @@ int64_t ObCascadMember::hash() const
   return (server_.hash() | (cluster_id_ << 32));
 }
 
-}  // namespace share
-}  // namespace oceanbase
+} // namespace share
+} // namespace oceanbase

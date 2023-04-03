@@ -1,0 +1,64 @@
+# owner: yibo.tyf
+# owner group: SQL3
+# tags: optimizer
+
+--source mysql_test/test_suite/executor/include/cleanup.inc
+--source mysql_test/test_suite/executor/include/load_data.inc
+set @@ob_enable_transformation=0;
+--result_format 4
+--explain_protocol 2
+################################
+# 1 full join
+
+# wise join
+# 0 exchange in distributed job.
+# nestedloop jion
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+# 暂时不是wise join
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
+# merge jion
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+# 暂时不是wise join
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
+# hash jion
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+# 暂时不是wise join
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
+
+# normal join
+# 1 exchange in distributed job.
+# nestedloop jion
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+# merge jion
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+# hash jion
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
+select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
+
+--source mysql_test/test_suite/executor/include/cleanup.inc

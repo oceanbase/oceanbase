@@ -15,40 +15,55 @@
 #include "lib/compress/ob_compressor.h"
 #include "lib/allocator/page_arena.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-namespace zstd_1_3_8 {
+namespace zstd_1_3_8
+{
 
-class ObZstdCtxAllocator {
+class ObZstdCtxAllocator
+{
 public:
   ObZstdCtxAllocator();
   virtual ~ObZstdCtxAllocator();
-  void* alloc(size_t size);
-  void free(void* addr);
+  static ObZstdCtxAllocator &get_thread_local_instance()
+  {
+    thread_local ObZstdCtxAllocator allocator;
+    return allocator;
+  }
+  void *alloc(size_t size);
+  void free(void *addr);
   void reuse();
-
+  void reset();
 private:
   ObArenaAllocator allocator_;
 };
 
-class __attribute__((visibility("default"))) ObZstdCompressor_1_3_8 : public ObCompressor {
+class __attribute__((visibility ("default"))) ObZstdCompressor_1_3_8 : public ObCompressor
+{
 public:
-  explicit ObZstdCompressor_1_3_8()
-  {}
-  virtual ~ObZstdCompressor_1_3_8()
-  {}
-  int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-  int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-  const char* get_compressor_name() const;
-  int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
+  explicit ObZstdCompressor_1_3_8() {}
+  virtual ~ObZstdCompressor_1_3_8() {}
+  int compress(const char *src_buffer,
+               const int64_t src_data_size,
+               char *dst_buffer,
+               const int64_t dst_buffer_size,
+               int64_t &dst_data_size);
+  int decompress(const char *src_buffer,
+                 const int64_t src_data_size,
+                 char *dst_buffer,
+                 const int64_t dst_buffer_size,
+                 int64_t &dst_data_size);
+  const char *get_compressor_name() const;
+  ObCompressorType get_compressor_type() const;
+  int get_max_overflow_size(const int64_t src_data_size,
+                            int64_t &max_overflow_size) const;
+  void reset_mem();
 
-private:
-  static const char* compressor_name;
 };
-}  // namespace zstd_1_3_8
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_COMMON_COMPRESS_ZSTD_1_3_8_COMPRESSOR_
+} // namespace zstd_1_3_8
+} //namespace common
+} //namespace oceanbase
+#endif //OCEANBASE_COMMON_COMPRESS_ZSTD_1_3_8_COMPRESSOR_

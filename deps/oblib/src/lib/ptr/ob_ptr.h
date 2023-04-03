@@ -16,22 +16,20 @@
 #include "lib/ob_define.h"
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObRefCount {
+class ObRefCount
+{
 public:
-  ObRefCount() : ref_count_(0)
-  {}
-  virtual ~ObRefCount()
-  {}
+  ObRefCount() : ref_count_(0) {}
+  virtual ~ObRefCount() {}
 
   virtual void free() = 0;
 
-  inline void inc_ref()
-  {
-    ATOMIC_FAA(&ref_count_, 1);
-  }
+  inline void inc_ref() { ATOMIC_FAA(&ref_count_, 1); }
 
   inline void dec_ref()
   {
@@ -43,29 +41,27 @@ public:
   volatile int64_t ref_count_;
 };
 
-class ObForceVFPTToTop {
+class ObForceVFPTToTop
+{
 public:
-  ObForceVFPTToTop()
-  {}
-  virtual ~ObForceVFPTToTop()
-  {}
+  ObForceVFPTToTop() { }
+  virtual ~ObForceVFPTToTop() { }
 };
 
 // class ObRefCountObj
 // prototypical class for reference counting
-class ObRefCountObj : public ObForceVFPTToTop {
+class ObRefCountObj : public ObForceVFPTToTop
+{
 public:
-  ObRefCountObj() : refcount_(0)
-  {}
-  virtual ~ObRefCountObj()
-  {}
+  ObRefCountObj() : refcount_(0) { }
+  virtual ~ObRefCountObj() { }
 
-  ObRefCountObj(const ObRefCountObj& s) : refcount_(0)
+  ObRefCountObj(const ObRefCountObj &s) : refcount_(0)
   {
     UNUSED(s);
   }
 
-  ObRefCountObj& operator=(const ObRefCountObj& s)
+  ObRefCountObj &operator=(const ObRefCountObj &s)
   {
     UNUSED(s);
     return (*this);
@@ -75,10 +71,7 @@ public:
   int64_t refcount_dec();
   int64_t refcount() const;
 
-  virtual void free()
-  {
-    delete this;
-  }
+  virtual void free() { delete this; }
 
   volatile int64_t refcount_;
 };
@@ -101,76 +94,53 @@ inline int64_t ObRefCountObj::refcount() const
 }
 
 // class ObPtr
-template <class T>
-class ObPtr {
+template<class T>
+class ObPtr
+{
 public:
-  explicit ObPtr(T* p = NULL);
-  ObPtr(const ObPtr<T>&);
+  explicit ObPtr(T *p = NULL);
+  ObPtr(const ObPtr<T> &);
   ~ObPtr();
 
   void release();
-  ObPtr<T>& operator=(const ObPtr<T>&);
-  ObPtr<T>& operator=(T*);
+  ObPtr<T> &operator=(const ObPtr<T>&);
+  ObPtr<T> &operator=(T*);
 
-  operator T*() const
-  {
-    return (ptr_);
-  }
-  T* operator->() const
-  {
-    return (ptr_);
-  }
-  T& operator*() const
-  {
-    return (*ptr_);
-  }
-  bool operator==(const T* p)
-  {
-    return (ptr_ == p);
-  }
-  bool operator==(const ObPtr<T>& p)
-  {
-    return (ptr_ == p.ptr_);
-  }
-  bool operator!=(const T* p)
-  {
-    return (ptr_ != p);
-  }
-  bool operator!=(const ObPtr<T>& p)
-  {
-    return (ptr_ != p.ptr_);
-  }
-  ObRefCountObj* get_ptr()
-  {
-    return reinterpret_cast<ObRefCountObj*>(ptr_);
-  }
+  operator T *() const { return (ptr_); }
+  T *operator->() const { return (ptr_); }
+  T &operator*() const { return (*ptr_); }
+  bool operator==(const T *p) { return (ptr_ == p); }
+  bool operator==(const ObPtr<T> &p) { return (ptr_ == p.ptr_); }
+  bool operator!=(const T *p) { return (ptr_ != p); }
+  bool operator!=(const ObPtr<T> &p) { return (ptr_ != p.ptr_); }
+  ObRefCountObj *get_ptr() { return reinterpret_cast<ObRefCountObj *>(ptr_); }
 
-  T* ptr_;
+  T *ptr_;
 };
 
-template <typename T>
-ObPtr<T> make_ptr(T* p)
+template<typename T>
+ObPtr<T> make_ptr(T *p)
 {
   return ObPtr<T>(p);
 }
 
-template <class T>
-inline ObPtr<T>::ObPtr(T* ptr /* = NULL */) : ptr_(ptr)
+template<class T>
+inline ObPtr<T>::ObPtr(T *ptr /* = NULL */) : ptr_(ptr)
 {
   if (NULL != ptr_) {
     get_ptr()->refcount_inc();
   }
 }
 
-template <class T>
-inline ObPtr<T>::ObPtr(const ObPtr<T>& src) : ptr_(src.ptr_)
+template<class T>
+inline ObPtr<T>::ObPtr(const ObPtr<T> &src) : ptr_(src.ptr_)
 {
   if (NULL != ptr_) {
     get_ptr()->refcount_inc();
   }
 }
 
-template <class T>
+template<class T> 
 inline ObPtr<T>::~ObPtr()
 {
   if ((NULL != ptr_) && 0 == get_ptr()->refcount_dec()) {
@@ -179,10 +149,10 @@ inline ObPtr<T>::~ObPtr()
   return;
 }
 
-template <class T>
-inline ObPtr<T>& ObPtr<T>::operator=(T* p)
+template<class T>
+inline ObPtr<T>& ObPtr<T>::operator = (T *p)
 {
-  T* temp_ptr = ptr_;
+  T *temp_ptr = ptr_;
 
   if (ptr_ != p) {
     ptr_ = p;
@@ -191,32 +161,32 @@ inline ObPtr<T>& ObPtr<T>::operator=(T* p)
       get_ptr()->refcount_inc();
     }
 
-    if ((NULL != temp_ptr) && 0 == (reinterpret_cast<ObRefCountObj*>(temp_ptr))->refcount_dec()) {
-      (reinterpret_cast<ObRefCountObj*>(temp_ptr))->free();
+    if ((NULL != temp_ptr) && 0 == (reinterpret_cast<ObRefCountObj *>(temp_ptr))->refcount_dec()) {
+      (reinterpret_cast<ObRefCountObj *>(temp_ptr))->free();
     }
   }
 
   return (*this);
 }
 
-template <class T>
+template<class T>
 inline void ObPtr<T>::release()
 {
   if (NULL != ptr_) {
-    if (0 == (reinterpret_cast<ObRefCountObj*>(ptr_))->refcount_dec()) {
-      (reinterpret_cast<ObRefCountObj*>(ptr_))->free();
+    if (0 == (reinterpret_cast<ObRefCountObj *>(ptr_))->refcount_dec()) {
+      (reinterpret_cast<ObRefCountObj *>(ptr_))->free();
     }
     ptr_ = NULL;
   }
 }
 
-template <class T>
-inline ObPtr<T>& ObPtr<T>::operator=(const ObPtr<T>& src)
+template<class T>
+inline ObPtr<T>& ObPtr<T>::operator = (const ObPtr<T> &src)
 {
-  return (operator=(src.ptr_));
+  return (operator =(src.ptr_));
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
-#endif  // OB_LIB_PTR_H_
+#endif // OB_LIB_PTR_H_

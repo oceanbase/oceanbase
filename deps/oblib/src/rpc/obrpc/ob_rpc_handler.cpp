@@ -25,7 +25,8 @@ using namespace oceanbase::rpc::frame;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
 
-ObRpcHandler::ObRpcHandler(ObReqDeliver& deliver) : deliver_(deliver)
+ObRpcHandler::ObRpcHandler(ObReqDeliver &deliver)
+    : deliver_(deliver)
 {
   EZ_ADD_CB(process);
 }
@@ -40,49 +41,50 @@ int ObRpcHandler::init()
   return OB_SUCCESS;
 }
 
-int ObRpcHandler::process(easy_request_t* r)
+int ObRpcHandler::process(easy_request_t *r)
 {
   int eret = EASY_OK;
   ObTimeGuard timeguard("ObRpcHandler::process", OB_EASY_HANDLER_COST_TIME);
   if (OB_ISNULL(r) || OB_ISNULL(r->ipacket)) {
     eret = EASY_ERROR;
-    LOG_ERROR("request is empty", K(eret), K(r));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "request is empty", K(eret), K(r));
   } else if (OB_ISNULL(r->ms) || OB_ISNULL(r->ms->pool)) {
     eret = EASY_ERROR;
-    LOG_ERROR("Easy message session(ms) or ms->pool is NULL", K(eret), "ms", r->ms);
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy message session(ms) or ms->pool is NULL", K(eret), "ms", r->ms);
   } else if (OB_ISNULL(r->ms->c) || OB_ISNULL(r->ms->c->pool)) {
     eret = EASY_ERROR;
-    LOG_ERROR("Easy ms connect(c) or (c->pool)is NULL", K(eret), "connect", r->ms->c);
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy ms connect(c) or (c->pool)is NULL", K(eret), "connect", r->ms->c);
   } else {
-    // TODO: , check copy new request is necessary.
+    // TODO: fufeng, check copy new request is necessary.
     timeguard.click();
-    void* buf = easy_alloc(r->ms->pool, sizeof(ObRequest));
+    void *buf = easy_alloc(r->ms->pool, sizeof (ObRequest));
     timeguard.click();
     if (OB_UNLIKELY(NULL == buf)) {
       eret = EASY_ERROR;
-      LOG_WARN("alloc easy memory fail", K(eret));
+      LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "alloc easy memory fail", K(eret));
     } else {
-      ObRpcRequest* req = new (buf) ObRpcRequest(ObRpcRequest::OB_RPC);
-      const ObRpcPacket* pkt = reinterpret_cast<ObRpcPacket*>(r->ipacket);
+      ObRpcRequest *req = new (buf) ObRpcRequest(ObRpcRequest::OB_RPC);
+      const ObRpcPacket *pkt = reinterpret_cast<ObRpcPacket*>(r->ipacket);
       req->set_receive_timestamp(pkt->get_receive_ts());
       req->set_packet(pkt);
-      req->set_request(r);
-      easy_request_sleeping(r);  // set alloc lock && inc ref count
+      req->set_ez_req(r);
+      r->protocol = EASY_REQQUEST_TYPE_RPC;
+      easy_request_sleeping(r); // set alloc lock && inc ref count
       timeguard.click();
       req->set_request_arrival_time(r->request_arrival_time);
       req->set_arrival_push_diff(common::ObTimeUtility::current_time());
       eret = deliver_.deliver(*req);
       timeguard.click();
       if (EASY_OK == eret) {
-        // deliver success, easy need to hold resource.
+        //deliver success, easy need to hold resource.
         eret = EASY_AGAIN;
       } else {
-        // deliver fail, easy can free resource.
+        //deliver fail, easy can free resource.
         LOG_DEBUG("Deliver failed", K(eret));
         easy_atomic_dec(&r->ms->c->pool->ref);
         easy_atomic_dec(&r->ms->pool->ref);
         if (OB_QUEUE_OVERFLOW == eret) {
-          LOG_WARN("deliver request fail", K(eret), K(*req));
+          LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "deliver request fail", K(eret), K(*req));
         }
         eret = EASY_OK;
       }

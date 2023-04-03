@@ -17,20 +17,23 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "observer/ob_sql_client_decorator.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::observer;
-namespace oceanbase {
-namespace common {
-const char* ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
+namespace oceanbase
+{
+namespace common
+{
+const char *ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     "SELECT * "
     "FROM ("
     "SELECT t1.time_zone_id, t1.inner_tz_id, t1.name, t3.transition_time, t2.offset, t2.is_dst, "
     "t2.transition_type_id, t2.abbreviation, "
-    "row_number() over (partition by t1.inner_tz_id, t3.transition_time order by t2.transition_type_id) as "
-    "tran_row_number "
+    "row_number() over (partition by t1.inner_tz_id, t3.transition_time order by t2.transition_type_id) as tran_row_number "
     "FROM (SELECT time_zone_id, row_number() over (order by time_zone_id) as inner_tz_id, name "
     "      FROM oceanbase.__all_time_zone_name "
     "      ORDER BY time_zone_id "
@@ -43,13 +46,12 @@ const char* ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     ") tz_info WHERE tz_info.tran_row_number = 1 "
     "ORDER BY tz_info.time_zone_id, tz_info.transition_time ";
 
-const char* ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
+const char *ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
     "SELECT * "
     "FROM ("
     "SELECT t1.time_zone_id, t1.inner_tz_id, t1.name, t3.transition_time, t2.offset, t2.is_dst, "
     "t2.transition_type_id, t2.abbreviation, "
-    "row_number() over (partition by t1.inner_tz_id, t3.transition_time order by t2.transition_type_id) as "
-    "tran_row_number "
+    "row_number() over (partition by t1.inner_tz_id, t3.transition_time order by t2.transition_type_id) as tran_row_number "
     "FROM (SELECT time_zone_id, row_number() over (order by time_zone_id) as inner_tz_id, name "
     "      FROM oceanbase.__all_tenant_time_zone_name "
     "      ORDER BY time_zone_id "
@@ -62,8 +64,8 @@ const char* ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
     ") tz_info WHERE tz_info.tran_row_number = 1 "
     "ORDER BY tz_info.time_zone_id, tz_info.transition_time ";
 
-const char* ObTimeZoneInfoManager::FETCH_LATEST_TZ_VERSION_SQL =
-    "SELECT value from oceanbase.__all_sys_stat where name = 'current_timezone_version'";
+const char *ObTimeZoneInfoManager::FETCH_LATEST_TZ_VERSION_SQL = 
+  "SELECT value from oceanbase.__all_sys_stat where name = 'current_timezone_version'";
 
 int ObTimeZoneInfoManager::init()
 {
@@ -92,7 +94,8 @@ int ObTimeZoneInfoManager::update_time_zone_info(int64_t tz_info_version)
   return ret;
 }
 
-bool ObTimeZoneInfoManager::FillRequestTZInfoResult::operator()(ObTZIDKey key, ObTimeZoneInfoPos* tz_info)
+bool ObTimeZoneInfoManager::FillRequestTZInfoResult::operator() (
+    ObTZIDKey key, ObTimeZoneInfoPos *tz_info)
 {
   int ret = OB_SUCCESS;
   UNUSED(key);
@@ -105,7 +108,7 @@ bool ObTimeZoneInfoManager::FillRequestTZInfoResult::operator()(ObTZIDKey key, O
   return OB_SUCCESS == ret;
 }
 
-int ObTimeZoneInfoManager::response_time_zone_info(ObRequestTZInfoResult& tz_result)
+int ObTimeZoneInfoManager::response_time_zone_info(ObRequestTZInfoResult &tz_result)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -122,14 +125,14 @@ int ObTimeZoneInfoManager::response_time_zone_info(ObRequestTZInfoResult& tz_res
   return ret;
 }
 
-void ObTimeZoneInfoManager::TaskProcessThread::handle(void* task)
+void ObTimeZoneInfoManager::TaskProcessThread::handle(void *task)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task is NULL", K(ret));
   } else {
-    TZInfoTask* tz_info_task = static_cast<TZInfoTask*>(task);
+    TZInfoTask *tz_info_task = static_cast<TZInfoTask *>(task);
     if (OB_FAIL(tz_info_task->run_task())) {
       LOG_WARN("fail to run task", K(ret));
     }
@@ -144,17 +147,17 @@ int ObTimeZoneInfoManager::fetch_time_zone_info()
     LOG_WARN("not init", K(ret));
   } else {
     int64_t current_tz_version = -1;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res)
-    {
-      sqlclient::ObMySQLResult* result = NULL;
-      if (OB_FAIL(sql_proxy_.read(res, tenant_id_, FETCH_LATEST_TZ_VERSION_SQL))) {
+    ObSQLClientRetryWeak sql_client_retry_weak(&sql_proxy_, tenant_id_, OB_ALL_SYS_STAT_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id_, FETCH_LATEST_TZ_VERSION_SQL))) {
         LOG_WARN("fail to execute sql", K(ret), K(tenant_id_));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get result", K(result), K(ret));
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
-          // no timezone_version in all_sys_stat table, means in upgrade mode.
+          // all_sys_stat中没有timezone_version，说明处于升级过程中
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("ObMySQLResult next failed", K(ret));
@@ -163,29 +166,24 @@ int ObTimeZoneInfoManager::fetch_time_zone_info()
         ObString version_str;
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", version_str);
         bool is_valid = false;
-        current_tz_version =
-            ObFastAtoi<int64_t>::atoi(version_str.ptr(), version_str.ptr() + version_str.length(), is_valid);
+        current_tz_version = ObFastAtoi<int64_t>::atoi(version_str.ptr(),
+            version_str.ptr() + version_str.length(), is_valid);
         if (!is_valid) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid key version", K(ret), K(version_str));
         }
       }
     }
-
     if (OB_FAIL(ret)) {
-    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
-      if (OB_FAIL(fetch_time_zone_info_from_tenant_table(current_tz_version))) {
-        LOG_WARN("fetch timezone info from tenant tz table failed", K(ret));
-      }
-    } else {
-      if (OB_FAIL(fetch_time_zone_info_from_sys_table())) {
-        LOG_WARN("fetch timezone info from tenant tz table failed", K(ret));
-      }
+    } else if (OB_FAIL(fetch_time_zone_info_from_tenant_table(current_tz_version))) {
+      LOG_WARN("fetch timezone info from tenant tz table failed", K(ret));
     }
   }
+
   return ret;
 }
 
+// 使用sql
 int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t current_tz_version)
 {
   int ret = OB_SUCCESS;
@@ -193,14 +191,12 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
     // already latest
   } else if (current_tz_version < last_version_) {
     LOG_ERROR("current timezone version lower than local tz map version, wierd",
-        K(tenant_id_),
-        K(current_tz_version),
-        K(last_version_));
+      K(tenant_id_), K(current_tz_version), K(last_version_));
   } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res)
-    {
-      sqlclient::ObMySQLResult* result = NULL;
-      if (OB_FAIL(sql_proxy_.read(res, tenant_id_, FETCH_TENANT_TZ_INFO_SQL))) {
+    ObSQLClientRetryWeak sql_client_retry_weak(&sql_proxy_, tenant_id_, OB_ALL_TENANT_TIME_ZONE_NAME_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id_, FETCH_TENANT_TZ_INFO_SQL))){
         LOG_WARN("fetch time zone data failed", K(ret));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -209,67 +205,26 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
         LOG_ERROR("fail to fill tz_info_map", K(ret));
       } else {
         last_version_ = current_tz_version;
-        LOG_INFO("success to fetch tz_info map",
-            K(ret),
-            K(last_version_),
-            "new_last_version",
-            current_tz_version,
-            K(tz_info_map_.id_map_.size()));
+        LOG_INFO("success to fetch tz_info map", K(ret), K(last_version_), K(tenant_id_),
+                  "new_last_version", current_tz_version, K(tz_info_map_.id_map_.size()));
       }
     }
   }
-  if (OB_SUCC(ret) && OB_UNLIKELY(OB_SYS_TENANT_ID == tenant_id_ && false == OTTZ_MGR.is_usable())) {
+  if (OB_SUCC(ret) &&
+      OB_UNLIKELY(OB_SYS_TENANT_ID == tenant_id_ && false == OTTZ_MGR.is_usable())) {
     OTTZ_MGR.set_usable();
   }
 
   return ret;
 }
 
-int ObTimeZoneInfoManager::fetch_time_zone_info_from_sys_table()
+int ObTimeZoneInfoManager::set_tz_info_map(ObTimeZoneInfoPos *&stored_tz_info,
+    ObTimeZoneInfoPos &new_tz_info,
+    ObTZInfoMap &tz_info_map)
 {
   int ret = OB_SUCCESS;
-  // upgrade not finished, no time_zone version info in all_sys_stat table, local version is set to zero by first
-  // refresh task. when upgrade finished, an item of tz_version=0 is inserted info all_sys_stat.
-  if (0 == last_version_) {
-    // already load
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res)
-    {
-      sqlclient::ObMySQLResult* result = NULL;
-      if (OB_FAIL(sql_proxy_.read(res, FETCH_TZ_INFO_SQL))) {
-        LOG_WARN("fail to execute sql", K(ret));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get result", K(result), K(ret));
-      } else {
-        if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_))) {
-          LOG_ERROR("fail to fill tz_info_map", K(ret));
-        } else {
-          //(void)print_tz_info_map();
-          if (OB_UNLIKELY(false == is_usable_)) {
-            is_usable_ = true;
-          }
-          LOG_INFO("success to fetch tz_info map during upgrading",
-              K(ret),
-              K(last_version_),
-              K(tz_info_map_.id_map_.size()));
-          last_version_ = 0;
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(OB_SYS_TENANT_ID == tenant_id_ && false == OTTZ_MGR.is_usable())) {
-    OTTZ_MGR.set_usable();
-  }
-  return ret;
-}
-
-int ObTimeZoneInfoManager::set_tz_info_map(
-    ObTimeZoneInfoPos*& stored_tz_info, ObTimeZoneInfoPos& new_tz_info, ObTZInfoMap& tz_info_map)
-{
-  int ret = OB_SUCCESS;
-  ObTimeZoneInfoPos* tz_pos_value = NULL;
-  ObTZNameIDInfo* name_id_value = NULL;
+  ObTimeZoneInfoPos *tz_pos_value = NULL;
+  ObTZNameIDInfo *name_id_value = NULL;
   bool is_equal = false;
   if (NULL == stored_tz_info) {
     if (OB_ISNULL(tz_pos_value = op_alloc(ObTimeZoneInfoPos))) {
@@ -295,11 +250,11 @@ int ObTimeZoneInfoManager::set_tz_info_map(
   } else if (OB_FAIL(stored_tz_info->compare_upgrade(new_tz_info, is_equal))) {
     LOG_WARN("fail to compare_upgrade", KPC(stored_tz_info), K(new_tz_info), K(ret));
   } else if (is_equal) {
-    // do nothing
+    //do nothing
   } else {
     LOG_INFO("need to upgrade transition time", KPC(stored_tz_info), K(new_tz_info));
-    common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
-    common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
+    common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
+    common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
     if (OB_FAIL(next_tz_tran_types.assign(new_tz_info.get_tz_tran_types()))) {
       LOG_WARN("fail to assign next_tz_tran_types", K(new_tz_info.get_tz_tran_types()), K(ret));
     } else if (OB_FAIL(next_tz_revt_types.assign(new_tz_info.get_tz_revt_types()))) {
@@ -322,8 +277,8 @@ int ObTimeZoneInfoManager::set_tz_info_map(
   return ret;
 }
 
-int ObTimeZoneInfoManager::prepare_tz_info(
-    const ObIArray<ObTZTransitionTypeInfo>& types_with_null, ObTimeZoneInfoPos& type_info)
+int ObTimeZoneInfoManager::prepare_tz_info(const ObIArray<ObTZTransitionTypeInfo> &types_with_null,
+                                           ObTimeZoneInfoPos &type_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(calc_default_tran_type(types_with_null, type_info))) {
@@ -334,8 +289,8 @@ int ObTimeZoneInfoManager::prepare_tz_info(
   return ret;
 }
 
-int ObTimeZoneInfoManager::calc_default_tran_type(
-    const ObIArray<ObTZTransitionTypeInfo>& types_with_null, ObTimeZoneInfoPos& type_info)
+int ObTimeZoneInfoManager::calc_default_tran_type(const ObIArray<ObTZTransitionTypeInfo> &types_with_null,
+                                                  ObTimeZoneInfoPos &type_info)
 {
   int ret = OB_SUCCESS;
   int64_t type_count = types_with_null.count();
@@ -344,22 +299,17 @@ int ObTimeZoneInfoManager::calc_default_tran_type(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid type count", K(ret));
   } else {
-    for (; i < type_count && types_with_null.at(i).is_dst(); ++i) { /*do nothing*/
-    }
+    for (; i <type_count && types_with_null.at(i).is_dst(); ++i) { /*do nothing*/ }
     i = (type_count == i ? 0 : i);
     if (OB_FAIL(type_info.set_default_tran_type(types_with_null.at(i)))) {
-      LOG_WARN("fail to set default tran type",
-          K(i),
-          "default_tran_type",
-          types_with_null.at(i),
-          K(types_with_null),
-          K(ret));
+      LOG_WARN("fail to set default tran type", K(i), "default_tran_type", types_with_null.at(i), K(types_with_null),K(ret));
     }
   }
   return ret;
 }
 
-int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, ObTZInfoMap& tz_info_map)
+int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult &result,
+    ObTZInfoMap &tz_info_map)
 {
   int ret = OB_SUCCESS;
   ObString tz_name_str;
@@ -369,19 +319,18 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
   int64_t inner_tz_id = 0;
   ObTZTransitionTypeInfo tz_tran_type;
   ObTimeZoneInfoPos tz_info;
-  ObTimeZoneInfoPos* stored_tz_info = NULL;
-  ;
+  ObTimeZoneInfoPos *stored_tz_info = NULL;;
   ObArray<ObTZTransitionTypeInfo> types_with_null;
   bool is_tran_time_null = false;
 
-  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+  while(OB_SUCC(ret) && OB_SUCC(result.next())) {
     tz_tran_type.reset();
     is_tran_time_null = false;
     inner_tz_id = 0;
     tz_name_str.reset();
     tz_abbr_str.reset();
     EXTRACT_INT_FIELD_MYSQL(result, "time_zone_id", tz_id, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "inner_tz_id", inner_tz_id, int64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, "inner_tz_id", inner_tz_id, int64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "name", tz_name_str)
     EXTRACT_INT_FIELD_MYSQL(result, "transition_type_id", tz_tran_type.info_.tran_type_id_, int32_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "abbreviation", tz_abbr_str)
@@ -417,15 +366,14 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
 
     LOG_DEBUG("succ to read one row", K(tz_tran_type), K(tz_id), K(inner_tz_id), K(tz_name_str), K(tz_abbr_str));
 
-    // set tz_info_map and create new tz_info
+    //set tz_info_map and create new tz_info
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!ObOTimestampData::is_valid_tz_id(static_cast<int32_t>(inner_tz_id))) ||
-               OB_UNLIKELY(!ObOTimestampData::is_valid_tran_type_id(tz_tran_type.info_.tran_type_id_))) {
+    } else if (OB_UNLIKELY(!ObOTimestampData::is_valid_tz_id(static_cast<int32_t>(inner_tz_id)))
+        || OB_UNLIKELY(!ObOTimestampData::is_valid_tran_type_id(tz_tran_type.info_.tran_type_id_))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN(
-          "invalid tz_id or tran_type_id", K(inner_tz_id), "tran_type_id", tz_tran_type.info_.tran_type_id_, K(ret));
+      LOG_WARN("invalid tz_id or tran_type_id", K(inner_tz_id), "tran_type_id", tz_tran_type.info_.tran_type_id_, K(ret));
     } else if (inner_tz_id != tz_info.get_tz_id()) {
-      if (tz_info.is_valid()) {  // not the first record
+      if (tz_info.is_valid()) {//not the first record
         if (OB_FAIL(prepare_tz_info(types_with_null, tz_info))) {
           LOG_WARN("fail to prepare prepare time zone info", K(tz_info), K(ret));
         } else if (OB_FAIL(set_tz_info_map(stored_tz_info, tz_info, tz_info_map))) {
@@ -461,7 +409,7 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
       }
     }
 
-    // add transition_type to tz_info
+    //add transition_type to tz_info
     if (OB_SUCC(ret)) {
       if (OB_FAIL(types_with_null.push_back(tz_tran_type))) {
         LOG_WARN("fail to push bak tz_tran_type", K(ret));
@@ -471,8 +419,8 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
         LOG_DEBUG("succ to add tz_tran_type", K(tz_name_str), K(tz_tran_type));
       }
     }
-  }  // while
-  // set last tz_info
+  }//while
+  //set last tz_info
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to get_next row", K(ret));
@@ -488,28 +436,24 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
   stored_tz_info = NULL;
   return ret;
 }
-int ObTimeZoneInfoManager::fill_tz_info_map(ObRequestTZInfoResult& tz_result)
+int ObTimeZoneInfoManager::fill_tz_info_map(ObRequestTZInfoResult &tz_result)
 {
   int ret = OB_SUCCESS;
   ObString tz_name_str;
-  ObTimeZoneInfoPos* stored_tz_info = NULL;
+  ObTimeZoneInfoPos *stored_tz_info = NULL;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < tz_result.tz_array_.count(); ++i) {
+  for(int64_t i = 0 ; OB_SUCC(ret) && i < tz_result.tz_array_.count(); ++i) {
     if (NULL != stored_tz_info) {
       tz_info_map_.id_map_.revert(stored_tz_info);
-      stored_tz_info = NULL;
+      stored_tz_info = NULL; 
     }
-    ObTimeZoneInfoPos& new_tz_info = tz_result.tz_array_.at(i);
+    ObTimeZoneInfoPos &new_tz_info = tz_result.tz_array_.at(i);
     if (OB_FAIL(tz_info_map_.id_map_.get(new_tz_info.get_tz_id(), stored_tz_info))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("fail to get stored_tz_info, should not happened",
-            "tz_id",
-            new_tz_info.get_tz_id(),
-            "tz_name",
-            new_tz_info.get_tz_name(),
-            K(ret));
+                 "tz_id", new_tz_info.get_tz_id(), "tz_name", new_tz_info.get_tz_name(), K(ret));
       }
     }
 
@@ -529,7 +473,7 @@ int ObTimeZoneInfoManager::fill_tz_info_map(ObRequestTZInfoResult& tz_result)
     (void)print_tz_info_map();
     last_version_ = tz_result.last_version_;
   }
-  return ret;
+    return ret;
 }
 
 int ObTimeZoneInfoManager::print_tz_info_map()
@@ -543,17 +487,12 @@ int ObTimeZoneInfoManager::print_tz_info_map()
   return ret;
 }
 
-int ObTimeZoneInfoManager::find_time_zone_info(const common::ObString& tz_name, ObTimeZoneInfoPos& tz_info)
+int ObTimeZoneInfoManager::find_time_zone_info(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info)
 {
   int ret = OB_SUCCESS;
-  ObTimeZoneInfoPos* tmp_tz_info = NULL;
-  if (OB_FAIL(tz_info_map_.get_tz_info_by_name(tz_name, tmp_tz_info))) {
+  if (OB_FAIL(tz_info_map_.get_tz_info_by_name(tz_name, tz_info))) {
     LOG_WARN("fail to get time zone info", K(tz_name), K(ret));
-  } else if (OB_FAIL(tz_info.assign(*tmp_tz_info))) {
-    LOG_WARN("fail to assign time zone info", KPC(tmp_tz_info), K(ret));
   }
-
-  tz_info_map_.free_tz_info_pos(tmp_tz_info);
 
   if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_ERR_UNKNOWN_TIME_ZONE;
@@ -563,7 +502,8 @@ int ObTimeZoneInfoManager::find_time_zone_info(const common::ObString& tz_name, 
 
 OB_SERIALIZE_MEMBER(ObRequestTZInfoArg, obs_addr_, tenant_id_);
 
+
 OB_SERIALIZE_MEMBER(ObRequestTZInfoResult, last_version_, tz_array_);
 
-}  // namespace common
-}  // namespace oceanbase
+}//common
+}//oceanbase

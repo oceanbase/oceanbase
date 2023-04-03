@@ -13,14 +13,16 @@
 #ifndef _OB_RAW_EXPR_CANONICALIZER_H
 #define _OB_RAW_EXPR_CANONICALIZER_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
-namespace oceanbase {
-namespace sql {
-class ObRawExprCanonicalizer {
+namespace oceanbase
+{
+namespace sql
+{
+// 表达式规范化
+class ObRawExprCanonicalizer
+{
 public:
-  ObRawExprCanonicalizer()
-  {}
-  virtual ~ObRawExprCanonicalizer()
-  {}
+  ObRawExprCanonicalizer() {}
+  virtual ~ObRawExprCanonicalizer() {}
   /**
    * Canonicalize the expression.
    *
@@ -28,8 +30,7 @@ public:
    *
    * @return error code
    */
-  virtual int canonicalize(ObRawExpr*& expr) = 0;
-
+  virtual int canonicalize(ObRawExpr *&expr) = 0;
 private:
   // types and constants
 private:
@@ -40,7 +41,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_RAW_EXPR_CANONICALIZER_H */

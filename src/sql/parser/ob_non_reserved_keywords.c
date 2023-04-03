@@ -37,18 +37,18 @@ int32_t get_next_id(char c)
   return ch_id;
 }
 
-int casesame_cstr(const char* a, const char* b)
+int casesame_cstr(const char *a, const char *b)
 {
   size_t len1 = strlen(a);
   size_t len2 = strlen(b);
   return (len1 == len2) && (strncasecmp(a, b, len1) == 0);
 }
 
-// return 0 if succ, return 1 if fail
-int add_word(t_node* root, const char* str, const int32_t idx)
+//return 0 if succ, return 1 if fail
+int add_word(t_node *root, const char *str, const int32_t idx)
 {
   int ret = 0;
-  t_node* pt = root;
+  t_node *pt = root;
   if (OB_UNLIKELY(NULL == root)) {
     ret = 1;
     printf("ERROR root is NULL! \n");
@@ -58,12 +58,12 @@ int add_word(t_node* root, const char* str, const int32_t idx)
   } else if (OB_UNLIKELY(idx < 0)) {
     printf("ERROR invalid idx:%d\n", idx);
   } else {
-    for (; '\0' != *str && 0 == ret; ++str) {
+    for ( ; '\0' != *str && 0 == ret; ++str) {
       int32_t ch_id = get_next_id(*str);
       if (ch_id >= 0 && NULL == pt->next[ch_id]) {
-        t_node* new_node = (t_node*)calloc(1, sizeof(t_node));
+        t_node *new_node = (t_node *)calloc(1, sizeof(t_node));
         if (OB_UNLIKELY(NULL == new_node)) {
-          ret = 1;
+          ret = OB_PARSER_ERR_NO_MEMORY;
           printf("ERROR malloc memory failed! \n");
         } else {
           new_node->idx = -1;
@@ -86,12 +86,12 @@ int add_word(t_node* root, const char* str, const int32_t idx)
   return ret;
 }
 
-const NonReservedKeyword* find_word(const char* word, const t_node* root, const NonReservedKeyword* words)
+const NonReservedKeyword *find_word(const char *word, const t_node *root, const NonReservedKeyword *words)
 {
-  const NonReservedKeyword* res_word = NULL;
-  const t_node* pt = root;
+  const NonReservedKeyword *res_word = NULL;
+  const t_node *pt = root;
   if (OB_UNLIKELY(NULL == word)) {
-    // do nothing
+    //do nothing
   } else {
     for (; *word != '\0' && NULL != pt; ++word) {
       char c = *word;
@@ -109,15 +109,15 @@ const NonReservedKeyword* find_word(const char* word, const t_node* root, const 
   return res_word;
 }
 
-// return 0 if succ, return 1 if fail
-int create_trie_tree(const NonReservedKeyword* words, int32_t count, t_node** root)
+//return 0 if succ, return 1 if fail
+int create_trie_tree(const NonReservedKeyword *words, int32_t count, t_node **root)
 {
   int ret = 0;
   if (OB_UNLIKELY(NULL == root)) {
     (void)printf("ERROR invalid root! \n");
     ret = 1;
   } else {
-    *root = (t_node*)calloc(1, sizeof(t_node));
+    *root = (t_node *)calloc(1, sizeof(t_node));
     if (OB_UNLIKELY(NULL == *root)) {
       (void)printf("ERROR malloc memory failed! \n");
       ret = 1;

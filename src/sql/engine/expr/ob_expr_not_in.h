@@ -15,32 +15,11 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-// class ObExprNotIn: public ObVectorExprOperator
-//{
-// public:
-//  explicit  ObExprNotIn(common::ObIAllocator &alloc);
-//  virtual ~ObExprNotIn() {};
-//
-//  virtual int calc_resultN(common::ObObj &result,
-//                           const common::ObObj *objs,
-//                           int64_t param_num,
-//                           common::ObExprCtx &expr_ctx) const;
-//
-//  virtual int calc_result_typeN(ObExprResType &type,
-//                                ObExprResType *types,
-//                                int64_t param_num,
-//                                common::ObExprTypeCtx &type_ctx) const;
-//
-// private:
-//  // disallow copy
-//  ObExprNotIn(const ObExprNotIn &other);
-//  ObExprNotIn &operator=(const ObExprNotIn &other);
-// protected:
-//  // data members
-//};
+namespace oceanbase
+{
+namespace sql
+{
 
 }
-}  // namespace oceanbase
-#endif /* _OB_EXPR_NOT_IN_H_ */
+}
+#endif  /* _OB_EXPR_NOT_IN_H_ */

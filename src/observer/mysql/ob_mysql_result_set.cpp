@@ -16,35 +16,22 @@
 #include "observer/mysql/obsm_utils.h"
 #include "lib/container/ob_array.h"
 #include "rpc/obmysql/ob_mysql_field.h"
+#include "observer/ob_server.h"
+#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::obmysql;
 
-int ObMySQLResultSet::to_mysql_field(const ObField& field, ObMySQLField& mfield)
+int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
 {
   int ret = OB_SUCCESS;
   mfield.dname_ = field.dname_;
   mfield.tname_ = field.tname_;
   mfield.org_tname_ = field.org_tname_;
   mfield.cname_ = field.cname_;
+  mfield.org_cname_ = field.org_cname_;
 
-  // If there is no parameterized template, there must be an alias name or a column itself
-  // as: select 1 as a from dual, select col_name form t
-  // use org_cname_
-  // otherwise select item is a expr,column name is auto generated,org_cname_ is same with cname_
-  if (field.is_paramed_select_item_) {
-    if (OB_ISNULL(field.paramed_ctx_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    } else if (0 == field.paramed_ctx_->paramed_cname_.length()) {
-      mfield.org_cname_ = field.org_cname_;
-    } else {
-      mfield.org_cname_ = field.cname_;
-    }
-  } else {
-    mfield.org_cname_ = field.org_cname_;
-  }
   if (OB_SUCC(ret)) {
     mfield.accuracy_ = field.accuracy_;
     // mfield.type_ = oceanbase::obmysql::MYSQL_TYPE_LONG;
@@ -56,36 +43,63 @@ int ObMySQLResultSet::to_mysql_field(const ObField& field, ObMySQLField& mfield)
     mfield.flags_ = field.flags_;
     mfield.length_ = field.length_;
 
-    // Varchar,need check charset:
-    if (ObCharset::is_valid_collation(static_cast<ObCollationType>(field.charsetnr_)) &&
-        ObCharset::is_bin_sort(static_cast<ObCollationType>(field.charsetnr_))) {
-      mfield.flags_ |= OB_MYSQL_BINARY_FLAG;
+    // 对于Varchar类，检查charset：
+    mfield.flags_ &= (~BINARY_FLAG);
+    bool is_oracle_lob = false;
+    if (ObLongTextType == field.type_.get_type() && lib::is_oracle_mode()) { // was ObLobType
+      is_oracle_lob = true;
     }
+    if (ob_is_string_type(field.type_.get_type())
+        && ObCharset::is_valid_collation(static_cast<ObCollationType>(field.charsetnr_))
+        && ObCharset::is_bin_sort(static_cast<ObCollationType>(field.charsetnr_))
+        && !is_oracle_lob) {
+      mfield.flags_ |= BINARY_FLAG;
+    }
+
     ObScale decimals = mfield.accuracy_.get_scale();
-    // TIMESTAMP, UNSIGNED are directly mapped through map
+    // TIMESTAMP、UNSIGNED通过map直接映射
     if (0 == field.type_name_.case_compare("SYS_REFCURSOR")) {
-      mfield.type_ = oceanbase::obmysql::MYSQL_TYPE_CURSOR;
+      mfield.type_ = MYSQL_TYPE_CURSOR;
     } else {
       ret = ObSMUtils::get_mysql_type(field.type_.get_type(), mfield.type_, mfield.flags_, decimals);
+    }
+    if (OB_SUCC(ret) && is_oracle_lob) {
+      mfield.flags_ &= (~BLOB_FLAG); // was ObLobType
     }
 
     mfield.type_owner_ = field.type_owner_;
     mfield.type_name_ = field.type_name_;
     mfield.accuracy_.set_scale(decimals);
     mfield.inout_mode_ = field.inout_mode_;
+    if (OB_SUCC(ret)
+        && ObExtendType == field.type_.get_type() && mfield.type_name_.empty()) {
+      // anonymous collection
+      uint16_t flags;
+      ObScale num_decimals;
+      ret = ObSMUtils::get_mysql_type(
+        field.default_value_.get_type(), mfield.default_value_, flags, num_decimals);
+    }
+    if (OB_SUCC(ret)
+        && EMySQLFieldType::MYSQL_TYPE_BIT == mfield.type_
+        && 1 != mfield.accuracy_.get_precision()) {
+      // bit(1) flags -> UNSIGNED
+      // bit(2) flags -> BINARY_FLAG | BLOB_FLAG | UNSIGNED
+      mfield.flags_ |= BINARY_FLAG;
+      mfield.flags_ |= BLOB_FLAG;
+    }
     if (field.is_hidden_rowid_) {
       mfield.inout_mode_ |= 0x04;
     }
   }
-  LOG_TRACE("to mysql field", K(mfield), K(field));
+  LOG_TRACE("to mysql field", K(ret), K(mfield), K(field));
   return ret;
 }
 
-int ObMySQLResultSet::next_field(ObMySQLField& obmf)
+int ObMySQLResultSet::next_field(ObMySQLField &obmf)
 {
   int ret = OB_SUCCESS;
   int64_t field_cnt = 0;
-  const ColumnsFieldIArray* fields = get_field_columns();
+  const ColumnsFieldIArray *fields = get_field_columns();
   if (OB_ISNULL(fields)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -93,7 +107,7 @@ int ObMySQLResultSet::next_field(ObMySQLField& obmf)
     if (field_index_ >= field_cnt) {
       ret = OB_ITER_END;
     } else {
-      const ObField& field = fields->at(field_index_++);
+      const ObField &field = fields->at(field_index_++);
       if (OB_FAIL(to_mysql_field(field, obmf))) {
         // do nothing
       } else {
@@ -105,10 +119,10 @@ int ObMySQLResultSet::next_field(ObMySQLField& obmf)
   return ret;
 }
 
-int ObMySQLResultSet::next_param(ObMySQLField& obmf)
+int ObMySQLResultSet::next_param(ObMySQLField &obmf)
 {
   int ret = OB_SUCCESS;
-  const ParamsFieldIArray* params = get_param_fields();
+  const ParamsFieldIArray *params = get_param_fields();
   if (OB_ISNULL(params)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -131,3 +145,4 @@ int ObMySQLResultSet::next_param(ObMySQLField& obmf)
   set_errcode(ret);
   return ret;
 }
+

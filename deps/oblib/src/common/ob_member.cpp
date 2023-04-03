@@ -12,17 +12,23 @@
 
 #include "common/ob_member.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ObMember::ObMember() : timestamp_(OB_INVALID_TIMESTAMP), flag_(0)
-{}
+{
+}
 
-ObMember::ObMember(const common::ObAddr& server, const int64_t timestamp) : server_(server), timestamp_(timestamp)
+ObMember::ObMember(const common::ObAddr &server,
+                   const int64_t timestamp)
+    : server_(server),
+      timestamp_(timestamp)
 {
   flag_ = 0;
 }
 
-const common::ObAddr& ObMember::get_server() const
+const common::ObAddr &ObMember::get_server() const
 {
   return server_;
 }
@@ -32,6 +38,11 @@ int64_t ObMember::get_timestamp() const
   return timestamp_;
 }
 
+int64_t ObMember::get_flag() const
+{
+  return flag_;
+}
+
 void ObMember::reset()
 {
   server_.reset();
@@ -39,7 +50,7 @@ void ObMember::reset()
   flag_ = 0;
 }
 
-ObMember& ObMember::operator=(const ObMember& rhs)
+ObMember &ObMember::operator=(const ObMember &rhs)
 {
   server_ = rhs.server_;
   timestamp_ = rhs.timestamp_;
@@ -47,7 +58,7 @@ ObMember& ObMember::operator=(const ObMember& rhs)
   return *this;
 }
 
-int ObMember::assign(const ObMember& other)
+int ObMember::assign(const ObMember &other)
 {
   int ret = OB_SUCCESS;
   *this = other;
@@ -77,8 +88,11 @@ void ObReplicaMember::reset()
 
 bool ObReplicaMember::is_valid() const
 {
-  return ObMember::is_valid() && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) && !region_.is_empty() &&
-         memstore_percent_ <= 100 && memstore_percent_ >= 0;
+  return ObMember::is_valid()
+         && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
+         && !region_.is_empty()
+         && memstore_percent_ <= 100
+         && memstore_percent_ >= 0;
 }
 
 common::ObReplicaType ObReplicaMember::get_replica_type() const
@@ -97,25 +111,25 @@ int ObReplicaMember::set_replica_type(const common::ObReplicaType replica_type)
   return ret;
 }
 
-const common::ObRegion& ObReplicaMember::get_region() const
+const common::ObRegion &ObReplicaMember::get_region() const
 {
   return region_;
 }
 
-int ObReplicaMember::set_member(const ObMember& member)
+int ObReplicaMember::set_member(const ObMember &member)
 {
-  int ret = OB_SUCCESS;
+ int ret = OB_SUCCESS;
 
-  if (!member.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid args", K(ret), K(member));
-  } else if (OB_FAIL(ObMember::assign(member))) {
-    COMMON_LOG(WARN, "failed to assign member", K(ret), K(member));
-  }
-  return ret;
+ if (!member.is_valid()) {
+   ret = OB_INVALID_ARGUMENT;
+   COMMON_LOG(WARN, "invalid args", K(ret), K(member));
+ } else if (OB_FAIL(ObMember::assign(member))) {
+   COMMON_LOG(WARN, "failed to assign member", K(ret), K(member));
+ }
+ return ret;
 }
 
-int ObReplicaMember::set_region(const common::ObRegion& region)
+int ObReplicaMember::set_region(const common::ObRegion &region)
 {
   int ret = OB_SUCCESS;
   if (region.is_empty()) {
@@ -126,7 +140,7 @@ int ObReplicaMember::set_region(const common::ObRegion& region)
   return ret;
 }
 
-ObReplicaMember& ObReplicaMember::operator=(const ObReplicaMember& rhs)
+ObReplicaMember &ObReplicaMember::operator=(const ObReplicaMember &rhs)
 {
   server_ = rhs.server_;
   timestamp_ = rhs.timestamp_;
@@ -139,5 +153,5 @@ ObReplicaMember& ObReplicaMember::operator=(const ObReplicaMember& rhs)
 
 OB_SERIALIZE_MEMBER((ObReplicaMember, ObMember), replica_type_, region_, memstore_percent_);
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

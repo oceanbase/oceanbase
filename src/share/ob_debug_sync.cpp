@@ -18,18 +18,22 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_common_rpc_proxy.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 bool ObDebugSyncAction::is_valid() const
 {
-  return (sync_point_ > INVALID_DEBUG_SYNC_POINT && sync_point_ < MAX_DEBUG_SYNC_POINT &&
-          (!signal_.is_empty() || !wait_.is_empty() || !broadcast_.is_empty()) && execute_ > 0);
+  return (sync_point_ > INVALID_DEBUG_SYNC_POINT && sync_point_ < MAX_DEBUG_SYNC_POINT
+      && (!signal_.is_empty() || !wait_.is_empty() || !broadcast_.is_empty()) && execute_ > 0);
 }
 
-OB_SERIALIZE_MEMBER(ObDebugSyncAction, sync_point_, timeout_, execute_, signal_, wait_, no_clear_, broadcast_);
+OB_SERIALIZE_MEMBER(ObDebugSyncAction, sync_point_, timeout_,
+    execute_, signal_, wait_, no_clear_, broadcast_);
 
-ObDSActionArray::ObDSActionArray(const bool is_const /* = false */) : active_cnt_(0), is_const_(is_const)
+ObDSActionArray::ObDSActionArray(const bool is_const /* = false */)
+   : active_cnt_(0), is_const_(is_const)
 {
   memset(action_ptrs_, 0, sizeof(action_ptrs_));
 }
@@ -43,7 +47,7 @@ void ObDSActionArray::clear(const ObDebugSyncPoint sync_point)
       LOG_INFO("clear sync point", K(sync_point));
     }
   } else {
-    LOG_WARN("invalid sync point", K(sync_point));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid sync point", K(sync_point));
   }
 }
 
@@ -56,7 +60,7 @@ void ObDSActionArray::clear_all()
   }
 }
 
-int ObDSActionArray::add_action(const ObDebugSyncAction& action)
+int ObDSActionArray::add_action(const ObDebugSyncAction &action)
 {
   int ret = OB_SUCCESS;
   if (!action.is_valid()) {
@@ -74,7 +78,8 @@ int ObDSActionArray::add_action(const ObDebugSyncAction& action)
   return ret;
 }
 
-int ObDSActionArray::fetch_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction& action)
+int ObDSActionArray::fetch_action(const ObDebugSyncPoint sync_point,
+    ObDebugSyncAction &action)
 {
   int ret = OB_ENTRY_NOT_EXIST;
   if (sync_point <= INVALID_DEBUG_SYNC_POINT || sync_point >= MAX_DEBUG_SYNC_POINT) {
@@ -96,11 +101,12 @@ int ObDSActionArray::fetch_action(const ObDebugSyncPoint sync_point, ObDebugSync
 
 bool ObDSActionArray::is_active(const ObDebugSyncPoint sync_point) const
 {
-  return (sync_point > INVALID_DEBUG_SYNC_POINT && sync_point < MAX_DEBUG_SYNC_POINT) &&
-         NULL != action_ptrs_[sync_point];
+  return (sync_point > INVALID_DEBUG_SYNC_POINT && sync_point < MAX_DEBUG_SYNC_POINT)
+      && NULL != action_ptrs_[sync_point];
 }
 
-int ObDSActionArray::copy_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction& action) const
+int ObDSActionArray::copy_action(const ObDebugSyncPoint sync_point,
+    ObDebugSyncAction &action) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_active(sync_point))) {
@@ -117,7 +123,8 @@ OB_DEF_SERIALIZE(ObDSActionArray)
   int ret = OB_SUCCESS;
   if (active_cnt_ > MAX_DEBUG_SYNC_POINT) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected action count", K(ret), K_(active_cnt), LITERAL_K(MAX_DEBUG_SYNC_POINT));
+    LOG_WARN("unexpected action count", K(ret),
+        K_(active_cnt), LITERAL_K(MAX_DEBUG_SYNC_POINT));
   } else {
     OB_UNIS_ENCODE(active_cnt_);
     if (active_cnt_ > 0) {
@@ -162,7 +169,8 @@ OB_DEF_SERIALIZE_SIZE(ObDSActionArray)
   int ret = OB_SUCCESS;
   if (active_cnt_ > MAX_DEBUG_SYNC_POINT) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected action count", K(ret), K_(active_cnt), LITERAL_K(MAX_DEBUG_SYNC_POINT));
+    LOG_WARN("unexpected action count", K(ret),
+        K_(active_cnt), LITERAL_K(MAX_DEBUG_SYNC_POINT));
   } else {
     OB_UNIS_ADD_LEN(active_cnt_);
     if (active_cnt_ > 0) {
@@ -183,13 +191,13 @@ ObDSSessionActions::~ObDSSessionActions()
   }
 }
 
-int ObDSSessionActions::init(const int64_t page_size, common::ObIAllocator& allocator)
+int ObDSSessionActions::init(const int64_t page_size, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (page_size < static_cast<int64_t>(sizeof(void*) + sizeof(ObDSActionNode))) {
+  } else if (page_size < static_cast<int64_t>(sizeof(void *) + sizeof(ObDSActionNode))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument: too small page size", K(ret), K(page_size));
   } else {
@@ -200,16 +208,16 @@ int ObDSSessionActions::init(const int64_t page_size, common::ObIAllocator& allo
   return ret;
 }
 
-ObDSActionNode* ObDSSessionActions::alloc_node()
+ObDSActionNode *ObDSSessionActions::alloc_node()
 {
-  ObDSActionNode* node = NULL;
+  ObDSActionNode *node = NULL;
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
     if (free_list_.is_empty()) {
-      void** block = static_cast<void**>(allocator_->alloc(page_size_));
+      void **block = static_cast<void **>(allocator_->alloc(page_size_));
       if (OB_ISNULL(block)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc memory failed", K(ret), K_(page_size));
@@ -219,10 +227,11 @@ ObDSActionNode* ObDSSessionActions::alloc_node()
         block_head_ = block;
 
         // add all action to free list
-        ObDSActionNode* begin = reinterpret_cast<ObDSActionNode*>(reinterpret_cast<char*>(block) + sizeof(void*));
-        const int64_t cnt = (page_size_ - sizeof(void*)) / sizeof(ObDSActionNode);
+        ObDSActionNode *begin = reinterpret_cast<ObDSActionNode *>(
+            reinterpret_cast<char *>(block)+ sizeof(void*));
+        const int64_t cnt = (page_size_ - sizeof(void *)) / sizeof(ObDSActionNode);
         for (int64_t i = 0; i < cnt; ++i) {
-          ObDSActionNode* n = new (&begin[i]) ObDSActionNode();
+          ObDSActionNode *n = new(&begin[i])ObDSActionNode();
           if (!free_list_.add_first(n)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("add empty node to list should always success", K(ret));
@@ -230,7 +239,7 @@ ObDSActionNode* ObDSSessionActions::alloc_node()
             // delete nodes added to %free_list_ and destruct it.
             n->~ObDSActionNode();
             for (int64_t j = 0; j < i; ++j) {
-              ObDSActionNode* r = free_list_.remove_first();
+              ObDSActionNode *r = free_list_.remove_first();
               if (NULL != r) {
                 r->~ObDSActionNode();
               }
@@ -253,31 +262,30 @@ ObDSActionNode* ObDSSessionActions::alloc_node()
   return node;
 }
 
-void ObDSSessionActions::free_node(ObDSActionNode* node)
+void ObDSSessionActions::free_node(ObDSActionNode *node)
 {
   if (NULL != node) {
-    if (NULL != node->get_next()) {  // in actions_
+    if (NULL != node->get_next()) { // in actions_
       actions_.remove(node);
     }
     node->action_.reset();
     if (!free_list_.add_first(node)) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
 }
 
-int ObDSSessionActions::add_action(const ObDebugSyncAction& action)
+int ObDSSessionActions::add_action(const ObDebugSyncAction &action)
 {
   int ret = OB_SUCCESS;
-  ObDSActionNode* n = NULL;
+  ObDSActionNode *n = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!action.is_valid()) {
     LOG_WARN("invalid action", K(ret), K(action));
   } else {
-    DLIST_FOREACH_NORET(it, actions_)
-    {
+    DLIST_FOREACH_NORET(it, actions_) {
       if (action.sync_point_ == it->action_.sync_point_) {
         n = &(*it);
         break;
@@ -310,7 +318,7 @@ void ObDSSessionActions::clear_all()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObDSActionNode* n = NULL;
+    ObDSActionNode *n = NULL;
     while (OB_SUCC(ret) && !actions_.is_empty()) {
       n = actions_.remove_first();
       if (OB_ISNULL(n)) {
@@ -330,7 +338,7 @@ void ObDSSessionActions::clear_all()
       }
     }
     while (OB_SUCC(ret) && NULL != block_head_) {
-      void** block = reinterpret_cast<void**>(block_head_);
+      void **block = reinterpret_cast<void **>(block_head_);
       block_head_ = *block;
       allocator_->free(block);
       block = NULL;
@@ -344,14 +352,13 @@ void ObDSSessionActions::clear(const ObDebugSyncPoint sync_point)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(sync_point <= INVALID_DEBUG_SYNC_POINT) || OB_UNLIKELY(sync_point >= MAX_DEBUG_SYNC_POINT)) {
-    ret = OB_INVALID_ARGUMENT;
-    ;
+  } else if (OB_UNLIKELY(sync_point <= INVALID_DEBUG_SYNC_POINT)
+      || OB_UNLIKELY(sync_point >= MAX_DEBUG_SYNC_POINT)) {
+    ret = OB_INVALID_ARGUMENT;;
     LOG_WARN("invalid argument", K(ret), K(sync_point));
   } else {
-    ObDSActionNode* n = NULL;
-    DLIST_FOREACH_NORET(it, actions_)
-    {
+    ObDSActionNode *n = NULL;
+    DLIST_FOREACH_NORET(it, actions_) {
       if (it->action_.sync_point_ == sync_point) {
         n = &(*it);
         break;
@@ -372,14 +379,13 @@ void ObDSSessionActions::clear(const ObDebugSyncPoint sync_point)
   }
 }
 
-int ObDSSessionActions::to_thread_local(ObDSActionArray& local) const
+int ObDSSessionActions::to_thread_local(ObDSActionArray &local) const
 {
   int ret = OB_SUCCESS;
   if (!local.is_empty()) {
     local.clear_all();
   }
-  DLIST_FOREACH(it, actions_)
-  {
+  DLIST_FOREACH(it, actions_) {
     if (OB_FAIL(local.add_action(it->action_))) {
       LOG_WARN("add action failed", K(ret), "action", *it);
     }
@@ -387,7 +393,7 @@ int ObDSSessionActions::to_thread_local(ObDSActionArray& local) const
   return ret;
 }
 
-int ObDSSessionActions::get_thread_local_result(const ObDSActionArray& local)
+int ObDSSessionActions::get_thread_local_result(const ObDSActionArray &local)
 {
   int ret = OB_SUCCESS;
   if (actions_.is_empty()) {
@@ -395,8 +401,7 @@ int ObDSSessionActions::get_thread_local_result(const ObDSActionArray& local)
   } else if (local.is_empty()) {
     clear_all();
   } else {
-    DLIST_FOREACH_REMOVESAFE(it, actions_)
-    {
+    DLIST_FOREACH_REMOVESAFE(it, actions_) {
       if (local.is_active(it->action_.sync_point_)) {
         if (OB_FAIL(local.copy_action(it->action_.sync_point_, it->action_))) {
           LOG_WARN("copy action failed", K(ret));
@@ -428,7 +433,7 @@ ObDSEventControl::ObDSEventControl() : stop_(false)
 {
   for (int64_t i = 0; i < ARRAYSIZEOF(events_); ++i) {
     if (!free_.add_first(&events_[i])) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
   cond_.init(ObWaitEventIds::DEBUG_SYNC_COND_WAIT);
@@ -439,28 +444,29 @@ ObDSEventControl::~ObDSEventControl()
   stop();
 }
 
-ObDSEventControl::Event* ObDSEventControl::alloc_event()
+
+ObDSEventControl::Event *ObDSEventControl::alloc_event()
 {
-  Event* e = NULL;
+  Event *e = NULL;
   if (free_.is_empty()) {
-    LOG_WARN("exceed max event count", LITERAL_K(MAX_EVENT_CNT));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exceed max event count", LITERAL_K(MAX_EVENT_CNT));
   } else {
     e = free_.remove_first();
   }
   return e;
 }
 
-void ObDSEventControl::free_event(Event* e)
+void ObDSEventControl::free_event(Event *e)
 {
   if (NULL != e) {
     e->reset();
     if (!free_.add_first(e)) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
 }
 
-int ObDSEventControl::find(const ObSyncEventName& name, Event*& e)
+int ObDSEventControl::find(const ObSyncEventName &name, Event *&e)
 {
   int ret = OB_SUCCESS;
   if (name.is_empty()) {
@@ -469,8 +475,7 @@ int ObDSEventControl::find(const ObSyncEventName& name, Event*& e)
   } else {
     ret = OB_ENTRY_NOT_EXIST;
     e = NULL;
-    DLIST_FOREACH_NORET(it, used_)
-    {
+    DLIST_FOREACH_NORET(it, used_) {
       if (it->name_ == name) {
         e = &(*it);
         ret = OB_SUCCESS;
@@ -481,7 +486,7 @@ int ObDSEventControl::find(const ObSyncEventName& name, Event*& e)
   return ret;
 }
 
-int ObDSEventControl::locate(const ObSyncEventName& name, Event*& e)
+int ObDSEventControl::locate(const ObSyncEventName &name, Event *&e)
 {
   int ret = OB_SUCCESS;
   e = NULL;
@@ -512,10 +517,10 @@ int ObDSEventControl::locate(const ObSyncEventName& name, Event*& e)
   return ret;
 }
 
-int ObDSEventControl::signal(const ObSyncEventName& name)
+int ObDSEventControl::signal(const ObSyncEventName &name)
 {
   int ret = OB_SUCCESS;
-  Event* e = NULL;
+  Event *e = NULL;
   ObThreadCondGuard guard(cond_);
   if (name.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -541,7 +546,7 @@ int ObDSEventControl::signal(const ObSyncEventName& name)
   return ret;
 }
 
-int ObDSEventControl::broadcast(const ObSyncEventName& name)
+int ObDSEventControl::broadcast(const ObSyncEventName &name)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -552,8 +557,7 @@ int ObDSEventControl::broadcast(const ObSyncEventName& name)
   } else {
     ObThreadCondGuard guard(cond_);
 
-    DLIST_FOREACH(it, used_)
-    {
+    DLIST_FOREACH(it, used_) {
       if (it->name_ == name) {
         if (it->waiter_cnt_ > 0 && it->signal_cnt_ < it->waiter_cnt_) {
           it->signal_cnt_ = it->waiter_cnt_;
@@ -570,12 +574,13 @@ int ObDSEventControl::broadcast(const ObSyncEventName& name)
   return ret;
 }
 
-int ObDSEventControl::wait(const ObSyncEventName& name, const int64_t timeout_us, const bool clear)
+int ObDSEventControl::wait(const ObSyncEventName &name,
+    const int64_t timeout_us, const bool clear)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time_ms = ObTimeUtility::current_time() / 1000;
   const int64_t abs_timeout_ms = start_time_ms + timeout_us / 1000;
-  Event* e = NULL;
+  Event *e = NULL;
   ObThreadCondGuard guard(cond_);
   if (name.is_empty() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -617,6 +622,7 @@ int ObDSEventControl::wait(const ObSyncEventName& name, const int64_t timeout_us
         e = NULL;
       }
     }
+
   }
   return ret;
 }
@@ -625,8 +631,7 @@ void ObDSEventControl::clear_event()
 {
   ObThreadCondGuard guard(cond_);
   if (!stop_) {
-    DLIST_FOREACH_REMOVESAFE_NORET(e, used_)
-    {
+    DLIST_FOREACH_REMOVESAFE_NORET(e, used_) {
       if (0 == e->waiter_cnt_) {
         used_.remove(e);
         free_event(e);
@@ -642,11 +647,11 @@ void ObDSEventControl::stop()
   stop_ = true;
   int tmp_ret = cond_.broadcast();
   if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("condition broadcast failed", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "condition broadcast failed", K(tmp_ret));
   }
 }
 
-ObString ObDebugSync::get_token(ObString& str)
+ObString ObDebugSync::get_token(ObString &str)
 {
   ObString token;
   if (str.empty()) {
@@ -676,12 +681,13 @@ ObString ObDebugSync::get_token(ObString& str)
   return token;
 }
 
-int ObDebugSync::parse_action(const ObString& str_origin, ObDebugSyncAction& action, bool& clear, bool& reset)
+int ObDebugSync::parse_action(const ObString &str_origin,
+    ObDebugSyncAction &action, bool &clear, bool &reset)
 {
   ObString str = str_origin;
   ObString token;
   int ret = OB_SUCCESS;
-  bool finish = false;  // finish parsing
+  bool finish = false; // finish parsing
 
   action.reset();
   action.timeout_ = GCONF.debug_sync_timeout;
@@ -711,7 +717,8 @@ int ObDebugSync::parse_action(const ObString& str_origin, ObDebugSyncAction& act
   // parse sync point
   if (OB_SUCC(ret) && !finish) {
     action.sync_point_ = get_debug_sync_point_value(token);
-    if (action.sync_point_ <= INVALID_DEBUG_SYNC_POINT || action.sync_point_ >= MAX_DEBUG_SYNC_POINT) {
+    if (action.sync_point_ <= INVALID_DEBUG_SYNC_POINT
+        || action.sync_point_ >= MAX_DEBUG_SYNC_POINT) {
       ret = OB_UNKNOWN_DEBUG_SYNC_POINT;
       LOG_WARN("invalid sync point", K(ret), K(token), K(str_origin));
     } else {
@@ -729,10 +736,11 @@ int ObDebugSync::parse_action(const ObString& str_origin, ObDebugSyncAction& act
       clear = true;
       finish = true;
       token = get_token(str);
-    } else if (token.case_compare("SIGNAL") == 0 || token.case_compare("BROADCAST") == 0 ||
-               token.case_compare("WAIT_FOR") == 0) {
+    } else if (token.case_compare("SIGNAL") == 0
+        || token.case_compare("BROADCAST") == 0
+        || token.case_compare("WAIT_FOR") == 0) {
       // parse signal or wait for
-      ObSyncEventName* name = &action.wait_;
+      ObSyncEventName *name = &action.wait_;
 
       if (0 == token.case_compare("SIGNAL")) {
         name = &action.signal_;
@@ -745,7 +753,7 @@ int ObDebugSync::parse_action(const ObString& str_origin, ObDebugSyncAction& act
         ret = OB_PARSE_DEBUG_SYNC_ERROR;
         LOG_WARN("no event name", K(ret), K(str_origin));
       } else {
-        // TODO : to lower case?
+        // TODO baihua: to lower case?
         if (OB_FAIL(name->assign(token))) {
           LOG_WARN("assign event name failed", K(ret), K(token), K(str_origin));
         } else {
@@ -821,11 +829,12 @@ int ObDebugSync::parse_action(const ObString& str_origin, ObDebugSyncAction& act
   return ret;
 }
 
-int ObDebugSync::add_debug_sync(const ObString& str, const bool is_global, ObDSSessionActions& session_actions)
+int ObDebugSync::add_debug_sync(const ObString &str, const bool is_global,
+    ObDSSessionActions &session_actions)
 {
   int ret = OB_SUCCESS;
   ObDebugSyncAction action;
-  ObDSActionArray* local_actions = thread_local_actions();
+  ObDSActionArray *local_actions = thread_local_actions();
   bool clear = false;
   bool reset = false;
   if (stop_) {
@@ -881,15 +890,16 @@ int ObDebugSync::add_debug_sync(const ObString& str, const bool is_global, ObDSS
 int ObDebugSync::execute(const ObDebugSyncPoint sync_point)
 {
   int ret = OB_SUCCESS;
-  ObDSActionArray* local_actions = thread_local_actions();
+  ObDSActionArray *local_actions = thread_local_actions();
   bool is_local_action = false;
 
-  if (OB_UNLIKELY(sync_point <= INVALID_DEBUG_SYNC_POINT) || OB_UNLIKELY(sync_point >= MAX_DEBUG_SYNC_POINT)) {
-    ret = OB_INVALID_ARGUMENT;
-    ;
+  if (OB_UNLIKELY(sync_point <= INVALID_DEBUG_SYNC_POINT)
+      || OB_UNLIKELY(sync_point >= MAX_DEBUG_SYNC_POINT)) {
+    ret = OB_INVALID_ARGUMENT;;
     LOG_WARN("invalid argument", K(ret), K(sync_point));
-  } else if (!GCONF.is_debug_sync_enabled() ||
-             ((OB_ISNULL(local_actions) || local_actions->is_empty()) && global_actions_.is_empty())) {
+  } else if (!GCONF.is_debug_sync_enabled()
+      || ((OB_ISNULL(local_actions) || local_actions->is_empty())
+          && global_actions_.is_empty())) {
     // quick path
   } else {
     ObDebugSyncAction action;
@@ -907,7 +917,8 @@ int ObDebugSync::execute(const ObDebugSyncPoint sync_point)
     if (OB_SUCC(ret)) {
       if (!got && !global_actions_.is_empty()) {
         ObSpinLockGuard guard(lock_);
-        if (OB_UNLIKELY(OB_SUCCESS == (ret = global_actions_.fetch_action(sync_point, action)))) {
+        if (OB_UNLIKELY(OB_SUCCESS == (ret = global_actions_.fetch_action(
+            sync_point, action)))) {
           got = true;
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -917,7 +928,7 @@ int ObDebugSync::execute(const ObDebugSyncPoint sync_point)
       }
     }
     if (OB_SUCC(ret) && OB_UNLIKELY(got)) {
-      LOG_INFO("execute action", K(is_local_action), K(action));
+      LOG_INFO("execute action",K(is_local_action), K(action));
       if (!action.signal_.is_empty()) {
         if (OB_FAIL(event_control_.signal(action.signal_))) {
           LOG_WARN("signal failed", K(ret), K(action));
@@ -939,10 +950,10 @@ int ObDebugSync::execute(const ObDebugSyncPoint sync_point)
   return ret;
 }
 
-int ObDebugSync::set_thread_local_actions(const ObDSSessionActions& session_actions)
+int ObDebugSync::set_thread_local_actions(const ObDSSessionActions &session_actions)
 {
   int ret = OB_SUCCESS;
-  ObDSActionArray* local = thread_local_actions();
+  ObDSActionArray *local = thread_local_actions();
   if (NULL != local) {
     if (OB_FAIL(session_actions.to_thread_local(*local))) {
       LOG_WARN("to thread local actions failed", K(ret));
@@ -951,10 +962,10 @@ int ObDebugSync::set_thread_local_actions(const ObDSSessionActions& session_acti
   return ret;
 }
 
-int ObDebugSync::collect_result_actions(ObDSSessionActions& session_actions)
+int ObDebugSync::collect_result_actions(ObDSSessionActions &session_actions)
 {
   int ret = OB_SUCCESS;
-  ObDSActionArray* local = thread_local_actions();
+  ObDSActionArray *local = thread_local_actions();
   if (NULL != local) {
     if (OB_FAIL(session_actions.get_thread_local_result(*local))) {
       LOG_WARN("get thread local actions result failed", K(ret));
@@ -963,22 +974,22 @@ int ObDebugSync::collect_result_actions(ObDSSessionActions& session_actions)
   return ret;
 }
 
-ObDebugSync& ObDebugSync::instance()
+ObDebugSync &ObDebugSync::instance()
 {
   static ObDebugSync global_instance_;
   return global_instance_;
 }
 
-ObDSActionArray* ObDebugSync::thread_local_actions() const
+ObDSActionArray *ObDebugSync::thread_local_actions() const
 {
-  return GET_TSI_MULT(ObDSActionArray, TSI_COMMON_DEBUG_SYNC_ARRAY);
+  return GET_TSI(ObDSActionArray);
 }
 
-ObDSActionArray& ObDebugSync::rpc_spread_actions() const
+ObDSActionArray &ObDebugSync::rpc_spread_actions() const
 {
   static const bool const_array = true;
   static ObDSActionArray empty_actions(const_array);
-  ObDSActionArray* actions = thread_local_actions();
+  ObDSActionArray *actions = thread_local_actions();
   if (OB_ISNULL(actions) || !GCONF.is_debug_sync_enabled()) {
     actions = &empty_actions;
   }
@@ -991,7 +1002,8 @@ void ObDebugSync::stop()
   event_control_.stop();
 }
 
-int ObDebugSync::set_global_action(const bool reset, const bool clear, const ObDebugSyncAction& action)
+int ObDebugSync::set_global_action(const bool reset, const bool clear,
+    const ObDebugSyncAction &action)
 {
   int ret = OB_SUCCESS;
   const bool is_debug_sync_enabled = GCONF.is_debug_sync_enabled();
@@ -1022,10 +1034,10 @@ int ObDebugSync::set_global_action(const bool reset, const bool clear, const ObD
   return ret;
 }
 
-void ObDebugSync::set_rpc_proxy(obrpc::ObCommonRpcProxy* rpc_proxy)
+void ObDebugSync::set_rpc_proxy(obrpc::ObCommonRpcProxy *rpc_proxy)
 {
   rpc_proxy_ = rpc_proxy;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

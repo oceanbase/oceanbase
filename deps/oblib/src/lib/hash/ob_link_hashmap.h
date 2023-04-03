@@ -18,192 +18,108 @@
 #include "lib/lock/ob_tc_ref.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 inline int32_t faa_if_positive(int32_t* addr, int32_t x)
 {
   int32_t ov = ATOMIC_LOAD(addr);
   int32_t nv = 0;
-  while (ov > 0 && ov != (nv = ATOMIC_VCAS(addr, ov, ov + x))) {
+  while(ov > 0 && ov != (nv = ATOMIC_VCAS(addr, ov, ov + x))) {
     ov = nv;
   }
   return ov;
 }
 
+static ObQSync& get_global_link_hashmap_qsync()
+{
+  static ObQSync qsync;
+  return qsync;
+}
+
 // DO NOT use me
-class BaseRefHandle {
+class BaseRefHandle
+{
 public:
   typedef RefNode Node;
-  enum { BORN_REF = INT32_MAX / 2 };
-  explicit BaseRefHandle(RetireStation& retire_station)
-      : qclock_(get_global_qclock()), retire_station_(retire_station), qc_slot_(UINT64_MAX)
-  {}
-  ~BaseRefHandle()
-  {}
-  virtual void enter_critical()
-  {
-    qc_slot_ = qclock_.enter_critical();
-  }
-  virtual void leave_critical()
-  {
-    qclock_.leave_critical(qc_slot_);
-  }
+  enum { BORN_REF = INT32_MAX/2 };
+  explicit BaseRefHandle(RetireStation& retire_station): qclock_(get_global_qclock()), retire_station_(retire_station), qc_slot_(UINT64_MAX) {}
+  ~BaseRefHandle() {}
+  virtual void enter_critical() { qc_slot_ = qclock_.enter_critical(); }
+  virtual void leave_critical() { qclock_.leave_critical(qc_slot_); }
   virtual void retire(Node* node, HazardList& reclaim_list)
   {
     HazardList retire_list;
     retire_list.push(&node->retire_link_);
     retire_station_.retire(reclaim_list, retire_list);
   }
-  virtual void purge(HazardList& reclaim_list)
-  {
-    retire_station_.purge(reclaim_list);
-  }
-
+  virtual void purge(HazardList& reclaim_list) { retire_station_.purge(reclaim_list); }
 protected:
   QClock& qclock_;
   RetireStation& retire_station_;
   uint64_t qc_slot_;
 };
 
-// fast read, slow del, delay reclaim Value/Node
-class TCRefHandle final : public BaseRefHandle {
+// Different from RefHandle, ZeroRefHandle will init ref count of node to 1,
+// when call revert and ref count is 0, will free_value,
+// In RefHandle, ref count of node is initialized to INT32_MAX, before del,
+// revert operator will not free_value
+class ZeroRefHandle final : public BaseRefHandle
+{
 public:
   typedef RefNode Node;
-  explicit TCRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
-  {}
-  void born(Node* node)
-  {
-    UNUSED(get_tcref().born(&node->uref_));
-  }
-  int32_t end(Node* node)
-  {
-    UNUSED(get_tcref().end(&node->uref_));
-    return get_tcref().sync(&node->uref_);
-  }
-  bool inc(Node* node)
-  {
-    int32_t ref = 0;
-    if (TCRef::REF_LIMIT == (ref = get_tcref().inc_ref(&node->uref_))) {
-      ref = ATOMIC_LOAD(&node->uref_);
-    }
-    return ref > TCRef::REF_LIMIT / 2;
-  }
-  int32_t dec(Node* node)
-  {
-    return get_tcref().dec_ref(&node->uref_);
-  }
-
-private:
-  static TCRef& get_tcref()
-  {
-    static TCRef tcref;
-    return tcref;
-  }
+  explicit ZeroRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station) {}
+  void born(Node* node) { (void)ATOMIC_AAF(&node->uref_, 1); }
+  int32_t end(Node* node) { return ATOMIC_AAF(&node->uref_, -1); }
+  bool inc(Node* node) { return faa_if_positive(&node->uref_, 1) > 0; }
+  int32_t dec(Node* node) { return ATOMIC_AAF(&node->uref_, -1); }
 };
 
 // balanced read/del performance, realtime reclaim Value, batch/delay reclaim Node.
-class RefHandle final : public BaseRefHandle {
+class RefHandle final : public BaseRefHandle
+{
 public:
   typedef RefNode Node;
-  explicit RefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
-  {}
-  void born(Node* node)
-  {
-    (void)ATOMIC_AAF(&node->uref_, BORN_REF);
-  }
-  int32_t end(Node* node)
-  {
-    return ATOMIC_AAF(&node->uref_, -BORN_REF);
-  }
-  bool inc(Node* node)
-  {
-    return faa_if_positive(&node->uref_, 1) > 0;
-  }
-  int32_t dec(Node* node)
-  {
-    return ATOMIC_AAF(&node->uref_, -1);
-  }
+  explicit RefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station) {}
+  void born(Node* node) { (void)ATOMIC_AAF(&node->uref_, BORN_REF); }
+  int32_t end(Node* node) { return ATOMIC_AAF(&node->uref_, -BORN_REF); }
+  bool inc(Node* node) { return faa_if_positive(&node->uref_, 1) > 0; }
+  int32_t dec(Node* node) { return ATOMIC_AAF(&node->uref_, -1); }
 };
 
-class DummyRefHandle final : public BaseRefHandle {
-public:
-  typedef RefNode Node;
-  enum { BORN_REF = 1 };
-  explicit DummyRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
-  {}
-  void enter_critical() override
-  {}
-  void leave_critical() override
-  {}
-  void retire(Node* node, HazardList& reclaim_list) override
-  {
-    reclaim_list.push(&node->retire_link_);
-  }
-  void purge(HazardList& reclaim_list) override
-  {
-    UNUSED(reclaim_list);
-  }
-  void born(Node* node)
-  {
-    UNUSED(node);
-  }
-  int32_t end(Node* node)
-  {
-    UNUSED(node);
-    return 0;
-  }
-  bool inc(Node* node)
-  {
-    UNUSED(node);
-    return true;
-  }
-  int32_t dec(Node* node)
-  {
-    UNUSED(node);
-    return 1;
-  }
-};
-
-template <typename Key, typename Value, typename AllocHandle = AllocHandle<Key, Value>, typename RefHandle = RefHandle,
-    int64_t SHRINK_THRESHOLD = 8>
-class ObLinkHashMap {
+// Doc:
+// class Key must implement compare() and hash() function.
+// class Value must derived from LinkHashValue<Key>
+template<typename Key, typename Value, typename AllocHandle=AllocHandle<Key, Value>, typename RefHandle=RefHandle, int64_t SHRINK_THRESHOLD = 8>
+class ObLinkHashMap
+{
 protected:
   typedef DCArrayAlloc ArrayAlloc;
   typedef DCHash<Key, SHRINK_THRESHOLD> Hash;
   typedef typename Hash::Node Node;
   typedef LinkHashNode<Key> HashNode;
   typedef LinkHashValue<Key> HashValue;
-  struct Guard {
-    explicit Guard(RetireStation& retire_station) : ref_handle_(retire_station)
-    {
-      ref_handle_.enter_critical();
-    }
-    ~Guard()
-    {
-      ref_handle_.leave_critical();
-    }
+  struct Guard
+  {
+    explicit Guard(RetireStation& retire_station): ref_handle_(retire_station) { ref_handle_.enter_critical(); }
+    ~Guard() { ref_handle_.leave_critical(); }
     RefHandle ref_handle_;
   };
   enum { RETIRE_LIMIT = 1024 };
-
 public:
-  class Iterator {
+  class Iterator
+  {
   public:
-    explicit Iterator(ObLinkHashMap& hash) : hash_(hash), next_(hash_.next(nullptr))
-    {}
-    ~Iterator()
-    {
-      destroy();
-    }
-    void destroy()
-    {
+    explicit Iterator(ObLinkHashMap& hash): hash_(hash), next_(hash_.next(nullptr)) {}
+    ~Iterator() { destroy(); }
+    void destroy() {
       if (OB_NOT_NULL(next_)) {
         hash_.revert(next_);
         next_ = nullptr;
       }
     }
-    Value* next(Value*& node)
-    {
+    Value* next(Value*& node) {
       if (OB_ISNULL(next_)) {
         node = nullptr;
       } else {
@@ -218,23 +134,28 @@ public:
         hash_.revert(value);
       }
     }
-
   private:
     ObLinkHashMap& hash_;
     HashNode* next_;
   };
-
+  static constexpr uint64 MAGIC_CODE = 0x0ceaba5e0ceaba5e;
 public:
-  explicit ObLinkHashMap(int64_t min_size = 1 << 16) : ref_handle_(get_retire_station()), hash_(array_alloc_, min_size)
+  explicit ObLinkHashMap(int64_t min_size = 1<<16, int64_t max_size = INT64_MAX)
+    : ref_handle_(get_retire_station()),
+      hash_(array_alloc_, min_size, max_size),
+      magic_code_(0)
   {}
-  ObLinkHashMap(AllocHandle alloc_handle, int64_t min_size = 1 << 16)
-      : alloc_handle_(alloc_handle), ref_handle_(get_retire_station()), hash_(array_alloc_, min_size)
-  {}
+  ObLinkHashMap(AllocHandle alloc_handle, int64_t min_size = 1<<16, int64_t max_size = INT64_MAX)
+    : alloc_handle_(alloc_handle),
+      ref_handle_(get_retire_station()),
+      hash_(array_alloc_, min_size, max_size),
+      magic_code_(0) {}
   ~ObLinkHashMap()
   {
     destroy();
   }
-  int init(const lib::ObLabel& label = ObModIds::OB_CONCURRENT_HASH_MAP, const uint64_t tenant_id = OB_SERVER_TENANT_ID)
+  int init(const lib::ObLabel &label = ObModIds::OB_CONCURRENT_HASH_MAP,
+      const uint64_t tenant_id = OB_SERVER_TENANT_ID)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -242,6 +163,8 @@ public:
       COMMON_LOG(WARN, "invalid argument", K(ret), K(label), K(tenant_id));
     } else if (OB_FAIL(array_alloc_.init(label, tenant_id))) {
       COMMON_LOG(ERROR, "array_alloc_ init error", K(ret), K(label), K(tenant_id));
+    } else {
+      magic_code_ = MAGIC_CODE;
     }
     return ret;
   }
@@ -255,6 +178,7 @@ public:
   {
     ObTimeGuard tg("link hash map destroyed", 1000000);
     reset();
+    ATOMIC_STORE(&magic_code_, 0xffffffffffffffff);
     tg.click();
     purge();
     tg.click();
@@ -264,23 +188,21 @@ public:
   void purge()
   {
     HazardList reclaim_list;
-    get_retire_station().purge(reclaim_list);
-    reclaim_nodes(reclaim_list);
+    {
+      CriticalGuard(get_global_link_hashmap_qsync());
+      get_retire_station().purge(reclaim_list);
+      reclaim_nodes(reclaim_list);
+    }
+    WaitQuiescent(get_global_link_hashmap_qsync());
   }
-  int64_t count() const
-  {
-    return hash_.count();
-  }
+  int64_t count() const { return hash_.count(); }
   HashNode* next(HashNode* node)
   {
     Guard guard(get_retire_station());
     return next_(node);
   }
-  int64_t size() const
-  {
-    return count_handle_.size();
-  }
-  int alloc_value(Value*& value)
+  int64_t size() const { return count_handle_.size(); }
+  int alloc_value(Value *&value)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(value = alloc_handle_.alloc_value())) {
@@ -288,50 +210,62 @@ public:
     }
     return ret;
   }
-  void free_value(Value* value)
+  void free_value(Value *value)
   {
-    alloc_handle_.free_value(value);
+    static_cast<decltype(this)>(value->hash_node_->host_)->alloc_handle_.free_value(value);
   }
-  int create(const Key& key, Value*& value)
+  int create(const Key &key, Value *&value)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(alloc_value(value)) || OB_ISNULL(value)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else if (OB_FAIL(insert_and_get(key, value))) {
-      free_value(value);
+      // free directly, cause value->hash_node_ is nullptr.
+      alloc_handle_.free_value(value);
       value = nullptr;
     }
     return ret;
   }
   // insert value and get value
   // @note must call hashmap.revert(value) after successful insert_and_get()
-  int insert_and_get(const Key& key, Value* value)
+  int insert_and_get(const Key &key, Value* value)
   {
+    common::ObTimeGuard tg("link_hash::insert_and_get", 100 * 1000);
     int hash_ret = 0;
     Guard guard(get_retire_station());
     HashNode* node = nullptr;
+    tg.click();
     if (OB_ISNULL(node = alloc_node(value))) {
       hash_ret = -ENOMEM;
     } else {
+      tg.click();
       ref_handle_.born(node);
       (void)ref_handle_.inc(node);
       node->xhref(2);
       node->hash_link_.set(key);
+      tg.click();
       while (-EAGAIN == (hash_ret = hash_.insert(key, &node->hash_link_)))
         ;
+      tg.click();
       if (OB_LIKELY(0 == hash_ret)) {
         count_handle_.add(1);
       } else {
         node->xhref(-2);
         (void)ref_handle_.dec(node);
+        tg.click();
         (void)ref_handle_.end(node);
-        alloc_handle_.free_node(node);
+        tg.click();
+        static_cast<decltype(this)>(node->host_)->alloc_handle_.free_node(node);
+        tg.click();
       }
+    }
+    if (tg.get_diff() > 100000) {
+      COMMON_LOG(INFO, "ObLinkHashMap insert and get cost too much time", K(tg));
     }
     return err_code_map(hash_ret);
   }
 
-  int del(const Key& key)
+  int del(const Key &key)
   {
     int hash_ret = 0;
     Node* hash_link = nullptr;
@@ -344,6 +278,7 @@ public:
       HazardList reclaim_list;
       HashNode* node = CONTAINER_OF(hash_link, HashNode, hash_link_);
       end_uref(node);
+      CriticalGuard(get_global_link_hashmap_qsync());
       ref_handle_.retire(node, reclaim_list);
       reclaim_nodes(reclaim_list);
       count_handle_.add(-1);
@@ -351,7 +286,7 @@ public:
     return err_code_map(hash_ret);
   }
 
-  int get(const Key& key, Value*& value)
+  int get(const Key &key, Value*& value)
   {
     int hash_ret = 0;
     Node* hash_link = nullptr;
@@ -368,9 +303,8 @@ public:
     }
     return err_code_map(hash_ret);
   }
-  // Used to get some very small values (by copy), see test_link_hashmap for usage details, no need to revert
-  template <typename Function>
-  int operate(const Key& key, Function& fn)
+  // Used to get some very small values ​​(by copy), see test_link_hashmap for usage details, no need to revert
+  template <typename Function> int operate(const Key &key, Function &fn)
   {
     int hash_ret = 0;
     Node* hash_link = nullptr;
@@ -385,6 +319,14 @@ public:
   }
   void revert(HashNode* node)
   {
+#ifndef NDEBUG
+    abort_unless(node->host_ == this);
+    abort_unless(magic_code_ == MAGIC_CODE);
+#else
+    if (OB_UNLIKELY(node->host_ != this || magic_code_ != MAGIC_CODE)) {
+      COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error", K(node->host_), K(this), K(magic_code_));
+    }
+#endif
     if (OB_NOT_NULL(node)) {
       dec_uref(node);
     }
@@ -395,7 +337,7 @@ public:
       revert(value->hash_node_);
     }
   }
-  int contains_key(const Key& key) const
+  int contains_key(const Key &key) const
   {
     int hash_ret = 0;
     Node* hash_link = nullptr;
@@ -405,14 +347,13 @@ public:
     return err_code_map(hash_ret);
   }
 
-  template <typename Function>
-  int map(Function& fn)
+  template <typename Function> int map(Function &fn)
   {
     int ret = OB_SUCCESS;
     if (0 != size()) {
       Value* value = nullptr;
       Iterator iter(*this);
-      while (OB_SUCC(ret) && OB_NOT_NULL(value = iter.next(value))) {
+      while(OB_SUCC(ret) && OB_NOT_NULL(value = iter.next(value))) {
         if (!fn(value->hash_node_->hash_link_.key_, value)) {
           ret = OB_EAGAIN;
         }
@@ -421,14 +362,12 @@ public:
     return ret;
   }
 
-  template <typename Function>
-  int for_each(Function& fn)
+  template <typename Function> int for_each(Function &fn)
   {
     HandleOn<Function> handle_on(*this, fn);
     return map(handle_on);
   }
-  template <typename Function>
-  int remove_if(Function& fn)
+  template <typename Function> int remove_if(Function &fn)
   {
     RemoveIf<Function> remove_if(*this, fn);
     return map(remove_if);
@@ -440,23 +379,12 @@ private:
   {
     int ret = OB_SUCCESS;
     switch (err) {
-      case 0:
-        ret = OB_SUCCESS;
-        break;
-      case -ENOENT:
-        ret = OB_ENTRY_NOT_EXIST;
-        break;
-      case -EEXIST:
-        ret = OB_ENTRY_EXIST;
-        break;
-      case -ENOMEM:
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        break;
-      case -EOVERFLOW:
-        ret = OB_SIZE_OVERFLOW;
-        break;
-      default:
-        ret = OB_ERROR;
+      case 0:           ret = OB_SUCCESS; break;
+      case -ENOENT:     ret = OB_ENTRY_NOT_EXIST; break;
+      case -EEXIST:     ret = OB_ENTRY_EXIST; break;
+      case -ENOMEM:     ret = OB_ALLOCATE_MEMORY_FAILED; break;
+      case -EOVERFLOW:  ret = OB_SIZE_OVERFLOW; break;
+      default:          ret = OB_ERROR;
     }
     return ret;
   }
@@ -470,6 +398,7 @@ private:
     } else {
       value->hash_node_ = node;
       node->hash_val_ = value;
+      node->host_ = this;
     }
     return node;
   }
@@ -479,7 +408,7 @@ private:
     if (OB_NOT_NULL(node)) {
       if (!ref_handle_.inc(node)) {
         ret = false;
-      } else if (is_last_bit_set((uint64_t)node->hash_link_.next_)) {
+      } else if(is_last_bit_set((uint64_t)node->hash_link_.next_)) {
         dec_uref(node);
         ret = false;
       }
@@ -513,7 +442,7 @@ private:
   {
     if (OB_NOT_NULL(node)) {
       if (0 == node->xhref(-1)) {
-        alloc_handle_.free_node(node);
+        static_cast<decltype(this)>(node->host_)->alloc_handle_.free_node(node);
         node = nullptr;
       }
     }
@@ -522,7 +451,7 @@ private:
   {
     ObLink* p = nullptr;
     if (list.size() > 0) {
-      while (OB_NOT_NULL(p = list.pop())) {
+      while(OB_NOT_NULL(p = list.pop())) {
         HashNode* node = CONTAINER_OF(p, HashNode, retire_link_);
         dec_href(node);
         node = nullptr;
@@ -533,35 +462,34 @@ private:
   {
     Node* iter = nullptr;
     HashNode* next_node = nullptr;
-    while (OB_NOT_NULL(iter = hash_.next(OB_NOT_NULL(node) ? &node->hash_link_ : nullptr)) &&
-           !try_inc_ref(next_node = CONTAINER_OF(iter, HashNode, hash_link_)))
+    while (OB_NOT_NULL(iter = hash_.next(OB_NOT_NULL(node)? &node->hash_link_: nullptr))
+           && !try_inc_ref(next_node = CONTAINER_OF(iter, HashNode, hash_link_)))
       ;
-    return OB_ISNULL(iter) ? nullptr : next_node;
+    return OB_ISNULL(iter)? nullptr: next_node;
   }
 
 protected:
   template <typename Function>
-  class HandleOn {
+  class HandleOn
+  {
   public:
-    HandleOn(ObLinkHashMap& hash, Function& fn) : hash_(hash), handle_(fn)
-    {}
-    bool operator()(Key& key, Value* value)
+    HandleOn(ObLinkHashMap &hash, Function &fn) : hash_(hash), handle_(fn) {}
+    bool operator()(Key &key, Value* value)
     {
       bool need_continue = handle_(key, value);
       hash_.revert(value);
       return need_continue;
     }
-
   private:
-    ObLinkHashMap& hash_;
-    Function& handle_;
+    ObLinkHashMap &hash_;
+    Function &handle_;
   };
   template <typename Function>
-  class RemoveIf {
+  class RemoveIf
+  {
   public:
-    RemoveIf(ObLinkHashMap& hash, Function& fn) : hash_(hash), predicate_(fn)
-    {}
-    bool operator()(Key& key, Value* value)
+    RemoveIf(ObLinkHashMap &hash, Function &fn) : hash_(hash), predicate_(fn) {}
+    bool operator()(Key &key, Value* value)
     {
       bool need_remove = predicate_(key, value);
       hash_.revert(value);
@@ -571,37 +499,30 @@ protected:
       // always return true
       return true;
     }
-
   private:
-    ObLinkHashMap& hash_;
-    Function& predicate_;
+    ObLinkHashMap &hash_;
+    Function &predicate_;
   };
-  static bool always_true(Key& key, Value* value)
-  {
-    UNUSED(key);
-    UNUSED(value);
-    return true;
-  }
-
+  static bool always_true(Key &key, Value *value) { UNUSED(key); UNUSED(value); return true; }
 protected:
-  static RetireStation& get_retire_station()
-  {
+  static RetireStation& get_retire_station() {
     static RetireStation retire_station(get_global_qclock(), RETIRE_LIMIT);
     return retire_station;
   }
-
 protected:
   CountHandle count_handle_;
   AllocHandle alloc_handle_;
   RefHandle ref_handle_;
   ArrayAlloc array_alloc_;
   Hash hash_;
+  uint64_t magic_code_;
 };
 
-template <typename Key, typename Value, typename AllocHandle>
-class ObTenantLinkHashMap : public ObLinkHashMap<Key, Value, AllocHandle> {
+template<typename Key, typename Value, typename AllocHandle, typename RefHandle=RefHandle>
+class ObTenantLinkHashMap : public ObLinkHashMap<Key, Value, AllocHandle, RefHandle>
+{
 public:
-  int create(uint64_t tenant_id, const Key& key, Value*& value)
+  int create(uint64_t tenant_id, const Key &key, Value *&value)
   {
     int ret = OB_SUCCESS;
     if (NULL == (value = this->alloc_handle_.alloc_value(tenant_id))) {
@@ -618,7 +539,8 @@ public:
   }
 };
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
+
 
 #endif /* OCEANBASE_HASH_OB_LINK_HASHMAP_H_ */

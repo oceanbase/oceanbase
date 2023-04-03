@@ -12,14 +12,16 @@
 
 #include <algorithm>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 // --------------------------------------------------------
 // class ObVector<T, Allocator> implements
 // --------------------------------------------------------
 template <typename T, typename Allocator>
-ObVector<T, Allocator>::ObVector(Allocator* alloc, const lib::ObLabel& label)
+ObVector<T, Allocator>::ObVector(Allocator *alloc, const lib::ObLabel &label)
     : mem_begin_(NULL), mem_end_(NULL), mem_end_of_storage_(NULL)
 {
   if (NULL == alloc) {
@@ -31,7 +33,7 @@ ObVector<T, Allocator>::ObVector(Allocator* alloc, const lib::ObLabel& label)
 }
 
 template <typename T, typename Allocator>
-ObVector<T, Allocator>::ObVector(int64_t size, Allocator* alloc, const lib::ObLabel& label)
+ObVector<T, Allocator>::ObVector(int64_t size, Allocator *alloc, const lib::ObLabel &label)
     : mem_begin_(NULL), mem_end_(NULL), mem_end_of_storage_(NULL)
 {
   if (NULL == alloc) {
@@ -53,15 +55,16 @@ ObVector<T, Allocator>::~ObVector()
 }
 
 template <typename T, typename Allocator>
-ObVector<T, Allocator>::ObVector(const ObVector<T, Allocator>& other)
-    : mem_begin_(NULL), mem_end_(NULL), mem_end_of_storage_(NULL), pallocator_(&default_allocator_)
+ObVector<T, Allocator>::ObVector(const ObVector<T, Allocator> &other)
+    : mem_begin_(NULL), mem_end_(NULL), mem_end_of_storage_(NULL),
+      pallocator_(&default_allocator_)
 {
   pallocator_->set_label(ObModIds::VECTOR);
   *this = other;
 }
 
 template <typename T, typename Allocator>
-int ObVector<T, Allocator>::assign(const ObVector<T, Allocator>& other)
+int ObVector<T, Allocator>::assign(const ObVector<T, Allocator> &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -79,7 +82,7 @@ int ObVector<T, Allocator>::assign(const ObVector<T, Allocator>& other)
 }
 
 template <typename T, typename Allocator>
-ObVector<T, Allocator>& ObVector<T, Allocator>::operator=(const ObVector<T, Allocator>& other)
+ObVector<T, Allocator> &ObVector<T, Allocator>::operator=(const ObVector<T, Allocator> &other)
 {
   int ret = assign(other);
   if (OB_FAIL(ret)) {
@@ -152,12 +155,14 @@ int ObVector<T, Allocator>::expand(int64_t size)
 template <typename T, typename Allocator>
 typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::alloc_array(const int64_t size)
 {
-  iterator ptr = reinterpret_cast<iterator>(pallocator_->alloc(size * sizeof(value_type)));
+  iterator ptr = reinterpret_cast<iterator>
+                 (pallocator_->alloc(size * sizeof(value_type)));
   return ptr;
 }
 
 template <typename T, typename Allocator>
-typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::fill(iterator ptr, const_value_type value)
+typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::fill(iterator ptr,
+                                                                       const_value_type value)
 {
   if (NULL != ptr) {
     //*ptr = value;
@@ -174,8 +179,8 @@ typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::fill(iterator 
  * @return
  */
 template <typename T, typename Allocator>
-typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::move(
-    iterator dest, const_iterator begin, const_iterator end)
+typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::move(iterator dest,
+                                                                       const_iterator begin, const_iterator end)
 {
   // assert(dest);
   // assert(end >= begin);
@@ -190,8 +195,8 @@ typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::move(
  * [dest, x] && [begin, end] cannot be overlap
  */
 template <typename T, typename Allocator>
-typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::copy(
-    iterator dest, const_iterator begin, const_iterator end)
+typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::copy(iterator dest,
+                                                                       const_iterator begin, const_iterator end)
 {
   // assert(dest);
   // assert(end >= begin);
@@ -207,9 +212,7 @@ typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::find(const_val
 {
   iterator pos = mem_begin_;
   while (pos != mem_end_) {
-    if (*pos == value) {
-      break;
-    }
+    if (*pos == value) { break; }
     ++pos;
   }
 
@@ -222,14 +225,13 @@ typename ObVector<T, Allocator>::iterator ObVector<T, Allocator>::find_if(const_
 {
   iterator pos = mem_begin_;
   while (pos != mem_end_) {
-    if (equal(*pos, value)) {
-      break;
-    }
+    if (equal(*pos, value)) { break; }
     ++pos;
   }
 
   return pos;
 }
+
 
 template <typename T, typename Allocator>
 int ObVector<T, Allocator>::remove(iterator pos)
@@ -249,7 +251,8 @@ template <typename T, typename Allocator>
 int ObVector<T, Allocator>::remove(iterator start_pos, iterator end_pos)
 {
   int ret = OB_SUCCESS;
-  if (start_pos < mem_begin_ || start_pos >= mem_end_ || end_pos < mem_begin_ || end_pos > mem_end_) {
+  if (start_pos < mem_begin_ || start_pos >= mem_end_
+      || end_pos < mem_begin_ || end_pos > mem_end_) {
     ret = OB_ARRAY_OUT_OF_RANGE;
   } else if (end_pos - start_pos > 0) {
     iterator new_end_pos = move(start_pos, end_pos, mem_end_);
@@ -277,53 +280,42 @@ int ObVector<T, Allocator>::remove_if(const_value_type value)
   int ret = OB_SUCCESS;
   iterator pos = mem_begin_;
   while (pos != mem_end_) {
-    if (*pos == value) {
-      break;
-    }
+    if (*pos == value) { break; }
     ++pos;
   }
 
-  if (pos >= mem_end_) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    ret = remove(pos);
-  }
+  if (pos >= mem_end_) { ret = OB_ENTRY_NOT_EXIST; }
+  else { ret = remove(pos); }
 
   return ret;
 }
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Predicate>
-int ObVector<T, Allocator>::remove_if(const ValueType& value, Predicate predicate)
+int ObVector<T, Allocator>::remove_if(const ValueType &value, Predicate predicate)
 {
   int ret = OB_SUCCESS;
   iterator pos = mem_begin_;
   while (pos != mem_end_) {
-    if (predicate(*pos, value)) {
-      break;
-    }
+    if (predicate(*pos, value)) { break; }
     ++pos;
   }
 
-  if (pos >= mem_end_) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    ret = remove(pos);
-  }
+  if (pos >= mem_end_) { ret = OB_ENTRY_NOT_EXIST; }
+  else { ret = remove(pos); }
 
   return ret;
 }
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Predicate>
-int ObVector<T, Allocator>::remove_if(const ValueType& value, Predicate predicate, value_type& removed_value)
+int ObVector<T, Allocator>::remove_if(const ValueType &value, Predicate predicate,
+                                      value_type &removed_value)
 {
   int ret = OB_SUCCESS;
   iterator pos = mem_begin_;
   while (pos != mem_end_) {
-    if (predicate(*pos, value)) {
-      break;
-    }
+    if (predicate(*pos, value)) { break; }
     ++pos;
   }
 
@@ -357,7 +349,7 @@ int ObVector<T, Allocator>::insert(iterator pos, const_value_type value)
     int64_t new_size = (old_size + 1) << 1;
     iterator new_mem = alloc_array(new_size);
     if (!new_mem) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
+      ret = OB_ALLOCATE_MEMORY_FAILED; 
     } else {
       iterator new_end = new_mem + old_size + 1;
       if (pos == mem_end_) {
@@ -382,7 +374,8 @@ int ObVector<T, Allocator>::insert(iterator pos, const_value_type value)
 }
 
 template <typename T, typename Allocator>
-int ObVector<T, Allocator>::replace(iterator pos, const_value_type value, value_type& replaced_value)
+int ObVector<T, Allocator>::replace(iterator pos, const_value_type value,
+                                    value_type &replaced_value)
 {
   int ret = OB_SUCCESS;
   if (pos >= mem_begin_ && pos < mem_end_) {
@@ -395,7 +388,7 @@ int ObVector<T, Allocator>::replace(iterator pos, const_value_type value, value_
 }
 
 template <typename T, typename Allocator>
-int64_t ObVector<T, Allocator>::to_string(char* buf, const int64_t buf_len) const
+int64_t ObVector<T, Allocator>::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_ARRAY_START();
@@ -413,12 +406,11 @@ int64_t ObVector<T, Allocator>::to_string(char* buf, const int64_t buf_len) cons
 // ObSortedVector
 template <typename T, typename Allocator>
 template <typename Compare>
-int ObSortedVector<T, Allocator>::insert(const_value_type value, iterator& insert_pos, Compare compare)
+int ObSortedVector<T, Allocator>::insert(const_value_type value,
+                                         iterator &insert_pos, Compare compare)
 {
   int ret = OB_SUCCESS;
-  if (NULL == value) {
-    ret = OB_ERROR;
-  }
+  if (NULL == value) { ret = OB_ERROR; }
   insert_pos = vector_.end();
   if (OB_SUCC(ret)) {
     iterator find_pos = std::lower_bound(vector_.begin(), vector_.end(), value, compare);
@@ -431,18 +423,18 @@ int ObSortedVector<T, Allocator>::insert(const_value_type value, iterator& inser
 
 template <typename T, typename Allocator>
 template <typename Compare, typename Equal>
-int ObSortedVector<T, Allocator>::replace(
-    const_value_type value, iterator& replace_pos, Compare compare, Equal equal, value_type& replaced_value)
+int ObSortedVector<T, Allocator>::replace(const_value_type value,
+                                          iterator &replace_pos, Compare compare, Equal equal, value_type &replaced_value)
 {
   int ret = OB_SUCCESS;
   replace_pos = vector_.end();
   if (NULL != value) {
     iterator find_pos = std::lower_bound(vector_.begin(), vector_.end(), value, compare);
     if (find_pos != end() && equal(*find_pos, value)) {
-      // existent, overwrite
+      //existent, overwrite
       ret = vector_.replace(find_pos, value, replaced_value);
     } else {
-      // non-existent, insert
+      //non-existent, insert
       ret = vector_.insert(find_pos, value);
     }
     if (OB_SUCC(ret)) {
@@ -456,18 +448,17 @@ int ObSortedVector<T, Allocator>::replace(
 
 template <typename T, typename Allocator>
 template <typename Compare, typename Unique>
-int ObSortedVector<T, Allocator>::insert_unique(
-    const_value_type value, iterator& insert_pos, Compare compare, Unique unique)
+int ObSortedVector<T, Allocator>::insert_unique(const_value_type value,
+                                                iterator &insert_pos, Compare compare, Unique unique)
 {
   int ret = OB_SUCCESS;
-  if (NULL == value) {
-    ret = OB_ERROR;
-  }
+  if (NULL == value) { ret = OB_ERROR; }
   iterator begin_iterator = begin();
   iterator end_iterator = end();
   insert_pos = end_iterator;
   if (OB_SUCC(ret)) {
-    iterator find_pos = std::lower_bound(begin_iterator, end_iterator, value, compare);
+    iterator find_pos = std::lower_bound(begin_iterator,
+                                         end_iterator, value, compare);
     insert_pos = find_pos;
     iterator compare_pos = find_pos;
     iterator prev_pos = end_iterator;
@@ -493,6 +484,7 @@ int ObSortedVector<T, Allocator>::insert_unique(
       }
     }
 
+
     if (OB_SUCC(ret)) {
       ret = vector_.insert(insert_pos, value);
     }
@@ -502,7 +494,8 @@ int ObSortedVector<T, Allocator>::insert_unique(
 
 template <typename T, typename Allocator>
 template <typename Compare>
-int ObSortedVector<T, Allocator>::find(const_value_type value, iterator& pos, Compare compare) const
+int ObSortedVector<T, Allocator>::find(const_value_type value,
+                                       iterator &pos, Compare compare) const
 {
   int ret = OB_ENTRY_NOT_EXIST;
   pos = std::lower_bound(begin(), end(), value, compare);
@@ -518,7 +511,8 @@ int ObSortedVector<T, Allocator>::find(const_value_type value, iterator& pos, Co
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Compare, typename Equal>
-int ObSortedVector<T, Allocator>::find(const ValueType& value, iterator& pos, Compare compare, Equal equal) const
+int ObSortedVector<T, Allocator>::find(const ValueType &value,
+                                       iterator &pos, Compare compare, Equal equal) const
 {
   int ret = OB_ENTRY_NOT_EXIST;
   pos = std::lower_bound(begin(), end(), value, compare);
@@ -534,23 +528,24 @@ int ObSortedVector<T, Allocator>::find(const ValueType& value, iterator& pos, Co
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Compare>
-typename ObSortedVector<T, Allocator>::iterator ObSortedVector<T, Allocator>::lower_bound(
-    const ValueType& value, Compare compare) const
+typename ObSortedVector<T, Allocator>::iterator
+ObSortedVector<T, Allocator>::lower_bound(const ValueType &value, Compare compare) const
 {
   return std::lower_bound(begin(), end(), value, compare);
 }
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Compare>
-typename ObSortedVector<T, Allocator>::iterator ObSortedVector<T, Allocator>::upper_bound(
-    const ValueType& value, Compare compare) const
+typename ObSortedVector<T, Allocator>::iterator
+ObSortedVector<T, Allocator>::upper_bound(const ValueType &value, Compare compare) const
 {
   return std::upper_bound(begin(), end(), value, compare);
 }
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Compare, typename Equal>
-int ObSortedVector<T, Allocator>::remove_if(const ValueType& value, Compare comapre, Equal equal)
+int ObSortedVector<T, Allocator>::remove_if(const ValueType &value,
+                                            Compare comapre, Equal equal)
 {
   iterator pos = end();
   int ret = find(value, pos, comapre, equal);
@@ -562,8 +557,8 @@ int ObSortedVector<T, Allocator>::remove_if(const ValueType& value, Compare coma
 
 template <typename T, typename Allocator>
 template <typename ValueType, typename Compare, typename Equal>
-int ObSortedVector<T, Allocator>::remove_if(
-    const ValueType& value, Compare comapre, Equal equal, value_type& removed_value)
+int ObSortedVector<T, Allocator>::remove_if(const ValueType &value,
+                                            Compare comapre, Equal equal, value_type &removed_value)
 {
   iterator pos = end();
   int ret = find(value, pos, comapre, equal);
@@ -591,5 +586,5 @@ void ObSortedVector<T, Allocator>::sort(Compare compare)
   std::sort(begin(), end(), compare);
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

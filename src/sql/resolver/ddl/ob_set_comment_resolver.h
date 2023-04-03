@@ -16,24 +16,23 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObSetCommentResolver : public ObDDLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObSetCommentResolver : public ObDDLResolver
+{
 public:
-  explicit ObSetCommentResolver(ObResolverParams& params);
+  explicit ObSetCommentResolver(ObResolverParams &params);
   virtual ~ObSetCommentResolver();
-  virtual int resolve(const ParseNode& parse_tree);
-  ObAlterTableStmt* get_alter_table_stmt()
-  {
-    return static_cast<ObAlterTableStmt*>(stmt_);
-  };
-
+  virtual int resolve(const ParseNode &parse_tree);
+  ObAlterTableStmt *get_alter_table_stmt() { return static_cast<ObAlterTableStmt*>(stmt_); };
 private:
   share::schema::ObTableSchema table_schema_;
   common::ObCollationType collation_type_;
   common::ObCharsetType charset_type_;
   DISALLOW_COPY_AND_ASSIGN(ObSetCommentResolver);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase
 #endif

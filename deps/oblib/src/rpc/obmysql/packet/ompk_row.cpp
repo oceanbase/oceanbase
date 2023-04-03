@@ -14,10 +14,13 @@
 
 using namespace oceanbase::obmysql;
 
-OMPKRow::OMPKRow(const ObMySQLRow& row) : row_(row)
-{}
+OMPKRow::OMPKRow(const ObMySQLRow &row)
+    : row_(row)
+{
 
-int OMPKRow::serialize(char* buffer, int64_t len, int64_t& pos) const
+}
+
+int OMPKRow::serialize(char *buffer, int64_t len, int64_t &pos) const
 {
   return row_.serialize(buffer, len, pos);
 }

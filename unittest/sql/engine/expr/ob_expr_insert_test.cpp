@@ -17,53 +17,54 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprInsertTest : public ::testing::Test {
+class ObExprInsertTest : public ::testing::Test
+{
 public:
   ObExprInsertTest();
   virtual ~ObExprInsertTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprInsertTest(const ObExprInsertTest& other);
-  ObExprInsertTest& operator=(const ObExprInsertTest& other);
-
+  ObExprInsertTest(const ObExprInsertTest &other);
+  ObExprInsertTest& operator=(const ObExprInsertTest &other);
 private:
   // data members
 };
 ObExprInsertTest::ObExprInsertTest()
-{}
+{
+}
 
 ObExprInsertTest::~ObExprInsertTest()
-{}
+{
+}
 
 void ObExprInsertTest::SetUp()
-{}
+{
+}
 
 void ObExprInsertTest::TearDown()
-{}
+{
+}
 
-#define T(obj, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value) \
-  EXPECT_RESULT4(obj, &buf, calc_result, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value)
-#define F(obj, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value) \
-  EXPECT_FAIL_RESULT4(obj, &buf, calc_result, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value) EXPECT_RESULT4(obj, &buf, calc_result, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value)
+#define F(obj, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value) EXPECT_FAIL_RESULT4(obj, &buf, calc_result, t1, v1, t2, v2, t3, v3, t4, v4, ref_type, ref_value)
 
 TEST_F(ObExprInsertTest, basic_test)
 {
-  // ObExprStringBuf buf;
+  //ObExprStringBuf buf;
   ObArenaAllocator buf(ObModIds::OB_SQL_SESSION);
   ObExprInsert insert(buf);
 
   ASSERT_EQ(ObExprOperator::MORE_THAN_TWO, insert.get_param_num());
 
   // null
-  T(insert, null, , null, , null, , null, , null, );
-  T(insert, int, 1, null, , null, , null, , null, );
-  T(insert, int, 1, varchar, "hi", null, , null, , null, );
-  T(insert, int, 1, null, , varchar, "hi", null, , null, );
-  T(insert, int, 1, null, , varchar, "hi", null, , null, );
-  T(insert, int, 1, null, , varchar, "hi", int, 1, null, );
+  T(insert, null,  , null,  , null,  ,null,  , null,  );
+  T(insert, int, 1, null,  , null,  ,null,  , null,  );
+  T(insert, int, 1, varchar, "hi", null,  ,null,  , null, );
+  T(insert, int, 1, null,  , varchar, "hi", null, , null, );
+  T(insert, int, 1, null,  , varchar, "hi", null, , null, );
+  T(insert, int, 1, null,  , varchar, "hi", int, 1, null, );
 
   // normal
   T(insert, varchar, "Quadratic", int, -2, int, 100, varchar, "What", varchar, "Quadratic");
@@ -278,6 +279,7 @@ TEST_F(ObExprInsertTest, basic_test)
   T(insert, varchar, "中国是个美丽的地方abc", int, 12, int, 1, varchar, "北京", varchar, "中国是个美丽的地方ab北京");
   T(insert, varchar, "中国是个美丽的地方abc", int, 13, int, 1, varchar, "北京", varchar, "中国是个美丽的地方abc");
   T(insert, varchar, "中国是个美丽的地方abc", int, 14, int, 1, varchar, "北京", varchar, "中国是个美丽的地方abc");
+
 }
 
 TEST_F(ObExprInsertTest, fail_test)
@@ -287,16 +289,18 @@ TEST_F(ObExprInsertTest, fail_test)
 
   ASSERT_EQ(ObExprOperator::MORE_THAN_TWO, insert.get_param_num());
   F(insert, varchar, "Quadratic", int, 1, max_value, , varchar, "What", varchar, "Quadratic");
-  F(insert, varchar, "Quadratic", int, 1, min_value, , varchar, "What", varchar, "Quadratic");
-  F(insert, varchar, "Quadratic", min_value, , int, 1, varchar, "What", varchar, "Quadratic");
-  F(insert, varchar, "Quadratic", max_value, , int, 1, varchar, "What", varchar, "Quadratic");
-  F(insert, int, 1, min_value, , min_value, , varchar, "1", varchar, "Quadratic");
-  F(insert, double, 1.3, min_value, , min_value, , varchar, "1.300000", varchar, "Quadratic");
+  F(insert, varchar, "Quadratic", int, 1, min_value,  , varchar, "What", varchar, "Quadratic");
+  F(insert, varchar, "Quadratic", min_value,  , int, 1, varchar, "What", varchar, "Quadratic");
+  F(insert, varchar, "Quadratic", max_value,  , int, 1, varchar, "What", varchar, "Quadratic");
+  F(insert, int, 1, min_value,  , min_value,  , varchar, "1", varchar, "Quadratic");
+  F(insert, double, 1.3, min_value,  , min_value,  , varchar, "1.300000", varchar, "Quadratic");
+
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

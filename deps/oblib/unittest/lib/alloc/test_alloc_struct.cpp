@@ -16,7 +16,7 @@
 
 using namespace oceanbase::lib;
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
@@ -90,10 +90,10 @@ TEST(TestABitSet, Basic)
     char bm_buf[ABitSet::buf_len(8201)];
     ABitSet bm(8201, bm_buf);
     bm.set(6136);
-    EXPECT_EQ(6136, bm.find_first_significant(6136));
-    EXPECT_EQ(6136, bm.find_first_significant(5814));
+    EXPECT_EQ(6136,bm.find_first_significant(6136));
+    EXPECT_EQ(6136,bm.find_first_significant(5814));
     bm.unset(6136);
-    EXPECT_EQ(-1, bm.find_first_significant(5814));
+    EXPECT_EQ(-1,bm.find_first_significant(5814));
   }
 
   {
@@ -136,4 +136,14 @@ TEST(TESTABitSet, Big)
   EXPECT_EQ(3210, bm.find_first_significant(1235));
   EXPECT_EQ(3210, bm.find_first_significant(3210));
   EXPECT_EQ(-1, bm.find_first_significant(3211));
+
+  // test first most
+  EXPECT_EQ(3210, bm.find_first_most_significant(4000));
+  EXPECT_EQ(3210, bm.find_first_most_significant(3210));
+  EXPECT_EQ(1234, bm.find_first_most_significant(3209));
+  EXPECT_EQ(1234, bm.find_first_most_significant(1234));
+  EXPECT_EQ(-1, bm.find_first_most_significant(1233));
+  EXPECT_EQ(3210, bm.find_first_most_significant(4095));
+  bm.set(4094);
+  EXPECT_EQ(4094, bm.find_first_most_significant(4095));
 }

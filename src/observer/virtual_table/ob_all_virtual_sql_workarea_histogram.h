@@ -18,26 +18,23 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/row/ob_row.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObSqlWorkareaHistogramIterator {
+class ObSqlWorkareaHistogramIterator
+{
 public:
   ObSqlWorkareaHistogramIterator();
-  ~ObSqlWorkareaHistogramIterator()
-  {
-    destroy();
-  }
-
+  ~ObSqlWorkareaHistogramIterator() { destroy(); }
 public:
   void destroy();
   void reset();
-  int init();
-  int get_next_wa_histogram(sql::ObWorkareaHistogram*& wa_histogram, uint64_t& tenant_id);
-
+  int init(const uint64_t effective_tenant_id);
+  int get_next_wa_histogram(sql::ObWorkareaHistogram *&wa_histogram, uint64_t &tenant_id);
 private:
   int get_next_batch_wa_histograms();
-
 private:
   common::ObSEArray<sql::ObWorkareaHistogram, 32> wa_histograms_;
   common::ObSEArray<uint64_t, 16> tenant_ids_;
@@ -45,39 +42,41 @@ private:
   int64_t cur_nth_tenant_;
 };
 
-class ObSqlWorkareaHistogram : public common::ObVirtualTableScannerIterator {
+class ObSqlWorkareaHistogram : public common::ObVirtualTableScannerIterator
+{
 public:
   ObSqlWorkareaHistogram();
-  virtual ~ObSqlWorkareaHistogram()
-  {
-    destroy();
-  }
+  virtual ~ObSqlWorkareaHistogram() { destroy(); }
 
 public:
   void destroy();
   void reset();
-  int inner_get_next_row(common::ObNewRow*& row);
+  int inner_get_next_row(common::ObNewRow *&row);
 
 private:
-  enum STORAGE_COLUMN {
+  enum STORAGE_COLUMN
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     LOW_OPTIMAL_SIZE,
     HIGH_OPTIMAL_SIZE,
     OPTIMAL_EXECUTIONS,
-    ONEPASS_EXECUTIONS,  // OB_APP_MIN_COLUMN_ID + 5
+    ONEPASS_EXECUTIONS, // OB_APP_MIN_COLUMN_ID + 5
     MULTIPASSES_EXECUTIONS,
     TOTAL_EXECUTIONS,
-    TENAND_ID,  // OB_APP_MIN_COLUMN_ID + 18
+    TENAND_ID,         // OB_APP_MIN_COLUMN_ID + 18
   };
-  int fill_row(uint64_t tenant_id, sql::ObWorkareaHistogram& wa_histogram, common::ObNewRow*& row);
+  int fill_row(
+    uint64_t tenant_id,
+    sql::ObWorkareaHistogram &wa_histogram,
+    common::ObNewRow *&row);
   int get_server_ip_and_port();
-
 private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaHistogramIterator iter_;
 };
+
 
 } /* namespace observer */
 } /* namespace oceanbase */

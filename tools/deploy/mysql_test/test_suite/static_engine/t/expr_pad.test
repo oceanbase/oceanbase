@@ -1,0 +1,119 @@
+# owner: luofan.zp
+# owner group: SQL2
+# description: test lpad/rpad/pad
+
+--disable_abort_on_error
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+
+--echo // Case1: normal test.测试各种类型组合, 跟不开新引擎开关进行对比
+alter system flush plan cache global;
+set @@ob_enable_plan_cache = 0;
+select rpad(null, null, null), rpad('a', 1, null), rpad(null, 1, 'a') from dual;
+select lpad(null, null, null), lpad('a', 1, null), lpad(null, 1, 'a') from dual;
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, rpad(c$left, c$left, c$right), lpad(c$left, c$left, c$right) from t1;
+    eval select c$left, c$right, pad(c$left, c$left, c$right) from t1;
+    inc $right;
+  }
+  inc $left;
+}
+
+--disable_query_log
+SET GLOBAL max_allowed_packet = 4194304;
+connection default;
+disconnect conn_admin;
+connect (conn_admin1, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin1;
+--enable_query_log
+
+--error 1582
+select lpad();
+--error 1582
+select lpad(2, 2);
+--error 1582
+select lpad(2, 2, 2, 2);
+
+select lpad(2, 2, 2);
+
+select lpad('a', 5, 'b');
+select lpad('a', 5, '12');
+select lpad('a', '5', 12);
+select lpad('bb', 0, 'c');
+select lpad('bb', -1, 'c');
+
+select lpad('a', 5, NULL);
+select lpad('a', 5, '');
+select lpad(NULL, 5, 'a');
+select lpad('', 5, 'a');
+
+select lpad('a', 0.49, 'b');
+select lpad('a', 0.5, 'b');
+select lpad('a', -0.49, 'b');
+select lpad('a', -0.5, 'b');
+
+
+set character_set_client=utf8;
+set character_set_connection=utf8;
+set character_set_database=utf8;
+set character_set_results=utf8;
+set character_set_server=utf8;
+
+set character_set_connection=binary;
+select hex(lpad('钡', 2, 'c'));
+set character_set_connection=utf8;
+select hex(lpad('钡', 2, 'c'));
+
+select lpad('a', 1, '阿斯'), length(lpad('a', 1, '阿斯')) from dual;
+select lpad('a', 2, '阿斯'), length(lpad('a', 2, '阿斯')) from dual;
+select lpad('a', 3, '阿斯'), length(lpad('a', 3, '阿斯')) from dual;
+select lpad('a', 4, '阿斯'), length(lpad('a', 4, '阿斯')) from dual;
+select lpad('a', 5, '阿斯'), length(lpad('a', 5, '阿斯')) from dual;
+select lpad('a', 6, '阿斯'), length(lpad('a', 6, '阿斯')) from dual;
+select lpad('a', 7, '阿斯'), length(lpad('a', 7, '阿斯')) from dual;
+select lpad('a', 8, '阿斯'), length(lpad('a', 8, '阿斯')) from dual;
+
+select rpad('a', 1, '阿斯'), length(rpad('a', 1, '阿斯')) from dual;
+select rpad('a', 2, '阿斯'), length(rpad('a', 2, '阿斯')) from dual;
+select rpad('a', 3, '阿斯'), length(rpad('a', 3, '阿斯')) from dual;
+select rpad('a', 4, '阿斯'), length(rpad('a', 4, '阿斯')) from dual;
+select rpad('a', 5, '阿斯'), length(rpad('a', 5, '阿斯')) from dual;
+select rpad('a', 6, '阿斯'), length(rpad('a', 6, '阿斯')) from dual;
+select rpad('a', 7, '阿斯'), length(rpad('a', 7, '阿斯')) from dual;
+select rpad('a', 8, '阿斯'), length(rpad('a', 8, '阿斯')) from dual;
+
+--sleep 2

@@ -16,45 +16,32 @@
 #include "lib/string/ob_strings.h"
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
-class ObDropUserStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropUserStmt: public ObDDLStmt
+{
 public:
-  explicit ObDropUserStmt(common::ObIAllocator* name_pool);
+  explicit ObDropUserStmt(common::ObIAllocator *name_pool);
   ObDropUserStmt();
   virtual ~ObDropUserStmt();
-  int add_user(const common::ObString& user_name, const common::ObString& host_name);
-  void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  };
-  const common::ObStrings* get_users() const
-  {
-    return &users_;
-  };
-  uint64_t get_tenant_id() const
-  {
-    return tenant_id_;
-  };
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return drop_user_arg_;
-  }
+  int add_user(const common::ObString &user_name, const common::ObString &host_name);
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; };
+  const common::ObStrings *get_users() const { return &users_; };
+  uint64_t get_tenant_id() const { return tenant_id_; };
+  virtual bool cause_implicit_commit() const { return true; }
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_user_arg_; }
   DECLARE_VIRTUAL_TO_STRING;
-
 private:
   // data members
-  common::ObStrings users_;  // user1,host1; usr2,host2;...
+  common::ObStrings users_;//user1,host1; usr2,host2;...
   uint64_t tenant_id_;
-  obrpc::ObDropUserArg drop_user_arg_;  // for returning exec_tenant_id_
+  obrpc::ObDropUserArg drop_user_arg_; // 用于返回exec_tenant_id_
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropUserStmt);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBAS_SQL_RESOLVER_DCL_OB_DROP_USER_STMT_
+#endif //OCEANBAS_SQL_RESOLVER_DCL_OB_DROP_USER_STMT_

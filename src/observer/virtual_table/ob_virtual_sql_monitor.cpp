@@ -22,26 +22,27 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::share;
-namespace oceanbase {
-namespace observer {
-ObVirtualSqlMonitor::ObVirtualSqlMonitor()
-    : ObVirtualTableProjector(),
-      monitor_manager_(NULL),
-      start_id_(0),
-      end_id_(0),
-      ref_(),
-      plan_info_(NULL),
-      tenant_id_(0),
-      request_id_(0),
-      plan_id_(0),
-      scheduler_ipstr_(),
-      scheduler_port_(0),
-      ipstr_(),
-      port_(0),
-      execution_time_(0)
+namespace oceanbase
 {
-  info_buf_[0] = '\0';
-}
+namespace observer
+{
+ObVirtualSqlMonitor::ObVirtualSqlMonitor() : ObVirtualTableProjector(),
+    monitor_manager_(NULL),
+    start_id_(0),
+    end_id_(0),
+    ref_(),
+    plan_info_(NULL),
+    tenant_id_(0),
+    request_id_(0),
+    plan_id_(0),
+    scheduler_ipstr_(),
+    scheduler_port_(0),
+    ipstr_(),
+    port_(0),
+    execution_time_(0)
+  {
+    info_buf_[0] = '\0';
+  }
 
 ObVirtualSqlMonitor::~ObVirtualSqlMonitor()
 {
@@ -52,7 +53,7 @@ void ObVirtualSqlMonitor::reset()
 {
   if (NULL != monitor_manager_) {
     if (OB_SUCCESS != monitor_manager_->revert(&ref_)) {
-      LOG_WARN("fail to revert ref");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to revert ref");
     }
   }
   info_buf_[0] = '\0';
@@ -66,21 +67,18 @@ int ObVirtualSqlMonitor::inner_open()
   int64_t end_request_id = -1;
   int64_t index = -1;
   ObRaQueue::Ref ref;
-  ObPhyPlanMonitorInfo* plan_info = NULL;
+  ObPhyPlanMonitorInfo *plan_info = NULL;
   if (OB_SUCC(ret)) {
     if (NULL != monitor_manager_) {
       if (key_ranges_.count() >= 1) {
-        ObNewRange& req_id_range = key_ranges_.at(0);
-        if (OB_UNLIKELY(
-                req_id_range.get_start_key().get_obj_cnt() != 6 || req_id_range.get_end_key().get_obj_cnt() != 6)) {
+        ObNewRange &req_id_range = key_ranges_.at(0);
+        if (OB_UNLIKELY(req_id_range.get_start_key().get_obj_cnt() != 6
+                        || req_id_range.get_end_key().get_obj_cnt() != 6)) {
           ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN,
-              "unexpected  # of rowkey columns",
-              K(ret),
-              "size of start key",
-              req_id_range.get_start_key().get_obj_cnt(),
-              "size of end key",
-              req_id_range.get_end_key().get_obj_cnt());
+          SERVER_LOG(WARN, "unexpected  # of rowkey columns",
+                     K(ret),
+                     "size of start key", req_id_range.get_start_key().get_obj_cnt(),
+                     "size of end key", req_id_range.get_end_key().get_obj_cnt());
 
         } else {
           ObObj id_low = (req_id_range.get_start_key().get_obj_ptr()[3]);
@@ -156,19 +154,19 @@ int ObVirtualSqlMonitor::get_next_monitor_info()
   return ret;
 }
 
-int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow*& row)
+int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
-  ObPhyPlanExecInfo* plan_info = NULL;
+  ObObj *cells = cur_row_.cells_;
+  ObPhyPlanExecInfo *plan_info = NULL;
   ObArray<Column> columns;
   if (OB_ISNULL(monitor_manager_)) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
-    ret = OB_NOT_INIT;
+    ret= OB_NOT_INIT;
     SERVER_LOG(WARN, "invalid arugment", K(ret), K(cells), K(allocator_), K(monitor_manager_));
   } else {
-    while (OB_SUCC(get_next_monitor_info())) {  // take care of the possible "holes"
+    while (OB_SUCC(get_next_monitor_info())) {  //处理可能的空洞
       if (NULL != plan_info_) {
         start_id_++;
         break;
@@ -195,7 +193,8 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow*& row)
             break;
           case SVR_IP:
             cells[cell_idx].set_varchar(ipstr_);
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
             break;
           case SVR_PORT:
             cells[cell_idx].set_int(port_);
@@ -214,19 +213,24 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow*& row)
             break;
           case SCHEDULER_IP:
             cells[cell_idx].set_varchar(scheduler_ipstr_);
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
             break;
           case SCHEDULER_PORT:
             cells[cell_idx].set_int(scheduler_port_);
             break;
-          case MONITOR_INFO: {
-            int64_t size = plan_info->print_info(info_buf_, OB_MAX_INFO_LENGTH);
-            cells[cell_idx].set_varchar(ObString(size, info_buf_));
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          } break;
+          case MONITOR_INFO:
+            {
+              int64_t size = plan_info->print_info(info_buf_, OB_MAX_INFO_LENGTH);
+              cells[cell_idx].set_varchar(ObString(size, info_buf_));
+              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                      ObCharset::get_default_charset()));
+            }
+            break;
           case EXTEND_INFO:
             cells[cell_idx].set_varchar(ObString::make_string(to_cstring(plan_info_->get_trace())));
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
             break;
           case SQL_EXEC_START:
             cells[cell_idx].set_timestamp(execution_time_);
@@ -240,22 +244,16 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow*& row)
 
       if (OB_SUCC(ret)) {
         row = &cur_row_;
-        SERVER_LOG(DEBUG,
-            "get next row",
-            K(plan_info_),
-            K(plan_info_->get_operator_count()),
-            K(request_id_),
-            K(plan_id_),
-            K(*plan_info),
-            K(start_id_),
-            K(end_id_));
+        SERVER_LOG(DEBUG, "get next row", K(plan_info_), K(plan_info_->get_operator_count()),
+                   K(request_id_), K(plan_id_), K(*plan_info),
+                   K(start_id_), K(end_id_));
       }
     }
   }
   return ret;
 }
 
-int ObVirtualSqlMonitor::set_addr(const common::ObAddr& addr)
+int ObVirtualSqlMonitor::set_addr(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
   char ipbuf[common::OB_IP_STR_BUFF];
@@ -271,5 +269,5 @@ int ObVirtualSqlMonitor::set_addr(const common::ObAddr& addr)
   }
   return ret;
 }
-}  // namespace observer
-}  // namespace oceanbase
+} //namespace observer
+} //namespace oceanbase

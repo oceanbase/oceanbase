@@ -14,24 +14,23 @@
 #define PARSER_ALLOC_FUNC_H_
 
 #include <stdint.h>
-// ObSQLParser module extracts a static link library to Proxy, Proxy must implement the following
-// functions by itself to link correctly
+// ObSQLParser模块抽取了一个静态链接库给Proxy，Proxy必须要自己实现以下几个函数才能正确链接
 
-void* parser_alloc_buffer(void* malloc_pool, const int64_t alloc_size);
-void parser_free_buffer(void* malloc_pool, void* buffer);
+void *parser_alloc_buffer(void *malloc_pool, const int64_t alloc_size);
+void parser_free_buffer(void *malloc_pool, void *buffer);
 
 #ifdef SQL_PARSER_COMPILATION
 #ifdef __cplusplus
 extern "C" {
-#endif  // __cplusplus
+#endif // __cplusplus
 
 extern bool check_stack_overflow_c();
-extern int check_stack_overflow_in_c(int* check_overflow);
+extern int check_stack_overflow_in_c(int *check_overflow);
 extern void right_to_die_or_duty_to_live_c();
 
 #ifdef __cplusplus
 }
-#endif  // __cplusplus
-#endif  // SQL_PARSER_COMPILATION
+#endif // __cplusplus
+#endif // SQL_PARSER_COMPILATION
 
-#endif  // !PASER_ALLOC_FUNC_H_
+#endif // !PARSER_ALLOC_FUNC_H_

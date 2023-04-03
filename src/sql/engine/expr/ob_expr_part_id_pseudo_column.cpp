@@ -14,12 +14,15 @@
 
 #include "sql/engine/expr/ob_expr_part_id_pseudo_column.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace oceanbase::common;
 
-ObExprPartIdPseudoColumn::ObExprPartIdPseudoColumn(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_PDML_PARTITION_ID, N_PDML_PARTITION_ID, 0, NOT_ROW_DIMENSION)
+ObExprPartIdPseudoColumn::ObExprPartIdPseudoColumn(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_PDML_PARTITION_ID, N_PDML_PARTITION_ID, 0, NOT_ROW_DIMENSION,
+                       INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
   // do nothing
 }
@@ -29,28 +32,18 @@ ObExprPartIdPseudoColumn::~ObExprPartIdPseudoColumn()
   // do nothing
 }
 
-int ObExprPartIdPseudoColumn::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprPartIdPseudoColumn::calc_result_type0(ObExprResType &type,
+                                                ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  type.set_int();
+  type.set_int(); // 默认partition id的数据类型是int64_t
   return ret;
 }
 
-int ObExprPartIdPseudoColumn::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  int64_t partition_id = expr_ctx.pdml_partition_id_;
-  if (partition_id == OB_INVALID_INDEX_INT64) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get pdml partition from ObExprCtx", K(ret));
-  } else {
-    result.set_int(partition_id);
-  }
-  return ret;
-}
-
-int ObExprPartIdPseudoColumn::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprPartIdPseudoColumn::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                      const ObRawExpr &raw_expr,
+                                      ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(op_cg_ctx);
@@ -59,13 +52,15 @@ int ObExprPartIdPseudoColumn::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& r
   return ret;
 }
 
-int ObExprPartIdPseudoColumn::eval_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprPartIdPseudoColumn::eval_part_id(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
+  // partition id 伪列表达式比较特殊，其对应的值是提前被设置到expr对应的datum中
+  // 每次都是直接通过local_expr_dutam获得，直接访问
   UNUSED(expr);
   UNUSED(ctx);
   UNUSED(expr_datum);
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end oceanbase
+} // end sql

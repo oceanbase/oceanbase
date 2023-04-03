@@ -16,6 +16,7 @@
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/ob_exec_context.h"
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
@@ -52,7 +53,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
     int64_t str_num = 2;
     const uint64_t max_len = std::max(on_len, off_len);
     // when bits exceed uint_max or int_min, ob is not compatible to mysql.
-    types_array[0].set_calc_type(common::ObUInt64Type);
+    types_array[0].set_calc_type(common::ObIntType);
     types_array[1].set_calc_type(common::ObVarcharType);
     types_array[2].set_calc_type(common::ObVarcharType);
     if (3 < param_num) {
@@ -63,7 +64,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
         types_array[4].set_calc_type(common::ObIntType);
       }
     }
-    common::ObLength len = static_cast<common::ObLength>(MAX_BIT_NUM * max_len + 
+    common::ObLength len = static_cast<common::ObLength>(MAX_BIT_NUM * max_len +
         MAX_SEP_NUM * sep_len);
     type.set_length(len);
     type.set_varchar();
@@ -77,75 +78,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
   return ret;
 }
 
-int ObExprExportSet::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num,
-    ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("calc_buf of expr_ctx is NULL", K(ret));
-  } else if (3 == param_num) {
-    ObObj tmp_n_bits;
-    ObObj tmp_sep;
-    tmp_n_bits.set_int(64);
-    tmp_sep.set_string(common::ObVarcharType, ObCharsetUtils::get_const_str(
-        objs_array[1].get_collation_type(), ','));
-    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2], 
-        tmp_sep, tmp_n_bits, expr_ctx))) {
-      LOG_WARN("calc_export_set failed", K(ret));
-    }
-  } else if (4 == param_num) {
-    ObObj tmp_n_bits;
-    tmp_n_bits.set_int(64);
-    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
-        objs_array[3], tmp_n_bits, expr_ctx))) {
-      LOG_WARN("calc_export_set failed", K(ret));
-    }
-  } else if (5 == param_num) {
-    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
-        objs_array[3], objs_array[4], expr_ctx))) {
-      LOG_WARN("calc_export_set failed", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-int ObExprExportSet::calc_export_set(ObObj& result, const ObObj& bits, const ObObj& on,
-    const ObObj& off, const ObObj& sep, const ObObj& n_bits, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (bits.is_null() || on.is_null() || off.is_null() || sep.is_null() || n_bits.is_null()) {
-    result.set_null();
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    uint64_t local_bits;
-    ObString local_on;
-    ObString local_off;
-    ObString local_sep;
-    int64_t local_n_bits;
-    ObString res;
-    local_on = on.get_string();
-    local_off = off.get_string();
-    local_sep = sep.get_string();
-    if (OB_FAIL(bits.get_uint64(local_bits))) {
-      LOG_WARN("fail to get bit", K(ret), K(bits));
-    } else if (OB_FAIL(n_bits.get_int(local_n_bits))) {
-      LOG_WARN("fail to get int", K(ret), K(n_bits));
-    } else if (OB_FAIL(calc_export_set_inner(res, local_bits, local_on, local_off,
-        local_sep, local_n_bits, *expr_ctx.calc_buf_))) {
-      LOG_WARN("do export set failed", K(ret));
-    } else {
-      result.set_string(result_type_.get_type(), res);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int ObExprExportSet::calc_export_set_inner(ObString& ret_str, const uint64_t bits,
+int ObExprExportSet::calc_export_set_inner(const int64_t max_result_size, ObString& ret_str, const uint64_t bits,
     const ObString& on, const ObString& off, const ObString& sep, const int64_t n_bits,
     ObExprStringBuf& string_buf)
 {
@@ -178,6 +111,9 @@ int ObExprExportSet::calc_export_set_inner(ObString& ret_str, const uint64_t bit
     if (OB_UNLIKELY(tot_length <= 0)) {
       // tot_length equals to 0 indicates that length_to is zero and "to" is empty string
       ret_str.reset();
+    } else if (tot_length > max_result_size) {
+      LOG_WARN("Result of export_set_inner was larger than max_allow_packet_size", K(ret), K(tot_length), K(max_result_size));
+      LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "export_set", static_cast<int>(max_result_size));
     } else {
       char* buf = static_cast<char*>(string_buf.alloc(tot_length));
       if (OB_ISNULL(buf)) {
@@ -227,7 +163,7 @@ int ObExprExportSet::eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   ObDatum* bits = NULL;
   ObDatum* on = NULL;
   ObDatum* off = NULL;
-  ObDatum* sep = NULL; 
+  ObDatum* sep = NULL;
   ObDatum* n_bits = NULL;
   int64_t max_size = 0;
   if (OB_FAIL(expr.eval_param_value(ctx, bits, on, off, sep, n_bits))) {
@@ -238,6 +174,8 @@ int ObExprExportSet::eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
     expr_datum.set_null();
   } else if (OB_NOT_NULL(n_bits) && n_bits->is_null()) {
     expr_datum.set_null();
+  } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
+    LOG_WARN("get max length failed", K(ret));
   } else {
     ObExprStrResAlloc expr_res_alloc(expr, ctx);
     ObString output;
@@ -254,7 +192,7 @@ int ObExprExportSet::eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
     } else {
       n_bits_parm = n_bits->get_uint64();
     }
-    if (OB_FAIL(calc_export_set_inner(output, bits->get_uint64(), on->get_string(),
+    if (OB_FAIL(calc_export_set_inner(max_size, output, bits->get_uint64(), on->get_string(),
         off->get_string(), sep_parm, n_bits_parm, expr_res_alloc))) {
       LOG_WARN("do export set failed", K(ret));
     } else {

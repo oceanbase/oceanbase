@@ -13,11 +13,14 @@
 #include "ob_row_data.h"
 #include "lib/utility/serialization.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace serialization;
-namespace memtable {
-static int serialize_data(char* buf, const int64_t len, int64_t& pos, const char* data, int64_t data_len)
+namespace memtable
+{
+static int serialize_data(char *buf, const int64_t len, int64_t &pos, const char *data,
+                          int64_t data_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || (OB_ISNULL(data) && data_len != 0) || pos < 0 || data_len < 0 || pos > len) {
@@ -34,7 +37,8 @@ static int serialize_data(char* buf, const int64_t len, int64_t& pos, const char
   return ret;
 }
 
-static int deserialize_data(const char* buf, const int64_t len, int64_t& pos, const char*& data, int64_t data_len)
+static int deserialize_data(const char *buf, const int64_t len, int64_t &pos, const char *&data,
+                            int64_t data_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || pos < 0 || data_len < 0 || pos > len) {
@@ -52,7 +56,7 @@ static int deserialize_data(const char* buf, const int64_t len, int64_t& pos, co
   return ret;
 }
 
-int ObRowData::serialize(char* buf, const int64_t buf_len, int64_t& pos)
+int ObRowData::serialize(char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -65,7 +69,7 @@ int ObRowData::serialize(char* buf, const int64_t buf_len, int64_t& pos)
   return ret;
 }
 
-int ObRowData::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+int ObRowData::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -79,5 +83,6 @@ int ObRowData::deserialize(const char* buf, const int64_t data_len, int64_t& pos
   return ret;
 }
 
-};  // namespace memtable
-};  // end namespace oceanbase
+
+}; // end namespace mvcc
+}; // end namespace oceanbase

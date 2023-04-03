@@ -14,41 +14,59 @@
 #define OCEANBASE_OBSERVER_MYSQL_SYNC_CMD_DRIVER_
 
 #include "observer/mysql/ob_query_driver.h"
+#include "rpc/obmysql/packet/ompk_eof.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace sql {
-class ObSqlCtx;
+namespace sql
+{
+struct ObSqlCtx;
 class ObSQLSessionInfo;
-}  // namespace sql
+}
 
-namespace observer {
+
+namespace observer
+{
 
 class ObIMPPacketSender;
-class ObGlobalContext;
+struct ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
-class ObSyncCmdDriver : public ObQueryDriver {
+class ObSyncCmdDriver : public ObQueryDriver
+{
 public:
-  ObSyncCmdDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-      ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender);
+  ObSyncCmdDriver(const ObGlobalContext &gctx,
+                  const sql::ObSqlCtx &ctx,
+                  sql::ObSQLSessionInfo &session,
+                  ObQueryRetryCtrl &retry_ctrl,
+                  ObIMPPacketSender &sender,
+                  bool is_prexecute = false);
   virtual ~ObSyncCmdDriver();
 
-  void send_eof_packet();
-  virtual int response_result(ObMySQLResultSet& result);
+  int send_eof_packet(bool has_more_result);
+  int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
+  virtual int response_query_result(sql::ObResultSet &result,
+                                    bool is_ps_protocol,
+                                    bool has_more_result,
+                                    bool &can_retry,
+                                    int64_t fetch_limit  = common::OB_INVALID_COUNT);
+  virtual int response_result(ObMySQLResultSet &result);
 
 private:
   /* functions */
-  int process_schema_version_changes(const ObMySQLResultSet& result);
+  int process_schema_version_changes(const ObMySQLResultSet &result);
   int check_and_refresh_schema(uint64_t tenant_id);
-  int response_query_result(ObMySQLResultSet& result);
+  int response_query_result(ObMySQLResultSet &result);
   /* variables */
   /* const */
   /* disallow copy & assign */
   DISALLOW_COPY_AND_ASSIGN(ObSyncCmdDriver);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+
+}
+}
 #endif /* OCEANBASE_OBSERVER_MYSQL_SYNC_CMD_DRIVER_ */
 //// end of header file
+

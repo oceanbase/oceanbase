@@ -23,55 +23,44 @@
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 
-ObMPDisconnect::ObMPDisconnect(const sql::ObFreeSessionCtx& ctx) : ctx_(ctx)
+ObMPDisconnect::ObMPDisconnect(const sql::ObFreeSessionCtx &ctx)
+    : ctx_(ctx)
 {
-  set_task_mark();
 }
 
 ObMPDisconnect::~ObMPDisconnect()
-{}
+{
 
-int ObMPDisconnect::kill_unfinished_session(uint32_t version, uint32_t sessid)
+}
+
+int ObMPDisconnect::kill_unfinished_session(uint32_t sessid)
 {
   int ret = OB_SUCCESS;
-  sql::ObSQLSessionInfo* session = NULL;
-  if (OB_ISNULL(GCTX.session_mgr_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid session mgr", K(GCTX.session_mgr_), K(ret));
-  } else if (OB_FAIL(GCTX.session_mgr_->get_session(version, sessid, session))) {
+  sql::ObSQLSessionInfo *session = NULL;
+  sql::ObSessionGetterGuard guard(*GCTX.session_mgr_, sessid);
+  if (OB_FAIL(guard.get_session(session))) {
     LOG_WARN("get session fail", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("fail to get session info", K(session), K(version), K(sessid), K(ret));
+    LOG_ERROR("fail to get session info", K(session), K(sessid), K(ret));
   } else {
     /* NOTE:
-     * In the context of Disconnect, there are two possibilities:
-     * (1) Long SQL is executed first and is being executed,
-     * then it has been able to detect the IS_KILLED mark
-     * At this time, disconnect_session will wait for the long SQL execution to exit
-     * before ending the transaction in the session
-     * (2) Disconnect_session is executed first, it will end the transaction and return,
-     * and then execute the following free_session
-     * (free_session does not release the session memory,
-     * it is just a logical deletion action).
-     * When long SQL gets the query_lock lock,
-     * it will immediately detect the IS_KILLED state,
-     * and exit the processing flow immediately after detection.
-     * The final reference count is reduced to 0, and the session is physically recycled.
+     * 在Disconnect的上下文中，两种可能：
+     * (1) 长SQL先执行，并且正在执行，那么它已经能够检测到IS_KILLED标记
+     *     此时disconnect_session会等待长SQL执行退出后才结束session中的事务
+     * (2) disconnect_session先执行，它会结束事务并返回，然后执行后面的free_session
+     *     (free_session 并不是释放 session 内存，只是一个逻辑删除的动作）。
+     *     当长SQL拿到query_lock锁，它会立即检测IS_KILLED状态，检测到后立即退出处理流程。
+     *     最终引用计数减为0，session被物理回收。
      */
     if (OB_FAIL(GCTX.session_mgr_->disconnect_session(*session))) {
-      LOG_WARN("fail to disconnect session", K(session), K(version), K(sessid), K(ret));
+      LOG_WARN("fail to disconnect session", K(session), K(sessid), K(ret));
     }
   }
-
-  if (OB_LIKELY(NULL != session)) {
-    (void)GCTX.session_mgr_->revert_session(session);
-  }
-
   return ret;
 }
 
-int ObMPDisconnect::process()
+int ObMPDisconnect::run()
 {
   int ret = OB_SUCCESS;
   if (ctx_.sessid_ != 0) {
@@ -79,11 +68,14 @@ int ObMPDisconnect::process()
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid session mgr", K(GCTX.session_mgr_), K(ret));
     } else {
-      (void)kill_unfinished_session(ctx_.version_, ctx_.sessid_);  // ignore ret
+      // bugfix:
+      (void) kill_unfinished_session(ctx_.sessid_); // ignore ret
       if (OB_FAIL(GCTX.session_mgr_->free_session(ctx_))) {
         LOG_WARN("free session fail", K(ctx_));
       } else {
-        LOG_INFO("free session successfully", "sessid", ctx_.sessid_, "version", ctx_.version_);
+        common::ObTenantStatEstGuard guard(ctx_.tenant_id_);
+        EVENT_INC(SQL_USER_LOGOUTS_CUMULATIVE);
+        LOG_INFO("free session successfully", "sessid", ctx_.sessid_);
       }
     }
   }

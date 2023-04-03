@@ -12,12 +12,16 @@
 
 #include "ob_kvcache_struct.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /**
  * ------------------------------------------------------------ObKVCacheConfig---------------------------------------------------------
  */
-ObKVCacheConfig::ObKVCacheConfig() : is_valid_(false), priority_(0)
+ObKVCacheConfig::ObKVCacheConfig()
+  : is_valid_(false),
+    priority_(0)
 {
   MEMSET(cache_name_, 0, MAX_CACHE_NAME_LENGTH);
 }
@@ -68,7 +72,8 @@ void ObKVCacheStatus::reset()
 /*
  * -------------------------------------------------------------ObKVStoreMemBlock--------------------------------------------------------
  */
-ObKVStoreMemBlock::ObKVStoreMemBlock(char* buffer, const int64_t size) : payload_size_(size), buffer_(buffer)
+ObKVStoreMemBlock::ObKVStoreMemBlock(char *buffer, const int64_t size)
+    : payload_size_(size), buffer_(buffer)
 {
   atomic_pos_.buffer = 0;
   atomic_pos_.pairs = 0;
@@ -83,7 +88,7 @@ void ObKVStoreMemBlock::reuse()
 {
   if (NULL != buffer_) {
     int64_t pos = 0;
-    ObKVCachePair* kvpair = NULL;
+    ObKVCachePair *kvpair = NULL;
 
     for (uint32_t i = 0; i < atomic_pos_.pairs; ++i) {
       kvpair = reinterpret_cast<ObKVCachePair*>(buffer_ + pos);
@@ -115,7 +120,7 @@ int64_t ObKVStoreMemBlock::upper_align(int64_t input, int64_t align)
  * aligned. it can make the cpu run faster than unaligned
  * instance.
  */
-int64_t ObKVStoreMemBlock::get_align_size(const ObIKVCacheKey& key, const ObIKVCacheValue& value)
+int64_t ObKVStoreMemBlock::get_align_size(const ObIKVCacheKey &key, const ObIKVCacheValue &value)
 {
   return get_align_size(key.size(), value.size());
 }
@@ -125,15 +130,18 @@ int64_t ObKVStoreMemBlock::get_align_size(const int64_t key_size, const int64_t 
   return upper_align(sizeof(ObKVCachePair) + key_size + value_size, ALIGN_SIZE);
 }
 
-int ObKVStoreMemBlock::store(const ObIKVCacheKey& key, const ObIKVCacheValue& value, ObKVCachePair*& kvpair)
+int ObKVStoreMemBlock::store(
+  const ObIKVCacheKey &key,
+  const ObIKVCacheValue &value,
+  ObKVCachePair *&kvpair)
 {
   int ret = OB_SUCCESS;
   int32_t align_kv_size = static_cast<int32_t>(get_align_size(key, value));
-  AtomicInt64 old_atomic_pos = {0};
-  AtomicInt64 new_atomic_pos = {0};
+  AtomicInt64 old_atomic_pos = { 0 };
+  AtomicInt64 new_atomic_pos = { 0 };
   kvpair = NULL;
 
-  // check parameters
+  //check parameters
   if (OB_UNLIKELY(NULL == buffer_)) {
     ret = OB_INVALID_DATA;
     COMMON_LOG(WARN, "The mem block is invalid, ", KP_(buffer), K(ret));
@@ -145,7 +153,7 @@ int ObKVStoreMemBlock::store(const ObIKVCacheKey& key, const ObIKVCacheValue& va
     COMMON_LOG(WARN, "The size of value is 0, ", K(ret));
   }
 
-  // find write position
+  //find write position
   while (OB_SUCC(ret)) {
     old_atomic_pos.atomic = ATOMIC_LOAD(&atomic_pos_.atomic);
     new_atomic_pos.atomic = old_atomic_pos.atomic;
@@ -161,17 +169,20 @@ int ObKVStoreMemBlock::store(const ObIKVCacheKey& key, const ObIKVCacheValue& va
     }
   }
 
-  // if has found store pos, then store the kv
+  //if has found store pos, then store the kv
   if (OB_SUCC(ret)) {
     ObKVCachePair store_pair;
     store_pair.size_ = align_kv_size;
 
-    if (OB_FAIL(
-            key.deep_copy(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair)]), key.size(), store_pair.key_))) {
+    if (OB_FAIL(key.deep_copy(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair)]),
+            key.size(),
+            store_pair.key_))) {
       COMMON_LOG(WARN, "Fail to deep copy key, ", K(ret));
-    } else if (OB_FAIL(value.deep_copy(&buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair) + key.size()],
-                   value.size(),
-                   store_pair.value_))) {
+    } else if (OB_FAIL(value.deep_copy(&buffer_[old_atomic_pos.buffer
+            + sizeof(ObKVCachePair)
+            + key.size()],
+            value.size(),
+            store_pair.value_))) {
       COMMON_LOG(WARN, "Fail to deep copy value, ", K(ret));
     } else {
       MEMCPY(&(buffer_[old_atomic_pos.buffer]), &store_pair, sizeof(ObKVCachePair));
@@ -201,27 +212,28 @@ int ObKVStoreMemBlock::store(const ObIKVCacheKey& key, const ObIKVCacheValue& va
   return ret;
 }
 
+
 int ObKVStoreMemBlock::alloc(
-    const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair*& kvpair)
+    const int64_t key_size,
+    const int64_t value_size,
+    const int64_t align_kv_size,
+    ObKVCachePair *&kvpair)
 {
   int ret = OB_SUCCESS;
-  AtomicInt64 old_atomic_pos = {0};
-  AtomicInt64 new_atomic_pos = {0};
+  AtomicInt64 old_atomic_pos = { 0 };
+  AtomicInt64 new_atomic_pos = { 0 };
   kvpair = NULL;
 
-  // check parameters
+  //check parameters
   if (OB_UNLIKELY(NULL == buffer_)) {
     ret = OB_INVALID_DATA;
     COMMON_LOG(WARN, "The mem block is invalid, ", KP_(buffer), K(ret));
-  } else if (OB_UNLIKELY(key_size <= 0)) {
+  } else if (OB_UNLIKELY(key_size <= 0 || value_size <= 0 || align_kv_size < 0 || align_kv_size > INT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The size of key is 0, ", K(ret));
-  } else if (OB_UNLIKELY(value_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The size of value is 0, ", K(ret));
+    COMMON_LOG(WARN, "invalid args", K(ret), K(key_size), K(value_size), K(align_kv_size));
   }
 
-  // find write position
+  //find write position
   while (OB_SUCC(ret)) {
     old_atomic_pos.atomic = atomic_pos_.atomic;
     new_atomic_pos.atomic = old_atomic_pos.atomic;
@@ -229,7 +241,7 @@ int ObKVStoreMemBlock::alloc(
       ret = OB_BUF_NOT_ENOUGH;
       break;
     } else {
-      new_atomic_pos.buffer += align_kv_size;
+      new_atomic_pos.buffer += static_cast<int32_t>(align_kv_size);
       new_atomic_pos.pairs += 1;
       if (ATOMIC_BCAS(&(atomic_pos_.atomic), old_atomic_pos.atomic, new_atomic_pos.atomic)) {
         break;
@@ -237,13 +249,13 @@ int ObKVStoreMemBlock::alloc(
     }
   }
 
-  // if has found store pos, then store the kv
+  //if has found store pos, then store the kv
   if (OB_SUCC(ret)) {
-    kvpair = reinterpret_cast<ObKVCachePair*>(&(buffer_[old_atomic_pos.buffer]));
-    kvpair->size_ = align_kv_size;
-    kvpair->key_ = reinterpret_cast<ObIKVCacheKey*>(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair)]));
-    kvpair->value_ =
-        reinterpret_cast<ObIKVCacheValue*>(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair) + key_size]));
+    kvpair = reinterpret_cast<ObKVCachePair *>(&(buffer_[old_atomic_pos.buffer]));
+    kvpair->size_ = static_cast<int32_t>(align_kv_size);
+    kvpair->key_ = reinterpret_cast<ObIKVCacheKey *>(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair)]));
+    kvpair->value_ = reinterpret_cast<ObIKVCacheValue *>(&(buffer_[old_atomic_pos.buffer
+        + sizeof(ObKVCachePair) + key_size]));
   }
 
   return ret;
@@ -262,10 +274,12 @@ ObKVMemBlockHandle::ObKVMemBlockHandle()
       score_(0),
       kv_cnt_(0),
       working_set_(NULL)
-{}
+{
+}
 
 ObKVMemBlockHandle::~ObKVMemBlockHandle()
-{}
+{
+}
 
 void ObKVMemBlockHandle::reset()
 {
@@ -283,7 +297,8 @@ void ObKVMemBlockHandle::reset()
   working_set_ = NULL;
 }
 
-int ObKVMemBlockHandle::store(const ObIKVCacheKey& key, const ObIKVCacheValue& value, ObKVCachePair*& pair)
+int ObKVMemBlockHandle::store(const ObIKVCacheKey &key, const ObIKVCacheValue &value,
+                              ObKVCachePair *&pair)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(mem_block_->store(key, value, pair))) {
@@ -294,8 +309,8 @@ int ObKVMemBlockHandle::store(const ObIKVCacheKey& key, const ObIKVCacheValue& v
   return ret;
 }
 
-int ObKVMemBlockHandle::alloc(
-    const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair*& pair)
+int ObKVMemBlockHandle::alloc(const int64_t key_size, const int64_t value_size,
+    const int64_t align_kv_size, ObKVCachePair *&pair)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(mem_block_->alloc(key_size, value_size, align_kv_size, pair))) {
@@ -311,5 +326,17 @@ void ObKVMemBlockHandle::set_full(const double base_mb_score)
   score_ += base_mb_score;
   ATOMIC_STORE((uint32_t*)(&status_), FULL);
 }
-}  // end namespace common
-}  // end namespace oceanbase
+
+
+/*
+ * -------------------------------------------------ObKVCacheStoreMemblockInfo------------------------------------------------
+ */
+bool ObKVCacheStoreMemblockInfo::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID && cache_id_ >= 0;
+}
+
+
+}//end namespace common
+}//end namespace oceanbase
+

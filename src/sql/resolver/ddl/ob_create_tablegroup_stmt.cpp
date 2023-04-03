@@ -17,17 +17,20 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-ObCreateTablegroupStmt::ObCreateTablegroupStmt() : ObTablegroupStmt(stmt::T_CREATE_TABLEGROUP)
+ObCreateTablegroupStmt::ObCreateTablegroupStmt()
+: ObTablegroupStmt(stmt::T_CREATE_TABLEGROUP)
 {
   create_tablegroup_arg_.if_not_exist_ = false;
 }
 
-ObCreateTablegroupStmt::ObCreateTablegroupStmt(common::ObIAllocator* name_pool)
-    : ObTablegroupStmt(name_pool, stmt::T_CREATE_TABLEGROUP)
-{}
+ObCreateTablegroupStmt::ObCreateTablegroupStmt(common::ObIAllocator *name_pool)
+: ObTablegroupStmt(name_pool, stmt::T_CREATE_TABLEGROUP)
+{
+}
 
 ObCreateTablegroupStmt::~ObCreateTablegroupStmt()
-{}
+{
+}
 
 void ObCreateTablegroupStmt::set_if_not_exists(bool if_not_exists)
 {
@@ -43,11 +46,11 @@ obrpc::ObCreateTablegroupArg& ObCreateTablegroupStmt::get_create_tablegroup_arg(
 {
   return create_tablegroup_arg_;
 }
-int ObCreateTablegroupStmt::set_primary_zone(const common::ObString& zone)
+int ObCreateTablegroupStmt::set_primary_zone(const common::ObString &zone)
 {
-  return create_tablegroup_arg_.tablegroup_schema_.set_primary_zone(zone);
+  return OB_SUCCESS; // ignore this (not support in 4.0)
 }
-int ObCreateTablegroupStmt::set_locality(const common::ObString& locality)
+int ObCreateTablegroupStmt::set_locality(const common::ObString &locality)
 {
-  return create_tablegroup_arg_.tablegroup_schema_.set_locality(locality);
+  return OB_SUCCESS; // ignore this (not support in 4.0)
 }

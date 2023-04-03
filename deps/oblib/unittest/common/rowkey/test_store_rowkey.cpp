@@ -17,22 +17,20 @@
 #include "lib/container/ob_se_array.h"
 using namespace oceanbase::common;
 
-class TestStoreRowkey : public ::testing::Test {
+class TestStoreRowkey: public ::testing::Test
+{
 public:
   static const int OBJ_CNT = 5;
 
-  TestStoreRowkey()
-  {}
-  ~TestStoreRowkey()
-  {}
+  TestStoreRowkey() {}
+  ~TestStoreRowkey() {}
   virtual void SetUp();
   virtual void TearDown();
 
 private:
   // disallow copy
-  TestStoreRowkey(const TestStoreRowkey& other);
-  TestStoreRowkey& operator=(const TestStoreRowkey& other);
-
+  TestStoreRowkey(const TestStoreRowkey &other);
+  TestStoreRowkey& operator=(const TestStoreRowkey &other);
 protected:
   // data memebers
   ObObj obj_array_[OBJ_CNT];
@@ -44,7 +42,7 @@ protected:
 
 void TestStoreRowkey::SetUp()
 {
-  for (int i = 0; i < OBJ_CNT; i++) {
+  for(int i = 0; i < OBJ_CNT; i++) {
     obj_array_[i].set_int(i);
   }
   for (int64_t i = 0; i < OB_MAX_ROWKEY_COLUMN_NUMBER; i++) {
@@ -84,6 +82,7 @@ TEST_F(TestStoreRowkey, test_valid_min_max)
   ret = store_rowkey.is_max(all_asc_orders_, 1, is_max_key);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(is_max_key);
+
 
   ret = store_rowkey.set_min(all_asc_orders_, 1, allocator_);
   ASSERT_EQ(ret, OB_SUCCESS);
@@ -146,7 +145,8 @@ TEST_F(TestStoreRowkey, test_deep_copy)
   regular_store_rowkey.deep_copy(dst_store_rowkey, allocator_);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(dst_store_rowkey.is_valid());
-  ASSERT_NE(dst_store_rowkey.get_obj_ptr(), regular_store_rowkey.get_obj_ptr());
+  ASSERT_NE(dst_store_rowkey.get_obj_ptr(),
+      regular_store_rowkey.get_obj_ptr());
   ASSERT_TRUE(regular_store_rowkey.simple_equal(dst_store_rowkey));
 }
 
@@ -160,7 +160,7 @@ TEST_F(TestStoreRowkey, test_serialize_and_deserialize)
   ObStoreRowkey invalid_store_rowkey;
   ret = invalid_store_rowkey.serialize(buf, buf_size, pos);
   ASSERT_EQ(pos, invalid_store_rowkey.get_serialize_size());
-  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_EQ(ret,OB_SUCCESS);
 
   pos = 0;
   ObStoreRowkey dst_store_rowkey;
@@ -183,7 +183,7 @@ TEST_F(TestStoreRowkey, test_serialize_and_deserialize)
   ASSERT_TRUE(dst_store_rowkey.simple_equal(regular_store_rowkey));
 }
 
-// for compatibility, ObStoreRowkey should be able to deserialize ObRowkey serialization correctly
+//for compatibility, ObStoreRowkey should be able to deserialize ObRowkey serialization correctly
 TEST_F(TestStoreRowkey, test_deserialize_compatibility)
 {
   int ret = OB_SUCCESS;
@@ -210,7 +210,8 @@ TEST_F(TestStoreRowkey, test_checksum)
   ObBatchChecksum regular_bc, min_bc, max_bc, invalid_bc, rowkey_bc;
   ObStoreRowkey regular_store_rowkey(obj_array_, OBJ_CNT);
 
-  // for compatibility,regular ObStoreRowkey should return the same checksum as the underlying rowkey
+
+  //for compatibility,regular ObStoreRowkey should return the same checksum as the underlying rowkey
   ret = regular_store_rowkey.checksum(regular_bc);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = regular_store_rowkey.key_.checksum(rowkey_bc);
@@ -237,21 +238,21 @@ TEST_F(TestStoreRowkey, test_checksum)
 
 TEST_F(TestStoreRowkey, test_hash)
 {
-  ObStoreRowkey regular_store_rowkey(obj_array_, OBJ_CNT);
-  ObStoreRowkey another_regular_store_rowkey(obj_array_, OBJ_CNT);
-  ObStoreRowkey invalid_store_rowkey(NULL, 0);
+   ObStoreRowkey regular_store_rowkey(obj_array_, OBJ_CNT);
+   ObStoreRowkey another_regular_store_rowkey(obj_array_, OBJ_CNT);
+   ObStoreRowkey invalid_store_rowkey(NULL, 0);
 
-  ObStoreRowkey min_store_rowkey;
-  min_store_rowkey.set_min(asc_desc_orders_, OBJ_CNT, allocator_);
-  ObStoreRowkey max_store_rowkey;
-  max_store_rowkey.set_max(asc_desc_orders_, OBJ_CNT, allocator_);
+   ObStoreRowkey min_store_rowkey;
+   min_store_rowkey.set_min(asc_desc_orders_, OBJ_CNT, allocator_);
+   ObStoreRowkey max_store_rowkey;
+   max_store_rowkey.set_max(asc_desc_orders_, OBJ_CNT, allocator_);
 
-  ASSERT_EQ(regular_store_rowkey.hash(), another_regular_store_rowkey.hash());
-  ASSERT_NE(min_store_rowkey.hash(), regular_store_rowkey.hash());
-  ASSERT_NE(max_store_rowkey.hash(), regular_store_rowkey.hash());
-  ASSERT_NE(min_store_rowkey.hash(), invalid_store_rowkey.hash());
-  ASSERT_NE(max_store_rowkey.hash(), invalid_store_rowkey.hash());
-  ASSERT_NE(max_store_rowkey.hash(), min_store_rowkey.hash());
+   ASSERT_EQ(regular_store_rowkey.hash(), another_regular_store_rowkey.hash());
+   ASSERT_NE(min_store_rowkey.hash(), regular_store_rowkey.hash());
+   ASSERT_NE(max_store_rowkey.hash(), regular_store_rowkey.hash());
+   ASSERT_NE(min_store_rowkey.hash(), invalid_store_rowkey.hash());
+   ASSERT_NE(max_store_rowkey.hash(), invalid_store_rowkey.hash());
+   ASSERT_NE(max_store_rowkey.hash(), min_store_rowkey.hash());
 }
 
 // simple_equal should *always* return the same results as test compare() == 0;
@@ -269,11 +270,13 @@ TEST_F(TestStoreRowkey, test_simple_equal)
   another_min_store_rowkey.set_min(asc_desc_orders_, OBJ_CNT, allocator_);
 
   simple_equal_res = regular_store_rowkey.simple_equal(regular_store_rowkey);
-  ret = regular_store_rowkey.compare(regular_store_rowkey, asc_desc_orders_, OBJ_CNT, compare_res);
+  ret = regular_store_rowkey.compare(regular_store_rowkey, asc_desc_orders_,
+                                      OBJ_CNT, compare_res);
   ASSERT_EQ(simple_equal_res, compare_res == 0);
 
   simple_equal_res = regular_store_rowkey.simple_equal(another_regular_store_rowkey);
-  ret = regular_store_rowkey.compare(another_regular_store_rowkey, asc_desc_orders_, OBJ_CNT, compare_res);
+  ret = regular_store_rowkey.compare(another_regular_store_rowkey,
+                        asc_desc_orders_, OBJ_CNT, compare_res);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(simple_equal_res, compare_res == 0);
 
@@ -283,24 +286,25 @@ TEST_F(TestStoreRowkey, test_simple_equal)
   ASSERT_EQ(simple_equal_res, compare_res == 0);
 
   simple_equal_res = min_store_rowkey.simple_equal(another_min_store_rowkey);
-  ret = min_store_rowkey.compare(another_min_store_rowkey, asc_desc_orders_, OBJ_CNT, compare_res);
+  ret = min_store_rowkey.compare(another_min_store_rowkey, asc_desc_orders_,
+                                 OBJ_CNT, compare_res);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(simple_equal_res, compare_res == 0);
 }
 
-// FIXME-: use an input file, instead of hard-code all the cases
+//FIXME-yangsuli: use an input file, instead of hard-code all the cases
 TEST_F(TestStoreRowkey, test_compare)
 {
   int ret = OB_SUCCESS;
   int compare_res = 0;
 
   ObObj small_objs[OBJ_CNT];
-  for (int i = 0; i < OBJ_CNT; i++) {
-    small_objs[i].set_int(1);
+  for(int i = 0; i < OBJ_CNT; i++) {
+      small_objs[i].set_int(1);
   }
 
   ObObj big_objs[OBJ_CNT];
-  for (int i = 0; i < OBJ_CNT; i++) {
+  for(int i = 0; i < OBJ_CNT; i++) {
     big_objs[i].set_int(9);
   }
 
@@ -320,6 +324,7 @@ TEST_F(TestStoreRowkey, test_compare)
   ASSERT_LT(compare_res, 0);
   ret = small_rowkey.compare(big_rowkey, all_desc_orders_, OBJ_CNT, compare_res);
   ASSERT_GT(compare_res, 0);
+
 
   // min_rowkey is smaller than regular rowkey, under the given column order
   ret = min_rowkey.set_min(all_asc_orders_, OBJ_CNT, allocator_);
@@ -348,6 +353,7 @@ TEST_F(TestStoreRowkey, test_compare)
   ret = small_rowkey.compare(min_rowkey, all_desc_orders_, OBJ_CNT, compare_res);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_GT(compare_res, 0);
+
 
   // max_rowkey is larger than regular rowkey, under the given column orders
   ret = max_rowkey.set_max(all_asc_orders_, OBJ_CNT, allocator_);
@@ -446,7 +452,8 @@ TEST_F(TestStoreRowkey, test_compare)
   ASSERT_LT(compare_res, 0);
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);

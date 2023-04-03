@@ -1,0 +1,107 @@
+#!/bin/bash
+CWD=$(cd `dirname $0`;pwd)
+cd "${CWD}"
+source _env
+
+STAMP="$(date +%s)"
+
+function is_true() {
+  value=$1
+  # convert value to upper case string(can work in bash 4.x)
+  value=${value^^}
+  
+  if [ "x${value}" == "xNO" ] || [ "x${value}" == "xFALSE" ] || [ "x${value}" == "x0" ]; then
+    return 1
+  fi
+  return 0
+}
+
+# return 0 if mini_mode is nil or 'no'/'false'/0
+# 0 means true and 1 for false in bash
+function is_mini_mode() {
+  if test -z ${MINI_MODE}
+  then
+    return 1
+  fi
+  
+  return `is_true ${MINI_MODE}`
+}
+
+function exit_while_error() {
+  if test -z ${EXIT_WHILE_ERROR}
+  then
+    return 0 
+  fi
+
+  return `is_true ${EXIT_WHILE_ERROR}`
+}
+
+function remove_disk_check_logic_in_obd() {
+  # make sure obd copy the plugin code
+  obd cluster list
+  start_check_files=('/root/.obd/plugins/oceanbase/3.1.0/start_check.py' '/root/.obd/plugins/oceanbase/4.0.0.0/start_check.py')
+  for start_check_file in ${start_check_files[@]}
+  do
+    sed -i "s/critical('(%s) %s not enough disk space\. (Avail/alert('(%s) %s not enough disk space\. (Avail/g" $start_check_file
+    sed -i "s/critical(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/alert(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/g" $start_check_file
+  done
+}
+
+# We should decide whether the observer's data exists and
+# whether the obd has the information of the cluster
+
+if [ -f "$HOME/.obd/cluster/${OB_CLUSTER_NAME}/config.yaml" ]; then
+  echo "find obd deploy information, skip configuring..." 
+  echo "start ob cluster ..."
+  obd cluster start $OB_CLUSTER_NAME
+
+else # nothing here, bootstrap
+
+  echo "generate boot.yaml ..."
+  TMPFILE="boot.${STAMP}.yaml"
+
+  if is_mini_mode
+  then
+    echo "oceanbase-ce docker in mini mode"
+    cp -f boot-mini-tmp.yaml $TMPFILE
+  else
+    cp -f boot-tmp.yaml $TMPFILE
+  fi
+
+  cat obagent.yaml >> $TMPFILE
+
+  sed -i "s|@OB_HOME_PATH@|${OB_HOME_PATH}|g" $TMPFILE
+  sed -i "s|@OB_MYSQL_PORT@|${OB_MYSQL_PORT}|g" $TMPFILE
+  sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
+  sed -i "s|@OB_CLUSTER_NAME@|${OB_CLUSTER_NAME}|g" $TMPFILE
+
+  [ "${OB_DATA_DIR}" ] && echo "    data_dir: ${OB_DATA_DIR}" >> $TMPFILE
+  [ "${OB_REDO_DIR}" ] && echo "    redo_dir: ${OB_REDO_DIR}" >> $TMPFILE
+  echo "create boot dirs and deploy ob cluster ..."
+  mkdir -p $OB_HOME_PATH
+
+  obd mirror clone /root/pkg/*.rpm \
+  && obd mirror list local
+
+  remove_disk_check_logic_in_obd
+  obd devmode enable \
+    && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
+    && obd cluster tenant create "${OB_CLUSTER_NAME}" -n ${OB_TENANT_NAME} \
+    && obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql \
+    && mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml \
+    && echo "deploy success!"
+fi
+
+if [ $? -eq 0 ]; then
+  echo "boot success!"
+else
+  echo "boot failed!"
+  if exit_while_error
+  then
+    exit 1
+  else
+    echo "Please check the log file ${OB_HOME_PATH}/log/observer.log"
+  fi
+fi
+exec tail -f /dev/null
+

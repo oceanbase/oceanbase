@@ -14,9 +14,11 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_cluster_version.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace obrpc {
+namespace obrpc
+{
 
 DEFINE_SERIALIZE(ObBatchPacket)
 {
@@ -64,52 +66,44 @@ DEFINE_GET_SERIALIZE_SIZE(ObBatchPacket)
   return len;
 }
 
-class BatchCallBack : public ObBatchRpcProxy::AsyncCB<OB_BATCH> {
+class BatchCallBack : public ObBatchRpcProxy::AsyncCB<OB_BATCH>
+{
 public:
-  BatchCallBack()
-  {}
-  virtual ~BatchCallBack()
-  {}
-  void set_args(const typename ObBatchRpcProxy::ObRpc<OB_BATCH>::Request& args)
+  BatchCallBack() {}
+  virtual ~BatchCallBack() {}
+  void set_args(const typename ObBatchRpcProxy::ObRpc<OB_BATCH>::Request &args) { UNUSED(args); }
+  oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
+      const oceanbase::rpc::frame::SPAlloc &alloc) const
   {
-    UNUSED(args);
-  }
-  oceanbase::rpc::frame::ObReqTransport::AsyncCB* clone(const oceanbase::rpc::frame::SPAlloc& alloc) const
-  {
-    BatchCallBack* newcb = NULL;
-    void* buf = alloc(sizeof(*this));
+    BatchCallBack *newcb = NULL;
+    void *buf = alloc(sizeof(*this));
     if (NULL != buf) {
-      newcb = new (buf) BatchCallBack();
+      newcb = new(buf) BatchCallBack();
     }
     return newcb;
   }
 
 public:
-  int process()
-  {
-    return common::OB_SUCCESS;
-  }
+  int process() { return common::OB_SUCCESS; }
   void on_timeout()
   {
-    const ObAddr& dst = ObBatchRpcProxy::AsyncCB<OB_BATCH>::dst_;
+    const ObAddr &dst = ObBatchRpcProxy::AsyncCB<OB_BATCH>::dst_;
     const int error = this->get_error();
-    RPC_LOG(WARN, "batch rpc timeout", K(dst), K(error));
+    RPC_LOG_RET(WARN, OB_TIMEOUT, "batch rpc timeout", K(dst), K(error));
   }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(BatchCallBack);
 };
 
-int ObBatchRpcProxy::post_batch(
-    uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id, ObBatchPacket& pkt)
+int ObBatchRpcProxy::post_batch(uint64_t tenant_id, const common::ObAddr &addr, const int64_t dst_cluster_id, int batch_type, ObBatchPacket& pkt)
 {
   int ret = OB_SUCCESS;
   static BatchCallBack s_cb;
-  BatchCallBack* cb = &s_cb;
+  BatchCallBack *cb = &s_cb;
 
   ret = this->to(addr).dst_cluster_id(dst_cluster_id).by(tenant_id).as(OB_SERVER_TENANT_ID).post_packet(pkt, cb);
   return ret;
 }
 
-};  // namespace obrpc
-};  // end namespace oceanbase
+}; // end namespace rpc
+}; // end namespace oceanbase

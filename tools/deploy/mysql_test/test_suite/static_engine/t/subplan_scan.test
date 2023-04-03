@@ -1,0 +1,43 @@
+# owner: bin.lb
+#tags: optimizer
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 int, c2 int);
+--enable_warnings
+
+insert into t1 (c1, c2) values (1, 1);
+insert into t1 (c1, c2) values (1, 1);
+insert into t1 (c1, c2) values (1, 2);
+insert into t1 (c1, c2) values (10, 10);
+insert into t1 (c1, c2) values (10, 10);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+explain select c2, sum(c1) from (select distinct c2, c1 from t1) x group by c2;
+select c2, sum(c1) from (select distinct c2, c1 from t1) x group by c2;
+
+explain select c2, sum(c1 + c2) from (select distinct c2, c1 from t1) x group by c2;
+select c2, sum(c1 + c2) from (select distinct c2, c1 from t1) x group by c2;
+
+explain select c2, sum(c1 + c2), max(c3) from (select c1, c2, c1 + 2 as c3 from (select distinct c2, c1 from t1) x ) y group by c2;
+select c2, sum(c1 + c2), max(c3) from (select c1, c2, c1 + 2 as c3 from (select distinct c2, c1 from t1) x ) y group by c2;
+
+explain select * from t1 where c2 in (select 1 from t1);
+select * from t1 where c2 in (select 1 from t1);
+
+connection syscon;

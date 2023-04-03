@@ -15,17 +15,18 @@
 #include "sql/engine/expr/ob_expr_instr.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
-using namespace common;
-namespace sql {
-ObExprPosition::ObExprPosition(ObIAllocator& alloc)
-    : ObLocationExprOperator(alloc, T_FUN_SYS_POSITION, N_POSITION, 2, NOT_ROW_DIMENSION)
-{}
-
-ObExprPosition::~ObExprPosition()
+namespace oceanbase
 {
+using namespace common;
+namespace sql
+{
+ObExprPosition::ObExprPosition(ObIAllocator &alloc)
+    : ObLocationExprOperator(alloc, T_FUN_SYS_POSITION, N_POSITION, 2, NOT_ROW_DIMENSION) {}
+
+
+ObExprPosition::~ObExprPosition() {
   // TODO Auto-generated
 }
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+}//end of namespace sql
+}//end of namespace oceanbase

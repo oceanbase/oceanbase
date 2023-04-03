@@ -1,0 +1,78 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaochu.yh
+# owner group: SQL1
+# Test of functions
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+
+connection default;
+
+--enable_metadata
+select 3;
+select 3.4;
+select 3.000000000000000000000000001;
+
+select -3;
+select -3.4;
+select -3.000000000000000000000000001;
+
+select 1, 11, 111, 1111, 11111, 111111, 1111111, 11111111, 111111111, 1111111111,11111111111, 111111111111;
+select TIMESTAMP '2012-12-31 11:30:45', TIMESTAMP '2012-12-31 11:30:45.1', TIMESTAMP '2012-12-31 11:30:45.11', TIMESTAMP '2012-12-31 11:30:45.111', TIMESTAMP '2012-12-31 11:30:45.1111', TIMESTAMP '2012-12-31 11:30:45.11111', TIMESTAMP '2012-12-31 11:30:45.111111';
+select TIME '11:30:45', TIME '11:30:45.111111', TIME '11:30:45.11111', TIME '11:30:45.1111', TIME '11:30:45.111', TIME '11:30:45.11', TIME '11:30:45.1';
+select date '1998-09-09';
+select TIMESTAMP '2012-2-1 11:30:45';
+select TIME '11:5:45';
+select date '1998-9-9';
+SELECT X'4D7953514C';
+#SELECT 0x0a+0;
+SELECT 0x5061756c;
+SELECT 0x636174;
+SELECT TRUE, true, FALSE, false;
+
+select 'abcde';
+select '我爱你';
+select '我e爱a你t';
+select '';
+select ' ';
+select '0x10';
+select '0810';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(f1  datetime(6));
+insert into t1 values('01-01-01'),('02-02-02'),('01-01-01'),('02-02-02');
+set @bug28261='';
+select if(@bug28261 = f1, '', @bug28261:= f1) from t1;
+drop table t1;
+
+--disable_metadata
+
+--enable_metadata
+--disable_warnings
+drop table if exists tt;
+--enable_warnings
+CREATE TABLE if not exists tt(aa  int);
+select count(*) as cnt from tt a ;
+select sum(cnt) from(select count(*) as cnt from tt a ) c;
+
+--disable_warnings
+drop table if exists obright;
+--disable_warnings
+create table obright(row_id bigint, dec3 decimal(16,6));
+
+select dec3 mod (case when row_id > 0 then dec3 else 1 end) from obright;
+
+select field(0,'a');
+show warnings;
+select field(1,'a', 'b');
+show warnings;
+select field(3,'a', 2, 'c');
+show warnings;
+
+--disable_metadata

@@ -1,0 +1,260 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: jiangxiu.wt
+#owner group: sql1
+
+##
+## Test Name: group_by_basic
+##
+## Scope: Test basic function of group-by operation
+##
+##
+## Date: 2015-9-16
+##
+
+--disable_warnings
+drop table if exists t1, t2, t3, t4, t5;
+--enable_warnings
+
+## create tables
+create table t1(c1 int primary key, c2 int, c3 varchar(10));
+create table t2(c1 int primary key,
+                c2 int,
+                c3 varchar(10))
+partition by key(c1) partitions 5;
+create table t3(c1 int primary key, c2 datetime default now());
+
+## generate data
+insert into t1 values(1, 1, 'abc');
+insert into t1 values(2, 1, 'def');
+insert into t1 values(3, 2, 'ghi');
+insert into t1 values(4, 3, 'jkl');
+insert into t1 values(5, 4, 'mno');
+
+insert into t2 values(0, 1, 'beijing');
+insert into t2 values(10, 2, 'beijing');
+insert into t2 values(11, 3, 'beijing');
+insert into t2 values(1, 1, 'hangzhou');
+insert into t2 values(2, 1, 'hangzhou');
+insert into t2 values(3, 1, 'shanghai');
+insert into t2 values(5, 1, 'tianjin');
+
+
+
+--sorted_result
+select c1, sum(c2), count(c2), avg(c2), max(c2), min(c2) from t1 group by c1;
+--sorted_result
+select c2, sum(c1), count(c1), avg(c1), max(c1), min(c1) from t1 group by c2;
+--sorted_result
+select c2, sum(c1), count(c2), avg(c2), max(c1), min(c1) from t1 group by c3;
+
+--sorted_result
+select c1, sum(c2), count(c2), avg(c2), max(c2), min(c2) from t2 group by c1;
+select c2, sum(c1), count(c1), avg(c1), max(c1), min(c1) from t2 group by c2;
+
+## bug 6429995
+--sorted_result
+select c3, sum(c1), count(c1), avg(c1), max(c2), min(c1) from t2 group by c3;
+
+select max(c1), count(*) from t1;
+select min(c2), count(*) from t2;
+
+--sorted_result
+select c1, c2, count(c2) from t1 group by c1, c2, c3;
+--sorted_result
+select c1, c2, count(c2) from t1 group by 1, 2;
+--sorted_result
+select c1 as id, max(c2) from t1 group by id;
+--sorted_result
+select sum(c1) + sum(c2) from t1 group by c3;
+--sorted_result
+select sum(c1 + c2) from t1 group by c3;
+
+--sorted_result
+select c1, c2, c3, count(*) from t1 group by c1, c2, c3;
+
+select * from t1 group by -1;
+
+
+## group_concat
+
+# basic
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 varchar(100), c3 varchar(100), c4 int, c5 varchar(100));
+insert into t1 values (1, 'a', 'bc', 21, 'g1'), (2, 'ab', 'c', 22, 'g1'), (3, 'a2', 'b3', 24, 'g2'), (4, 'a1', 'b3', 24, 'g2'), (5, 'a3', 'b2', 25, 'g2');
+select group_concat(c2, c3) from t1;
+select group_concat(distinct c2, c3) from t1;
+select group_concat(c2, c3 order by c2) from t1;
+select group_concat(c2, c3 order by c3) from t1;
+select group_concat(c2, c3 order by c3 desc, c2 asc) from t1;
+select group_concat(distinct c2, c3 order by c3 desc, c2 asc) from t1;
+select group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1;
+
+--sorted_result
+select group_concat(c2, c3) from t1 group by c5;
+select group_concat(distinct c2, c3) from t1 group by c5;
+--sorted_result
+select group_concat(c2, c3 order by c1) from t1 group by c5;
+--sorted_result
+select group_concat(c2, c3 order by c2) from t1 group by c5;
+--sorted_result
+select group_concat(c2, c3 order by c3) from t1 group by c5;
+--sorted_result
+select group_concat(c2, c3 order by c4 desc) from t1 group by c5;
+--sorted_result
+select group_concat(c2, c3 order by c3 desc, c2 asc) from t1 group by c5;
+--sorted_result
+select group_concat(distinct c2, c3 order by c3 desc, c2 asc) from t1 group by c5;
+--sorted_result
+select group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1 group by c5;
+select min(c2), max(c3), count(*), count(c1), avg(c4), group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1 group by c5;
+
+--sorted_result
+select group_concat(c3, c4 order by c4 desc) from t1 group by c5;
+select group_concat(distinct c3, c4 order by c4 desc) from t1 group by c5;
+--sorted_result
+select group_concat(c4 order by 1 desc) from t1 group by c5;
+--sorted_result
+select group_concat(distinct c4 order by 1 desc) from t1 group by c5;
+
+--sorted_result
+select group_concat(distinct c4 order by c4 desc separator 'AAA') from t1 group by c5;
+select group_concat(distinct c4 order by 1 desc separator '#') from t1 group by c5;
+select group_concat(distinct c2, c3 order by c3 asc, c2 desc separator '%%') from t1 group by c5;
+select group_concat(c2, c3 order by c4 desc separator '*') from t1 group by c5;
+select group_concat(c2 separator '\\') from t1;
+select group_concat(c2, c3 separator '\\') from t1;
+
+# null and group_concat_max_len
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (c1 int primary key, c2 varchar(100), c3 varchar(100), c4 varchar(100));
+insert into t2 values (1, 'd1', 's1', 'g1'), (2, 'd2', NULL, 'g1'), (3, NULL, 's3', 'g1'), (4, 'd4', 's4', 'g1'), (5, 'd5', NULL, 'g2'), (6, NULL, 's6', 'g2'), (7, NULL, NULL, 'g3'), (8, '', '', 'g4');
+select group_concat(c2, c3) from t2;
+--sorted_result
+select group_concat(c2, c3) from t2 group by c4;
+--sorted_result
+select group_concat(c2) from t2 group by c4;
+select @@group_concat_max_len;
+set group_concat_max_len = 7;
+select @@group_concat_max_len;
+select group_concat(c2, c3) from t2;
+--sorted_result
+select group_concat(c2) from t2 group by c4;
+--sorted_result
+select group_concat(c2, c3) from t2 group by c4;
+set group_concat_max_len = 10;
+select @@group_concat_max_len;
+select group_concat(c2, c3) from t2;
+set group_concat_max_len = 9;
+--sorted_result
+select group_concat(c2, c3) from t2 group by c4;
+select @@group_concat_max_len;
+set group_concat_max_len = default;
+select @@group_concat_max_len;
+select group_concat(c2, c3) from t2;
+--sorted_result
+select group_concat(c2) from t2 group by c4;
+--sorted_result
+select group_concat(c2, c3) from t2 group by c4;
+
+# scale
+--disable_warnings
+drop table if exists t3;
+--enable_warnings
+create table t3(c1 int, c2 timestamp(4));
+insert into t3 values(1,'2015-01-01 12:12:12'), (2, '2015-01-02 12:12:33.333333');
+select * from t3;
+select group_concat(c1,c2) from t3;
+
+# collation
+--disable_warnings
+drop table if exists t4;
+--enable_warnings
+create table t4 (c1 int primary key, c2 varchar(100) charset utf8mb4 collate utf8mb4_bin, c3 varchar(50) charset utf8mb4 collate utf8mb4_general_ci);
+insert into t4 values (1, 'a', 'a'), (2, 'A', 'A'), (3, 'B', 'B'), (4, 'b', 'b');
+select group_concat(c2 order by c2) from t4;
+select group_concat(c3 order by c3) from t4;
+select group_concat(distinct c2) from t4;
+select group_concat(distinct c3) from t4;
+select collation(group_concat(c1)), collation(group_concat(c2)), collation(group_concat(c3)) from t4;
+
+# pull down for distributed plan
+create table t5(c1 int primary key, c2 int, c3 varchar(100), c4 int) partition by hash(c1) partitions 2;
+insert into t5 values (1, 21, 'a', 1);
+insert into t5 values (2, 22, 'b', 2);
+insert into t5 values (3, 23, 'c', 1);
+insert into t5 values (4, 24, 'd', 1);
+insert into t5 values (5, 25, 'e', 1);
+--sorted_result
+select count(c2), group_concat(c3 order by c3 desc), max(c1) from t5 group by c4;
+
+# bug7726379
+set @bug7726379 = 1;
+select group_concat(@bug7726379 order by 1);
+select group_concat(@bug7726379 order by @bug7726379);
+select group_concat(3 order by 1);
+select group_concat(3 + 2 order by 1);
+
+drop table t1, t2;
+create table t1(c1 int, c2 int);
+create table t2(a int, b int);
+--error 1056
+select distinct (select max(a) from t1 where alias.b = a) as field1 from t2 as alias group by field1;
+
+drop table t1;
+create table t1 (c1 int, c2 int, c3 int);
+insert into t1 (c1, c2, c3) values (1, 1, 1);
+insert into t1 (c1, c2, c3) values (1, 2, 2);
+insert into t1 (c1, c2, c3) values (1, 2, 2);
+insert into t1 (c1, c2, c3) values (1, 2, 3);
+insert into t1 (c1, c2, c3) values (2, 1, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 3);
+
+select c2, avg(distinct c3) from t1 group by c2;
+select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2;
+select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 with rollup;
+
+drop table t1, t2, t3, t4, t5;
+
+##
+--disable_warnings
+drop table if exists t1, t2;
+drop table if exists `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;
+--enable_warnings
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+insert into t1 values (1, 1);
+insert into t2 values (2, 2);
+
+CREATE TABLE `rpup_list_mcs_asoc_b` (   `LIST_MCS_ASOC_ID` varchar(40) NOT NULL COMMENT '目录耗材关联ID',   `RPUP_CNT_ITEM_ID` varchar(40) DEFAULT NULL COMMENT '报量项目ID',   `MCS_LIST_ID` varchar(40) DEFAULT NULL COMMENT '耗材目录ID',   `MCS_REGNO` varchar(100) DEFAULT NULL COMMENT '耗材注册证编号',   `MCS_CODE` varchar(100) DEFAULT NULL COMMENT '耗材代码',   `MCS_NAME` varchar(500) DEFAULT NULL COMMENT '耗材名称',   `MCS_MOL` varchar(500) DEFAULT NULL COMMENT '耗材型号',   `RID` varchar(40) NOT NULL DEFAULT '' COMMENT '数据唯一记录号',   `CRTER_ID` varchar(20) DEFAULT NULL COMMENT '创建人ID',   `CRTER_NAME` varchar(50) DEFAULT NULL COMMENT '创建人姓名',   `CRTE_OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '创建机构编号',   `CRTE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '数据创建时间',   `OPTER_ID` varchar(20) DEFAULT NULL COMMENT '经办人ID',   `OPTER_NAME` varchar(50) DEFAULT NULL COMMENT '经办人姓名',   `OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '经办机构编号',   `UPDT_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '数据更新时间',   `INVD_FLAG` varchar(3) NOT NULL DEFAULT '0' COMMENT '无效标志',   PRIMARY KEY (`LIST_MCS_ASOC_ID`) USING BTREE,   KEY `IDX_RPUP_LIST_MCS_ASOC_B_1` (`RPUP_CNT_ITEM_ID`) USING BTREE,   KEY `IDX_RPUP_LIST_MCS_ASOC_B_2` (`MCS_LIST_ID`) USING BTREE,   KEY `IDX_RPUP_LIST_MCS_ASOC_B_3` (`MCS_CODE`) USING BTREE,   KEY `IDX_RPUP_LIST_MCS_ASOC_B_4` (`MCS_REGNO`) USING BTREE );
+CREATE TABLE `bidprcu_mcs_regcert_b` (   `MCS_REGCERT_ID` varchar(40) NOT NULL COMMENT '耗材注册证ID',   `MCS_REGNO` varchar(100) NOT NULL DEFAULT '' COMMENT '耗材注册证编号',   `MCS_REGCERT_NAME` varchar(200) NOT NULL DEFAULT '' COMMENT '耗材注册证名称',   `REGCERT_EXPY_BEGNTIME` datetime NOT NULL DEFAULT '1970-01-01 08:00:00' COMMENT '注册证有效期开始时间',   `REGCERT_EXPY_ENDTIME` datetime NOT NULL DEFAULT '1970-01-01 08:00:00' COMMENT '注册证有效期结束时间',   `PRODENTP_CODE` varchar(50) NOT NULL DEFAULT '' COMMENT '生产企业代码',   `PRODENTP_NAME` varchar(200) NOT NULL DEFAULT '' COMMENT '生产企业名称',   `PRXY_ENTP_CODE` varchar(50) NOT NULL DEFAULT '' COMMENT '代理企业代码',   `PRXY_ENTP_NAME` varchar(200) NOT NULL DEFAULT '' COMMENT '代理企业名称',   `MGT_TYPE_CODE` varchar(10) NOT NULL DEFAULT '' COMMENT '管理类别代码',   `REGCERT_FILE_ID` varchar(500) NOT NULL DEFAULT '' COMMENT '注册证文件ID',   `MANL_FILE_ID` varchar(500) DEFAULT NULL COMMENT '说明书文件ID',   `OTH_FILE_ID` varchar(500) NOT NULL DEFAULT '' COMMENT '其他文件ID',   `RID` varchar(40) NOT NULL DEFAULT '' COMMENT '数据唯一记录号',   `CRTER_ID` varchar(20) DEFAULT NULL COMMENT '创建人ID',   `CRTER_NAME` varchar(50) DEFAULT NULL COMMENT '创建人姓名',   `CRTE_OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '创建机构编号',   `CRTE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '数据创建时间',   `OPT_TIME` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '经办时间',   `OPTER_ID` varchar(20) DEFAULT NULL COMMENT '经办人ID',   `OPTER_NAME` varchar(50) DEFAULT NULL COMMENT '经办人姓名',   `OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '经办机构编号',    `UPDT_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '数据更新时间',   `INVD_FLAG` varchar(3) NOT NULL DEFAULT '0' COMMENT '无效标志',   `MANU_ADDR` varchar(2048) DEFAULT NULL COMMENT '生产地址',   `APB_SCP` longtext COMMENT '适用范围',   `STRU_COMP` longtext COMMENT '结构及组成',   `PROD_SOUC` varchar(3) DEFAULT NULL COMMENT '耗材来源',   `PROD_SOUC_CODE` varchar(3) DEFAULT NULL COMMENT '耗材来源',   `SPEC_MOL` longtext COMMENT '规格型号',   `MEMO` longtext COMMENT '备注',   PRIMARY KEY (`MCS_REGCERT_ID`) USING BTREE,   KEY `IDX_BIDPRCU_MCS_REGCERT_B_1` (`MCS_REGNO`) USING BTREE );
+CREATE TABLE `rpup_mcs_list_info_b` (   `MCS_LIST_ID` varchar(40) NOT NULL COMMENT '耗材目录ID',   `RPUP_CNT_ITEM_ID` varchar(40) DEFAULT NULL COMMENT '报量项目ID',   `MCS_LIST_CODE` varchar(40) DEFAULT NULL COMMENT '耗材目录代码',   `LV1_LIST_NAME` varchar(100) DEFAULT NULL COMMENT '一级目录名称',   `LV2_LIST_NAME` varchar(100) DEFAULT NULL COMMENT '二级目录名称',   `LV3_LIST_NAME` varchar(100) DEFAULT NULL COMMENT '三级目录名称',   `GENNAME` varchar(100) DEFAULT NULL COMMENT '通用名',   `MATL` varchar(100) DEFAULT NULL COMMENT '材质',   `SPEC` varchar(200) DEFAULT NULL COMMENT '规格',   `ISU_FLAG` varchar(3) DEFAULT NULL COMMENT '下发标志',   `RID` varchar(40) NOT NULL DEFAULT '' COMMENT '数据唯一记录号',   `CRTER_ID` varchar(20) DEFAULT NULL COMMENT '创建人ID',   `CRTER_NAME` varchar(50) DEFAULT NULL COMMENT '创建人姓名',   `CRTE_OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '创建机构编号',   `CRTE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '数据创建时间',   `OPTER_ID` varchar(20) DEFAULT NULL COMMENT '经办人ID',   `OPTER_NAME` varchar(50) DEFAULT NULL COMMENT '经办人姓名',   `OPTINS_NO` varchar(20) DEFAULT NULL COMMENT '经办机构编号',   `UPDT_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '数据更新时间',   `INVD_FLAG` varchar(3) NOT NULL DEFAULT '0' COMMENT '无效标志',   PRIMARY KEY (`MCS_LIST_ID`) USING BTREE,   KEY `IDX_RPUP_MCS_LIST_INFO_B_1` (`RPUP_CNT_ITEM_ID`) USING BTREE,   KEY `IDX_RPUP_MCS_LIST_INFO_B_2` (`MCS_LIST_CODE`) USING BTREE,   KEY `IDX_RPUP_MCS_LIST_INFO_B_3` (`GENNAME`) USING BTREE );
+
+SELECT  rpup_list_mcs_asoc_b.LIST_MCS_ASOC_ID,  rpup_list_mcs_asoc_b.RPUP_CNT_ITEM_ID,  rpup_list_mcs_asoc_b.RPUP_CNT_ITEM_ID AS rupuCntItemId,   rpup_list_mcs_asoc_b.MCS_REGNO,
+    rpup_list_mcs_asoc_b.MCS_NAME,  rpup_list_mcs_asoc_b.MCS_MOL,   rpup_mcs_list_info_b.MCS_LIST_CODE,   rpup_mcs_list_info_b.LV1_LIST_NAME,
+    rpup_mcs_list_info_b.LV2_LIST_NAME,   rpup_mcs_list_info_b.LV3_LIST_NAME,   rpup_mcs_list_info_b.GENNAME,   rpup_mcs_list_info_b.MATL,
+    rpup_mcs_list_info_b.SPEC,  bidprcu_mcs_regcert_b.PRODENTP_CODE,  bidprcu_mcs_regcert_b.PRODENTP_NAME,  rpup_list_mcs_asoc_b.RID,   rpup_list_mcs_asoc_b.CRTER_ID,
+    rpup_list_mcs_asoc_b.CRTER_NAME,  rpup_list_mcs_asoc_b.CRTE_OPTINS_NO,  rpup_list_mcs_asoc_b.CRTE_TIME,   rpup_list_mcs_asoc_b.OPTER_ID,
+    rpup_list_mcs_asoc_b.OPTER_NAME,  rpup_list_mcs_asoc_b.OPTINS_NO,   rpup_list_mcs_asoc_b.UPDT_TIME,   rpup_list_mcs_asoc_b.INVD_FLAG
+FROM  rpup_list_mcs_asoc_b  LEFT JOIN bidprcu_mcs_regcert_b ON bidprcu_mcs_regcert_b.mcs_regno = rpup_list_mcs_asoc_b.MCS_REGNO
+    LEFT JOIN rpup_mcs_list_info_b ON rpup_mcs_list_info_b.MCS_LIST_ID = rpup_list_mcs_asoc_b.MCS_LIST_ID
+WHERE  rpup_list_mcs_asoc_b.INVD_FLAG = '0'     AND rpup_mcs_list_info_b.INVD_FLAG = '0'
+AND rpup_list_mcs_asoc_b.RPUP_CNT_ITEM_ID = '1403980836851798017'  AND bidprcu_mcs_regcert_b.PRODENTP_NAME IS NOT NULL
+GROUP BY   MCS_LIST_CODE,  MCS_REGNO,  MCS_NAME,   PRODENTP_NAME,  MCS_MOL;
+
+select t1.c1 from t1, t2 group by c1;
+--error 1052
+select * from t1, t2 group by c1;
+--error 1052
+select 1 from t1, t2 group by c1;
+
+drop table t1, t2;
+drop table `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;

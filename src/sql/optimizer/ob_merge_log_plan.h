@@ -15,30 +15,105 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObMergeLogPlan : public ObInsertLogPlan {
+namespace oceanbase
+{
+namespace sql
+{
+struct ObStmtCompareContext;
+
+class ObMergeLogPlan : public ObDelUpdLogPlan
+{
 public:
-  ObMergeLogPlan(ObOptimizerContext& ctx, const ObDMLStmt* merge_stmt) : ObInsertLogPlan(ctx, merge_stmt)
-  {}
-  virtual ~ObMergeLogPlan()
-  {}
-  int generate_raw_plan();
-  virtual int generate_plan();
+  ObMergeLogPlan(ObOptimizerContext &ctx, const ObMergeStmt *merge_stmt)
+      : ObDelUpdLogPlan(ctx, merge_stmt)
+      {
+      }
+  virtual ~ObMergeLogPlan() {}
+
+  const ObMergeStmt *get_stmt() const
+  { return reinterpret_cast<const ObMergeStmt*>(stmt_); }
+
+  ObIArray<ObRawExpr *>& get_insert_condition() { return insert_condition_exprs_; }
+  const ObIArray<ObRawExpr *>& get_insert_condition() const { return insert_condition_exprs_; }
+  ObIArray<ObRawExpr *>& get_update_condition() { return update_condition_exprs_; }
+  const ObIArray<ObRawExpr *>& get_update_condition() const { return update_condition_exprs_; }
+  ObIArray<ObRawExpr *>& get_delete_condition() { return delete_condition_exprs_; }
+  const ObIArray<ObRawExpr *>& get_delete_condition() const { return delete_condition_exprs_; }
+  virtual int prepare_dml_infos() override;
+private:
+  virtual int generate_normal_raw_plan() override;
+  int candi_allocate_merge();
+  int create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
+                         ObTablePartitionInfo *insert_table_part,
+                         ObShardingInfo *insert_sharding,
+                         const bool force_no_multi_part,
+                         const bool force_multi_part,
+                         ObIArray<CandidatePlan> &update_plans);
+  int allocate_merge_as_top(ObLogicalOperator *&top,
+                            ObTablePartitionInfo *table_partition_info,
+                            bool is_multi_part_dml,
+                            const ObIArray<ObPCParamEqualInfo> *equal_infos);
+  int candi_allocate_subplan_filter_for_merge();
+  int candi_allocate_pdml_merge();
+  int create_pdml_merge_plan(ObLogicalOperator *&top,
+                             ObTablePartitionInfo *insert_table_part,
+                             ObExchangeInfo &exch_info);
+
+  int check_merge_need_multi_partition_dml(ObLogicalOperator &top,
+                                           ObTablePartitionInfo *insert_table_partition,
+                                           ObShardingInfo *insert_sharding,
+                                           bool &is_multi_part_dml,
+                                           ObIArray<ObPCParamEqualInfo> &equal_infos);
+  int check_update_insert_sharding_basic(ObLogicalOperator &top,
+                                         ObShardingInfo *insert_sharding,
+                                         bool &is_basic,
+                                         ObIArray<ObPCParamEqualInfo> &equal_infos);
+  bool match_same_partition(const ObShardingInfo &l_sharding_info,
+                            const ObShardingInfo &r_sharding_info);
+  int generate_equal_constraint(ObLogicalOperator &top,
+                                ObShardingInfo &insert_sharding,
+                                bool &can_gen_cons,
+                                ObIArray<ObPCParamEqualInfo> &equal_infos);
+  int has_equal_values(const ObIArray<ObConstRawExpr*> &l_const_exprs,
+                       const ObIArray<ObConstRawExpr*> &r_const_exprs,
+                       ObStmtCompareContext &context,
+                       bool &has_equal,
+                       ObIArray<ObPCParamEqualInfo> &equal_infos);
+  int get_const_expr_values(const ObRawExpr *part_expr,
+                            const ObIArray<ObRawExpr*> &conds,
+                            ObIArray<ObConstRawExpr*> &const_exprs);
+  int get_target_table_scan(const uint64_t target_table_id,
+                            ObLogicalOperator *cur_op,
+                            ObLogTableScan *&target_table_scan);
+  int check_update_insert_sharding_partition_wise(ObLogicalOperator &top,
+                                                  ObShardingInfo *insert_sharding,
+                                                  bool &is_partition_wise);
+  int prepare_table_dml_info_insert(const ObMergeTableInfo& merge_info,
+                                    IndexDMLInfo* table_dml_info,
+                                    ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                    ObIArray<IndexDMLInfo*> &all_index_dml_infos);
+  int prepare_table_dml_info_update(const ObMergeTableInfo& merge_info,
+                                    IndexDMLInfo* table_dml_info,
+                                    ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                    ObIArray<IndexDMLInfo*> &all_index_dml_infos);
+  int prepare_table_dml_info_delete(const ObMergeTableInfo& merge_info,
+                                    IndexDMLInfo* table_dml_info,
+                                    ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                    ObIArray<IndexDMLInfo*> &all_index_dml_infos);
+
+  int check_merge_stmt_need_multi_partition_dml(bool &is_multi_part_dml, bool &is_one_part_table);
+
+
+  DISALLOW_COPY_AND_ASSIGN(ObMergeLogPlan);
 
 private:
-  int allocate_merge_operator_as_top(ObLogicalOperator*& top);
-  int allocate_merge_subquery();
-  int get_update_insert_condition_subquery(ObRawExpr* matched_expr, ObRawExpr* null_expr, bool& update_has_subquery,
-      bool& insert_has_subquery, ObIArray<ObRawExpr*>& new_subquery_exprs);
-  int get_update_insert_target_subquery(ObRawExpr* matched_expr, ObRawExpr* null_expr, bool update_has_subquery,
-      bool insert_has_subquery, ObIArray<ObRawExpr*>& new_subquery_exprs);
-  int get_delete_condition_subquery(ObRawExpr* matched_expr, ObRawExpr* null_expr, bool update_has_subquery,
-      ObIArray<ObRawExpr*>& new_subquery_exprs);
-  int generate_merge_conditions_subquery(
-      ObRawExpr* matched_expr, ObRawExpr* null_expr, bool is_matched, ObIArray<ObRawExpr*>& condition_exprs);
-  DISALLOW_COPY_AND_ASSIGN(ObMergeLogPlan);
+  common::ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_update_infos_;
+  common::ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_delete_infos_;
+
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> insert_condition_exprs_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> update_condition_exprs_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> delete_condition_exprs_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 #endif

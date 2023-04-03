@@ -15,14 +15,16 @@
 
 #include "lib/lock/ob_thread_cond.h"
 
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 
-class ObThreadIdling {
+class ObThreadIdling
+{
 public:
-  explicit ObThreadIdling(volatile bool& stop);
-  virtual ~ObThreadIdling()
-  {}
+  explicit ObThreadIdling(volatile bool &stop);
+  virtual ~ObThreadIdling() {}
 
   virtual void wakeup();
   virtual int idle();
@@ -32,11 +34,11 @@ public:
 
 private:
   common::ObThreadCond cond_;
-  volatile bool& stop_;
+  volatile bool &stop_;
   int64_t wakeup_cnt_;
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_THREAD_IDLING_H_
+#endif // OCEANBASE_ROOTSERVER_OB_THREAD_IDLING_H_

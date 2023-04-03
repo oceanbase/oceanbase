@@ -16,8 +16,10 @@
 #include "share/backup/ob_backup_manager.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/backup/ob_backup_operator.h"
+#include "rootserver/ob_i_backup_scheduler.h"
+#include "share/backup/ob_backup_operator.h" 
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
+#include "rootserver/backup/ob_backup_service.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -26,21 +28,26 @@ using namespace obrpc;
 using namespace rootserver;
 
 ObBackupLeaseService::ObBackupLeaseService()
-    : is_inited_(false),
-      can_be_leader_ts_(0),
-      expect_round_(0),
-      lock_(),
-      backup_lease_info_mgr_(),
-      lease_info_(),
-      sql_proxy_(nullptr),
-      idle_(has_set_stop()),
-      local_addr_()
-{}
+  : is_inited_(false),
+    can_be_leader_ts_(0),
+    expect_round_(0),
+    lock_(common::ObLatchIds::BACKUP_LOCK),
+    backup_lease_info_mgr_(),
+    lease_info_(),
+    sql_proxy_(nullptr),
+    backup_service_(nullptr),
+    idle_(has_set_stop()),
+    local_addr_()
+{
+}
 
 ObBackupLeaseService::~ObBackupLeaseService()
-{}
+{
+}
 
-int ObBackupLeaseService::init(const ObAddr& addr, ObMySQLProxy& sql_proxy)
+int ObBackupLeaseService::init(
+    const ObAddr &addr,
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
@@ -62,7 +69,7 @@ int ObBackupLeaseService::init(const ObAddr& addr, ObMySQLProxy& sql_proxy)
   return ret;
 }
 
-int ObBackupLeaseService::register_scheduler(ObRsReentrantThread& scheduler)
+int ObBackupLeaseService::register_scheduler(ObIBackupScheduler &scheduler)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
@@ -72,6 +79,20 @@ int ObBackupLeaseService::register_scheduler(ObRsReentrantThread& scheduler)
     LOG_WARN("not inited", K(ret));
   } else if (OB_FAIL(backup_schedulers_.push_back(&scheduler))) {
     LOG_WARN("failed to add scheduler", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupLeaseService::register_mgr(ObBackupService &backup_service)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    backup_service_ = &backup_service;
   }
   return ret;
 }
@@ -113,6 +134,7 @@ int ObBackupLeaseService::stop_lease()
   } else {
     SpinWLockGuard guard(lock_);
     stop_backup_scheduler_();
+    stop_backup_service_();
     ++expect_round_;
     can_be_leader_ts_ = 0;
     FLOG_INFO("stop backup lease service", K(*this));
@@ -128,12 +150,12 @@ void ObBackupLeaseService::wait_lease()
 
 int ObBackupLeaseService::start()
 {
-  return ThreadPool::start();
+  return  lib::ThreadPool::start();
 }
 
 void ObBackupLeaseService::stop()
 {
-  ThreadPool::stop();
+  lib::ThreadPool::stop();
   idle_.wakeup();
 }
 
@@ -149,10 +171,11 @@ void ObBackupLeaseService::destroy()
   LOG_INFO("start destroy ObBackupLeaseService");
   stop_lease();
   wait_backup_scheduler_stop_();
+  wait_mgr_stop_();
   stop();
   backup_schedulers_.destroy();
   wait();
-  ThreadPool::destroy();
+  lib::ThreadPool::destroy();
   const int64_t cost_ts = ObTimeUtil::current_time() - start_ts;
   LOG_INFO("finish destroy ObBackupLeaseService", K(cost_ts));
 }
@@ -170,7 +193,7 @@ int ObBackupLeaseService::check_lease()
   return ret;
 }
 
-int ObBackupLeaseService::get_lease_status(bool& is_lease_valid)
+int ObBackupLeaseService::get_lease_status(bool &is_lease_valid)
 {
   int ret = OB_SUCCESS;
   is_lease_valid = false;
@@ -196,15 +219,17 @@ int ObBackupLeaseService::get_lease_status(bool& is_lease_valid)
   return ret;
 }
 
-int ObBackupLeaseService::start_backup_scheduler_()
+int64_t ObBackupLeaseService::get_lease_version() const {
+  return lease_info_.lease_epoch_;
+}
+
+int ObBackupLeaseService::start_backup_scheduler_() 
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-
   FLOG_INFO("[BACKUP_LEASE] start_backup_scheduler");
-
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
     FLOG_INFO("[BACKUP_LEASE] start scheduler", "name", scheduler->get_thread_name());
     if (OB_SUCCESS != (tmp_ret = scheduler->start())) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
@@ -214,32 +239,62 @@ int ObBackupLeaseService::start_backup_scheduler_()
   return ret;
 }
 
-void ObBackupLeaseService::stop_backup_scheduler_()
+int ObBackupLeaseService::start_backup_service_()
 {
-  FLOG_INFO("[BACKUP_LEASE] stop_backup_scheduler");
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+	FLOG_INFO("[BACKUP_LEASE] start backup mgr", "name", backup_service_->get_thread_name());
+  backup_service_->disable_backup();
+  if (OB_SUCCESS != (tmp_ret = backup_service_->start())) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+    LOG_ERROR("failed to start backup mgr", K(tmp_ret), K(ret), "name", backup_service_->get_thread_name());
+  }
+  return ret;
+}
+
+void ObBackupLeaseService::stop_backup_scheduler_() 
+{
+	FLOG_INFO("[BACKUP_LEASE] stop_backup_scheduler");
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
     FLOG_INFO("[BACKUP_LEASE] stop scheduler", "name", scheduler->get_thread_name());
     scheduler->stop();
   }
 }
 
+void ObBackupLeaseService::stop_backup_service_()
+{
+  FLOG_INFO("[BACKUP_LEASE] stop backup_mgr", "name", backup_service_->get_thread_name());
+	backup_service_->stop();
+}
+
 void ObBackupLeaseService::wait_backup_scheduler_stop_()
 {
   int64_t start_ts = ObTimeUtil::current_time();
-  FLOG_INFO("[BACKUP_LEASE] start wait_backup_scheduler_stop_");
-
+	FLOG_INFO("[BACKUP_LEASE] start wait_backup_scheduler_stop_");
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
-    FLOG_INFO("[BACKUP_LEASE] waiting scheduler stop", "name", scheduler->get_thread_name(), KP(scheduler));
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
+    FLOG_INFO("[BACKUP_LEASE] waiting scheduler stop",
+        "name", scheduler->get_thread_name(), KP(scheduler));
     int64_t start_ts2 = ObTimeUtil::current_time();
     scheduler->wait();
     int64_t cost_ts2 = ObTimeUtil::current_time() - start_ts2;
-    FLOG_INFO("[BACKUP_LEASE] waiting scheduler stop", K(cost_ts2), "name", scheduler->get_thread_name());
+    FLOG_INFO("[BACKUP_LEASE] waiting scheduler stop", K(cost_ts2),
+        "name", scheduler->get_thread_name());
   }
-
   int64_t cost_ts = ObTimeUtil::current_time() - start_ts;
   FLOG_INFO("[BACKUP_LEASE] finish wait_backup_scheduler_stop_", K(cost_ts));
+}
+
+void ObBackupLeaseService::wait_mgr_stop_()
+{
+  FLOG_INFO("[BACKUP_LEASE] start waiting backup mgr stop");
+  int64_t start_ts = ObTimeUtil::current_time();
+	if (nullptr != backup_service_) {
+    backup_service_->wait();
+  }
+  int64_t cost_ts = ObTimeUtil::current_time() - start_ts;
+  FLOG_INFO("[BACKUP_LEASE] finish waiting backup mgr stop", K(cost_ts));
 }
 
 int64_t ObBackupLeaseService::ObBackupLeaseIdle::get_idle_interval_us()
@@ -253,9 +308,9 @@ void ObBackupLeaseService::run1()
   lib::set_thread_name("BackupLease");
   FLOG_INFO("ObBackupLeaseService start");
 
-  while (!has_set_stop()) {
+  while(!has_set_stop()) {
     if (OB_SUCCESS != (tmp_ret = renew_lease_())) {
-      LOG_WARN("failed to renew lease", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to renew lease", K(tmp_ret));
     }
     do_idle(tmp_ret);
   }
@@ -269,14 +324,16 @@ void ObBackupLeaseService::do_idle(const int32_t result)
 
   {
     SpinRLockGuard guard(lock_);
-    if (can_be_leader_ts_ > 0 || lease_info_.is_leader_ || expect_round_ != lease_info_.round_ ||
-        OB_SUCCESS != result) {
+    if (can_be_leader_ts_ > 0
+        || lease_info_.is_leader_
+        || expect_round_ != lease_info_.round_
+        || OB_SUCCESS != result) {
       idle_us = ObBackupLeaseIdle::FAST_IDLE_US;
     } else {
       LOG_INFO("do idle", K(idle_us), K(can_be_leader_ts_), K(expect_round_), K(lease_info_));
     }
   }
-  idle_.idle(idle_us);  // ignore ret
+  idle_.idle(idle_us); // ignore ret
 }
 
 // Only single thread will change lease_info_
@@ -303,19 +360,21 @@ int ObBackupLeaseService::renew_lease_()
   if (OB_SUCC(ret) && need_wait_stop) {
     stop_backup_scheduler_();
     wait_backup_scheduler_stop_();
+    stop_backup_service_();
+    wait_mgr_stop_();
     if (OB_FAIL(clean_backup_lease_info_(next_round))) {
       LOG_WARN("failed to clean backup leader info", K(ret), K(next_round));
-    }
+    } 
   }
 
   if (OB_SUCC(ret) && can_be_leader_ts > 0 && next_round == lease_info_.round_) {
     share::ObBackupLeaseInfo new_lease_info;
     bool need_start_scheduler = !lease_info_.is_leader_;
-    const char* msg = "";
+    const char *msg = "";
     if (OB_FAIL(check_sys_backup_info_())) {
       LOG_WARN("failed to check sys backup info", K(ret));
     } else if (OB_FAIL(backup_lease_info_mgr_.renew_lease(
-                   can_be_leader_ts, next_round, lease_info_, new_lease_info, msg))) {
+        can_be_leader_ts, next_round, lease_info_, new_lease_info, msg))) {
       LOG_WARN("failed to do renew lease", K(ret), K(lease_info_), K(new_lease_info));
     } else if (OB_FAIL(set_backup_lease_info_(new_lease_info, msg))) {
       LOG_ERROR("failed to set lease info", K(ret), K(lease_info_), K(new_lease_info));
@@ -324,6 +383,8 @@ int ObBackupLeaseService::renew_lease_()
     } else if (need_start_scheduler) {
       if (OB_FAIL(start_backup_scheduler_())) {
         LOG_ERROR("failed to start backup scheduler", K(ret));
+	  } else if (OB_FAIL(start_backup_service_())) {
+        LOG_ERROR("failed to start backup mgr", K(ret));
       }
     }
   }
@@ -343,7 +404,8 @@ int ObBackupLeaseService::clean_backup_lease_info_(const int64_t next_round)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(backup_lease_info_mgr_.clean_backup_lease_info(next_round, lease_info_, new_lease_info))) {
+  } else if (OB_FAIL(backup_lease_info_mgr_.clean_backup_lease_info(
+      next_round, lease_info_, new_lease_info))) {
     LOG_WARN("failed to release lease", K(ret), K(next_round));
   } else {
     SpinWLockGuard guard(lock_);
@@ -357,7 +419,8 @@ int ObBackupLeaseService::clean_backup_lease_info_(const int64_t next_round)
   return ret;
 }
 
-int ObBackupLeaseService::set_backup_lease_info_(const share::ObBackupLeaseInfo& lease_info, const char* msg)
+int ObBackupLeaseService::set_backup_lease_info_(
+    const share::ObBackupLeaseInfo &lease_info, const char *msg)
 {
   int ret = OB_SUCCESS;
   bool is_leader_changed = false;
@@ -372,7 +435,8 @@ int ObBackupLeaseService::set_backup_lease_info_(const share::ObBackupLeaseInfo&
     if (lease_info.round_ != lease_info_.round_ || OB_ISNULL(msg)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid lease info", K(ret), K(lease_info), K(lease_info_), KP(msg));
-    } else if (lease_info.is_leader_ && lease_info.lease_start_ts_ + ObBackupLeaseInfo::MAX_LEASE_TIME < cur_ts) {
+    } else if (lease_info.is_leader_
+        && lease_info.lease_start_ts_ + ObBackupLeaseInfo::MAX_LEASE_TIME < cur_ts) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("lease info start ts is too old", K(ret), K(lease_info), K(cur_ts));
     } else {
@@ -386,16 +450,17 @@ int ObBackupLeaseService::set_backup_lease_info_(const share::ObBackupLeaseInfo&
   FLOG_INFO("set_backup_leader_info_", K(ret), K(lease_info_));
   if (OB_SUCC(ret) && is_leader_changed) {
     if (lease_info_.is_leader_) {
-      ROOTSERVICE_EVENT_ADD(
-          "backup_lease", "acquire backup lease", K_(local_addr), "round", lease_info_.round_, K(msg), K_(lease_info));
+      ROOTSERVICE_EVENT_ADD("backup_lease", "acquire backup lease",
+          K_(local_addr), "round", lease_info_.round_, K(msg), K_(lease_info));
     } else {
-      ROOTSERVICE_EVENT_ADD("backup_lease", "release backup lease", K_(local_addr), "round", lease_info_.round_);
+      ROOTSERVICE_EVENT_ADD("backup_lease", "release backup lease",
+          K_(local_addr), "round", lease_info_.round_);
     }
   }
   return ret;
 }
 
-int ObBackupLeaseService::check_sys_backup_info_()
+int ObBackupLeaseService::check_sys_backup_info_() 
 {
   int ret = OB_SUCCESS;
   ObBackupInfoChecker checker;
@@ -414,12 +479,34 @@ int ObBackupLeaseService::check_sys_backup_info_()
     LOG_WARN("failed to check sys backup info", K(ret));
   }
 
-  if (OB_SUCC(ret) && inner_table_version >= OB_BACKUP_INNER_TABLE_V2) {
-    ObLogArchiveBackupInfoMgr info_mgr;
-    if (OB_FAIL(info_mgr.check_sys_log_archive_status(*sql_proxy_))) {
-      LOG_WARN("failed to check sys backup log archive status ", K(ret));
-    }
-  }
   LOG_TRACE("finish check sys backup info", K(ret));
   return ret;
+}
+
+
+int ObBackupLeaseService::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[BACKUP_LEASE] start force_cancel");
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("not inited", K(ret));
+  } else {
+    for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
+      tmp_ret = scheduler->force_cancel(tenant_id);
+      FLOG_INFO("[BACKUP_LEASE] force_cancel", K(i), K(tmp_ret), K(tenant_id));
+    }
+	  ObSEArray<ObIBackupJobScheduler *, 8> &jobs = backup_service_->get_jobs();
+    for (int64_t i = 0; i < jobs.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      ObIBackupJobScheduler *scheduler = jobs.at(i);
+      tmp_ret = scheduler->force_cancel(tenant_id);
+      FLOG_INFO("[BACKUP_LEASE] force_cancel", K(i), K(tmp_ret), K(tenant_id));
+    }
+  }
+  
+  FLOG_INFO("[BACKUP_LEASE] end force_cancel");
+  return OB_SUCCESS;
 }

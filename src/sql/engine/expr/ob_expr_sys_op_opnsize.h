@@ -15,28 +15,30 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprSysOpOpnsize : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprSysOpOpnsize : public ObFuncExprOperator
+{
 public:
-  explicit ObExprSysOpOpnsize(common::ObIAllocator& alloc)
-      : ObFuncExprOperator(alloc, T_FUN_SYS_OP_OPNSIZE, "sys_op_opnsize", 1, NOT_ROW_DIMENSION)
+  explicit  ObExprSysOpOpnsize(common::ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_OP_OPNSIZE, "sys_op_opnsize", 1, NOT_ROW_DIMENSION)
   {}
-  virtual ~ObExprSysOpOpnsize()
-  {}
+  virtual ~ObExprSysOpOpnsize() {}
 
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result1(
-      common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_sys_op_opnsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-
+  virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
+  static int calc_sys_op_opnsize_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                      ObDatum &res);
+  static int calc_sys_op_opnsize(ObExpr *expr, ObDatum *arg, int64_t &size);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysOpOpnsize);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_SYS_OP_OPNSIZE_
+#endif // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_SYS_OP_OPNSIZE_

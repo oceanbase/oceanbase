@@ -13,12 +13,14 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_raw_expr_sets.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
 
-int ObRawExprSetUtils::to_expr_set(
-    common::ObIAllocator* allocator, const common::ObIArray<ObRawExpr*>& exprs, ObRawExprSet& expr_set)
+int ObRawExprSetUtils::to_expr_set(common::ObIAllocator *allocator,
+                                   const common::ObIArray<ObRawExpr *> &exprs,
+                                   ObRawExprSet &expr_set)
 {
   int ret = OB_SUCCESS;
   if (exprs.count() <= 0 || OB_ISNULL(allocator)) {
@@ -35,12 +37,13 @@ int ObRawExprSetUtils::to_expr_set(
   return ret;
 }
 
-int ObRawExprSetUtils::add_expr_set(
-    common::ObIAllocator* allocator, const common::ObIArray<ObRawExpr*>& exprs, ObRawExprSets& expr_sets)
+int ObRawExprSetUtils::add_expr_set(common::ObIAllocator *allocator,
+                                    const common::ObIArray<ObRawExpr *> &exprs,
+                                    ObRawExprSets &expr_sets)
 {
   int ret = OB_SUCCESS;
-  ObRawExprSet* expr_set = NULL;
-  void* ptr = NULL;
+  ObRawExprSet *expr_set = NULL;
+  void *ptr = NULL;
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(allocator));
@@ -50,7 +53,7 @@ int ObRawExprSetUtils::add_expr_set(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no memory to create ObRawExprSet", K(ret));
   } else {
-    expr_set = new (ptr) ObRawExprSet();
+    expr_set = new(ptr) ObRawExprSet();
     if (OB_FAIL(to_expr_set(allocator, exprs, *expr_set))) {
       LOG_WARN("failed to convert array to expr set", K(ret));
     } else if (OB_FAIL(expr_sets.push_back(expr_set))) {

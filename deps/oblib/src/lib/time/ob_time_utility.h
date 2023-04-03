@@ -16,34 +16,34 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include "lib/coro/co_var.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_unify_serialize.h"
 #include "lib/ob_define.h"
-#include "lib/ob_abort.h"
+#include "lib/time/ob_tsc_timestamp.h"
 
-namespace oceanbase {
-namespace common {
-class ObTimeUtility {
+namespace oceanbase
+{
+namespace common
+{
+class ObTimeUtility
+{
 public:
   static int64_t current_time();
+	static int64_t current_time_ns();
   static int64_t fast_current_time();
   static int64_t current_monotonic_time();
   static int64_t current_time_coarse();
   static int64_t current_monotonic_raw_time();
-
 private:
   static int64_t current_monotonic_time_();
   ObTimeUtility() = delete;
 };
 
-static __attribute__((noinline)) void do_abort()
-{
-  ob_abort();
-}
-
 static bool IS_SYSTEM_SUPPORT_MONOTONIC_RAW = true;
 
 // high performance current time, number of instructions is 1/6 of vdso_gettimeofday's.
-inline int64_t ObTimeUtility::fast_current_time()
+OB_INLINE int64_t ObTimeUtility::fast_current_time()
 {
   return ObTimeUtility::current_time();
 }
@@ -52,54 +52,88 @@ inline int64_t ObTimeUtility::current_monotonic_time_()
 {
   int64_t ret_val = 0;
 
-#ifdef _POSIX_MONOTONIC_CLOCK
+  #ifdef _POSIX_MONOTONIC_CLOCK
   int err_ret = 0;
   struct timespec ts;
   if (OB_UNLIKELY((err_ret = clock_gettime(CLOCK_MONOTONIC, &ts)) != 0)) {
     ret_val = current_time();
   }
   // TODO: div 1000 can be replace to bitwise
-  ret_val =
-      ret_val > 0 ? ret_val : (static_cast<int64_t>(ts.tv_sec) * 1000000L + static_cast<int64_t>(ts.tv_nsec / 1000));
-#else
+  ret_val = ret_val > 0 ? ret_val : (static_cast<int64_t>(ts.tv_sec) * 1000000L +
+                                     static_cast<int64_t>(ts.tv_nsec / 1000));
+  #else
   ret_val = current_time();
-#endif
+  #endif
 
   return ret_val;
 }
 
 inline int64_t ObTimeUtility::current_monotonic_time()
 {
-// if defined _POSIX_MONOTONIC_CLOCK
-// if _POSIX_MONOTONIC_CLOCK > 0, function in compile time and runtime can be used.
-// if _POSIX_MONOTONIC_CLOCK == 0, function in runtime may not be used.
-// if _POSIX_MONOTONIC_CLOCK < 0, function can not be used.
-#ifndef _POSIX_MONOTONIC_CLOCK
+  // if defined _POSIX_MONOTONIC_CLOCK
+  // if _POSIX_MONOTONIC_CLOCK > 0, function in compile time and runtime can be used.
+  // if _POSIX_MONOTONIC_CLOCK == 0, function in runtime may not be used.
+  // if _POSIX_MONOTONIC_CLOCK < 0, function can not be used.
+  #ifndef _POSIX_MONOTONIC_CLOCK
   return current_time();
-#elif _POSIX_MONOTONIC_CLOCK >= 0
+  #elif _POSIX_MONOTONIC_CLOCK >= 0
   return current_monotonic_time_();
-#else
+  #else
   return current_time();
-#endif
-}
-
-inline int64_t ObTimeUtility::current_time_coarse()
-{
-  struct timespec t;
-  if (OB_UNLIKELY(clock_gettime(
-#ifdef HAVE_REALTIME_COARSE
-          CLOCK_REALTIME_COARSE,
-#else
-          CLOCK_REALTIME,
-#endif
-          &t))) {
-    do_abort();
-  }
-  return (static_cast<int64_t>(t.tv_sec) * 1000000L + static_cast<int64_t>(t.tv_nsec / 1000));
+  #endif
 }
 
 typedef ObTimeUtility ObTimeUtil;
-}  // namespace common
-}  // namespace oceanbase
 
-#endif  //_OCEANBASE_COMMON_OB_TIME_UTILITY_H_
+typedef struct ObMonotonicTs
+{
+  OB_UNIS_VERSION(1);
+public:
+  explicit ObMonotonicTs(int64_t mts) : mts_(mts) {}
+  ObMonotonicTs() { reset(); }
+  ~ObMonotonicTs() { reset(); }
+  void reset() { mts_ = 0; }
+  bool is_valid() const { return mts_ > 0; }
+  bool operator!=(const struct ObMonotonicTs other) const { return  mts_ != other.mts_; }
+  bool operator==(const struct ObMonotonicTs other) const { return  mts_ == other.mts_; }
+  bool operator>(const struct ObMonotonicTs other) const { return  mts_ > other.mts_; }
+  bool operator>=(const struct ObMonotonicTs other) const { return  mts_ >= other.mts_; }
+  bool operator<(const struct ObMonotonicTs other) const { return  mts_ < other.mts_; }
+  bool operator<=(const struct ObMonotonicTs other) const { return  mts_ <= other.mts_; }
+  struct ObMonotonicTs operator+(const struct ObMonotonicTs other) const { return ObMonotonicTs(mts_ + other.mts_); }
+  struct ObMonotonicTs operator-(const struct ObMonotonicTs other) const { return ObMonotonicTs(mts_ - other.mts_); }
+  static struct ObMonotonicTs current_time() { return ObMonotonicTs(common::ObTimeUtility::current_time()); }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+public:
+  int64_t mts_;
+} ObMonotonicTs;
+
+
+} //common
+} //oceanbase
+
+#define TC_REACH_TIME_INTERVAL(i) \
+  ({ \
+    bool bret = false; \
+    static thread_local int64_t last_time = 0; \
+    int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    if (OB_UNLIKELY((i + last_time) < cur_time)) \
+    { \
+      last_time = cur_time; \
+      bret = true; \
+    } \
+    bret; \
+  })
+
+#define TC_REACH_COUNT_INTERVAL(i) \
+  ({ \
+    bool bret = false; \
+    static thread_local int64_t count = 0; \
+    if (0 == (++count % i)) \
+    { \
+      bret = true; \
+    } \
+    bret; \
+  })
+
+#endif //_OCEANBASE_COMMON_OB_TIME_UTILITY_H_

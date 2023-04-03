@@ -14,17 +14,19 @@
 #define OB_EXPR_LOCATE_H_
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprLocate : public ObLocationExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprLocate : public ObLocationExprOperator
+{
 public:
-  explicit ObExprLocate(common::ObIAllocator& alloc);
+  explicit  ObExprLocate(common::ObIAllocator &alloc);
   virtual ~ObExprLocate();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_array,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   static const int8_t PARAM_NUM_TWO = 2;
   static const int8_t PARAM_NUM_THREE = 3;
@@ -32,7 +34,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLocate);
 };
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+
+}//end of namespace sql
+}//end of namespace oceanbase
 
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR_LOCATE_H_ */

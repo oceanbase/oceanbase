@@ -14,19 +14,19 @@
 #include "blocksstable/ob_row_generate.h"
 #include "storage/ob_i_store.h"
 #include "share/schema/ob_table_schema.h"
-#include "storage/ob_sstable_row_iterator.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace blocksstable;
 using namespace share::schema;
 using namespace storage;
 using namespace common;
-class TestIStore : public ::testing::Test {
+class TestIStore : public ::testing::Test
+{
 public:
   TestIStore();
   ~TestIStore();
   virtual void SetUp();
-
 protected:
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 8;
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
@@ -36,11 +36,15 @@ protected:
   ObArenaAllocator allocator_;
 };
 
-TestIStore::TestIStore() : table_schema_()
-{}
+TestIStore::TestIStore() :
+    table_schema_()
+{
+}
 
 TestIStore::~TestIStore()
-{}
+{
+
+}
 
 void TestIStore::SetUp()
 {
@@ -50,9 +54,9 @@ void TestIStore::SetUp()
 
 void TestIStore::prepare_schema()
 {
-  int64_t table_id = combine_id(1, 3001);
+  int64_t table_id = 3001;
   ObColumnSchemaV2 column;
-  // init table schema
+  //init table schema
   table_schema_.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema_.set_table_name("test_i_store"));
   table_schema_.set_tenant_id(1);
@@ -63,7 +67,7 @@ void TestIStore::prepare_schema()
   table_schema_.set_max_used_column_id(TEST_COLUMN_CNT);
   table_schema_.set_block_size(4 * 1024);
   table_schema_.set_compress_func_name("none");
-  // init column
+  //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
   ObObjMeta meta_type;
@@ -105,42 +109,38 @@ void TestIStore::prepare_schema()
   }
 }
 
-// TEST_F(TestIStore, RowsInfo)
+
+//TEST_F(TestIStore, RowsInfo)
 //{
-// int ret = common::OB_SUCCESS;
-// int rowkey_size = 2;
-// int row_count = 10;
-// ObRowsInfo rows_info;
-// void *ptr = allocator_.alloc(row_count * sizeof(ObStoreRow));
-// ObStoreRow *rows = new (ptr) ObStoreRow[row_count];
-// for (int64_t i = 0; i < row_count; i++) {
-// void *rptr = allocator_.alloc(TEST_COLUMN_CNT * sizeof(ObObj));
-// ObObj *cells = new (rptr) ObObj[TEST_COLUMN_CNT];
-// rows[i].row_val_.assign(cells, TEST_COLUMN_CNT);
-// row_generate_.get_next_row(rows[i]);
+  //int ret = common::OB_SUCCESS;
+  //int rowkey_size = 2;
+  //int row_count = 10;
+  //ObRowsInfo rows_info;
+  //void *ptr = allocator_.alloc(row_count * sizeof(ObStoreRow));
+  //ObStoreRow *rows = new (ptr) ObStoreRow[row_count];
+  //for (int64_t i = 0; i < row_count; i++) {
+    //void *rptr = allocator_.alloc(TEST_COLUMN_CNT * sizeof(ObObj));
+    //ObObj *cells = new (rptr) ObObj[TEST_COLUMN_CNT];
+    //rows[i].row_val_.assign(cells, TEST_COLUMN_CNT);
+    //row_generate_.get_next_row(rows[i]);
+  //}
+  //ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
+  //EXPECT_EQ(OB_SUCCESS, ret);
+
+  //row_generate_.get_next_row(0, rows[1]);
+  //ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
+  //EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, ret);
+
+  //row_count = 1;
+  //ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
+  //EXPECT_EQ(OB_SUCCESS, ret);
 //}
-// ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
-// EXPECT_EQ(OB_SUCCESS, ret);
 
-// row_generate_.get_next_row(0, rows[1]);
-// ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
-// EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, ret);
-
-// row_count = 1;
-// ret = rows_info.check_duplicate(rows, row_count, rowkey_size);
-// EXPECT_EQ(OB_SUCCESS, ret);
-//}
-
-TEST_F(TestIStore, test_size)
-{
-  STORAGE_LOG(INFO, "sstable row iterator size", K(sizeof(ObSSTableRowIterator)));
 }
-
-}  // namespace oceanbase
 int main(int argc, char** argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
-  // OB_LOGGER.set_log_level("ERROR");
+  //OB_LOGGER.set_log_level("ERROR");
   return RUN_ALL_TESTS();
 }

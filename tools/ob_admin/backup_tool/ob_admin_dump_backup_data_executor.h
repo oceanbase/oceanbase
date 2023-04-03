@@ -10,179 +10,192 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_ADMIN_DUMPBACKUP_EXECUTOR_H_
-#define OB_ADMIN_DUMPBACKUP_EXECUTOR_H_
+#ifndef OB_ADMIN_DUMP_BACKUP_DATA_EXECUTOR_H_
+#define OB_ADMIN_DUMP_BACKUP_DATA_EXECUTOR_H_
 #include "../ob_admin_executor.h"
-#include "../dumpsst/ob_admin_dumpsst_print_helper.h"
-#include "lib/container/ob_array.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_extern_backup_info_mgr.h"
-#include "share/backup/ob_log_archive_backup_info_mgr.h"
-#include "storage/ob_partition_base_data_physical_restore.h"
-#include "share/backup/ob_tenant_name_mgr.h"
+#include "storage/backup/ob_backup_data_struct.h"
+#include "share/backup/ob_backup_data_store.h"
+#include "lib/string/ob_fixed_length_string.h"
+#include "share/backup/ob_archive_store.h"
+#include "share/ob_tablet_autoincrement_param.h"
+#include "storage/backup/ob_backup_restore_util.h"
+namespace oceanbase {
+namespace tools {
 
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_store_file.h"
-#include "storage/ob_i_table.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_srv_network_frame.h"
-#include "observer/omt/ob_worker_processor.h"
-#include "observer/omt/ob_multi_tenant.h"
+class ObAdminDumpBackupDataExecutor;
 
-#include "storage/ob_i_table.h"
-#include "storage/backup/ob_partition_backup_struct.h"
-
-namespace oceanbase
-{
-namespace tools
-{
-
-typedef common::hash::ObHashMap<storage::ObITable::TableKey,
-    common::ObArray<storage::ObBackupTableMacroIndex> *> TableMacroIndexMap;
-
-enum ObBackupMacroIndexVersion
-{
-  BACKUP_MACRO_INDEX_VERSION_1, // before 2.2.77
-  BACKUP_MACRO_INDEX_VERSION_2, // after 3.1
-};
-
-class ObAdminDumpBackupDataReaderUtil
-{
+class ObAdminDumpBackupDataUtil {
 public:
-  static int get_data_type(
-      const char *data_path,
-      const char *storage_info,
-      ObBackupFileType &data_type);
-  static int get_backup_data_common_header(
-      const char *data_path,
-      const char *storage_info,
-      share::ObBackupCommonHeader &common_header);
-  static int get_backup_data(
-      const char *data_path,
-      const char *storage_info,
-      char *&buf,
-      int64_t &file_length,
-      common::ObIAllocator &allocator);
-  static int get_meta_index(
-      blocksstable::ObBufferReader &buffer_reader,
-      share::ObBackupCommonHeader &common_header,
-      common::ObIArray<ObBackupMetaIndex> &meta_index_array);
-  static int get_backup_data(
-      const char *data_path,
-      const char *storage_info,
-      char *&buf,
-      const int64_t offset,
-      const int64_t data_length,
-      common::ObIAllocator &allocator);
-  static int get_meta_header(
-      const char *buf,
-      const int64_t read_size,
-      share::ObBackupMetaHeader &common_header);
-  static int get_macro_block_index(
-      blocksstable::ObBufferReader &buffer_reader,
-      share::ObBackupCommonHeader &common_header,
-      common::ObIArray<ObBackupMacroIndex> &macro_index_array);
-  static int get_macro_block_index_v2(
-      blocksstable::ObBufferReader &buffer_reader,
-      common::ObIAllocator &allocator,
-      TableMacroIndexMap &map);
-private:
-  static int add_sstable_index(
-      const storage::ObITable::TableKey &table_key,
-      const common::ObIArray<storage::ObBackupTableMacroIndex> &index_list,
-      common::ObIAllocator &allocator,
-      TableMacroIndexMap &index_map);
-  static int get_table_key_ptr(
-      common::ObIAllocator &allocator,
-      common::ObArray<storage::ObITable::TableKey *> &table_key_ptrs,
-      const storage::ObITable::TableKey &table_key,
-      const storage::ObITable::TableKey *&table_key_ptr);
+  static int read_archive_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str, 
+      share::ObIBackupSerializeProvider &serializer);
+  static int read_backup_file_header(const common::ObString &backup_path, const common::ObString &storage_info_str,
+      backup::ObBackupFileHeader &file_header);
+  static int read_data_file_trailer(const common::ObString &backup_path, const common::ObString &storage_info_str,
+      backup::ObBackupDataFileTrailer &file_trailer);
+  static int read_index_file_trailer(const common::ObString &backup_path, const common::ObString &storage_info_str,
+      backup::ObBackupMultiLevelIndexTrailer &index_trailer);
+  static int pread_file(const common::ObString &backup_path, const common::ObString &storage_info_str, const int64_t offset,
+      const int64_t read_size, char *buf);
+  static int get_backup_file_length(
+      const common::ObString &backup_path, const common::ObString &storage_info_str, int64_t &file_length);
+  static int get_common_header(
+      blocksstable::ObBufferReader &buffer_reader, const share::ObBackupCommonHeader *&common_header);
+  template <class IndexType>
+  static int parse_from_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+      const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+      const std::function<int(const common::ObIArray<IndexType> &)> &print_func2);
+  template <class IndexType>
+  static int parse_from_index_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+      const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+      const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &print_func2,
+      const std::function<int(const common::ObIArray<IndexType> &)> &print_func3);
+  template <class IndexType, class IndexIndexType>
+  static int parse_from_index_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+      const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+      const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &print_func2,
+      const std::function<int(const common::ObIArray<IndexType> &)> &print_func3,
+      const std::function<int(const common::ObIArray<IndexIndexType> &)> &print_func4);
+  template <class IndexType>
+  static int parse_from_index_blocks(
+      blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
+  template <typename BackupSmallFileType> 
+  static int read_backup_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str, 
+      BackupSmallFileType &file_info);
 };
 
-
-class ObAdminDumpBackupDataExecutor : public ObAdminExecutor
-{
+class ObAdminDumpBackupDataExecutor : public ObAdminExecutor {
 public:
   ObAdminDumpBackupDataExecutor();
   virtual ~ObAdminDumpBackupDataExecutor();
-  virtual int execute(int argc, char *argv[]);
+  virtual int execute(int argc, char *argv[]) override;
+
 private:
-  int parse_cmd(int argc, char *argv[]);
-  void print_common_header();
-  void print_common_header(const share::ObBackupCommonHeader &common_header);
-  void print_meta_header(const share::ObBackupMetaHeader &meta_header);
-  void print_backup_info();
-  void print_backup_tenant_info();
-  void print_clog_backup_info();
-  void print_backup_set_info();
-  void print_backup_piece_info();
-  void print_backup_single_piece_info();
-  void print_backup_set_file_info();
-  void print_pg_list();
-  void print_meta_index();
-  int print_meta_index_(
-      const share::ObBackupCommonHeader &common_header,
-      const common::ObIArray<ObBackupMetaIndex> &meta_index_array);
-  void print_meta_data();
-  void print_partition_group_meta(
-      const char *buf,
-      const int64_t size);
-  void print_partition_meta(
-      const char *buf,
-      const int64_t size);
-  void print_sstable_meta(
-      const char *buf,
-      const int64_t size);
-  void print_table_keys(
-      const char *buf,
-      const int64_t size);
-  void print_partition_group_meta_info(
-      const char *buf,
-      const int64_t size);
-  void print_macro_data_index();
-  int get_macro_data_index_version(int64_t &version);
-  void print_macro_data_index_v1(
-      const char *buf,
-      const int64_t size);
-  int print_macro_data_index_v1_(
-      const share::ObBackupCommonHeader &common_header,
-      const common::ObIArray<ObBackupMacroIndex> &macro_index_array);
-  void print_macro_data_index_v2(
-      const char *buf,
-      const int64_t size);
-  int print_macro_data_index_v2_(
-      const TableMacroIndexMap &index_map);
-  void print_macro_block();
-  void print_tenant_name_info();
-  void print_tenant_name_info_meta(const ObTenantNameSimpleMgr::ObTenantNameMeta &meta);
-  void print_tenant_name_info(const int64_t idx,
-      const ObTenantNameSimpleMgr::ObTenantNameInfo &info);
-  void print_usage();
-  void print_macro_meta();
-  void print_super_block();
-  int dump_macro_block(const int64_t macro_id);
-  void dump_sstable();
-  void dump_sstable_meta();
-  int open_store_file();
-  void print_archive_block_meta();
-  void print_archive_index_file();
-  int check_exist(const char *data_path, const char *storage_info);
+  int parse_cmd_(int argc, char *argv[]);
+  int check_file_exist_(const char *data_path, const char *storage_info_str);
+  int check_dir_exist_(const char *data_path, const char *storage_info_str, bool &is_exist);
+  int get_backup_file_path_();
+  int get_backup_file_type_();
+  int do_execute_();
+  int print_usage_();
+  int check_tenant_backup_path_(const char *data_path, const char *storage_info_str, bool &is_exist);
+  int check_tenant_backup_path_type_(const char *data_path, const char *storage_info_str, share::ObBackupDestType::TYPE &type);
+  int dump_tenant_backup_path_();
+  int dump_tenant_archive_path_();
+  int do_check_exist_();
+  int build_rounds_info_(
+      const share::ObPieceKey &first_piece, 
+      const common::ObIArray<share::ObTenantArchivePieceAttr> &pieces,
+      common::ObIArray<share::ObTenantArchiveRoundAttr> &rounds);
+
 private:
-  static const int64_t MAX_BACKUP_ID_STR_LENGTH = 64;
+  int print_backup_data_file_();
+  int print_macro_range_index_file();
+  int print_meta_index_file();
+
 private:
-  char data_path_[common::OB_MAX_URI_LENGTH];
-  char input_data_path_[common::OB_MAX_URI_LENGTH];
+  int print_backup_file_header_();
+  int print_macro_block_();
+  int print_tablet_meta_();
+  int print_sstable_metas_();
+  int print_macro_block_index_list_();
+  int print_meta_index_list_();
+  int print_data_file_trailer_();
+  int print_index_file_trailer_();
+  int print_macro_range_index_index_list_();
+  int print_meta_index_index_list_();
+  int print_ls_attr_info_();
+  int print_tablet_to_ls_info_();
+  int print_deleted_tablet_info_();
+  int print_tenant_locality_info_();
+  int print_tenant_diagnose_info_();
+  int print_backup_set_info_();
+  int print_place_holder_info_();
+  int print_archive_round_start_file_();
+  int print_archive_round_end_file_();
+  int print_archive_piece_start_file_();
+  int print_archive_piece_end_file_();
+  int print_archive_single_piece_file_();
+  int print_archive_piece_inner_placeholder_file_();
+  int print_archive_single_ls_info_file_();
+  int print_archive_piece_list_info_file_();
+  int print_tenant_archive_piece_infos_file_();
+  int print_backup_format_file_();
+  int print_tenant_backup_set_infos_();
+  int print_backup_ls_meta_infos_file_();
+
+private:
+  int inner_print_macro_block_(const int64_t offset, const int64_t length, const int64_t idx = -1);
+  int inner_print_tablet_meta_(const int64_t offset, const int64_t length);
+  int inner_print_sstable_metas_(const int64_t offset, const int64_t length);
+  int inner_print_backup_macro_block_id_mapping_metas_(const int64_t offset, const int64_t length);
+  int inner_print_macro_block_index_list_(const int64_t offset, const int64_t length);
+  int inner_print_meta_index_list_(const int64_t offset, const int64_t length);
+  int inner_print_macro_range_index_list_(const int64_t offset, const int64_t length);
+  int inner_print_macro_range_index_index_list_(const int64_t offset, const int64_t length);
+  int inner_print_meta_index_index_list_(const int64_t offset, const int64_t length);
+  int inner_print_common_header_(const common::ObString &backup_path, const common::ObString &storage_info);
+  int inner_print_common_header_(const char *data_path, const char *storage_info_str);
+
+private:
+  int dump_backup_file_header_(const backup::ObBackupFileHeader &file_header);
+  int dump_common_header_(const share::ObBackupCommonHeader &common_header);
+  int dump_data_file_trailer_(const backup::ObBackupDataFileTrailer &trailer);
+  int dump_index_file_trailer_(const backup::ObBackupMultiLevelIndexTrailer &trailer);
+  int dump_multi_level_index_header_(const backup::ObBackupMultiLevelIndexHeader &header);
+  int dump_macro_block_index_(const backup::ObBackupMacroBlockIndex &index);
+  int dump_macro_block_index_list_(const common::ObIArray<backup::ObBackupMacroBlockIndex> &index_list);
+  int dump_macro_range_index_(const backup::ObBackupMacroRangeIndex &index);
+  int dump_macro_range_index_list_(const common::ObIArray<backup::ObBackupMacroRangeIndex> &index_list);
+  int dump_macro_range_index_index_(const backup::ObBackupMacroRangeIndexIndex &index);
+  int dump_macro_range_index_index_list_(const common::ObIArray<backup::ObBackupMacroRangeIndexIndex> &index_list);
+  int dump_meta_index_(const backup::ObBackupMetaIndex &index);
+  int dump_meta_index_list_(const common::ObIArray<backup::ObBackupMetaIndex> &index_list);
+  int dump_meta_index_index_(const backup::ObBackupMetaIndexIndex &index_index);
+  int dump_meta_index_index_list_(const common::ObIArray<backup::ObBackupMetaIndexIndex> &index_list);
+  int dump_backup_tablet_meta_(const backup::ObBackupTabletMeta &tablet_meta);
+  int dump_backup_sstable_meta_(const backup::ObBackupSSTableMeta &sstable_meta);
+  int dump_backup_macro_block_id_mapping_meta_(const backup::ObBackupMacroBlockIDMappingsMeta &mapping_meta);
+  int dump_ls_attr_info_(const share::ObLSAttr &ls_attr);
+  int dump_tablet_to_ls_info_(const share::ObBackupDataTabletToLSInfo &tablet_to_ls_info);
+  int dump_tenant_locality_info_(const share::ObExternTenantLocalityInfoDesc &locality_info);
+  int dump_tenant_diagnose_info_(const share::ObExternTenantDiagnoseInfoDesc &diagnose_info);
+  int dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info);
+  int dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos);
+  int dump_backup_ls_meta_infos_file_(const share::ObBackupLSMetaInfosDesc &ls_meta_infos);
+  int dump_archive_round_start_file_(const share::ObRoundStartDesc &round_start_file);
+  int dump_archive_round_end_file_(const share::ObRoundEndDesc round_end_file);
+  int dump_archive_piece_start_file_(const share::ObPieceStartDesc &piece_start_file);
+  int dump_archive_piece_end_file_(const share::ObPieceEndDesc &piece_end_file);
+  int dump_archive_single_piece_file_(const share::ObSinglePieceDesc &piece_single_file);
+  int dump_one_piece_(const share::ObTenantArchivePieceAttr &piece);
+  int dump_archive_piece_inner_placeholder_file_(const share::ObPieceInnerPlaceholderDesc &piece_inner_placeholder);
+  int dump_archive_single_ls_info_file_(const share::ObSingleLSInfoDesc &single_ls_info_file);
+  int dump_archive_piece_list_info_file_(const share::ObPieceInfoDesc &piece_info_file);
+  int dump_tenant_archive_piece_infos_file_(const share::ObTenantArchivePieceInfosDesc &piece_infos_file);
+  int dump_backup_format_file_(const share::ObBackupFormatDesc &format_file);
+  int dump_check_exist_result_(const char *data_path, const char *storage_info_str, const bool is_exist);
+  int print_tablet_autoinc_seq_(const share::ObTabletAutoincSeq &autoinc_seq);
+  
+private:
+  int get_tenant_backup_set_infos_path_(const share::ObBackupSetDesc &backup_set_dir_name, 
+      share::ObBackupPath &target_path);
+  int get_backup_set_placeholder_dir_path(share::ObBackupPath &path);
+  int filter_backup_set_(const share::ObTenantBackupSetInfosDesc &tenant_backup_set_infos, 
+      const ObSArray<share::ObBackupSetDesc> &placeholder_infos,
+      ObIArray<share::ObBackupSetFileDesc> &target_backup_set);
+
+private:
+  char backup_path_[common::OB_MAX_URI_LENGTH];
   char storage_info_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
-  share::ObBackupCommonHeader common_header_;
-  common::ObArenaAllocator allocator_;
-  bool is_quiet_;
   int64_t offset_;
-  int64_t data_length_;
+  int64_t length_;
+  int64_t file_type_;
+  bool is_quiet_;
   bool check_exist_;
+  common::ObArenaAllocator allocator_;
 };
 
+}  // namespace tools
+}  // namespace oceanbase
 
-} //namespace tools
-} //namespace oceanbase
-
-#endif /* OB_ADMIN_DUMPBACKUP_EXECUTOR_H_ */
+#endif

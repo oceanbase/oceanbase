@@ -16,12 +16,14 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
-namespace oceanbase {
-namespace rootserver {
-
-const ObUnitInfo* ObAliveZoneUnitAdaptor::at(int64_t idx) const
+namespace oceanbase
 {
-  ObUnitInfo* info = NULL;
+namespace rootserver
+{
+
+const ObUnitInfo *ObAliveZoneUnitAdaptor::at(int64_t idx) const
+{
+  ObUnitInfo *info = NULL;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == zu_)) {
     ret = OB_NOT_INIT;
@@ -39,15 +41,18 @@ int64_t ObAliveZoneUnitAdaptor::count() const
 {
   int64_t cnt = 0;
   if (OB_UNLIKELY(NULL == zu_)) {
-    LOG_ERROR("unexpected null zu_");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected null zu_");
   } else {
     cnt = zu_->count();
   }
   return cnt;
 }
 
-int ObAliveZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
-    const bool is_primary_partition, int64_t& unit_idx) const
+int ObAliveZoneUnitAdaptor::get_target_unit_idx(
+    const int64_t unit_offset,
+    common::hash::ObHashSet<int64_t> &unit_set,
+    const bool is_primary_partition,
+    int64_t &unit_idx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(is_primary_partition);
@@ -76,21 +81,25 @@ int ObAliveZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, commo
   return ret;
 }
 
-int ObAliveZoneUnitAdaptor::update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition)
+int ObAliveZoneUnitAdaptor::update_tg_pg_count(
+    const int64_t unit_idx,
+    const bool is_primary_partition)
 {
   UNUSED(unit_idx);
   UNUSED(is_primary_partition);
   return OB_SUCCESS;
 }
 
-bool ObAliveZoneUnitsProvider::UnitSortOp::operator()(share::ObUnitInfo* left, share::ObUnitInfo* right)
+bool ObAliveZoneUnitsProvider::UnitSortOp::operator()(
+     share::ObUnitInfo *left,
+     share::ObUnitInfo *right)
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(common::OB_SUCCESS != ret_)) {
     // jump out
   } else if (OB_UNLIKELY(nullptr == left || nullptr == right)) {
     ret_ = common::OB_ERR_UNEXPECTED;
-    LOG_WARN("left or right ptr is null", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "left or right ptr is null", K(ret_), KP(left), KP(right));
   } else if (left->unit_.unit_id_ < right->unit_.unit_id_) {
     bool_ret = true;
   } else {
@@ -99,17 +108,20 @@ bool ObAliveZoneUnitsProvider::UnitSortOp::operator()(share::ObUnitInfo* left, s
   return bool_ret;
 }
 
-bool ObAliveZoneUnitsProvider::ZoneUnitSortOp::operator()(UnitPtrArray& left, UnitPtrArray& right)
+bool ObAliveZoneUnitsProvider::ZoneUnitSortOp::operator()(
+     UnitPtrArray &left,
+     UnitPtrArray &right)
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(common::OB_SUCCESS != ret_)) {
     // jump out
   } else if (left.count() <= 0 || right.count() <= 0) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("left or right unit array empty", K(ret_), "left_count", left.count(), "right_count", right.count());
+    LOG_WARN_RET(ret_, "left or right unit array empty", K(ret_),
+             "left_count", left.count(), "right_count", right.count());
   } else if (nullptr == left.at(0) || nullptr == right.at(0)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit ptr is null", K(ret_), "left_ptr", left.at(0), "right_ptr", right.at(0));
+    LOG_WARN_RET(ret_, "unit ptr is null", K(ret_), "left_ptr", left.at(0), "right_ptr", right.at(0));
   } else if (left.at(0)->unit_.zone_ < right.at(0)->unit_.zone_) {
     bool_ret = true;
   } else {
@@ -118,7 +130,8 @@ bool ObAliveZoneUnitsProvider::ZoneUnitSortOp::operator()(UnitPtrArray& left, Un
   return bool_ret;
 }
 
-int ObAliveZoneUnitsProvider::init(const ZoneUnitPtrArray& all_zone_units)
+int ObAliveZoneUnitsProvider::init(
+    const ZoneUnitPtrArray &all_zone_units)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -127,10 +140,10 @@ int ObAliveZoneUnitsProvider::init(const ZoneUnitPtrArray& all_zone_units)
   } else {
     UnitPtrArray unit_ptr_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_zone_units.count(); ++i) {
-      const UnitPtrArray& unit_array = all_zone_units.at(i);
+      const UnitPtrArray &unit_array = all_zone_units.at(i);
       unit_ptr_array.reuse();
       for (int64_t j = 0; OB_SUCC(ret) && j < unit_array.count(); ++j) {
-        share::ObUnitInfo* unit_info = unit_array.at(j);
+        share::ObUnitInfo *unit_info = unit_array.at(j);
         if (OB_UNLIKELY(nullptr == unit_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit info ptr is null", K(ret));
@@ -163,7 +176,8 @@ int ObAliveZoneUnitsProvider::init(const ZoneUnitPtrArray& all_zone_units)
   return ret;
 }
 
-int ObAliveZoneUnitsProvider::prepare_for_next_partition(const common::hash::ObHashSet<int64_t>& unit_set)
+int ObAliveZoneUnitsProvider::prepare_for_next_partition(
+    const common::hash::ObHashSet<int64_t> &unit_set)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -174,9 +188,9 @@ int ObAliveZoneUnitsProvider::prepare_for_next_partition(const common::hash::ObH
     UnitPtrArray unit_ptr_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_zone_unit_ptrs_.count(); ++i) {
       unit_ptr_array.reuse();
-      const UnitPtrArray& this_unit_ptr_array = all_zone_unit_ptrs_.at(i);
+      const UnitPtrArray &this_unit_ptr_array = all_zone_unit_ptrs_.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < this_unit_ptr_array.count(); ++j) {
-        share::ObUnitInfo* unit_info = this_unit_ptr_array.at(j);
+        share::ObUnitInfo *unit_info = this_unit_ptr_array.at(j);
         if (OB_UNLIKELY(nullptr == unit_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit info ptr is null", K(ret));
@@ -205,18 +219,22 @@ int ObAliveZoneUnitsProvider::prepare_for_next_partition(const common::hash::ObH
   return ret;
 }
 
-int ObAliveZoneUnitsProvider::get_all_zone_units(ZoneUnitArray& zone_unit) const
+int ObAliveZoneUnitsProvider::get_all_zone_units(
+    ZoneUnitArray& zone_unit) const
 {
   UNUSED(zone_unit);
   return OB_NOT_IMPLEMENT;
 }
 
-int ObAliveZoneUnitsProvider::get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const
+int ObAliveZoneUnitsProvider::get_all_ptr_zone_units(
+    ZoneUnitPtrArray& zone_unit_ptr) const
 {
   return zone_unit_ptr.assign(all_zone_unit_ptrs_);
 }
 
-int ObAliveZoneUnitsProvider::find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua)
+int ObAliveZoneUnitsProvider::find_zone(
+    const common::ObZone &zone,
+    const ObZoneUnitAdaptor *&zua)
 {
   int ret = OB_SUCCESS;
   zua = NULL;
@@ -224,8 +242,7 @@ int ObAliveZoneUnitsProvider::find_zone(const common::ObZone& zone, const ObZone
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    FOREACH_CNT_X(zu, available_zone_unit_ptrs_, OB_SUCCESS == ret)
-    {
+    FOREACH_CNT_X(zu, available_zone_unit_ptrs_, OB_SUCCESS == ret) {
       if (zu->count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid zone unit count. should not be zero.", K(ret));
@@ -239,9 +256,9 @@ int ObAliveZoneUnitsProvider::find_zone(const common::ObZone& zone, const ObZone
   return ret;
 }
 
-const ObUnitInfo* ObAllZoneUnitAdaptor::at(int64_t idx) const
+const ObUnitInfo *ObAllZoneUnitAdaptor::at(int64_t idx) const
 {
-  ObUnitInfo* info = NULL;
+  ObUnitInfo *info = NULL;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == all_unit_)) {
     ret = OB_NOT_INIT;
@@ -259,15 +276,18 @@ int64_t ObAllZoneUnitAdaptor::count() const
 {
   int64_t cnt = 0;
   if (OB_UNLIKELY(NULL == all_unit_)) {
-    LOG_ERROR("unexpected null all_unit_");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected null all_unit_");
   } else {
     cnt = all_unit_->count();
   }
   return cnt;
 }
 
-int ObAllZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
-    const bool is_primary_partition, int64_t& unit_idx) const
+int ObAllZoneUnitAdaptor::get_target_unit_idx(
+    const int64_t unit_offset,
+    common::hash::ObHashSet<int64_t> &unit_set,
+    const bool is_primary_partition,
+    int64_t &unit_idx) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == all_unit_)) {
@@ -282,14 +302,16 @@ int ObAllZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, common:
     const int64_t end = start + all_unit_->count();
     for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
       const int64_t idx = i % all_unit_->count();
-      const UnitStat* this_unit = all_unit_->at(idx);
+      const UnitStat *this_unit = all_unit_->at(idx);
       if (OB_UNLIKELY(nullptr == this_unit)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit ptr is null", K(ret));
       } else if (nullptr == this_unit->server_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this server ptr is null", K(ret));
-      } else if (!this_unit->server_->active_ || !this_unit->server_->online_ || this_unit->server_->blocked_) {
+      } else if (!this_unit->server_->active_
+          || !this_unit->server_->online_
+          || this_unit->server_->blocked_) {
         // bypass, since server not available
       } else if (OB_HASH_EXIST == unit_set.exist_refactored(this_unit->info_.unit_.unit_id_)) {
         // by pass
@@ -301,7 +323,7 @@ int ObAllZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, common:
     }
     if (OB_SUCC(ret) && -1 == unit_idx) {
       ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-    }
+    } 
   } else {
     int64_t idx = unit_offset % all_unit_->count();
     const int64_t guard = idx;
@@ -324,7 +346,9 @@ int ObAllZoneUnitAdaptor::get_target_unit_idx(const int64_t unit_offset, common:
   return ret;
 }
 
-int ObAllZoneUnitAdaptor::update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition)
+int ObAllZoneUnitAdaptor::update_tg_pg_count(
+    const int64_t unit_idx,
+    const bool is_primary_partition)
 {
   int ret = OB_SUCCESS;
   if (unit_idx >= count()) {
@@ -334,7 +358,7 @@ int ObAllZoneUnitAdaptor::update_tg_pg_count(const int64_t unit_idx, const bool 
     ret = OB_NOT_INIT;
     LOG_ERROR("unexpected null all_unit_. bad code", K(ret));
   } else if (is_primary_partition) {
-    UnitStat* this_unit = const_cast<UnitStat*>(all_unit_->at(unit_idx));
+    UnitStat *this_unit = const_cast<UnitStat *>(all_unit_->at(unit_idx));
     if (OB_UNLIKELY(nullptr == this_unit)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unit ptr is null", K(ret));
@@ -347,15 +371,14 @@ int ObAllZoneUnitAdaptor::update_tg_pg_count(const int64_t unit_idx, const bool 
   return ret;
 }
 
-bool ObZoneLogonlyUnitProvider::exist(const ObZone& zone, const uint64_t unit_id) const
+bool ObZoneLogonlyUnitProvider::exist(const ObZone &zone, const uint64_t unit_id) const
 {
   bool bret = false;
-  FOREACH_CNT(zu, all_zone_units_)
-  {
+  FOREACH_CNT(zu, all_zone_units_) {
     if (zu->zone_ == zone) {
-      FOREACH_CNT(us, zu->all_unit_)
-      {
-        if ((*us)->info_.unit_.replica_type_ == REPLICA_TYPE_LOGONLY && (*us)->info_.unit_.unit_id_ == unit_id) {
+      FOREACH_CNT(us, zu->all_unit_) {
+        if ((*us)->info_.unit_.replica_type_ == REPLICA_TYPE_LOGONLY
+            && (*us)->info_.unit_.unit_id_ == unit_id) {
           bret = true;
           break;
         }
@@ -376,26 +399,25 @@ int ObZoneLogonlyUnitProvider::get_all_ptr_zone_units(ZoneUnitPtrArray& zone_uni
   return OB_NOT_IMPLEMENT;
 }
 
-int ObZoneLogonlyUnitProvider::find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua)
+int ObZoneLogonlyUnitProvider::find_zone(const common::ObZone &zone,
+                                      const ObZoneUnitAdaptor *&zua)
 {
   int ret = OB_SUCCESS;
   zua = NULL;
-  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret)
-  {
+  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret) {
     if (zu->zone_ == zone) {
       // construct atemporay ZoneUnit
       all_unit_.reuse();
-      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret))
-      {
-        const ServerStat* server = (*us)->server_;
+      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret)) {
+        const ServerStat *server = (*us)->server_;
         if (OB_ISNULL(server)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (!server->can_migrate_in()) {
           // ignore
         } else if (REPLICA_TYPE_LOGONLY != (*us)->info_.unit_.replica_type_) {
-          // nothing todo
-        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat*>(*us)))) {
-          LOG_WARN("fail add alive unit to zone_unit", K(ret));
+          //nothing todo
+        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat *>(*us)))) {
+            LOG_WARN("fail add alive unit to zone_unit", K(ret));
         }
       }
       zone_unit_adaptor_.set_zone_unit(&all_unit_);
@@ -417,26 +439,25 @@ int ObZoneUnitsWithoutLogonlyProvider::get_all_ptr_zone_units(ZoneUnitPtrArray& 
   return OB_NOT_IMPLEMENT;
 }
 
-int ObZoneUnitsWithoutLogonlyProvider::find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua)
+int ObZoneUnitsWithoutLogonlyProvider::find_zone(const common::ObZone &zone,
+                                      const ObZoneUnitAdaptor *&zua)
 {
   int ret = OB_SUCCESS;
   zua = NULL;
-  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret)
-  {
+  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret) {
     if (zu->zone_ == zone) {
       // construct a temporary ZoneUnit
       all_unit_.reuse();
-      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret))
-      {
-        const ServerStat* server = (*us)->server_;
+      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret)) {
+        const ServerStat *server = (*us)->server_;
         if (OB_ISNULL(server)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (!server->can_migrate_in()) {
           // ignore
         } else if (REPLICA_TYPE_LOGONLY == (*us)->info_.unit_.replica_type_) {
-          // nothing todo
-        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat*>(*us)))) {
-          LOG_WARN("fail add alive unit to zone_unit", K(ret));
+          //nothing todo
+        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat *>(*us)))) {
+            LOG_WARN("fail add alive unit to zone_unit", K(ret));
         }
       }
       zone_unit_adaptor_.set_zone_unit(&all_unit_);
@@ -458,24 +479,23 @@ int ObAllZoneUnitsProvider::get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit) 
   return OB_NOT_IMPLEMENT;
 }
 
-int ObAllZoneUnitsProvider::find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua)
+int ObAllZoneUnitsProvider::find_zone(const common::ObZone &zone,
+                                      const ObZoneUnitAdaptor *&zua)
 {
   int ret = OB_SUCCESS;
   zua = NULL;
-  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret)
-  {
+  FOREACH_CNT_X(zu, all_zone_units_, OB_SUCCESS == ret) {
     if (zu->zone_ == zone) {
       // construct a temporary ZoneUnit
       all_unit_.reuse();
-      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret))
-      {
-        const ServerStat* server = (*us)->server_;
+      FOREACH_CNT_X(us, zu->all_unit_, OB_SUCC(ret)) {
+        const ServerStat *server = (*us)->server_;
         if (OB_ISNULL(server)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (!server->can_migrate_in()) {
           // ignore
-        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat*>(*us)))) {
-          LOG_WARN("fail add alive unit to zone_unit", K(ret));
+        } else if (OB_FAIL(all_unit_.push_back(const_cast<UnitStat *>(*us)))) {
+            LOG_WARN("fail add alive unit to zone_unit", K(ret));
         }
       }
       zone_unit_adaptor_.set_zone_unit(&all_unit_);
@@ -486,5 +506,6 @@ int ObAllZoneUnitsProvider::find_zone(const common::ObZone& zone, const ObZoneUn
   return ret;
 }
 
-}  // namespace rootserver
-}  // namespace oceanbase
+
+}/* ns rootserver*/
+}/* ns oceanbase */

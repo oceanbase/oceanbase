@@ -472,11 +472,11 @@ explain select 1+1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [

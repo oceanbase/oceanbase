@@ -18,17 +18,20 @@
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 using namespace oceanbase::sql;
-class ObExprCompareTest : public ::testing::Test {
+class ObExprCompareTest
+    : public ::testing::Test
+{
 public:
-  ObExprCompareTest()
+      ObExprCompareTest()
   {}
   virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-
-  void time_test(int zs, const char* str, int64_t count, int64_t& total_my)
   {
+  }
+  virtual void TearDown()
+  {
+  }
+
+  void time_test(int zs, const char *str, int64_t count, int64_t &total_my) {
     ObObj obj1, obj2, result;
     ObCastCtx ctx;
 
@@ -50,7 +53,6 @@ public:
     total_my += end_ts_my - start_ts_my;
     LOG_INFO("total ", K(total_my));
   }
-
 protected:
 };
 
@@ -65,7 +67,7 @@ TEST_F(ObExprCompareTest, calc)
   LOG_INFO("all total 1000000", K(total_my));
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

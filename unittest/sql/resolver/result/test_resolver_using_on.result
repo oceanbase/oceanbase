@@ -667,9 +667,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -699,9 +699,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -731,9 +731,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -763,9 +763,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -795,9 +795,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -827,9 +827,9 @@ insert into tjuo1 values(1, 11), (2, 12), (3, 13);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1681,9 +1681,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1713,9 +1713,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1745,9 +1745,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1777,9 +1777,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1809,9 +1809,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1841,9 +1841,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1873,9 +1873,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1905,9 +1905,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1937,9 +1937,9 @@ insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2547,9 +2547,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2579,9 +2579,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2611,9 +2611,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2643,9 +2643,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2675,9 +2675,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2707,9 +2707,9 @@ insert into tjuo3 values(7, 21), (8, 22), (9, 23);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],

@@ -82,7 +82,7 @@
 #define TYPENAME_TN63 TYPENAME_TN62, typename T63
 #define TYPENAME_TN64 TYPENAME_TN63, typename T64
 
-#define FUNC_ARG(n) const char *key##n, const T##n &obj##n
+#define FUNC_ARG(n) const char* key##n, const T##n &obj##n
 #define ARGUMENT_KV0
 #define ARGUMENT_KV1 FUNC_ARG(1)
 #define ARGUMENT_KV2 ARGUMENT_KV1, FUNC_ARG(2)
@@ -149,20 +149,19 @@
 #define ARGUMENT_KV63 ARGUMENT_KV62, FUNC_ARG(63)
 #define ARGUMENT_KV64 ARGUMENT_KV63, FUNC_ARG(64)
 
-#define J_COMMA_WITH_RET           \
-  if (OB_FAIL(ret)) {              \
-  } else if (OB_FAIL(J_COMMA())) { \
-  } else {                         \
-  }
+#define J_COMMA_WITH_RET \
+    if (OB_FAIL(ret)) { \
+    } else if (OB_FAIL(J_COMMA())) { \
+    } else {}
 
-#define BODY(n)                                                                      \
-  if (OB_SUCC(ret)) {                                                                \
-    if (1 == n) {                                                                    \
-      ret = common::databuff_print_json_kv(buf, buf_len, pos, key##n, obj##n);       \
-    } else {                                                                         \
-      ret = common::databuff_print_json_kv_comma(buf, buf_len, pos, key##n, obj##n); \
-    }                                                                                \
-  }
+#define BODY(n) \
+    if (OB_SUCC(ret)) { \
+      if (1 == n) {\
+        ret = common::databuff_print_json_kv(buf, buf_len, pos, key##n, obj##n);\
+      } else {\
+        ret = common::databuff_print_json_kv_comma(buf, buf_len, pos, key##n, obj##n);\
+      }\
+    }
 
 #define FUNC_BODY_0
 #define FUNC_BODY_1 BODY(1)
@@ -230,16 +229,19 @@
 #define FUNC_BODY_63 FUNC_BODY_62 BODY(63)
 #define FUNC_BODY_64 FUNC_BODY_63 BODY(64)
 
-#define DEFINE_PRINT_KV(n)                                                              \
-  template <TYPENAME_TN##n>                                                             \
-  int databuff_print_kv(char* buf, const int64_t buf_len, int64_t& pos, ARGUMENT_KV##n) \
-  {                                                                                     \
-    int ret = OB_SUCCESS;                                                               \
-    FUNC_BODY_##n return ret;                                                           \
+#define DEFINE_PRINT_KV(n)\
+  template <TYPENAME_TN##n>                                             \
+  int databuff_print_kv(char *buf, const int64_t buf_len, int64_t& pos, ARGUMENT_KV##n)\
+  {                                                                     \
+    int ret = OB_SUCCESS;                                               \
+    FUNC_BODY_##n                                                       \
+    return ret;                                                         \
   }
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 DEFINE_PRINT_KV(1)
 DEFINE_PRINT_KV(2)
 DEFINE_PRINT_KV(3)
@@ -304,7 +306,7 @@ DEFINE_PRINT_KV(61)
 DEFINE_PRINT_KV(62)
 DEFINE_PRINT_KV(63)
 DEFINE_PRINT_KV(64)
-}  // namespace common
-}  // end namespace oceanbase
+} // end namespce common
+} // end namespace oceanbase
 
 #endif /* LIB_UTILITY_OB_PRINT_KV_ */

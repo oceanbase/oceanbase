@@ -20,22 +20,30 @@
 #include "share/ob_virtual_table_iterator.h"
 #include "observer/virtual_table/ob_tenant_virtual_outline.h"
 using oceanbase::common::OB_APP_MIN_COLUMN_ID;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
 
-namespace common {
+namespace common
+{
 class ObNewRow;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObOutlineInfo;
 }
-}  // namespace share
-namespace observer {
-class ObTenantVirtualConcurrentLimitSql : public ObTenantVirtualOutlineBase {
-  enum TENANT_VIRTUAL_OUTLINE_COLUMN {
+}
+namespace observer
+{
+class ObTenantVirtualConcurrentLimitSql : public ObTenantVirtualOutlineBase
+{
+  enum TENANT_VIRTUAL_OUTLINE_COLUMN
+  {
     TENANT_ID = OB_APP_MIN_COLUMN_ID,
     DATABASE_ID = OB_APP_MIN_COLUMN_ID + 1,
     OUTLINE_ID = OB_APP_MIN_COLUMN_ID + 2,
@@ -47,25 +55,26 @@ class ObTenantVirtualConcurrentLimitSql : public ObTenantVirtualOutlineBase {
     CONCURRENT_NUM = OB_APP_MIN_COLUMN_ID + 8,
     LIMIT_TARGET = OB_APP_MIN_COLUMN_ID + 9,
   };
-
 public:
-  ObTenantVirtualConcurrentLimitSql() : ObTenantVirtualOutlineBase(), param_idx_(common::OB_INVALID_INDEX)
+  ObTenantVirtualConcurrentLimitSql()
+      : ObTenantVirtualOutlineBase(),
+      param_idx_(common::OB_INVALID_INDEX)
   {}
-  ~ObTenantVirtualConcurrentLimitSql()
-  {}
+  ~ObTenantVirtualConcurrentLimitSql() {}
   void reset();
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 
 private:
-  int fill_cells(const share::schema::ObOutlineInfo* outline_info, const share::schema::ObMaxConcurrentParam* param);
-  int get_next_concurrent_limit_row(const share::schema::ObOutlineInfo* outline_info, bool& is_iter_end);
-  int is_need_output(const share::schema::ObOutlineInfo* outline_info, bool& is_output);
-
+  int fill_cells(const share::schema::ObOutlineInfo *outline_info,
+                 const share::schema::ObMaxConcurrentParam *param);
+  int get_next_concurrent_limit_row(const share::schema::ObOutlineInfo *outline_info,
+                                    bool &is_iter_end);
+  int is_need_output(const share::schema::ObOutlineInfo *outline_info, bool &is_output);
 private:
   int64_t param_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualConcurrentLimitSql);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_TENANT_VIRTUAL_CONCURRENT_LIMIT_SQL_ */

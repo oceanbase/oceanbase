@@ -16,33 +16,40 @@
 #include "observer/virtual_table/ob_all_plan_cache_stat.h"
 #include "sql/plan_cache/ob_prepare_stmt_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using common::ObPsStmtId;
-namespace observer {
+namespace observer
+{
 
-class ObAllVirtualPsItemInfo : public ObAllPlanCacheBase {
+class ObAllVirtualPsItemInfo: public ObAllPlanCacheBase
+{
 public:
-  ObAllVirtualPsItemInfo() : ObAllPlanCacheBase(), stmt_id_array_idx_(OB_INVALID_ID), stmt_id_array_(), ps_cache_(NULL)
-  {}
-  virtual ~ObAllVirtualPsItemInfo()
-  {}
+  ObAllVirtualPsItemInfo()
+    : ObAllPlanCacheBase(),
+      stmt_id_array_idx_(OB_INVALID_ID),
+      stmt_id_array_(),
+      ps_cache_(NULL) {}
+  virtual ~ObAllVirtualPsItemInfo() {}
 
   virtual int inner_get_next_row() override;
   virtual int inner_open() override;
   virtual void reset() override;
-
 private:
-  int fill_cells(uint64_t tenant_id, ObPsStmtId stmt_id, sql::ObPsStmtItem* stmt_item, sql::ObPsStmtInfo* stmt_info);
-  int get_next_row_from_specified_tenant(uint64_t tenant_id, bool& is_end);
+  int fill_cells(uint64_t tenant_id,
+                 ObPsStmtId stmt_id,
+                 sql::ObPsStmtItem *stmt_item,
+                 sql::ObPsStmtInfo *stmt_info);
+  int get_next_row_from_specified_tenant(uint64_t tenant_id, bool &is_end);
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPsItemInfo);
 
 private:
   int64_t stmt_id_array_idx_;
   common::ObSEArray<ObPsStmtId, 1024> stmt_id_array_;
-  sql::ObPsCache* ps_cache_;
+  sql::ObPsCache *ps_cache_;
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_ALL_VIRTUAL_PS_ITEM_INFO_H */

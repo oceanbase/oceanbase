@@ -14,14 +14,15 @@
 
 #include "observer/mysql/obmp_init_db.h"
 
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/packet/ompk_ok.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sql_session_mgr.h"
-#include "observer/mysql/obsm_struct.h"
+#include "rpc/obmysql/obsm_struct.h"
+#include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 
 using namespace oceanbase::rpc;
@@ -41,8 +42,8 @@ int ObMPInitDB::deserialize()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid packet", K(ret), K_(req), K(req_->get_type()));
   } else {
-    const ObMySQLRawPacket& pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
-    db_name_.assign_ptr(const_cast<char*>(pkt.get_cdata()), pkt.get_clen() - 1);
+    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+    db_name_.assign_ptr(const_cast<char *>(pkt.get_cdata()), pkt.get_clen()-1);
   }
   return ret;
 }
@@ -51,8 +52,11 @@ int ObMPInitDB::process()
 {
   LOG_INFO("init db", K_(db_name));
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session = NULL;
+  bool need_disconnect = true;
+  ObSQLSessionInfo *session = NULL;
   ObString tmp_db_name;
+  ObDataBuffer allocator(db_name_conv_buf, sizeof(db_name_conv_buf));
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
   bool is_packet_retry = false;
   if (OB_FAIL(get_session(session))) {
@@ -81,8 +85,7 @@ int ObMPInitDB::process()
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(effective_tenant_id, global_version))) {
       LOG_WARN("fail to get global_version", K(ret), K(effective_tenant_id));
-    } else if (OB_FAIL(
-                   gctx_.schema_service_->get_tenant_refreshed_schema_version(effective_tenant_id, local_version))) {
+    } else if (OB_FAIL(gctx_.schema_service_->get_tenant_refreshed_schema_version(effective_tenant_id, local_version))) {
       LOG_WARN("fail to get local_version", K(ret), K(effective_tenant_id));
     } else if (OB_FAIL(session->get_collation_database(old_db_coll_type))) {
       LOG_WARN("fail to get collation_database", K(ret));
@@ -92,9 +95,22 @@ int ObMPInitDB::process()
       LOG_WARN("fail to get name case mode", K(mode), K(ret));
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));
+    } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+      LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session->post_sync_session_info())) {
     } else {
-      bool perserve_lettercase = share::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
-      if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(collation_connection, perserve_lettercase, db_name_))) {
+      need_disconnect = false;
+      bool perserve_lettercase = lib::is_oracle_mode() ?
+          true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
+      if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator,
+                                                                     session->get_dtc_params(),
+                                                                     db_name_))) {
+        LOG_WARN("fail to convert db name", K(ret), KPHEX(db_name_.ptr(), db_name_.length()));
+      } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
+                  collation_connection, perserve_lettercase, db_name_))) {
         LOG_WARN("failed to check database name", K(db_name_), K(ret));
       } else {
         bool force_local_retry = false;
@@ -104,38 +120,40 @@ int ObMPInitDB::process()
           if (is_schema_error(ret)) {
             if (local_version < global_version) {
               if (!THIS_WORKER.is_timeout()) {
-                if (force_local_retry || retry_times < ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES) {
+                if (force_local_retry
+                    || retry_times < ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES) {
                   retry_type = RETRY_TYPE_LOCAL;
                 } else {
                   retry_type = RETRY_TYPE_PACKET;
                 }
                 retry_times++;
                 if (RETRY_TYPE_LOCAL == retry_type) {
-                  usleep(ObQueryRetryCtrl::WAIT_LOCAL_SCHEMA_REFRESHED_US *
-                         ObQueryRetryCtrl::linear_timeout_factor(retry_times));
+                  ob_usleep(ObQueryRetryCtrl::WAIT_LOCAL_SCHEMA_REFRESHED_US
+                         * ObQueryRetryCtrl::linear_timeout_factor(retry_times));
                 }
-                int tmp_ret =
-                    gctx_.schema_service_->get_tenant_refreshed_schema_version(effective_tenant_id, local_version);
+                int tmp_ret = gctx_.schema_service_->get_tenant_refreshed_schema_version(effective_tenant_id, local_version);
                 if (OB_SUCCESS != tmp_ret) {
                   LOG_WARN("fail to get local_version", K(ret), K(tmp_ret), K(effective_tenant_id));
                 }
               }
-              LOG_WARN("schema err, need retry",
-                  K(ret),
-                  K(retry_type),
-                  K(retry_times),
-                  K(force_local_retry),
-                  LITERAL_K(ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES));
+              LOG_WARN("schema err, need retry", K(ret),
+                       K(retry_type), K(retry_times), K(force_local_retry),
+                       LITERAL_K(ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES));
             }
           }
           force_local_retry = false;
           if (RETRY_TYPE_LOCAL == retry_type) {
+            // 在本线程重试
             force_local_retry = true;
           } else if (RETRY_TYPE_PACKET == retry_type) {
-            if (!THIS_WORKER.set_retry_flag()) {
+            // 扔回队列中重试
+            if (!THIS_WORKER.can_retry()) {
+              // 不允许丢回队列，在本线程重试
+              // FIXME: when will we be here?
               force_local_retry = true;
               LOG_WARN("fail to set retry flag, force to do local retry");
             } else {
+              THIS_WORKER.set_need_retry();
               is_packet_retry = true;
             }
           }
@@ -157,14 +175,15 @@ int ObMPInitDB::process()
     ob_setup_tsi_warning_buffer(NULL);
   }  // end session guard
 
-  THIS_WORKER.disable_retry();
-
   if (OB_FAIL(ret)) {
-    if (false == is_packet_retry && OB_FAIL(send_error_packet(ret, NULL))) {
+    if (false == is_packet_retry && need_disconnect && is_conn_valid()) {
+      force_disconnect();
+      LOG_WARN("disconnect connection when process query", K(ret));
+    } else  if (false == is_packet_retry && OB_FAIL(send_error_packet(ret, NULL))) { // 覆盖ret, 无需继续抛出
       LOG_WARN("failed to send error packet", K(ret));
     }
   } else if (OB_LIKELY(NULL != session)) {
-    ObOKPParam ok_param;  // use defualt value
+    ObOKPParam ok_param; // use defualt value
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {
       LOG_WARN("fail to send ok packet", K(ok_param), K(ret));
     }
@@ -177,7 +196,7 @@ int ObMPInitDB::process()
   return ret;
 }
 
-int ObMPInitDB::do_process(sql::ObSQLSessionInfo* session)
+int ObMPInitDB::do_process(sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   int sret = OB_SUCCESS;
@@ -187,8 +206,8 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo* session)
   if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session not init", K(ret), K(session), K(gctx_.schema_service_));
-  } else if (OB_FAIL(
-                 gctx_.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+                                  session->get_effective_tenant_id(), schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (session->is_tenant_changed() && 0 != db_name_.case_compare(OB_SYS_DATABASE_NAME)) {
     ret = OB_ERR_NO_DB_PRIVILEGE;
@@ -200,9 +219,9 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo* session)
     } else if (OB_FAIL(schema_guard.check_db_access(session_priv, db_name_))) {
       LOG_WARN("fail to check db access.", K_(db_name), K(ret));
       if (OB_ERR_NO_DB_SELECTED == ret) {
-        sret = OB_ERR_BAD_DATABASE;
+        sret = OB_ERR_BAD_DATABASE;// 将错误码抛出让外层重试
       } else {
-        sret = ret;
+        sret = ret; // 保险起见，也抛出
       }
     } else {
       uint64_t db_id = OB_INVALID_ID;
@@ -211,8 +230,9 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo* session)
         LOG_WARN("failed to set default database", K(ret), K(db_name_));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         LOG_WARN("failed to update database variables", K(ret));
-      } else if (OB_FAIL(schema_guard.get_database_id(
-                     session->get_effective_tenant_id(), session->get_database_name(), db_id))) {
+      } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
+                                                      session->get_database_name(),
+                                                      db_id))) {
         LOG_WARN("failed to get database id", K(ret));
       } else {
         session->set_database_id(db_id);

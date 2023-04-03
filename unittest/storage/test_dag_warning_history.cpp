@@ -15,20 +15,22 @@
 #define private public
 #define protected public
 
-#include "storage/ob_dag_warning_history_mgr.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_dag_scheduler.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace storage;
+using namespace share;
 
-namespace unittest {
-class TestDagWarningHistory : public ::testing::Test {
+namespace unittest
+{
+class TestDagWarningHistory : public ::testing::Test
+{
 public:
-  TestDagWarningHistory()
-  {}
-  virtual ~TestDagWarningHistory()
-  {}
+  TestDagWarningHistory() {}
+  virtual ~TestDagWarningHistory() {}
 };
 
 TEST_F(TestDagWarningHistory, init)
@@ -41,50 +43,50 @@ TEST_F(TestDagWarningHistory, simple_add)
   int ret = OB_SUCCESS;
   ObDagWarningHistoryManager& manager = ObDagWarningHistoryManager::get_instance();
 
-  ObDagWarningInfo* info = NULL;
+  ObDagWarningInfo *info = NULL;
   const int64_t key = 8888;
-  ret = manager.alloc_and_add(key, info);
+  ret = manager.alloc_and_add_with_no_lock(key, info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   info->dag_ret_ = -4016;
   info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
-  info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+  info->dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
   strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
-  ObDagWarningInfo* ret_info = NULL;
+  ObDagWarningInfo *ret_info = NULL;
   ret = manager.get(key + 1, ret_info);
   ASSERT_EQ(OB_HASH_NOT_EXIST, ret);
   ASSERT_EQ(NULL, ret_info);
 
   ret = manager.get(key, ret_info);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, *ret_info == *info);
+  ASSERT_EQ (TRUE, *ret_info == *info);
   STORAGE_LOG(INFO, "ret", KPC(ret_info));
 
   // duplicated key
-  ret = manager.alloc_and_add(key, info);
+  ret = manager.alloc_and_add_with_no_lock(key, info);
   ASSERT_EQ(OB_HASH_EXIST, ret);
 }
 
-TEST_F(TestDagWarningHistory, simple_del)
+TEST_F(TestDagWarningHistory, simple_del_with_no_lock)
 {
   int ret = OB_SUCCESS;
   ObDagWarningHistoryManager& manager = ObDagWarningHistoryManager::get_instance();
   manager.clear();
 
-  ObDagWarningInfo* info = NULL;
+  ObDagWarningInfo *info = NULL;
   const int64_t key = 8888;
-  ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
+  ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add_with_no_lock(key, info));
   info->dag_ret_ = -4016;
   info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
-  info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+  info->dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
   strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
-  ASSERT_EQ(OB_HASH_NOT_EXIST, manager.del(key + 1));
+  ASSERT_EQ(OB_HASH_NOT_EXIST, manager.del_with_no_lock(key + 1));
 
-  ASSERT_EQ(OB_SUCCESS, manager.del(key));
+  ASSERT_EQ(OB_SUCCESS, manager.del_with_no_lock(key));
 
-  ObDagWarningInfo* ret_info = NULL;
+  ObDagWarningInfo *ret_info = NULL;
   ret = manager.get(key, ret_info);
   ASSERT_EQ(OB_HASH_NOT_EXIST, ret);
 }
@@ -94,26 +96,29 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
   int ret = OB_SUCCESS;
   ObDagWarningHistoryManager& manager = ObDagWarningHistoryManager::get_instance();
   manager.clear();
+  const int64_t tenant_id = 100;
 
   ObDagWarningInfo basic_info;
+  basic_info.tenant_id_ = tenant_id;
   basic_info.dag_ret_ = -4016;
   basic_info.dag_status_ = ObDagWarningInfo::ODS_WARNING;
-  basic_info.dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+  basic_info.dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
   strcpy(basic_info.warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
   const int64_t max_cnt = 20;
-  ObDagWarningInfo* info = NULL;
+  ObDagWarningInfo *info = NULL;
   int64_t key = 0;
   for (int i = 0; i < max_cnt; ++i) {
     key = 8888 + i;
-    ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
+    ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add_with_no_lock(key, info));
+    info->tenant_id_ = tenant_id;
     info->dag_ret_ = -4016 + i;
     info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
-    info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+    info->dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
     strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
   }
   ObDagWarningInfoIterator iterator;
-  iterator.open();
+  iterator.open(tenant_id);
   ObDagWarningInfo read_info;
   int i = 0;
   while (OB_SUCC(ret)) {
@@ -122,23 +127,23 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
     } else {
       basic_info.dag_ret_ = -4016 + i;
       STORAGE_LOG(DEBUG, "print info", K(ret), K(read_info), K(basic_info));
-      ASSERT_EQ(true, read_info == basic_info);
+      ASSERT_EQ(TRUE, read_info == basic_info);
       ++i;
     }
   }
 
   for (int i = 0; i < max_cnt; i += 2) {
     key = 8888 + i;
-    ASSERT_EQ(OB_SUCCESS, manager.del(key));
+    ASSERT_EQ(OB_SUCCESS, manager.del_with_no_lock(key));
   }
 
   iterator.reset();
-  iterator.open();
+  iterator.open(tenant_id);
   i = 0;
   while (OB_SUCC(ret)) {
     if (OB_SUCC(iterator.get_next_info(read_info))) {
       basic_info.dag_ret_ = -4016 + i;
-      ASSERT_EQ(true, read_info == basic_info);
+      ASSERT_EQ(TRUE, read_info == basic_info);
       STORAGE_LOG(DEBUG, "print info", K(ret), K(read_info), KPC(info));
       i += 2;
     }
@@ -148,27 +153,31 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
   ASSERT_EQ(0, manager.size());
 }
 
+
 TEST_F(TestDagWarningHistory, test_rebuild)
 {
   int ret = OB_SUCCESS;
   ObDagWarningHistoryManager& manager = ObDagWarningHistoryManager::get_instance();
   manager.clear();
 
+  const int64_t tenant_id = 100;
   const int64_t max_cnt = 20;
   ObDagWarningInfo basic_info;
+  basic_info.tenant_id_ = tenant_id;
   basic_info.dag_ret_ = -4016;
   basic_info.dag_status_ = ObDagWarningInfo::ODS_WARNING;
-  basic_info.dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+  basic_info.dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
   strcpy(basic_info.warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
-  ObDagWarningInfo* info = NULL;
+  ObDagWarningInfo *info = NULL;
   int64_t key = 0;
   for (int i = 0; i < max_cnt; ++i) {
     key = 8888 + i;
-    ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
+    ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add_with_no_lock(key, info));
+    info->tenant_id_ = tenant_id;
     info->dag_ret_ = -4016 + i;
     info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
-    info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
+    info->dag_type_ = share::ObDagType::DAG_TYPE_MERGE_EXECUTE;
     strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
     STORAGE_LOG(DEBUG, "print info", K(ret), K(i), K(key), KPC(info));
   }
@@ -177,20 +186,20 @@ TEST_F(TestDagWarningHistory, test_rebuild)
 
   for (int i = 0; i < max_cnt; i += 2) {
     key = 8888 + i;
-    ASSERT_EQ(OB_SUCCESS, manager.del(key));
+    ASSERT_EQ(OB_SUCCESS, manager.del_with_no_lock(key));
   }
 
   ASSERT_EQ(max_cnt / 2, manager.size());
 
   ObDagWarningInfoIterator iterator;
-  iterator.open();
+  iterator.open(tenant_id);
   ObDagWarningInfo read_info;
   int i = 1;
   while (OB_SUCC(ret)) {
     if (OB_SUCC(iterator.get_next_info(read_info))) {
       basic_info.dag_ret_ = -4016 + i;
       STORAGE_LOG(DEBUG, "print info", K(ret), K(read_info), K(basic_info));
-      ASSERT_EQ(true, read_info == basic_info);
+      ASSERT_EQ(TRUE, read_info == basic_info);
       i += 2;
     }
   }
@@ -202,13 +211,13 @@ TEST_F(TestDagWarningHistory, test_rebuild)
 TEST_F(TestDagWarningHistory, simple_destory)
 {
   ObDagWarningHistoryManager& manager = ObDagWarningHistoryManager::get_instance();
-  manager.destory();
+  manager.destroy();
 }
 
 }  // end namespace unittest
 }  // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -f test_dag_warning_history.log*");
   OB_LOGGER.set_file_name("test_dag_warning_history.log");

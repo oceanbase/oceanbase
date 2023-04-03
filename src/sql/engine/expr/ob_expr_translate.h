@@ -18,37 +18,47 @@
 #include "lib/container/ob_array_serialization.h"
 #include "lib/container/ob_fixed_array.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprTranslate : public ObStringExprOperator {
-public:
-  explicit ObExprTranslate(common::ObIAllocator& alloc);
-  virtual ~ObExprTranslate();
+class ObExprTranslate : public ObStringExprOperator
+{
+  public:
+    explicit ObExprTranslate(common::ObIAllocator &alloc);
+    virtual ~ObExprTranslate();
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+    virtual int calc_result_typeN(ObExprResType &type,
+                                  ObExprResType *types,
+                                  int64_t param_num,
+                                  common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+    virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const override;
 
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+    static int translate_hashmap(const common::ObString &ori_str,
+                                 const common::ObString &from_str,
+                                 const common::ObString &to_str,
+                                 common::ObCollationType cs_type,
+                                 common::ObIAllocator &tmp_alloc,
+                                 common::ObIAllocator &res_alloc,
+                                 common::ObString &res_str,
+                                 bool &is_null);
+  private:
+    typedef common::hash::ObHashMap<common::ObString, common::ObString> StringHashMap;
 
-  static int translate_hashmap(const common::ObString& ori_str, const common::ObString& from_str,
-      const common::ObString& to_str, common::ObCollationType cs_type, common::ObIAllocator& tmp_alloc,
-      common::ObIAllocator& res_alloc, common::ObString& res_str, bool& is_null);
+    static int insert_map(const common::ObString &key_str,
+                          const common::ObString &val_str,
+                          common::ObIAllocator &allocator,
+                          const common::ObFixedArray<size_t, common::ObIAllocator> &byte_num_key_str,
+                          const common::ObFixedArray<size_t, common::ObIAllocator> &byte_num_val_str,
+                          StringHashMap &ret_map);
 
-private:
-  typedef common::hash::ObHashMap<common::ObString, common::ObString> StringHashMap;
-
-  static int insert_map(const common::ObString& key_str, const common::ObString& val_str,
-      common::ObIAllocator& allocator, const common::ObFixedArray<size_t, common::ObIAllocator>& byte_num_key_str,
-      const common::ObFixedArray<size_t, common::ObIAllocator>& byte_num_val_str, StringHashMap& ret_map);
-
-  DISALLOW_COPY_AND_ASSIGN(ObExprTranslate);
+    DISALLOW_COPY_AND_ASSIGN(ObExprTranslate);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_TRANSLATE_ */

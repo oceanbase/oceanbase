@@ -14,13 +14,20 @@
 
 #include "sql/plan_cache/ob_id_manager_allocator.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
+namespace sql
+{
 
-ObIdManagerAllocator::ObIdManagerAllocator() : small_alloc_(), m_alloc_(), object_size_(0), inited_(false)
-{}
+ObIdManagerAllocator::ObIdManagerAllocator()
+    : small_alloc_(),
+      m_alloc_(),
+      object_size_(0),
+      inited_(false)
+{
+}
 
 ObIdManagerAllocator::~ObIdManagerAllocator()
 {
@@ -31,17 +38,18 @@ void ObIdManagerAllocator::reset()
 {
   if (inited_) {
     // destroy() print enough errmsg
-    (void)small_alloc_.destroy();
+    (void) small_alloc_.destroy();
     m_alloc_.reset();
   }
   object_size_ = 0;
   inited_ = false;
 }
 
-int ObIdManagerAllocator::init(int64_t sz, const char* label, uint64_t tenant_id)
+int ObIdManagerAllocator::init(const int64_t sz, const char *label, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(sz <= 0) || OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID)) {
+  if (OB_UNLIKELY(sz <= 0)
+      || OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(sz), K(label), K(tenant_id), K(ret));
   } else {
@@ -49,7 +57,10 @@ int ObIdManagerAllocator::init(int64_t sz, const char* label, uint64_t tenant_id
     if (OB_UNLIKELY(inited_)) {
       ret = OB_INIT_TWICE;
       LOG_WARN("ObIdManagerAllocator init twice", K(ret));
-    } else if (OB_FAIL(small_alloc_.init(object_size_, label, tenant_id, BLOCK_SIZE))) {
+    } else if (OB_FAIL(small_alloc_.init(object_size_,
+                                         label,
+                                         tenant_id,
+                                         BLOCK_SIZE))) {
       ret = OB_INIT_FAIL;
       LOG_WARN("ObSmallAllocator init failed", K(object_size_), K(label), K(tenant_id), K(ret));
     } else {
@@ -62,11 +73,11 @@ int ObIdManagerAllocator::init(int64_t sz, const char* label, uint64_t tenant_id
   return ret;
 }
 
-void* ObIdManagerAllocator::alloc_(int64_t sz)
+void *ObIdManagerAllocator::alloc_(const int64_t sz)
 {
   int ret = OB_SUCCESS;
-  void* buf = NULL;
-  int64_t* tmp = NULL;
+  void *buf = NULL;
+  int64_t *tmp = NULL;
   int64_t size = 0;
 
   if (OB_UNLIKELY(!inited_)) {
@@ -80,7 +91,7 @@ void* ObIdManagerAllocator::alloc_(int64_t sz)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate memory by ObSmallAllocator failed", K(sz), K(object_size_), K(ret));
     } else {
-      tmp = static_cast<int64_t*>(buf);
+      tmp = static_cast<int64_t *>(buf);
       *tmp = ALLOC_MAGIC;
       tmp++;
       *tmp = SMALL_ALLOC_SYMBOL;
@@ -91,7 +102,7 @@ void* ObIdManagerAllocator::alloc_(int64_t sz)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate memory by ObMalloc failed", K(sz), K(object_size_), K(ret));
     } else {
-      tmp = static_cast<int64_t*>(buf);
+      tmp = static_cast<int64_t *>(buf);
       *tmp = ALLOC_MAGIC;
       tmp++;
       *tmp = M_ALLOC_SYMBOL;
@@ -99,7 +110,7 @@ void* ObIdManagerAllocator::alloc_(int64_t sz)
   }
 
   if (OB_SUCC(ret) && OB_LIKELY(NULL != buf)) {
-    tmp = static_cast<int64_t*>(buf);
+    tmp = static_cast<int64_t *>(buf);
     tmp += 2;
     buf = tmp;
   }
@@ -107,7 +118,7 @@ void* ObIdManagerAllocator::alloc_(int64_t sz)
   return buf;
 }
 
-void ObIdManagerAllocator::free_(void* ptr)
+void ObIdManagerAllocator::free_(void *ptr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -117,8 +128,8 @@ void ObIdManagerAllocator::free_(void* ptr)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(ptr), K(ret));
   } else {
-    int64_t* tmp_magic = static_cast<int64_t*>(ptr);
-    int64_t* tmp_symbol = static_cast<int64_t*>(ptr);
+    int64_t *tmp_magic = static_cast<int64_t *>(ptr);
+    int64_t *tmp_symbol = static_cast<int64_t *>(ptr);
     tmp_magic -= 2;
     tmp_symbol -= 1;
     if (OB_UNLIKELY(ALLOC_MAGIC != *tmp_magic)) {
@@ -126,15 +137,15 @@ void ObIdManagerAllocator::free_(void* ptr)
       LOG_WARN("invalid magic", KP(ptr), K(*tmp_magic), K(ret));
     } else {
       switch (*tmp_symbol) {
-        case SMALL_ALLOC_SYMBOL: {
-          small_alloc_.free(static_cast<void*>(tmp_magic));
+      case SMALL_ALLOC_SYMBOL: {
+          small_alloc_.free(static_cast<void *>(tmp_magic));
           break;
         }
-        case M_ALLOC_SYMBOL: {
-          m_alloc_.free(static_cast<void*>(tmp_magic));
+      case M_ALLOC_SYMBOL: {
+          m_alloc_.free(static_cast<void *>(tmp_magic));
           break;
         }
-        default: {
+      default: {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid symbol magic", KP(ptr), K(*tmp_symbol), K(ret));
           break;
@@ -146,5 +157,5 @@ void ObIdManagerAllocator::free_(void* ptr)
   }
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

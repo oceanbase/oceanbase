@@ -14,56 +14,37 @@
 #include "ob_expr_acos.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include <math.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-ObExprAcos::ObExprAcos(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_ACOS, N_ACOS, 1, NOT_ROW_DIMENSION)
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObExprAcos::ObExprAcos(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ACOS, N_ACOS, 1, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprAcos::~ObExprAcos()
-{}
+{
+}
 
-int ObExprAcos::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+int ObExprAcos::calc_result_type1(ObExprResType &type,
+                                  ObExprResType &type1,
+                                  common::ObExprTypeCtx &type_ctx) const
 {
   return calc_trig_function_result_type1(type, type1, type_ctx);
 }
 
-int ObExprAcos::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_ISNULL(expr_ctx.calc_buf_))) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_UNLIKELY(obj.is_null())) {
-    result.set_null();
-  } else if (obj.is_number()) {
-    number::ObNumber res_nmb;
-    if (OB_FAIL(obj.get_number().acos(res_nmb, *(expr_ctx.calc_buf_)))) {
-      LOG_WARN("fail to calc acos", K(obj), K(ret), K(res_nmb));
-    } else {
-      result.set_number(res_nmb);
-    }
-  } else if (obj.is_double()) {
-    double arg = obj.get_double();
-    if (arg > 1 || arg < -1) {
-      result.set_null();
-    } else {
-      double res = acos(arg);
-      result.set_double(res);
-    }
-  }
-  return ret;
-}
-
 DEF_CALC_TRIGONOMETRIC_EXPR(acos, arg > 1 || arg < -1, OB_ERR_ARGUMENT_OUT_OF_RANGE);
 
-int ObExprAcos::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprAcos::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -71,5 +52,5 @@ int ObExprAcos::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObE
   rt_expr.eval_func_ = calc_acos_expr;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

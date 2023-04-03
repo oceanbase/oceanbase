@@ -24,39 +24,37 @@ namespace sql {
 namespace dtl {
 
 /**
- *  This interface is similar to make_receive_channel, and is mainly used to construct a channel
- *  after the tranmist and receive end receive channel information
- *  The previous make_channel was created on the PX (coord) side, and then the sqc was sent
- *  separately, that is, to the transmit and receive sides,
- *  The transmit and receive sides directly new channel instances based on the created channel
- *  information. But this method has performance problems
- *  The algorithm complexity of the previous method is: transmit_dfo_task_cnt * receive_dfo_task_cnt,
- *  assuming dop=512, then at least 512*512
- *  DTL channel map optimization design"
- *  The new scheme no longer constructs all channel specific information from the PX side,
- *  Instead, PX constructs the overall information of the channel, and sends the overall information
- *  of the channel to the sqc of all dfos,
- *  Then each (task) worker constructs its own information according to the overall channel information,
- *  Replace the previous make_channel with make_transmit(receive)_channel
- *  That is, the channel provider provides the get_data_ch interface, and then transmti and receive
- *  build their own channels respectively
- *  Assumption: M: the number of workers in Transmit dfo
- *              N: The number of workers receiving dfo
- *              start_ch_id: is the start id of the number of channels applying for (M * N)
- * For a worker, the general formula for building a channel is:
- * transmit side:
+ * 该接口与make_receive_channel类似，主要用于tranmist和receive端收到channel信息后构建channel
+ * 之前的make_channel是在PX(coord)端创建好，然后分别发送sqc,即给transmit和receive端，
+ * transmit和receive端直接根据创建好的channel信息来new channel实例。但这种方式存在性能问题
+ * 之前方式实现算法复杂度是：transmit_dfo_task_cnt * receive_dfo_task_cnt，假设dop=512，则至少512*512
+ * 随着dop增大耗时更长。见bug
+ * 新方案：
+ *        新方案从PX端不再构建所有channel具体信息，
+ *        而是PX构建channel的总体信息，将channel总体信息发给所有的dfo的sqc，
+ *        然后每个(task)worker根据channel总体信息各自构建自己的信息,
+ *        将之前 make_channel 替换成 make_transmit(receive)_channel
+ *        即channel provider提供get_data_ch接口，然后transmti和receive分别构建属于自己的channel
+ * 假设： M: Transmit dfo的worker数量
+ *       N: Receive dfo的worker数量
+ *       start_ch_id: 是申请(M * N)的channel个数的start id
+ * 对于某个worker来讲，构建channel大致公式为：
+ * transmit端：
  * i = cur_worker_idx;
  * for (j = 0; j < N; j++) {
  *  chid = start_ch_id + j + i * N;
  * }
- * receive side:
+ * receive端：
  * i = cur_worker_idx;
  * for (j = 0; j < M; j++) {
  *  chid = start_ch_id + j * N + i;
  * }
  **/
-void ObDtlChannelGroup::make_transmit_channel(
-    const uint64_t tenant_id, const ObAddr& peer_exec_addr, uint64_t chid, ObDtlChannelInfo& ci_producer, bool is_local)
+void ObDtlChannelGroup::make_transmit_channel(const uint64_t tenant_id,
+                                    const ObAddr &peer_exec_addr,
+                                    uint64_t chid,
+                                    ObDtlChannelInfo &ci_producer,
+                                    bool is_local)
 {
   UNUSED(is_local);
   ci_producer.chid_ = chid << 1;
@@ -70,8 +68,11 @@ void ObDtlChannelGroup::make_transmit_channel(
   ci_producer.tenant_id_ = tenant_id;
 }
 
-void ObDtlChannelGroup::make_receive_channel(
-    const uint64_t tenant_id, const ObAddr& peer_exec_addr, uint64_t chid, ObDtlChannelInfo& ci_consumer, bool is_local)
+void ObDtlChannelGroup::make_receive_channel(const uint64_t tenant_id,
+                                    const ObAddr &peer_exec_addr,
+                                    uint64_t chid,
+                                    ObDtlChannelInfo &ci_consumer,
+                                    bool is_local)
 {
   UNUSED(is_local);
   ci_consumer.chid_ = (chid << 1) + 1;
@@ -85,8 +86,11 @@ void ObDtlChannelGroup::make_receive_channel(
   ci_consumer.tenant_id_ = tenant_id;
 }
 
-int ObDtlChannelGroup::make_channel(const uint64_t tenant_id, const ObAddr& producer_exec_addr,
-    const ObAddr& consumer_exec_addr, ObDtlChannelInfo& ci_producer, ObDtlChannelInfo& ci_consumer)
+int ObDtlChannelGroup::make_channel(const uint64_t tenant_id,
+                                    const ObAddr &producer_exec_addr,
+                                    const ObAddr &consumer_exec_addr,
+                                    ObDtlChannelInfo &ci_producer,
+                                    ObDtlChannelInfo &ci_consumer)
 {
   int ret = OB_SUCCESS;
   const uint64_t chid = ObDtlChannel::generate_id();
@@ -119,11 +123,11 @@ int ObDtlChannelGroup::make_channel(const uint64_t tenant_id, const ObAddr& prod
   return ret;
 }
 
-int ObDtlChannelGroup::link_channel(const ObDtlChannelInfo& ci, ObDtlChannel*& chan, ObDtlFlowControl* dfc)
+int ObDtlChannelGroup::link_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&chan, ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
   const auto chid = ci.chid_;
-  chan = NULL;
+  //流控则可以使用local，即data channel
   if (nullptr != dfc && ci.type_ == DTL_CT_LOCAL) {
     if (OB_FAIL(DTL.create_local_channel(ci.tenant_id_, ci.chid_, ci.peer_, chan, dfc))) {
       LOG_WARN("create local channel fail", KP(chid), K(ret));
@@ -138,23 +142,17 @@ int ObDtlChannelGroup::link_channel(const ObDtlChannelInfo& ci, ObDtlChannel*& c
   return ret;
 }
 
-int ObDtlChannelGroup::unlink_channel(const ObDtlChannelInfo& ci)
+int ObDtlChannelGroup::unlink_channel(const ObDtlChannelInfo &ci)
 {
   return DTL.destroy_channel(ci.chid_);
 }
 
-int ObDtlChannelGroup::remove_channel(const ObDtlChannelInfo& ci, ObDtlChannel*& ch)
+//从dtl的map中删除channel
+int ObDtlChannelGroup::remove_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch)
 {
   return DTL.remove_channel(ci.chid_, ch);
 }
 
-int ObDtlChannelGroup::make_channel(ObDtlChSet& producer, ObDtlChSet& consumer)
-{
-  int ret = OB_SUCCESS;
-  UNUSEDx(producer, consumer);
-  return ret;
-}
-
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase

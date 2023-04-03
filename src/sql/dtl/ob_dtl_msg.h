@@ -22,14 +22,24 @@ namespace sql {
 namespace dtl {
 
 struct ObDtlMsgHeader {
-  ObDtlMsgHeader() : hlen_(sizeof(*this)), type_(0), nbody_(0), checksum_(0)
+  ObDtlMsgHeader()
+      : hlen_(sizeof (*this)),
+        type_(0),
+        nbody_(0),
+        checksum_(0)
   {}
 
-  bool is_drain()
-  {
+  bool is_drain() {
     return type_ == (uint16_t)ObDtlMsgType::DRAIN_DATA_FLOW;
   }
-  TO_STRING_KV(K_(hlen), K_(type), K_(nbody), K_(checksum));
+  bool is_px_bloom_filter_data() {
+    return type_ == (uint16_t)ObDtlMsgType::PX_BLOOM_FILTER_DATA;
+  }
+  TO_STRING_KV(
+      K_(hlen),
+      K_(type),
+      K_(nbody),
+      K_(checksum));
   NEED_SERIALIZE_AND_DESERIALIZE;
   uint16_t hlen_;
   uint16_t type_;
@@ -43,7 +53,7 @@ OB_INLINE DEFINE_SERIALIZE(ObDtlMsgHeader)
   using namespace common::serialization;
 
   int ret = OB_SUCCESS;
-  if (buf_len - pos < static_cast<int64_t>(sizeof(*this))) {
+  if (buf_len - pos < static_cast<int64_t>(sizeof (*this))) {
     ret = OB_SIZE_OVERFLOW;
   } else {
     IGNORE_RETURN encode_i16(buf, buf_len, pos, hlen_);
@@ -60,7 +70,7 @@ OB_INLINE DEFINE_DESERIALIZE(ObDtlMsgHeader)
   using namespace common::serialization;
 
   int ret = OB_SUCCESS;
-  if (data_len - pos < static_cast<int64_t>(sizeof(*this))) {
+  if (data_len - pos < static_cast<int64_t>(sizeof (*this))) {
     ret = OB_SIZE_OVERFLOW;
   } else {
     IGNORE_RETURN decode_i16(buf, data_len, pos, (int16_t*)&hlen_);
@@ -73,29 +83,23 @@ OB_INLINE DEFINE_DESERIALIZE(ObDtlMsgHeader)
 
 OB_INLINE DEFINE_GET_SERIALIZE_SIZE(ObDtlMsgHeader)
 {
-  return sizeof(*this);
+  return sizeof (*this);
 }
 
 class ObDtlMsg {
   OB_UNIS_VERSION_PV();
-
 public:
   virtual ObDtlMsgType get_type() const = 0;
-  inline bool is_data_msg() const
-  {
-    return ObDtlMsgType::PX_NEW_ROW == get_type();
-  }
-  inline bool is_drain_msg() const
-  {
-    return ObDtlMsgType::DRAIN_DATA_FLOW == get_type();
-  }
-
+  inline bool is_data_msg() const { return ObDtlMsgType::PX_NEW_ROW == get_type(); }
+  inline bool is_drain_msg() const { return ObDtlMsgType::DRAIN_DATA_FLOW == get_type(); }
 protected:
   ~ObDtlMsg() = default;
 };
 
 template <ObDtlMsgType TYPE>
-class ObDtlMsgTemp : public ObDtlMsg {
+class ObDtlMsgTemp
+    : public ObDtlMsg
+{
 public:
   ObDtlMsgType get_type() const override
   {
@@ -107,8 +111,9 @@ public:
   }
 };
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+
+}  // dtl
+}  // sql
+}  // oceanbase
 
 #endif /* OB_DTL_MSG_H */

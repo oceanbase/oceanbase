@@ -14,30 +14,36 @@
 #define OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_SUB_PARTITOIN_
 
 #include "ob_all_virtual_proxy_base.h"
-#include "share/schema/ob_part_mgr_util.h"
+#include "share/schema/ob_part_mgr_util.h" // ObPartIterator, ObSubPartIterator
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObSubPartition;
-class ObPartIteratorV2;
-class ObSubPartIteratorV2;
-}  // namespace schema
-}  // namespace share
-namespace observer {
-class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator {
-  enum ALL_VIRTUAL_PROXY_SUB_PARTITOIN_TABLE_COLUMNS {
-    TABLE_ID = oceanbase::common::OB_APP_MIN_COLUMN_ID,
+}
+}
+namespace observer
+{
+class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator
+{
+  enum ALL_VIRTUAL_PROXY_SUB_PARTITOIN_TABLE_COLUMNS
+  {
+    TENANT_NAME= oceanbase::common::OB_APP_MIN_COLUMN_ID,
+    TABLE_ID,
     PART_ID,
     SUB_PART_ID,
 
-    TENANT_ID,
     PART_NAME,
     STATUS,
     LOW_BOUND_VAL,
     LOW_BOUND_VAL_BIN,
     HIGH_BOUND_VAL,
     HIGH_BOUND_VAL_BIN,
+    SUB_PART_POSITION,
+    TABLET_ID,
 
     SPARE1,
     SPARE2,
@@ -47,8 +53,10 @@ class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator {
     SPARE6,
   };
 
-  enum ALL_VIRTUAL_PROXY_SUB_PARTITOIN_ROWKEY_IDX {
-    TABLE_ID_IDX = 0,
+  enum ALL_VIRTUAL_PROXY_SUB_PARTITOIN_ROWKEY_IDX
+  {
+    TENANT_NAME_IDX = 0,
+    TABLE_ID_IDX,
     PART_ID_IDX,
     SUB_PART_ID_IDX,
     ROW_KEY_COUNT,
@@ -57,22 +65,20 @@ class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator {
 public:
   ObAllVirtualProxySubPartition();
   virtual ~ObAllVirtualProxySubPartition();
-
   virtual int inner_open();
   virtual int inner_get_next_row();
-
-  int fill_cells(const share::schema::ObSubPartition& table_schema);
-
 private:
-  share::schema::ObPartIteratorV2 part_iter_;
-  share::schema::ObSubPartIteratorV2 subpart_iter_;
-  share::schema::ObPartitionFuncType part_func_type_;
-  bool is_sub_part_template_;
-  const share::schema::ObTableSchema* table_;
+  int fill_row_(const share::schema::ObSubPartition &table_schema);
+
   bool is_inited_;
+  share::schema::ObPartIterator part_iter_;
+  share::schema::ObSubPartIterator subpart_iter_;
+  share::schema::ObPartitionFuncType part_func_type_;
+  const share::schema::ObSimpleTableSchemaV2 *table_schema_;
+
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualProxySubPartition);
 };
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 #endif /* OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_SUB_PARTITOIN_ */

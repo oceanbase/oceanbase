@@ -8198,10 +8198,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8231,10 +8231,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8661,10 +8661,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -8942,10 +8942,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8975,10 +8975,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9283,10 +9283,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9316,10 +9316,10 @@ merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not match
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],

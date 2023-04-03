@@ -15,39 +15,52 @@
 
 #include "ob_ddl_sql_service.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 class ObISQLClient;
-}  // namespace common
-namespace share {
-namespace schema {
+}
+namespace share
+{
+namespace schema
+{
 
 class ObProfileSchema;
 
-class ObProfileSqlService : public ObDDLSqlService {
+class ObProfileSqlService : public ObDDLSqlService
+{
 public:
-  ObProfileSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
-  {}
-  virtual ~ObProfileSqlService()
-  {}
+  explicit ObProfileSqlService(ObSchemaService &schema_service)
+    : ObDDLSqlService(schema_service) {}
+  virtual ~ObProfileSqlService() {}
 
-  int apply_new_schema(const ObProfileSchema& schema, ObISQLClient& sql_client, ObSchemaOperationType ddl_type,
-      const common::ObString& ddl_stmt_str);
+  int apply_new_schema(const ObProfileSchema &schema,
+                       ObISQLClient &sql_client,
+                       ObSchemaOperationType ddl_type,
+                       const common::ObString &ddl_stmt_str);
 
-  int add_schema(ObISQLClient& sql_client, const ObProfileSchema& schema);
-  int alter_schema(ObISQLClient& sql_client, const ObProfileSchema& schema);
-  int drop_schema(ObISQLClient& sql_client, const ObProfileSchema& schema);
+  int add_schema(ObISQLClient &sql_client,
+                 const ObProfileSchema &schema);
+  int alter_schema(ObISQLClient &sql_client,
+                   const ObProfileSchema &schema);
+  int drop_schema(ObISQLClient &sql_client,
+                  const ObProfileSchema &schema);
 
 private:
-  int gen_sql(common::ObSqlString& sql, common::ObSqlString& values, const ObProfileSchema& schema);
+  int gen_sql(common::ObSqlString &sql,
+              common::ObSqlString &values,
+              const ObProfileSchema &schema);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProfileSqlService);
 };
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
 
-#endif  // OB_PROFILE_SQL_SERVICE_H
+
+}
+}
+}
+
+#endif // OB_PROFILE_SQL_SERVICE_H

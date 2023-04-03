@@ -1,0 +1,124 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: zuojiao.hzj
+# owner group: SQL1
+# description: OUR GOAL: Make all this simple and effective!
+#/--disableabortonerror/
+#/test for floor function in ob_expr_func_floor.cpp/
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+
+connection default;
+
+--enable_metadata
+--disable_abort_on_error
+--disable_warnings
+
+--enable_abort_on_error
+select 1.345;
+select round(1.345);
+
+select -13.544;
+select round(-13.544);
+
+select round(0.0);
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int);
+insert into t1 values(10);
+select round(a + 0.5) from t1;
+select round(a + 0.4) from t1;
+drop table t1;
+
+select floor(null);
+select ceil(null);
+select floor(-123);
+select floor(-123.123);
+select floor(123);
+select ceil(-1234.1223);
+select ceil(-123);
+select ceil(123);
+select floor(3.1415926);
+select floor(-3.1415926);
+select floor(0.00);
+select floor(-0.0);
+select floor(0.123456789);
+select floor(-0.123456789);
+select floor(123456789.123456789);
+select floor(-99999999.999999999);
+select floor(999999999.123456789);
+select floor(-999999999.123456789);
+select floor(-123456789123456789123456789.123456789);
+select floor(123456789123456789123456789123456789123456789123456789.123456789);
+select floor(-123456789123456789123456789123456789123456789123456789.123456789);
+select floor(123456789123456789123456789.123456789123456789123456789123456789);
+select floor(-123456789123456789123456789.123456789123456789123456789123456789);
+select floor(-123456789123456789123456789.123456789);
+select floor(999999999999999999999999999999999999999999999.499999999);
+select floor(999999999999999999999999999999999999999999999.500000001);
+select floor(99999999999999999999999999999999999999999999.399999999);
+select floor(-99999999999999999999999999999999999999999999.399999999);
+select floor(-99999999999999999999999999999999999999999999.399999999);
+select floor(999999999999999999999999999999999999999999999211111.399999999);
+select floor(-999999999999999999999999999999999999999999999211111.399999999);
+select floor(-999999999999999999999999999999999999999999999511111.399999999);
+select floor(-999999999999999999999999999999999999999999999499999.399999999);
+select  CEIL(109.19)  ceil_val,FLOOR(109.19) floor_val from dual;
+select ceil( 10.00000000001 )  from dual;
+select ceil( -1.99 )from dual;
+select ceil( -1.9999999999999999999999999999999999999999111111111 )from dual;
+select ceil( -1.999999999999999999999999999999999999999999999111111111 )from dual;
+select floor(0.00000000000),ceil(0.00000);
+select ceil( 10.00000000001 )  from dual;
+--disable_warnings
+drop table if exists tbl1;
+--enable_warnings
+create table tbl1 (i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+insert into tbl1 values(1,'now','haha1',1.6256,'2014-05-04 12:00:00',-10.235);
+insert into tbl1 values(2,'now','haha2',-1.6256,'2014-05-04 12:00:00',1.243);
+insert into tbl1 values(3,'now','haha3',1.156,'2014-05-04 12:00:00',-1.45);
+insert into tbl1 values(4,'now','haha1',5.9256,'2014-05-04 12:00:00',3.45);
+insert into tbl1 values(5,'now1','haha2',1.2356,'2014-05-04 12:00:00',-0.25);
+insert into tbl1 values(6,'now2','haha3',-10.4256,'2014-05-04 12:00:00',0.253);
+insert into tbl1 values(7,'now3','haha4',0.6256,'2014-05-04 12:00:00',1.677);
+select floor(i4),floor(i5) from tbl1;
+select max(floor(i4)),max(floor(i5)) from tbl1;
+select min(floor(i4)),min(floor(i5)) from tbl1;
+select max(ceil(i4)),max(ceil(i5)) from tbl1;
+select min(ceil(i4)),min(ceil(i5)) from tbl1;
+select avg(ceil(i4)),avg(ceil(i5)) from tbl1;
+select avg(ceil(i5)),avg(floor(i5)) from tbl1;
+select sum(ceil(i4)),sum(ceil(i5)) from tbl1;
+select count(ceil(i4)),count(ceil(i5)) from tbl1;
+select ceil(count(ceil(i4))),floor(count(ceil(i5))) from tbl1;
+select ceil(avg(ceil(i4))),floor(avg(ceil(i5))) from tbl1;
+select ceil(avg(ceil(i4))),ceil(avg(ceil(i5))) from tbl1;
+select * from tbl1 where floor(i4)=2;
+select * from tbl1 where floor(i4)=ceil(i4)-1;
+select * from tbl1 where floor(i1)=ceil(i1);
+select floor(i1/10*8),i1/10*8 from tbl1;
+select ceil(i1/10*8),i1/10*8 from tbl1;
+select * from tbl1 order by floor(i4);
+select * from tbl1 order by floor(i4) desc;
+select floor(i4) abc from tbl1 order by abc desc;
+#there is a bug;
+select floor(v2) from tbl1;
+select floor(i3) from tbl1;
+select floor(d4) from tbl1;
+--disable_warnings
+drop table if exists tbl2;
+--enable_warnings
+create table tbl2 (i1 int, v2 varchar(80), primary key(i1));
+insert into tbl2 values(1,'1');
+insert into tbl2 values(2,'2.5');
+insert into tbl2 values(3,'-3.2');
+select floor(v2),ceil(v2) from tbl2;
+
+
+

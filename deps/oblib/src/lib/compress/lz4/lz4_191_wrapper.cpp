@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lz4_191.h"
+#include "lz4_src/lz4_191.h"
 #include "lz4_wrapper.h"
 
 namespace oceanbase {
@@ -26,6 +26,6 @@ LZ4_createStreamDecode_FUNC LZ4_createStreamDecode = &::LZ4_createStreamDecode;
 LZ4_freeStreamDecode_FUNC LZ4_freeStreamDecode = &::LZ4_freeStreamDecode;
 LZ4_decompress_safe_continue_FUNC LZ4_decompress_safe_continue = &::LZ4_decompress_safe_continue;
 LZ4_compressBound_FUNC LZ4_compressBound = &::LZ4_compressBound;
-}  // namespace lz4_191
-}  // namespace lib
-}  // namespace oceanbase
+}  // lz4_191
+}  // lib
+}  // oceanbase

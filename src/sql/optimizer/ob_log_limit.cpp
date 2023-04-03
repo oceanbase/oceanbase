@@ -20,312 +20,301 @@
 #include "ob_opt_est_cost.h"
 #include "ob_log_exchange.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObLogLimit::copy_without_child(ObLogicalOperator*& out)
+int ObLogLimit::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  out = NULL;
-  ObLogicalOperator* op = NULL;
-  ObLogLimit* limit = NULL;
-  if (OB_FAIL(clone(op))) {
-    LOG_WARN("failed to clone ObLogLimit", K(ret));
-  } else if (OB_ISNULL(limit = static_cast<ObLogLimit*>(op))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to cast ObLogicalOperator * to ObLogLimit *", K(ret));
-  } else {
-    limit->set_calc_found_rows(is_calc_found_rows_);
-    limit->set_has_union_child(has_union_child_);
-    limit->set_fetch_with_ties(is_fetch_with_ties());
-    limit->set_limit_count(limit_count_);
-    limit->set_limit_offset(limit_offset_);
-    limit->set_limit_percent(limit_percent_);
-    out = limit;
-  }
-  return ret;
-}
-
-int ObLogLimit::allocate_exchange_post(AllocExchContext* ctx)
-{
-  int ret = OB_SUCCESS;
-  bool is_basic = false;
-  bool should_push_limit = (!is_calc_found_rows_ && limit_count_ != NULL);
-  ObLogicalOperator* exchange_point = NULL;
-  ObExchangeInfo exch_info;
-  if (OB_ISNULL(ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ctx), K(ret));
-  } else if (OB_FAIL(compute_basic_sharding_info(ctx, is_basic))) {
-    LOG_WARN("failed to compute basic sharding info", K(ret));
-  } else if (is_basic) {
-    LOG_TRACE("is basic sharding info", K(sharding_info_));
-  } else if (OB_FAIL(push_down_limit(
-                 ctx, limit_count_, limit_offset_, should_push_limit, is_fetch_with_ties(), exchange_point))) {
-    LOG_WARN("failed to push down limit", K(ret));
-  } else if (OB_ISNULL(exchange_point)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(exchange_point), K(ret));
-  } else if (OB_FAIL(exchange_point->allocate_exchange_nodes_below(first_child, *ctx, exch_info))) {
-    LOG_WARN("failed to allocate exchange nodes below", K(ret));
-  } else {
-    sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
-  }
-  return ret;
-}
-
-int ObLogLimit::allocate_granule_pre(AllocGIContext &ctx)
-{
-  return pw_allocate_granule_pre(ctx);
-}
-
-int ObLogLimit::allocate_granule_post(AllocGIContext &ctx)
-{
-  return pw_allocate_granule_post(ctx);
-}
-
-int ObLogLimit::transmit_op_ordering()
-{
-  int ret = OB_SUCCESS;
-  bool need_sort = false;
-  if (OB_FAIL(check_need_sort_below_node(0, expected_ordering_, need_sort))) {
-    LOG_WARN("failed to check need sort", K(ret));
-  } else if (!need_sort) {
-    // do nothing
-  } else if (OB_FAIL(allocate_sort_below(0, expected_ordering_))) {
-    LOG_WARN("failed to allocate sort", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObLogicalOperator::transmit_op_ordering())) {
-      LOG_WARN("failed to transmit op ordering", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogLimit::allocate_expr_pre(ObAllocExprContext& ctx)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 6> order_exprs;
+  //支持with ties功能，如果存在order by item,需要添加对应的order by item
   ObSEArray<ObOrderDirection, 6> order_directions;
-  if (is_fetch_with_ties() &&
-      OB_FAIL(ObOptimizerUtil::split_expr_direction(get_expected_ordering(), order_exprs, order_directions))) {
+  if (is_fetch_with_ties() && OB_FAIL(ObOptimizerUtil::split_expr_direction(
+                                                       order_items_,
+                                                       all_exprs,
+                                                       order_directions))) {
     LOG_WARN("failed to split expr and direction", K(ret));
-  } else if (OB_FAIL(add_exprs_to_ctx(ctx, order_exprs))) {
-    LOG_WARN("fail to add expr to ctx", K(ret));
-  } else if (OB_FAIL(ObLogicalOperator::allocate_expr_pre(ctx))) {
-    LOG_WARN("failed to add parent need expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else if (NULL != limit_expr_ && OB_FAIL(all_exprs.push_back(limit_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != offset_expr_ && OB_FAIL(all_exprs.push_back(offset_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != percent_expr_ && OB_FAIL(all_exprs.push_back(percent_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else {/*do nothing*/ }
   return ret;
 }
 
 int ObLogLimit::est_cost()
 {
   int ret = OB_SUCCESS;
+  double child_cost = 0.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_stmt()), K(child), K(ret));
+  } else if (OB_FALSE_IT(child_cost = child->get_cost())) {
+  } else if (OB_FAIL(inner_est_cost(child->get_card(), child_cost, true, card_, op_cost_))) {
+    LOG_WARN("failed to est cost", K(ret));
+  } else {
+    cost_ = op_cost_ + child_cost;
+  }
+  LOG_TRACE("succeed to estimate limit-k cost", K(card_),
+      K(op_cost_), K(cost_));
+  return ret;
+}
+
+int ObLogLimit::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+{
+  int ret = OB_SUCCESS;
+  int64_t offset_count = 0;
+  double limit_percent = 0.0;
+  int64_t limit_count = 0;
+  bool is_null_value = false;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child)) ||
+      OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else if (limit_expr_ != NULL && limit_expr_->has_flag(CNT_DYNAMIC_PARAM)) {
+    //limit ? do nothing
+  } else if (NULL != percent_expr_ &&
+            OB_FAIL(ObTransformUtils::get_percentage_value(percent_expr_,
+                                                            get_stmt(),
+                                                            get_plan()->get_optimizer_context().get_params(),
+                                                            get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                            &get_plan()->get_optimizer_context().get_allocator(),
+                                                            limit_percent,
+                                                            is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && limit_expr_ != NULL &&
+             OB_FAIL(ObTransformUtils::get_limit_value(limit_expr_,
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       limit_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && offset_expr_ != NULL &&
+            OB_FAIL(ObTransformUtils::get_limit_value(offset_expr_,
+                                                      get_plan()->get_optimizer_context().get_params(),
+                                                      get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                      &get_plan()->get_optimizer_context().get_allocator(),
+                                                      offset_count,
+                                                      is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else {
+    double child_card = child->get_card();
+    double child_cost = child->get_cost();
+    double op_cost = 0.0;
+    if (param.need_row_count_ >= 0 && param.need_row_count_ <= card) {
+      if (is_null_value) {
+        param.need_row_count_ = 0;
+      } else if (NULL != percent_expr_) {
+        param.need_row_count_ = param.need_row_count_ * 100 / limit_percent;
+      } else if (NULL != offset_expr_) {
+        param.need_row_count_ += offset_count;
+      }
+    } else {
+      if (is_null_value) {
+        param.need_row_count_ = 0;
+      } else if (NULL != percent_expr_) {
+        param.need_row_count_ = child_card * limit_percent / 100;
+      } else if (NULL == limit_expr_) {
+        param.need_row_count_ = child_card;
+      } else {
+        param.need_row_count_ = static_cast<double>(limit_count + offset_count);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+      LOG_WARN("failed to est child cost", K(ret));
+    } else if (OB_FAIL(inner_est_cost(child_card, child_cost, false, card, op_cost))) {
+      LOG_WARN("failed to est count cost", K(ret));
+    } else {
+      if (param.override_) {
+        cost = op_cost + child_cost;
+        set_op_cost(op_cost);
+        set_cost(cost);
+        set_card(card);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogLimit::inner_est_cost(double child_card, 
+                               double &child_cost,
+                               bool need_re_est_child_cost, 
+                               double &card, 
+                               double &op_cost)
+{
+  int ret = OB_SUCCESS;
+  int64_t parallel = 0;
   int64_t limit_count = -1;
   int64_t offset_count = 0;
-  double percentage = 0.0;
+  double limit_percent = 0.0;
   bool is_null_value = false;
-  if (OB_ISNULL(get_child(first_child)) || OB_ISNULL(get_plan())) {
+  ObLogicalOperator *child = NULL;
+  double re_estimate_card = 0.0;
+  card = 0.0;
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Limit's child not expected to be NULL", K(ret));
-  } else if (limit_count_ != NULL && OB_FAIL(ObTransformUtils::get_limit_value(limit_count_,
-                                         get_plan()->get_stmt(),
-                                         get_plan()->get_optimizer_context().get_params(),
-                                         get_plan()->get_optimizer_context().get_session_info(),
-                                         &get_plan()->get_optimizer_context().get_allocator(),
-                                         limit_count,
-                                         is_null_value))) {
-    LOG_WARN("Get limit count num error", K(ret));
-  } else if (!is_null_value && limit_offset_ != NULL &&
-             OB_FAIL(ObTransformUtils::get_limit_value(limit_offset_,
-                 get_plan()->get_stmt(),
-                 get_plan()->get_optimizer_context().get_params(),
-                 get_plan()->get_optimizer_context().get_session_info(),
-                 &get_plan()->get_optimizer_context().get_allocator(),
-                 offset_count,
-                 is_null_value))) {
-    LOG_WARN("Get limit offset num error", K(ret));
-  } else if (!is_null_value && limit_percent_ != NULL &&
-             OB_FAIL(get_percentage_value(limit_percent_, percentage, is_null_value))) {
-    LOG_WARN("failed to get percentage value", K(ret));
+    LOG_WARN("get unexpected null", K(get_stmt()), K(get_plan()),
+        K(child), K(ret));
+  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(ret));
+  } else if (limit_expr_ != NULL && limit_expr_->has_flag(CNT_DYNAMIC_PARAM)) {
+    //limit ? do nothing
+  } else if (NULL != percent_expr_ &&
+             OB_FAIL(ObTransformUtils::get_percentage_value(percent_expr_,
+                                                            get_stmt(),
+                                                            get_plan()->get_optimizer_context().get_params(),
+                                                            get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                            &get_plan()->get_optimizer_context().get_allocator(),
+                                                            limit_percent,
+                                                            is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && limit_expr_ != NULL &&
+             OB_FAIL(ObTransformUtils::get_limit_value(limit_expr_,
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       limit_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && offset_expr_ != NULL &&
+             OB_FAIL(ObTransformUtils::get_limit_value(offset_expr_,
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       offset_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (is_null_value) {
+    re_estimate_card = 0;
+    card = 0;
+  } else if (NULL != percent_expr_) {
+    re_estimate_card = child_card * limit_percent / 100;
+    card = re_estimate_card - offset_count;
+  } else if (NULL == limit_expr_) {
+    re_estimate_card = child_card;
+    card = child_card - offset_count;
   } else {
-    double child_card = get_child(first_child)->get_card();
-    double limit_count_double = 0.0;
-    double offset_count_double = 0.0;
-    double scan_count_double = 0.0;
-    if (limit_count_ != NULL || limit_percent_ != NULL) {
-      limit_count = is_null_value ? 0 : limit_count;
-      offset_count = is_null_value ? 0 : offset_count;
-      if (limit_percent_ != NULL) {
-        limit_count_double = child_card * percentage / 100.0;
-        offset_count_double = static_cast<double>(offset_count);
+    re_estimate_card = static_cast<double>(limit_count + offset_count) * parallel;
+    card = std::min(static_cast<double>(limit_count) * parallel, child_card - offset_count);
+  }
+  if (OB_SUCC(ret)) {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    re_estimate_card = std::min(re_estimate_card, child_card);
+    card = std::max(card, 0.0);
+    if (!is_calc_found_rows_ && NULL == percent_expr_ && need_re_est_child_cost) {
+      EstimateCostInfo param;
+      param.need_row_count_ = re_estimate_card;
+      param.override_ = false;
+      if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+        LOG_WARN("failed to re-est cost", K(ret));
       } else {
-        limit_count_double = static_cast<double>(limit_count);
-        offset_count_double = static_cast<double>(offset_count);
-      }
-      scan_count_double = limit_count_double + offset_count_double;
-      if (scan_count_double <= child_card) {
-        set_card(limit_count_double);
-      } else {
-        limit_count_double = child_card - offset_count_double;
-        set_card(limit_count_double >= 0.0 ? limit_count_double : 0.0);
-      }
-      if (!is_calc_found_rows_ && NULL == limit_percent_) {
-        bool re_est = false;
-        if (OB_FAIL(get_child(first_child)->re_est_cost(this, scan_count_double, re_est))) {
-          LOG_WARN("Failed to re est cost", K(ret));
-        }
+        op_cost = ObOptEstCost::cost_get_rows(re_estimate_card, opt_ctx.get_cost_model_type());
       }
     } else {
-      offset_count_double = static_cast<double>(offset_count);
-      if (OB_UNLIKELY(offset_count_double < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("offset count double should greater than 0", K(ret), K(offset_count_double));
-      } else {
-        limit_count_double = is_null_value ? 0 : child_card - offset_count_double;
-        set_card(limit_count_double >= 0.0 ? limit_count_double : 0.0);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      double op_cost = ObOptEstCost::cost_limit(get_child(first_child)->get_card());
-      set_op_cost(op_cost);
-      set_cost(get_child(first_child)->get_cost() + op_cost);
-      set_width(get_child(first_child)->get_width());
+      op_cost = ObOptEstCost::cost_get_rows(child_card, opt_ctx.get_cost_model_type());
     }
   }
   return ret;
 }
 
-int ObLogLimit::re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(parent);
-  re_est = false;
-  if (OB_UNLIKELY(need_row_count < 0.0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Need row count should not less than 0", K(ret));
-  } else if (need_row_count < get_card()) {
-    card_ = need_row_count;
-    int64_t offset_count = 0;
-    ObLogicalOperator* child = NULL;
-    bool is_null_value = false;
-    if (OB_ISNULL(child = get_child(first_child)) || OB_ISNULL(get_plan())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(child));
-    } else if (OB_FAIL(ObTransformUtils::get_limit_value(limit_offset_,
-                   get_plan()->get_stmt(),
-                   get_plan()->get_optimizer_context().get_params(),
-                   get_plan()->get_optimizer_context().get_session_info(),
-                   &get_plan()->get_optimizer_context().get_allocator(),
-                   offset_count,
-                   is_null_value))) {
-      LOG_WARN("Get limit offset num error", K(ret));
-    } else if (OB_FAIL(child->re_est_cost(this, static_cast<double>(offset_count) + need_row_count, re_est))) {
-      LOG_WARN("Failed to re_est child cost", K(ret));
-    } else {
-      re_est = true;
-      double op_cost = ObOptEstCost::cost_limit(child->get_card());
-      set_op_cost(op_cost);
-      set_cost(child->get_cost() + op_cost);
-    }
-  }
-  return ret;
-}
-
-uint64_t ObLogLimit::hash(uint64_t seed) const
-{
-  uint64_t hash_value = seed;
-  hash_value = do_hash(is_calc_found_rows_, hash_value);
-  hash_value = do_hash(has_union_child_, hash_value);
-  hash_value = do_hash(is_top_limit_, hash_value);
-  hash_value = ObOptimizerUtil::hash_expr(limit_count_, hash_value);
-  hash_value = ObOptimizerUtil::hash_expr(limit_offset_, hash_value);
-  hash_value = ObLogicalOperator::hash(hash_value);
-
-  return hash_value;
-}
-
-int ObLogLimit::check_output_dep_specific(ObRawExprCheckDep& checker)
+int ObLogLimit::check_output_dep_specific(ObRawExprCheckDep &checker)
 {
   int ret = OB_SUCCESS;
 
-  if (NULL != limit_count_) {
-    if (OB_FAIL(checker.check(*limit_count_))) {
-      LOG_WARN("failed to check limit_count_", K(*limit_count_), K(ret));
+  if (NULL != limit_expr_) {
+    if (OB_FAIL(checker.check(*limit_expr_))) {
+      LOG_WARN("failed to check limit_count_", K(*limit_expr_), K(ret));
     }
-  } else { /* Do nothing */
-  }
+  } else { /* Do nothing */ }
 
   if (OB_SUCC(ret)) {
-    if (NULL != limit_offset_) {
-      if (OB_FAIL(checker.check(*limit_offset_))) {
-        LOG_WARN("failed to check limit_offset_", K(limit_offset_), K(ret));
+    if (NULL != offset_expr_) {
+      if (OB_FAIL(checker.check(*offset_expr_))) {
+        LOG_WARN("failed to check limit_offset_", K(offset_expr_), K(ret));
       }
-    } else { /* Do nothing */
-    }
+    } else { /* Do nothing */ }
   }
 
   if (OB_SUCC(ret)) {
-    if (NULL != limit_percent_) {
-      if (OB_FAIL(checker.check(*limit_percent_))) {
-        LOG_WARN("failed to check limit_percent_", K(limit_percent_), K(ret));
+    if (NULL != percent_expr_) {
+      if (OB_FAIL(checker.check(*percent_expr_))) {
+        LOG_WARN("failed to check limit_percent_", K(percent_expr_), K(ret));
       }
     }
   }
 
   if (OB_SUCC(ret) && is_fetch_with_ties()) {
-    ObIArray<OrderItem>& order_items = get_expected_ordering();
-    for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
-      ObRawExpr* cur_expr = order_items.at(i).expr_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
+      ObRawExpr *cur_expr = order_items_.at(i).expr_;
       if (OB_ISNULL(cur_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null ptr", K(cur_expr), K(ret));
       } else if (OB_FAIL(checker.check(*cur_expr))) {
         LOG_WARN("failed to check expr", K(cur_expr), K(ret));
-      } else { /*do nothing*/
-      }
+      } else {/*do nothing*/}
     }
   }
   return ret;
 }
 
-int ObLogLimit::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
+int ObLogLimit::get_plan_item_info(PlanText &plan_text,
+                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (NULL != limit_count_ || NULL != limit_offset_ || NULL != limit_percent_) {
-    if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else {
-      ObRawExpr* limit = limit_count_;
-      ObRawExpr* offset = limit_offset_;
-      ObRawExpr* percent = limit_percent_;
-      EXPLAIN_PRINT_EXPR(limit, type);
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else if (NULL != limit_expr_ || NULL != offset_expr_ ||  NULL != percent_expr_) {
+    BEGIN_BUF_PRINT;
+    ObRawExpr *limit = limit_expr_;
+    ObRawExpr *offset = offset_expr_;
+    ObRawExpr *percent = percent_expr_;
+    EXPLAIN_PRINT_EXPR(limit, type);
+    ret = BUF_PRINTF(", ");
+    EXPLAIN_PRINT_EXPR(offset, type);
+    if (percent_expr_ != NULL) {
       BUF_PRINTF(", ");
-      EXPLAIN_PRINT_EXPR(offset, type);
-      if (limit_percent_ != NULL) {
-        BUF_PRINTF(", ");
-        EXPLAIN_PRINT_EXPR(percent, type);
-      }
-      if (is_fetch_with_ties_) {
-        BUF_PRINTF(", ");
-        BUF_PRINTF("with_ties(%s)", "true");
-      }
+      EXPLAIN_PRINT_EXPR(percent, type);
     }
+    if (is_fetch_with_ties_) {
+      BUF_PRINTF(", ");
+      BUF_PRINTF("with_ties(%s)", "true");
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
 
-int ObLogLimit::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const
+int ObLogLimit::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
-  OZ(raw_exprs.append(limit_count_));
-  OZ(raw_exprs.append(limit_offset_));
-  if (NULL != limit_percent_) {
-    OZ(raw_exprs.append(limit_percent_));
+  if (NULL != limit_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, limit_expr_))) {
+    LOG_WARN("failed to replace limit expr", K(ret));
+  } else if (NULL != offset_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, offset_expr_))) {
+    LOG_WARN("failed to replace offset expr", K(ret));
+  } else if (NULL != percent_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, percent_expr_))) {
+    LOG_WARN("failed to replace percent expr", K(ret));
   }
-
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null ", K(ret));
+    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, order_items_.at(i).expr_))) {
+      LOG_WARN("failed to adjust order expr with onetime", K(ret));
+    }
+  }
   return ret;
 }

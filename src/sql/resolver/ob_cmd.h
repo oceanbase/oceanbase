@@ -13,19 +13,20 @@
 #ifndef OCEANBASE_SQL_RESOLVER_OB_CMD_
 #define OCEANBASE_SQL_RESOLVER_OB_CMD_
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObICmd {
+class ObICmd
+{
 public:
   virtual int get_cmd_type() const = 0;
-  virtual bool cause_implicit_commit() const
-  {
-    return false;
-  }
+  virtual bool cause_implicit_commit() const { return false; }
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_RESOLVER_OB_CMD_ */
 //// end of header file
+

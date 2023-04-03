@@ -20,48 +20,47 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObIEndTransCallback;
 }
 
-namespace observer {
+namespace observer
+{
 
 using obmysql::ObMySQLField;
 using obmysql::ObMySQLRow;
 
-class ObMySQLResultSet : public ObResultSet, public common::ObDLinkBase<ObMySQLResultSet> {
+class ObMySQLResultSet
+  : public ObResultSet, public common::ObDLinkBase<ObMySQLResultSet>
+{
 public:
   /**
-   * construct
+   * 构造函数
    *
+   * @param [in] obrs SQL执行起返回的数据集
    */
-  ObMySQLResultSet(sql::ObSQLSessionInfo& session, common::ObIAllocator& allocator)
+  ObMySQLResultSet(sql::ObSQLSessionInfo &session, common::ObIAllocator &allocator)
       : ObResultSet(session, allocator), field_index_(0), param_index_(0), has_more_result_(false)
   {
     is_user_sql_ = true;
   }
 
-  // only for observer/mysql/obmp_connect.cpp:112
-  ObMySQLResultSet(sql::ObSQLSessionInfo& session)
-      : ObResultSet(session), field_index_(0), param_index_(0), has_more_result_(false)
-  {
-    is_user_sql_ = true;
-  }
+  /**
+   * 析构函数
+   */
+  virtual ~ObMySQLResultSet() {};
 
   /**
-   * destory
-   */
-  virtual ~ObMySQLResultSet(){};
-
-  /**
-   * Return the information of the next field
+   * 返回下一个字段的信息
    *
-   * @param [out] obmf Information in the next field
+   * @param [out] obmf 下一个字段的信息
    *
-   * @return ret = OB_SUCCESS.is no data ret = Ob_ITER_END
+   * @return 成功返回OB_SUCCESS。如果没有数据，则返回Ob_ITER_END
    */
-  int next_field(ObMySQLField& obmf);
+  int next_field(ObMySQLField &obmf);
 
   /**
    * return next param
@@ -69,10 +68,10 @@ public:
    * @parm [out] obmp next param
    * @return return OB_SUCCESS if succeed, else return OB_ITER_END
    */
-  int next_param(ObMySQLField& obmf);
+  int next_param(ObMySQLField &obmf);
 
   /**
-   * Multi-Query,whether have other resultset
+   * 对于Multi-Query，指示是否为最后一个resultset
    */
   bool has_more_result() const
   {
@@ -84,37 +83,34 @@ public:
   }
 
   /**
-   * get next row
+   * 获取下一行的数据
    *
-   * @param [out] obmr next row
+   * @param [out] obmr 下一行数据
    *
-   * @return execute succeed ret = OB_SUCCESS.id no data, ret = Ob_ITER_END
+   * @return 成功返回OB_SUCCESS。如果没有数据，则返回Ob_ITER_END
    */
-  int next_row(const ObNewRow*& obmr);
-  int64_t to_string(char* buf, const int64_t buf_len) const;
-  int32_t get_type()
-  {
-    return 0;
-  };
-  static int to_mysql_field(const ObField& field, ObMySQLField& mfield);
+  int next_row(const ObNewRow *&obmr);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  int32_t get_type() {return 0;};
+  static int to_mysql_field(const ObField &field, ObMySQLField &mfield);
 
 private:
-  int64_t field_index_; /**< The sequence number of the next field to be read */
-  int64_t param_index_; /* < The serial number of the next parameter to be read*/
+  int64_t field_index_;     /**< 下一个需要读取的字段的序号 */
+  int64_t param_index_;     /* < 下一个需要读取的参数的序号*/
   bool has_more_result_;
-};  // end class ObMySQLResultSet
+}; // end class ObMySQLResultSet
 
-inline int64_t ObMySQLResultSet::to_string(char* buf, const int64_t buf_len) const
+inline int64_t ObMySQLResultSet::to_string(char *buf, const int64_t buf_len) const
 {
   return ObResultSet::to_string(buf, buf_len);
 }
 
-inline int ObMySQLResultSet::next_row(const ObNewRow*& obmr)
+inline int ObMySQLResultSet::next_row(const ObNewRow *&obmr)
 {
   return ObResultSet::get_next_row(obmr);
 }
 
-}  // namespace observer
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_MYSQL_RESULT_SET_H_ */

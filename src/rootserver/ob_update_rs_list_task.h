@@ -18,39 +18,55 @@
 #include "lib/thread/ob_work_queue.h"
 #include "share/ob_root_addr_agent.h"
 #include "share/ob_rs_mgr.h"
-#include "share/ob_cluster_type.h"  // ObClusterType
+#include "share/ob_cluster_role.h"        // ObClusterRole
 
-namespace oceanbase {
-namespace share {
-class ObPartitionTableOperator;
+namespace oceanbase
+{
+namespace share
+{
+class ObLSTableOperator;
 }
-namespace rootserver {
+namespace rootserver
+{
 class ObRootService;
 class ObServerManager;
-class ObMultiClusterManager;
 class ObZoneManager;
-class ObUpdateRsListTask : public share::ObAsyncTask {
+class ObUpdateRsListTask : public share::ObAsyncTask
+{
 public:
   ObUpdateRsListTask();
   virtual ~ObUpdateRsListTask();
 
-  int init(share::ObPartitionTableOperator& pt_operator, share::ObRootAddrAgent* addr_agent_,
-      ObServerManager& server_mgr, ObZoneManager& zone_mgr, common::SpinRWLock& lock, const bool force_update,
-      const common::ObAddr& self_addr);
+  int init(share::ObLSTableOperator &lst_operator,
+           share::ObRootAddrAgent *addr_agent_,
+           ObServerManager &server_mgr,
+           ObZoneManager &zone_mgr,
+           common::SpinRWLock &lock,
+           const bool force_update,
+           const common::ObAddr &self_addr);
   int process();
   int process_without_lock();
   int64_t get_deep_copy_size() const;
-  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
-  static int get_rs_list(share::ObPartitionTableOperator& pt, ObServerManager& server_mgr,
-      const common::ObAddr& self_addr, share::ObIAddrList& rs_list, share::ObIAddrList& readonly_rs_list,
-      bool& rs_list_diff_memeber_list);
-  static int check_rs_list_diff(const share::ObIAddrList& l, const share::ObIAddrList& r, bool& different);
-  static int check_rs_list_subset(const share::ObIAddrList& l, const share::ObIAddrList& r, bool& is_subset);
+  share::ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const;
+  static int get_rs_list(share::ObLSTableOperator &lst,
+                         ObServerManager &server_mgr,
+                         const common::ObAddr &self_addr,
+                         share::ObIAddrList &rs_list,
+                         share::ObIAddrList &readonly_rs_list,
+                         bool &rs_list_diff_memeber_list);
+  static int check_rs_list_diff(const share::ObIAddrList &l, const share::ObIAddrList &r,
+                         bool &different);
+  static int check_rs_list_subset(const share::ObIAddrList &l, const share::ObIAddrList &r,
+                           bool &is_subset);
+
 
 private:
-  int check_need_update(const share::ObIAddrList& rs_list, const share::ObIAddrList& readonly_rs_list,
-      const common::ObClusterType cluster_type, const bool rs_list_diff_member_list, bool& need_update,
-      bool& inner_need_update);
+  int check_need_update(const share::ObIAddrList &rs_list,
+                        const share::ObIAddrList &readonly_rs_list,
+                        const common::ObClusterRole cluster_role,
+                        const bool rs_list_diff_member_list,
+                        bool &need_update,
+                        bool &inner_need_update);
 
 public:
   // encapsulate the operation of g_wait_cnt_
@@ -63,39 +79,34 @@ private:
 
 private:
   bool inited_;
-  share::ObPartitionTableOperator* pt_operator_;
-  share::ObRootAddrAgent* root_addr_agent_;
-  ObServerManager* server_mgr_;
-  ObZoneManager* zone_mgr_;
-  common::SpinRWLock* lock_;
+  share::ObLSTableOperator *lst_operator_;
+  share::ObRootAddrAgent *root_addr_agent_;
+  ObServerManager *server_mgr_;
+  ObZoneManager *zone_mgr_;
+  common::SpinRWLock *lock_;
   bool force_update_;
   common::ObAddr self_addr_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUpdateRsListTask);
 };
 
-class ObUpdateRsListTimerTask : public common::ObAsyncTimerTask {
+class ObUpdateRsListTimerTask :public common::ObAsyncTimerTask
+{
 public:
   const static int64_t RETRY_INTERVAL = 600 * 1000L * 1000L;  // 10min
-  ObUpdateRsListTimerTask(ObRootService& rs);
-  virtual ~ObUpdateRsListTimerTask()
-  {}
+  ObUpdateRsListTimerTask(ObRootService &rs);
+  virtual ~ObUpdateRsListTimerTask() {}
 
   // interface of AsyncTask
   virtual int process() override;
-  virtual int64_t get_deep_copy_size() const override
-  {
-    return sizeof(*this);
-  }
-  virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
-
+  virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
+  virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
 private:
-  ObRootService& rs_;
+  ObRootService &rs_;
   DISALLOW_COPY_AND_ASSIGN(ObUpdateRsListTimerTask);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+}//end namespace rootserver
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_UPDATE_RS_LIST_TASK_H_
+#endif //OCEANBASE_ROOTSERVER_OB_UPDATE_RS_LIST_TASK_H_

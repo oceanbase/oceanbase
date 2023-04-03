@@ -13,8 +13,10 @@
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const ObStatEvent OB_STAT_EVENTS[] = {
 #define STAT_EVENT_ADD_DEF(def, name, stat_class, display_name, stat_id, summary_in_session, can_visible) \
   {name, stat_class, display_name, stat_id, summary_in_session, can_visible},
@@ -26,10 +28,13 @@ const ObStatEvent OB_STAT_EVENTS[] = {
 #undef STAT_EVENT_SET_DEF
 };
 
-ObStatEventAddStat::ObStatEventAddStat() : stat_no_(0), stat_value_(0)
-{}
 
-int ObStatEventAddStat::add(const ObStatEventAddStat& other)
+ObStatEventAddStat::ObStatEventAddStat()
+  : stat_value_(0)
+{
+}
+
+int ObStatEventAddStat::add(const ObStatEventAddStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
@@ -51,14 +56,16 @@ int ObStatEventAddStat::add(int64_t value)
 
 void ObStatEventAddStat::reset()
 {
-  stat_no_ = 0;
   stat_value_ = 0;
 }
 
-ObStatEventSetStat::ObStatEventSetStat() : stat_no_(0), stat_value_(0), set_time_(0)
-{}
+ObStatEventSetStat::ObStatEventSetStat()
+  : stat_value_(0),
+    set_time_(0)
+{
+}
 
-int ObStatEventSetStat::add(const ObStatEventSetStat& other)
+int ObStatEventSetStat::add(const ObStatEventSetStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
@@ -75,10 +82,11 @@ int ObStatEventSetStat::add(const ObStatEventSetStat& other)
 
 void ObStatEventSetStat::reset()
 {
-  stat_no_ = 0;
   stat_value_ = 0;
   set_time_ = 0;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+
+}
+}
+

@@ -18,32 +18,35 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprDateFormatTest : public ::testing::Test {
+class ObExprDateFormatTest : public ::testing::Test
+{
 public:
   ObExprDateFormatTest();
   virtual ~ObExprDateFormatTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprDateFormatTest(const ObExprDateFormatTest& other);
-  ObExprDateFormatTest& operator=(const ObExprDateFormatTest& other);
-
+  ObExprDateFormatTest(const ObExprDateFormatTest &other);
+  ObExprDateFormatTest& operator=(const ObExprDateFormatTest &other);
 private:
   // data members
 };
 ObExprDateFormatTest::ObExprDateFormatTest()
-{}
+{
+}
 
 ObExprDateFormatTest::~ObExprDateFormatTest()
-{}
+{
+}
 
 void ObExprDateFormatTest::SetUp()
-{}
+{
+}
 
 void ObExprDateFormatTest::TearDown()
-{}
+{
+}
 
 int64_t get_usec(int year, int month, int day, int hour, int minute, int sec, int64_t usec)
 {
@@ -59,10 +62,8 @@ int64_t get_usec(int year, int month, int day, int hour, int minute, int sec, in
   ObTimeUtility::timestamp_to_usec(t, usec, ret);
   return ret;
 }
-#define T(obj, t1, v1, t2, v2, ref_type, ref_value) \
-  EXPECT_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
-#define F(obj, t1, v1, t2, v2, ref_type, ref_value) \
-  EXPECT_FAIL_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, ref_type, ref_value) EXPECT_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
+#define F(obj, t1, v1, t2, v2, ref_type, ref_value) EXPECT_FAIL_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
 
 TEST_F(ObExprDateFormatTest, base_test)
 {
@@ -106,7 +107,7 @@ TEST_F(ObExprDateFormatTest, fail_test)
   ASSERT_EQ(2, dateformat.get_param_num());
 
   F(dateformat, int, 1, int, 0, varchar, "");
-  // F(dateformat, int, 1, null, 0, varchar, "");
+  //F(dateformat, int, 1, null, 0, varchar, "");
   F(dateformat, int, get_usec(2013, 9, 10, 0, 0, 0, 0), varchar, "%Y-%m-%d", varchar, "");
   F(dateformat, double, 1.1, varchar, "%Y-%m-%d", varchar, "");
   F(dateformat, float, 1.1f, varchar, "%Y-%m-%d", varchar, "");
@@ -115,9 +116,9 @@ TEST_F(ObExprDateFormatTest, fail_test)
   F(dateformat, varchar, "2013-09-10 23:59:59.9999", varchar, "", varchar, "");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

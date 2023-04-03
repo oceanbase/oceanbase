@@ -1,0 +1,9 @@
+#package_name:dbms_upgrade
+#author: hr351303
+
+
+CREATE OR REPLACE PACKAGE __DBMS_UPGRADE
+  PROCEDURE UPGRADE(package_name VARCHAR(1024));
+  PROCEDURE UPGRADE_ALL();
+END;
+//

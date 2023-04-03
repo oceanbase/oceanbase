@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_unix_timestamp.h"
 #include "sql/engine/expr/ob_expr_util.h"
@@ -23,20 +23,27 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprUnixTimestamp::ObExprUnixTimestamp(ObIAllocator& alloc)
+ObExprUnixTimestamp::ObExprUnixTimestamp(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_UNIX_TIMESTAMP, N_UNIX_TIMESTAMP, ZERO_OR_ONE, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprUnixTimestamp::~ObExprUnixTimestamp()
-{}
-
-int ObExprUnixTimestamp::calc_result_typeN(
-    ObExprResType& type, ObExprResType* type_array, int64_t param, ObExprTypeCtx& type_ctx) const
 {
-  /*  no argument - > int
+}
+
+int ObExprUnixTimestamp::calc_result_typeN(ObExprResType &type,
+                                           ObExprResType *type_array,
+                                           int64_t param,
+                                           ObExprTypeCtx &type_ctx) const
+{
+  /*  yeti:
+   *  no argument - > int
    *  has argument & is literal :
    *  --> out_of_range date --> 0.000000
    *  --> (has usec) --> int
@@ -55,30 +62,33 @@ int ObExprUnixTimestamp::calc_result_typeN(
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
     UNUSED(type_array);
   } else {
-    ObExprResType& date_type = type_array[0];
-    if (ObNullType == date_type.get_type()) {
-      type.set_null();
-    } else if (date_type.is_literal()) {  // literal
+    ObExprResType &date_type = type_array[0];
+    if(ObNullType == date_type.get_type()) {
+      type.set_int();
+    } else if (date_type.is_literal()) { // literal
       ret = calc_result_type_literal(type, date_type);
-    } else {  // column
+    } else { // column
       ret = calc_result_type_column(type, date_type);
     }
     date_type.set_calc_type(ObTimestampType);
   }
-  ret = OB_SUCCESS;  // just let it go if error happened
+  ret = OB_SUCCESS;//just let it go if error happened
   return ret;
+
 }
 
-int ObExprUnixTimestamp::calc_result_type_literal(ObExprResType& type, ObExprResType& type1) const
+int ObExprUnixTimestamp::calc_result_type_literal(ObExprResType &type,
+                             ObExprResType &type1) const
 {
   int ret = OB_SUCCESS;
   ObObj date_obj = type1.get_param();
   bool is_number_res_type = false;
   int64_t utz_value = 0;
-  if (date_obj.is_string_type()) {  // string
+  if (date_obj.is_string_type()) { //string
     int16_t scale = DEFAULT_SCALE_FOR_INTEGER;
     ObTimeConvertCtx cvrt_ctx(NULL, false);
-    if (OB_FAIL(ObTimeConverter::str_to_datetime(date_obj.get_string(), cvrt_ctx, utz_value, &scale))) {
+    if (OB_FAIL(ObTimeConverter::str_to_datetime(
+                date_obj.get_string(), cvrt_ctx, utz_value, &scale, 0))) {
       LOG_WARN("failed to cast str to datetime", K(ret));
       is_number_res_type = true;
       type.set_scale(MAX_SCALE_FOR_TEMPORAL);
@@ -86,15 +96,20 @@ int ObExprUnixTimestamp::calc_result_type_literal(ObExprResType& type, ObExprRes
       type.set_scale(scale);
     }
   } else {
-    ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC);  // is this ok?
-    ObCastCtx cast_ctx(&oballocator, NULL, 0, CM_NONE, CS_TYPE_INVALID, NULL);
+    ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC); // is this ok?
+    ObCastCtx cast_ctx(&oballocator,
+                       NULL,
+                       0,
+                       CM_NONE,
+                       CS_TYPE_INVALID,
+                       NULL);
     EXPR_GET_DATETIME_V2(date_obj, utz_value);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to cast date to datetime", K(ret), K(date_obj));
       utz_value = 0;
     }
   }
-  // todo out-of-range date --> 0.000000
+  // todo (yeti) out-of-range date --> 0.000000
   if (is_number_res_type || utz_value % 1000000) {
     type.set_number();
     if (!type1.is_string_type()) {
@@ -110,7 +125,8 @@ int ObExprUnixTimestamp::calc_result_type_literal(ObExprResType& type, ObExprRes
   return ret;
 }
 
-int ObExprUnixTimestamp::calc_result_type_column(ObExprResType& type, ObExprResType& type1) const
+int ObExprUnixTimestamp::calc_result_type_column(ObExprResType &type,
+                             ObExprResType &type1) const
 {
   int ret = OB_SUCCESS;
   if (type1.is_string_type() || type1.is_double()) {
@@ -131,67 +147,8 @@ int ObExprUnixTimestamp::calc_result_type_column(ObExprResType& type, ObExprResT
   return ret;
 }
 
-int ObExprUnixTimestamp::calc_resultN(
-    ObObj& result, const ObObj* date_array, int64_t param, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(date_array) || OB_ISNULL(expr_ctx.phy_plan_ctx_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret));
-  } else {
-    ObObj date;
-    if (0 == param) {
-      if (!expr_ctx.phy_plan_ctx_->has_cur_time()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("physical plan context don't have current time value", K(ret));
-      } else {
-        date = expr_ctx.phy_plan_ctx_->get_cur_time();
-      }
-    } else if (1 == param) {
-      date = date_array[0];
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param is not right", K(ret));
-    }
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    // here use result_type_
-    if (OB_SUCCESS == ret && OB_FAIL(calc(result, date, result_type_, cast_ctx))) {
-      LOG_WARN("calc date value failed", K(ret));
-    }
-  }
-  return ret;
-}
-int ObExprUnixTimestamp::calc(ObObj& result, const ObObj& date, const ObExprResType& res_type, ObCastCtx& cast_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (date.is_null()) {
-    result.set_null();
-  } else if (ObTimestampType != date.get_type()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("type of date must be ObTimestampType", K(ret));
-  } else {
-    int64_t utz_value = 0;
-    utz_value = date.get_timestamp();
-    utz_value = utz_value < 0 ? 0 : utz_value;
-    if (ObIntType == res_type.get_type()) {
-      result.set_int(utz_value / 1000000);
-    } else {
-      number::ObNumber nmb;
-      number::ObNumber usec;
-      number::ObNumber res_nmb;
-      nmb.from(utz_value, cast_ctx);
-      int64_t v_usec = 1000000;
-      usec.from(v_usec, cast_ctx);
-      ret = nmb.div(usec, res_nmb, cast_ctx);
-      if (OB_SUCC(ret)) {
-        result.set_number(res_nmb);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprUnixTimestamp::eval_unix_timestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprUnixTimestamp::eval_unix_timestamp(const ObExpr &expr, ObEvalCtx &ctx, 
+                                       ObDatum &res)
 {
   int ret = OB_SUCCESS;
   int64_t utz_value = 0;
@@ -199,11 +156,11 @@ int ObExprUnixTimestamp::eval_unix_timestamp(const ObExpr& expr, ObEvalCtx& ctx,
   if (0 == expr.arg_cnt_) {
     CK(OB_NOT_NULL(ctx.exec_ctx_.get_physical_plan_ctx()));
     if (OB_SUCC(ret)) {
-      const ObObj& date = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time();
+      const ObObj &date = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time();
       utz_value = date.get_timestamp();
     }
   } else if (1 == expr.arg_cnt_) {
-    ObDatum* arg = NULL;
+    ObDatum *arg = NULL;
     if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
       LOG_WARN("eval arg failed", K(ret));
     } else if (arg->is_null()) {
@@ -221,9 +178,10 @@ int ObExprUnixTimestamp::eval_unix_timestamp(const ObExpr& expr, ObEvalCtx& ctx,
     ObObjType res_type = expr.datum_meta_.type_;
     utz_value = utz_value < 0 ? 0 : utz_value;
     if (ObIntType == res_type) {
-      res.set_int(utz_value / 1000000);
+      res.set_int(utz_value/ 1000000);
     } else if (ObNumberType == res_type) {
-      ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       number::ObNumber tmp_nmb;
       number::ObNumber res_nmb;
       number::ObNumber usec_nmb;
@@ -240,7 +198,8 @@ int ObExprUnixTimestamp::eval_unix_timestamp(const ObExpr& expr, ObEvalCtx& ctx,
   return ret;
 }
 
-int ObExprUnixTimestamp::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprUnixTimestamp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                              ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -248,5 +207,5 @@ int ObExprUnixTimestamp::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_
   rt_expr.eval_func_ = eval_unix_timestamp;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

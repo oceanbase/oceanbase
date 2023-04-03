@@ -18,31 +18,51 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_sys_context.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprUserEnv::ObExprUserEnv(common::ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_USERENV, N_USERENV, 1, NOT_ROW_DIMENSION)
-{}
+ObExprUserEnv::ObExprUserEnv(common::ObIAllocator &alloc)
+: ObFuncExprOperator(alloc,
+                    T_FUN_SYS_USERENV,
+                    N_USERENV,
+                    1, NOT_ROW_DIMENSION)
+{
+}
 
-ObExprUserEnv::~ObExprUserEnv()
-{}
+ObExprUserEnv::~ObExprUserEnv() {}
 
-ObExprUserEnv::UserEnvParameter ObExprUserEnv::parameters_[] = {
-    {"SCHEMAID", false, calc_schemaid_result1, eval_schemaid_result1},
-    {"SESSIONID", false, calc_sessionid_result1, eval_sessionid_result1}};
+ObExprUserEnv::UserEnvParameter ObExprUserEnv::parameters_[] =
+{
+  {"SCHEMAID", false, eval_schemaid_result1 },
+  {"SESSIONID", false, eval_sessionid_result1 },
+  {"LANG", true, eval_lang },
+  {"LANGUAGE", true, eval_language },
+  {"INSTANCE", false, eval_instance },
+  {"SID", false, eval_sessionid_result1},
+  {"CLIENT_INFO", true, eval_client_info},
+};
 
-int ObExprUserEnv::calc_result_type1(ObExprResType& type, ObExprResType& arg_type1, common::ObExprTypeCtx& type_ctx,
-    common::ObIArray<common::ObObj*>& arg_arrs) const
+ObExprUserEnv::NLS_Lang ObExprUserEnv::lang_map_[] =
+{
+  {"AMERICAN", "US"},
+};
+
+int ObExprUserEnv::calc_result_type1(ObExprResType& type,
+                                ObExprResType& arg_type1,
+                                common::ObExprTypeCtx& type_ctx,
+                                common::ObIArray<common::ObObj*> &arg_arrs) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(ObStringTC != arg_type1.get_type_class()) || OB_ISNULL(type_ctx.get_session())) {
+  if (OB_UNLIKELY(ObStringTC != arg_type1.get_type_class()) ||
+      OB_ISNULL(type_ctx.get_session())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument or session is NULL", K(ret), K(arg_type1.get_type_class()));
   } else {
@@ -50,24 +70,21 @@ int ObExprUserEnv::calc_result_type1(ObExprResType& type, ObExprResType& arg_typ
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument.", K(ret));
     } else {
-      const common::ObObj* value = arg_arrs.at(0);
+      const common::ObObj *value = arg_arrs.at(0);
       UserEnvParameter para;
-      if (type_ctx.get_session()->use_static_typing_engine()) {
-        // in parameter for userenv must be constant
-        // if it is not string, throw error
-        arg_type1.set_calc_type(arg_type1.get_type());
-      } else {
-        arg_type1.set_calc_type(common::ObVarcharType);
-      }
+      // userenv要求参数一定是常量
+      // CG时如果发现参数类型不是string，会报错
+      arg_type1.set_calc_type(arg_type1.get_type());
       arg_type1.set_calc_collation_type(arg_type1.get_collation_type());
-      if (OB_FAIL(check_arg_valid(*value, para))) {
+      if (OB_FAIL(check_arg_valid(*value, para, nullptr))) {
         LOG_WARN("fail to check argument", K(ret));
       } else if (para.is_str) {
-        // return string type
         type.set_varchar();
-        // FIXME:default length is 64, for different parameters, the return length is also different
-        type.set_length(DEFAULT_LENGTH);
         type.set_collation_type(type_ctx.get_session()->get_nls_collation());
+        type.set_collation_level(CS_LEVEL_SYSCONST);
+        const ObLengthSemantics def_ls = type_ctx.get_session()->get_actual_nls_length_semantics();
+        type.set_length_semantics(def_ls);
+        type.set_length(DEFAULT_LENGTH);
       } else {
         // return number type
         type.set_type(ObNumberType);
@@ -79,98 +96,51 @@ int ObExprUserEnv::calc_result_type1(ObExprResType& type, ObExprResType& arg_typ
   return ret;
 }
 
-int ObExprUserEnv::check_arg_valid(const common::ObObj& value, UserEnvParameter& para) const
+int ObExprUserEnv::check_arg_valid(const common::ObObj &value, UserEnvParameter &para,
+                                  ObIAllocator *alloc) const
 {
   int ret = OB_SUCCESS;
   bool found = false;
   if (ObStringTC == value.get_type_class()) {
     ObString data = value.get_varchar();
-
-    for (int64_t i = 0; !found && i < ARRAYSIZEOF(parameters_); ++i) {
-      if (0 == data.case_compare(parameters_[i].name)) {
-        found = true;
-        para = parameters_[i];
+    ObString convert_data;
+    if (nullptr == alloc) {
+      common::ObArenaAllocator tmp_alloc;
+      OZ(ObExprUtil::convert_string_collation(data, value.get_collation_type(), convert_data,
+                                              ObCharset::get_system_collation(), tmp_alloc));
+      for (int64_t i = 0; OB_SUCC(ret) && !found && i < ARRAYSIZEOF(parameters_); ++i) {
+        if (0 == convert_data.case_compare(parameters_[i].name)) {
+          found = true;
+          para = parameters_[i];
+        }
+      }
+    } else {
+      OZ(ObExprUtil::convert_string_collation(data, value.get_collation_type(), convert_data,
+                                              ObCharset::get_system_collation(), *alloc));
+      for (int64_t i = 0; OB_SUCC(ret) && !found && i < ARRAYSIZEOF(parameters_); ++i) {
+        if (0 == convert_data.case_compare(parameters_[i].name)) {
+          found = true;
+          para = parameters_[i];
+        }
       }
     }
   }
-  if (!found) {
+  if (OB_SUCC(ret) && !found) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(value), K(ret));
   }
   return ret;
 }
 
-int ObExprUserEnv::calc_result1(common::ObObj& result, const common::ObObj& arg1, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UserEnvParameter para;
-  if (OB_FAIL(check_arg_valid(arg1, para))) {
-    LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(para.calc(result, arg1, expr_ctx))) {
-    LOG_WARN("fail to calculate result", K(ret));
-  }
-  return ret;
-}
-
-int ObExprUserEnv::calc_schemaid_result1(common::ObObj& result, const common::ObObj& arg1, common::ObExprCtx& expr_ctx)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(arg1);
-
-  if (OB_ISNULL(expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr_ctx.my_session_ is null", K(ret));
-  } else {
-    // get schemaid
-    uint64_t dbid = OB_INVALID_ID;
-    share::schema::ObSchemaGetterGuard* schema_guard = expr_ctx.exec_ctx_->get_virtual_table_ctx().schema_guard_;
-    if (OB_ISNULL(schema_guard)) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("wrong schema", K(ret));
-    } else if (OB_FAIL(schema_guard->get_database_id(
-                   expr_ctx.my_session_->get_effective_tenant_id(), expr_ctx.my_session_->get_user_name(), dbid))) {
-      LOG_WARN("fail to get database id", K(ret));
-    } else {
-      number::ObNumber res_nmb;
-      if (OB_FAIL(res_nmb.from(dbid, *expr_ctx.calc_buf_))) {
-        LOG_WARN("fail to assign number", K(ret));
-      } else {
-        result.set_number(res_nmb);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprUserEnv::calc_sessionid_result1(common::ObObj& result, const common::ObObj& arg1, common::ObExprCtx& expr_ctx)
-{
-  UNUSED(arg1);
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr_ctx.my_session_ is null", K(ret));
-  } else {
-    number::ObNumber sid;
-    int64_t sid_ = expr_ctx.my_session_->get_sessid();
-    LOG_DEBUG("^^^^session id", K(*(expr_ctx.my_session_)), K(sid_));
-    if (OB_FAIL(sid.from(sid_, *expr_ctx.calc_buf_))) {
-      LOG_WARN("fail to assign number", K(ret), K(sid));
-    } else {
-      result.set_number(sid);
-    }
-  }
-  return ret;
-}
-
-int ObExprUserEnv::cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprUserEnv::cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
   UNUSED(raw_expr);
   // for now expr. res type must be ObNumberType and arg type must be string.
   // change calc_user_env_expr function if it is not true.
-  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) || OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) ||
-      ObNumberType != rt_expr.datum_meta_.type_ || !ob_is_string_type(rt_expr.args_[0]->datum_meta_.type_)) {
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) || OB_ISNULL(rt_expr.args_) ||
+      OB_ISNULL(rt_expr.args_[0]) || !ob_is_string_type(rt_expr.args_[0]->datum_meta_.type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid expr or arg res type", K(ret), K(rt_expr));
   } else {
@@ -179,21 +149,24 @@ int ObExprUserEnv::cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& 
   return ret;
 }
 
-int ObExprUserEnv::calc_user_env_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprUserEnv::calc_user_env_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();
   } else {
-    const ObString& arg_str = arg->get_string();
+    const ObString &arg_str = arg->get_string();
     ObString arg_str_utf8;
-    ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
-    const ObCollationType& arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-    if (OB_FAIL(ObExprUtil::convert_string_collation(
-            arg_str, arg_cs_type, arg_str_utf8, ObCharset::get_system_collation(), calc_alloc))) {
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    const ObCollationType &arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    // userenv表达式要求参数必须是const，所以不能加隐式cast,只能在这里手动转
+    if (OB_FAIL(ObExprUtil::convert_string_collation(arg_str, arg_cs_type, arg_str_utf8,
+                                                     ObCharset::get_system_collation(),
+                                                     calc_alloc))) {
       LOG_WARN("convert string collation failed", K(ret), K(arg_str), K(arg_cs_type));
     } else {
       UserEnvParameter para;
@@ -204,16 +177,21 @@ int ObExprUserEnv::calc_user_env_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatu
           para = parameters_[i];
         }
       }
-      OZ(para.eval(expr, ctx, res));
+      if (found) {
+        OZ(para.eval(expr, ctx, res));
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(arg_str_utf8), K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObExprUserEnv::eval_schemaid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprUserEnv::eval_schemaid_result1(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   CK(OB_NOT_NULL(ctx.exec_ctx_.get_my_session()));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
@@ -221,14 +199,18 @@ int ObExprUserEnv::eval_schemaid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObD
     } else if (arg->is_null()) {
       res.set_null();
     } else {
+      // 获取schemaid
+      // 对于oracle来说，由于schemaid和userid是一致的，不存在user在其他schema下
+      // 所以在这里，ob返回databaseid，即user名字对应的相同名字的database的id
       uint64_t dbid = OB_INVALID_ID;
-      share::schema::ObSchemaGetterGuard* schema_guard = ctx.exec_ctx_.get_virtual_table_ctx().schema_guard_;
-      if (OB_ISNULL(schema_guard)) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("wrong schema", K(ret));
-      } else if (OB_FAIL(schema_guard->get_database_id(ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
-                     ctx.exec_ctx_.get_my_session()->get_user_name(),
-                     dbid))) {
+      share::schema::ObSchemaGetterGuard schema_guard;
+      if (OB_FAIL(ObExprSysContext::get_schema_guard(schema_guard,
+                  ctx.exec_ctx_.get_my_session()->get_effective_tenant_id()))) {
+        LOG_WARN("failed to get schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard.get_database_id(
+        ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+        ctx.exec_ctx_.get_my_session()->get_user_name(),
+        dbid))) {
         LOG_WARN("fail to get database id", K(ret));
       } else {
         number::ObNumber res_nmb;
@@ -244,10 +226,10 @@ int ObExprUserEnv::eval_schemaid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObD
   return ret;
 }
 
-int ObExprUserEnv::eval_sessionid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprUserEnv::eval_sessionid_result1(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   CK(OB_NOT_NULL(ctx.exec_ctx_.get_my_session()));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
@@ -268,5 +250,131 @@ int ObExprUserEnv::eval_sessionid_result1(const ObExpr& expr, ObEvalCtx& ctx, Ob
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObExprUserEnv::eval_instance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  uint64_t instance_id = GCTX.server_id_;
+  number::ObNumber res_nmb;
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+  if (OB_FAIL(res_nmb.from(instance_id, calc_alloc))) {
+    LOG_WARN("failed to get number", K(ret));
+  } else {
+    res.set_number(res_nmb);
+  }
+  return ret;
+}
+
+int ObExprUserEnv::eval_language(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  ObObj language;
+  ObObj territory;
+  ObObj characterset;
+  //return language_territory.characterset
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  CK(OB_NOT_NULL(session));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(session->get_sys_variable(SYS_VAR_NLS_LANGUAGE, language))) {
+      LOG_WARN("failed to get sys var", K(ret));
+    } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_NLS_TERRITORY, territory))) {
+      LOG_WARN("failed to get sys var", K(ret));
+    } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_NLS_CHARACTERSET, characterset))) {
+      LOG_WARN("failed to get sys var", K(ret));
+    } else {
+      const int64_t MAX_LANGUAGE_LEN = 256;
+      char language_str[MAX_LANGUAGE_LEN];
+      int64_t pos = 0;
+      if (OB_UNLIKELY(MAX_LANGUAGE_LEN < language.get_string().length()
+                                         + territory.get_string().length()
+                                         + characterset.get_string().length() + 2)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("language str is not enough", K(ret));
+      } else {
+        MEMCPY(language_str, language.get_string().ptr(), language.get_string().length());
+        pos += language.get_string().length();
+        language_str[pos++] = '_';
+        MEMCPY(language_str + pos, territory.get_string().ptr(), territory.get_string().length());
+        pos += territory.get_string().length();
+        language_str[pos++] = '.';
+        MEMCPY(language_str + pos, characterset.get_string().ptr(),
+                                   characterset.get_string().length());
+        pos += characterset.get_string().length();
+        ObString out_language(pos, language_str);
+        ObExprStrResAlloc res_alloc(expr, ctx);
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        OZ(ObExprUtil::convert_string_collation(out_language, ObCharset::get_system_collation(),
+                                                out_language, expr.datum_meta_.cs_type_,
+                                                calc_alloc));
+        OZ(deep_copy_ob_string(res_alloc, out_language, out_language));
+        OX(res.set_string(out_language));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprUserEnv::eval_lang(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  ObObj language;
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  CK(OB_NOT_NULL(session));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(session->get_sys_variable(SYS_VAR_NLS_LANGUAGE, language))) {
+      LOG_WARN("failed to get sys var", K(ret));
+    } else {
+      bool found = false;
+      ObString abbreviated;
+      for (int64_t i = 0; !found && i < ARRAYSIZEOF(lang_map_); ++i) {
+        if (0 == language.get_string().case_compare(lang_map_[i].language)) {
+          found = true;
+          abbreviated.assign(lang_map_[i].abbreviated,
+                             static_cast<int32_t>(strlen(lang_map_[i].abbreviated)));
+        }
+      }
+      if (!found) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(language));
+      } else {
+        ObExprStrResAlloc res_alloc(expr, ctx);
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        OZ(ObExprUtil::convert_string_collation(abbreviated, ObCharset::get_system_collation(),
+                                                abbreviated, expr.datum_meta_.cs_type_,
+                                                calc_alloc));
+        OZ(deep_copy_ob_string(res_alloc, abbreviated, abbreviated));
+        OX(res.set_string(abbreviated));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprUserEnv::eval_client_info(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  CK(OB_NOT_NULL(session));
+  if (OB_SUCC(ret)) {
+    ObString client_info;
+    ObExprStrResAlloc res_alloc(expr, ctx);
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    OZ(ObExprUtil::convert_string_collation(session->get_client_info(),
+                                            ObCharset::get_system_collation(),
+                                            client_info, expr.datum_meta_.cs_type_,
+                                            calc_alloc));
+    OZ(deep_copy_ob_string(res_alloc, client_info, client_info));
+    OX(res.set_string(client_info));
+  }
+  return ret;
+}
+
+} //namespace sql
+} //namespace oceanbase

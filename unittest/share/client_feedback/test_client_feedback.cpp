@@ -16,8 +16,10 @@
 #include "share/client_feedback/ob_client_feedback_manager.h"
 #include "share/partition_table/ob_partition_location.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace obmysql;
 using namespace std;
@@ -81,6 +83,7 @@ TEST(ObFeedbackPartitionLocation, common)
   AS;
   ASSERT_EQ(fpl2, fpl);
 
+
   fpl.reset();
   fpl.set_table_id(1);
   fpl.set_partition_id(1);
@@ -105,7 +108,7 @@ TEST(ObFeedbackPartitionLocation, common)
   ASSERT_TRUE(pos > 0);
 
   pos = 0;
-  ret = fpl2.deserialize(buf, LEN, pos);
+  ret =  fpl2.deserialize(buf, LEN, pos);
   AS;
 
   ASSERT_EQ(fpl2, fpl);
@@ -156,24 +159,24 @@ TEST(ObFeedbackManager, common)
   ret = fbm.add_partition_fb_info(param);
   AS;
   param.schema_version_ = 2;
-  ret = fbm.add_partition_fb_info(param);  // override
+  ret = fbm.add_partition_fb_info(param); // override
   AS;
   param.schema_version_ = 3;
-  ret = fbm.add_partition_fb_info(param);  // override
+  ret = fbm.add_partition_fb_info(param); // override
   AS;
   param.schema_version_ = 4;
-  ret = fbm.add_partition_fb_info(param);  // override
+  ret = fbm.add_partition_fb_info(param); // override
   AS;
 
   ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER);
   AS;
-  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER);  // override
+  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER); // override
   AS;
-  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER);  // override
+  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER); // override
   AS;
-  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER);  // override
+  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER); // override
   AS;
-  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER);  // override
+  ret = fbm.add_follower_first_fb_info(FFF_HIT_LEADER); // override
   AS;
 
   const int64_t LEN = 100;
@@ -246,14 +249,12 @@ TEST(ObFeedbackManager, common)
   ASSERT_EQ(*(fbm2.get_pl_feedback()), *(fbm.get_pl_feedback()));
 }
 
-class ObForwardCompatibilityFeedbackPartitionLocation
-    : public ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation> {
+class ObForwardCompatibilityFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation>
+{
 public:
-  ObForwardCompatibilityFeedbackPartitionLocation()
-      : ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
+  ObForwardCompatibilityFeedbackPartitionLocation() : ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
   {}
-  virtual ~ObForwardCompatibilityFeedbackPartitionLocation()
-  {}
+  virtual ~ObForwardCompatibilityFeedbackPartitionLocation() {}
   FB_OBJ_DEFINE_METHOD;
 
 public:
@@ -261,8 +262,7 @@ public:
   int64_t partition_id_;
 };
 
-int ObForwardCompatibilityFeedbackPartitionLocation::serialize_struct_content(
-    char* buf, const int64_t len, int64_t& pos) const
+int ObForwardCompatibilityFeedbackPartitionLocation::serialize_struct_content(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   OB_FB_ENCODE_INT(table_id_);
@@ -275,8 +275,7 @@ inline bool ObForwardCompatibilityFeedbackPartitionLocation::is_valid_obj() cons
   return true;
 }
 
-int ObForwardCompatibilityFeedbackPartitionLocation::deserialize_struct_content(
-    char* buf, const int64_t len, int64_t& pos)
+int ObForwardCompatibilityFeedbackPartitionLocation::deserialize_struct_content(char *buf, const int64_t len, int64_t &pos)
 {
   UNUSED(buf);
   UNUSED(len);
@@ -310,14 +309,12 @@ TEST(ObFeedbackPartitionLocation, forward_compatibility)
   ASSERT_EQ(fpl.get_replica_array()->count(), 0);
 }
 
-class ObBackwardCompatibilityFeedbackPartitionLocation
-    : public ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation> {
+class ObBackwardCompatibilityFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation>
+{
 public:
-  ObBackwardCompatibilityFeedbackPartitionLocation()
-      : ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
+  ObBackwardCompatibilityFeedbackPartitionLocation() : ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
   {}
-  virtual ~ObBackwardCompatibilityFeedbackPartitionLocation()
-  {}
+  virtual ~ObBackwardCompatibilityFeedbackPartitionLocation() {}
   FB_OBJ_DEFINE_METHOD;
 
 public:
@@ -330,8 +327,7 @@ public:
   int64_t test_2_;
 };
 
-int ObBackwardCompatibilityFeedbackPartitionLocation::serialize_struct_content(
-    char* buf, const int64_t len, int64_t& pos) const
+int ObBackwardCompatibilityFeedbackPartitionLocation::serialize_struct_content(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   OB_FB_ENCODE_INT(table_id_);
@@ -348,8 +344,7 @@ inline bool ObBackwardCompatibilityFeedbackPartitionLocation::is_valid_obj() con
   return true;
 }
 
-int ObBackwardCompatibilityFeedbackPartitionLocation::deserialize_struct_content(
-    char* buf, const int64_t len, int64_t& pos)
+int ObBackwardCompatibilityFeedbackPartitionLocation::deserialize_struct_content(char *buf, const int64_t len, int64_t &pos)
 {
   UNUSED(buf);
   UNUSED(len);
@@ -398,10 +393,10 @@ TEST(ObFeedbackPartitionLocation, backward_compatibility)
   ASSERT_EQ(bcfpl.replicas_.count(), fpl.get_replica_array()->count());
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

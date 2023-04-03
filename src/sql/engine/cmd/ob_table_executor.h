@@ -17,295 +17,257 @@
 #include "common/sql_mode/ob_sql_mode.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/ob_rpc_struct.h"
-namespace oceanbase {
-namespace share {
-namespace schema {
-class ObPartition;
-class ObSubPartition;
-class ObBasePartition;
+#include "sql/ob_sql_context.h"
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
+struct ObPartition;
+struct ObSubPartition;
+struct ObBasePartition;
 class ObMultiVersionSchemaService;
-}  // namespace schema
-}  // namespace share
-namespace obrpc {
-class ObAlterTableArg;
 }
-namespace common {
+}
+namespace obrpc
+{
+struct ObAlterTableArg;
+}
+namespace common
+{
 class ObIAllocator;
-class ObExprCtx;
+struct ObExprCtx;
 class ObNewRow;
-namespace sqlclient {
+// namespace sqlclient
+// {
 class ObMySQLProxy;
+// }
 }
-}  // namespace common
-namespace sql {
+namespace sql
+{
 class ObExecContext;
 class ObRawExpr;
 class ObCreateTableStmt;
 class ObTableStmt;
 
-class ObTableExecutorUtils {
-public:
-  static int get_first_stmt(
-      const common::ObString& stmt, common::ObString& first_stmt, ObSQLMode sql_mode = DEFAULT_OCEANBASE_MODE);
-};
-
-class ObCreateTableExecutor {
+class ObCreateTableExecutor
+{
 public:
   ObCreateTableExecutor();
   virtual ~ObCreateTableExecutor();
-  int execute(ObExecContext& ctx, ObCreateTableStmt& stmt);
-  int set_index_arg_list(ObExecContext& ctx, ObCreateTableStmt& stmt);
-  int execute_ctas(ObExecContext& ctx, ObCreateTableStmt& stmt, obrpc::ObCommonRpcProxy* common_rpc_proxy);
-
+  int execute(ObExecContext &ctx, ObCreateTableStmt &stmt);
+  int set_index_arg_list(ObExecContext &ctx, ObCreateTableStmt &stmt);
+  int execute_ctas(ObExecContext &ctx, ObCreateTableStmt &stmt, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
-  int prepare_ins_arg(ObCreateTableStmt& stmt, const ObSQLSessionInfo* my_session, ObSqlString& ins_sql);
-  int prepare_alter_arg(
-      ObCreateTableStmt& stmt, const ObSQLSessionInfo* my_session, obrpc::ObAlterTableArg& alter_table_arg);
-  int prepare_drop_arg(const ObCreateTableStmt& stmt, const ObSQLSessionInfo* my_session,
-      obrpc::ObTableItem& table_item, obrpc::ObDropTableArg& drop_table_arg);
+  int prepare_stmt(ObCreateTableStmt &stmt, const ObSQLSessionInfo &my_session, ObString &create_table_name);
+  int prepare_ins_arg(ObCreateTableStmt &stmt,
+                      const ObSQLSessionInfo *my_session,
+                      ObSchemaGetterGuard *schema_guard,
+                      const ParamStore *param_store,
+                      ObSqlString &ins_sql);
+  int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, obrpc::ObAlterTableArg &alter_table_arg);
+  int prepare_drop_arg(const ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, obrpc::ObTableItem &table_item, obrpc::ObDropTableArg &drop_table_arg);
 };
 
 class ObAlterTableStmt;
-class ObAlterTableExecutor {
+class ObAlterTableExecutor
+{
 public:
   ObAlterTableExecutor();
   virtual ~ObAlterTableExecutor();
-  int execute(ObExecContext& ctx, ObAlterTableStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
 private:
-  struct PartitionServer {
-    PartitionServer() : pkey_(), server_()
-    {}
-    void reset()
-    {
-      pkey_.reset();
-      server_.reset();
-    }
-    TO_STRING_KV(K(pkey_), K(server_));
-    int set_server(const common::ObAddr& server)
-    {
-      int ret = common::OB_SUCCESS;
-      if (!server.is_valid()) {
-        ret = common::OB_INVALID_ARGUMENT;
-        RS_LOG(WARN, "invalid argument", K(ret), K(server));
-      } else {
-        server_ = server;
-      }
-      return ret;
-    }
-    int set_partition_key(const common::ObPartitionKey& pkey)
-    {
-      int ret = common::OB_SUCCESS;
-      if (!pkey.is_valid()) {
-        ret = common::OB_INVALID_ARGUMENT;
-        RS_LOG(WARN, "invalid argument", K(ret), K(pkey));
-      } else {
-        pkey_ = pkey;
-      }
-      return ret;
-    }
-    int set(const common::ObAddr& server, common::ObPartitionKey& pkey)
-    {
-      int ret = common::OB_SUCCESS;
-      if (!server.is_valid() || !pkey.is_valid()) {
-        ret = common::OB_INVALID_ARGUMENT;
-        RS_LOG(WARN, "invalid argument", K(ret), K(server), K(pkey));
-      } else {
-        server_ = server;
-        pkey_ = pkey;
-      }
-      return ret;
-    }
-    int set(
-        const common::ObAddr& server, const uint64_t table_id, const int64_t partition_id, const int64_t partition_cnt)
-    {
-      int ret = common::OB_SUCCESS;
-      if (!server.is_valid()) {
-        ret = common::OB_INVALID_ARGUMENT;
-        RS_LOG(WARN, "invalid argument", K(ret), K(server));
-      } else if (OB_FAIL(pkey_.init(table_id, partition_id, partition_cnt))) {
-        RS_LOG(WARN, "fail to init pkey", K(ret), K(table_id), K(partition_id), K(partition_cnt));
-      } else {
-        server_ = server;
-      }
-      return ret;
-    }
-    common::ObPartitionKey pkey_;
-    common::ObAddr server_;
-  };
-  static const int64_t TIME_INTERVAL_PER_PART_US = 50 * 1000;                          // 50ms
-  static const int64_t MAX_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 120LL * 1000000LL;  // 120s
-  static const int64_t MIN_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 20LL * 1000000LL;   // 20s
-  static const int64_t WAIT_US = 500 * 1000;                                           // 500ms
-  static const int64_t GET_ASSOCIATED_SNAPSHOT_TIMEOUT = 9000000LL;                    // 9s
+  static const int64_t TIME_INTERVAL_PER_PART_US = 50 * 1000; // 50ms
+  static const int64_t MAX_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 120LL * 1000000LL; // 120s
+  static const int64_t MIN_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 20LL * 1000000LL; // 20s
+  static const int64_t WAIT_US = 500 * 1000; // 500ms
+  static const int64_t GET_ASSOCIATED_SNAPSHOT_TIMEOUT = 9000000LL; // 9s
 
-  int alter_table_rpc_v1(obrpc::ObAlterTableArg& alter_table_arg, obrpc::ObAlterTableRes& res,
-      common::ObIAllocator& allocator, obrpc::ObCommonRpcProxy* common_rpc_proxy, ObSQLSessionInfo* my_session,
+  int check_constraint_validity(ObExecContext &ctx,
+      obrpc::ObAlterTableArg &alter_table_arg,
+      common::ObIAllocator &allocator,
+      obrpc::ObAlterTableRes &res,
+      obrpc::ObCommonRpcProxy &common_rpc_proxy,
+      ObString first_stmt,
+      const bool need_modify_notnull_validate);
+
+  int alter_table_rpc_v2(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      obrpc::ObAlterTableRes &res,
+      common::ObIAllocator &allocator,
+      obrpc::ObCommonRpcProxy *common_rpc_proxy,
+      ObSQLSessionInfo *my_session,
       const bool is_sync_ddl_user);
 
-  int alter_table_rpc_v2(obrpc::ObAlterTableArg& alter_table_arg, obrpc::ObAlterTableRes& res,
-      common::ObIAllocator& allocator, obrpc::ObCommonRpcProxy* common_rpc_proxy, ObSQLSessionInfo* my_session,
-      const bool is_sync_ddl_user);
+  int need_check_constraint_validity(obrpc::ObAlterTableArg &alter_table_arg, bool &need_check);
 
-  int set_alter_col_nullable_ddl_stmt_str(obrpc::ObAlterTableArg& alter_table_arg, common::ObIAllocator& allocator);
+  int set_alter_col_nullable_ddl_stmt_str(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      common::ObIAllocator &allocator);
 
-  int set_drop_constraint_ddl_stmt_str(obrpc::ObAlterTableArg& alter_table_arg, common::ObIAllocator& allocator);
+  int check_alter_partition(
+      ObExecContext &ctx,
+      ObAlterTableStmt &stmt,
+      const obrpc::ObAlterTableArg &arg);
+  int resolve_alter_column_partition_expr(
+      const share::schema::ObColumnSchemaV2 &col_schema,
+      const share::schema::ObTableSchema &table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObSQLSessionInfo &session_info,
+      common::ObIAllocator &allocator,
+      const bool is_sub_part,
+      ObExprResType &dst_res_type);
+  template<class T>
+  int calc_range_part_high_bound(
+      const ObPartitionFuncType part_func_type,
+      const ObString &col_name,
+      const ObExprResType &dst_res_type,
+      T &part,
+      ObExecContext &ctx);
+  int calc_range_values_exprs(
+      const share::schema::ObColumnSchemaV2 &col_schema,
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::ObTableSchema &new_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObSQLSessionInfo &session_info,
+      common::ObIAllocator &allocator,
+      ObExecContext &ctx,
+      const bool is_subpart);
+  template<class T>
+  int calc_list_part_rows(
+    const ObPartitionFuncType part_func_type,
+    const ObString &col_name,
+    const ObExprResType &dst_res_type,
+    const T &orig_part,
+    T &new_part,
+    ObExecContext &ctx,
+    common::ObIAllocator &allocator);
+  int calc_list_values_exprs(
+      const share::schema::ObColumnSchemaV2 &col_schema,
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::ObTableSchema &new_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObSQLSessionInfo &session_info,
+      common::ObIAllocator &allocator,
+      ObExecContext &ctx,
+      const bool is_subpart);
+  int check_alter_part_key(ObExecContext &ctx,
+                           obrpc::ObAlterTableArg &arg);
 
-  int set_alter_constraint_ddl_stmt_str_for_check(
-      obrpc::ObAlterTableArg& alter_table_arg, common::ObIAllocator& allocator);
-
-  int set_alter_constraint_ddl_stmt_str_for_fk(
-      obrpc::ObAlterTableArg& alter_table_arg, common::ObIAllocator& allocator);
-
-  int init_build_snapshot_ctx(const common::ObIArray<PartitionServer>& partition_leader_array,
-      common::ObIArray<int64_t>& invalid_snapshot_id_array, common::ObIArray<int64_t>& snapshot_array);
-
-  int generate_original_table_partition_leader_array(ObExecContext& ctx,
-      share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObTableSchema* data_schema,
-      common::ObIArray<PartitionServer>& partition_leader_array);
-
-  int update_partition_leader_array(common::ObIArray<PartitionServer>& partition_leader_array,
-      const common::ObIArray<int>& ret_code_array, const common::ObIArray<int64_t>& invalid_snapshot_id_array);
-
-  int pick_build_snapshot(const common::ObIArray<int64_t>& snapshot_array, int64_t& snapshot);
-
-  template <typename PROXY>
-  int update_build_snapshot_ctx(PROXY& proxy, const common::ObIArray<int>& ret_code_array,
-      common::ObIArray<int64_t>& invalid_snapshot_id_array, common::ObIArray<int64_t>& snapshot_array);
-
-  template <typename PROXY, typename ARG>
-  int do_get_associated_snapshot(PROXY& rpc_proxy, ARG& rpc_arg, int64_t schema_version,
-      const share::schema::ObTableSchema* data_schema, common::ObIArray<PartitionServer>& partition_leader_array,
-      int64_t& snapshot);
-
-  int get_constraint_check_snapshot(ObExecContext& ctx, int64_t schema_version,
-      share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t table_id, int64_t& snapshot);
-
-  int check_data_validity_for_check_by_inner_sql(const share::schema::AlterTableSchema& alter_table_schema,
-      ObCommonSqlProxy* sql_proxy, const ObString& check_expr_str, bool& is_data_valid);
-
-  int check_check_constraint_data_validity(ObExecContext& ctx, const obrpc::ObAlterTableArg& alter_table_arg,
-      ObCommonSqlProxy* sql_proxy, int64_t schema_version, const ObString& check_expr_str, bool& is_data_valid);
-
-  int check_data_validity_for_fk_by_inner_sql(const share::schema::AlterTableSchema& alter_table_schema,
-      const obrpc::ObCreateForeignKeyArg& fk_arg, ObCommonSqlProxy* sql_proxy, bool& is_data_valid);
-
-  int check_fk_constraint_data_validity(ObExecContext& ctx, const obrpc::ObAlterTableArg& alter_table_arg,
-      ObCommonSqlProxy* sql_proxy, int64_t schema_version, bool& is_data_valid);
-
-  int check_alter_partition(ObExecContext& ctx, ObAlterTableStmt& stmt, const obrpc::ObAlterTableArg& arg);
-
-  int set_index_arg_list(ObExecContext& ctx, ObAlterTableStmt& stmt);
+  int set_index_arg_list(ObExecContext &ctx, ObAlterTableStmt &stmt);
 
   int refresh_schema_for_table(const uint64_t tenant_id);
-
 private:
-  // DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
+  //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };
 
 class ObDropTableStmt;
-class ObDropTableExecutor {
+class ObDropTableExecutor
+{
 public:
   ObDropTableExecutor();
   virtual ~ObDropTableExecutor();
-  int execute(ObExecContext& ctx, ObDropTableStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObDropTableStmt &stmt);
 private:
 };
 
 class ObRenameTableStmt;
-class ObRenameTableExecutor {
+class ObRenameTableExecutor
+{
 public:
   ObRenameTableExecutor();
   virtual ~ObRenameTableExecutor();
-  int execute(ObExecContext& ctx, ObRenameTableStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObRenameTableStmt &stmt);
 private:
+
 };
 
 class ObTruncateTableStmt;
-class ObTruncateTableExecutor {
+class ObTruncateTableExecutor
+{
 public:
   ObTruncateTableExecutor();
   virtual ~ObTruncateTableExecutor();
-  int execute(ObExecContext& ctx, ObTruncateTableStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
 private:
+
 };
 
 class ObCreateTableLikeStmt;
-class ObCreateTableLikeExecutor {
+class ObCreateTableLikeExecutor
+{
 public:
   ObCreateTableLikeExecutor();
   virtual ~ObCreateTableLikeExecutor();
-  int execute(ObExecContext& ctx, ObCreateTableLikeStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObCreateTableLikeStmt &stmt);
 private:
+
 };
 
 class ObFlashBackTableFromRecyclebinStmt;
-class ObFlashBackTableFromRecyclebinExecutor {
+class ObFlashBackTableFromRecyclebinExecutor
+{
 public:
-  ObFlashBackTableFromRecyclebinExecutor()
-  {}
-  virtual ~ObFlashBackTableFromRecyclebinExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObFlashBackTableFromRecyclebinStmt& stmt);
-
+  ObFlashBackTableFromRecyclebinExecutor() {}
+  virtual ~ObFlashBackTableFromRecyclebinExecutor() {}
+  int execute(ObExecContext &ctx, ObFlashBackTableFromRecyclebinStmt &stmt);
 private:
 };
 
 class ObFlashBackTableToScnStmt;
-class ObFlashBackTableToScnExecutor {
+class ObFlashBackTableToScnExecutor
+{
 public:
-  ObFlashBackTableToScnExecutor()
-  {}
-  virtual ~ObFlashBackTableToScnExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObFlashBackTableToScnStmt& stmt);
-
+  ObFlashBackTableToScnExecutor() {}
+  virtual ~ObFlashBackTableToScnExecutor() {}
+  int execute(ObExecContext &ctx, ObFlashBackTableToScnStmt &stmt);
 private:
 };
 
 class ObPurgeTableStmt;
-class ObPurgeTableExecutor {
+class ObPurgeTableExecutor
+{
 public:
-  ObPurgeTableExecutor()
-  {}
-  virtual ~ObPurgeTableExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObPurgeTableStmt& stmt);
-
+  ObPurgeTableExecutor() {}
+  virtual ~ObPurgeTableExecutor() {}
+  int execute(ObExecContext &ctx, ObPurgeTableStmt &stmt);
 private:
 };
 
 class ObOptimizeTableStmt;
-class ObOptimizeTableExecutor {
+class ObOptimizeTableExecutor
+{
 public:
   ObOptimizeTableExecutor() = default;
   virtual ~ObOptimizeTableExecutor() = default;
-  int execute(ObExecContext& ctx, ObOptimizeTableStmt& stmt);
+  int execute(ObExecContext &ctx, ObOptimizeTableStmt &stmt);
 };
 
 class ObOptimizeTenantStmt;
-class ObOptimizeTenantExecutor {
+class ObOptimizeTenantExecutor
+{
 public:
   ObOptimizeTenantExecutor() = default;
   virtual ~ObOptimizeTenantExecutor() = default;
-  int execute(ObExecContext& ctx, ObOptimizeTenantStmt& stmt);
-  static int optimize_tenant(const obrpc::ObOptimizeTenantArg& arg, const uint64_t tenant_id,
-      share::schema::ObMultiVersionSchemaService& schema_service, obrpc::ObCommonRpcProxy* common_rpc_proxy);
+  int execute(ObExecContext &ctx, ObOptimizeTenantStmt &stmt);
+  static int optimize_tenant(const obrpc::ObOptimizeTenantArg &arg,
+      const uint64_t tenant_id,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      obrpc::ObCommonRpcProxy *common_rpc_proxy);
 };
 
 class ObOptimizeAllStmt;
-class ObOptimizeAllExecutor {
+class ObOptimizeAllExecutor
+{
 public:
   ObOptimizeAllExecutor() = default;
   virtual ~ObOptimizeAllExecutor() = default;
-  int execute(ObExecContext& ctx, ObOptimizeAllStmt& stmt);
+  int execute(ObExecContext &ctx, ObOptimizeAllStmt &stmt);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} //end namespace sql
+} //end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_TABLE_EXECUTOR_
+
+#endif //OCEANBASE_SQL_OB_TABLE_EXECUTOR_

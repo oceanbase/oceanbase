@@ -1,0 +1,51 @@
+# owner: bin.lb
+# owner group: sql2
+# tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select substr('abcdef', 0) from dual;
+select substr('abcdef', -1) from dual;
+select substr('abcdef', 1) from dual;
+select substr('abcdef', 2) from dual;
+select substr('abcdef', 10) from dual;
+select substr('', 1) from dual;
+select substr('abcdef', 10) from dual;
+select substr('abcdef', 2, 1) from dual;
+select substr('abcdef', 2, 2) from dual;
+select substr('abcdef', 2, 0) from dual;
+select substr('abcdef', 2, -1) from dual;
+select substr('abcdef', 2, 100) from dual;
+select substr('', 2, 100) from dual;
+
+select substr(NULL, 2, 1) from dual;
+select substr('abcdef', NULL, 1) from dual;
+select substr('abcdef', 2, NULL) from dual;
+
+
+--disable_warnings
+select substr(3.14159, 2, 3) from dual;
+explain select substr(3.14159, '2', '3') from dual;
+select substr(3.14159, '2', '2.1') from dual;
+select substr(3.14159, '2', '2.9') from dual;
+select substr(3.14159, '2', '2.9') from dual;
+select substr(3.14159, '2.1', '2.9') from dual;
+select substr(3.14159, '2.9', '2.9') from dual;
+select substr(3.14159, 2.1, '2.9') from dual;
+select substr(3.14159, 2.9, '2.9') from dual;
+select substr(3.14159, 2.9, 2.9) from dual;
+select substr(3.14159, 2.1, 2.1) from dual;
+--enable_warnings
+
+connection syscon;
+--sleep 2

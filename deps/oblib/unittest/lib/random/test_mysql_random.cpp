@@ -12,16 +12,19 @@
 
 #include <gtest/gtest.h>
 #include "lib/random/ob_mysql_random.h"
+#include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class TestMysqlRandom : public ::testing::Test {
+class TestMysqlRandom : public ::testing::Test
+{
 public:
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+
 };
 
 TEST_F(TestMysqlRandom, main_test)
@@ -29,7 +32,7 @@ TEST_F(TestMysqlRandom, main_test)
   double res_double = 0;
   uint64_t res_uint = 0;
   char res_buf[21];
-  // test static methods
+  //test static methods
 
   ObMysqlRandom random;
   ASSERT_TRUE(false == random.is_inited());
@@ -67,10 +70,10 @@ TEST_F(TestMysqlRandom, main_test)
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

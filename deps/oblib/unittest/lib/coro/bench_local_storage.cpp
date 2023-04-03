@@ -20,7 +20,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 using namespace std;
 
-static constexpr auto CNT = 1000L * 1000L * 100L;
+static constexpr auto CNT = 1000L*1000L*100L;
 
 void bench(string name, void (*func)())
 {
@@ -28,7 +28,9 @@ void bench(string name, void (*func)())
   func();
   auto end_ts = ObTimeUtility::current_time();
   auto elapsed = end_ts - start_ts;
-  cout << name << ": " << CNT / elapsed << "Mps" << endl;
+  if (end_ts > start_ts) {
+    cout << name << ": " <<   CNT / elapsed << "Mps" << endl;
+  }
 }
 
 void bench_thread_local()
@@ -43,7 +45,7 @@ void bench_thread_local()
 
 void bench_co_local()
 {
-  static RLOCAL(int64_t, var);
+  RLOCAL(int64_t, var);
   bench(__FUNCTION__, [] {
     for (int64_t i = 0; i < CNT; i++) {
       var += i << 1;

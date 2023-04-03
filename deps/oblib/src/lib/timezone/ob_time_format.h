@@ -15,16 +15,18 @@
 
 #include <stdint.h>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-// enum enum_ob_timestamp_type
+//enum enum_ob_timestamp_type
 //{
 //  OB_TIMESTAMP_NONE= -2, OB_TIMESTAMP_ERROR= -1,
 //  OB_TIMESTAMP_DATE= 0, OB_TIMESTAMP_DATETIME= 1, OB_TIMESTAMP_TIME= 2
 //};
 
-// typedef struct
+//typedef struct
 //{
 //  /*
 //    this format is different since in the struct tm,
@@ -35,7 +37,7 @@ namespace common {
 //  bool     neg;
 //} OB_TIME;
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif

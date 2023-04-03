@@ -17,5 +17,5 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-OB_SERIALIZE_MEMBER(ObOpMetric, enable_audit_, id_, type_, first_in_ts_, first_out_ts_, last_in_ts_, last_out_ts_,
-    counter_, exec_time_);
+
+OB_SERIALIZE_MEMBER(ObOpMetric, enable_audit_, id_, type_, first_in_ts_, first_out_ts_, last_in_ts_, last_out_ts_, counter_, exec_time_, eof_);

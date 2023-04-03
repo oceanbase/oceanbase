@@ -22,8 +22,10 @@
 #include "share/config/ob_server_config.h"
 #include <pthread.h>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 using namespace obrpc;
 using testing::_;
 using testing::Return;
@@ -202,38 +204,32 @@ TEST(common, ObDSSessionActions)
   ASSERT_TRUE(aa.is_empty());
 }
 
-class Timer {
+class Timer
+{
 public:
-  Timer()
-  {
-    begin_ = ::oceanbase::common::ObTimeUtility::current_time();
-  }
-  int64_t used() const
-  {
-    return ::oceanbase::common::ObTimeUtility::current_time() - begin_;
-  }
-
+  Timer() { begin_ = ::oceanbase::common::ObTimeUtility::current_time(); }
+  int64_t used() const { return ::oceanbase::common::ObTimeUtility::current_time() - begin_; }
 public:
   int64_t begin_;
 };
 
-static ObDSEventControl global_event_control;  // avoid large stack object
+static ObDSEventControl global_event_control; // avoid large stack object
 #define WAIT_TIME 200000
 #define WAIT_TIME_SAFE (WAIT_TIME * 9 / 10)
 
 #define TO_STRING_(x) #x
 #define TO_STRING(x) "" TO_STRING_(x)
 
-void* run_wait(void* arg)
+void *run_wait(void *arg)
 {
-  ObDSEventControl* ec = static_cast<ObDSEventControl*>(arg);
+  ObDSEventControl *ec = static_cast<ObDSEventControl *>(arg);
   ec->wait("multi-thread-event", WAIT_TIME, true);
   return NULL;
 }
 
 TEST(common, ObDSEventControl)
 {
-  ObDSEventControl& ec = global_event_control;
+  ObDSEventControl &ec = global_event_control;
   ASSERT_NE(OB_SUCCESS, ec.signal(""));
 
   ObSqlString event;
@@ -312,7 +308,7 @@ TEST(debug_sync, ObDebugSync)
   ASSERT_NE(&GDS.rpc_spread_actions(), GDS.thread_local_actions());
 
   // test debug sync parser
-  const bool L = false;  // local
+  const bool L = false; // local
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  reset   ", L, sa));
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  now  clear    ", L, sa));
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("now  signal x", L, sa));
@@ -323,8 +319,7 @@ TEST(debug_sync, ObDebugSync)
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  now  wait_for x-y  no_clear_event execute 2 ", L, sa));
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  now  wait_for x-y  timeout 1024 no_clear_event execute 2 ", L, sa));
   ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  now  wait_for x-y  no_clear_event timeout 1024 execute 2 ", L, sa));
-  ASSERT_EQ(
-      OB_SUCCESS, GDS.add_debug_sync("  now  signal xxx wait_for x-y  timeout 0 no_clear_event execute 2 ", L, sa));
+  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("  now  signal xxx wait_for x-y  timeout 0 no_clear_event execute 2 ", L, sa));
 
   ASSERT_NE(OB_SUCCESS, GDS.add_debug_sync("  reset a", L, sa));
   ASSERT_NE(OB_SUCCESS, GDS.add_debug_sync("  signal b ", L, sa));
@@ -373,11 +368,7 @@ TEST(debug_sync, ObDebugSync)
   DEBUG_SYNC(MAJOR_FREEZE_BEFORE_SYS_COORDINATE_COMMIT);
   DEBUG_SYNC(MAJOR_FREEZE_BEFORE_SYS_COORDINATE_COMMIT);
 
-  ASSERT_EQ(OB_SUCCESS,
-      GDS.add_debug_sync("MAJOR_FREEZE_BEFORE_SYS_COORDINATE_COMMIT signal def wait_for xyz TIMEOUT " TO_STRING(
-                             WAIT_TIME) " execute 3",
-          L,
-          sa));
+  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("MAJOR_FREEZE_BEFORE_SYS_COORDINATE_COMMIT signal def wait_for xyz TIMEOUT " TO_STRING(WAIT_TIME) " execute 3", L, sa));
 
   {
     // get xyz
@@ -418,7 +409,7 @@ TEST(debug_sync, ObDebugSync)
   }
 
   // global actions
-  const bool G = true;  // global
+  const bool G = true; // global
   {
     ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("reset", L, sa));
     EXPECT_CALL(rpc, broadcast_ds_action(_, _)).Times(3).WillRepeatedly(Return(OB_SUCCESS));
@@ -437,11 +428,11 @@ TEST(debug_sync, ObDebugSync)
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -25,23 +25,18 @@
  * END_THREAD_CODE(MyClass);
  *=========================================
  */
-#define BEGIN_THREAD_CODE(class_name, thread_count)         \
-  class _##class_name : public oceanbase::lib::ThreadPool { \
-  public:                                                   \
-    _##class_name()                                         \
-    {                                                       \
-      set_thread_count(thread_count);                       \
-    }                                                       \
-    void run1() final                                       \
-    {
+#define BEGIN_THREAD_CODE(class_name, thread_count)             \
+  class _##class_name : public oceanbase::lib::ThreadPool       \
+  {                                                             \
+public:                                                         \
+_##class_name() { set_thread_count(thread_count); }             \
+void run1() final {                                             \
+                                                                \
 
 #define END_THREAD_CODE(class_name) \
-  }                                 \
-  }                                 \
-  ;                                 \
-  _##class_name my_##class_name;    \
-  my_##class_name.start();          \
-  my_##class_name.wait();
+  }};\
+  _##class_name my_##class_name; \
+  my_##class_name.start();  my_##class_name.wait();
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define BAD(ass) ASSERT_NE(OB_SUCCESS, (ass))

@@ -16,20 +16,22 @@
 #include "lib/ob_name_def.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprBetween : public ObRelationalExprOperator {
+class ObExprBetween: public ObRelationalExprOperator
+{
 public:
   ObExprBetween();
-  explicit ObExprBetween(common::ObIAllocator& alloc);
+  explicit  ObExprBetween(common::ObIAllocator &alloc);
   virtual ~ObExprBetween()
-  {}
+  {
+  }
 
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+              ObExpr &rt_expr) const override;
 private:
   // types and constants
 private:
@@ -40,7 +42,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_EXPR_BETWEEN_H_
+#endif //OCEANBASE_SQL_OB_EXPR_BETWEEN_H_

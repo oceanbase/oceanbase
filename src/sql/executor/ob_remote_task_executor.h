@@ -14,30 +14,37 @@
 #define OCEANBASE_SQL_EXECUTOR_REMOTE_TASK_EXECUTOR_
 #include "sql/executor/ob_task_executor.h"
 #include "sql/executor/ob_executor_rpc_impl.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 class ObExecutorRpcImpl;
 class ObExecContext;
 class ObTaskInfo;
 class ObTask;
-class ObRemoteTaskExecutor : public ObTaskExecutor {
+class ObRemoteTaskExecutor : public ObTaskExecutor
+{
 public:
   ObRemoteTaskExecutor();
   virtual ~ObRemoteTaskExecutor();
-  virtual int execute(ObExecContext& query_ctx, ObJob* job, ObTaskInfo* task_info);
-  inline virtual void reset()
-  {
-    ObTaskExecutor::reset();
-  }
-
+  virtual int execute(ObExecContext &query_ctx, ObJob *job, ObTaskInfo *task_info);
+  inline virtual void reset() { ObTaskExecutor::reset(); }
+  static int handle_tx_after_rpc(ObScanner *scanner,
+                                 ObSQLSessionInfo *session,
+                                 const bool has_sent_task,
+                                 const bool has_transfer_err,
+                                 const ObPhysicalPlan *phy_plan);
 private:
-  int build_task(ObExecContext& query_ctx, ObJob& job, ObTaskInfo& task_info, ObTask& task);
-
+  int build_task(ObExecContext &query_ctx,
+                 ObJob &job,
+                 ObTaskInfo &task_info,
+                 ObTask &task);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteTaskExecutor);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_REMOTE_TASK_EXECUTOR_ */
 //// end of header file
+

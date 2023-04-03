@@ -28,12 +28,12 @@ using namespace oceanbase::lib;
 
 ObAddr self_addr;
 
-class Msg : public ObDtlMsgTemp<ObDtlMsgType::TESTING> {
+class Msg
+    : public ObDtlMsgTemp<ObDtlMsgType::TESTING>
+{
   OB_UNIS_VERSION(1);
-
 public:
-  void reset()
-  {}
+  void reset() {}
   int ret_;
 };
 OB_SERIALIZE_MEMBER(Msg, ret_);
@@ -119,12 +119,11 @@ TEST(TestDtlRpcChannel, Basic)
 
 //   // Create a DtlChannelInfo object, ci1 and ci2 are the channel information at both ends of the same channel.
 //   ObDtlChannelInfo ci1, ci2;
-//   const uint64_t tenant_id = 500;
+//   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
 //   int ret = ObDtlChannelGroup::make_channel(tenant_id, self_addr, self_addr, ci1, ci2);
 //   ASSERT_EQ(OB_SUCCESS, ret);
 
-//   // Create a Channel based on the DtlChannelInfo obtained in the previous step, here based on the ci1 in the
-//   previous step
+//   // Create a Channel based on the DtlChannelInfo obtained in the previous step, here based on the ci1 in the previous step
 //   // Create two Channels (ChannelPort) with ci2.
 //   ObDtlChannel *ch1 = nullptr, *ch2 = nullptr;
 //   ret = ObDtlChannelGroup::link_channel(ci1, ch1);
@@ -149,8 +148,8 @@ TEST(TestDtlRpcChannel, Basic)
 //   ch1->flush();
 //   ASSERT_TRUE(ta->get_hold() - hold > sizeof(Msg) * msg_cnt);
 
-//   // Define a specific DtlMsg processing function, and monitor and process it on another Port of the same Channel
-//   (ch2). class : public ObDtlPacketProc<Msg> {
+//   // Define a specific DtlMsg processing function, and monitor and process it on another Port of the same Channel (ch2).
+//   class : public ObDtlPacketProc<Msg> {
 //     int process(const Msg &pkt) override
 //     {
 //       return pkt.ret_;
@@ -174,7 +173,7 @@ TEST(TestDtlRpcChannel, Basic)
 //   ASSERT_TRUE(ta->get_hold() - hold < sizeof(Msg) * msg_cnt);
 // }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   // OB_LOGGER.set_log_level("info");
   system("rm -f test_dtl_rpc_channel.log*");

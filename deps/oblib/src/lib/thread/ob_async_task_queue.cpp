@@ -14,12 +14,18 @@
 
 #include "lib/thread/ob_async_task_queue.h"
 #include "lib/profile/ob_trace_id.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace lib;
-namespace share {
-ObAsyncTaskQueue::ObAsyncTaskQueue() : is_inited_(false), queue_(), allocator_()
-{}
+namespace share
+{
+ObAsyncTaskQueue::ObAsyncTaskQueue()
+  : is_inited_(false),
+    queue_(),
+    allocator_()
+{
+}
 
 ObAsyncTaskQueue::~ObAsyncTaskQueue()
 {
@@ -29,24 +35,19 @@ ObAsyncTaskQueue::~ObAsyncTaskQueue()
   }
 }
 
-int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, const char* thread_name)
+int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, const char *thread_name)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("task queue has already been initialized", K(ret));
-  } else if (thread_cnt <= 0 || queue_size <= 0 || 0 != (queue_size & (queue_size - 1))) {
+  } else if (thread_cnt <= 0|| queue_size <= 0 || 0 != (queue_size & (queue_size - 1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(thread_cnt), K(queue_size), K(ret));
   } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
-    LOG_WARN("allocator init failed",
-        "total limit",
-        static_cast<int64_t>(TOTAL_LIMIT),
-        "hold limit",
-        static_cast<int64_t>(HOLD_LIMIT),
-        "page size",
-        static_cast<int64_t>(PAGE_SIZE),
-        K(ret));
+    LOG_WARN("allocator init failed", "total limit", static_cast<int64_t>(TOTAL_LIMIT),
+        "hold limit", static_cast<int64_t>(HOLD_LIMIT),
+        "page size",  static_cast<int64_t>(PAGE_SIZE), K(ret));
   } else if (OB_FAIL(queue_.init(queue_size))) {
     LOG_WARN("queue init failed", K(queue_size), K(ret));
   } else if (OB_FAIL(create(thread_cnt, thread_name))) {
@@ -71,16 +72,16 @@ int ObAsyncTaskQueue::destroy()
   return ret;
 }
 
-int ObAsyncTaskQueue::push(ObAsyncTask& task)
+int ObAsyncTaskQueue::push(const ObAsyncTask &task)
 {
   int ret = OB_SUCCESS;
-  ObAsyncTask* task_ptr = NULL;
+  ObAsyncTask *task_ptr = NULL;
   const int64_t buf_size = task.get_deep_copy_size();
-  char* buf = NULL;
+  char *buf = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (NULL == (buf = static_cast<char*>(allocator_.alloc(buf_size)))) {
+  } else if (NULL == (buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocator alloc memory failed", K(buf_size), K(ret));
   } else if (NULL == (task_ptr = task.deep_copy(buf, buf_size))) {
@@ -111,13 +112,14 @@ void ObAsyncTaskQueue::run2()
   } else {
     ObAddr zero_addr;
     while (!stop_) {
+      IGNORE_RETURN lib::Thread::update_loop_ts(ObTimeUtility::fast_current_time());
       if (REACH_TIME_INTERVAL(600 * 1000 * 1000)) {
-        // print queue size every interval
+        //每隔一段时间，打印队列的大小
         LOG_INFO("[ASYNC TASK QUEUE]", "queue_size", queue_.size());
       }
-      ObAsyncTask* task = NULL;
+      ObAsyncTask *task = NULL;
       ret = pop(task);
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret))  {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("pop task from queue failed", K(ret));
         }
@@ -131,7 +133,7 @@ void ObAsyncTaskQueue::run2()
             int64_t now = ObTimeUtility::current_time();
             int64_t sleep_time = task->get_last_execute_time() + task->get_retry_interval() - now;
             if (sleep_time > 0) {
-              this_routine::usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)));
+              ::usleep(static_cast<int32_t>(MIN(sleep_time, SLEEP_INTERVAL)));
             } else {
               break;
             }
@@ -142,11 +144,8 @@ void ObAsyncTaskQueue::run2()
         // just do it
         ret = task->process();
         if (OB_FAIL(ret)) {
-          LOG_WARN("task process failed, start retry",
-              "max retry time",
-              task->get_retry_times(),
-              "retry interval",
-              task->get_retry_interval(),
+          LOG_WARN("task process failed, start retry", "max retry time",
+              task->get_retry_times(), "retry interval", task->get_retry_interval(),
               K(ret));
           if (task->get_retry_times() > 0) {
             task->set_retry_times(task->get_retry_times() - 1);
@@ -168,7 +167,14 @@ void ObAsyncTaskQueue::run2()
   }
   LOG_INFO("async task queue stop");
 }
-
+int ObAsyncTaskQueue::start()
+{
+  return logical_start();
+}
+void ObAsyncTaskQueue::stop()
+{
+  logical_stop();
+}
 void ObAsyncTaskQueue::wait()
 {
   int ret = OB_SUCCESS;
@@ -176,8 +182,8 @@ void ObAsyncTaskQueue::wait()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObReentrantThread::wait();
-    ObAsyncTask* task = NULL;
+    logical_wait();
+    ObAsyncTask *task = NULL;
     while (queue_.size() > 0 && OB_SUCCESS == pop(task)) {
       task->~ObAsyncTask();
       allocator_.free(task);
@@ -186,10 +192,10 @@ void ObAsyncTaskQueue::wait()
   }
 }
 
-int ObAsyncTaskQueue::pop(ObAsyncTask*& task)
+int ObAsyncTaskQueue::pop(ObAsyncTask *&task)
 {
   int ret = OB_SUCCESS;
-  void* vp = NULL;
+  void *vp = NULL;
   const int64_t timeout = 1000 * 1000;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -201,11 +207,11 @@ int ObAsyncTaskQueue::pop(ObAsyncTask*& task)
         LOG_WARN("queue pop failed", K(ret));
       }
     } else {
-      task = static_cast<ObAsyncTask*>(vp);
+      task = static_cast<ObAsyncTask *>(vp);
     }
   }
   return ret;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase

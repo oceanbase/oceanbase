@@ -16,33 +16,36 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
 #include <gtest/gtest.h>
-class ObExprGreaterThanTest : public ::testing::Test {
-public:
-  ObExprGreaterThanTest();
-  virtual ~ObExprGreaterThanTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprGreaterThanTest(const ObExprGreaterThanTest& other);
-  ObExprGreaterThanTest& operator=(const ObExprGreaterThanTest& other);
-
-protected:
-  // data members
+class ObExprGreaterThanTest: public ::testing::Test
+{
+  public:
+    ObExprGreaterThanTest();
+    virtual ~ObExprGreaterThanTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprGreaterThanTest(const ObExprGreaterThanTest &other);
+    ObExprGreaterThanTest& operator=(const ObExprGreaterThanTest &other);
+  protected:
+    // data members
 };
 
 ObExprGreaterThanTest::ObExprGreaterThanTest()
-{}
+{
+}
 
 ObExprGreaterThanTest::~ObExprGreaterThanTest()
-{}
+{
+}
 
 void ObExprGreaterThanTest::SetUp()
-{}
+{
+}
 
 void ObExprGreaterThanTest::TearDown()
-{}
+{
+}
 
 #define T(t1, v1, t2, v2, res) COMPARE_EXPECT(ObExprGreaterThan, &buf, calc_result2, t1, v1, t2, v2, res)
 #define T_BIN(t1, v1, t2, v2, res) COMPARE_EXPECT_BIN(ObExprGreaterThan, &buf, calc_result2, t1, v1, t2, v2, res)
@@ -727,8 +730,8 @@ TEST_F(ObExprGreaterThanTest, row2_basic_test)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

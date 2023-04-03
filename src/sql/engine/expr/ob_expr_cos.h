@@ -15,21 +15,25 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprCos : public ObFuncExprOperator {
+class ObExprCos : public ObFuncExprOperator
+{
 public:
-  explicit ObExprCos(common::ObIAllocator& alloc);
-  virtual ~ObExprCos();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& radian, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& radian_obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  explicit  ObExprCos(common::ObIAllocator &alloc);
+  virtual   ~ObExprCos();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &radian,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCos);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_COS_ */

@@ -13,21 +13,28 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_char_length.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace sql {
+namespace sql
+{
 
-ObExprCharLength::ObExprCharLength(ObIAllocator& alloc)
+ObExprCharLength::ObExprCharLength(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_CHAR_LENGTH, N_CHAR_LENGTH, 1, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprCharLength::~ObExprCharLength()
-{}
+{
+}
 
-int ObExprCharLength::calc_result_type1(ObExprResType& type, ObExprResType& text, ObExprTypeCtx& type_ctx) const
+int ObExprCharLength::calc_result_type1(ObExprResType &type,
+                                        ObExprResType &text,
+                                        ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
 
@@ -42,7 +49,9 @@ int ObExprCharLength::calc_result_type1(ObExprResType& type, ObExprResType& text
       type.set_int();
       type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-      text.set_calc_type(ObVarcharType);
+      if (!ob_is_text_tc(text.get_type())) {
+        text.set_calc_type(ObVarcharType);
+      }
       text.set_calc_collation_type(text.get_collation_type());
       text.set_calc_collation_level(text.get_collation_level());
     }
@@ -50,41 +59,37 @@ int ObExprCharLength::calc_result_type1(ObExprResType& type, ObExprResType& text
   return ret;
 }
 
-int ObExprCharLength::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int ObExprCharLength::eval_char_length(const ObExpr &expr, ObEvalCtx &ctx, 
+                                       ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObObjTypeClass type_class = ob_obj_type_class(obj.get_type());
-  if (!ob_is_castable_type_class(type_class)) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(obj, ObVarcharType);
-    size_t length = ObCharset::strlen_char(obj.get_collation_type(), obj.get_string_ptr(), obj.get_string_len());
-    result.set_int(static_cast<int>(length));
-  }
-  UNUSED(expr_ctx);
-  return ret;
-}
-
-int ObExprCharLength::eval_char_length(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   ObObjTypeClass in_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
   if (!ob_is_castable_type_class(in_tc)) {
     res.set_null();
-  } else if (expr.eval_param_value(ctx, arg)) {
+  } else if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();
-  } else {
-    const ObString& arg_str = arg->get_string();
-    size_t length = ObCharset::strlen_char(expr.args_[0]->datum_meta_.cs_type_, arg_str.ptr(), arg_str.length());
+  } else if (in_tc != ObTextTC) {
+    const ObString &arg_str = arg->get_string();
+    size_t length = ObCharset::strlen_char(expr.args_[0]->datum_meta_.cs_type_,
+                                           arg_str.ptr(), arg_str.length());
     res.set_int(length);
+  } else {
+    int64_t char_len = 0;
+    if (OB_FAIL(ObTextStringHelper::get_char_len(ctx, *arg,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), char_len))) {
+      LOG_WARN("failed to read realdata", K(ret));
+    } else {
+      res.set_int(static_cast<size_t>(char_len));
+    }
   }
   return ret;
 }
 
-int ObExprCharLength::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprCharLength::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                              ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -92,5 +97,5 @@ int ObExprCharLength::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_exp
   rt_expr.eval_func_ = eval_char_length;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

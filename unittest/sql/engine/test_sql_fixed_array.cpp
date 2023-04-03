@@ -19,22 +19,20 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_se_array.h"
 
-namespace oceanbase {
-namespace sql {
-class ObTestSqlFixedArray : public ::testing::Test {
-public:
-  ObTestSqlFixedArray()
-  {}
-  ~ObTestSqlFixedArray()
-  {}
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObTestSqlFixedArray);
-};
+namespace oceanbase
+{
+namespace sql
+{
+  class ObTestSqlFixedArray: public ::testing::Test
+  {
+  public:    
+    ObTestSqlFixedArray() {}
+    ~ObTestSqlFixedArray() {}
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObTestSqlFixedArray);
+  };
 
 TEST(ObTestSqlFixedArray, push_back)
 {
@@ -66,7 +64,7 @@ TEST(ObTestSqlFixedArray, to_string)
   ObSqlFixedArray<int64_t> int_array;
   ObObj tmp;
   ObMalloc alloc;
-
+    
   EXPECT_EQ(OB_SUCCESS, obj_array.init(20, alloc));
   EXPECT_EQ(OB_SUCCESS, int_array.init(20, alloc));
 
@@ -101,7 +99,7 @@ TEST(ObTestSqlFixedArray, destroy)
   const int64_t N = 3000;
   EXPECT_EQ(OB_NOT_INIT, obj_array.push_back(tmp));
   EXPECT_EQ(OB_SUCCESS, obj_array.reserve(N, allocator));
-
+    
   for (int64_t i = 0; i < N; i++) {
     tmp.set_int(i);
     EXPECT_EQ(OB_SUCCESS, obj_array.push_back(tmp));
@@ -115,10 +113,10 @@ TEST(ObTestSqlFixedArray, destroy)
   EXPECT_EQ(0, allocator.used());
   EXPECT_EQ(0, allocator.total());
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();

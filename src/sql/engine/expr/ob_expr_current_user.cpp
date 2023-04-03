@@ -23,47 +23,40 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprCurrentUser::ObExprCurrentUser(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_CURRENT_USER, N_CURRENT_USER, 0)
-{}
+
+ObExprCurrentUser::ObExprCurrentUser(ObIAllocator &alloc)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CURRENT_USER, N_CURRENT_USER, 0)
+{
+}
 
 ObExprCurrentUser::~ObExprCurrentUser()
-{}
+{
+}
 
-int ObExprCurrentUser::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprCurrentUser::calc_result_type0(ObExprResType &type,
+                                         ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
   type.set_varchar();
   type.set_default_collation_type();
   type.set_collation_level(CS_LEVEL_SYSCONST);
-  type.set_length(static_cast<ObLength>((OB_MAX_HOST_NAME_LENGTH + OB_MAX_USER_NAME_LENGTH + 1)));
+  type.set_length(static_cast<ObLength>((OB_MAX_HOST_NAME_LENGTH
+                                           + OB_MAX_USER_NAME_LENGTH + 1)));
   return ret;
 }
 
-int ObExprCurrentUser::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else {
-    const ObString current_user = session_info->get_user_at_host();
-    result.set_varchar(current_user);
-    result.set_collation(result_type_);
-  }
-  return ret;
-}
-
-int ObExprCurrentUser::eval_current_user(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprCurrentUser::eval_current_user(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObBasicSessionInfo* session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -73,7 +66,8 @@ int ObExprCurrentUser::eval_current_user(const ObExpr& expr, ObEvalCtx& ctx, ObD
   return ret;
 }
 
-int ObExprCurrentUser::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprCurrentUser::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -81,5 +75,5 @@ int ObExprCurrentUser::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

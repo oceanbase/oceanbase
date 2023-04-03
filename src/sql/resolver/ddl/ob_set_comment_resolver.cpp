@@ -16,26 +16,34 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_service.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
-ObSetCommentResolver::ObSetCommentResolver(ObResolverParams& params)
-    : ObDDLResolver(params), table_schema_(NULL), collation_type_(CS_TYPE_INVALID), charset_type_(CHARSET_INVALID)
-{}
+namespace sql
+{
+ObSetCommentResolver::ObSetCommentResolver(ObResolverParams &params)
+    : ObDDLResolver(params),
+      table_schema_(NULL),
+      collation_type_(CS_TYPE_INVALID),
+      charset_type_(CHARSET_INVALID)
+{
+}
 
 ObSetCommentResolver::~ObSetCommentResolver()
-{}
+{
+}
 
-int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
+int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   CHECK_COMPATIBILITY_MODE(session_info_);
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "session_info should not be null", K(ret));
-  } else if (OB_ISNULL(parse_tree.children_) ||
-             ((T_SET_TABLE_COMMENT != parse_tree.type_) && (T_SET_COLUMN_COMMENT != parse_tree.type_))) {
+  } else if (OB_ISNULL(parse_tree.children_)
+      || ((T_SET_TABLE_COMMENT != parse_tree.type_)
+         && (T_SET_COLUMN_COMMENT != parse_tree.type_))) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
   } else if (!lib::is_oracle_mode()) {
@@ -45,21 +53,23 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
     ObString database_name;
     ObString table_name;
     ObString col_name;
-    ObAlterTableStmt* alter_table_stmt = NULL;
-    const share::schema::ObTableSchema* table_schema = NULL;
+    ObAlterTableStmt *alter_table_stmt = NULL;
+    const share::schema::ObTableSchema *table_schema = NULL;
     if (NULL == (alter_table_stmt = create_stmt<ObAlterTableStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "failed to create alter table stmt", K(ret));
     } else if (OB_FAIL(alter_table_stmt->set_tz_info_wrap(session_info_->get_tz_info_wrap()))) {
       LOG_WARN("failed to set_tz_info_wrap", "tz_info_wrap", session_info_->get_tz_info_wrap(), K(ret));
-    } else if (OB_FAIL(alter_table_stmt->set_nls_formats(session_info_->get_local_nls_formats()))) {
+    } else if (OB_FAIL(alter_table_stmt->set_nls_formats(session_info_->get_local_nls_date_format(),
+        session_info_->get_local_nls_timestamp_format(),
+        session_info_->get_local_nls_timestamp_tz_format()))) {
       SQL_RESV_LOG(WARN, "failed to set_nls_formats", K(ret));
     } else {
       stmt_ = alter_table_stmt;
       alter_table_stmt->set_tenant_id(tenant_id);
       alter_table_stmt->set_is_comment_table(true);
     }
-
+    
     // resolve string_value
     if (OB_FAIL(ret)) {
       // do-nothing
@@ -68,13 +78,13 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
       SQL_RESV_LOG(WARN, "invalid parse tree for comment string", K(ret));
     } else {
       int64_t comment_length = 0;
-      const char* comment_ptr = NULL;
+      const char *comment_ptr = NULL;
       comment_length = parse_tree.children_[1]->str_len_;
       comment_ptr = parse_tree.children_[1]->str_value_;
       if (T_SET_TABLE_COMMENT == parse_tree.type_ && comment_length <= MAX_ORACLE_COMMENT_LENGTH) {
-        comment_.assign_ptr((char*)(comment_ptr), static_cast<int32_t>(comment_length));
+        comment_.assign_ptr((char *)(comment_ptr), static_cast<int32_t>(comment_length));
       } else if (T_SET_COLUMN_COMMENT == parse_tree.type_ && comment_length <= MAX_ORACLE_COMMENT_LENGTH) {
-        comment_.assign_ptr((char*)(comment_ptr), static_cast<int32_t>(comment_length));
+        comment_.assign_ptr((char *)(comment_ptr), static_cast<int32_t>(comment_length));
       } else {
         comment_ = "";
         if (T_SET_TABLE_COMMENT == parse_tree.type_) {
@@ -85,13 +95,13 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
           LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_ORACLE_COMMENT_LENGTH);
         }
       }
-      OZ(ObSQLUtils::copy_and_convert_string_charset(
-          *allocator_, comment_, comment_, session_info_->get_local_collation_connection(), CS_TYPE_UTF8MB4_BIN));
+      OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
+            *allocator_, session_info_->get_dtc_params(), comment_));
     }
-
+    
     if (OB_SUCC(ret)) {
       if (T_SET_TABLE_COMMENT == parse_tree.type_) {
-        // COMMENT ON TABLE
+        // COMMENT ON TABLE 
         bool is_exists = false;
         if (2 != parse_tree.num_child_) {
           ret = OB_ERR_UNEXPECTED;
@@ -99,20 +109,35 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
         } else if (OB_ISNULL(parse_tree.children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
-        } else if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[0], table_name, database_name))) {
+        } else if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[0],
+                                                       table_name,
+                                                       database_name))) {
           SQL_RESV_LOG(WARN, "failed to resolve table name.", K(table_name), K(database_name), K(ret));
         } else if (OB_FAIL(schema_checker_->check_table_exists(
-                       tenant_id, database_name, table_name, false /*index*/, is_exists))) {
-          SQL_RESV_LOG(WARN, "failed to check_table_exist", K(ret), K(tenant_id), K(database_name), K(table_name));
+            tenant_id,
+            database_name,
+            table_name,
+            false /*index*/,
+            false/*is_hidden*/,
+            is_exists))) {
+          SQL_RESV_LOG(WARN, "failed to check_table_exist", 
+            K(ret), K(tenant_id), K(database_name), K(table_name));
         } else if (!is_exists) {
           ret = OB_TABLE_NOT_EXIST;
-          SQL_RESV_LOG(WARN, "failed to check_table_exist", K(ret), K(tenant_id), K(database_name), K(table_name));
+          SQL_RESV_LOG(WARN, "failed to check_table_exist", 
+            K(ret), K(tenant_id), K(database_name), K(table_name));
         } else if (OB_FAIL(schema_checker_->get_table_schema(
-                       tenant_id, database_name, table_name, false /*not index table*/, table_schema))) {
+            tenant_id,
+            database_name,
+            table_name,
+            false/*not index table*/,
+            table_schema))) {
           SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
+        } else {
+          alter_table_stmt->set_table_id(table_schema->get_table_id());
         }
       } else if (T_SET_COLUMN_COMMENT == parse_tree.type_) {
         // COMMENT ON COLUMN
@@ -127,7 +152,7 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
           bool is_exists = false;
           ObQualifiedName column_ref;
           ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
-          ParseNode* column_ref_node = parse_tree.children_[0];
+          ParseNode *column_ref_node = parse_tree.children_[0];
           if (OB_UNLIKELY(T_COLUMN_REF != column_ref_node->type_)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "node type is not T_COLUMN_LIST", K(ret), K(column_ref_node->type_));
@@ -155,16 +180,26 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(schema_checker_->get_table_schema(
-                         tenant_id, database_name, table_name, false /*not index table*/, table_schema))) {
+              tenant_id,
+              database_name,
+              table_name,
+              false/*not index table*/,
+              table_schema))) {
             SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
-          } else if (OB_FAIL(schema_checker_->check_column_exists(table_schema->get_table_id(), col_name, is_exists))) {
+          } else if (OB_FAIL(schema_checker_->check_column_exists(
+              tenant_id,
+              table_schema->get_table_id(),
+              col_name,
+              is_exists))) {
             SQL_RESV_LOG(WARN, "failed to check_column_exists", K(ret), K(table_schema), K(col_name));
           } else if (!is_exists) {
             ret = OB_ERR_COLUMN_NOT_FOUND;
             SQL_RESV_LOG(WARN, "column doesn't exist", K(ret), K(col_name));
+          } else {
+            alter_table_stmt->set_table_id(table_schema->get_table_id());
           }
         }
       } else {
@@ -174,8 +209,8 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
     }
     if (OB_SUCC(ret)) {
       if (T_SET_TABLE_COMMENT == parse_tree.type_) {
-        share::schema::AlterTableSchema& alter_table_schema =
-            alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+        share::schema::AlterTableSchema &alter_table_schema = 
+          alter_table_stmt->get_alter_table_arg().alter_table_schema_;
         if (OB_FAIL(alter_table_schema.set_comment(comment_))) {
           SQL_RESV_LOG(WARN, "Write comment_ to alter_table_schema failed!", K(ret));
         } else if (OB_FAIL(alter_table_bitset_.add_member(obrpc::ObAlterTableArg::COMMENT))) {
@@ -189,8 +224,13 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
           SQL_RESV_LOG(WARN, "Set table options error!", K(ret));
         }
       } else if (T_SET_COLUMN_COMMENT == parse_tree.type_) {
-        const share::schema::ObColumnSchemaV2* column_schema = NULL;
-        if (OB_FAIL(schema_checker_->get_column_schema(table_schema->get_table_id(), col_name, column_schema, false))) {
+        const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_FAIL(schema_checker_->get_column_schema(
+            table_schema->get_tenant_id(),
+            table_schema->get_table_id(),
+            col_name,
+            column_schema,
+            false))) {
           SQL_RESV_LOG(WARN, "fail to get origin column schema", K(ret));
         } else if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -206,17 +246,17 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
           } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           }
-
+          
           if (OB_FAIL(ret)) {
             alter_column_schema.reset();
             SQL_RESV_LOG(WARN, "Set column options error!", K(ret));
           }
-        }
+        } 
       } else {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "Unkonwn operation type", K(ret), K(parse_tree.type_));
       }
-
+        
       if (OB_SUCC(ret)) {
         if (OB_FAIL(alter_table_stmt->set_origin_database_name(database_name))) {
           SQL_RESV_LOG(WARN, "failed to set origin database name", K(ret));
@@ -229,5 +269,5 @@ int ObSetCommentResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

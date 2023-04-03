@@ -14,11 +14,13 @@
 #define OCEANBASE_COMMON_OB_TRANS_CHARACTER_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-// never change the value;
-typedef enum ObTransCharacter {
+//never change the value;
+typedef enum ObTransCharacter
+{
   OB_WITH_CONSTISTENT_SNAPSHOT = 1,
   OB_TRANS_READ_ONLY = 2,
   OB_TRANS_READ_WRITE = 4,
@@ -31,4 +33,4 @@ typedef enum ObTransCharacter {
 #ifdef __cplusplus
 }
 #endif
-#endif  // OCEANBASE_COMMON_OB_TRANS_CHARACTER_H
+#endif //OCEANBASE_COMMON_OB_TRANS_CHARACTER_H

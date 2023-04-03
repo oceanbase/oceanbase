@@ -1,5 +1,5 @@
 ############################## test for start with #######################################
-
+### 单表测试 ###
 select c1 from t0 start with pk = 1 connect by prior 1 = 1;
 select c1 from t0 start with c1 = 1 connect by prior c1 = c2;
 select c1 from t0 start with pk > 1 connect by prior c1 = c2;
@@ -7,7 +7,7 @@ select c1 from t0 start with c1 > 1 or c1 < -1 connect by prior c1 = c2;
 select c1 from t0 start with c1 > 1 or 1 = 2 connect by prior c1 = c2;
 select c1 from (select * from t0) as tt start with c1 > 1  connect by prior c1 = c2;
 
-
+### 两表测试 ###
 
 select t0.c1 from t0, t4 start with t0.c1 = 1 connect by prior t0.c1 = t0.c2;
 select t0.c1 from t0, t4 start with t4.c1 = 1 connect by prior t0.c1 = t0.c2;
@@ -17,11 +17,11 @@ select t0.c1 from t0 left join t4 on t0.c1 = t4.c1 and t0.c1 > 1 start with t4.c
 select t0.c1 from t0 left join t4 on t0.c1 = t4.c1 start with t0.pk != 0 connect by prior t0.c1 = t0.c2;
 select t0.c1 from t0 left join t4 on t0.c1 > t4.c1 start with t0.pk != 0 and t4.c1 is NULL connect by prior t0.c1 = t0.c2;
 
-
+###  三表测试 ###
 select t0.c1 from t0, t4 , t7 start with t0.c1 = 1 connect by prior t0.c1 = t0.c2;
 select t0.c1 from t0, t4 , t7 start with t0.pk = 1 connect by prior t0.c1 = t0.c2;
 
-
+### 测试将start with expression 下降到不同位置 ###
 
 # single table #
 select t0.c1 from t0 start with t0.c1 = 1 connect by  1 = 1;
@@ -98,7 +98,7 @@ select t0.c1 from t0 left join t7 on t0.c1 = t7.c1 connect by prior t0.c1 = t7.c
 
 ############################ test for where conditoin ####################################
 
-
+### 单表 ###
 # simple #
 select * from t7 where t7.c1 connect by prior c1 = c2;
 select * from t7 where t7.c1 + t7.c2 connect by prior c1 = c2;
@@ -117,7 +117,7 @@ select c1 + prior a3 > (select c1 from t7) from t0 connect by prior c1 = c2;
 select prior c1 + 1 > (select c1 from t7) from t0 connect by prior c1 = c2;
 ## select * from t7 where c1 > (select c1 from t0 where t0.c1 > t7.c1) connect by prior c1 = c2;
 
-
+### 多表 ###
 # simpile #
 select t0.c1 from t0 join t7 where t0.c1 connect by prior t0.c1 = t7.c1;
 select t0.c1 from t0 join t7 where t0.c1 + t7.c1 connect by prior t0.c1 = t7.c1;
@@ -129,7 +129,7 @@ select t0.c1 from t7 left join t0 on t7.c1 = t0.c1 where prior t0.c1 is NULL con
 
 ############################# test for output expr #######################################
 
-
+### 单表测试 ###
 # same output #
 select prior c2, c1 from t0 start with c1 = 1 connect by prior c1 = c2;
 select prior c2, c2 from t0 connect by prior (c1 + 1) = (c1 + 1);
@@ -155,7 +155,7 @@ select prior(c1 + c2), (c1 + c2) from t0 where prior c2 < c1 connect by prior c1
 select abs(a3) + a3 from t0 where prior c2 < c1 connect by prior c1 > c2;
 select prior (abs(a3) + a3) from t0 where prior c2 < c1 connect by prior c1 > c2;
 
-
+### 多表测试 ###
 
 # same output #
 select prior t9.c3, t0.pk from t0 join t9 connect by prior t0.pk = t9.c3;

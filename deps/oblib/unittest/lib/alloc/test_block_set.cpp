@@ -21,32 +21,41 @@ using namespace oceanbase::common;
 
 ObMemAttr attr;
 
-class TestBlockSet : public ::testing::Test {
+static const uint32_t INTACT_BIG_ABLOCK_SIZE = ACHUNK_SIZE;
+static const uint32_t BIG_ABLOCK_SIZE = INTACT_BIG_ABLOCK_SIZE - ABLOCK_HEADER_SIZE;
+static const uint32_t INTACT_BIG_AOBJECT_SIZE = BIG_ABLOCK_SIZE;
+static const uint32_t BIG_AOBJECT_SIZE = INTACT_BIG_AOBJECT_SIZE - AOBJECT_META_SIZE;
+
+class TestBlockSet
+    : public ::testing::Test
+{
 public:
-  TestBlockSet() : tallocator_(500)
+  TestBlockSet()
+      : tallocator_(500)
   {}
   virtual void SetUp()
   {
     tallocator_.set_tenant_memory_mgr();
     tallocator_.set_limit(1000L << 20);
-    cs_.set_tenant_ctx_allocator(tallocator_, attr);
+    cs_.set_tenant_ctx_allocator(tallocator_);
   }
 
   virtual void TearDown()
-  {}
-
-  ABlock* Malloc(uint64_t size)
   {
-    ABlock* block = cs_.alloc_block(size, attr);
+  }
+
+  ABlock *Malloc(uint64_t size)
+  {
+    ABlock *block = cs_.alloc_block(size, attr);
     return block;
   }
 
-  void Free(ABlock* block)
+  void Free(ABlock *block)
   {
     cs_.free_block(block);
   }
 
-  void check_ptr(void* p)
+  void check_ptr(void *p)
   {
     UNUSED(p);
     ASSERT_TRUE(p != NULL);
@@ -60,7 +69,7 @@ protected:
 
 TEST_F(TestBlockSet, ManyMalloc)
 {
-  ABlock* p = NULL;
+  ABlock *p = NULL;
   int64_t cnt = 1L << 10;
   uint64_t sz = 32;
 
@@ -113,7 +122,7 @@ TEST_F(TestBlockSet, ManyMalloc)
     p = Malloc(sz);
     check_ptr(p);
     Free(p);
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1 << 18) - 1));
+    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<18) - 1));
   }
 }
 
@@ -121,13 +130,13 @@ TEST_F(TestBlockSet, AllocLarge)
 {
   uint64_t sz = 1L << 18;
   int64_t cnt = 1L << 10;
-  ABlock* p = NULL;
+  ABlock *p = NULL;
 
   while (cnt--) {
     p = Malloc(sz);
     check_ptr(p);
     Free(p);
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1 << 25) - 1));
+    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<25) - 1));
   }
 }
 
@@ -135,7 +144,7 @@ TEST_F(TestBlockSet, NormalBlock)
 {
   const uint64_t sz = INTACT_BIG_AOBJECT_SIZE;
   int64_t cnt = 1L << 10;
-  ABlock* p = NULL;
+  ABlock *p = NULL;
 
   while (cnt--) {
     p = Malloc(sz);
@@ -148,7 +157,7 @@ TEST_F(TestBlockSet, BigBlock)
 {
   const uint64_t sz = 1L << 20;
   int64_t cnt = 1L << 20;
-  ABlock* p = NULL;
+  ABlock *p = NULL;
 
   while (cnt--) {
     p = Malloc(sz);
@@ -161,7 +170,7 @@ TEST_F(TestBlockSet, BigBlockOrigin)
 {
   const uint64_t sz = 1L << 20;
   int64_t cnt = 1L << 10;
-  void* p = NULL;
+  void *p = NULL;
 
   while (cnt--) {
     p = ob_malloc(sz);
@@ -173,7 +182,7 @@ TEST_F(TestBlockSet, BigBlockOrigin)
 TEST_F(TestBlockSet, Single)
 {
   uint64_t sz = INTACT_NORMAL_AOBJECT_SIZE;
-  ABlock* pa[1024] = {};
+  ABlock *pa[1024] = {};
   int cnt = 10;
   while (cnt--) {
     int i = 0;
@@ -189,7 +198,7 @@ TEST_F(TestBlockSet, Single)
   }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

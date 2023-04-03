@@ -15,37 +15,34 @@
 #include <gtest/gtest.h>
 using namespace oceanbase::common;
 
-class ObLoserTreeTest : public ::testing::Test {
-public:
-  ObLoserTreeTest(){};
-  virtual ~ObLoserTreeTest(){};
-  virtual void SetUp(){};
-  virtual void TearDown(){};
-
-private:
-  // disallow copy
-  ObLoserTreeTest(const ObLoserTreeTest& other);
-  ObLoserTreeTest& operator=(const ObLoserTreeTest& other);
-
-private:
-  // data members
+class ObLoserTreeTest: public ::testing::Test
+{
+  public:
+    ObLoserTreeTest() {};
+    virtual ~ObLoserTreeTest() {};
+    virtual void SetUp() {};
+    virtual void TearDown() {};
+  private:
+    // disallow copy
+    ObLoserTreeTest(const ObLoserTreeTest &other);
+    ObLoserTreeTest& operator=(const ObLoserTreeTest &other);
+  private:
+    // data members
 };
 
-class TestMaxComp {
+class TestMaxComp
+{
 public:
-  int get_error_code()
+  int cmp(const int64_t &a, const int64_t &b, int64_t &cmp_ret)
   {
-    return OB_SUCCESS;
-  }
-  int64_t operator()(const int64_t& a, const int64_t& b)
-  {
-    int64_t cmp_ret = 0;
+    int ret = OB_SUCCESS;
+    cmp_ret = 0;
     if (a < b) {
       cmp_ret = 1;
     } else if (a > b) {
       cmp_ret = -1;
     }
-    return cmp_ret;
+    return ret;
   }
 };
 
@@ -87,7 +84,7 @@ TEST_F(ObLoserTreeTest, single)
   ASSERT_EQ(1, tree.count());
 
   // not rebuild
-  const int64_t* top = nullptr;
+  const int64_t *top = nullptr;
   ret = tree.top(top);
   ASSERT_EQ(ret, OB_ERR_UNEXPECTED);
   ret = tree.pop();
@@ -133,7 +130,7 @@ TEST_F(ObLoserTreeTest, multiple_players)
   int64_t data[DATA_CNT] = {1, 2, 3, 4, 5, 6, 7, 8};
 
   // different player
-  const int64_t* top;
+  const int64_t *top;
   for (int64_t count = 1; count <= DATA_CNT; ++count) {
     tree.reset();
     ret = tree.init(count, allocator);
@@ -173,7 +170,7 @@ TEST_F(ObLoserTreeTest, basic)
   ret = tree.rebuild();
   ASSERT_EQ(ret, OB_SUCCESS);
 
-  const int64_t* top = nullptr;
+  const int64_t *top = nullptr;
   ret = tree.top(top);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(*top, 14);
@@ -252,7 +249,7 @@ TEST_F(ObLoserTreeTest, only_one_element)
     ASSERT_EQ(ret, OB_SUCCESS);
   }
 
-  const int64_t* top = nullptr;
+  const int64_t *top = nullptr;
   ret = tree.top(top);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(0, *top);
@@ -342,8 +339,8 @@ TEST_F(ObLoserTreeTest, unique_champion)
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(tree.is_unique_champion());
 }
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

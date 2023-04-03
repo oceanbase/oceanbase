@@ -1,0 +1,4 @@
+#select case when c1 = 'A' then 1 else 0 end from t;
+#select c1 is null from jit;
+select c1 not in (2, 3) from jit;
+

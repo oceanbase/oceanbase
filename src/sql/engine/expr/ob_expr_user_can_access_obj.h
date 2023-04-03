@@ -17,35 +17,54 @@
 #include "share/ob_priv_common.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprUserCanAccessObj : public ObFuncExprOperator {
+class ObExprUserCanAccessObj : public ObFuncExprOperator
+{
 public:
-  explicit ObExprUserCanAccessObj(common::ObIAllocator& alloc);
+  explicit  ObExprUserCanAccessObj(common::ObIAllocator &alloc);
   virtual ~ObExprUserCanAccessObj();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& arg1, ObExprResType& arg2, ObExprResType& arg3,
-      common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result_type3(
+      ObExprResType &type,
+      ObExprResType &arg1,
+      ObExprResType &arg2,
+      ObExprResType &arg3,
+      common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2,
-      const common::ObObj& arg3, common::ObExprCtx& expr_ctx) const override;
+  virtual int cg_expr(
+      ObExprCGCtx &expr_cg_ctx, 
+      const ObRawExpr &raw_expr,
+      ObExpr &rt_expr) const override;
 
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int eval_user_can_access_obj(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-  static int build_raw_obj_priv(uint64_t obj_type, share::ObRawObjPrivArray& raw_obj_priv_array);
+  static int eval_user_can_access_obj(
+      const ObExpr &expr, 
+      ObEvalCtx &ctx, 
+      ObDatum &res_datum);
+  static int build_raw_obj_priv(
+      uint64_t obj_type, 
+      share::ObRawObjPrivArray &raw_obj_priv_array);
 
 private:
   static int build_real_obj_type_for_sym(
-      uint64_t tenant_id, share::schema::ObSchemaGetterGuard* schema_guard, uint64_t& obj_type, uint64_t& obj_id);
+      uint64_t tenant_id,
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      uint64_t &obj_type,
+      uint64_t &obj_id);
 
-  static int check_user_access_obj(share::schema::ObSchemaGetterGuard* schema_guard, ObSQLSessionInfo* session,
-      uint64_t obj_type, uint64_t obj_id, uint64_t owner_id, bool& can_access);
-
+  static int check_user_access_obj(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      ObSQLSessionInfo *session,
+      uint64_t obj_type,
+      uint64_t obj_id,
+      uint64_t owner_id,
+      bool &can_access);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUserCanAccessObj);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_INITCAP_ */

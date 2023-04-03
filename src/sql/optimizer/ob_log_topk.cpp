@@ -23,8 +23,8 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObLogTopk::set_topk_params(
-    ObRawExpr* limit_count, ObRawExpr* limit_offset, int64_t minimum_row_count, int64_t topk_precision)
+int ObLogTopk::set_topk_params(ObRawExpr *limit_count, ObRawExpr *limit_offset,
+                               int64_t minimum_row_count, int64_t topk_precision)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(limit_count)) {
@@ -39,144 +39,127 @@ int ObLogTopk::set_topk_params(
   return ret;
 }
 
-int ObLogTopk::copy_without_child(ObLogicalOperator*& out)
+int ObLogTopk::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  out = NULL;
-  ObLogicalOperator* op = NULL;
-  ObLogTopk* topk = NULL;
-  if (OB_FAIL(clone(op))) {
-    LOG_WARN("failed to clone ObLogTopk", K(ret));
-  } else if (OB_ISNULL(topk = static_cast<ObLogTopk*>(op))) {
+  if (NULL != topk_limit_count_ && OB_FAIL(all_exprs.push_back(topk_limit_count_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
+  } else if (NULL != topk_limit_offset_ && OB_FAIL(all_exprs.push_back(topk_limit_offset_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get exprs", K(ret));
+  } else { /*do nothing*/ }
+
+  return ret;
+}
+
+int ObLogTopk::est_width()
+{
+  int ret = OB_SUCCESS;
+  double width = 0.0;
+  ObSEArray<ObRawExpr*, 16> output_exprs;
+  if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to cast ObLogicalOperator * to ObLogTopk *", K(ret));
-  } else if (OB_FAIL(
-                 topk->set_topk_params(topk_limit_count_, topk_limit_offset_, minimum_row_count_, topk_precision_))) {
-    LOG_WARN("failed to set_topk_params", K(ret));
+    LOG_WARN("invalid plan", K(ret));
+  } else if (OB_FAIL(get_topk_output_exprs(output_exprs))) {
+    LOG_WARN("failed to get topk output exprs", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            output_exprs,
+                                                            width))) {
+    LOG_WARN("failed to estimate width for output topk exprs", K(ret));
   } else {
-    out = topk;
+    set_width(width);
+    LOG_TRACE("est width for topk", K(output_exprs), K(width));
   }
   return ret;
 }
 
-int ObLogTopk::allocate_exchange_post(AllocExchContext* ctx)
+int ObLogTopk::get_topk_output_exprs(ObIArray<ObRawExpr *> &output_exprs)
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  if (OB_ISNULL(ctx) || OB_ISNULL(child = get_child(first_child))) {
+  ObLogPlan *plan = NULL;
+  ObSEArray<ObRawExpr*, 16> candi_exprs;
+  ObSEArray<ObRawExpr*, 16> extracted_col_aggr_winfunc_exprs;
+  if (OB_ISNULL(plan = get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-    LOG_WARN("failed to deep copy sharding info from child", K(ret));
-  } else { /*do nothing*/
-  }
+    LOG_WARN("invalid input", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(candi_exprs, plan->get_select_item_exprs_for_width_est()))) {
+    LOG_WARN("failed to add into output exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_col_aggr_winfunc_exprs(candi_exprs,
+                                                                    extracted_col_aggr_winfunc_exprs))) {
+  } else if (OB_FAIL(append_array_no_dup(output_exprs, extracted_col_aggr_winfunc_exprs))) {
+    LOG_WARN("failed to add into output exprs", K(ret));
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObLogTopk::allocate_exchange(AllocExchContext* ctx, bool parts_order)
-{
-  UNUSED(ctx);
-  UNUSED(parts_order);
-  int ret = OB_ERR_UNEXPECTED;
-  LOG_WARN("should not come here", K(ret));
-  return ret;
-}
-
-int ObLogTopk::set_topk_size()
+int ObLogTopk::est_cost()
 {
   int ret = OB_SUCCESS;
   int64_t limit_count = 0;
   int64_t offset_count = 0;
-  double child_card = 0;
   bool is_null_value = false;
-  if (OB_ISNULL(get_child(first_child)) || OB_ISNULL(get_plan())) {
+  int64_t parallel = 0.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(first_child)) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpeced null", K(ret));
-  } else if (FALSE_IT(child_card = get_child(first_child)->get_card())) {
+    LOG_WARN("get unexpeced null", K(child), K(get_stmt()), K(get_plan()),K(ret));
+  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(ret)); 
   } else if (OB_FAIL(ObTransformUtils::get_limit_value(topk_limit_count_,
-                 get_plan()->get_stmt(),
-                 get_plan()->get_optimizer_context().get_params(),
-                 get_plan()->get_optimizer_context().get_session_info(),
-                 &get_plan()->get_optimizer_context().get_allocator(),
-                 limit_count,
-                 is_null_value))) {
-    LOG_WARN("Get limit count num error", K(ret));
-  } else if (!is_null_value && OB_FAIL(ObTransformUtils::get_limit_value(topk_limit_offset_,
-                                   get_plan()->get_stmt(),
-                                   get_plan()->get_optimizer_context().get_params(),
-                                   get_plan()->get_optimizer_context().get_session_info(),
-                                   &get_plan()->get_optimizer_context().get_allocator(),
-                                   offset_count,
-                                   is_null_value))) {
-    LOG_WARN("Get limit offset num error", K(ret));
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       limit_count,
+                                                       is_null_value))) {
+    LOG_WARN("get limit count num error", K(ret));
+  } else if (!is_null_value &&
+             OB_FAIL(ObTransformUtils::get_limit_value(topk_limit_offset_,
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       offset_count,
+                                                       is_null_value))) {
+    LOG_WARN("Get limit offset num error", K(ret));  
   } else {
     limit_count = is_null_value ? 0 : limit_count + offset_count;
     double topk_card = static_cast<double>(std::max(minimum_row_count_, limit_count));
-    double row_count = child_card * static_cast<double>(topk_precision_) / 100.0;
+    double row_count = child->get_card() * static_cast<double>(topk_precision_) / 100.0;
     topk_card = std::max(topk_card, row_count);
-    topk_card = std::min(topk_card, child_card);
+    topk_card = std::min(topk_card, child->get_card());
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    double op_cost = ObOptEstCost::cost_get_rows(topk_card / parallel,
+                                                 opt_ctx.get_cost_model_type());
     set_card(topk_card);
-    if (OB_SUCC(ret)) {
-      double op_cost = ObOptEstCost::cost_limit(get_card());
-      set_op_cost(op_cost);
-      set_cost(get_child(first_child)->get_cost() + op_cost);
-    }
+    set_op_cost(op_cost);
+    set_cost(child->get_cost() + op_cost);
   }
   return ret;
 }
 
-uint64_t ObLogTopk::hash(uint64_t seed) const
-{
-  uint64_t hash_value = seed;
-  hash_value = do_hash(minimum_row_count_, topk_precision_);
-  hash_value = ObOptimizerUtil::hash_expr(topk_limit_count_, hash_value);
-  hash_value = ObOptimizerUtil::hash_expr(topk_limit_offset_, hash_value);
-  hash_value = ObLogicalOperator::hash(hash_value);
-  return hash_value;
-}
-
-int ObLogTopk::check_output_dep_specific(ObRawExprCheckDep& checker)
+int ObLogTopk::get_plan_item_info(PlanText &plan_text,
+                                  ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-
-  if (NULL != topk_limit_count_) {
-    if (OB_FAIL(checker.check(*topk_limit_count_))) {
-      LOG_WARN("failed to check limit_count_", K(*topk_limit_count_), K(ret));
-    }
-  } else { /* Do nothing */
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
   }
-
-  if (OB_SUCC(ret)) {
-    if (NULL != topk_limit_offset_) {
-      if (OB_FAIL(checker.check(*topk_limit_offset_))) {
-        LOG_WARN("failed to check limit_offset_", KPC(topk_limit_offset_), K(ret));
-      }
-    } else { /* Do nothing */
-    }
-  }
-  return ret;
-}
-
-int ObLogTopk::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF(", minimum_row_count:%ld top_precision:%ld ", minimum_row_count_, topk_precision_))) {
+  BEGIN_BUF_PRINT;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(BUF_PRINTF("minimum_row_count:%ld top_precision:%ld ",
+                                minimum_row_count_, topk_precision_))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else {
-    ObRawExpr* limit = topk_limit_count_;
-    ObRawExpr* offset = topk_limit_offset_;
+    ObRawExpr *limit = topk_limit_count_;
+    ObRawExpr *offset = topk_limit_offset_;
     EXPLAIN_PRINT_EXPR(limit, type);
     BUF_PRINTF(", ");
     EXPLAIN_PRINT_EXPR(offset, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
-  return ret;
-}
-
-int ObLogTopk::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const
-{
-  int ret = OB_SUCCESS;
-  OZ(raw_exprs.append(topk_limit_count_));
-  OZ(raw_exprs.append(topk_limit_offset_));
-
   return ret;
 }

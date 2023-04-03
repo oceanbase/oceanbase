@@ -12,22 +12,27 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include <string.h>
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprInt2ip::ObExprInt2ip(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_INT2IP, N_INT2IP, 1)
-{}
+ObExprInt2ip::ObExprInt2ip(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INT2IP, N_INT2IP, 1)
+{
+}
 
 ObExprInt2ip::~ObExprInt2ip()
-{}
+{
+}
 
-int ObExprInt2ip::calc(ObObj& result, const ObObj& text, common::ObExprStringBuf& string_buf)
+int ObExprInt2ip::calc(ObObj &result, const ObObj &text, common::ObExprStringBuf &string_buf)
 {
   int ret = OB_SUCCESS;
   if (text.is_null()) {
@@ -42,27 +47,11 @@ int ObExprInt2ip::calc(ObObj& result, const ObObj& text, common::ObExprStringBuf
   return ret;
 }
 
-int ObExprInt2ip::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(result, text, *expr_ctx.calc_buf_))) {
-    LOG_WARN("fail to calc", K(ret), K(text));
-  } else if (OB_LIKELY(!result.is_null())) {
-    result.set_collation_type(result_type_.get_collation_type());
-    result.set_collation_level(result_type_.get_collation_level());
-  } else {
-  }
-  return ret;
-}
-
-int ObExprInt2ip::int2ip(ObObj& result, const int64_t int_val, ObExprStringBuf& string_buf)
+int ObExprInt2ip::int2ip(ObObj &result, const int64_t int_val, ObExprStringBuf &string_buf)
 {
   int ret = OB_SUCCESS;
   ObString str_result;
-  char* buf = static_cast<char*>(string_buf.alloc(16));
+  char *buf = static_cast<char *>(string_buf.alloc(16));
   if (OB_ISNULL(buf)) {
     result.set_null();
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -73,8 +62,9 @@ int ObExprInt2ip::int2ip(ObObj& result, const int64_t int_val, ObExprStringBuf& 
     } else {
       in_addr addr;
       addr.s_addr = htonl(static_cast<uint32_t>(int_val));
-      // Fix me,The problem with inet_ntop() is that it is available starting from Windows Vista, but the minimum supported version is Windows 2000.
-      const char* iret = inet_ntop(AF_INET, &addr, buf, 16);
+      const char *iret = inet_ntop(AF_INET, &addr, buf, 16);
+      // Fixme : The problem with inet_ntop() is that it is available starting from Windows Vista,
+      // but the minimum supported version is Windows 2000.
       if (OB_ISNULL(iret)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("fail to inet_ntop", K(ret), K(int_val), K(addr.s_addr));
@@ -87,17 +77,17 @@ int ObExprInt2ip::int2ip(ObObj& result, const int64_t int_val, ObExprStringBuf& 
   return ret;
 }
 
-int ObExprInt2ip::int2ip(ObDatum& result, const int64_t int_val)
+int ObExprInt2ip::int2ip(ObDatum &result, const int64_t int_val)
 {
   int ret = OB_SUCCESS;
   ObString str_result = result.get_string();
-  char* buf = str_result.ptr();
+  char *buf = str_result.ptr();
   if ((int_val >> 32) > 0 || int_val < 0) {
     result.set_null();
   } else {
     in_addr addr;
     addr.s_addr = htonl(static_cast<uint32_t>(int_val));
-    const char* iret = inet_ntop(AF_INET, &addr, buf, 16);
+    const char *iret = inet_ntop(AF_INET, &addr, buf,  16);
     if (OB_ISNULL(iret)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("fail to inet_ntop", K(ret), K(int_val), K(addr.s_addr));
@@ -110,7 +100,9 @@ int ObExprInt2ip::int2ip(ObDatum& result, const int64_t int_val)
   return ret;
 }
 
-int ObExprInt2ip::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprInt2ip::cg_expr(ObExprCGCtx &op_cg_ctx,
+                          const ObRawExpr &raw_expr,
+                          ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -128,13 +120,13 @@ int ObExprInt2ip::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
   return ret;
 }
 
-int ObExprInt2ip::int2ip_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprInt2ip::int2ip_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
     LOG_WARN("int2ip expr eval param value failed", K(ret));
   } else {
-    ObDatum& text = expr.locate_param_datum(ctx, 0);
+    ObDatum &text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
       expr_datum.set_null();
     } else {
@@ -148,5 +140,6 @@ int ObExprInt2ip::int2ip_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& ex
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+

@@ -15,40 +15,60 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 #define ROUND_MIN_SCALE -30
 #define ROUND_MAX_SCALE 30
-class ObExprFuncRound : public ObFuncExprOperator {
+class ObExprFuncRound : public ObFuncExprOperator
+{
 public:
-  explicit ObExprFuncRound(common::ObIAllocator& alloc);
+  explicit  ObExprFuncRound(common::ObIAllocator &alloc);
   virtual ~ObExprFuncRound();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
 
+  static int calc_round_expr_numeric1_batch(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const int64_t batch_size);
+
+  static int calc_round_expr_numeric2_batch(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const int64_t batch_size);
+
+  static int calc_round_expr_datetime1_batch(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const int64_t batch_size);
+
+  static int calc_round_expr_datetime2_batch(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const int64_t batch_size);
 private:
-  int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
-  int calc_result2(
-      common::ObObj& result, const common::ObObj& input, const common::ObObj& param, common::ObExprCtx& expr_ctx) const;
-  int set_round_val(common::number::ObNumber& nmb, common::ObObj& result, common::ObExprCtx& cast_ctx) const;
-  int calc_with_date(common::ObObj& result, const common::ObObj& source, const common::ObObj& format,
-      common::ObExprCtx& expr_ctx) const;
-  int calc_with_decimal(
-      common::ObObj& result, const common::ObObj& input, const common::ObObj& param, common::ObExprCtx& expr_ctx) const;
   // engine 3.0
-  int se_deduce_type(
-      ObExprResType& type, ObExprResType* params, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  static int set_res_scale_prec(common::ObExprTypeCtx& type_ctx, ObExprResType* params, int64_t param_num,
-      const common::ObObjType& res_type, ObExprResType& type);
-  static int set_res_and_calc_type(ObExprResType* params, int64_t param_num, common::ObObjType& res_type);
+  int se_deduce_type(ObExprResType &type,
+                     ObExprResType *params,
+                     int64_t param_num,
+                     common::ObExprTypeCtx &type_ctx) const;
+  static int set_res_scale_prec(common::ObExprTypeCtx &type_ctx, ObExprResType *params,
+                                int64_t param_num, const common::ObObjType &res_type,
+                                ObExprResType &type);
+  static int set_res_and_calc_type(ObExprResType *params, int64_t param_num,
+                                   common::ObObjType &res_type);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncRound);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_ENGINE_OB_SQL_EXPR_FUNC_ROUND_
+#endif // OCEANBASE_SQL_ENGINE_OB_SQL_EXPR_FUNC_ROUND_

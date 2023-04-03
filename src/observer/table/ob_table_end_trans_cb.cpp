@@ -12,10 +12,12 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_end_trans_cb.h"
+#include "storage/tx/ob_trans_service.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 ObTableAPITransCb::ObTableAPITransCb()
-    :ref_count_(2)
+    :tx_desc_(NULL),
+     ref_count_(2)
 {}
 
 ObTableAPITransCb::~ObTableAPITransCb()
@@ -43,15 +45,9 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
     LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
-  } else if (!is_txs_end_trans_called()) {
-	//has NOT invoke the end trans interface
-    LOG_WARN("fail before trans service end trans, disconnct", K(cb_param));
-    if (OB_UNLIKELY(OB_SUCCESS == cb_param)) {
-      LOG_ERROR("callback before trans service end trans, but ret is OB_SUCCESS, it is BUG!!!",
-                K(cb_param), K_(end_trans_type));
-    }
-  } else {
-    //has invoke the end trans interface
+  } else if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
   }
   this->handin();
   CHECK_BALANCE("[table async callback]");
@@ -64,7 +60,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
   if (OB_FAIL(response_sender_.response(cb_param))) {
     LOG_WARN("failed to send response", K(ret), K(cb_param));
   } else {
-    LOG_DEBUG("yzfdebug async send execute response", K(cb_param));
+    LOG_INFO("async send execute response", K(cb_param));
   }
   this->destroy_cb_if_no_ref();
 }
@@ -102,15 +98,9 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
     LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
-  } else if (!is_txs_end_trans_called()) {
-	//has NOT invoked the end trans interface
-    LOG_WARN("fail before trans service end trans, disconnct", K(cb_param));
-    if (OB_UNLIKELY(OB_SUCCESS == cb_param)) {
-      LOG_ERROR("callback before trans service end trans, but ret is OB_SUCCESS, it is BUG!!!",
-                K(cb_param), K_(end_trans_type));
-    }
-  } else {
-    //has invoked the end trans interface
+  } else if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
   }
   this->handin();
   CHECK_BALANCE("[table batch async callback]");

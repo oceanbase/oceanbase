@@ -16,11 +16,13 @@
 #include <stdint.h>
 #include "lib/ob_errno.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 /*
-  The time and space of each interface call (from top to bottom is the time series)
+  各接口调用的时间与空间(从上到下为时间序列)
          worker_thread         destination_thread
 
      worker_thread: start()
@@ -33,30 +35,25 @@ namespace common {
                                thread4: prepare()
      worker_thread: end()
  */
-class ObSigProcessor {
+class ObSigProcessor
+{
 public:
-  virtual int start()
-  {
-    return OB_SUCCESS;
-  }
-  virtual int end()
-  {
-    return OB_SUCCESS;
-  }
+  virtual int start() { return OB_SUCCESS; }
+  virtual int end() { return OB_SUCCESS; }
   virtual int prepare() = 0;
   virtual int process() = 0;
   virtual ~ObSigProcessor() = 0;
 };
-inline ObSigProcessor::~ObSigProcessor()
-{}
+inline ObSigProcessor::~ObSigProcessor() {}
 
-class ObSigBTOnlyProcessor : public ObSigProcessor {
+class ObSigBTOnlyProcessor : public ObSigProcessor
+{
 public:
   ObSigBTOnlyProcessor();
   ~ObSigBTOnlyProcessor();
+  int start() override;
   int prepare() override;
   int process() override;
-
 protected:
   int fd_;
   char filename_[128];
@@ -64,18 +61,16 @@ protected:
   int64_t pos_;
 };
 
-class ObSigBTSQLProcessor : public ObSigBTOnlyProcessor {
+class ObSigBTSQLProcessor: public ObSigBTOnlyProcessor
+{
 public:
-  ObSigBTSQLProcessor() : sql_(nullptr)
-  {}
+  ObSigBTSQLProcessor() = default;
   virtual int prepare() override;
   virtual int process() override;
-
 private:
-  char* sql_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SIGNAL_PROCESSOR_H_
+#endif // OCEANBASE_SIGNAL_PROCESSOR_H_

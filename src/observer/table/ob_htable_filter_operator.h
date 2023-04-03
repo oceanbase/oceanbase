@@ -9,17 +9,18 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #ifndef _OB_HTABLE_FILTER_OPERATOR_H
 #define _OB_HTABLE_FILTER_OPERATOR_H 1
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
 #include "share/table/ob_table.h"
-#include "share/table/ob_table_rpc_struct.h"
+#include "ob_table_filter.h"
 #include "common/row/ob_row_iterator.h"
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_parser.h"
 #include "ob_htable_filters.h"
+#include "ob_table_scan_executor.h"
 #include <utility>
 
 namespace oceanbase
@@ -69,7 +70,8 @@ public:
        oldest_stamp_(0)
   {}
   virtual ~ObHTableColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order) = 0;
+  virtual int init(const table::ObHTableFilter &htable_filter,
+                   common::ObQueryFlag::ScanOrder &scan_order) = 0;
   virtual int check_column(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
   virtual int check_versions(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
   virtual const ColumnCount *get_curr_column() const = 0;
@@ -77,7 +79,10 @@ public:
   virtual bool done() const = 0;
   virtual int get_next_column_or_row(const ObHTableCell &cell, ObHTableMatchCode &match_code) = 0;
   virtual common::ObQueryFlag::ScanOrder get_scan_order() { return tracker_scan_order_; }
-  virtual void set_scan_order(common::ObQueryFlag::ScanOrder tracker_scan_order) { tracker_scan_order_ = tracker_scan_order; }
+  virtual void set_scan_order(common::ObQueryFlag::ScanOrder tracker_scan_order)
+  {
+    tracker_scan_order_ = tracker_scan_order;
+  }
   // Give the tracker a chance to declare it's done based on only the timestamp.
   bool is_done(int64_t timestamp) const;
   void set_ttl(int32_t ttl_value);
@@ -98,11 +103,15 @@ class ObHTableExplicitColumnTracker: public ObHTableColumnTracker
 public:
   ObHTableExplicitColumnTracker();
   virtual ~ObHTableExplicitColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order) override;
+  virtual int init(const table::ObHTableFilter &htable_filter,
+                   common::ObQueryFlag::ScanOrder &scan_order) override;
 
-  virtual int check_column(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
-  virtual int check_versions(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
-  virtual int get_next_column_or_row(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
+  virtual int check_column(const ObHTableCell &cell,
+                           ObHTableMatchCode &match_code) override;
+  virtual int check_versions(const ObHTableCell &cell,
+                             ObHTableMatchCode &match_code) override;
+  virtual int get_next_column_or_row(const ObHTableCell &cell,
+                                     ObHTableMatchCode &match_code) override;
   virtual const ColumnCount *get_curr_column() const override { return curr_column_; }
   virtual void reset() override;
   virtual bool done() const override;
@@ -125,10 +134,14 @@ class ObHTableWildcardColumnTracker: public ObHTableColumnTracker
 public:
   ObHTableWildcardColumnTracker();
   virtual ~ObHTableWildcardColumnTracker() {}
-  virtual int init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order) override;
-  virtual int check_column(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
-  virtual int check_versions(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
-  virtual int get_next_column_or_row(const ObHTableCell &cell, ObHTableMatchCode &match_code) override;
+  virtual int init(const table::ObHTableFilter &htable_filter,
+                   common::ObQueryFlag::ScanOrder &scan_order) override;
+  virtual int check_column(const ObHTableCell &cell,
+                           ObHTableMatchCode &match_code) override;
+  virtual int check_versions(const ObHTableCell &cell,
+                             ObHTableMatchCode &match_code) override;
+  virtual int get_next_column_or_row(const ObHTableCell &cell,
+                                     ObHTableMatchCode &match_code) override;
   virtual const ColumnCount *get_curr_column() const override { return NULL; }
   virtual void reset() override;
   virtual bool done() const override { return false; }
@@ -148,13 +161,20 @@ private:
 class ObHTableScanMatcher
 {
 public:
-  explicit ObHTableScanMatcher(const table::ObHTableFilter &htable_filter, ObHTableColumnTracker *column_tracker = nullptr);
+  explicit ObHTableScanMatcher(const table::ObHTableFilter &htable_filter,
+                               ObHTableColumnTracker *column_tracker = nullptr);
   virtual ~ObHTableScanMatcher() {}
-  void init(ObHTableColumnTracker *tracker, table::hfilter::Filter *hfilter) { column_tracker_ = tracker; hfilter_ = hfilter; }
+  void init(ObHTableColumnTracker *tracker, table::hfilter::Filter *hfilter)
+  {
+    column_tracker_ = tracker;
+    hfilter_ = hfilter;
+  }
   void set_hfilter(table::hfilter::Filter *hfilter) { hfilter_ = hfilter; }
 
   int match(const ObHTableCell &cell, ObHTableMatchCode &match_code);
-  int create_key_for_next_col(common::ObArenaAllocator &allocator, const ObHTableCell &cell, ObHTableCell *&next_cell);
+  int create_key_for_next_col(common::ObArenaAllocator &allocator,
+                              const ObHTableCell &cell,
+                              ObHTableCell *&next_cell);
 
   const ObHTableCell* get_curr_row() const;
   void clear_curr_row() { curr_row_.set_ob_row(NULL); }
@@ -185,21 +205,26 @@ public:
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
 
   int seek(const ObHTableCell &key);
-  void set_scan_result(common::ObNewRowIterator *scan_result) { child_op_ = scan_result; }
+  virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
+  {
+    child_op_ = scan_result;
+  }
   bool has_more_result() const { return has_more_cells_; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
-  int add_same_kq_to_res(ObIArray<common::ObNewRow> &same_kq_cells, ObTableQueryResult *&out_result);
+  int add_same_kq_to_res(ObIArray<common::ObNewRow> &same_kq_cells,
+                         ObTableQueryResult *&out_result);
   ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
 private:
   int next_cell();
-  int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells, ObTableQueryResult *&out_result);
+  int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells,
+                        ObTableQueryResult *&out_result);
   int seek_or_skip_to_next_row(const ObHTableCell &cell);
   int seek_or_skip_to_next_col(const ObHTableCell &cell);
   bool reach_batch_limit() const;
   bool reach_size_limit() const;
 private:
-  common::ObNewRowIterator *child_op_;
+  table::ObTableApiScanRowIterator *child_op_;
   const table::ObHTableFilter &htable_filter_;
   table::hfilter::Filter *hfilter_;
   int32_t limit_per_row_per_cf_;
@@ -221,6 +246,7 @@ private:
   int32_t cell_count_;
   int32_t count_per_row_;
   bool has_more_cells_;
+  bool is_first_result_;
 };
 
 // entry class
@@ -232,14 +258,18 @@ public:
   /// Fetch next batch result
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
-  void set_scan_result(common::ObNewRowIterator *scan_result) { row_iterator_.set_scan_result(scan_result); }
+  virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
+  virtual void set_one_result(ObTableQueryResult *result) override {one_result_ = result;}
+  virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
+  {
+    row_iterator_.set_scan_result(scan_result);
+  }
   void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
   // parse the filter string
-  int parse_filter_string(common::ObArenaAllocator* allocator);
+  int parse_filter_string(common::ObIAllocator* allocator);
 private:
-  const ObTableQuery &query_;
   ObHTableRowIterator row_iterator_;
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
   int32_t batch_size_;

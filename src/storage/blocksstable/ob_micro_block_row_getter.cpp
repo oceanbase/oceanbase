@@ -11,47 +11,64 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-
 #include "ob_micro_block_row_getter.h"
+#include "ob_index_block_row_scanner.h"
+#include "ob_macro_block_reader.h"
+#include "storage/access/ob_sstable_row_getter.h"
+#include "storage/access/ob_index_tree_prefetcher.h"
+#include "storage/blocksstable/ob_sstable.h"
+#include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "lib/statistic_event/ob_stat_event.h"
+#include "lib/stat/ob_diagnose_info.h"
 
-namespace oceanbase {
-using namespace common;
-using namespace storage;
-using share::schema::ColumnMap;
-namespace blocksstable {
+namespace oceanbase
+{
+namespace blocksstable
+{
 /**
- * ----------------------------------------------------------ObMicroBlockRowFetcher---------------------------------------------------------------
+ * --------------------------------------------ObMicroBlockRowFetcher-------------------------------------------------
  */
 ObIMicroBlockRowFetcher::ObIMicroBlockRowFetcher()
-    : param_(NULL),
-      context_(NULL),
-      sstable_(NULL),
-      reader_(NULL),
-      flat_reader_(NULL),
-      multi_version_reader_(NULL),
-      sparse_reader_(NULL),
-      is_multi_version_(false),
-      is_inited_(false)
+  : param_(nullptr),
+    context_(nullptr),
+    sstable_(nullptr),
+    reader_(nullptr),
+    flat_reader_(nullptr),
+    encode_reader_(nullptr),
+    is_inited_(false)
 {}
 
 ObIMicroBlockRowFetcher::~ObIMicroBlockRowFetcher()
 {
-  if (NULL != flat_reader_) {
-    flat_reader_->~ObMicroBlockGetReader();
-    flat_reader_ = NULL;
-  }
-  if (NULL != multi_version_reader_) {
-    multi_version_reader_->~ObMultiVersionBlockGetReader();
-    multi_version_reader_ = NULL;
-  }
-  if (NULL != sparse_reader_) {
-    sparse_reader_->~ObSparseMicroBlockGetReader();
-    sparse_reader_ = NULL;
-  }
+  FREE_PTR_FROM_CONTEXT(context_, flat_reader_, ObMicroBlockGetReader);
+  FREE_PTR_FROM_CONTEXT(context_, encode_reader_, ObEncodeBlockGetReader);
 }
 
 int ObIMicroBlockRowFetcher::init(
-    const storage::ObTableIterParam& param, storage::ObTableAccessContext& context, const storage::ObSSTable* sstable)
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), KP(sstable));
+  } else {
+    param_ = &param;
+    context_ = &context;
+    sstable_ = sstable;
+    reader_ = nullptr;
+    flat_reader_ = nullptr;
+    encode_reader_ = nullptr;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObIMicroBlockRowFetcher::switch_context(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sstable)) {
@@ -61,38 +78,29 @@ int ObIMicroBlockRowFetcher::init(
     param_ = &param;
     context_ = &context;
     sstable_ = sstable;
-    reader_ = NULL;
-    flat_reader_ = NULL;
-    multi_version_reader_ = NULL;
-    sparse_reader_ = NULL;
-    is_multi_version_ = sstable->is_multi_version_minor_sstable();
-    is_inited_ = true;
   }
   return ret;
 }
 
-int ObIMicroBlockRowFetcher::prepare_reader(const ObFullMacroBlockMeta& macro_meta)
+int ObIMicroBlockRowFetcher::prepare_reader(const ObRowStoreType store_type)
 {
   int ret = OB_SUCCESS;
-  const int16_t store_type = macro_meta.meta_->row_store_type_;
-  reader_ = NULL;
+  reader_ = nullptr;
   if (FLAT_ROW_STORE == store_type) {
-    if (!is_multi_version_) {
-      if (NULL == flat_reader_) {
-        flat_reader_ = OB_NEWx(ObMicroBlockGetReader, context_->allocator_);
+    if (nullptr == flat_reader_) {
+      flat_reader_ = OB_NEWx(ObMicroBlockGetReader, context_->stmt_allocator_);
+    }
+    reader_ = flat_reader_;
+  } else if (ENCODING_ROW_STORE == store_type || SELECTIVE_ENCODING_ROW_STORE == store_type) {
+    if (OB_LIKELY(!sstable_->is_multi_version_minor_sstable())) {
+      if (nullptr == encode_reader_) {
+        encode_reader_ = OB_NEWx(ObEncodeBlockGetReader, context_->stmt_allocator_);
       }
-      reader_ = flat_reader_;
+      reader_ = encode_reader_;
     } else {
-      if (NULL == multi_version_reader_) {
-        multi_version_reader_ = OB_NEWx(ObMultiVersionBlockGetReader, context_->allocator_);
-      }
-      reader_ = multi_version_reader_;
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported multi version encode store type", K(ret), K(store_type));
     }
-  } else if (SPARSE_ROW_STORE == store_type) {  // sparse storage
-    if (NULL == sparse_reader_) {
-      sparse_reader_ = OB_NEWx(ObSparseMicroBlockGetReader, context_->allocator_);
-    }
-    reader_ = sparse_reader_;
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported row store type", K(ret), K(store_type));
@@ -100,327 +108,319 @@ int ObIMicroBlockRowFetcher::prepare_reader(const ObFullMacroBlockMeta& macro_me
   LOG_DEBUG("row store type", K(ret), K(store_type));
   if (OB_SUCC(ret) && OB_ISNULL(reader_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate reader, ", K(ret), K(store_type));
+    LOG_WARN("Fail to allocate reader", K(ret), K(store_type));
   }
   return ret;
 }
 
-/**
- * ----------------------------------------------------------ObMicroBlockRowGetter---------------------------------------------------------------
- */
-ObMicroBlockRowGetter::ObMicroBlockRowGetter() : allocator_(ObModIds::OB_STORE_ROW_GETTER)
-{}
 
-ObMicroBlockRowGetter::~ObMicroBlockRowGetter()
-{}
-
-int ObMicroBlockRowGetter::init(const ObTableIterParam& param, ObTableAccessContext& context, const ObSSTable* sstable)
+int ObMicroBlockRowGetter::init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
-  const ObColDescIArray* out_cols = nullptr;
-  const ObIArray<int32_t>* projector = nullptr;
-  const share::schema::ColumnMap* column_id_map = nullptr;
-  if (OB_UNLIKELY(is_inited_)) {
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!param.is_valid()) || OB_UNLIKELY(!context.is_valid()) || OB_ISNULL(sstable)) {
+  } else if (OB_UNLIKELY(!param.is_valid() ||
+                         !context.is_valid() ||
+                         nullptr == sstable)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param), K(context), KP(sstable));
   } else if (sstable->is_multi_version_minor_sstable() &&
-             sstable->get_snapshot_version() > context.trans_version_range_.snapshot_version_) {
+             sstable->get_upper_trans_version() > context.trans_version_range_.snapshot_version_) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sstable", K(ret), K(sstable->get_snapshot_version()), K(context.trans_version_range_));
-  } else if (OB_FAIL(param.get_out_cols(context.use_fuse_row_cache_, out_cols))) {
-    LOG_WARN("fail to get out cols", K(ret));
-  } else if (OB_FAIL(param.get_column_map(context.use_fuse_row_cache_, column_id_map))) {
-    LOG_WARN("fail to get column id map", K(ret));
-  } else if (OB_FAIL(param.get_projector(context.use_fuse_row_cache_, projector))) {
-    LOG_WARN("fail to get projector", K(ret));
-  } else if (OB_FAIL(column_map_.init(*context.allocator_,
-                 param.schema_version_,
-                 param.rowkey_cnt_,
-                 0, /*store_column_count*/
-                 *out_cols,
-                 column_id_map,
-                 projector,
-                 sstable->get_multi_version_rowkey_type()))) {
-    LOG_WARN("fail to init column map", K(ret));
+    LOG_WARN("invalid sstable", K(ret), KPC(sstable), K(context.trans_version_range_));
   } else if (OB_FAIL(ObIMicroBlockRowFetcher::init(param, context, sstable))) {
-    LOG_WARN("fail to init micro block row fecher, ", K(ret));
+    LOG_WARN("fail to init micro block row fecher", K(ret));
+  } else if (OB_ISNULL(read_info_ = param.get_read_info(
+              (context.enable_put_row_cache() || context.use_fuse_row_cache_)
+              && param.read_with_same_schema()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null read info", K(ret), K(context.use_fuse_row_cache_),
+             K(context.enable_put_row_cache()), K(param.read_with_same_schema()), K(param));
+  } else if (OB_FAIL(row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
+    LOG_WARN("Failed to init datum row", K(ret));
+  } else if (context.enable_put_row_cache() && param.read_with_same_schema()
+             && OB_FAIL(cache_project_row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
+    STORAGE_LOG(WARN, "Failed to init cache project row", K(ret));
   } else {
-    LOG_DEBUG("success to init micro block row getter, ", K(param));
+    LOG_DEBUG("success to init micro block row getter", K(param));
   }
+
   return ret;
 }
 
-int ObMicroBlockRowGetter::get_row(const ObStoreRowkey& rowkey, const MacroBlockId macro_id, const int64_t file_id,
-    const ObFullMacroBlockMeta& macro_meta, const ObMicroBlockData& block_data,
-    const storage::ObSSTableRowkeyHelper* rowkey_helper, const storage::ObStoreRow*& row)
+int ObMicroBlockRowGetter::switch_context(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(prepare_reader(macro_meta))) {
-    LOG_WARN("failed to prepare reader, ", K(ret), K(macro_meta.meta_->row_store_type_));
-  } else if (OB_FAIL(
-                 column_map_.rebuild(macro_meta, param_->need_build_column_map(column_map_.get_schema_version())))) {
-    LOG_WARN("fail to rebuild column map", K(ret), K(macro_meta));
+    STORAGE_LOG(WARN, "ObMicroBlockRowGetter is not inited", K(ret));
+  } else if (OB_UNLIKELY(!param.is_valid())
+      || OB_UNLIKELY(!context.is_valid())
+      || OB_ISNULL(sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(param), K(context), KP(sstable));
+  } else if (sstable->is_multi_version_minor_sstable()
+             && sstable->get_upper_trans_version() > context.trans_version_range_.snapshot_version_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sstable", K(ret), KPC(sstable), K(context.trans_version_range_));
+  } else if (OB_FAIL(ObIMicroBlockRowFetcher::switch_context(param, context, sstable))) {
+    LOG_WARN("fail to switch context micro block row fecher, ", K(ret));
+  } else if (OB_ISNULL(read_info_ = param.get_read_info(
+              (context.enable_put_row_cache() || context.use_fuse_row_cache_)
+              && param.read_with_same_schema()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null read info", K(ret), K(context.use_fuse_row_cache_),
+             K(context.enable_put_row_cache()), K(param.read_with_same_schema()), K(param));
   } else {
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-    row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-    if (!context_->enable_put_row_cache()) {
-      if (OB_FAIL(reader_->get_row(
-              context_->pkey_.get_tenant_id(), block_data, rowkey, column_map_, macro_meta, rowkey_helper, row_))) {
-        if (OB_BEYOND_THE_RANGE == ret) {
-          if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-            LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
-          }
-        } else {
-          LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
-        }
-      } else {
-        // cast different type
-        if (OB_UNLIKELY(!column_map_.is_all_column_matched())) {
-          allocator_.reuse();
-          const ObColumnIndexItem* column_indexs = column_map_.get_column_indexs();
-          const int64_t request_count = column_map_.get_request_count();
-          for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-            if (!column_indexs[i].is_column_type_matched_) {
-              if (OB_FAIL(ObIRowReader::cast_obj(
-                      column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-                LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
-              }
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          row = &row_;
-          LOG_DEBUG("Success to get row, ", K(*row));
-        }
-      }
-    } else {
-      // need read full row to put row cache
-      full_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(full_row_obj_buf_);
-      full_row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      full_row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-      ObRowCacheValue row_cache_value;
-      if (OB_FAIL(reader_->get_row(
-              context_->pkey_.get_tenant_id(), block_data, rowkey, macro_meta, rowkey_helper, full_row_))) {
-        if (OB_BEYOND_THE_RANGE == ret) {
-          if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-            LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
-          }
-        } else {
-          LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
-        }
-      } else {
-        LOG_DEBUG("Success to get row, ", K(ret), K(rowkey), K(full_row_));
-        if (OB_FAIL(row_cache_value.init(macro_meta, &full_row_, macro_id))) {
-          STORAGE_LOG(WARN, "fail to init row cache value", K(ret), K(macro_meta));
-        } else if (OB_FAIL(project_row(rowkey, row_cache_value, column_map_, row))) {
-          STORAGE_LOG(WARN, "fail to project cache row", K(ret), K(rowkey), K(row_cache_value));
-        } else {
-          // put row cache, ignore fail
-          ObRowCacheKey row_cache_key(param_->table_id_,
-              file_id,
-              rowkey,
-              sstable_->is_major_sstable() ? 0 : sstable_->get_snapshot_version(),
-              sstable_->get_key().table_type_);
-          if (OB_SUCCESS == OB_STORE_CACHE.get_row_cache().put_row(row_cache_key, row_cache_value)) {
-            context_->access_stat_.row_cache_put_cnt_++;
-          }
-          LOG_DEBUG("Success to get row, ", K(*row), K_(full_row), K(row_cache_value));
-        }
+    if (context.enable_put_row_cache() && param.read_with_same_schema()) {
+      if (cache_project_row_.is_valid()) {
+      } else if (OB_FAIL(cache_project_row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
+        STORAGE_LOG(WARN, "Failed to init cache project row", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObMicroBlockRowGetter::get_cached_row(const ObStoreRowkey& rowkey, const ObFullMacroBlockMeta& macro_meta,
-    const ObRowCacheValue& value, const ObStoreRow*& row)
+int ObMicroBlockRowGetter::get_row(
+    ObSSTableReadHandle &read_handle,
+    const ObDatumRow *&store_row,
+    ObMacroBlockReader &block_reader)
 {
   int ret = OB_SUCCESS;
-  row = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(
-                 column_map_.rebuild(macro_meta, param_->need_build_column_map(column_map_.get_schema_version())))) {
-    LOG_WARN("fail to rebuild column map", K(ret));
+    LOG_WARN("not init micro block row getter", K(ret));
+  } else if (OB_UNLIKELY(!read_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(read_handle));
   } else {
-    if (value.is_row_not_exist()) {
-      // not exist row
-      if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-        LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
-      }
-    } else {
-      if (OB_FAIL(project_row(rowkey, value, column_map_, row))) {
-        LOG_WARN("fail to project cache row, ", K(ret));
-      } else {
-        LOG_DEBUG("success to get cache row, ", K(ret), K(*row));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObMicroBlockRowGetter::get_not_exist_row(const common::ObStoreRowkey& rowkey, const storage::ObStoreRow*& row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    const int64_t request_cnt = column_map_.get_request_count();
-    const int64_t rowkey_cnt = rowkey.get_obj_cnt();
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-    row_.row_val_.count_ = request_cnt;
-
-    for (int64_t i = 0; i < rowkey_cnt; i++) {
-      row_.row_val_.cells_[i] = rowkey.get_obj_ptr()[i];
-    }
-    for (int64_t i = rowkey_cnt; i < request_cnt; i++) {
-      row_.row_val_.cells_[i].set_nop_value();
-    }
-
-    row = &row_;
-  }
-  return ret;
-}
-
-int ObMicroBlockRowGetter::project_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value,
-    const ObColumnMap& column_map, const storage::ObStoreRow*& row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(value.get_column_ids())) {  // flat row
-    if (OB_FAIL(project_cache_row(rowkey, value, column_map, row))) {
-      LOG_WARN("project dense cache row failed", K(ret), K(row), K(rowkey));
-    }
-  } else {  // sparse row
-    if (OB_FAIL(project_cache_sparse_row(rowkey, value, column_map, row))) {
-      LOG_WARN("project sparse cache row failed", K(ret), K(row), K(rowkey));
-    }
-  }
-  return ret;
-}
-
-int ObMicroBlockRowGetter::project_cache_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value,
-    const ObColumnMap& column_map, const storage::ObStoreRow*& row)
-{
-  UNUSED(rowkey);
-  int ret = OB_SUCCESS;
-  int64_t store_index = 0;
-  common::ObObj* const obj_array = value.get_obj_array();
-  const int64_t column_cnt = value.get_column_cnt();
-  const ObColumnIndexItem* column_indexs = column_map.get_column_indexs();
-  const int64_t request_count = column_map.get_request_count();
-  row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-  row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-    store_index = column_indexs[i].store_index_;
-    if (OB_INVALID_INDEX != store_index) {
-      if (store_index < column_cnt) {
-        row_.row_val_.cells_[i] = obj_array[store_index];
-      } else {
+    switch (read_handle.row_state_) {
+      case ObSSTableRowState::NOT_EXIST:
+        if (OB_FAIL(get_not_exist_row(*read_handle.rowkey_, store_row))) {
+          LOG_WARN("fail to get not exist row", K(ret), K(*read_handle.rowkey_));
+        }
+        break;
+      case ObSSTableRowState::IN_ROW_CACHE:
+        if (OB_FAIL(get_cached_row(
+                    *read_handle.rowkey_,
+                    *read_handle.row_handle_.row_value_,
+                    store_row))) {
+          LOG_WARN("fail to get cache row", K(ret), K(*read_handle.rowkey_));
+        }
+        break;
+      case ObSSTableRowState::IN_BLOCK:
+        if (OB_FAIL(get_block_row(read_handle, block_reader, store_row))) {
+          LOG_WARN("Fail to get block row", K(ret));
+        }
+        break;
+      default:
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected store index, ", K(ret), K(store_index), K(column_cnt));
-      }
-    } else {
-      row_.row_val_.cells_[i].set_nop_value();
-    }
-  }
-
-  // cast different type
-  if (OB_UNLIKELY(!column_map.is_all_column_matched())) {
-    allocator_.reuse();
-    for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-      if (!column_indexs[i].is_column_type_matched_) {
-        if (OB_FAIL(
-                ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-          LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
-        }
-      }
+        LOG_WARN("invalid row state", K(ret), K(read_handle.row_state_));
     }
   }
 
   if (OB_SUCC(ret)) {
-    row_.row_val_.count_ = request_count;
-    row_.flag_ = value.get_flag();
-    row_.set_row_dml(value.get_row_dml());
-    row = &row_;
+    (const_cast<ObDatumRow*> (store_row))->scan_index_ = read_handle.range_idx_;
+    LOG_DEBUG("get row", K(*store_row), K(read_handle.row_state_), K(*read_handle.rowkey_));
   }
   return ret;
 }
 
-int ObMicroBlockRowGetter::project_cache_sparse_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value,
-    const ObColumnMap& column_map, const storage::ObStoreRow*& row)
+int ObMicroBlockRowGetter::get_block_row(
+    ObSSTableReadHandle &read_handle,
+    ObMacroBlockReader &block_reader,
+    const ObDatumRow *&store_row
+)
 {
-  UNUSED(rowkey);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(column_map.get_column_indexs()) || OB_ISNULL(column_map.get_cols_map()) ||
-      column_map.get_request_count() <= 0 || OB_ISNULL(value.get_obj_array()) || OB_ISNULL(value.get_column_ids())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(column_map), K(value));
-  } else {
-    common::ObObj* const obj_array = value.get_obj_array();
-    const int64_t column_cnt = value.get_column_cnt();
-    const uint16_t* col_id_array = value.get_column_ids();
-    const ObColumnIndexItem* column_indexs = column_map.get_column_indexs();
-    const ColumnMap* col_id_map = column_map.get_cols_map();
-    const int64_t request_count = column_map.get_request_count();
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {  // set nop
-      row_.row_val_.cells_[i].set_nop_value();
+  ObMicroBlockData block_data;
+  if (OB_FAIL(read_handle.get_block_data(block_reader, block_data))) {
+    LOG_WARN("Fail to get block data", K(ret), K(read_handle));
+  } else if (OB_FAIL(inner_get_row(
+              read_handle.micro_handle_->macro_block_id_,
+              *read_handle.rowkey_,
+              block_data,
+              store_row))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get block row", K(ret), K(*read_handle.rowkey_));
     }
-    int32_t col_pos = OB_INVALID_INDEX;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-      if (OB_FAIL(col_id_map->get(col_id_array[i], col_pos))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("get column pos failed", K(ret), "column_id", col_id_array[i]);
-        }
-      } else if (OB_INVALID_INDEX != col_pos) {
-        if (col_pos > request_count) {
-          LOG_WARN("invalid column pos", K(ret), "column_id", col_id_array[i], K(col_pos));
-        } else {
-          row_.row_val_.cells_[col_pos] = obj_array[i];
+  } else {
+    if (store_row->row_flag_.is_not_exist()) {
+      ++context_->table_store_stat_.get_row_.empty_read_cnt_;
+      EVENT_INC(ObStatEventIds::GET_ROW_EMPTY_READ);
+      if (!context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable()) {
+        (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
+            MTL_ID(),
+            param_->table_id_,
+            read_handle.micro_handle_->macro_block_id_,
+            read_handle.rowkey_->get_datum_cnt());
+        if (read_handle.is_bf_contain_) {
+          ++context_->table_store_stat_.bf_empty_read_cnt_;
         }
       }
+    } else {
+      ++context_->table_store_stat_.get_row_.effect_read_cnt_;
+      EVENT_INC(ObStatEventIds::GET_ROW_EFFECT_READ);
     }
+  }
 
-    // cast different type
-    if (OB_SUCC(ret)) {
-      allocator_.reuse();
-      for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-        if (!row_.row_val_.cells_[i].is_nop_value() && !row_.row_val_.cells_[i].is_null() &&
-            column_indexs[i].request_column_type_ != row_.row_val_.cells_[i].get_meta()) {
-          if (OB_FAIL(
-                  ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-            LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
-          }
+
+  return ret;
+}
+
+int ObMicroBlockRowGetter::get_cached_row(
+    const ObDatumRowkey &rowkey,
+    const ObRowCacheValue &value,
+    const ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (value.is_row_not_exist()) {
+    //not exist row
+    if (OB_FAIL(get_not_exist_row(rowkey, row))) {
+      LOG_WARN("Fail to get not exist row", K(ret), K(rowkey));
+    }
+  } else if (OB_FAIL(project_cache_row(value, row_))) {
+    LOG_WARN("fail to project cache row", K(ret));
+  } else {
+    row = &row_;
+    LOG_DEBUG("success to get cache row", K(ret), K(*row));
+  }
+  return ret;
+}
+
+int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  const ObTableReadInfo *read_info = nullptr;
+  if (OB_ISNULL(read_info = param_->get_read_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null read_info", K(ret), K_(param));
+  } else if (OB_FAIL(row.reserve(read_info->get_request_count()))) {
+    LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info->get_request_count()));
+  } else {
+    const int64_t request_cnt = read_info->get_request_count();
+    const ObIArray<int32_t> &cols_index = read_info->get_columns_index();
+    row.row_flag_ = value.get_flag();
+    row.count_ = read_info->get_request_count();
+    ObStorageDatum *const datums = value.get_datums();
+    const int64_t column_cnt = value.get_column_cnt();
+    for (int64_t i = 0; OB_SUCC(ret) && i < request_cnt; i++) {
+      if (cols_index.at(i) < column_cnt && cols_index.at(i) >= 0) {
+        row.storage_datums_[i] = datums[cols_index.at(i)];
+      } else {
+        // new added col
+        row.storage_datums_[i].set_nop();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockRowGetter::inner_get_row(
+    const MacroBlockId &macro_id,
+    const ObDatumRowkey &rowkey,
+    const ObMicroBlockData &block_data,
+    const ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(nullptr == read_info_ || !read_info_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid read_info", K(ret), KPC_(read_info));
+  } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
+    LOG_WARN("failed to prepare reader", K(ret), K(macro_id));
+  } else {
+    if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
+      LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
+    } else if (OB_FAIL(reader_->get_row(block_data, rowkey, *read_info_, row_))) {
+      if (OB_BEYOND_THE_RANGE == ret) {
+        if (OB_FAIL(get_not_exist_row(rowkey, row))) {
+          LOG_WARN("Fail to get not exist row", K(ret), K(rowkey), K(macro_id));
         }
-      }  // end for
+        STORAGE_LOG(DEBUG, "get not exist row", K(rowkey), K(macro_id));
+      } else {
+        LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info),
+                 KPC_(param), KPC_(context), K(macro_id));
+      }
+    } else {
+      row = &row_;
+      LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), KPC_(read_info),
+                K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(macro_id));
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      row_.row_val_.count_ = request_count;
-      row_.flag_ = value.get_flag();
-      row_.set_row_dml(value.get_row_dml());
-      row_.is_sparse_row_ = false;
+  if (OB_FAIL(ret)) {
+  } else if (context_->use_fuse_row_cache_) {
+    // fuse row cache bypass the row cache
+  } else if (context_->enable_put_row_cache() && param_->read_with_same_schema()) {
+    ObRowCacheValue row_cache_value;
+    if (OB_FAIL(row_cache_value.init(sstable_->get_key().get_start_scn().get_val_for_tx(), row_))) {
+      LOG_WARN("fail to init row cache value", K(ret), K(row_));
+    } else {
+      //put row cache, ignore fail
+      ObRowCacheKey row_cache_key(
+          MTL_ID(),
+          param_->tablet_id_,
+          rowkey,
+          read_info_->get_datum_utils(),
+          sstable_->get_data_version(),
+          sstable_->get_key().table_type_);
+      if (OB_SUCCESS == OB_STORE_CACHE.get_row_cache().put_row(row_cache_key, row_cache_value)) {
+        context_->table_store_stat_.row_cache_put_cnt_++;
+      }
+
+      if (OB_FAIL(project_cache_row(row_cache_value, cache_project_row_))) {
+        LOG_WARN("fail to project cache row", K(ret), K(row_cache_value));
+      } else {
+        row = &cache_project_row_;
+        LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), K(row_cache_value), K(macro_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockRowGetter::get_not_exist_row(const ObDatumRowkey &rowkey, const ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    const ObTableReadInfo *read_info = nullptr;
+    if (OB_ISNULL(read_info = param_->get_read_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null read_info", K(ret), K_(param));
+    } else if (OB_FAIL(row_.reserve(rowkey.get_datum_cnt()))) {
+      LOG_WARN("fail to reserve datum row", K(ret), KPC(read_info));
+    } else {
+      row_.count_ = rowkey.get_datum_cnt();
+      row_.row_flag_.reset();
+      row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
+      //TODO maybe we do not need to copy the rowkey datum
+      for (int64_t i = 0; i < rowkey.get_datum_cnt(); i++) {
+        row_.storage_datums_[i] = rowkey.datums_[i];
+      }
       row = &row_;
     }
   }
   return ret;
 }
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+} // end namespace blocksstable
+} // end namespace oceanbase

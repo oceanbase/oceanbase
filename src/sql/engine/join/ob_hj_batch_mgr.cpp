@@ -26,8 +26,7 @@ ObHJBatchMgr::~ObHJBatchMgr()
 
 void ObHJBatchMgr::reset()
 {
-  FOREACH(p, batch_list_)
-  {
+  FOREACH(p, batch_list_) {
     if (NULL != p->left_) {
       free(p->left_);
       p->left_ = NULL;
@@ -40,8 +39,7 @@ void ObHJBatchMgr::reset()
   batch_list_.clear();
 }
 
-int ObHJBatchMgr::next_batch(ObHJBatchPair& batch_pair)
-{
+int ObHJBatchMgr::next_batch(ObHJBatchPair &batch_pair) {
   int ret = batch_list_.pop_front(batch_pair);
   if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_ITER_END;
@@ -59,8 +57,8 @@ int ObHJBatchMgr::remove_undumped_batch()
   hj_batch_pair_list_type::iterator iter = batch_list_.begin();
   hj_batch_pair_list_type::iterator pre_iter = batch_list_.end();
   while (OB_SUCC(ret) && iter != batch_list_.end()) {
-    ObHJBatch* left = iter->left_;
-    ObHJBatch* right = iter->right_;
+    ObHJBatch *left = iter->left_;
+    ObHJBatch *right = iter->right_;
     bool erased = false;
     if (nullptr != left && nullptr != right) {
       if (left->is_dumped()) {
@@ -105,11 +103,12 @@ int ObHJBatchMgr::remove_undumped_batch()
   return ret;
 }
 
-int ObHJBatchMgr::get_or_create_batch(int32_t level, int32_t batchno, bool is_left, ObHJBatch*& batch, bool only_get)
+int ObHJBatchMgr::get_or_create_batch(int32_t level, int64_t part_shift, int32_t batchno, bool is_left, ObHJBatch *&batch,
+    bool only_get)
 {
   int ret = OB_SUCCESS;
   bool flag = false;
-  for (hj_batch_pair_list_type::iterator iter = batch_list_.begin(); iter != batch_list_.end(); iter++) {
+  for (hj_batch_pair_list_type::iterator iter = batch_list_.begin(); iter != batch_list_.end(); iter ++) {
     if (is_left) {
       if (iter->left_->get_part_level() == level && iter->left_->get_batchno() == batchno) {
         batch = iter->left_;
@@ -125,22 +124,22 @@ int ObHJBatchMgr::get_or_create_batch(int32_t level, int32_t batchno, bool is_le
     }
   }
 
-  if (!flag && !only_get) {  // not found, should new one
+  if (!flag && !only_get) { //not found, should new one
     ObHJBatchPair batch_pair;
-    void* buf = alloc_.alloc(sizeof(ObHJBatch));
+    void *buf = alloc_.alloc(sizeof(ObHJBatch));
     if (NULL == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      batch_count_++;
-      batch_pair.left_ = new (buf) ObHJBatch(alloc_, buf_mgr_, tenant_id_, level, batchno);
+      batch_count_ ++;
+      batch_pair.left_ = new (buf) ObHJBatch(alloc_, buf_mgr_, tenant_id_, level, part_shift, batchno);
     }
     if (OB_SUCC(ret)) {
       buf = alloc_.alloc(sizeof(ObHJBatch));
       if (NULL == buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        batch_count_++;
-        batch_pair.right_ = new (buf) ObHJBatch(alloc_, buf_mgr_, tenant_id_, level, batchno);
+        batch_count_ ++;
+        batch_pair.right_ = new (buf) ObHJBatch(alloc_, buf_mgr_, tenant_id_, level, part_shift, batchno);
       }
     }
     if (OB_SUCC(ret)) {

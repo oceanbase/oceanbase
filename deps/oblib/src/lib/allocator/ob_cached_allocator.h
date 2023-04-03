@@ -10,54 +10,51 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
-#define OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#ifndef OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#define OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
 
 #include "lib/objectpool/ob_pool.h"
 #include "lib/lock/ob_spin_lock.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // @note thread-safe
 template <typename T>
-class ObCachedAllocator {
+class ObCachedAllocator
+{
 public:
   ObCachedAllocator();
   virtual ~ObCachedAllocator();
 
-  T* alloc();
-  void free(T* obj);
-  int32_t get_allocated_count() const
-  {
-    return allocated_count_;
-  };
-  int32_t get_cached_count() const
-  {
-    return cached_count_;
-  };
-
+  T *alloc();
+  void free(T *obj);
+  int32_t get_allocated_count() const {return allocated_count_;};
+  int32_t get_cached_count() const {return cached_count_;};
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCachedAllocator);
-
 private:
   // data members
   ObSpinLock lock_;
   ObPool<> pool_;
-  ObArray<T*> cached_objs_;
+  ObArray<T *> cached_objs_;
   int32_t allocated_count_;
   int32_t cached_count_;
 };
 
-template <typename T>
-ObCachedAllocator<T>::ObCachedAllocator() : pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
-{}
+template<typename T>
+ObCachedAllocator<T>::ObCachedAllocator()
+    : lock_(ObLatchIds::OB_CACHED_ALLOCATOR_LOCK), pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
+{
+}
 
-template <typename T>
+template<typename T>
 ObCachedAllocator<T>::~ObCachedAllocator()
 {
   //_OB_LOG(DEBUG, "free cached objs, count=%ld", cached_objs_.count());
-  T* obj = NULL;
+  T *obj = NULL;
   while (OB_SUCCESS == cached_objs_.pop_back(obj)) {
     obj->~T();
     pool_.free(obj);
@@ -65,32 +62,33 @@ ObCachedAllocator<T>::~ObCachedAllocator()
     --cached_count_;
   }
   if (0 != allocated_count_ || 0 != cached_count_) {
-    LIB_LOG(WARN, "some allocated object is not freed", K(allocated_count_), K(cached_count_));
+    LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "some allocated object is not freed",
+              K(allocated_count_), K(cached_count_));
   }
 }
 
-template <typename T>
-T* ObCachedAllocator<T>::alloc()
+template<typename T>
+T *ObCachedAllocator<T>::alloc()
 {
-  T* ret = NULL;
+  T *ret = NULL;
   ObSpinLockGuard guard(lock_);
   if (OB_SUCCESS != cached_objs_.pop_back(ret)) {
-    void* p = pool_.alloc();
+    void *p = pool_.alloc();
     if (OB_ISNULL(p)) {
-      LIB_LOG(ERROR, "no memory");
+      LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "no memory");
     } else {
-      ret = new (p) T();
-      ++allocated_count_;
+      ret = new(p) T();
+      ++ allocated_count_;
     }
   } else {
-    --cached_count_;
-    ++allocated_count_;
+    -- cached_count_;
+    ++ allocated_count_;
   }
   return ret;
 }
 
-template <typename T>
-void ObCachedAllocator<T>::free(T* obj)
+template<typename T>
+void ObCachedAllocator<T>::free(T *obj)
 {
   if (OB_LIKELY(NULL != obj)) {
     int ret = OB_SUCCESS;
@@ -102,13 +100,13 @@ void ObCachedAllocator<T>::free(T* obj)
       pool_.free(obj);
     } else {
       obj->reset();
-      ++cached_count_;
+      ++ cached_count_;
     }
-    --allocated_count_;
+    -- allocated_count_;
   }
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#endif //OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_

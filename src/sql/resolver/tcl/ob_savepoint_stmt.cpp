@@ -13,11 +13,13 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_savepoint_stmt.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
-int ObSavePointStmt::set_sp_name(const char* str_value, int64_t str_len)
+int ObSavePointStmt::set_sp_name(const char *str_value, int64_t str_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str_value) || str_len <= 0) {
@@ -29,5 +31,6 @@ int ObSavePointStmt::set_sp_name(const char* str_value, int64_t str_len)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
+

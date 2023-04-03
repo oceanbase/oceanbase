@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_filter_parser.h"
 #include "htable_filter_lex.hxx"
@@ -35,7 +35,7 @@ ObHTableFilterParser::~ObHTableFilterParser()
   destroy();
 }
 
-int ObHTableFilterParser::init(common::ObArenaAllocator* allocator)
+int ObHTableFilterParser::init(common::ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
   if (nullptr != scanner_ || nullptr != allocator_) {

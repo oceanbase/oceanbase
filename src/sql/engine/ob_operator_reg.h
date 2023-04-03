@@ -14,18 +14,25 @@
 #define OCEANBASE_ENGINE_OB_OPERATOR_REG_H_
 
 #include "sql/engine/ob_phy_operator_type.h"
+#include "share/ob_cluster_version.h"
 #include <type_traits>
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-namespace op_reg {
+namespace op_reg
+{
 
 template <int>
-struct ObOpTypeTraits {
+struct ObOpTypeTraits
+{
 
-  constexpr static int registered_ = false;
-  constexpr static int has_input_ = false;
+  constexpr static bool registered_ = false;
+  constexpr static bool has_input_ = false;
+  constexpr static bool vectorized_ = false;
+  constexpr static uint64_t ob_version_ = 0;
   typedef char LogOp;
   typedef char Spec;
   typedef char Op;
@@ -33,48 +40,74 @@ struct ObOpTypeTraits {
 };
 
 template <typename T>
-struct ObOpTraits {
+struct ObOpTraits
+{
   constexpr static int type_ = 0;
 };
 
-}  // end namespace op_reg
+} // end namespace op_reg
 
-#define DEF_OP_TRAITS_true(type, op)   \
-  template <>                          \
-  struct ObOpTraits<op> {              \
-    constexpr static int type_ = type; \
-  };
+struct VECTORIZED_OP {};
+#define NOINPUT char
 
-#define DEF_OP_TRAITS_false(type, op)
-#define DEF_OP_INPUT_TRAITS(has, type, input) DEF_OP_TRAITS_##has(type, input)
 
-#define REGISTER_OPERATOR_FULL(log_op, type, op_spec, op, has_input, input)                                  \
-  namespace op_reg {                                                                                         \
-  template <>                                                                                                \
-  struct ObOpTypeTraits<type> {                                                                              \
-    constexpr static bool registered_ = true;                                                                \
-    constexpr static bool has_input_ = has_input;                                                            \
-    typedef log_op LogOp;                                                                                    \
-    typedef op_spec Spec;                                                                                    \
-    typedef op Op;                                                                                           \
-    typedef input Input;                                                                                     \
-  };                                                                                                         \
-  DEF_OP_TRAITS_true(type, op_spec) DEF_OP_TRAITS_true(type, op) DEF_OP_INPUT_TRAITS(has_input, type, input) \
+// check the input is char, return 0 or 1
+#define CHECK_IS_CHAR__char 1, 1
+#define CHECK_IS_CHAR(x) SELECT(2, CHECK_IS_CHAR__ ## x, 0)
+
+// define operator input type traits if input is not char.
+#define DEF_OP_INPUT_TRAITS(input, type) \
+    CONCAT(DEF_OP_INPUT_TRAITS_, CHECK_IS_CHAR(input))(input, type)
+#define DEF_OP_INPUT_TRAITS_0(input, type) \
+  template <> struct ObOpTraits<input> { constexpr static int type_ = type; };
+#define DEF_OP_INPUT_TRAITS_1(input, type)
+
+
+#define REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z) \
+  REGISTER_OPERATOR_FULL_(log_op, type, spec, op, x, y, z)
+#define REGISTER_OPERATOR_FULL_(...) REGISTER_OPERATOR_FULL__(__VA_ARGS__)
+
+#define REGISTER_OPERATOR_FULL__(log_op, type, op_spec, op, input_type,        \
+                                 vec_type, ob_version)                         \
+  namespace op_reg {                                                           \
+  template <> struct ObOpTypeTraits<type> {                                    \
+    constexpr static bool registered_ = true;                                  \
+    constexpr static bool has_input_ = !std::is_same<char, input_type>::value; \
+    constexpr static bool vectorized_ =                                        \
+        std::is_same<VECTORIZED_OP, vec_type>::value;                          \
+    constexpr static uint64_t ob_version_ =                                    \
+        (ob_version == 0 ? CLUSTER_VERSION_4_0_0_0 : ob_version);                 \
+    typedef log_op LogOp;                                                      \
+    typedef op_spec Spec;                                                      \
+    typedef op Op;                                                             \
+    typedef input_type Input;                                                  \
+  };                                                                           \
+  template <> struct ObOpTraits<op_spec> {                                     \
+    constexpr static int type_ = type;                                         \
+  };                                                                           \
+  template <> struct ObOpTraits<op> { constexpr static int type_ = type; };    \
+  DEF_OP_INPUT_TRAITS(input_type, type)                                        \
   }
 
-#define REGISTER_OPERATOR_4(log_op, type, spec, op) REGISTER_OPERATOR_FULL(log_op, type, spec, op, false, char)
-#define REGISTER_OPERATOR_5(log_op, type, spec, op, input) REGISTER_OPERATOR_FULL(log_op, type, spec, op, true, input)
+#define REGISTER_OPERATOR_5(log_op, type, spec, op, x) \
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, char, 0)
+#define REGISTER_OPERATOR_6(log_op, type, spec, op, x, y) \
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, 0)
+#define REGISTER_OPERATOR_7(log_op, type, spec, op, x, y, z) \
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z)
 
-#define REGISTER_OPERATOR___(n, ...) REGISTER_OPERATOR_##n(__VA_ARGS__)
+#define REGISTER_OPERATOR___(n, ...) REGISTER_OPERATOR_ ##n(__VA_ARGS__)
 #define REGISTER_OPERATOR__(...) REGISTER_OPERATOR___(__VA_ARGS__)
-#define REGISTER_OPERATOR(...) REGISTER_OPERATOR__(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+#define REGISTER_OPERATOR(...) \
+    REGISTER_OPERATOR__(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
 
 template <typename T>
-const typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Spec& get_my_spec(const T& op)
+const typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Spec &get_my_spec(const T &op)
 {
   typedef typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_> Traits;
-  static_assert(Traits::registered_, "only registered operator can call this function");
-  return static_cast<const typename Traits::Spec&>(op.get_spec());
+  static_assert(Traits::registered_,
+                "only registered operator can call this function");
+  return static_cast<const typename Traits::Spec &>(op.get_spec());
 }
 
 #define MY_SPEC get_my_spec(*this)
@@ -85,16 +118,18 @@ const typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Spec& get_m
 // }
 
 template <typename T>
-typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Input& get_my_input(const T& op)
+typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Input &get_my_input(const T &op)
 {
   typedef typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_> Traits;
-  static_assert(Traits::has_input_, "only registered operator with operator input can call this function");
+  static_assert(Traits::has_input_,
+                "only registered operator with operator input can call this function");
   // Dereferencing op.get_input() here is safe, because input pointer validity is checked in
   // ObOperatorFactory::alloc_operator if operator registered with input.
-  return static_cast<typename Traits::Input&>(*op.get_input());
+  return static_cast<typename Traits::Input &>(*op.get_input());
 }
 
 #define MY_INPUT get_my_input(*this)
+
 
 // All operators should been registered here with REGISTER_OPERATOR macro:
 //    REGISTER_OPERATOR(logic_operator, type, operator_spec, operator)
@@ -106,127 +141,135 @@ typename op_reg::ObOpTypeTraits<op_reg::ObOpTraits<T>::type_>::Input& get_my_inp
 class ObLogLimit;
 class ObLimitSpec;
 class ObLimitOp;
-REGISTER_OPERATOR(ObLogLimit, PHY_LIMIT, ObLimitSpec, ObLimitOp);
+REGISTER_OPERATOR(ObLogLimit, PHY_LIMIT, ObLimitSpec, ObLimitOp, NOINPUT,
+                  VECTORIZED_OP);
 
 class ObLogDistinct;
 class ObMergeDistinctSpec;
 class ObMergeDistinctOp;
-REGISTER_OPERATOR(ObLogDistinct, PHY_MERGE_DISTINCT, ObMergeDistinctSpec, ObMergeDistinctOp);
+REGISTER_OPERATOR(ObLogDistinct, PHY_MERGE_DISTINCT, ObMergeDistinctSpec,
+                  ObMergeDistinctOp, NOINPUT, VECTORIZED_OP);
 
 class ObHashDistinctSpec;
 class ObHashDistinctOp;
-REGISTER_OPERATOR(ObLogDistinct, PHY_HASH_DISTINCT, ObHashDistinctSpec, ObHashDistinctOp);
+REGISTER_OPERATOR(ObLogDistinct, PHY_HASH_DISTINCT, ObHashDistinctSpec,
+                  ObHashDistinctOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogMaterial;
 class ObMaterialSpec;
 class ObMaterialOp;
-REGISTER_OPERATOR(ObLogMaterial, PHY_MATERIAL, ObMaterialSpec, ObMaterialOp);
+class ObMaterialOpInput;
+REGISTER_OPERATOR(ObLogMaterial, PHY_MATERIAL, ObMaterialSpec, ObMaterialOp,
+                  ObMaterialOpInput, VECTORIZED_OP);
 
 class ObLogSort;
 class ObSortSpec;
 class ObSortOp;
-REGISTER_OPERATOR(ObLogSort, PHY_SORT, ObSortSpec, ObSortOp);
+REGISTER_OPERATOR(ObLogSort, PHY_SORT, ObSortSpec, ObSortOp, NOINPUT,
+                  VECTORIZED_OP);
 
 class ObLogSet;
 class ObHashUnionSpec;
 class ObHashUnionOp;
-REGISTER_OPERATOR(ObLogSet, PHY_HASH_UNION, ObHashUnionSpec, ObHashUnionOp);
+REGISTER_OPERATOR(ObLogSet, PHY_HASH_UNION, ObHashUnionSpec, ObHashUnionOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObHashIntersectSpec;
 class ObHashIntersectOp;
-REGISTER_OPERATOR(ObLogSet, PHY_HASH_INTERSECT, ObHashIntersectSpec, ObHashIntersectOp);
+REGISTER_OPERATOR(ObLogSet, PHY_HASH_INTERSECT, ObHashIntersectSpec,
+                  ObHashIntersectOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObHashExceptSpec;
 class ObHashExceptOp;
-REGISTER_OPERATOR(ObLogSet, PHY_HASH_EXCEPT, ObHashExceptSpec, ObHashExceptOp);
+REGISTER_OPERATOR(ObLogSet, PHY_HASH_EXCEPT, ObHashExceptSpec, ObHashExceptOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObMergeUnionSpec;
 class ObMergeUnionOp;
-REGISTER_OPERATOR(ObLogSet, PHY_MERGE_UNION, ObMergeUnionSpec, ObMergeUnionOp);
+REGISTER_OPERATOR(ObLogSet, PHY_MERGE_UNION, ObMergeUnionSpec, ObMergeUnionOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObRecursiveUnionAllSpec;
 class ObRecursiveUnionAllOp;
-REGISTER_OPERATOR(ObLogSet, PHY_RECURSIVE_UNION_ALL, ObRecursiveUnionAllSpec, ObRecursiveUnionAllOp);
+REGISTER_OPERATOR(ObLogSet, PHY_RECURSIVE_UNION_ALL, ObRecursiveUnionAllSpec,
+                  ObRecursiveUnionAllOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogTableScan;
 class ObFakeCTETableSpec;
 class ObFakeCTETableOp;
-REGISTER_OPERATOR(ObLogTableScan, PHY_FAKE_CTE_TABLE, ObFakeCTETableSpec, ObFakeCTETableOp);
+REGISTER_OPERATOR(ObLogTableScan, PHY_FAKE_CTE_TABLE, ObFakeCTETableSpec,
+                  ObFakeCTETableOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogTempTableAccess;
 class ObTempTableAccessOpInput;
 class ObTempTableAccessOpSpec;
 class ObTempTableAccessOp;
-REGISTER_OPERATOR(ObLogTempTableAccess, PHY_TEMP_TABLE_ACCESS, ObTempTableAccessOpSpec, ObTempTableAccessOp,
-    ObTempTableAccessOpInput);
+REGISTER_OPERATOR(ObLogTempTableAccess, PHY_TEMP_TABLE_ACCESS,
+                  ObTempTableAccessOpSpec, ObTempTableAccessOp, ObTempTableAccessOpInput, VECTORIZED_OP);
 
 class ObLogTempTableInsert;
 class ObTempTableInsertOpInput;
 class ObTempTableInsertOpSpec;
 class ObTempTableInsertOp;
-REGISTER_OPERATOR(ObLogTempTableInsert, PHY_TEMP_TABLE_INSERT, ObTempTableInsertOpSpec, ObTempTableInsertOp,
-    ObTempTableInsertOpInput);
+REGISTER_OPERATOR(ObLogTempTableInsert, PHY_TEMP_TABLE_INSERT,
+                  ObTempTableInsertOpSpec, ObTempTableInsertOp, ObTempTableInsertOpInput, VECTORIZED_OP);
 
 class ObLogTempTableTransformation;
 class ObTempTableTransformationOpSpec;
 class ObTempTableTransformationOp;
-REGISTER_OPERATOR(ObLogTempTableTransformation, PHY_TEMP_TABLE_TRANSFORMATION, ObTempTableTransformationOpSpec,
-    ObTempTableTransformationOp);
+REGISTER_OPERATOR(ObLogTempTableTransformation, PHY_TEMP_TABLE_TRANSFORMATION,
+                  ObTempTableTransformationOpSpec, ObTempTableTransformationOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObMergeIntersectSpec;
 class ObMergeIntersectOp;
-REGISTER_OPERATOR(ObLogSet, PHY_MERGE_INTERSECT, ObMergeIntersectSpec, ObMergeIntersectOp);
+REGISTER_OPERATOR(ObLogSet, PHY_MERGE_INTERSECT, ObMergeIntersectSpec,
+                  ObMergeIntersectOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogSet;
 class ObMergeExceptSpec;
 class ObMergeExceptOp;
-REGISTER_OPERATOR(ObLogSet, PHY_MERGE_EXCEPT, ObMergeExceptSpec, ObMergeExceptOp);
+REGISTER_OPERATOR(ObLogSet, PHY_MERGE_EXCEPT, ObMergeExceptSpec,
+                  ObMergeExceptOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogCount;
 class ObCountSpec;
 class ObCountOp;
-REGISTER_OPERATOR(ObLogCount, PHY_COUNT, ObCountSpec, ObCountOp);
+REGISTER_OPERATOR(ObLogCount, PHY_COUNT, ObCountSpec, ObCountOp, NOINPUT);
 
 class ObLogValues;
 class ObValuesSpec;
 class ObValuesOp;
-REGISTER_OPERATOR(ObLogValues, PHY_VALUES, ObValuesSpec, ObValuesOp);
-
-class ObLogTableLookup;
-class ObTableLookupSpec;
-class ObTableLookupOp;
-REGISTER_OPERATOR(ObLogTableLookup, PHY_TABLE_LOOKUP, ObTableLookupSpec, ObTableLookupOp);
+REGISTER_OPERATOR(ObLogValues, PHY_VALUES, ObValuesSpec, ObValuesOp, NOINPUT);
 
 class ObLogTableScan;
 class ObTableScanOpInput;
 class ObTableScanSpec;
 class ObTableScanOp;
-REGISTER_OPERATOR(ObLogTableScan, PHY_TABLE_SCAN, ObTableScanSpec, ObTableScanOp, ObTableScanOpInput);
-
-class ObLogTableScan;
-class ObMultiPartTableScanOpInput;
-class ObMultiPartTableScanSpec;
-class ObMultiPartTableScanOp;
-REGISTER_OPERATOR(ObLogTableScan, PHY_MULTI_PART_TABLE_SCAN, ObMultiPartTableScanSpec, ObMultiPartTableScanOp,
-    ObMultiPartTableScanOpInput);
+REGISTER_OPERATOR(ObLogTableScan, PHY_TABLE_SCAN,
+                  ObTableScanSpec, ObTableScanOp, ObTableScanOpInput,
+                  VECTORIZED_OP);
 
 class ObLogTableScan;
 class ObRowSampleScanOpInput;
 class ObRowSampleScanSpec;
 class ObRowSampleScanOp;
-REGISTER_OPERATOR(ObLogTableScan, PHY_ROW_SAMPLE_SCAN, ObRowSampleScanSpec, ObRowSampleScanOp, ObRowSampleScanOpInput);
+REGISTER_OPERATOR(ObLogTableScan, PHY_ROW_SAMPLE_SCAN,
+                  ObRowSampleScanSpec, ObRowSampleScanOp, ObRowSampleScanOpInput,
+                  VECTORIZED_OP);
 
 class ObLogTableScan;
 class ObBlockSampleScanOpInput;
 class ObBlockSampleScanSpec;
 class ObBlockSampleScanOp;
-REGISTER_OPERATOR(
-    ObLogTableScan, PHY_BLOCK_SAMPLE_SCAN, ObBlockSampleScanSpec, ObBlockSampleScanOp, ObBlockSampleScanOpInput);
+REGISTER_OPERATOR(ObLogTableScan, PHY_BLOCK_SAMPLE_SCAN,
+                  ObBlockSampleScanSpec, ObBlockSampleScanOp, ObBlockSampleScanOpInput,
+                  VECTORIZED_OP);
 
 class ObLogMerge;
 class ObTableMergeSpec;
@@ -234,207 +277,186 @@ class ObTableMergeOp;
 class ObTableMergeOpInput;
 REGISTER_OPERATOR(ObLogMerge, PHY_MERGE, ObTableMergeSpec, ObTableMergeOp, ObTableMergeOpInput);
 
-class ObLogMerge;
-class ObMultiTableMergeSpec;
-class ObMultiTableMergeOp;
-REGISTER_OPERATOR(ObLogMerge, PHY_MULTI_TABLE_MERGE, ObMultiTableMergeSpec, ObMultiTableMergeOp);
-
 class ObLogInsert;
 class ObTableInsertSpec;
 class ObTableInsertOp;
 class ObTableInsertOpInput;
-REGISTER_OPERATOR(ObLogInsert, PHY_INSERT, ObTableInsertSpec, ObTableInsertOp, ObTableInsertOpInput);
-
-class ObLogInsert;
-class ObMultiPartInsertSpec;
-class ObMultiPartInsertOp;
-REGISTER_OPERATOR(ObLogInsert, PHY_MULTI_PART_INSERT, ObMultiPartInsertSpec, ObMultiPartInsertOp);
-
-class ObTableInsertReturningSpec;
-class ObTableInsertReturningOp;
-class ObTableInsertReturningOpInput;
-REGISTER_OPERATOR(ObLogInsert, PHY_INSERT_RETURNING, ObTableInsertReturningSpec, ObTableInsertReturningOp,
-    ObTableInsertReturningOpInput);
-
-class ObLogDelete;
-class ObMultiPartDeleteSpec;
-class ObMultiPartDeleteOp;
-REGISTER_OPERATOR(ObLogDelete, PHY_MULTI_PART_DELETE, ObMultiPartDeleteSpec, ObMultiPartDeleteOp);
+REGISTER_OPERATOR(ObLogInsert, PHY_INSERT, ObTableInsertSpec,
+                  ObTableInsertOp, ObTableInsertOpInput);
 
 // PDML-delete
 class ObLogDelete;
 class ObPxMultiPartDeleteSpec;
 class ObPxMultiPartDeleteOp;
 class ObPxMultiPartDeleteOpInput;
-REGISTER_OPERATOR(
-    ObLogDelete, PHY_PX_MULTI_PART_DELETE, ObPxMultiPartDeleteSpec, ObPxMultiPartDeleteOp, ObPxMultiPartDeleteOpInput);
+REGISTER_OPERATOR(ObLogDelete, PHY_PX_MULTI_PART_DELETE, ObPxMultiPartDeleteSpec, ObPxMultiPartDeleteOp, ObPxMultiPartDeleteOpInput);
 
 // PDML-insert
 class ObLogInsert;
 class ObPxMultiPartInsertSpec;
 class ObPxMultiPartInsertOp;
 class ObPxMultiPartInsertOpInput;
-REGISTER_OPERATOR(
-    ObLogInsert, PHY_PX_MULTI_PART_INSERT, ObPxMultiPartInsertSpec, ObPxMultiPartInsertOp, ObPxMultiPartInsertOpInput);
+REGISTER_OPERATOR(ObLogInsert, PHY_PX_MULTI_PART_INSERT, ObPxMultiPartInsertSpec, ObPxMultiPartInsertOp, ObPxMultiPartInsertOpInput);
 
 // PDML-update
 class ObLogUpdate;
 class ObPxMultiPartUpdateSpec;
 class ObPxMultiPartUpdateOp;
 class ObPxMultiPartUpdateOpInput;
-REGISTER_OPERATOR(
-    ObLogUpdate, PHY_PX_MULTI_PART_UPDATE, ObPxMultiPartUpdateSpec, ObPxMultiPartUpdateOp, ObPxMultiPartUpdateOpInput);
+REGISTER_OPERATOR(ObLogUpdate, PHY_PX_MULTI_PART_UPDATE, ObPxMultiPartUpdateSpec, ObPxMultiPartUpdateOp, ObPxMultiPartUpdateOpInput);
 
-class ObLogicalOperator;
-class ObAppendSpec;
-class ObAppendOp;
-REGISTER_OPERATOR(ObLogicalOperator, PHY_APPEND, ObAppendSpec, ObAppendOp);
+// ddl insert sstable
+class ObLogInsert;
+class ObPxMultiPartSSTableInsertSpec;
+class ObPxMultiPartSSTableInsertOp;
+class ObPxMultiPartSSTableInsertOpInput;
+REGISTER_OPERATOR(ObLogInsert, PHY_PX_MULTI_PART_SSTABLE_INSERT, ObPxMultiPartSSTableInsertSpec, ObPxMultiPartSSTableInsertOp, ObPxMultiPartSSTableInsertOpInput);
 
 class ObLogicalOperator;
 class ObTableRowStoreSpec;
 class ObTableRowStoreOp;
 class ObTableRowStoreOpInput;
-REGISTER_OPERATOR(
-    ObLogicalOperator, PHY_TABLE_ROW_STORE, ObTableRowStoreSpec, ObTableRowStoreOp, ObTableRowStoreOpInput);
+REGISTER_OPERATOR(ObLogicalOperator, PHY_TABLE_ROW_STORE, ObTableRowStoreSpec,
+                  ObTableRowStoreOp, ObTableRowStoreOpInput);
 
 class ObLogExprValues;
 class ObExprValuesSpec;
 class ObExprValuesOp;
-class ObExprValuesOpInput;
-REGISTER_OPERATOR(ObLogExprValues, PHY_EXPR_VALUES, ObExprValuesSpec, ObExprValuesOp, ObExprValuesOpInput);
+REGISTER_OPERATOR(ObLogExprValues, PHY_EXPR_VALUES, ObExprValuesSpec, ObExprValuesOp, NOINPUT);
 
 class ObLogDelete;
 class ObTableDeleteSpec;
 class ObTableDeleteOp;
 class ObTableDeleteOpInput;
-REGISTER_OPERATOR(ObLogDelete, PHY_DELETE, ObTableDeleteSpec, ObTableDeleteOp, ObTableDeleteOpInput);
-
-class ObLogDelete;
-class ObTableDeleteReturningSpec;
-class ObTableDeleteReturningOp;
-class ObTableDeleteReturningOpInput;
-REGISTER_OPERATOR(ObLogDelete, PHY_DELETE_RETURNING, ObTableDeleteReturningSpec, ObTableDeleteReturningOp,
-    ObTableDeleteReturningOpInput);
+REGISTER_OPERATOR(ObLogDelete, PHY_DELETE, ObTableDeleteSpec,
+                  ObTableDeleteOp, ObTableDeleteOpInput);
 
 class ObLogInsert;
 class ObTableReplaceSpec;
 class ObTableReplaceOp;
 class ObTableReplaceOpInput;
-REGISTER_OPERATOR(ObLogInsert, PHY_REPLACE, ObTableReplaceSpec, ObTableReplaceOp, ObTableReplaceOpInput);
-
-class ObLogInsert;
-class ObMultiTableReplaceSpec;
-class ObMultiTableReplaceOp;
-REGISTER_OPERATOR(ObLogInsert, PHY_MULTI_TABLE_REPLACE, ObMultiTableReplaceSpec, ObMultiTableReplaceOp);
+REGISTER_OPERATOR(ObLogInsert, PHY_REPLACE, ObTableReplaceSpec, ObTableReplaceOp,
+                  ObTableReplaceOpInput);
 
 class ObLogJoin;
 class ObNLConnectByWithIndexSpec;
 class ObNLConnectByWithIndexOp;
-REGISTER_OPERATOR(
-    ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX, ObNLConnectByWithIndexSpec, ObNLConnectByWithIndexOp);
+REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX,
+                  ObNLConnectByWithIndexSpec, ObNLConnectByWithIndexOp,
+                  NOINPUT);
 
 class ObLogJoin;
 class ObNLConnectBySpec;
 class ObNLConnectByOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY, ObNLConnectBySpec, ObNLConnectByOp);
+REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_CONNECT_BY, ObNLConnectBySpec,
+                  ObNLConnectByOp, NOINPUT);
 
 class ObLogJoin;
 class ObHashJoinSpec;
 class ObHashJoinOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_HASH_JOIN, ObHashJoinSpec, ObHashJoinOp);
+class ObHashJoinInput;
+REGISTER_OPERATOR(ObLogJoin, PHY_HASH_JOIN, ObHashJoinSpec, ObHashJoinOp,
+                  ObHashJoinInput, VECTORIZED_OP);
 
 class ObNestedLoopJoinSpec;
 class ObNestedLoopJoinOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_JOIN, ObNestedLoopJoinSpec, ObNestedLoopJoinOp);
+REGISTER_OPERATOR(ObLogJoin, PHY_NESTED_LOOP_JOIN, ObNestedLoopJoinSpec,
+                  ObNestedLoopJoinOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogSubPlanFilter;
 class ObSubPlanFilterSpec;
 class ObSubPlanFilterOp;
-REGISTER_OPERATOR(ObLogSubPlanFilter, PHY_SUBPLAN_FILTER, ObSubPlanFilterSpec, ObSubPlanFilterOp);
+REGISTER_OPERATOR(ObLogSubPlanFilter, PHY_SUBPLAN_FILTER,
+                  ObSubPlanFilterSpec, ObSubPlanFilterOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogSubPlanScan;
 class ObSubPlanScanSpec;
 class ObSubPlanScanOp;
-REGISTER_OPERATOR(ObLogSubPlanScan, PHY_SUBPLAN_SCAN, ObSubPlanScanSpec, ObSubPlanScanOp);
+REGISTER_OPERATOR(ObLogSubPlanScan, PHY_SUBPLAN_SCAN, ObSubPlanScanSpec,
+                  ObSubPlanScanOp, NOINPUT, VECTORIZED_OP);
+
+class ObLogUnpivot;
+class ObUnpivotSpec;
+class ObUnpivotOp;
+REGISTER_OPERATOR(ObLogUnpivot, PHY_UNPIVOT, ObUnpivotSpec,
+                  ObUnpivotOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogForUpdate;
 class ObTableLockOpInput;
 class ObTableLockSpec;
 class ObTableLockOp;
-REGISTER_OPERATOR(ObLogForUpdate, PHY_LOCK, ObTableLockSpec, ObTableLockOp, ObTableLockOpInput);
+REGISTER_OPERATOR(ObLogForUpdate, PHY_LOCK, ObTableLockSpec, ObTableLockOp,
+                  ObTableLockOpInput, VECTORIZED_OP);
 
 class ObLogUpdate;
 class ObTableUpdateOpInput;
 class ObTableUpdateSpec;
 class ObTableUpdateOp;
-REGISTER_OPERATOR(ObLogUpdate, PHY_UPDATE, ObTableUpdateSpec, ObTableUpdateOp, ObTableUpdateOpInput);
-
-class ObTableUpdateReturningOpInput;
-class ObTableUpdateReturningSpec;
-class ObTableUpdateReturningOp;
-REGISTER_OPERATOR(ObLogUpdate, PHY_UPDATE_RETURNING, ObTableUpdateReturningSpec, ObTableUpdateReturningOp,
-    ObTableUpdateReturningOpInput);
+REGISTER_OPERATOR(ObLogUpdate, PHY_UPDATE, ObTableUpdateSpec,
+                  ObTableUpdateOp, ObTableUpdateOpInput);
 
 class ObLogInsert;
 class ObTableInsertUpOpInput;
 class ObTableInsertUpSpec;
 class ObTableInsertUpOp;
-REGISTER_OPERATOR(ObLogInsert, PHY_INSERT_ON_DUP, ObTableInsertUpSpec, ObTableInsertUpOp, ObTableInsertUpOpInput);
-
-class ObLogInsert;
-class ObMultiTableInsertUpSpec;
-class ObMultiTableInsertUpOp;
-REGISTER_OPERATOR(ObLogInsert, PHY_MULTI_TABLE_INSERT_UP, ObMultiTableInsertUpSpec, ObMultiTableInsertUpOp);
-
-class ObLogForUpdate;
-class ObMultiPartLockOp;
-class ObMultiPartLockSpec;
-REGISTER_OPERATOR(ObLogForUpdate, PHY_MULTI_LOCK, ObMultiPartLockSpec, ObMultiPartLockOp);
-
-class ObLogUpdate;
-class ObMultiPartUpdateOp;
-class ObMultiPartUpdateSpec;
-REGISTER_OPERATOR(ObLogUpdate, PHY_MULTI_PART_UPDATE, ObMultiPartUpdateSpec, ObMultiPartUpdateOp);
+REGISTER_OPERATOR(ObLogInsert, PHY_INSERT_ON_DUP, ObTableInsertUpSpec,
+                  ObTableInsertUpOp, ObTableInsertUpOpInput);
 
 class ObLogGroupBy;
 class ObScalarAggregateSpec;
 class ObScalarAggregateOp;
-REGISTER_OPERATOR(ObLogGroupBy, PHY_SCALAR_AGGREGATE, ObScalarAggregateSpec, ObScalarAggregateOp);
+REGISTER_OPERATOR(ObLogGroupBy, PHY_SCALAR_AGGREGATE, ObScalarAggregateSpec,
+                  ObScalarAggregateOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogGroupBy;
 class ObMergeGroupBySpec;
 class ObMergeGroupByOp;
-REGISTER_OPERATOR(ObLogGroupBy, PHY_MERGE_GROUP_BY, ObMergeGroupBySpec, ObMergeGroupByOp);
+REGISTER_OPERATOR(ObLogGroupBy, PHY_MERGE_GROUP_BY, ObMergeGroupBySpec,
+                  ObMergeGroupByOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogGroupBy;
 class ObHashGroupBySpec;
 class ObHashGroupByOp;
-REGISTER_OPERATOR(ObLogGroupBy, PHY_HASH_GROUP_BY, ObHashGroupBySpec, ObHashGroupByOp);
+REGISTER_OPERATOR(ObLogGroupBy, PHY_HASH_GROUP_BY, ObHashGroupBySpec,
+                  ObHashGroupByOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogWindowFunction;
 class ObWindowFunctionSpec;
 class ObWindowFunctionOp;
-REGISTER_OPERATOR(ObLogWindowFunction, PHY_WINDOW_FUNCTION, ObWindowFunctionSpec, ObWindowFunctionOp);
+class ObWindowFunctionOpInput;
+REGISTER_OPERATOR(ObLogWindowFunction, PHY_WINDOW_FUNCTION, ObWindowFunctionSpec,
+                  ObWindowFunctionOp, ObWindowFunctionOpInput, VECTORIZED_OP);
 
 class ObLogJoin;
 class ObMergeJoinSpec;
 class ObMergeJoinOp;
-REGISTER_OPERATOR(ObLogJoin, PHY_MERGE_JOIN, ObMergeJoinSpec, ObMergeJoinOp);
+REGISTER_OPERATOR(ObLogJoin, PHY_MERGE_JOIN, ObMergeJoinSpec, ObMergeJoinOp,
+                  NOINPUT, VECTORIZED_OP);
 
 class ObLogTopk;
 class ObTopKSpec;
 class ObTopKOp;
-REGISTER_OPERATOR(ObLogTopk, PHY_TOPK, ObTopKSpec, ObTopKOp);
+REGISTER_OPERATOR(ObLogTopk, PHY_TOPK, ObTopKSpec, ObTopKOp, NOINPUT);
 
 class ObLogMonitoringDump;
 class ObMonitoringDumpSpec;
 class ObMonitoringDumpOp;
-REGISTER_OPERATOR(ObLogMonitoringDump, PHY_MONITORING_DUMP, ObMonitoringDumpSpec, ObMonitoringDumpOp);
+REGISTER_OPERATOR(ObLogMonitoringDump, PHY_MONITORING_DUMP, ObMonitoringDumpSpec,
+                  ObMonitoringDumpOp, NOINPUT, VECTORIZED_OP);
 
 class ObLogSequence;
 class ObSequenceSpec;
 class ObSequenceOp;
-REGISTER_OPERATOR(ObLogSequence, PHY_SEQUENCE, ObSequenceSpec, ObSequenceOp);
+REGISTER_OPERATOR(ObLogSequence, PHY_SEQUENCE, ObSequenceSpec, ObSequenceOp,
+                  NOINPUT);
+
+class ObLogJoinFilter;
+class ObJoinFilterSpec;
+class ObJoinFilterOp;
+class ObJoinFilterOpInput;
+REGISTER_OPERATOR(ObLogJoinFilter, PHY_JOIN_FILTER, ObJoinFilterSpec,
+                  ObJoinFilterOp, ObJoinFilterOpInput, VECTORIZED_OP);
 
 // PX Operator
 // PHY_GRANULE_ITERATOR,
@@ -449,81 +471,138 @@ class ObLogGranuleIterator;
 class ObGranuleIteratorSpec;
 class ObGranuleIteratorOp;
 class ObGIOpInput;
-REGISTER_OPERATOR(ObLogGranuleIterator, PHY_GRANULE_ITERATOR, ObGranuleIteratorSpec, ObGranuleIteratorOp, ObGIOpInput);
+REGISTER_OPERATOR(ObLogGranuleIterator, PHY_GRANULE_ITERATOR, ObGranuleIteratorSpec,
+                  ObGranuleIteratorOp, ObGIOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxFifoReceiveSpec;
 class ObPxFifoReceiveOp;
 class ObPxFifoReceiveOpInput;
-REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_RECEIVE, ObPxFifoReceiveSpec, ObPxFifoReceiveOp, ObPxFifoReceiveOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_RECEIVE, ObPxFifoReceiveSpec,
+                  ObPxFifoReceiveOp, ObPxFifoReceiveOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxMSReceiveSpec;
 class ObPxMSReceiveOp;
 class ObPxMSReceiveOpInput;
-REGISTER_OPERATOR(ObLogExchange, PHY_PX_MERGE_SORT_RECEIVE, ObPxMSReceiveSpec, ObPxMSReceiveOp, ObPxMSReceiveOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_MERGE_SORT_RECEIVE, ObPxMSReceiveSpec,
+                  ObPxMSReceiveOp, ObPxMSReceiveOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxDistTransmitSpec;
 class ObPxDistTransmitOp;
 class ObPxDistTransmitOpInput;
-REGISTER_OPERATOR(
-    ObLogExchange, PHY_PX_DIST_TRANSMIT, ObPxDistTransmitSpec, ObPxDistTransmitOp, ObPxDistTransmitOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_DIST_TRANSMIT, ObPxDistTransmitSpec,
+                  ObPxDistTransmitOp, ObPxDistTransmitOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxRepartTransmitSpec;
 class ObPxRepartTransmitOp;
 class ObPxRepartTransmitOpInput;
-REGISTER_OPERATOR(
-    ObLogExchange, PHY_PX_REPART_TRANSMIT, ObPxRepartTransmitSpec, ObPxRepartTransmitOp, ObPxRepartTransmitOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_REPART_TRANSMIT, ObPxRepartTransmitSpec,
+                  ObPxRepartTransmitOp, ObPxRepartTransmitOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxReduceTransmitSpec;
 class ObPxReduceTransmitOp;
 class ObPxReduceTransmitOpInput;
-REGISTER_OPERATOR(
-    ObLogExchange, PHY_PX_REDUCE_TRANSMIT, ObPxReduceTransmitSpec, ObPxReduceTransmitOp, ObPxReduceTransmitOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_REDUCE_TRANSMIT, ObPxReduceTransmitSpec,
+                  ObPxReduceTransmitOp, ObPxReduceTransmitOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObPxFifoCoordSpec;
 class ObPxFifoCoordOp;
 class ObPxFifoCoordOpInput;
-REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_COORD, ObPxFifoCoordSpec, ObPxFifoCoordOp, ObPxFifoCoordOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_COORD, ObPxFifoCoordSpec,
+                  ObPxFifoCoordOp, ObPxFifoCoordOpInput, VECTORIZED_OP);
 
+class ObPxOrderedCoordSpec;
+class ObPxOrderedCoordOp;
+class ObPxOrderedCoordOpInput;
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_ORDERED_COORD, ObPxOrderedCoordSpec,
+                  ObPxOrderedCoordOp, ObPxOrderedCoordOpInput, VECTORIZED_OP);
 class ObLogExchange;
 class ObPxMSCoordSpec;
 class ObPxMSCoordOp;
 class ObPxMSCoordOpInput;
-REGISTER_OPERATOR(ObLogExchange, PHY_PX_MERGE_SORT_COORD, ObPxMSCoordSpec, ObPxMSCoordOp, ObPxMSCoordOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_PX_MERGE_SORT_COORD, ObPxMSCoordSpec,
+                  ObPxMSCoordOp, ObPxMSCoordOpInput, VECTORIZED_OP);
 
 class ObLogExchange;
 class ObDirectReceiveSpec;
 class ObDirectReceiveOp;
-REGISTER_OPERATOR(ObLogExchange, PHY_DIRECT_RECEIVE, ObDirectReceiveSpec, ObDirectReceiveOp);
+REGISTER_OPERATOR(ObLogExchange, PHY_DIRECT_RECEIVE, ObDirectReceiveSpec,
+                  ObDirectReceiveOp, NOINPUT);
 
 class ObLogExchange;
 class ObDirectTransmitSpec;
 class ObDirectTransmitOp;
 class ObDirectTransmitOpInput;
-REGISTER_OPERATOR(
-    ObLogExchange, PHY_DIRECT_TRANSMIT, ObDirectTransmitSpec, ObDirectTransmitOp, ObDirectTransmitOpInput);
+REGISTER_OPERATOR(ObLogExchange, PHY_DIRECT_TRANSMIT, ObDirectTransmitSpec,
+                  ObDirectTransmitOp, ObDirectTransmitOpInput);
 
-class ObLogConflictRowFetcher;
-class ObTableConflictRowFetcherSpec;
-class ObTableConflictRowFetcherOp;
-class ObTCRFetcherOpInput;
-REGISTER_OPERATOR(ObLogConflictRowFetcher, PHY_TABLE_CONFLICT_ROW_FETCHER, ObTableConflictRowFetcherSpec,
-    ObTableConflictRowFetcherOp, ObTCRFetcherOpInput);
+class ObLogErrLog;
+class ObErrLogSpec;
+class ObErrLogOp;
+REGISTER_OPERATOR(ObLogErrLog, PHY_ERR_LOG, ObErrLogSpec, ObErrLogOp, NOINPUT);
+
+class ObLogSelectInto;
+class ObSelectIntoSpec;
+class ObSelectIntoOp;
+REGISTER_OPERATOR(ObLogSelectInto, PHY_SELECT_INTO, ObSelectIntoSpec, ObSelectIntoOp,
+                  NOINPUT, VECTORIZED_OP);
+class ObLogLinkScan;
+class ObLinkScanSpec;
+class ObLinkScanOp;
+REGISTER_OPERATOR(ObLogLinkScan, PHY_LINK_SCAN, ObLinkScanSpec, ObLinkScanOp,
+                  NOINPUT, VECTORIZED_OP);
+
+class ObLogLinkDml;
+class ObLinkDmlSpec;
+class ObLinkDmlOp;
+REGISTER_OPERATOR(ObLogLinkDml, PHY_LINK_DML, ObLinkDmlSpec, ObLinkDmlOp, NOINPUT);
+
+class ObLogFunctionTable;
+class ObFunctionTableSpec;
+class ObFunctionTableOp;
+REGISTER_OPERATOR(ObLogFunctionTable, PHY_FUNCTION_TABLE, ObFunctionTableSpec,
+                  ObFunctionTableOp, NOINPUT);
+
+class ObLogInsertAll;
+class ObTableInsertAllSpec;
+class ObTableInsertAllOp;
+class ObTableInsertAllOpInput;
+REGISTER_OPERATOR(ObLogInsertAll, PHY_MULTI_TABLE_INSERT,
+                  ObTableInsertAllSpec, ObTableInsertAllOp,
+                  ObTableInsertAllOpInput);
+
+class ObLogStatCollector;
+class ObStatCollectorSpec;
+class ObStatCollectorOp;
+REGISTER_OPERATOR(ObLogStatCollector, PHY_STAT_COLLECTOR, ObStatCollectorSpec, ObStatCollectorOp, NOINPUT,
+                  VECTORIZED_OP);
+
+class ObLogJsonTable;
+class ObJsonTableSpec;
+class ObJsonTableOp;
+REGISTER_OPERATOR(ObLogJsonTable, PHY_JSON_TABLE, ObJsonTableSpec,
+                  ObJsonTableOp, NOINPUT);
+
+class ObLogOptimizerStatsGathering;
+class ObOptimizerStatsGatheringSpec;
+class ObOptimizerStatsGatheringOp;
+REGISTER_OPERATOR(ObLogOptimizerStatsGathering, PHY_OPTIMIZER_STATS_GATHERING,
+                  ObOptimizerStatsGatheringSpec, ObOptimizerStatsGatheringOp, NOINPUT, VECTORIZED_OP);
 
 #undef REGISTER_OPERATOR
 #undef REGISTER_OPERATOR_FULL
+#undef CHECK_IS_CHAR
+#undef DEF_OP_INPUT_TRAITS
 #undef REGISTER_OPERATOR_4
 #undef REGISTER_OPERATOR_5
-#undef DEF_OP_TRAITS_true
-#undef DEF_OP_TRAITS_false
-#undef DEF_OP_INPUT_TRAITS
+#undef REGISTER_OPERATOR_6
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ENGINE_OB_OPERATOR_REG_H_
+#endif // OCEANBASE_ENGINE_OB_OPERATOR_REG_H_

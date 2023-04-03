@@ -24,12 +24,11 @@ namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-class ObDtlRpcDataResponse {
+class ObDtlRpcDataResponse
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObDtlRpcDataResponse() : is_block_(false), recode_(OB_SUCCESS)
-  {}
+  ObDtlRpcDataResponse() : is_block_(false), recode_(OB_SUCCESS) {}
   TO_STRING_KV(K_(is_block));
 
 public:
@@ -37,19 +36,19 @@ public:
   int recode_;
 };
 
-class ObDtlBCRpcDataResponse {
+class ObDtlBCRpcDataResponse
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObDtlBCRpcDataResponse() : resps_()
-  {}
+  ObDtlBCRpcDataResponse() : resps_() {}
   TO_STRING_KV(K_(resps));
 
 public:
-  ObSEArray<ObDtlRpcDataResponse, 16> resps_;
+  ObSEArray<ObDtlRpcDataResponse, 4> resps_;
 };
 
-struct ObDtlRpcChanArgs {
+struct ObDtlRpcChanArgs
+{
   int64_t chid_;
   common::ObAddr peer_;
 
@@ -57,36 +56,41 @@ struct ObDtlRpcChanArgs {
   OB_UNIS_VERSION(1);
 };
 
-class ObDtlSendArgs {
+class ObDtlSendArgs
+{
 public:
   ObDtlSendArgs() = default;
-  ObDtlSendArgs(int64_t chid, const ObDtlLinkedBuffer& buffer) : chid_(chid), buffer_(buffer)
+  ObDtlSendArgs(int64_t chid, const ObDtlLinkedBuffer &buffer)
+      : chid_(chid), buffer_(buffer)
   {}
   int64_t chid_;
   ObDtlLinkedBuffer buffer_;
   TO_STRING_KV(K_(chid), KP(&buffer_));
-
 private:
   OB_UNIS_VERSION(1);
 };
 
-class ObDtlBCSendArgs {
+class ObDtlBCSendArgs
+{
 public:
-  ObDtlBCSendArgs() : args_(), bc_buffer_()
+  ObDtlBCSendArgs()
+      : args_(), bc_buffer_()
   {}
-  ObSEArray<ObDtlSendArgs, 16> args_;
+  ObSEArray<ObDtlSendArgs, 4> args_;
   ObDtlLinkedBuffer bc_buffer_;
   TO_STRING_KV(K(args_.count()));
-
 private:
   OB_UNIS_VERSION(1);
 };
 
-}  // namespace dtl
-}  // namespace sql
+
+}  // dtl
+}  // sql
 
 namespace obrpc {
-class ObDtlRpcProxy : public ObRpcProxy {
+class ObDtlRpcProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(ObDtlRpcProxy);
 
@@ -97,7 +101,9 @@ public:
   RPC_AP(@PR5 ap_send_bc_message, OB_DTL_BC_SEND, (sql::dtl::ObDtlBCSendArgs), sql::dtl::ObDtlBCRpcDataResponse);
 };
 
-}  // namespace obrpc
-}  // namespace oceanbase
+}  // obrpc
+}  // oceanbase
+
+
 
 #endif /* OB_DTL_RPC_PROXY_H */

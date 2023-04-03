@@ -15,91 +15,76 @@
 #include "lib/container/ob_se_array.h"
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogDistinct : public ObLogicalOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogDistinct : public ObLogicalOperator
+{
 public:
-  ObLogDistinct(ObLogPlan& plan) : ObLogicalOperator(plan), algo_(AGGREGATE_UNINITIALIZED), is_block_mode_(false)
-  {}
+  ObLogDistinct(ObLogPlan &plan)
+      : ObLogicalOperator(plan),
+        algo_(AGGREGATE_UNINITIALIZED),
+        is_block_mode_(false),
+        is_push_down_(false),
+        total_ndv_(-1.0),
+        force_push_down_(false)
+  { }
   virtual ~ObLogDistinct()
-  {}
+  { }
 
-  const char* get_name() const override;
-
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  int push_down_distinct(
-      AllocExchContext* ctx, common::ObIArray<OrderItem>& sort_keys, ObLogicalOperator*& exchange_point);
-  int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  // this interface can be used for adding distinct expr
+  const char *get_name() const;
+  //this interface can be used for adding distinct expr
   inline ObIArray<ObRawExpr*>& get_distinct_exprs()
-  {
-    return distinct_exprs_;
-  }
+  { return distinct_exprs_; }
   inline const ObIArray<ObRawExpr*>& get_distinct_exprs() const
-  {
-    return distinct_exprs_;
-  }
-  int add_distinct_expr(ObRawExpr* expr)
-  {
-    return distinct_exprs_.push_back(expr);
-  }
-  int set_distinct_exprs(common::ObIArray<ObRawExpr*>& exprs)
-  {
-    return append(distinct_exprs_, exprs);
-  }
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
-  uint64_t hash(uint64_t seed) const override;
+  { return distinct_exprs_; }
+  int set_distinct_exprs(const common::ObIArray<ObRawExpr*> &exprs)
+  { return append(distinct_exprs_, exprs); }
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs) override;
+  virtual uint64_t hash(uint64_t seed) const override;
 
-  inline void set_hash_type()
-  {
-    algo_ = HASH_AGGREGATE;
-  }
-  inline void set_merge_type()
-  {
-    algo_ = MERGE_AGGREGATE;
-  }
-  inline void set_algo_type(AggregateAlgo type)
-  {
-    algo_ = type;
-  }
-  inline AggregateAlgo get_algo() const
-  {
-    return algo_;
-  }
-  inline void set_block_mode(bool is_block_mode)
-  {
-    is_block_mode_ = is_block_mode;
-  }
-  inline bool get_block_mode()
-  {
-    return is_block_mode_;
-  }
+  inline void set_hash_type() { algo_ = HASH_AGGREGATE; }
+  inline void set_merge_type() { algo_ = MERGE_AGGREGATE; }
+  inline void set_algo_type(AggregateAlgo type) { algo_ = type; }
+  inline AggregateAlgo get_algo() const { return algo_; }
+  inline void set_block_mode(bool is_block_mode) { is_block_mode_ = is_block_mode; }
+  inline bool get_block_mode() { return is_block_mode_; }
   virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering() override;
-  virtual bool is_block_op() const override
-  {
-    return false;
-  }
+  virtual int est_width() override;
+  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  int inner_est_cost(double child_card, double child_ndv, double &op_cost);
+  virtual bool is_block_op() const override { return false; }
   virtual int compute_fd_item_set() override;
-
-  virtual int allocate_granule_post(AllocGIContext& ctx) override;
-  virtual int allocate_granule_pre(AllocGIContext& ctx) override;
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
+  virtual int allocate_granule_post(AllocGIContext &ctx) override;
+  virtual int allocate_granule_pre(AllocGIContext &ctx) override;
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int compute_op_ordering() override;
-  virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
+  inline bool is_push_down() const { return is_push_down_; }
+  inline void set_push_down(const bool is_push_down) { is_push_down_ = is_push_down; }
+  inline double get_total_ndv() const { return total_ndv_; }
+  inline void set_total_ndv(double total_ndv) { total_ndv_ = total_ndv; }
+  inline bool force_partition_gi() const { return is_partition_wise() && !is_push_down(); }
+  inline bool force_push_down() const { return force_push_down_; }
+  inline void set_force_push_down(bool force_push_down) { force_push_down_ = force_push_down; }
+  int get_distinct_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
   AggregateAlgo algo_;
   bool is_block_mode_;
-
+  bool is_push_down_;
+  double total_ndv_;
+  bool force_push_down_; // control by _aggregation_optimization_settings
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDistinct);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif

@@ -17,15 +17,17 @@
 #include "rootserver/ob_partition_table_util.h"
 #include "rootserver/ob_zone_manager.h"
 
-namespace oceanbase {
-namespace rootserver {
-class FakePartitionTableUtil : public ObPartitionTableUtil {
+namespace oceanbase
+{
+namespace rootserver
+{
+class FakePartitionTableUtil : public ObPartitionTableUtil
+{
 public:
-  FakePartitionTableUtil(ObZoneManager& cm) : cm_(cm)
-  {}
+  FakePartitionTableUtil(ObZoneManager &cm) : cm_(cm) {}
 
-  virtual int check_merge_progress(
-      const volatile bool& stop, const int64_t version, ObZoneMergeProgress& all_progress, bool& all_merged)
+  virtual int check_merge_progress(const volatile bool &stop, const int64_t version,
+      ObZoneMergeProgress &all_progress, bool &all_merged)
   {
     UNUSED(version);
     int ret = common::OB_SUCCESS;
@@ -47,16 +49,16 @@ public:
     return ret;
   }
 
-  virtual int set_leader_backup_flag(const volatile bool&, const bool, ObPartitionTableUtil::ObLeaderInfoArray*)
+  virtual int set_leader_backup_flag(const volatile bool &, const bool , ObPartitionTableUtil::ObLeaderInfoArray *)
   {
     return common::OB_SUCCESS;
   }
 
 private:
-  ObZoneManager& cm_;
+  ObZoneManager &cm_;
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_FAKE_PARTITION_TABLE_UTIL_H_
+#endif // OCEANBASE_ROOTSERVER_FAKE_PARTITION_TABLE_UTIL_H_

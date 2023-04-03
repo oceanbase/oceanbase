@@ -1,0 +1,100 @@
+# owner: luofan.zp
+# owner group: sql2
+
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+--disable_warnings
+drop database if exists shaoge;
+drop table if exists t1;
+--enable_warnings
+
+create database shaoge;
+use shaoge;
+
+create table t1(col_float float, col_char char(100), col_text text);
+insert into t1 values (1.1, '1.1', '1.1');
+insert into t1 values (1.9, '1.9', '1.9');
+insert into t1 values (2.1, '2.1', '2.1');
+insert into t1 values (2.9, '2.9', '2.9');
+insert into t1 values (9223372036854775807, '9223372036854775807', '9223372036854775807');
+insert into t1 values (9223372036854775807.5, '9223372036854775807.5', '9223372036854775807.5');
+insert into t1 values (9223372036854775806.5, '9223372036854775806.5', '9223372036854775806.5');
+insert into t1 values (null, '1234567890123456789012345678901234567890.5', '1234567890123456789012345678901234567890.5');
+
+insert into t1 values (-1.1, '-1.1', '-1.1');
+insert into t1 values (-1.9, '-1.9', '-1.9');
+insert into t1 values (-2.1, '-2.1', '-2.1');
+insert into t1 values (-2.9, '-2.9', '-2.9');
+insert into t1 values (-9223372036854775807, '-9223372036854775808', '-9223372036854775808');
+insert into t1 values (-9223372036854775807.5, '-9223372036854775807.5', '-9223372036854775807.5');
+insert into t1 values (-9223372036854775806.5, '-9223372036854775806.5', '-9223372036854775806.5');
+insert into t1 values (null, '-1234567890123456789012345678901234567890.5', '-1234567890123456789012345678901234567890.5');
+
+create table tbl_check_zerofill(col_zf int(3) zerofill, col_no_zf int(3));
+insert into tbl_check_zerofill values(1, 1);
+
+--echo // sql engine 3.0 test
+--echo // string->int/uint will trunc
+--echo // otherwise will round
+select col_float, cast(col_float as signed) from t1;
+select col_char, cast(col_char as signed) from t1;
+select col_text, cast(col_text as signed) from t1;
+
+select col_float, cast(col_float as unsigned) from t1;
+select col_char, cast(col_char as unsigned) from t1;
+select col_text, cast(col_text as unsigned) from t1;
+
+--echo // 测试zerofill
+--echo // 应该有warning: Truncated incorrect CHAR(1) value: '001'
+select cast(col_zf as char(1)) from tbl_check_zerofill;
+select cast(col_zf as char(2)) from tbl_check_zerofill;
+select cast(col_zf as char(3)) from tbl_check_zerofill;
+select cast(col_zf as char(4)) from tbl_check_zerofill;
+select cast(col_no_zf as char(1)) from tbl_check_zerofill;
+select cast(col_no_zf as char(1)) from tbl_check_zerofill;
+select cast(col_no_zf as char(2)) from tbl_check_zerofill;
+select cast(col_no_zf as char(3)) from tbl_check_zerofill;
+select cast(col_no_zf as char(4)) from tbl_check_zerofill;
+
+
+drop table t1;
+create table t1(c1 varchar(3));
+insert into t1 values('abc');
+select cast(c1 as char(10)), concat(c1, '123') from t1;
+select cast(c1 as char(1)), concat(c1, '123') from t1;
+select concat(cast(c1 as char(10)), '123') from t1;
+select concat(cast(c1 as char(1)), '123') from t1;
+
+drop table t1;
+create table t1(c1 decimal(10, 3));
+insert into t1 values(1.123);
+select cast(c1 as decimal(10,1)), concat(c1, 'abc') from t1;
+select c1, cast(c1 as binary(10)), hex(cast(c1 as binary(10))) from t1;
+
+drop table t1;
+create table t1(c1 time(6));
+insert into t1 values('11:11:11.123456');
+select cast(c1 as time), concat(c1, 'abc') from t1;
+
+drop table t1;
+create table t1(col_utf8  varchar(100) collate utf8_general_ci,
+                col_utf16 varchar(100) collate utf16_bin,
+                col_gbk   varchar(100) collate gbk_chinese_ci);
+insert into t1 values('123.123', '123.123', '123.123');
+select cast(col_utf8 as char(10)), cast(col_utf16 as char(10)), cast(col_gbk as char(10)) from t1;
+select length(cast(col_utf8 as char(10))), length(cast(col_utf16 as char(10))), length(cast(col_gbk as char(10))) from t1;
+
+select cast(col_utf8 as decimal(10, 1)), cast(col_utf16 as decimal(10, 5)), cast(col_gbk as decimal(10, 1)) from t1;
+
+--echo // binary/varbinary test, check if padding char is ok
+select col_utf16, cast(col_utf16 as binary(20)), hex(cast(col_utf16 as binary(20))) from t1;
+select col_utf8, cast(col_utf8 as binary(20)), hex(cast(col_utf8 as binary(20))) from t1;
+
+drop table t1;
+create table t1(c1 bigint unsigned);
+insert into t1 values(18446744073709551615);
+select cast(c1 as signed) from t1;
+select c1, cast(c1 as binary(30)), hex(cast(c1 as binary(30))) from t1;
+
+drop table t1;

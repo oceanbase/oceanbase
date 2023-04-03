@@ -16,15 +16,25 @@
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/ob_cmd.h"
 
-namespace oceanbase {
-namespace sql {
-class ObXaStmt : public ObStmt, public ObICmd {
+namespace oceanbase
+{
+namespace sql
+{
+class ObXaStmt : public ObStmt, public ObICmd
+{
 public:
   explicit ObXaStmt(const stmt::StmtType stmt_type)
-      : ObStmt(stmt_type), xid_string_(), gtrid_string_(), bqual_string_(), format_id_(1), flags_(0)
-  {}
+    : ObStmt(stmt_type),
+      xid_string_(),
+      gtrid_string_(),
+      bqual_string_(),
+      format_id_(-1),
+      flags_(0)
+  {
+  }
   ~ObXaStmt()
-  {}
+  {
+  }
 
   void set_xa_string(common::ObString& gtrid_string)
   {
@@ -36,11 +46,12 @@ public:
     }
   }
 
-  void set_xa_string(common::ObString& gtrid_string, common::ObString& bqual_string)
+  void set_xa_string(common::ObString &gtrid_string, common::ObString &bqual_string)
   {
     gtrid_string_ = gtrid_string;
     bqual_string_ = bqual_string;
-    if ((gtrid_string.length() <= MAX_XID_LENGTH / 2) && (bqual_string.length() <= MAX_XID_LENGTH / 2)) {
+    if ((gtrid_string.length() <= MAX_XID_LENGTH / 2)
+        && (bqual_string.length() <= MAX_XID_LENGTH / 2)) {
       xid_string_.reset();
       (void)xid_string_.assign_buffer(xid_buffer_, sizeof(xid_buffer_));
       xid_string_.write(gtrid_string.ptr(), gtrid_string.length());
@@ -48,10 +59,9 @@ public:
     }
   }
 
-  common::ObString get_xa_string()
-  {
+  common::ObString get_xa_string() {
     return xid_string_;
-  }
+  } 
 
   common::ObString get_gtrid_string() const
   {
@@ -73,8 +83,7 @@ public:
     return format_id_;
   }
 
-  int get_cmd_type() const
-  {
+  int get_cmd_type() const {
     return stmt_type_;
   }
 
@@ -90,13 +99,26 @@ public:
 
   bool is_valid_oracle_xid()
   {
-    return gtrid_string_.length() > 0 && gtrid_string_.length() <= MAX_GTRID_LENGTH && bqual_string_.length() > 0 &&
-           bqual_string_.length() <= MAX_BQUAL_LENGTH;
+    return 0 <= format_id_
+           && 0 < gtrid_string_.length()
+           && MAX_GTRID_LENGTH >= gtrid_string_.length()
+           && 0 < bqual_string_.length()
+           && MAX_BQUAL_LENGTH >= bqual_string_.length();
   }
 
-  TO_STRING_KV(
-      N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string), K_(bqual_string), K_(format_id), K_(flags));
+  static bool is_valid_oracle_xid(const int64_t format_id,
+                                  const common::ObString &gtrid_string,
+                                  const common::ObString &bqual_string)
+  {
+    return 0 <= format_id
+           && 0 < gtrid_string.length()
+           && MAX_GTRID_LENGTH >= gtrid_string.length()
+           && 0 < bqual_string.length()
+           && MAX_BQUAL_LENGTH >= bqual_string.length();
+  }
 
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string),
+               K_(bqual_string), K_(format_id), K_(flags));
 public:
   static const int32_t MAX_XID_LENGTH = 128;
   static const int32_t MAX_GTRID_LENGTH = 64;
@@ -104,7 +126,6 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObXaStmt);
-
 private:
   char xid_buffer_[MAX_XID_LENGTH];
   common::ObString xid_string_;
@@ -114,37 +135,52 @@ private:
   int64_t flags_;
 };
 
-class ObXaStartStmt : public ObXaStmt {
+class ObXaStartStmt : public ObXaStmt
+{
 public:
-  explicit ObXaStartStmt() : ObXaStmt(stmt::T_XA_START)
-  {}
+  explicit ObXaStartStmt()
+      : ObXaStmt(stmt::T_XA_START)
+  {
+  }
 };
 
-class ObXaEndStmt : public ObXaStmt {
+class ObXaEndStmt : public ObXaStmt
+{
 public:
-  explicit ObXaEndStmt() : ObXaStmt(stmt::T_XA_END)
-  {}
+  explicit ObXaEndStmt()
+      : ObXaStmt(stmt::T_XA_END)
+  {
+  }
 };
 
-class ObXaPrepareStmt : public ObXaStmt {
+class ObXaPrepareStmt : public ObXaStmt
+{
 public:
-  explicit ObXaPrepareStmt() : ObXaStmt(stmt::T_XA_PREPARE)
-  {}
+  explicit ObXaPrepareStmt()
+      : ObXaStmt(stmt::T_XA_PREPARE)
+  {
+  }
 };
 
-class ObXaCommitStmt : public ObXaStmt {
+class ObXaCommitStmt : public ObXaStmt
+{
 public:
-  explicit ObXaCommitStmt() : ObXaStmt(stmt::T_XA_COMMIT)
-  {}
+  explicit ObXaCommitStmt()
+      : ObXaStmt(stmt::T_XA_COMMIT)
+  {
+  }
 };
 
-class ObXaRollBackStmt : public ObXaStmt {
+class ObXaRollBackStmt : public ObXaStmt
+{
 public:
-  explicit ObXaRollBackStmt() : ObXaStmt(stmt::T_XA_ROLLBACK)
-  {}
+  explicit ObXaRollBackStmt()
+      : ObXaStmt(stmt::T_XA_ROLLBACK)
+  {
+  }
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end sql
+} // end oceanbase
 
 #endif

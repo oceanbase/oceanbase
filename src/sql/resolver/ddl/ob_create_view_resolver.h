@@ -14,18 +14,24 @@
 #define OCEANBASE_SQL_RESOLVER_DDL_CREATE_VIEW_RESOLVER_H_
 
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "sql/resolver/dml/ob_view_table_resolver.h"  // resolve select clause
+#include "sql/resolver/dml/ob_view_table_resolver.h" // resolve select clause
 #include "share/schema/ob_table_schema.h"
 #include "lib/hash/ob_hashset.h"
+#include "sql/resolver/ddl/ob_create_table_stmt.h" // share CREATE TABLE stmt
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObColumnSchemaV2;
 }
-}  // namespace share
-namespace sql {
-class ObCreateViewResolver : public ObDDLResolver {
+}
+namespace sql
+{
+class ObCreateViewResolver : public ObDDLResolver
+{
   static const int64_t MATERIALIZED_NODE = 0;
   static const int64_t VIEW_NODE = 1;
   static const int64_t VIEW_COLUMNS_NODE = 2;
@@ -33,17 +39,31 @@ class ObCreateViewResolver : public ObDDLResolver {
   static const int64_t SELECT_STMT_NODE = 4;
   static const int64_t IF_NOT_EXISTS_NODE = 5;
   static const int64_t WITH_OPT_NODE = 6;
-  static const int64_t ROOT_NUM_CHILD = 7;
+  static const int64_t FORCE_VIEW_NODE = 7;
+  static const int64_t ROOT_NUM_CHILD = 8;
 
 public:
-  explicit ObCreateViewResolver(ObResolverParams& params);
+  explicit ObCreateViewResolver(ObResolverParams &params);
   virtual ~ObCreateViewResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
+  static int add_column_infos(const uint64_t tenant_id,
+                              ObSelectStmt &select_stmt,
+                              ObTableSchema &table_schema,
+                              common::ObIAllocator &alloc,
+                              sql::ObSQLSessionInfo &session_info,
+                              const common::ObIArray<ObString> &column_list);
+  static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,
+                                        const sql::SelectItem &select_item,
+                                        schema::ObColumnSchemaV2 &column_schema,
+                                        common::ObIAllocator &alloc,
+                                        sql::ObSQLSessionInfo &session_info);
 private:
+  int check_privilege(ObCreateTableStmt *stmt,
+                      ObSelectStmt *select_stmt);
   int resolve_column_list(ParseNode *view_columns_node,
-                          common::ObIArray<common::ObString> &column_list);
+                          common::ObIArray<common::ObString> &column_list,
+                          ObTableSchema &table_schema);
   int check_select_stmt_col_name(
       SelectItem &select_item,
       ObArray<int64_t> &index_array,
@@ -51,18 +71,32 @@ private:
       common::hash::ObHashSet<ObString> &view_col_names,
       bool &is_expr_or_col_dup,
       ObString &dup_col_name);
+  int check_view_columns(ObSelectStmt &select_stmt,
+                         ParseNode *view_columns_node,
+                         share::schema::ObErrorInfo &error_info,
+                         const bool is_force_view);
+  int check_privilege_needed(ObCreateTableStmt &stmt,
+                             ObSelectStmt &select_stmt,
+                             const bool is_force_view);
+  int try_add_error_info(const uint64_t error_number,
+                         share::schema::ObErrorInfo &error_info);
   int create_alias_names_auto(
-      ObArray<int64_t>& index_array, ObSelectStmt* select_stmt, common::hash::ObHashSet<ObString>& view_col_names);
+      ObArray<int64_t> &index_array,
+      ObSelectStmt *select_stmt,
+      common::hash::ObHashSet<ObString> &view_col_names);
   /**
    * use stmt_print instead of ObSelectStmtPrinter. When do_print return OB_SIZE_OVERFLOW
    * and the buf_len is less than OB_MAX_PACKET_LENGTH, stmt_print will expand buf and try again.
    */
-  int stmt_print(
-      const ObSelectStmt* stmt, common::ObIArray<common::ObString>* column_list, common::ObString& expanded_view);
+  int stmt_print(const ObSelectStmt *stmt,
+                 common::ObIArray<common::ObString> *column_list,
+                 common::ObString &expanded_view);
+  int collect_dependency_infos(ObQueryCtx *query_ctx,
+                               obrpc::ObCreateTableArg &create_arg);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);
 };
 }  // namespace sql
 }  // namespace oceanbase
-#endif  // OCEANBASE_SQL_RESOLVER_DDL_OB_CREATE_VIEW_RESOLVER_H_
+#endif // OCEANBASE_SQL_RESOLVER_DDL_OB_CREATE_VIEW_RESOLVER_H_

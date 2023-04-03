@@ -1,0 +1,139 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#### owner: dachuan.sdc
+#### owner group: sql3
+#### description: 测试date_add和date_sub
+# tags: datatype
+
+select date_add('2012-2-29', interval '-12.34' second);
+select date_add('2012-2-29', interval 1 year);
+select date_add(20120229, interval '34.56+78=90' day_microsecond);
+select date_sub('2012-2-29', interval '-12.34' second);
+select date_sub('2012-2-29', interval 1 year);
+select date_sub(20120229, interval '34.56+78=90' day_microsecond);
+select date_add('2010-01-01', interval 1 day);
+select date_add('2010-01-01', interval 1 minute);
+select date_add('2010-01-01 01:01:01', interval 1 day);
+select date_add('2010-01-01 01:01:01', interval 1 microsecond);
+select date_add('9999-12-31 23:59:59',INTERVAL 1 SECOND);
+select date_add('9999-12-31 23:59:59',INTERVAL 1000 SECOND);
+select date_add('9999-12-31 23:59:59',INTERVAL 1 MONTH);
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a date);
+insert into t1 values('2010-01-01');
+select date_add(a, interval 1 day) from t1;
+select date_add(a, interval 1 minute) from t1;
+select date_add(a, interval 1 microsecond) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime);
+insert into t1 values('2010-01-01 01:01:01');
+select date_add(a, interval 1 day) from t1;
+select date_add(a, interval 1 minute) from t1;
+select date_add(a, interval 1 microsecond) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime(2));
+insert into t1 values('2010-01-01 01:01:01');
+select date_add(a, interval 1 day) from t1;
+select date_add(a, interval 1 minute) from t1;
+select date_add(a, interval 1 microsecond) from t1;
+
+echo =======
+
+select adddate('2012-2-29', interval '-12.34' second);
+select adddate('2012-2-29', interval 1 year);
+select adddate(20120229, interval '34.56+78=90' day_microsecond);
+select subdate('2012-2-29', interval '-12.34' second);
+select subdate('2012-2-29', interval 1 year);
+select subdate(20120229, interval '34.56+78=90' day_microsecond);
+select adddate('2010-01-01', interval 1 day);
+select adddate('2010-01-01', interval 1 minute);
+select adddate('2010-01-01 01:01:01', interval 1 day);
+select adddate('2010-01-01 01:01:01', interval 1 microsecond);
+select adddate('9999-12-31 23:59:59',INTERVAL 1 SECOND);
+select adddate('9999-12-31 23:59:59',INTERVAL 1000 SECOND);
+select adddate('9999-12-31 23:59:59',INTERVAL 1 MONTH);
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a date);
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01');
+select adddate(a, interval 1 day) from t1;
+select adddate(a, interval 1 minute) from t1;
+select adddate(a, interval 1 microsecond) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime);
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a, interval 1 day) from t1;
+select adddate(a, interval 1 minute) from t1;
+select adddate(a, interval 1 microsecond) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime(2));
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a, interval 1 day) from t1;
+select adddate(a, interval 1 minute) from t1;
+select adddate(a, interval 1 microsecond) from t1;
+
+echo =======
+
+select adddate('2012-2-29',  '-12.34');
+select adddate('2012-2-29',  1);
+select adddate(20120229,  '34.56+78=90');
+select subdate('2012-2-29',  '-12.34');
+select subdate('2012-2-29',  1);
+select subdate(20120229,  '34.56+78=90');
+select adddate('2010-01-01',  1);
+select adddate('2010-01-01',  10);
+select adddate('2010-01-01 01:01:01',  1);
+select adddate('2010-01-01 01:01:01',  30);
+select adddate('9999-12-31 23:59:59', 1);
+select adddate('9999-12-31 23:59:59', 1000);
+select adddate('9999-12-31 23:59:59', 30);
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a date);
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01');
+select adddate(a,  1) from t1;
+select adddate(a,  2) from t1;
+select adddate(a,  30) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime);
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a,  1) from t1;
+select adddate(a,  2) from t1;
+select adddate(a,  30) from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a datetime(2));
+--source mysql_test/include/drop_and_flashback_table.inc
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a,  1) from t1;
+select adddate(a,  2) from t1;
+select adddate(a,  30) from t1;
+
+drop table t1;

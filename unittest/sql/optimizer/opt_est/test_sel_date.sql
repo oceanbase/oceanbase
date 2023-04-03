@@ -22,6 +22,7 @@ select c1 from t4 where c4 > '838:59:59';
 select c1 from t4 where c4 > '00:00:00';
 select c1 from t4 where c4 < '00:00:00';
 select c1 from t4 where c5 = 2016;
+#year类型query range不做抽取
 select c1 from t4 where c5 > 1970;
 select c1 from t4 where c5 < 1970;
 select c1 from t4 where c5 > 2155;

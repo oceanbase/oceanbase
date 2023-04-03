@@ -18,17 +18,16 @@
 using namespace oceanbase::common;
 using namespace oceanbase::yson;
 
-class TestYson : public ::testing::Test {
+class TestYson: public ::testing::Test
+{
 public:
   TestYson();
   virtual ~TestYson();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestYson);
-
 protected:
   // function members
 protected:
@@ -36,22 +35,34 @@ protected:
 };
 
 TestYson::TestYson()
-{}
+{
+}
 
 TestYson::~TestYson()
-{}
+{
+}
 
 void TestYson::SetUp()
-{}
+{
+}
 
 void TestYson::TearDown()
-{}
+{
+}
 
-struct ClassWithToYson {
-  TO_YSON_KV(0, val1_, 1, val2_, 2, val3_, 3, val4_, 4, val5_);
-  TO_STRING_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
+struct ClassWithToYson
+{
+  TO_YSON_KV(0, val1_,
+             1, val2_,
+             2, val3_,
+             3, val4_,
+             4, val5_);
+  TO_STRING_KV("0", val1_,
+               "1", val2_,
+               "2", val3_,
+               "3", val4_,
+               "4", val5_);
   OB_UNIS_VERSION(1);
-
 public:
   int64_t val1_;
   int32_t val2_;
@@ -82,12 +93,17 @@ TEST_F(TestYson, test_to_yson_kv)
   OB_LOG(INFO, "YSON to text", "text", text);
 }
 
-struct ClassB {
+struct ClassB
+{
   int32_t arr_[3];
   ClassWithToYson obj1_;
   ObString val1_;
-  TO_YSON_KV(2, ObArrayWrap<int32_t>(arr_, 3), 0, obj1_, 11, val1_);
-  TO_STRING_KV("2", ObArrayWrap<int32_t>(arr_, 3), "0", obj1_, "11", val1_);
+  TO_YSON_KV(2, ObArrayWrap<int32_t>(arr_, 3),
+             0, obj1_,
+             11, val1_);
+  TO_STRING_KV("2", ObArrayWrap<int32_t>(arr_, 3),
+               "0", obj1_,
+               "11", val1_);
   OB_UNIS_VERSION(1);
 };
 OB_SERIALIZE_MEMBER(ClassB, arr_, obj1_, val1_);
@@ -134,7 +150,7 @@ TEST_F(TestYson, performance_vs_json)
   }
   int64_t end_us = ObTimeUtility::current_time();
   int64_t elapsed_us = end_us - begin_us;
-  OB_LOG(INFO, "YSON time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us) / double(ROUND));
+  OB_LOG(INFO, "YSON time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us)/double(ROUND));
 
   // JSON
   begin_us = ObTimeUtility::current_time();
@@ -146,7 +162,7 @@ TEST_F(TestYson, performance_vs_json)
   }
   end_us = ObTimeUtility::current_time();
   elapsed_us = end_us - begin_us;
-  OB_LOG(INFO, "JSON time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us) / double(ROUND));
+  OB_LOG(INFO, "JSON time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us)/double(ROUND));
   // serialize
   begin_us = ObTimeUtility::current_time();
   for (int64_t i = 0; i < ROUND; ++i) {
@@ -158,17 +174,22 @@ TEST_F(TestYson, performance_vs_json)
   }
   end_us = ObTimeUtility::current_time();
   elapsed_us = end_us - begin_us;
-  OB_LOG(INFO, "serialize() time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us) / double(ROUND));
+  OB_LOG(INFO, "serialize() time", K(ROUND), K(elapsed_us), "avg", double(elapsed_us)/double(ROUND));
+
 }
 
-struct X {
+struct X
+{
   int64_t val1_;
   int32_t val2_;
   bool val3_;
   uint32_t val4_;
   uint64_t val5_;
-  TO_STRING_AND_YSON(
-      OB_ID(tag1), val1_, OB_ID(tag2), val2_, OB_ID(tag3), val3_, OB_ID(tag4), val4_, OB_ID(tag4), val5_);
+  TO_STRING_AND_YSON(OB_ID(tag1), val1_,
+                     OB_ID(tag2), val2_,
+                     OB_ID(tag3), val3_,
+                     OB_ID(tag4), val4_,
+                     OB_ID(tag4), val5_);
 };
 
 TEST_F(TestYson, to_string_and_yson)
@@ -205,9 +226,9 @@ TEST_F(TestYson, test_overflow)
   OB_LOG(INFO, "YSON to text", "text", ObYsonToString(buf, pos));
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   return RUN_ALL_TESTS();
 }

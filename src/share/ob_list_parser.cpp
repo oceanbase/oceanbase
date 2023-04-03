@@ -21,8 +21,10 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
 int ObListParser::match(int sym)
 {
@@ -53,12 +55,12 @@ int ObListParser::get_token()
       break;
     } else if (isspace(*cur_)) {
       if (allow_space_) {
-        cur_++;  // Skip the spaces before and after the token
+        cur_++; // Skip the spaces before and after the token
       } else {
         ret = OB_INVALID_ARGUMENT;
       }
     } else if (isprint(*cur_)) {
-      const char* start = cur_;
+      const char *start = cur_;
       while (isprint(*cur_) && !isspace(*cur_) && SYM_LIST_SEP != *cur_ && '\0' != *cur_) {
         cur_++;
       }
@@ -79,7 +81,7 @@ int ObListParser::get_token()
   return ret;
 }
 
-int ObListParser::parse(const char* data)
+int ObListParser::parse(const char *data)
 {
   int ret = OB_SUCCESS;
   bool finish = false;
@@ -120,5 +122,5 @@ int ObListParser::parse(const char* data)
   return ret;
 }
 
-}  // namespace share
-}  // namespace oceanbase
+}/* ns share*/
+}/* ns oceanbase */

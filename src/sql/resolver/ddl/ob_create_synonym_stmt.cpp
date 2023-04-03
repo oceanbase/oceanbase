@@ -20,18 +20,27 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObCreateSynonymStmt::ObCreateSynonymStmt(ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_CREATE_SYNONYM), create_synonym_arg_()
-{}
+ObCreateSynonymStmt::ObCreateSynonymStmt(ObIAllocator *name_pool)
+    : ObDDLStmt(name_pool, stmt::T_CREATE_SYNONYM),
+      create_synonym_arg_()
+{
+}
 
-ObCreateSynonymStmt::ObCreateSynonymStmt() : ObDDLStmt(stmt::T_CREATE_SYNONYM), create_synonym_arg_()
-{}
+ObCreateSynonymStmt::ObCreateSynonymStmt()
+    : ObDDLStmt(stmt::T_CREATE_SYNONYM),
+      create_synonym_arg_()
+{
+}
 
 ObCreateSynonymStmt::~ObCreateSynonymStmt()
-{}
+{
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+
+} // namespace sql
+} // namespace oceanbase

@@ -1,0 +1,39 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : sean.yyj
+#owner group : sql1
+#description : test information_schema.
+
+create user tmp_user_test_user_priv identified by '123';
+create database test_user_priv_db;
+use test_user_priv_db;
+create table zhan_t1 (a int primary key, b int);
+
+#table format
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table information_schema.table_privileges;
+desc information_schema.table_privileges;
+
+#should be empty
+select * from information_schema.table_privileges where table_name = 'zhan_t1';
+
+#grant 
+grant select on test_user_priv_db.zhan_t1 to tmp_user_test_user_priv;
+
+
+#should be one row
+--real_sleep 3
+select * from information_schema.table_privileges where table_name = 'zhan_t1'; 
+#revoke 
+revoke select on test_user_priv_db.zhan_t1 from tmp_user_test_user_priv;
+
+#should be empty
+--real_sleep 3
+select * from information_schema.table_privileges where table_name = 'zhan_t1'; 
+
+#cleanup
+--disable_warnings
+drop database test_user_priv_db;
+drop user tmp_user_test_user_priv;
+--enable_warnings

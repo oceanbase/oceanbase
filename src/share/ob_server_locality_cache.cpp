@@ -14,24 +14,28 @@
 #include "share/ob_server_locality_cache.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 ObServerLocality::ObServerLocality()
-    : inited_(false),
-      is_idle_(false),
-      is_active_(false),
-      addr_(),
-      zone_(),
-      zone_type_(ObZoneType::ZONE_TYPE_INVALID),
-      idc_(),
-      region_(),
-      start_service_time_(0),
-      server_stop_time_(0),
-      server_status_(ObServerStatus::OB_DISPLAY_MAX)
-{}
+  : inited_(false),
+    is_idle_(false),
+    is_active_(false),
+    addr_(),
+    zone_(),
+    zone_type_(ObZoneType::ZONE_TYPE_INVALID),
+    idc_(),
+    region_(),
+    start_service_time_(0),
+    server_stop_time_(0),
+    server_status_(ObServerStatus::OB_DISPLAY_MAX)
+{
+}
 
 ObServerLocality::~ObServerLocality()
-{}
+{
+}
 
 void ObServerLocality::reset()
 {
@@ -48,7 +52,7 @@ void ObServerLocality::reset()
   server_status_ = ObServerStatus::OB_DISPLAY_MAX;
 }
 
-int ObServerLocality::assign(const ObServerLocality& other)
+int ObServerLocality::assign(const ObServerLocality &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(zone_.assign(other.zone_))) {
@@ -71,8 +75,14 @@ int ObServerLocality::assign(const ObServerLocality& other)
   return ret;
 }
 
-int ObServerLocality::init(const char* svr_ip, const int32_t svr_port, const ObZone& zone, const ObZoneType zone_type,
-    const ObIDC& idc, const ObRegion& region, bool is_idle, bool is_active)
+
+int ObServerLocality::init(const char *svr_ip,
+                           const int32_t svr_port,
+                           const ObZone &zone,
+                           const ObZoneType zone_type,
+                           const ObIDC &idc,
+                           const ObRegion &region,
+                           bool is_active)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -90,13 +100,12 @@ int ObServerLocality::init(const char* svr_ip, const int32_t svr_port, const ObZ
   } else {
     zone_type_ = zone_type;
     inited_ = true;
-    is_idle_ = is_idle;
     is_active_ = is_active;
   }
   return ret;
 }
 
-int ObServerLocality::set_server_status(const char* svr_status)
+int ObServerLocality::set_server_status(const char *svr_status)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObServerStatus::str2display_status(svr_status, server_status_))) {
@@ -109,13 +118,13 @@ int ObServerLocality::set_server_status(const char* svr_status)
 }
 
 ObServerLocalityCache::ObServerLocalityCache()
-    : rwlock_(),
-      server_locality_array_(ObModIds::OB_SERVER_LOCALITY_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
-      server_cid_map_(),
-      server_region_map_(),
-      server_idc_map_(),
-      has_readonly_zone_(false),
-      is_inited_(false)
+  : rwlock_(common::ObLatchIds::SERVER_LOCALITY_CACHE_LOCK),
+    server_locality_array_(ObModIds::OB_SERVER_LOCALITY_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
+    server_cid_map_(),
+    server_region_map_(),
+    server_idc_map_(),
+    has_readonly_zone_(false),
+    is_inited_(false)
 {}
 
 ObServerLocalityCache::~ObServerLocalityCache()
@@ -163,7 +172,8 @@ void ObServerLocalityCache::destroy()
 }
 
 int ObServerLocalityCache::get_server_locality_array(
-    ObIArray<ObServerLocality>& server_locality_array, bool& has_readonly_zone) const
+    ObIArray<ObServerLocality> &server_locality_array,
+    bool &has_readonly_zone) const
 {
   int ret = OB_SUCCESS;
   server_locality_array.reset();
@@ -182,7 +192,9 @@ int ObServerLocalityCache::get_server_locality_array(
 }
 
 // If there are not any servers in a zone, return OB_ENTRY_NOT_EXIST
-int ObServerLocalityCache::get_noempty_zone_region(const common::ObZone& zone, common::ObRegion& region) const
+int ObServerLocalityCache::get_noempty_zone_region(
+    const common::ObZone &zone,
+    common::ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(zone.is_empty())) {
@@ -192,7 +204,7 @@ int ObServerLocalityCache::get_noempty_zone_region(const common::ObZone& zone, c
     SpinRLockGuard guard(rwlock_);
     bool is_found = false;
     for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
-      const share::ObServerLocality& server_locality = server_locality_array_.at(i);
+      const share::ObServerLocality &server_locality = server_locality_array_.at(i);
       if (server_locality.get_zone() == zone) {
         region = server_locality.get_region();
         is_found = true;
@@ -205,7 +217,8 @@ int ObServerLocalityCache::get_noempty_zone_region(const common::ObZone& zone, c
   return ret;
 }
 
-int ObServerLocalityCache::get_server_zone(const common::ObAddr& server, common::ObZone& zone) const
+int ObServerLocalityCache::get_server_zone(const common::ObAddr &server,
+                                           common::ObZone &zone) const
 {
   int ret = OB_SUCCESS;
   if (!server.is_valid()) {
@@ -215,7 +228,7 @@ int ObServerLocalityCache::get_server_zone(const common::ObAddr& server, common:
     SpinRLockGuard guard(rwlock_);
     bool is_found = false;
     for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
-      const share::ObServerLocality& server_locality = server_locality_array_.at(i);
+      const share::ObServerLocality &server_locality = server_locality_array_.at(i);
       if (server_locality.get_addr() == server) {
         zone = server_locality.get_zone();
         is_found = true;
@@ -228,7 +241,8 @@ int ObServerLocalityCache::get_server_zone(const common::ObAddr& server, common:
   return ret;
 }
 
-int ObServerLocalityCache::get_server_region(const common::ObAddr& server, common::ObRegion& region) const
+int ObServerLocalityCache::get_server_region(const common::ObAddr &server,
+                                             common::ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -240,7 +254,7 @@ int ObServerLocalityCache::get_server_region(const common::ObAddr& server, commo
     SpinRLockGuard guard(rwlock_);
     bool is_found = false;
     for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
-      const share::ObServerLocality& server_locality = server_locality_array_.at(i);
+      const share::ObServerLocality &server_locality = server_locality_array_.at(i);
       if (server_locality.get_addr() == server) {
         if (!server_locality.get_region().is_empty()) {
           // assign region only when it is not empty
@@ -259,7 +273,8 @@ int ObServerLocalityCache::get_server_region(const common::ObAddr& server, commo
   return ret;
 }
 
-int ObServerLocalityCache::get_server_idc(const common::ObAddr& server, common::ObIDC& idc) const
+int ObServerLocalityCache::get_server_idc(const common::ObAddr &server,
+                                          common::ObIDC &idc) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -271,7 +286,7 @@ int ObServerLocalityCache::get_server_idc(const common::ObAddr& server, common::
     SpinRLockGuard guard(rwlock_);
     bool is_found = false;
     for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
-      const share::ObServerLocality& server_locality = server_locality_array_.at(i);
+      const share::ObServerLocality &server_locality = server_locality_array_.at(i);
       if (server_locality.get_addr() == server) {
         idc = server_locality.get_idc();
         is_found = true;
@@ -285,7 +300,8 @@ int ObServerLocalityCache::get_server_idc(const common::ObAddr& server, common::
 }
 
 int ObServerLocalityCache::set_server_locality_array(
-    const ObIArray<ObServerLocality>& server_locality_array, bool has_readonly_zone)
+    const ObIArray<ObServerLocality> &server_locality_array,
+    bool has_readonly_zone)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -303,7 +319,8 @@ int ObServerLocalityCache::set_server_locality_array(
   return ret;
 }
 
-int ObServerLocalityCache::get_server_region_from_map_(const common::ObAddr& server, ObRegion& region) const
+int ObServerLocalityCache::get_server_region_from_map_(const common::ObAddr &server,
+                                                       ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -321,7 +338,8 @@ int ObServerLocalityCache::get_server_region_from_map_(const common::ObAddr& ser
   return ret;
 }
 
-int ObServerLocalityCache::record_server_region(const common::ObAddr& server, const ObRegion& region)
+int ObServerLocalityCache::record_server_region(const common::ObAddr &server,
+                                                const ObRegion &region)
 {
   int ret = OB_SUCCESS;
   ObRegion old_val;
@@ -353,7 +371,8 @@ int ObServerLocalityCache::record_server_region(const common::ObAddr& server, co
   return ret;
 }
 
-int ObServerLocalityCache::get_server_cluster_id(const common::ObAddr& server, int64_t& cluster_id) const
+int ObServerLocalityCache::get_server_cluster_id(const common::ObAddr &server,
+                                                 int64_t &cluster_id) const
 {
   int ret = OB_SUCCESS;
   int64_t map_val = INVALID_CLUSTER_ID;
@@ -374,7 +393,8 @@ int ObServerLocalityCache::get_server_cluster_id(const common::ObAddr& server, i
 
 // Store server's cluster_id
 // NOTE: only support store server's information not in self cluster
-int ObServerLocalityCache::record_server_cluster_id(const common::ObAddr& server, const int64_t& cluster_id)
+int ObServerLocalityCache::record_server_cluster_id(const common::ObAddr &server,
+                                                    const int64_t &cluster_id)
 {
   int ret = OB_SUCCESS;
   int64_t old_val = INVALID_CLUSTER_ID;
@@ -405,7 +425,8 @@ int ObServerLocalityCache::record_server_cluster_id(const common::ObAddr& server
   return ret;
 }
 
-int ObServerLocalityCache::get_server_idc_from_map_(const common::ObAddr& server, ObIDC& idc) const
+int ObServerLocalityCache::get_server_idc_from_map_(const common::ObAddr &server,
+                                                    ObIDC &idc) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -423,7 +444,8 @@ int ObServerLocalityCache::get_server_idc_from_map_(const common::ObAddr& server
   return ret;
 }
 
-int ObServerLocalityCache::record_server_idc(const common::ObAddr& server, const ObIDC& idc)
+int ObServerLocalityCache::record_server_idc(const common::ObAddr &server,
+                                             const ObIDC &idc)
 {
   int ret = OB_SUCCESS;
   ObIDC old_val;
@@ -454,5 +476,5 @@ int ObServerLocalityCache::record_server_idc(const common::ObAddr& server, const
   }
   return ret;
 }
-}  // namespace share
-}  // namespace oceanbase
+}/* ns share*/
+}/* ns oceanbase */

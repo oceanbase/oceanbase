@@ -15,21 +15,22 @@
 
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObRpcExtraPayload : public obrpc::ObIRpcExtraPayload {
+class ObRpcExtraPayload : public obrpc::ObIRpcExtraPayload
+{
 public:
-  ObRpcExtraPayload()
-  {}
-  virtual ~ObRpcExtraPayload()
-  {}
+  ObRpcExtraPayload() {}
+  virtual ~ObRpcExtraPayload() {}
 
   virtual int64_t get_serialize_size() const override;
   virtual int serialize(SERIAL_PARAMS) const override;
   virtual int deserialize(DESERIAL_PARAMS) override;
 
-  static ObRpcExtraPayload& extra_payload_instance()
+  static ObRpcExtraPayload &extra_payload_instance()
   {
     static ObRpcExtraPayload global_rpc_extra_payload;
     return global_rpc_extra_payload;
@@ -39,7 +40,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcExtraPayload);
 };
 
-}  // namespace observer
-}  // end namespace oceanbase
+} // end namespace server
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_OB_RPC_EXTRA_PAYLOAD_H_
+#endif // OCEANBASE_OBSERVER_OB_RPC_EXTRA_PAYLOAD_H_

@@ -19,33 +19,45 @@
 #include "common/row/ob_row_desc.h"
 #include "common/rowkey/ob_rowkey.h"
 
-namespace commontest {
+namespace commontest
+{
 class ObRowTest_reset_test_Test;
 }
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObColumnInfo {
+class ObColumnInfo
+{
 public:
   int64_t index_;
   common::ObCollationType cs_type_;
-  ObColumnInfo() : index_(common::OB_INVALID_INDEX), cs_type_(common::CS_TYPE_INVALID)
-  {}
-  virtual ~ObColumnInfo()
-  {}
+  ObColumnInfo() : index_(common::OB_INVALID_INDEX), cs_type_(common::CS_TYPE_INVALID) {}
+  virtual ~ObColumnInfo() {}
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV2(N_INDEX_ID, index_, N_COLLATION_TYPE, common::ObCharset::collation_name(cs_type_));
+  TO_STRING_KV2(N_INDEX_ID, index_,
+                N_COLLATION_TYPE, common::ObCharset::collation_name(cs_type_));
 };
 
 /**
  * @brief: wrap row pointer(an ObObj array) and row size
  */
-class ObNewRow final {
+class ObNewRow final
+{
 public:
-  ObNewRow() : cells_(NULL), count_(0), projector_size_(0), projector_(NULL)
+  ObNewRow()
+      :cells_(NULL),
+       count_(0),
+       projector_size_(0),
+       projector_(NULL)
   {}
-  ObNewRow(ObObj* cells, int64_t count) : cells_(cells), count_(count), projector_size_(0), projector_(NULL)
+  ObNewRow(ObObj *cells, int64_t count)
+      :cells_(cells),
+       count_(count),
+       projector_size_(0),
+       projector_(NULL)
   {}
 
   void reset();
@@ -59,58 +71,55 @@ public:
     return !is_invalid();
   }
 
-  OB_INLINE void assign(ObObj* ptr, const int64_t count)
+  OB_INLINE void assign(ObObj *ptr, const int64_t count)
   {
     cells_ = ptr;
     count_ = count;
   }
   int64_t get_deep_copy_size() const;
-  int deep_copy(const ObNewRow& src, char* buf, int64_t len, int64_t& pos);
-  // According to the existing buffer to construct an ObNewRow, the memory format is:
-  // The memory structure allocated by sizeof(ObNewRow) + ObNewRow.deep_copy()
-  static int construct(char* buf, int64_t len, int64_t& pos, ObNewRow*& row);
+  int deep_copy(const ObNewRow &src, char *buf, int64_t len, int64_t &pos);
+  //According to the existing buffer to construct an ObNewRow, the memory format is:
+  //The memory structure allocated by sizeof(ObNewRow) + ObNewRow.deep_copy()
+  static int construct(char *buf, int64_t len, int64_t &pos, ObNewRow *&row);
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  bool operator==(const ObNewRow& other) const;
-  OB_INLINE int64_t get_count() const
-  {
-    return projector_size_ > 0 ? projector_size_ : count_;
-  }
-  const ObObj& get_cell(int64_t index) const
+  bool operator==(const ObNewRow &other) const;
+  OB_INLINE int64_t get_count() const { return projector_size_ > 0 ? projector_size_ : count_; }
+  const ObObj &get_cell(int64_t index) const
   {
     int64_t real_idx = index;
     if (projector_size_ > 0) {
       if (OB_ISNULL(projector_) || index >= projector_size_ || index < 0) {
-        COMMON_LOG(ERROR, "index is invalid", K(index), K_(projector_size), K_(projector));
+        COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "index is invalid", K(index), K_(projector_size), K_(projector));
       } else {
         real_idx = projector_[index];
       }
     }
     if (real_idx >= count_) {
-      COMMON_LOG(ERROR, "real_idx is invalid", K_(count), K(real_idx));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "real_idx is invalid", K_(count), K(real_idx));
     }
     return cells_[real_idx];
   }
 
-  ObObj& get_cell(int64_t index)
+  ObObj &get_cell(int64_t index)
   {
     int64_t real_idx = index;
     if (projector_size_ > 0) {
       if (OB_ISNULL(projector_) || index >= projector_size_ || index < 0) {
-        COMMON_LOG(ERROR, "index is invalid", K(index), K_(projector_size), K_(projector));
+        COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "index is invalid", K(index), K_(projector_size), K_(projector));
         right_to_die_or_duty_to_live();
       } else {
         real_idx = projector_[index];
       }
     }
     if (real_idx >= count_) {
-      COMMON_LOG(ERROR, "real_idx is invalid", K_(count), K(real_idx));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "real_idx is invalid", K_(count), K(real_idx));
       right_to_die_or_duty_to_live();
     }
     return cells_[real_idx];
   }
 
-  int32_t get_project_idx(int64_t cell_idx)
+  int32_t get_project_idx(int64_t cell_idx) const
   {
     int32_t proj_idx = -1;
     if (0 <= cell_idx && cell_idx < count_) {
@@ -143,20 +152,19 @@ public:
     J_OBJ_END();
     return pos;
   }
-
 public:
-  ObObj* cells_;
+  ObObj *cells_;
   int64_t count_;  // cells count
   int64_t projector_size_;
-  int32_t* projector_;  // if projector is not NULL, the caller should use this projector to access cells_
+  int32_t *projector_;  // if projector is not NULL, the caller should use this projector to access cells_
 };
 
-template <typename AllocatorT>
-int ob_write_row(AllocatorT& allocator, const ObNewRow& src, ObNewRow& dst)
+template<typename AllocatorT>
+int ob_write_row(AllocatorT &allocator, const ObNewRow &src, ObNewRow &dst)
 {
   int ret = OB_SUCCESS;
-  void* ptr1 = NULL;
-  void* ptr2 = NULL;
+  void *ptr1 = NULL;
+  void *ptr2 = NULL;
   if (src.count_ <= 0) {
     dst.count_ = src.count_;
     dst.cells_ = NULL;
@@ -165,24 +173,26 @@ int ob_write_row(AllocatorT& allocator, const ObNewRow& src, ObNewRow& dst)
   } else if (OB_ISNULL(ptr1 = allocator.alloc(sizeof(ObObj) * src.count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     _OB_LOG(ERROR, "out of memory");
-  } else if (NULL != src.projector_ && OB_ISNULL(ptr2 = allocator.alloc(sizeof(int32_t) * src.projector_size_))) {
+  } else if (NULL != src.projector_
+      && OB_ISNULL(ptr2 = allocator.alloc(sizeof(int32_t) * src.projector_size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     _OB_LOG(ERROR, "out of memory");
   } else {
     if (NULL != src.projector_) {
       MEMCPY(ptr2, src.projector_, sizeof(int32_t) * src.projector_size_);
     }
-    ObObj* objs = new (ptr1) ObObj[src.count_]();
+    ObObj *objs = new(ptr1) ObObj[src.count_]();
     for (int64_t i = 0; OB_SUCC(ret) && i < src.count_; ++i) {
       if (OB_FAIL(ob_write_obj(allocator, src.cells_[i], objs[i]))) {
-        _OB_LOG(WARN, "copy ObObj error, row=%s, i=%ld, ret=%d", to_cstring(src.cells_[i]), i, ret);
+        _OB_LOG(WARN, "copy ObObj error, row=%s, i=%ld, ret=%d",
+            to_cstring(src.cells_[i]), i, ret);
       }
     }
     if (OB_SUCC(ret)) {
       dst.count_ = src.count_;
       dst.cells_ = objs;
       dst.projector_size_ = src.projector_size_;
-      dst.projector_ = (NULL != src.projector_) ? static_cast<int32_t*>(ptr2) : NULL;
+      dst.projector_ = (NULL != src.projector_) ? static_cast<int32_t *>(ptr2) : NULL;
     }
   }
   if (OB_FAIL(ret)) {
@@ -198,11 +208,11 @@ int ob_write_row(AllocatorT& allocator, const ObNewRow& src, ObNewRow& dst)
   return ret;
 }
 
-template <typename AllocatorT>
-int ob_write_row_by_projector(AllocatorT& allocator, const ObNewRow& src, ObNewRow& dst)
+template<typename AllocatorT>
+int ob_write_row_by_projector(AllocatorT &allocator, const ObNewRow &src, ObNewRow &dst)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   int64_t len = sizeof(ObObj) * src.get_count();
   if (src.count_ <= 0) {
     dst.reset();
@@ -210,7 +220,7 @@ int ob_write_row_by_projector(AllocatorT& allocator, const ObNewRow& src, ObNewR
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "no memory to create row cells", K(ret), K(len));
   } else {
-    dst.cells_ = new (ptr) ObObj[src.get_count()];
+    dst.cells_ = new(ptr) ObObj[src.get_count()];
     dst.count_ = src.get_count();
     dst.projector_ = NULL;
     dst.projector_size_ = 0;
@@ -223,24 +233,24 @@ int ob_write_row_by_projector(AllocatorT& allocator, const ObNewRow& src, ObNewR
   return ret;
 }
 
-template <typename AllocatorT>
-int ob_create_row(AllocatorT& allocator, int64_t col_count, ObNewRow*& row)
+template<typename AllocatorT>
+int ob_create_row(AllocatorT &allocator, int64_t col_count, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(col_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "row_count is invalid", K(ret), K(col_count));
   } else {
-    void* row_buf = NULL;
+    void *row_buf = NULL;
     size_t row_size = sizeof(ObNewRow);
     int64_t row_buf_len = row_size + col_count * sizeof(ObObj);
     if (OB_ISNULL(row_buf = allocator.alloc(row_buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "allocate row buffer failed", K(ret), K(row_buf_len));
     } else {
-      void* cells_buf = static_cast<char*>(row_buf) + row_size;
-      row = new (row_buf) ObNewRow();
-      row->cells_ = new (cells_buf) ObObj[col_count];
+      void *cells_buf = static_cast<char*>(row_buf) + row_size;
+      row = new(row_buf) ObNewRow();
+      row->cells_ = new(cells_buf) ObObj[col_count];
       row->count_ = col_count;
       row->projector_ = NULL;
       row->projector_size_ = 0;
@@ -249,8 +259,8 @@ int ob_create_row(AllocatorT& allocator, int64_t col_count, ObNewRow*& row)
   return ret;
 }
 
-template <typename AllocatorT>
-int ob_create_row(AllocatorT& allocator, int64_t col_count, ObNewRow& row)
+template<typename AllocatorT>
+int ob_create_row(AllocatorT &allocator, int64_t col_count, ObNewRow &row)
 {
   int ret = OB_SUCCESS;
   row.reset();
@@ -258,13 +268,13 @@ int ob_create_row(AllocatorT& allocator, int64_t col_count, ObNewRow& row)
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "row_count is invalid", K(ret), K(col_count));
   } else {
-    void* cell_buf = NULL;
+    void *cell_buf = NULL;
     int64_t cell_buf_len = col_count * sizeof(ObObj);
     if (OB_ISNULL(cell_buf = allocator.alloc(cell_buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "allocate row buffer failed", K(ret), K(cell_buf_len));
     } else {
-      row.cells_ = new (cell_buf) ObObj[col_count];
+      row.cells_ = new(cell_buf) ObObj[col_count];
       row.count_ = col_count;
       row.projector_ = NULL;
       row.projector_size_ = 0;
@@ -273,7 +283,7 @@ int ob_create_row(AllocatorT& allocator, int64_t col_count, ObNewRow& row)
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_COMMON_OB_ROW_ */

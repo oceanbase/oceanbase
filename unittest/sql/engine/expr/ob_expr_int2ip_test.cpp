@@ -17,32 +17,35 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprInt2ipTest : public ::testing::Test {
+class ObExprInt2ipTest : public ::testing::Test
+{
 public:
   ObExprInt2ipTest();
   virtual ~ObExprInt2ipTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprInt2ipTest(const ObExprInt2ipTest& other);
-  ObExprInt2ipTest& operator=(const ObExprInt2ipTest& other);
-
+  ObExprInt2ipTest(const ObExprInt2ipTest &other);
+  ObExprInt2ipTest& operator=(const ObExprInt2ipTest &other);
 private:
   // data members
 };
 ObExprInt2ipTest::ObExprInt2ipTest()
-{}
+{
+}
 
 ObExprInt2ipTest::~ObExprInt2ipTest()
-{}
+{
+}
 
 void ObExprInt2ipTest::SetUp()
-{}
+{
+}
 
 void ObExprInt2ipTest::TearDown()
-{}
+{
+}
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define F(obj, t1, v1, ref_type, ref_value) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -76,9 +79,10 @@ TEST_F(ObExprInt2ipTest, fail_tst)
   F(int2ip, min, 0, null, 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

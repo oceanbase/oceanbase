@@ -1,0 +1,24 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: xiaoyi.xy
+#owner group : storage
+#description : __tenant_virtual_statname
+
+--disable_abort_on_error
+--disable_warnings
+
+use oceanbase;
+desc __tenant_virtual_statname;
+desc v$statname;
+
+--disable_result_log
+let $idx1 = query_get_value(select count(*) from oceanbase.__tenant_virtual_statname,count(*),1);
+--enable_result_log
+if($idx1)
+{
+--echo succeed
+}
+--enable_abort_on_error
+--enable_warnings
+

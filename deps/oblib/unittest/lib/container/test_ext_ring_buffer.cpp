@@ -24,29 +24,20 @@ using namespace oceanbase;
 using namespace common;
 using namespace erb;
 
-namespace oceanbase {
-namespace unittest {
 
-struct PopCondA {
-  bool operator()(int64_t val)
-  {
-    UNUSED(val);
-    return true;
-  }
-  bool operator()(int64_t oldptr, int* newptr)
-  {
-    UNUSED(oldptr);
-    UNUSED(newptr);
-    return true;
-  }
+namespace oceanbase
+{
+namespace unittest
+{
+
+struct PopCondA
+{
+  bool operator()(int64_t val) { UNUSED(val); return true; }
+  bool operator()(int64_t oldptr, int *newptr) { UNUSED(oldptr); UNUSED(newptr); return true; }
 };
-struct SetCondA {
-  bool operator()(int* oldptr, int* newptr)
-  {
-    UNUSED(oldptr);
-    UNUSED(newptr);
-    return true;
-  }
+struct SetCondA
+{
+  bool operator()(int *oldptr, int *newptr) { UNUSED(oldptr); UNUSED(newptr); return true; }
 };
 TEST(RINGBUFFER_BASE, debug)
 {
@@ -59,7 +50,7 @@ TEST(RINGBUFFER_BASE, debug)
   EXPECT_EQ(OB_SUCCESS, ret);
 
   // set and get
-  int* ptr = reinterpret_cast<int*>(8);
+  int *ptr = reinterpret_cast<int*>(8);
   int64_t cnt = 200000;
   for (int64_t idx = begin_sn; idx < cnt; ++idx) {
     bool set = false;
@@ -67,7 +58,7 @@ TEST(RINGBUFFER_BASE, debug)
     ret = rb_base.set(idx, ptr, setcond, set);
     EXPECT_TRUE(set);
     EXPECT_EQ(OB_SUCCESS, ret);
-    int* ptr_val = NULL;
+    int *ptr_val = NULL;
     ret = rb_base.get(idx, ptr_val);
     EXPECT_EQ(OB_SUCCESS, ret);
     EXPECT_EQ(ptr, ptr_val);
@@ -76,7 +67,7 @@ TEST(RINGBUFFER_BASE, debug)
   // pop
   PopCondA cond;
   bool popped = false;
-  int* ptr_val = NULL;
+  int *ptr_val = NULL;
   for (int64_t idx = begin_sn; idx < cnt; ++idx) {
     ret = rb_base.pop(cond, ptr_val, popped);
     EXPECT_EQ(OB_SUCCESS, ret);
@@ -84,30 +75,20 @@ TEST(RINGBUFFER_BASE, debug)
     EXPECT_EQ(ptr, ptr_val) << "current idx:" << idx;
   }
 
+
   ret = rb_base.destroy();
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
-struct PopCondB {
-  bool operator()(int64_t val)
-  {
-    UNUSED(val);
-    return true;
-  }
-  bool operator()(int64_t oldptr, int64_t newptr)
-  {
-    UNUSED(oldptr);
-    UNUSED(newptr);
-    return true;
-  }
+
+struct PopCondB
+{
+  bool operator()(int64_t val) { UNUSED(val); return true; }
+  bool operator()(int64_t oldptr, int64_t newptr) { UNUSED(oldptr); UNUSED(newptr); return true; }
 };
-struct SetCondB {
-  bool operator()(int64_t oldval, int64_t newval)
-  {
-    UNUSED(oldval);
-    UNUSED(newval);
-    return true;
-  }
+struct SetCondB
+{
+  bool operator()(int64_t oldval, int64_t newval) { UNUSED(oldval); UNUSED(newval); return true; }
 };
 TEST(RINGBUFFER_BASE, debug2)
 {
@@ -145,13 +126,15 @@ TEST(RINGBUFFER_BASE, debug2)
     EXPECT_EQ(val, idx);
   }
 
+
   ret = rb_base.destroy();
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
 typedef ValSlot<int64_t> SlotT;
 typedef ObExtendibleRingBufferBase<int64_t, SlotT> I64RBBASE;
-class SetRunnable : public cotesting::DefaultRunnable {
+class SetRunnable : public cotesting::DefaultRunnable
+{
 public:
   void run1() final
   {
@@ -160,20 +143,22 @@ public:
       EXPECT_EQ(OB_SUCCESS, rb_->set(sn, sn));
     }
   }
-  I64RBBASE* rb_;
+  I64RBBASE *rb_;
   int64_t s_;
   int64_t cnt_;
 };
-class PopRunnable : public cotesting::DefaultRunnable {
+class PopRunnable : public cotesting::DefaultRunnable
+{
 public:
-  struct PopCond {
+  struct PopCond
+  {
     int64_t expect_;
-    /*
-        bool operator()(const int64_t &val)
-        {
-          return (expect_ == val);
-        }
-    */
+/*
+    bool operator()(const int64_t &val)
+    {
+      return (expect_ == val);
+    }
+*/
     bool operator()(const int64_t begin_sn, const int64_t val)
     {
       UNUSED(begin_sn);
@@ -198,7 +183,7 @@ public:
       }
     }
   }
-  I64RBBASE* rb_;
+  I64RBBASE *rb_;
   int64_t s_;
   int64_t cnt_;
 };
@@ -217,13 +202,13 @@ TEST(RINGBUFFER_BASE, debug3)
   SetRunnable set_runnable[setthcnt];
   PopRunnable pop_runnable[popthcnt];
   for (int64_t idx = 0; idx < setthcnt; ++idx) {
-    SetRunnable& r = set_runnable[idx];
+    SetRunnable &r = set_runnable[idx];
     r.rb_ = &rb;
     r.s_ = s + idx * th_size;
     r.cnt_ = th_size;
   }
   for (int64_t idx = 0; idx < popthcnt; ++idx) {
-    PopRunnable& r = pop_runnable[idx];
+    PopRunnable &r = pop_runnable[idx];
     r.rb_ = &rb;
     r.s_ = s;
     r.cnt_ = th_size * setthcnt;
@@ -231,21 +216,21 @@ TEST(RINGBUFFER_BASE, debug3)
 
   // Run.
   for (int64_t idx = 0; idx < popthcnt; ++idx) {
-    PopRunnable& r = pop_runnable[idx];
+    PopRunnable &r = pop_runnable[idx];
     r.start();
   }
   for (int64_t idx = 0; idx < setthcnt; ++idx) {
-    SetRunnable& r = set_runnable[idx];
+    SetRunnable &r = set_runnable[idx];
     r.start();
   }
 
   // Join.
   for (int64_t idx = 0; idx < popthcnt; ++idx) {
-    PopRunnable& r = pop_runnable[idx];
+    PopRunnable &r = pop_runnable[idx];
     r.wait();
   }
   for (int64_t idx = 0; idx < setthcnt; ++idx) {
-    SetRunnable& r = set_runnable[idx];
+    SetRunnable &r = set_runnable[idx];
     r.wait();
   }
 
@@ -253,18 +238,10 @@ TEST(RINGBUFFER_BASE, debug3)
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
-struct CondC {
-  bool operator()(const int* ptr)
-  {
-    UNUSED(ptr);
-    return true;
-  }
-  bool operator()(int64_t oldptr, int* newptr)
-  {
-    UNUSED(oldptr);
-    UNUSED(newptr);
-    return true;
-  }
+struct CondC
+{
+  bool operator()(const int *ptr) { UNUSED(ptr); return true; }
+  bool operator()(int64_t oldptr, int *newptr) { UNUSED(oldptr); UNUSED(newptr); return true; }
 };
 TEST(RingBuffer, debug)
 {
@@ -272,7 +249,7 @@ TEST(RingBuffer, debug)
   RBT rb;
   rb.init(100);
 
-  int* ptr = reinterpret_cast<int*>(2);
+  int *ptr = reinterpret_cast<int*>(2);
   rb.set(101, ptr);
   rb.set(10100, ptr);
   rb.get(101, ptr);
@@ -291,7 +268,8 @@ TEST(RingBuffer, debug)
 }
 
 // Hazrd Ptr Tests.
-struct TypeA : public erb::HazardBase {
+struct TypeA : public erb::HazardBase
+{
 public:
   virtual int purge()
   {
@@ -306,24 +284,25 @@ TEST(HazPtr, Basic0)
   EXPECT_EQ(common::OB_SUCCESS, err);
 
   TypeA ta;
-  TypeA* target = &ta;
+  TypeA *target = &ta;
 
   const int64_t lmt = 10000000;
   int64_t cnt = 0;
-  int64_t start = obsys::CTimeUtil::getTime();
+  int64_t start = ObTimeUtility::current_time();
   while (++cnt < lmt) {
-    TypeA* ptr = hazptr.acquire(target, 0);
+    TypeA *ptr = hazptr.acquire(target, 0);
     EXPECT_EQ(target, ptr);
     hazptr.revert(0);
   }
-  int64_t end = obsys::CTimeUtil::getTime();
+  int64_t end = ObTimeUtility::current_time();
   LIB_LOG(ERROR, ">>>", K(cnt), K(end - start), K((double)cnt / ((double)(end - start) / 1000000)));
 
   err = hazptr.destroy();
   EXPECT_EQ(common::OB_SUCCESS, err);
 }
 
-struct TypeB : public erb::HazardBase {
+struct TypeB : public erb::HazardBase
+{
 public:
   virtual int purge()
   {
@@ -335,22 +314,19 @@ public:
   }
   bool alloc_;
 };
-class PurgeTestA : public cotesting::DefaultRunnable {
+class PurgeTestA : public cotesting::DefaultRunnable
+{
 public:
   void run1() final
   {
-    while (!ATOMIC_LOAD(&acquire_)) {
-      this_routine::usleep(1000000);
-    }
+    while (!ATOMIC_LOAD(&acquire_)) { ::usleep(1000000); }
     hazptr_->acquire(data_, 0);
-    while (ATOMIC_LOAD(&acquire_)) {
-      this_routine::usleep(1000000);
-    }
+    while (ATOMIC_LOAD(&acquire_)) { ::usleep(1000000); }
     hazptr_->revert(0);
   }
   bool acquire_;
-  TypeB* data_;
-  erb::HazardPtr<1>* hazptr_;
+  TypeB *data_;
+  erb::HazardPtr<1> *hazptr_;
 };
 
 #include <vector>
@@ -372,7 +348,7 @@ TEST(HazPtr, Basic1)
   std::vector<PurgeTestA*> purge_runnable;
   for (int64_t idx = 0, cnt = obj_cnt; idx < cnt; ++idx) {
     if (0 != idx % 2) {
-      PurgeTestA* r = new PurgeTestA();
+      PurgeTestA *r = new PurgeTestA();
       ATOMIC_STORE(&(r->acquire_), true);
       r->data_ = objects + idx;
       r->hazptr_ = &hazptr;
@@ -381,9 +357,7 @@ TEST(HazPtr, Basic1)
     }
   }
   for (int64_t idx = 0, cnt = purge_runnable.size(); idx < cnt; ++idx) {
-    while (!ATOMIC_LOAD(&(purge_runnable[idx]->acquire_))) {
-      this_routine::usleep(100000);
-    }
+    while (!ATOMIC_LOAD(&(purge_runnable[idx]->acquire_))) { ::usleep(100000); }
   }
   // Retire half, even ones.
   for (int64_t idx = 0, cnt = obj_cnt; idx < cnt; ++idx) {
@@ -399,7 +373,8 @@ TEST(HazPtr, Basic1)
   for (int64_t idx = 0, cnt = obj_cnt; idx < cnt; ++idx) {
     if (0 != idx % 2) {
       EXPECT_TRUE(objects[idx].alloc_) << idx;
-    } else {
+    }
+    else {
       EXPECT_FALSE(objects[idx].alloc_) << idx;
     }
   }
@@ -431,13 +406,13 @@ TEST(HazPtr, Basic1)
   EXPECT_EQ(common::OB_SUCCESS, err);
 }
 
-}  // namespace unittest
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("info");
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   // testing::FLAGS_gtest_filter = "DO_NOT_RUN";
   return RUN_ALL_TESTS();
   return 0;

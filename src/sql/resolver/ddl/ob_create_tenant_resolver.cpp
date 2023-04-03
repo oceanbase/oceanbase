@@ -18,32 +18,38 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
 /**
  *  CREATE TENANT [IF NOT EXISTS] tenant_name
  *      (create_resource_definition,...)
  *
  *  create_resource_definition:
- * TODO: () add detail res definition here
+ * TODO: (xiaochu.yh) add detail res definition here
  */
 
-ObCreateTenantResolver::ObCreateTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObCreateTenantResolver::ObCreateTenantResolver(ObResolverParams &params)
+  : ObDDLResolver(params)
+{
+}
 
 ObCreateTenantResolver::~ObCreateTenantResolver()
-{}
+{
+}
 
-int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
+int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObCreateTenantStmt* mystmt = NULL;
+  ObCreateTenantStmt *mystmt = NULL;
 
-  if (OB_UNLIKELY(T_CREATE_TENANT != parse_tree.type_) || OB_ISNULL(parse_tree.children_) ||
-      OB_UNLIKELY(4 != parse_tree.num_child_)) {
+  if (OB_UNLIKELY(T_CREATE_TENANT != parse_tree.type_)
+      || OB_ISNULL(parse_tree.children_)
+      || OB_UNLIKELY(4 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param", K(parse_tree.type_), K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
   }
@@ -77,8 +83,8 @@ int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("invalid parse_tree", K(ret));
     } else {
       ObString tenant_name;
-      tenant_name.assign_ptr(
-          (char*)(parse_tree.children_[1]->str_value_), static_cast<int32_t>(parse_tree.children_[1]->str_len_));
+      tenant_name.assign_ptr((char *)(parse_tree.children_[1]->str_value_),
+                             static_cast<int32_t>(parse_tree.children_[1]->str_len_));
       if (tenant_name.length() >= OB_MAX_TENANT_NAME_LENGTH) {
         ret = OB_ERR_TOO_LONG_IDENT;
         LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, tenant_name.length(), tenant_name.ptr());
@@ -118,47 +124,42 @@ int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get_basic_stmt", K(ret));
         } else {
-          ObVariableSetStmt* stmt = static_cast<ObVariableSetStmt*>(var_set_resolver.get_basic_stmt());
+          ObVariableSetStmt *stmt = static_cast<ObVariableSetStmt *>(var_set_resolver.get_basic_stmt());
           if (OB_FAIL(mystmt->assign_variable_nodes(stmt->get_variable_nodes()))) {
             LOG_WARN("failed to assign_variable_nodes", K(ret));
           }
         }
+
       }
     }
   }
 
   bool is_oracle_mode = false;
   if (OB_SUCC(ret)) {
-    for (int64_t i = 0; i < mystmt->get_sys_var_nodes().count() && OB_SUCC(ret); i++) {
-      const ObVariableSetStmt::VariableNamesSetNode& var_names_node = mystmt->get_sys_var_nodes().at(i);
-      if (OB_UNLIKELY(!var_names_node.is_set_variable_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not allow to set names when create tenant according to symtax", K(ret));
-      } else {
-        const ObVariableSetStmt::VariableSetNode& node = var_names_node.var_set_node_;
-        if (0 == node.variable_name_.case_compare("ob_compatibility_mode")) {
-          ObConstRawExpr* const_expr = static_cast<ObConstRawExpr*>(node.value_expr_);
-          if (nullptr == const_expr) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("const expr is null", K(ret));
-          } else {
-            ObObj value = const_expr->get_value();
-            ObString str;
-            if (OB_FAIL(value.get_string(str))) {
-              LOG_WARN("get string failed", K(ret));
-            } else if (0 == str.case_compare("oracle")) {
-              is_oracle_mode = true;
-            }
+    for (int64_t i = 0; i < mystmt->get_sys_var_nodes().count(); i++) {
+      const ObVariableSetStmt::VariableSetNode &node = mystmt->get_sys_var_nodes().at(i);
+      if (0 == node.variable_name_.case_compare("ob_compatibility_mode")) {
+        ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(node.value_expr_);
+        if (nullptr == const_expr) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("const expr is null", K(ret));
+        } else {
+          ObObj value = const_expr->get_value();
+          ObString str;
+          if (OB_FAIL(value.get_string(str))) {
+            LOG_WARN("get string failed", K(ret));
+          } else if (0 == str.case_compare("oracle")) {
+            is_oracle_mode = true;
           }
         }
       }
     }
   }
 
-  /* charset an collation of tenant depends on compat mode, so we need to get compat mode first.
-   * MySQL uses charset and collation, they are set here.
-   * For Oracle tenant, only charset is set when creating tenant, because there is no collation in Oracle.
-   * Comparison in oracle depends on nls_comp and nls_sort, and compared in BINARY default.
+  /* 对于tenant的charset和collation属性，是依赖于模式的，所以需要确定好模式后再处理
+   * MySQL依赖于charset和collation属性，这里都会设置
+   * 对于Oracle租户，创建租户时只允许设置charset属性，因为Oracle其实没有collation概念，Oracle的
+   * 比较行为依赖于nls_comp和nls_sort两个参数，这两个默认行为是BINARY比较
    */
   if (OB_SUCC(ret)) {
     ObCollationType collation_type = mystmt->get_create_tenant_arg().tenant_schema_.get_collation_type();
@@ -175,27 +176,35 @@ int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
       } else if (CHARSET_INVALID == charset_type) {
         charset_type = ObCharset::charset_type_by_coll(collation_type);
       } else {
+        //这里需要考虑到charset_type已经是一个有效的字符集时，需要重新设置对应的collation_type
+        //bug:
         collation_type = ObCharset::get_default_collation_oracle(charset_type);
+      }
+
+      if (OB_SUCC(ret)) {
+        if (CHARSET_UTF16 == charset_type) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use utf16 as database charset");
+        }
       }
 
       if (OB_SUCC(ret)) {
         if (OB_UNLIKELY(collation_type != ObCharset::get_default_collation_oracle(charset_type))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("collation isn't corresponding to charset in oracle mode",
-              K(ret),
-              K(collation_type),
-              K(ObCharset::get_default_collation_oracle(charset_type)));
+          LOG_WARN("collation isn't corresponding to charset in oracle mode", K(ret), 
+                   K(collation_type), K(ObCharset::get_default_collation_oracle(charset_type)));
         }
       }
     } else {
-      if (collation_type == CS_TYPE_INVALID && charset_type == CHARSET_INVALID) {
+      if (collation_type == CS_TYPE_INVALID
+          && charset_type == CHARSET_INVALID) {
         charset_type = ObCharset::get_default_charset();
         collation_type = ObCharset::get_default_collation(charset_type);
       } else if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type))) {
         SQL_LOG(WARN, "fail to check charset collation", K(ret));
       }
     }
-    // check wheter charset and collation are consistent.
+    // 这里需要检查对应的字符集和collation是否是匹配并且有效的，如果不匹配直接在resolver阶段抛出错误
     if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
       ret = OB_ERR_COLLATION_MISMATCH;
       LOG_WARN("invalid collation info", K(charset_type), K(collation_type));
@@ -208,5 +217,6 @@ int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+} /* sql */
+} /* oceanbase */

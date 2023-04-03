@@ -14,45 +14,37 @@
 #include "ob_udf.h"
 #include "lib/oblog/ob_log_module.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
 using namespace std;
 using namespace common;
 
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 
-ObUDF::ObUDF(common::ObIAllocator* allocator)
-    : ObSchema(allocator),
-      tenant_id_(common::OB_INVALID_ID),
-      udf_id_(common::OB_INVALID_ID),
-      name_(),
-      ret_(UDFRetType::UDF_RET_UNINITIAL),
-      dl_(),
-      type_(UDFType::UDF_TYPE_UNINITIAL),
-      schema_version_(common::OB_INVALID_VERSION)
+ObUDF::ObUDF(common::ObIAllocator *allocator)
+    : ObSchema(allocator), tenant_id_(common::OB_INVALID_ID), udf_id_(common::OB_INVALID_ID), name_(), ret_(UDFRetType::UDF_RET_UNINITIAL),
+      dl_(), type_(UDFType::UDF_TYPE_UNINITIAL), schema_version_(common::OB_INVALID_VERSION)
 {
   reset();
 }
 
-ObUDF::ObUDF(const ObUDF& src_schema)
-    : ObSchema(),
-      tenant_id_(common::OB_INVALID_ID),
-      udf_id_(common::OB_INVALID_ID),
-      name_(),
-      ret_(UDFRetType::UDF_RET_UNINITIAL),
-      dl_(),
-      type_(UDFType::UDF_TYPE_UNINITIAL),
-      schema_version_(common::OB_INVALID_VERSION)
+ObUDF::ObUDF(const ObUDF &src_schema)
+    : ObSchema(), tenant_id_(common::OB_INVALID_ID), udf_id_(common::OB_INVALID_ID), name_(), ret_(UDFRetType::UDF_RET_UNINITIAL),
+      dl_(), type_(UDFType::UDF_TYPE_UNINITIAL), schema_version_(common::OB_INVALID_VERSION)
 {
   reset();
   *this = src_schema;
 }
 
 ObUDF::~ObUDF()
-{}
+{
+}
 
-ObUDF& ObUDF::operator=(const ObUDF& src_schema)
+ObUDF &ObUDF::operator = (const ObUDF &src_schema)
 {
   if (this != &src_schema) {
     reset();
@@ -66,8 +58,7 @@ ObUDF& ObUDF::operator=(const ObUDF& src_schema)
       LOG_WARN("Fail to deep copy udf name, ", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_schema.dl_, dl_))) {
       LOG_WARN("Fail to deep copy udf dl, ", K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
 
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -77,12 +68,12 @@ ObUDF& ObUDF::operator=(const ObUDF& src_schema)
   return *this;
 }
 
-bool ObUDF::operator==(const ObUDF& r) const
+bool ObUDF::operator==(const ObUDF &r) const
 {
   return (tenant_id_ == r.tenant_id_ && name_ == r.name_);
 }
 
-bool ObUDF::operator!=(const ObUDF& r) const
+bool ObUDF::operator !=(const ObUDF &r) const
 {
   return !(*this == r);
 }
@@ -105,10 +96,22 @@ void ObUDF::reset()
   ObSchema::reset();
 }
 
-OB_SERIALIZE_MEMBER(ObUDF, tenant_id_, name_, ret_, dl_, type_);
+OB_SERIALIZE_MEMBER(ObUDF,
+										tenant_id_,
+										name_,
+										ret_,
+										dl_,
+										type_);
 
-OB_SERIALIZE_MEMBER(ObUDFMeta, tenant_id_, name_, ret_, dl_, type_);
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
+
+OB_SERIALIZE_MEMBER(ObUDFMeta,
+                    tenant_id_,
+                    name_,
+                    ret_,
+                    dl_,
+                    type_);
+
+}
+}
+}

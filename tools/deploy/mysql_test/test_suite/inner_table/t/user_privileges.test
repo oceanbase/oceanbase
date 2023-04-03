@@ -1,0 +1,63 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : sean.yyj
+#owner group : sql1
+#description : test information_schema.user_privileges
+
+
+#table format
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table information_schema.user_privileges;
+desc information_schema.user_privileges;
+
+#should be empty
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+#new user
+create user tmp_user_user_privileges identified by '123';
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+
+#grant 
+grant select on *.* to tmp_user_user_privileges;
+#should be one row
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+#revoke
+revoke select on *.* from tmp_user_user_privileges;
+#should be USAGE only
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+
+
+#grant option test
+grant select on *.* to tmp_user_user_privileges with grant option;
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+revoke grant option on *.* from tmp_user_user_privileges;
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+revoke all on *.* from tmp_user_user_privileges;
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+
+#clean up
+--disable_warnings
+drop user tmp_user_user_privileges;
+--enable_warnings
+
+#should be empty
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%'; 
+
+#test root & admin
+--real_sleep 3
+select * from information_schema.user_privileges where grantee like '%root%' or grantee like '%admin%';
+
+
+

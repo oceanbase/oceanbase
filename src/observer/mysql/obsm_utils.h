@@ -22,41 +22,54 @@
 #include "common/object/ob_object.h"
 #include "common/ob_accuracy.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObSchemaGetterGuard;
 }
-}  // namespace share
-namespace common {
+}
+namespace common
+{
 class ObField;
 class ObSMUtils {
 public:
   /**
+   * 序列化一个cell到buf + pos的位置。
    *
-   * @param [in] obj: need to serialize cell
-   * @param [in] buf: output buf
-   * @param [in] len: length of bug
-   * @param [in,out] pos: buf position
+   * @param [in] obj 需要序列化的cell
+   * @param [in] buf 输出的buf
+   * @param [in] len buf的大小
+   * @param [in,out] pos 写入buf的位置
    * @param [in] cell index for binary protocol
    *
-   * @return if success return OB_SUCCESS,  else return oceanbase error code
+   * @return 成功返回OB_SUCCESS， 失败返回oceanbase error code
    */
-  static int cell_str(char* buf, const int64_t len, const ObObj& obj, obmysql::MYSQL_PROTOCOL_TYPE type, int64_t& pos,
-      int64_t cell_idx, char* bitmap, const ObDataTypeCastParams& dtc_params, const ObField* field,
-      share::schema::ObSchemaGetterGuard* schema_guard = NULL, uint64_t tenant_id = common::OB_INVALID_ID);
+  static int cell_str(
+      char *buf, const int64_t len,
+      const ObObj &obj,
+      obmysql::MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+      int64_t cell_idx, char *bitmap,
+      const ObDataTypeCastParams &dtc_params,
+      const ObField *field,
+      share::schema::ObSchemaGetterGuard *schema_guard = NULL,
+      uint64_t tenant_id = common::OB_INVALID_ID);
 
-  static bool update_from_bitmap(ObObj& param, const char* bitmap, int64_t field_index);
+  static bool update_from_bitmap(ObObj &param, const char *bitmap, int64_t field_index);
 
-  static int get_type_length(ObObjType ob_type, int64_t& length);
+  static bool update_from_bitmap(const char *bitmap, int64_t field_index);
 
-  static int get_mysql_type(
-      ObObjType ob_type, obmysql::EMySQLFieldType& mysql_type, uint16_t& flags, ObScale& num_decimals);
+  static int get_type_length(ObObjType ob_type, int64_t &length);
 
-  static int get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType mysql_type);
+  static int get_mysql_type(ObObjType ob_type, obmysql::EMySQLFieldType &mysql_type,
+                            uint16_t &flags, ObScale &num_decimals);
+
+  static int get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type);
 };
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
 #endif /* _OBSM_UTILS_H_ */

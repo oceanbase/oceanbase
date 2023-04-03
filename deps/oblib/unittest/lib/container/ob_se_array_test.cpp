@@ -14,35 +14,39 @@
 #include <gtest/gtest.h>
 using namespace oceanbase::common;
 
-class ObSEArrayTest : public ::testing::Test {
-public:
-  ObSEArrayTest();
-  virtual ~ObSEArrayTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObSEArrayTest(const ObSEArrayTest& other);
-  ObSEArrayTest& operator=(const ObSEArrayTest& other);
-
-private:
-  // data members
+class ObSEArrayTest: public ::testing::Test
+{
+  public:
+    ObSEArrayTest();
+    virtual ~ObSEArrayTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObSEArrayTest(const ObSEArrayTest &other);
+    ObSEArrayTest& operator=(const ObSEArrayTest &other);
+  private:
+    // data members
 };
 
 ObSEArrayTest::ObSEArrayTest()
-{}
+{
+}
 
 ObSEArrayTest::~ObSEArrayTest()
-{}
+{
+}
 
 void ObSEArrayTest::SetUp()
-{}
+{
+}
 
 void ObSEArrayTest::TearDown()
-{}
+{
+}
 
-struct A {
+struct A
+{
   int64_t a_;
   TO_STRING_EMPTY();
 };
@@ -52,17 +56,20 @@ TEST_F(ObSEArrayTest, basic_test)
   ObSEArray<A, 256> searray, searray2;
   A a;
   int NUMS[] = {256, 1024};
-  for (int k = 0; k < (int)ARRAYSIZEOF(NUMS); ++k) {
+  for (int k = 0; k < (int)ARRAYSIZEOF(NUMS); ++k)
+  {
     int num = NUMS[k];
     searray.reset();
     searray2.reset();
-    for (int64_t i = 0; i < num; ++i) {
+    for (int64_t i = 0; i < num; ++i)
+    {
       a.a_ = i;
       ASSERT_EQ(OB_SUCCESS, searray.push_back(a));
-      ASSERT_EQ(i + 1, searray.count());
+      ASSERT_EQ(i+1, searray.count());
     }
     searray2 = searray;
-    for (int64_t i = 0; i < num; ++i) {
+    for (int64_t i = 0; i < num; ++i)
+    {
       ASSERT_EQ(i, searray2.at(i).a_);
     }
     searray.reset();
@@ -73,7 +80,8 @@ TEST_F(ObSEArrayTest, basic_test)
 TEST_F(ObSEArrayTest, destroy)
 {
   ObSEArray<A, 8> searray;
-  for (int i = 0; i < 9; ++i) {
+  for (int i = 0; i < 9; ++i)
+  {
     A a;
     a.a_ = i;
     ASSERT_EQ(OB_SUCCESS, searray.push_back(a));
@@ -84,7 +92,8 @@ TEST_F(ObSEArrayTest, destroy)
 TEST(ObSEArrayTest2, array_remove)
 {
   ObSEArray<int, 10> ai;
-  for (int i = 0; i < 32; ++i) {
+  for (int i = 0; i < 32; ++i)
+  {
     ASSERT_EQ(OB_SUCCESS, ai.push_back(i));
   }
   ASSERT_EQ(32, ai.count());
@@ -96,7 +105,8 @@ TEST(ObSEArrayTest2, array_remove)
   ASSERT_EQ(OB_SUCCESS, ai.remove(10));
   int v = 0;
   ASSERT_EQ(31, static_cast<int>(ai.count()));
-  for (int i = 0; i < 31; ++i) {
+  for (int i = 0; i < 31; ++i)
+  {
     ASSERT_EQ(OB_SUCCESS, ai.at(static_cast<int64_t>(i), v));
     ASSERT_NE(10, v);
   }
@@ -107,7 +117,8 @@ TEST(ObSEArrayTest2, serialize)
   char buf[1024];
   ObSEArray<int64_t, 100> array;
   const int64_t NUM = 20;
-  for (int64_t i = 0; i < NUM; i++) {
+  for (int64_t i = 0; i < NUM; i ++)
+  {
     array.push_back(i);
   }
 
@@ -121,7 +132,8 @@ TEST(ObSEArrayTest2, serialize)
   array2.deserialize(buf, data_len, pos);
 
   ASSERT_EQ(array2.count(), NUM);
-  for (int64_t i = 0; i < NUM; i++) {
+  for (int64_t i = 0; i < NUM; i ++)
+  {
     ASSERT_EQ(i, array2.at(i));
   }
 }
@@ -137,10 +149,11 @@ TEST_F(ObSEArrayTest, test_null_allocator_array)
   ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, array.push_back(1));
   ASSERT_EQ(OB_SUCCESS, array.pop_back(value));
   ASSERT_EQ(OB_SUCCESS, array.push_back(1));
+
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

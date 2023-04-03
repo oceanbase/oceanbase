@@ -1,4 +1,3 @@
-木兰公共许可证, 第2版
 木兰公共许可证， 第2版
 
 2021年5月 http://license.coscl.org.cn/MulanPubL-2.0
@@ -79,8 +78,9 @@
 
 3， 请将如下声明文本放入每个源文件的头部注释中。
 
-Copyright (c) 2021 OceanBase
-OceanBase CE is licensed under Mulan PubL v2.
+```
+Copyright (c) [Year] [name of copyright holder]
+[Software Name] is licensed under Mulan PubL v2.
 You can use this software according to the terms and conditions of the Mulan PubL v2.
 You may obtain a copy of Mulan PubL v2 at:
          http://license.coscl.org.cn/MulanPubL-2.0
@@ -88,7 +88,11 @@ THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PubL v2 for more details.
-Mulan Public License，Version 2
+```
+
+
+
+
 Mulan Public License，Version 2 (Mulan PubL v2)
 
 May 2021 http://license.coscl.org.cn/MulanPubL-2.0
@@ -166,11 +170,14 @@ How to apply the Mulan Public License，Version 2 (Mulan PubL v2), to your softw
 To apply the Mulan Public License，Version 2 to your work, for easy identification by recipients, you are suggested to complete following three steps:
 
 Fill in the blanks in following statement, including insert your software name, the year of the first publication of your software, and your name identified as the copyright owner;
+
 Create a file named “LICENSE” which contains the whole context of this License in the first directory of your software package;
+
 Attach the statement to the appropriate annotated syntax at the beginning of each source file.
 
-Copyright (c) 2021 OceanBase
-OceanBase CE is licensed under Mulan PubL v2.
+```
+Copyright (c) [Year] [name of copyright holder]
+[Software Name] is licensed under Mulan PubL v2.
 You can use this software according to the terms and conditions of the Mulan PubL v2.
 You may obtain a copy of Mulan PubL v2 at:
          http://license.coscl.org.cn/MulanPubL-2.0
@@ -178,3 +185,4 @@ THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PubL v2 for more details.
+```

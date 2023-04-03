@@ -16,27 +16,30 @@
 #include "common/expression/ob_expr_string_buf.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprDesHexStr : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprDesHexStr : public ObFuncExprOperator
+{
 public:
-  explicit ObExprDesHexStr(common::ObIAllocator& alloc);
-  virtual ~ObExprDesHexStr()
-  {}
+  explicit ObExprDesHexStr(common::ObIAllocator &alloc);
+  virtual ~ObExprDesHexStr() {}
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_des_hex_str(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_des_hex_str(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
-  static int deserialize_hex_cstr(
-      const char* buf, int64_t buf_len, common::ObExprStringBuf& string_buf, common::ObObj& obj);
-
+  static int deserialize_hex_cstr(const char *buf,
+                                  int64_t buf_len,
+                                  common::ObExprStringBuf &string_buf,
+                                  common::ObObj &obj);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDesHexStr);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_DES_HEX_STR_
+} // namespace sql
+} // namespace oceanbase
+#endif //OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_DES_HEX_STR_

@@ -19,28 +19,35 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
-namespace oceanbase {
-namespace sql {
-ObAlterDatabaseResolver::ObAlterDatabaseResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObAlterDatabaseResolver::ObAlterDatabaseResolver(ObResolverParams &params)
+    : ObDDLResolver(params)
+{
+}
 
 ObAlterDatabaseResolver::~ObAlterDatabaseResolver()
-{}
+{
+}
 
-int ObAlterDatabaseResolver::resolve(const ParseNode& parse_tree)
+int ObAlterDatabaseResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_ALTER_DATABASE != node->type_) ||
-      OB_UNLIKELY(node->num_child_ != DATABASE_NODE_COUNT) || OB_ISNULL(node->children_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_ALTER_DATABASE != node->type_)
+      || OB_UNLIKELY(node->num_child_ != DATABASE_NODE_COUNT)
+      || OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
   } else {
-    ObAlterDatabaseStmt* alter_database_stmt = NULL;
+    ObAlterDatabaseStmt *alter_database_stmt = NULL;
     if (OB_ISNULL(alter_database_stmt = create_stmt<ObAlterDatabaseStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to create alter_database_stmt", K(ret));
@@ -51,32 +58,35 @@ int ObAlterDatabaseResolver::resolve(const ParseNode& parse_tree)
     // resolve database name
     if (OB_SUCC(ret)) {
       ObString database_name;
-      ParseNode* dbname_node = node->children_[DBNAME];
-      int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION
-                                             ? OB_MAX_DATABASE_NAME_LENGTH - 1
-                                             : OB_MAX_DATABASE_NAME_LENGTH;
+      ParseNode *dbname_node = node->children_[DBNAME];
       if (NULL == dbname_node) {
+        // sql 语句在缺省 database_name 的时候，默认使用当前 database_name
         database_name = session_info_->get_database_name();
       } else {
         if (OB_UNLIKELY(T_IDENT != dbname_node->type_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid parse tree node", K(ret), K(dbname_node->type_));
         } else {
-          database_name.assign_ptr(dbname_node->str_value_, static_cast<int32_t>(dbname_node->str_len_));
+          database_name.assign_ptr(dbname_node->str_value_,
+                                   static_cast<int32_t>(dbname_node->str_len_));
           ObNameCaseMode mode = OB_NAME_CASE_INVALID;
           if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
-            LOG_WARN("fail to get name case mode", K(mode), K(ret));
+              LOG_WARN("fail to get name case mode", K(mode), K(ret));
           } else {
-            bool perserve_lettercase = share::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
+            bool perserve_lettercase = lib::is_oracle_mode() ?
+                true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
             ObCollationType cs_type = CS_TYPE_INVALID;
             if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
               LOG_WARN("fail to get collation_connection", K(ret));
-            } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, database_name))) {
+            } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
+                        cs_type, perserve_lettercase, database_name))) {
               LOG_WARN("fail to check and convert database name", K(database_name), K(ret));
             } else {
-              CK(OB_NOT_NULL(schema_checker_));
-              CK(OB_NOT_NULL(schema_checker_->get_schema_guard()));
-              OZ(ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(), session_info_, database_name));
+              CK (OB_NOT_NULL(schema_checker_));
+              CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
+              OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
+                                                 session_info_,
+                                                 database_name));
             }
           }
         }
@@ -89,23 +99,24 @@ int ObAlterDatabaseResolver::resolve(const ParseNode& parse_tree)
     }
     // resolve database options
     if (OB_SUCC(ret)) {
-      ParseNode* dboption_node = node->children_[DATABASE_OPTION];
+      ParseNode *dboption_node = node->children_[DATABASE_OPTION];
       if (OB_ISNULL(dboption_node) || OB_UNLIKELY(T_DATABASE_OPTION_LIST != dboption_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid parse tree", K(ret));
       } else {
         ObDatabaseResolver<ObAlterDatabaseStmt> resolver;
-        if (OB_FAIL(resolver.resolve_database_options(alter_database_stmt, dboption_node))) {
+        if (OB_FAIL(resolver.resolve_database_options(alter_database_stmt,
+                                                      dboption_node,
+                                                      session_info_))) {
           LOG_WARN("resolve database option failed", K(ret));
         } else {
-          if (resolver.get_alter_option_bitset().has_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE)) {
+          if(resolver.get_alter_option_bitset().has_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE)) {
             bool is_sync_ddl_user = false;
             if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(session_info_, is_sync_ddl_user))) {
               LOG_WARN("Failed to check sync_ddl_user", K(ret));
             } else if (is_sync_ddl_user) {
               ret = OB_IGNORE_SQL_IN_RESTORE;
-              LOG_WARN(
-                  "Cannot support for sync ddl user to alter primary zone", K(ret), K(session_info_->get_user_name()));
+              LOG_WARN("Cannot support for sync ddl user to alter primary zone", K(ret), K(session_info_->get_user_name()));
             }
           }
           if (OB_SUCC(ret)) {
@@ -118,5 +129,5 @@ int ObAlterDatabaseResolver::resolve(const ParseNode& parse_tree)
   LOG_INFO("resolve alter database finish", K(ret));
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase

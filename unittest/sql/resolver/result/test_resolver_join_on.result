@@ -4308,10 +4308,10 @@ insert into t_1 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -5203,9 +5203,9 @@ insert into t_1 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -5235,9 +5235,9 @@ insert into t_1 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -5757,10 +5757,10 @@ insert into t_2 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -6652,9 +6652,9 @@ insert into t_2 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -6684,9 +6684,9 @@ insert into t_2 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -7206,10 +7206,10 @@ insert into t_3 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8101,9 +8101,9 @@ insert into t_3 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8133,9 +8133,9 @@ insert into t_3 values (1,1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8611,10 +8611,10 @@ insert into t_4 values (1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9306,9 +9306,9 @@ insert into t_4 values (1);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],

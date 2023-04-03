@@ -19,7 +19,7 @@ ALTER TABLE default_t1 ADD d3 double not null default 5.0000
 
 ALTER TABLE default_t1 ADD v1 varchar(500);
 ALTER TABLE default_t1 ADD v2 varchar(500) not null;
-ALTER TABLE default_t1 ADD v3 varchar(500) not null default '@varchar500';
+ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
 --error 5173
 ALTER TABLE default_t1 ADD v3 varchar(500) not null default null;
 
@@ -54,10 +54,10 @@ ALTER TABLE default_t1 ADD c3 char not null default 'x';
 
 ALTER TABLE default_t1 ADD b1 binary;
 ALTER TABLE default_t1 ADD b2 binary not null;
-ALTER TABLE default_t1 ADD b3 binary not null default '@binary'
+ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
 
 ALTER TABLE default_t1 ADD vb1 varbinary(1000);
 ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
-ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default '@varbinary@1000';
+ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@1000';
 
 drop database defaultvalue;

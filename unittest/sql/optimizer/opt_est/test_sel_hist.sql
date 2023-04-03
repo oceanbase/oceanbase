@@ -21,6 +21,7 @@ select c1 from t1 where c1 = 1;
 select c1 from t1 where c1 <= 1;
 (103 - 5) / 200 * 0.8 = 0.392
 select c1 from t1 where c1 >= 2 and c1 <= 10;
+# TODO: 可能需要改造 query range
 # ((103 - 5) / 200 + 0.0025) * 0.8 = 0.393
 ((103 - 5) / 200) * 0.8 = 0.392
 select c1 from t1 where c1 > 1.5 and c1 <= 10;

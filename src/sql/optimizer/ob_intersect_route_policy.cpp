@@ -15,15 +15,15 @@
 #include "sql/optimizer/ob_replica_compare.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "storage/ob_partition_service.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
-namespace oceanbase {
-namespace sql {
-int ObIntersectRoutePolicy::init_candidate_replicas(
-    const ObList<common::ObAddr, ObArenaAllocator>& candidate_server_list,
-    common::ObIArray<CandidateReplica>& candi_replicas)
+namespace oceanbase
+{
+namespace sql
+{
+int ObIntersectRoutePolicy::init_candidate_replicas(const ObList<common::ObAddr, ObArenaAllocator> &candidate_server_list,
+                                                    common::ObIArray<CandidateReplica> &candi_replicas)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -34,8 +34,8 @@ int ObIntersectRoutePolicy::init_candidate_replicas(
   auto server_iter = candidate_server_list.begin();
   CandidateReplica candi_replica;
   for (; OB_SUCC(ret) && server_iter != candidate_server_list.end(); ++server_iter) {
-    candi_replica.replica_type_ = REPLICA_TYPE_MAX;  // fixme: ignore replica type for mv
-    candi_replica.server_ = *server_iter;
+    candi_replica.set_replica_type(REPLICA_TYPE_MAX);//fixme(hanting) : ignore replica type for mv
+    candi_replica.set_server(*server_iter);
     if (OB_FAIL(init_candidate_replica(server_locality_array_, candi_replica))) {
       LOG_WARN("fail to init candidate replica", K(server_locality_array_), K(candi_replica), K(ret));
     } else if (OB_FAIL(candi_replicas.push_back(candi_replica))) {
@@ -44,23 +44,23 @@ int ObIntersectRoutePolicy::init_candidate_replicas(
   }
   return ret;
 }
-int ObIntersectRoutePolicy::select_replica_with_priority(const ObRoutePolicyCtx& route_policy_ctx,
-    const common::ObIArray<CandidateReplica>& replica_array,
-    common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list)
+int ObIntersectRoutePolicy::select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
+                                                         const common::ObIArray<CandidateReplica> &replica_array,
+                                                         common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list)
 {
   int ret = OB_SUCCESS;
   bool has_found = false;
   ObAddr selected_addr;
   for (int64_t i = 0; OB_SUCC(ret) && !has_found && i < replica_array.count(); ++i) {
     if (replica_array.at(i).is_usable()) {
-      selected_addr = replica_array.at(i).server_;
+      selected_addr = replica_array.at(i).get_server();
       has_found = true;
     }
   }
 
   if (OB_UNLIKELY(false == has_found)) {
     int64_t select_idx = rand() % replica_array.count();
-    selected_addr = replica_array.at(select_idx).server_;
+    selected_addr = replica_array.at(select_idx).get_server();
     LOG_WARN("all replica is not usable currently", K(replica_array), K(route_policy_ctx), K(select_idx));
   }
 
@@ -71,5 +71,5 @@ int ObIntersectRoutePolicy::select_replica_with_priority(const ObRoutePolicyCtx&
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase

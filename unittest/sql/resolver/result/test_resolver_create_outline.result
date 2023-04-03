@@ -2168,10 +2168,10 @@ create outline outline_name on update t1 set c1=100 where c1=1;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],

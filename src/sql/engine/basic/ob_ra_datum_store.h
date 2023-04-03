@@ -21,81 +21,61 @@
 #include "common/row/ob_row.h"
 #include "share/datum/ob_datum.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/basic/ob_sql_mem_callback.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
+
+class ObIOEventObserver;
 
 // Random access row store, support disk store.
 // All row must have same cell count and  projector.
-class ObRADatumStore {
+class ObRADatumStore
+{
 public:
-  class ShrinkBuffer {
+
+  class ShrinkBuffer
+  {
   public:
-    ShrinkBuffer() : data_(NULL), head_(0), tail_(0), cap_(0)
-    {}
+    ShrinkBuffer() : data_(NULL), head_(0), tail_(0), cap_(0) {}
 
-    int init(char* buf, const int64_t buf_size);
-    inline int64_t remain() const
-    {
-      return tail_ - head_;
-    }
-    inline char* data()
-    {
-      return data_;
-    }
-    inline char* head() const
-    {
-      return data_ + head_;
-    }
-    inline int64_t head_size() const
-    {
-      return head_;
-    }
-    inline char* tail() const
-    {
-      return data_ + tail_;
-    }
-    inline int64_t tail_size() const
-    {
-      return cap_ - tail_;
-    }
-    inline int64_t capacity() const
-    {
-      return cap_;
-    }
-    inline bool is_inited() const
-    {
-      return NULL != data_;
-    }
+    int init(char *buf, const int64_t buf_size);
+    inline int64_t remain() const { return tail_ - head_; }
+    inline char *data() { return data_; }
+    inline char *head() const { return data_ + head_; }
+    inline int64_t head_size() const { return head_; }
+    inline char *tail() const { return data_ + tail_; }
+    inline int64_t tail_size() const { return cap_ - tail_; }
+    inline int64_t capacity() const { return cap_; }
+    inline bool is_inited() const { return NULL != data_; }
 
-    inline void reset()
-    {
-      *this = ShrinkBuffer();
-    }
-    inline void reuse()
-    {
-      head_ = 0;
-      tail_ = cap_;
-    }
+    inline void reset() { *this = ShrinkBuffer(); }
+    inline void reuse() { head_ = 0; tail_ = cap_; }
     inline int fill_head(int64_t size);
     inline int fill_tail(int64_t size);
     inline int compact();
 
     TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
-
   private:
-    char* data_;
+    char *data_;
     int64_t head_;
     int64_t tail_;
     int64_t cap_;
   };
 
-  class LinkNode : public common::ObDLinkBase<LinkNode> {};
+  class LinkNode : public common::ObDLinkBase<LinkNode>
+  {
+  };
 
-  static inline int row_copy_size(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size)
+  // 这里暂时以ObExpr的数组形式写入数据到DatumStore，主要是为了上层Operator在写入数据时，可以无脑调用ObExpr的插入
+  // 可以看下面参数为common::ObDatum **datums的函数进行对比
+  static inline int row_copy_size(
+    const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, int64_t &size)
   {
     int ret = common::OB_SUCCESS;
-    common::ObDatum* datum = nullptr;
+    common::ObDatum *datum = nullptr;
     size = DATUM_SIZE * exprs.count();
     for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
       if (OB_FAIL(exprs.at(i)->eval(ctx, datum))) {
@@ -106,7 +86,8 @@ public:
     }
     return ret;
   }
-  static inline int row_copy_size(const common::ObIArray<common::ObDatum>& datums, int64_t& size)
+  static inline int row_copy_size(
+    const common::ObIArray<common::ObDatum> &datums, int64_t &size)
   {
     int ret = common::OB_SUCCESS;
     size = DATUM_SIZE * datums.count();
@@ -115,54 +96,57 @@ public:
     }
     return ret;
   }
-  struct StoredRow {
-    StoredRow() : readable_(true), cnt_(0), row_size_(0)
-    {}
+  struct StoredRow
+  {
+    StoredRow() : readable_(true), cnt_(0), row_size_(0) {}
 
-    int copy_datums(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, char* buf, const int64_t size,
-        const int64_t row_size, const uint32_t row_extend_size);
-    int copy_datums(const common::ObIArray<common::ObDatum>& datums, char* buf, const int64_t size,
-        const int64_t row_size, const uint32_t row_extend_size);
-    int to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const;
-    inline common::ObDatum* cells()
-    {
-      return reinterpret_cast<common::ObDatum*>(payload_);
-    }
-    inline const common::ObDatum* cells() const
-    {
-      return reinterpret_cast<const common::ObDatum*>(payload_);
-    }
-    inline void* get_extra_payload() const
-    {
-      return static_cast<void*>(const_cast<char*>(payload_ + sizeof(common::ObDatum) * cnt_));
-    }
-    int assign(const StoredRow* sr);
+    int copy_datums(const common::ObIArray<ObExpr*> &exprs,
+                    ObEvalCtx &ctx,
+                    char *buf,
+                    const int64_t size,
+                    const int64_t row_size,
+                    const uint32_t row_extend_size);
+    int copy_datums(const common::ObIArray<common::ObDatum> &datums,
+                    char *buf,
+                    const int64_t size,
+                    const int64_t row_size,
+                    const uint32_t row_extend_size);
+    int to_expr(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx) const;
+    inline common::ObDatum *cells()
+    { return reinterpret_cast<common::ObDatum *>(payload_); }
+    inline const common::ObDatum *cells() const
+    { return reinterpret_cast<const common::ObDatum *>(payload_); }
+    inline void *get_extra_payload() const
+    { return static_cast<void*>(const_cast<char*>(payload_ + sizeof(common::ObDatum) * cnt_)); }
+    int assign(const StoredRow *sr);
 
     int to_copyable();
     int to_readable();
     TO_STRING_KV(K_(readable), K_(cnt), K_(row_size), "cells", common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
 
-    uint32_t readable_ : 1;
-    uint32_t cnt_ : 31;
+    uint32_t readable_:1;
+    uint32_t cnt_:31;
     uint32_t row_size_;
     char payload_[0];
   } __attribute__((packed));
 
-  struct Block {
+  struct Block
+  {
     static const int64_t MAGIC = 0x35f4451b9b56eb12;
     typedef uint32_t row_idx_t;
     const static int64_t ROW_HEAD_SIZE = sizeof(StoredRow);
     const static int64_t ROW_INDEX_SIZE = sizeof(row_idx_t);
 
-    Block() : magic_(MAGIC), row_id_(0), rows_(0), idx_off_(0)
-    {}
+    Block() : magic_(MAGIC), row_id_(0), rows_(0), idx_off_(0) {}
 
     static int64_t inline min_buf_size(const int64_t row_store_size)
     {
       return sizeof(Block) + row_store_size;
     }
-    static int inline row_store_size(
-        const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size, uint32_t row_extend_size = 0)
+    static int inline row_store_size(const common::ObIArray<ObExpr*> &exprs,
+                                     ObEvalCtx &ctx,
+                                     int64_t &size,
+                                     uint32_t row_extend_size = 0)
     {
       int ret = common::OB_SUCCESS;
       size = 0;
@@ -173,8 +157,9 @@ public:
       }
       return ret;
     }
-    static int inline row_store_size(
-        const common::ObIArray<common::ObDatum>& datums, int64_t& size, uint32_t row_extend_size = 0)
+    static int inline row_store_size(const common::ObIArray<common::ObDatum> &datums,
+                                     int64_t &size,
+                                     uint32_t row_extend_size = 0)
     {
       int ret = common::OB_SUCCESS;
       size = 0;
@@ -186,23 +171,23 @@ public:
       return ret;
     }
 
-    int add_row(ShrinkBuffer& buf, const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, const int64_t row_size,
-        uint32_t row_extend_size, StoredRow** stored_row = NULL);
-    int add_row(ShrinkBuffer& buf, const common::ObIArray<common::ObDatum>& datums, const int64_t row_size,
-        uint32_t row_extend_size, StoredRow** stored_row = NULL);
-    int copy_stored_row(ShrinkBuffer& buf, const StoredRow& stored_row, StoredRow** dst_sr);
-    int compact(ShrinkBuffer& buf);
+    int add_row(ShrinkBuffer &buf, const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
+                const int64_t row_size, uint32_t row_extend_size, StoredRow **stored_row = NULL);
+    int add_row(ShrinkBuffer &buf, const common::ObIArray<common::ObDatum> &datums,
+                const int64_t row_size, uint32_t row_extend_size, StoredRow **stored_row = NULL);
+    int copy_stored_row(ShrinkBuffer &buf, const StoredRow &stored_row, StoredRow **dst_sr);
+    int compact(ShrinkBuffer &buf);
     int to_copyable();
-    const row_idx_t* indexes() const
+    const row_idx_t *indexes() const
     {
-      return reinterpret_cast<const row_idx_t*>(payload_ + idx_off_);
+      return reinterpret_cast<const row_idx_t *>(payload_ + idx_off_);
     }
     inline bool contain(const int64_t row_id) const
     {
       return row_id_ <= row_id && row_id < row_id_ + rows_;
     }
 
-    int get_store_row(const int64_t row_id, const StoredRow*& sr);
+    int get_store_row(const int64_t row_id, const StoredRow *&sr);
 
     TO_STRING_KV(K_(magic), K_(row_id), K_(rows), K_(idx_off));
 
@@ -214,52 +199,40 @@ public:
   } __attribute__((packed));
 
   struct IndexBlock;
-  struct BlockIndex {
-    static bool compare(const BlockIndex& bi, const int64_t row_id)
-    {
-      return bi.row_id_ < row_id;
-    }
+  struct BlockIndex
+  {
+    static bool compare(const BlockIndex &bi, const int64_t row_id) { return bi.row_id_ < row_id; }
     TO_STRING_KV(K_(is_idx_block), K_(on_disk), K_(row_id), K_(offset), K_(length));
 
-    uint64_t is_idx_block_ : 1;
-    uint64_t on_disk_ : 1;
+    uint64_t is_idx_block_:1;
+    uint64_t on_disk_:1;
     uint64_t row_id_ : 62;
     union {
-      IndexBlock* idx_blk_;
-      Block* blk_;
+      IndexBlock *idx_blk_;
+      Block *blk_;
       int64_t offset_;
     };
     int32_t length_;
   } __attribute__((packed));
 
-  struct IndexBlock {
+  struct IndexBlock
+  {
     const static int64_t MAGIC = 0x4847bcb053c3703f;
     const static int64_t INDEX_BLOCK_SIZE = (64 << 10) - sizeof(LinkNode);
-    constexpr static inline int64_t capacity()
-    {
+    constexpr static inline int64_t capacity() {
       return (INDEX_BLOCK_SIZE - sizeof(IndexBlock)) / sizeof(BlockIndex);
     }
 
-    IndexBlock() : magic_(MAGIC), cnt_(0)
-    {}
+    IndexBlock() : magic_(MAGIC), cnt_(0) {}
 
-    inline int64_t buffer_size() const
-    {
-      return sizeof(*this) + sizeof(BlockIndex) * cnt_;
-    }
-    inline bool is_full() const
-    {
-      return cnt_ == capacity();
-    }
+    inline int64_t buffer_size() const { return sizeof(*this) + sizeof(BlockIndex) * cnt_; }
+    inline bool is_full() const { return cnt_ == capacity(); }
 
     // may return false when row in position (false negative),
     // since block index only contain start row_id, we can not detect right boundary.
     inline bool row_in_pos(const int64_t row_id, const int64_t pos);
 
-    void reset()
-    {
-      cnt_ = 0;
-    }
+    void reset() { cnt_ = 0; }
 
     TO_STRING_KV(K_(magic), K_(cnt));
 
@@ -268,55 +241,87 @@ public:
     BlockIndex block_indexes_[0];
   } __attribute__((packed));
 
-  struct BlockBuffer {
-    BlockBuffer() : buf_(), blk_()
-    {}
+  struct BlockBuffer
+  {
+    BlockBuffer() : buf_(), blk_() {}
 
-    void reset()
-    {
-      buf_.reset();
-      blk_ = NULL;
-    }
+    void reset() { buf_.reset(); blk_ = NULL; }
     ShrinkBuffer buf_;
-    Block* blk_;
+    Block *blk_;
+  };
+  // Iteration age used for iterated rows life cycle control, iterated rows' memory are available
+  // until age increased. E.g.:
+  //
+  //   IterationAge iter_age;
+  //   Reader it(ra_row_store);
+  //   it.set_iteration_age(iter_age);
+  //
+  //   while (...) {
+  //     iter_age.inc();
+  //
+  //     it.get_row(idx1, row1);
+  //     it.get_row(iex2, row2);
+  //
+  //     // row1 and row2's memory are still available here, until the get_row() is called
+  //     // after iteration age increased.
+  //   }
+  class IterationAge
+  {
+  public:
+    int64_t get(void) const { return age_; }
+    void inc(void) { age_ += 1; }
+  private:
+    int64_t age_;
   };
 
+  struct TryFreeMemBlk
+  {
+    TryFreeMemBlk *next_;
+    int64_t age_;
+    int64_t size_;
+
+    TryFreeMemBlk() = delete;
+  };
+
+  static_assert(std::is_pod<TryFreeMemBlk>::value == true, "TryFreeMemBlk should be pod");
+
   // Reader must be deleted before ObRADatumStore
-  class Reader {
+  class Reader
+  {
     friend class ObRADatumStore;
-
   public:
-    explicit Reader(ObRADatumStore& store) : store_(store), file_size_(0), idx_blk_(NULL), ib_pos_(0), blk_(NULL)
-    {}
-    virtual ~Reader()
-    {
-      reset();
-    }
+    explicit Reader(ObRADatumStore &store)
+        : store_(store), file_size_(0), idx_blk_(NULL), ib_pos_(0), blk_(NULL),
+        age_(NULL), try_free_list_(NULL) {}
+    virtual ~Reader() { reset(); }
 
-    inline int64_t get_row_cnt() const
-    {
-      return store_.get_row_cnt();
-    }
+    inline int64_t get_row_cnt() const { return store_.get_row_cnt(); }
     // row memory will hold until the next get_row called or non-const method of ObRADatumStore called
-    int get_row(const int64_t row_id, const StoredRow*& sr);
+    int get_row(const int64_t row_id, const StoredRow *&sr);
+
+    void set_iteration_age(IterationAge *age) { age_ = age; }
 
     void reset();
     void reuse();
 
   private:
     void reset_cursor(const int64_t file_size);
+    void free_all_blks();
 
   private:
-    ObRADatumStore& store_;
+    ObRADatumStore &store_;
     // idx_blk_, blk_ may point to the writing block,
     // we need to invalid the pointers if file_size_ change.
     int64_t file_size_;
-    IndexBlock* idx_blk_;
-    int64_t ib_pos_;  // current block index position in index block
-    Block* blk_;
+    IndexBlock *idx_blk_;
+    int64_t ib_pos_; // current block index position in index block
+    Block *blk_;
 
     ShrinkBuffer buf_;
     ShrinkBuffer idx_buf_;
+
+    IterationAge *age_;
+    TryFreeMemBlk *try_free_list_;
 
     DISALLOW_COPY_AND_ASSIGN(Reader);
   };
@@ -328,102 +333,93 @@ public:
   const static int64_t DEFAULT_BLOCK_CNT = (1L << 20) / BLOCK_SIZE;
   static const int32_t DATUM_SIZE = sizeof(common::ObDatum);
 
-  explicit ObRADatumStore(common::ObIAllocator* alloc = NULL);
-  virtual ~ObRADatumStore()
-  {
-    reset();
-  }
+  explicit ObRADatumStore(common::ObIAllocator *alloc = NULL);
+  virtual ~ObRADatumStore() { reset(); }
 
-  int init(int64_t mem_limit, uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
-      int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID, const char* label = common::ObModIds::OB_SQL_ROW_STORE);
+  int init(int64_t mem_limit,
+           uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+           int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
+           const char *label = common::ObModIds::OB_SQL_ROW_STORE,
+           uint32_t row_extend_size = 0);
 
   void reset();
   // Keeping one memory block, reader must call reuse() too.
   void reuse();
 
-  int add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx* ctx, StoredRow** stored_row = nullptr);
-  int add_row(const common::ObIArray<common::ObDatum>& datums, StoredRow** stored_row = nullptr);
-  int add_row(const StoredRow& src_stored_row, StoredRow** stored_row = nullptr);
+  int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
+              StoredRow **stored_row = nullptr);
+  int add_row(const common::ObIArray<common::ObDatum> &datums,
+              StoredRow **stored_row = nullptr);
+  int add_row(const StoredRow &src_stored_row,
+              StoredRow **stored_row = nullptr);
   int finish_add_row();
   // row memory will hold until the next non-const method of ObRADatumStore called.
-  int get_row(const int64_t row_id, const StoredRow*& sr)
+  int get_row(const int64_t row_id, const StoredRow *&sr)
   {
     return inner_reader_.get_row(row_id, sr);
   }
 
-  bool is_inited() const
-  {
-    return inited_;
-  }
-  bool is_file_open() const
-  {
-    return fd_ >= 0;
-  }
+  // set iteration age for inner reader.
+  void set_iteration_age(IterationAge *age) { inner_reader_.set_iteration_age(age); }
 
-  void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-  void set_mem_ctx_id(const int64_t ctx_id)
-  {
-    ctx_id_ = ctx_id;
-  }
-  void set_mem_limit(const int64_t limit)
-  {
-    mem_limit_ = limit;
-  }
+  bool is_inited() const { return inited_; }
+  bool is_file_open() const { return fd_ >= 0; }
 
-  inline int64_t get_row_cnt() const
-  {
-    return row_cnt_;
-  }
-  inline int64_t get_mem_hold() const
-  {
-    return mem_hold_;
-  }
-  inline int64_t get_file_size() const
-  {
-    return file_size_;
-  }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
+  void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
 
-  TO_STRING_KV(
-      K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
+  void set_mem_stat(ObSqlMemoryCallback *mem_stat) { mem_stat_ = mem_stat; }
+  void set_io_observer(ObIOEventObserver *io_observer) { io_observer_ = io_observer; }
+
+  inline int64_t get_row_cnt() const { return row_cnt_; }
+  inline int64_t get_mem_hold() const { return mem_hold_; }
+  inline int64_t get_file_size() const { return file_size_; }
+
+  void set_mem_hold(int64_t hold);
+  void inc_mem_hold(int64_t hold);
+  void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
+
+  TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
+      K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
 
 private:
-  static int get_timeout(int64_t& timeout_ms);
-  void* alloc_blk_mem(const int64_t size);
-  void free_blk_mem(void* mem, const int64_t size = 0);
-  int setup_block(BlockBuffer& blkbuf) const;
-  int alloc_block(BlockBuffer& blkbuf, const int64_t min_size);
+  static int get_timeout(int64_t &timeout_ms);
+  void *alloc_blk_mem(const int64_t size);
+  void free_blk_mem(void *mem, const int64_t size = 0);
+  int setup_block(BlockBuffer &blkbuf) const;
+  int alloc_block(BlockBuffer &blkbuf, const int64_t min_size);
   // new block is not needed if %min_size is zero. (finish add row)
   int switch_block(const int64_t min_size);
-  int add_block_idx(const BlockIndex& bi);
-  int alloc_idx_block(IndexBlock*& ib);
+  int add_block_idx(const BlockIndex &bi);
+  int alloc_idx_block(IndexBlock *&ib);
   int build_idx_block();
   int switch_idx_block(bool finish_add = false);
 
-  int load_block(Reader& reader, const int64_t row_id);
-  int load_idx_block(Reader& reader, IndexBlock*& ib, const BlockIndex& bi);
-  int find_block_idx(Reader& reader, BlockIndex& bi, const int64_t row_id);
+  int load_block(Reader &reader, const int64_t row_id);
+  int load_idx_block(Reader &reader, IndexBlock *&ib, const BlockIndex &bi);
+  int find_block_idx(Reader &reader, BlockIndex &bi, const int64_t row_id);
 
-  int get_store_row(Reader& reader, const int64_t row_id, const StoredRow*& sr);
+  int get_store_row(Reader &reader, const int64_t row_id, const StoredRow *&sr);
 
-  int ensure_reader_buffer(ShrinkBuffer& buf, const int64_t size);
+  int ensure_reader_buffer(Reader &reader, ShrinkBuffer &buf, const int64_t size);
 
-  int write_file(BlockIndex& bi, void* buf, int64_t size);
-  int read_file(void* buf, const int64_t size, const int64_t offset);
+  int write_file(BlockIndex &bi, void *buf, int64_t size);
+  int read_file(void *buf, const int64_t size, const int64_t offset);
 
   bool need_dump();
 
 private:
   bool inited_;
   uint64_t tenant_id_;
-  const char* label_;
+  const char *label_;
   int64_t ctx_id_;
   int64_t mem_limit_;
 
+
   BlockBuffer blkbuf_;
-  IndexBlock* idx_blk_;
+  IndexBlock *idx_blk_;
 
   int64_t save_row_cnt_;
   int64_t row_cnt_;
@@ -439,9 +435,11 @@ private:
 
   int64_t mem_hold_;
   common::DefaultPageAllocator inner_allocator_;
-  common::ObIAllocator& allocator_;
+  common::ObIAllocator *allocator_;
 
   uint32_t row_extend_size_;
+  ObSqlMemoryCallback *mem_stat_;
+  ObIOEventObserver *io_observer_;
 
   DISALLOW_COPY_AND_ASSIGN(ObRADatumStore);
 };
@@ -502,7 +500,7 @@ inline bool ObRADatumStore::IndexBlock::row_in_pos(const int64_t row_id, const i
   }
   return in_pos;
 }
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_BASIC_OB_RA_DATUM_STORE_H_
+#endif // OCEANBASE_BASIC_OB_RA_DATUM_STORE_H_

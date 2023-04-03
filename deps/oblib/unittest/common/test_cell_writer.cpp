@@ -14,103 +14,158 @@
 #include "common/cell/ob_cell_writer.h"
 #include "common/object/ob_object.h"
 #include "lib/number/ob_number_v2.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace number;
-namespace unittest {
-class TestCellWriter : public ::testing::Test {
+namespace unittest
+{
+class TestCellWriter : public ::testing::Test
+{
 public:
   TestCellWriter();
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  static void SetUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
-  void alloc(char*& ptr, const int64_t size);
-  void check_meta(const char* buf, const int64_t pos, const int64_t type, const int64_t attr);
-  void check_int(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value);
-  void check_double(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const double value);
-  void check_number(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, ObObj& obj);
-  void check_time(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value);
-  void check_char(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value,
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
+  void alloc(char *&ptr, const int64_t size);
+  void check_meta(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr);
+  void check_int(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const int64_t value);
+  void check_double(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const double value);
+  void check_number(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      ObObj &obj);
+  void check_time(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const int64_t value);
+  void check_char(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const int64_t value,
       const uint8_t c_type);
-  void check_binary(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value);
-  void check_extend(const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value);
-  void check_column_id(const char* buf, const int64_t pos, const uint32_t column_id);
+  void check_binary(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const int64_t value);
+  void check_extend(
+      const char *buf,
+      const int64_t pos,
+      const int64_t type,
+      const int64_t attr,
+      const int64_t value);
+  void check_column_id(
+      const char *buf,
+      const int64_t pos,
+      const uint32_t column_id);
 
-  ModuleArena* get_arena()
-  {
-    return &arena_;
-  }
-
+  ModuleArena *get_arena() { return &arena_; }
 private:
   ModulePageAllocator alloc_;
   ModuleArena arena_;
 };
-TestCellWriter::TestCellWriter() : alloc_(ObModIds::TEST), arena_(ModuleArena::DEFAULT_BIG_PAGE_SIZE, alloc_)
-{}
-void TestCellWriter::alloc(char*& ptr, const int64_t size)
+TestCellWriter::TestCellWriter()
+  :alloc_(ObModIds::TEST),
+   arena_(ModuleArena::DEFAULT_BIG_PAGE_SIZE, alloc_)
+{
+}
+void TestCellWriter::alloc(char *&ptr, const int64_t size)
 {
   ptr = reinterpret_cast<char*>(arena_.alloc(size));
   ASSERT_TRUE(NULL != ptr);
 }
-void TestCellWriter::check_meta(const char* buf, const int64_t pos, const int64_t type, const int64_t attr)
+void TestCellWriter::check_meta(
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
 }
 void TestCellWriter::check_int(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const int64_t value)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
-  switch (meta->attr_) {
+  switch(meta->attr_) {
     case 0: {
-      const int8_t* tmp = reinterpret_cast<const int8_t*>(buf + pos + 1);
-      ASSERT_EQ(*tmp, value);
-      break;
-    }
+        const int8_t *tmp = reinterpret_cast<const int8_t*>(buf + pos + 1);
+        ASSERT_EQ(*tmp, value);
+        break;
+      }
     case 1: {
-      const int16_t* tmp = reinterpret_cast<const int16_t*>(buf + pos + 1);
-      ASSERT_EQ(*tmp, value);
-      break;
-    }
+        const int16_t *tmp = reinterpret_cast<const int16_t*>(buf + pos + 1);
+        ASSERT_EQ(*tmp, value);
+        break;
+      }
     case 2: {
-      const int32_t* tmp = reinterpret_cast<const int32_t*>(buf + pos + 1);
-      ASSERT_EQ(*tmp, value);
-      break;
-    }
+        const int32_t *tmp = reinterpret_cast<const int32_t*>(buf + pos + 1);
+        ASSERT_EQ(*tmp, value);
+        break;
+      }
     case 3: {
-      const int64_t* tmp = reinterpret_cast<const int64_t*>(buf + pos + 1);
-      ASSERT_EQ(*tmp, value);
-      break;
-    }
+        const int64_t *tmp = reinterpret_cast<const int64_t*>(buf + pos + 1);
+        ASSERT_EQ(*tmp, value);
+        break;
+      }
     default:
-      COMMON_LOG(WARN, "invalid attr.");
+      COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid attr.");
   }
 }
 
 void TestCellWriter::check_double(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const double value)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const double value)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
   switch (meta->type_) {
     case ObFloatType:
-    case ObUFloatType: {
-      const float* tmp = reinterpret_cast<const float*>(buf + pos + 1);
+    case ObUFloatType:  {
+      const float *tmp = reinterpret_cast<const float*>(buf + pos + 1);
       ASSERT_EQ(*tmp, static_cast<float>(value));
       break;
     }
     case ObDoubleType:
-    case ObUDoubleType: {
-      const double* tmp = reinterpret_cast<const double*>(buf + pos + 1);
+    case ObUDoubleType:{
+      const double *tmp = reinterpret_cast<const double*>(buf + pos + 1);
       ASSERT_EQ(*tmp, value);
       break;
     }
@@ -118,44 +173,55 @@ void TestCellWriter::check_double(
 }
 
 void TestCellWriter::check_time(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const int64_t value)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
   switch (meta->type_) {
     case ObDateTimeType:
     case ObTimestampType:
     case ObTimeType: {
-      const int64_t* tmp = reinterpret_cast<const int64_t*>(buf + pos + 1);
+      const int64_t *tmp = reinterpret_cast<const int64_t*>(buf + pos + 1);
       ASSERT_EQ(*tmp, static_cast<int64_t>(value));
       break;
     }
     case ObDateType: {
-      const int32_t* tmp = reinterpret_cast<const int32_t*>(buf + pos + 1);
+      const int32_t *tmp = reinterpret_cast<const int32_t*>(buf + pos + 1);
       ASSERT_EQ(*tmp, static_cast<int32_t>(value));
       break;
     }
     case ObYearType: {
-      const uint8_t* tmp = reinterpret_cast<const uint8_t*>(buf + pos + 1);
+      const uint8_t *tmp = reinterpret_cast<const uint8_t*>(buf + pos + 1);
       ASSERT_EQ(*tmp, static_cast<uint8_t>(value));
       break;
     }
   }
 }
 
-void TestCellWriter::check_char(const char* buf, const int64_t pos, const int64_t type, const int64_t attr,
-    const int64_t value, const uint8_t c_type)
+void TestCellWriter::check_char(
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const int64_t value,
+    const uint8_t c_type)
 {
   int ret = OB_SUCCESS;
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
   alloc(tmp_buf, 1024);
-  const int32_t* ptr1 = NULL;
-  const uint8_t* ptr2 = NULL;
-  const char* ptr3 = NULL;
+  const int32_t *ptr1 = NULL;
+  const uint8_t *ptr2 = NULL;
+  const char *ptr3 = NULL;
   switch (meta->attr_) {
     case 0:
       sprintf(tmp_buf, "%ld", value);
@@ -165,7 +231,7 @@ void TestCellWriter::check_char(const char* buf, const int64_t pos, const int64_
       ret = memcmp(ptr3, tmp_buf, strlen(tmp_buf));
       ASSERT_EQ(0, ret);
       break;
-    case 1:
+   case 1:
       sprintf(tmp_buf, "%ld", value);
       ptr2 = reinterpret_cast<const uint8_t*>(buf + pos + 1);
       ASSERT_EQ(*ptr2, c_type);
@@ -179,16 +245,21 @@ void TestCellWriter::check_char(const char* buf, const int64_t pos, const int64_
 }
 
 void TestCellWriter::check_binary(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const int64_t value)
 {
   int ret = OB_SUCCESS;
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
   alloc(tmp_buf, 1024);
-  const int32_t* ptr1 = NULL;
-  const char* ptr3 = NULL;
+  const int32_t *ptr1 = NULL;
+  const char *ptr3 = NULL;
 
   sprintf(tmp_buf, "%ld", value);
   ptr1 = reinterpret_cast<const int32_t*>(buf + pos + 1);
@@ -199,18 +270,24 @@ void TestCellWriter::check_binary(
 }
 
 void TestCellWriter::check_number(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, ObObj& obj)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    ObObj &obj)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
   ObObj check_obj;
   ObNumber check_value;
-  const uint32_t* desc = reinterpret_cast<const uint32_t*>(buf + pos + 1);
+  const uint32_t *desc = reinterpret_cast<const uint32_t*>(buf + pos + 1);
   ObNumber::Desc tmp_desc;
   tmp_desc.desc_ = *desc;
-  tmp_desc.cap_ = tmp_desc.len_;
-  check_value.assign(tmp_desc.desc_, ((0 == tmp_desc.len_) ? NULL : (uint32_t*)(buf + pos + 5)));
+  tmp_desc.reserved_ = 0;
+  check_value.assign(tmp_desc.desc_,
+      ((0 == tmp_desc.len_) ? NULL : (uint32_t*)(buf + pos + 5)));
   if (ObNumberType == meta->type_) {
     check_obj.set_number(check_value);
   } else if (ObUNumberType == meta->type_) {
@@ -220,12 +297,17 @@ void TestCellWriter::check_number(
 }
 
 void TestCellWriter::check_extend(
-    const char* buf, const int64_t pos, const int64_t type, const int64_t attr, const int64_t value)
+    const char *buf,
+    const int64_t pos,
+    const int64_t type,
+    const int64_t attr,
+    const int64_t value)
 {
-  const ObCellWriter::CellMeta* meta = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
+  const ObCellWriter::CellMeta *meta
+    = reinterpret_cast<const ObCellWriter::CellMeta*>(buf + pos);
   ASSERT_EQ(type, meta->type_);
   ASSERT_EQ(attr, meta->attr_);
-  const int8_t* ptr = NULL;
+  const int8_t *ptr = NULL;
   switch (meta->attr_) {
     case 0:
       break;
@@ -236,16 +318,19 @@ void TestCellWriter::check_extend(
   }
 }
 
-void TestCellWriter::check_column_id(const char* buf, const int64_t pos, const uint32_t column_id)
+void TestCellWriter::check_column_id(
+    const char *buf,
+    const int64_t pos,
+    const uint32_t column_id)
 {
-  const uint32_t* ptr = reinterpret_cast<const uint32_t*>(buf + pos);
+  const uint32_t *ptr = reinterpret_cast<const uint32_t*>(buf + pos);
   ASSERT_EQ(column_id, *ptr);
 }
 
 TEST_F(TestCellWriter, test_null)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObObj obj;
   obj.set_null();
@@ -255,7 +340,7 @@ TEST_F(TestCellWriter, test_null)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(1, size);
@@ -267,7 +352,7 @@ TEST_F(TestCellWriter, test_null)
 TEST_F(TestCellWriter, test_int)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
@@ -305,7 +390,7 @@ TEST_F(TestCellWriter, test_int)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(48, size);
@@ -326,7 +411,7 @@ TEST_F(TestCellWriter, test_int)
 TEST_F(TestCellWriter, test_float_double)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
@@ -346,7 +431,7 @@ TEST_F(TestCellWriter, test_float_double)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(28, size);
@@ -362,7 +447,7 @@ TEST_F(TestCellWriter, test_float_double)
 TEST_F(TestCellWriter, test_number)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
@@ -372,12 +457,12 @@ TEST_F(TestCellWriter, test_number)
 
   ObNumber number1;
   ObNumber number2;
-  char* buf1 = NULL;
-  char* buf2 = NULL;
+  char *buf1 = NULL;
+  char *buf2 = NULL;
   alloc(buf1, 1024);
   alloc(buf2, 1024);
 
-  ModuleArena* arena = get_arena();
+  ModuleArena *arena = get_arena();
   sprintf(buf1, "100");
   ret = number1.from(buf1, *arena);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -392,7 +477,7 @@ TEST_F(TestCellWriter, test_number)
   ret = writer.append(obj2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(18, size);
@@ -402,10 +487,11 @@ TEST_F(TestCellWriter, test_number)
   check_number(buf, 9, ObUNumberType, 0, obj2);
 }
 
+
 TEST_F(TestCellWriter, test_time)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
@@ -432,7 +518,7 @@ TEST_F(TestCellWriter, test_time)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(34, size);
@@ -449,13 +535,13 @@ TEST_F(TestCellWriter, test_time)
 TEST_F(TestCellWriter, test_char)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObObj obj;
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
   alloc(tmp_buf, 1024);
   ObString str;
 
@@ -473,7 +559,7 @@ TEST_F(TestCellWriter, test_char)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(14, size);
@@ -487,13 +573,13 @@ TEST_F(TestCellWriter, test_char)
 TEST_F(TestCellWriter, test_extend)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObObj obj;
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
   alloc(tmp_buf, 1024);
   ObString str;
 
@@ -521,7 +607,7 @@ TEST_F(TestCellWriter, test_extend)
   ret = writer.append(obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(11, size);
@@ -539,20 +625,20 @@ TEST_F(TestCellWriter, test_extend)
 TEST_F(TestCellWriter, test_append_column)
 {
   int ret = OB_SUCCESS;
-  char* write_buf = NULL;
+  char *write_buf = NULL;
   alloc(write_buf, 2 * 1024 * 1024);
   ObCellWriter writer;
   ret = writer.init(write_buf, 2 * 1024 * 1024, SPARSE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObObj obj;
   obj.set_int(1);
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
   alloc(tmp_buf, 1024);
 
   ret = writer.append(5, obj);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = writer.get_buf();
+  char *buf = writer.get_buf();
   ASSERT_TRUE(NULL != buf);
   int64_t size = writer.size();
   ASSERT_EQ(6, size);
@@ -562,9 +648,9 @@ TEST_F(TestCellWriter, test_append_column)
   check_int(buf, 0, ObIntType, 0, 1);
   check_column_id(buf, 2, 5);
 }
-}  // end namespace unittest
-}  // end namespace oceanbase
-int main(int argc, char** argv)
+}//end namespace unittest
+}//end namespace oceanbase
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

@@ -13,15 +13,13 @@
 #ifndef Oceanbase_SQL_OPTIMIZER_DEFAULT_STAT_H_
 #define Oceanbase_SQL_OPTIMIZER_DEFAULT_STAT_H_
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const double LN_2 = 0.69314718055994530941723212145818;
 #define LOGN(x) (log(x))
 #define LOG2(x) (LOGN(static_cast<double>(x)) / LN_2)
-
-const double TYPICAL_BLOCK_CACHE_HIT_RATE = 0.6;
-
-const double DEFAULT_RANGE_EXCEED_LIMIT_DECAY_RATIO = 0.5;
 
 const double DEFAULT_CACHE_HIT_RATE = 0.8;
 
@@ -29,52 +27,73 @@ const double VIRTUAL_INDEX_GET_COST = 20;
 
 const int64_t DEFAULT_ROW_SIZE = 200;
 
+const int64_t DEFAULT_COLUMN_SIZE = 10;
+
 const int64_t DEFAULT_MICRO_BLOCK_SIZE = 16L * 1024;
 
-const int64_t DEFAULT_MACRO_BLOCK_SIZE = 2L * 1024 * 1024;
+const int64_t DEFAULT_MACRO_BLOCK_SIZE_MB = 2L;
 
-const int64_t OB_EST_DEFAULT_ROW_COUNT = 100000;
+const int64_t DEFAULT_MACRO_BLOCK_SIZE = DEFAULT_MACRO_BLOCK_SIZE_MB * 1024 * 1024;
 
-const int64_t EST_DEF_COL_NUM_DISTINCT = 100;
+const int64_t OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT = 100000;
 
 const double EST_DEF_COL_NULL_RATIO = 0.01;
 
 const double EST_DEF_COL_NOT_NULL_RATIO = 1 - EST_DEF_COL_NULL_RATIO;
 
-const double EST_DEF_VAR_EQ_SEL = EST_DEF_COL_NOT_NULL_RATIO / EST_DEF_COL_NUM_DISTINCT;
+const double EST_DEF_VAR_EQ_SEL = EST_DEF_COL_NOT_NULL_RATIO;
 
-const double OB_COLUMN_DISTINCT_RATIO = 2.0 / 3.0;
-
-const int64_t OB_EST_DEFAULT_NUM_NULL =
-    static_cast<int64_t>(static_cast<double>(OB_EST_DEFAULT_ROW_COUNT) * EST_DEF_COL_NULL_RATIO);
-
-const int64_t OB_EST_DEFAULT_DATA_SIZE = OB_EST_DEFAULT_ROW_COUNT * DEFAULT_ROW_SIZE;
-
-const int64_t OB_EST_DEFAULT_MACRO_BLOCKS = OB_EST_DEFAULT_DATA_SIZE / DEFAULT_MACRO_BLOCK_SIZE;
-
-const int64_t OB_EST_DEFAULT_MICRO_BLOCKS = OB_EST_DEFAULT_DATA_SIZE / DEFAULT_MICRO_BLOCK_SIZE;
+const int64_t OB_EST_DEFAULT_DATA_SIZE = DEFAULT_ROW_SIZE;
 
 const double OB_DEFAULT_HALF_OPEN_RANGE_SEL = 0.1;
 
 const double OB_DEFAULT_CLOSED_RANGE_SEL = 0.05;
 
+/**
+ *@brief  等值表达式如("A = b")的默认选择率
+ */
 const double DEFAULT_EQ_SEL = 0.005;
 
+/**
+ *@brief　非等值表达式(如"A < b")的默认选择率
+ */
 const double DEFAULT_INEQ_SEL = 1.0 / 3.0;
 
+/**
+ *@brief　空间表达式的默认选择率: 1 / OB_GEO_S2REGION_OPTION_MAX_CELL
+ */
+const double DEFAULT_SPATIAL_SEL = 0.25;
+
+/**
+ *@brief　猜都没办法猜的默认选择率：一半一半
+ */
 const double DEFAULT_SEL = 0.5;
 
+///Update一行数据的代价.暂时写的
 const int64_t UPDATE_ONE_ROW_COST = 1;
-
+///DELETE一行数据的代价.暂时写的
 const int64_t DELETE_ONE_ROW_COST = 1;
 
+// [agg(expr) <|>|btw cosnt]的默认选择率，参考oracle
 const double DEFAULT_AGG_RANGE = 0.05;
-
+// [aggr(expr) = const]的默认选择率，参考oracle
 const double DEFAULT_AGG_EQ = 0.01;
-
+// clob/blob like "xxx" 的默认选择率
 const double DEFAULT_CLOB_LIKE_SEL = 0.05;
+const double DEFAULT_ANTI_JOIN_SEL = 0.01;
 
-}  // namespace common
-}  // namespace oceanbase
+enum ObEstimateType
+{
+  OB_DEFAULT_STAT_EST,
+  OB_CURRENT_STAT_EST,
+};
+
+} // namespace common
+} // namespace oceanabse
+
+
+
+
+
 
 #endif /* Oceanbase_SQL_OPTIMIZER_DEFAULT_STAT_H_ */

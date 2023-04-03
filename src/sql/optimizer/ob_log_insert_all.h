@@ -16,108 +16,54 @@
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "ob_log_insert.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObLogInsertAll : public ObLogInsert {
+class ObLogInsertAll : public ObLogInsert
+{
 public:
-  ObLogInsertAll(ObLogPlan& plan)
+  ObLogInsertAll(ObDelUpdLogPlan &plan)
       : ObLogInsert(plan),
         is_multi_table_insert_(false),
         is_multi_insert_first_(false),
         is_multi_conditions_insert_(false),
-        multi_value_columns_(NULL),
-        multi_column_convert_exprs_(NULL),
-        multi_insert_table_info_(NULL)
-  {}
+        insert_all_table_info_(NULL)
+  {
+  }
 
   virtual ~ObLogInsertAll()
-  {}
-
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
-  virtual int extract_value_exprs() override;
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs) override;
-
-  const char* get_name() const override;
-  const common::ObIArray<RawExprArray>& get_multi_value_exprs() const
   {
-    return multi_value_exprs_;
   }
-  void set_multi_value_columns(const common::ObIArray<ColRawExprArray>* multi_value_columns)
-  {
-    multi_value_columns_ = multi_value_columns;
-  }
-  void set_multi_column_convert_exprs(const common::ObIArray<RawExprArray>* multi_col_conv_exprs)
-  {
-    multi_column_convert_exprs_ = multi_col_conv_exprs;
-  }
-  inline const common::ObIArray<RawExprArray>* get_multi_column_convert_exprs() const
-  {
-    return multi_column_convert_exprs_;
-  }
-  bool is_multi_table_insert() const
-  {
-    return is_multi_table_insert_;
-  }
-  void set_is_multi_table_insert(bool is_multi)
-  {
-    is_multi_table_insert_ = is_multi;
-  }
-  bool is_multi_insert_first()
-  {
-    return is_multi_insert_first_;
-  }
-  void set_is_multi_insert_first(bool v)
-  {
-    is_multi_insert_first_ = v;
-  }
-  bool is_multi_conditions_insert()
-  {
-    return is_multi_conditions_insert_;
-  }
-  void set_is_multi_conditions_insert(bool v)
-  {
-    is_multi_conditions_insert_ = v;
-  }
-  inline void set_multi_insert_table_info(const common::ObIArray<ObInsertTableInfo>* multi_insert_table_info)
-  {
-    multi_insert_table_info_ = multi_insert_table_info;
-  }
-  inline const common::ObIArray<ObInsertTableInfo>* get_multi_insert_table_info() const
-  {
-    return multi_insert_table_info_;
-  }
-  int add_part_hint(const ObPartHint*& part_hint)
-  {
-    return part_hints_.push_back(part_hint);
-  }
-  int get_part_hint(const ObPartHint*& part_hint, const uint64_t table_id) const;
-  const common::ObIArray<const ObPartHint*>& get_part_hints() const
-  {
-    return part_hints_;
-  }
-  int remove_const_expr(const common::ObIArray<ObRawExpr*>& old_exprs, common::ObIArray<ObRawExpr*>& new_exprs) const;
-
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  const char* get_name() const;
+  bool is_multi_table_insert() const { return is_multi_table_insert_; }
+  void set_is_multi_table_insert(bool is_multi) { is_multi_table_insert_ = is_multi; }
+  bool is_multi_insert_first() { return is_multi_insert_first_; }
+  void set_is_multi_insert_first(bool v) { is_multi_insert_first_ = v; }
+  bool is_multi_conditions_insert() { return is_multi_conditions_insert_; }
+  void set_is_multi_conditions_insert(bool v) { is_multi_conditions_insert_ = v; }
+  inline void set_insert_all_table_info(const common::ObIArray<ObInsertAllTableInfo*> *insert_all_table_info)
+  { insert_all_table_info_ = insert_all_table_info; }
+  inline const common::ObIArray<ObInsertAllTableInfo*> *get_insert_all_table_info() const
+  { return insert_all_table_info_; }
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
 protected:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
-  int is_insert_table_id(uint64_t table_id, bool& is_true) const;
-
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  // virtual int generate_rowid_expr_for_trigger() override;
+  // virtual int generate_multi_part_partition_id_expr() override;
 private:
-  bool is_multi_table_insert_;
-  bool is_multi_insert_first_;
-  bool is_multi_conditions_insert_;
-  const common::ObIArray<ColRawExprArray>* multi_value_columns_;
-  common::ObSEArray<RawExprArray, 16, common::ModulePageAllocator, true> multi_value_exprs_;
-  const common::ObIArray<RawExprArray>* multi_column_convert_exprs_;
-  const common::ObIArray<ObInsertTableInfo>* multi_insert_table_info_;
-  common::ObSEArray<const ObPartHint*, 16, common::ModulePageAllocator, true> part_hints_;
+  bool is_multi_table_insert_;//标记是否是multi table insert
+  bool is_multi_insert_first_;//标记是否是multi table insert first
+  bool is_multi_conditions_insert_;//标记是带条件的multi table insert
+
+  //用于多表插入时保存所有的插入的表基本信息
+  const common::ObIArray<ObInsertAllTableInfo*> *insert_all_table_info_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif

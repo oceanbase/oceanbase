@@ -10,30 +10,27 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef OCEANBASE_COMMON_OB_TRACE_ID_H
+#define OCEANBASE_COMMON_OB_TRACE_ID_H
 #include <stdint.h>
 #include <pthread.h>
 #include "lib/net/ob_addr.h"
 #include "lib/atomic/ob_atomic.h"
-#ifndef OCEANBASE_COMMON_OB_TRACE_ID_H
-#define OCEANBASE_COMMON_OB_TRACE_ID_H
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 #define TRACE_ID_FORMAT "Y%lX-%016lX"
-struct ObCurTraceId {
-  class Guard {
+#define TRACE_ID_FORMAT_V2 "Y%lX-%016lX-%lx-%lx"
+#define TRACE_ID_FORMAT_PARAM(x) x[0], x[1], x[2], x[3]
+struct ObCurTraceId
+{
+  class SeqGenerator
+  {
   public:
-    explicit Guard(const ObAddr& addr);
-    ~Guard();
-
-  private:
-    bool need_reset_;
-  };
-  class SeqGenerator {
-  public:
-    enum { BATCH = 1 << 20 };
-    static uint64_t gen_seq()
-    {
-      static __thread uint64_t thread_seq = 0;
+    enum { BATCH = 1<<20 };
+    OB_INLINE static uint64_t gen_seq() {
+      RLOCAL_INLINE(uint64_t, thread_seq);
       if (0 == (thread_seq % BATCH)) {
         thread_seq = ATOMIC_FAA(&seq_generator_, BATCH);
       }
@@ -41,28 +38,32 @@ struct ObCurTraceId {
     }
     static uint64_t seq_generator_;
   };
-  class TraceId {
+  class TraceId
+  {
     OB_UNIS_VERSION(1);
-
   public:
-    inline TraceId()
-    {
-      uval_[0] = 0;
-      uval_[1] = 0;
-    }
-    inline bool is_invalid() const
-    {
-      return id_.seq_ == 0 ? true : false;
-    }
-    inline void init(const ObAddr& ip_port)
+    inline TraceId() { uval_[0] = 0; uval_[1] = 0; uval_[2] = 0; uval_[3] = 0; }
+    inline bool is_invalid() const { return id_.seq_ == 0 ? true : false; }
+    inline void init(const ObAddr &ip_port)
     {
       id_.seq_ = SeqGenerator::gen_seq();
-      id_.ip_ = ip_port.get_ipv4();
       id_.is_user_request_ = 0;
+      id_.is_ipv6_ = ip_port.using_ipv6();
       id_.reserved_ = 0;
       id_.port_ = static_cast<uint16_t>(ip_port.get_port());
+      if (ip_port.using_ipv6()) {
+        id_.ipv6_[0] = ip_port.get_ipv6_low();
+        id_.ipv6_[1] = ip_port.get_ipv6_high();
+      } else {
+        id_.ip_ = ip_port.get_ipv4();
+      }
     }
-    inline int set(const uint64_t* uval)
+    void check_ipv6_valid() {
+      if (id_.is_ipv6_ && id_.ipv6_[0] == 0) {
+        fprintf(stderr, "ERROR trace id lost ipv6 addr: %s\n", lbt());
+      }
+    }
+    inline int set(const uint64_t *uval)
     {
       int ret = OB_SUCCESS;
       if (OB_ISNULL(uval)) {
@@ -70,54 +71,64 @@ struct ObCurTraceId {
       } else {
         uval_[0] = uval[0];
         uval_[1] = uval[1];
+        uval_[2] = uval[2];
+        uval_[3] = uval[3];
+        check_ipv6_valid();
       }
       return ret;
     }
-    inline void set(const TraceId& new_trace_id)
+    inline void set(const TraceId &new_trace_id)
     {
       uval_[0] = new_trace_id.uval_[0];
       uval_[1] = new_trace_id.uval_[1];
+      uval_[2] = new_trace_id.uval_[2];
+      uval_[3] = new_trace_id.uval_[3];
+      check_ipv6_valid();
     }
-    inline const uint64_t* get() const
-    {
-      return uval_;
-    }
-    inline uint64_t get_seq() const
-    {
-      return id_.seq_;
-    }
+    inline const uint64_t* get() const { return uval_; }
+    inline uint64_t get_seq() const { return id_.seq_; }
     inline const ObAddr get_addr() const
     {
       ObAddr addr(id_.ip_, id_.port_);
+      if (id_.is_ipv6_) {
+        addr.set_ipv6_addr(id_.ipv6_[1], id_.ipv6_[0], id_.port_);
+      }
       return addr;
     }
-    inline void reset()
+    inline void get_uval(uint64_t (&uval)[4])
     {
-      uval_[0] = 0;
-      uval_[1] = 0;
+      MEMCPY(&uval[0], &uval_[0], sizeof(uval_));
     }
-    inline int get_server_addr(ObAddr& addr) const
+    inline void reset() { uval_[0] = 0; uval_[1] = 0; uval_[2] = 0; uval_[3] = 0; }
+    inline int get_server_addr(ObAddr &addr) const
     {
       int ret = OB_SUCCESS;
       if (is_invalid()) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (addr.set_ipv4_addr(id_.ip_, id_.port_)) {
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        addr = get_addr();
       }
       return ret;
     }
 
-    inline int64_t to_string(char* buf, const int64_t buf_len) const
+    inline int64_t to_string(char *buf, const int64_t buf_len) const
     {
       int64_t pos = 0;
-      common::databuff_printf(buf, buf_len, pos, TRACE_ID_FORMAT, uval_[0], uval_[1]);
+      common::databuff_printf(buf, buf_len, pos, TRACE_ID_FORMAT_V2, uval_[0], uval_[1], uval_[2], uval_[3]);
 
       return pos;
     }
-    inline bool equals(const TraceId& trace_id) const
+    int parse_from_buf(char* buf) {
+      int ret = OB_SUCCESS;
+      if (4 != sscanf(buf, TRACE_ID_FORMAT_V2, &uval_[0], &uval_[1], &uval_[2], &uval_[3])) {
+        ret = OB_INVALID_ARGUMENT;
+      }
+      return ret;
+    }
+    inline bool equals(const TraceId &trace_id) const
     {
-      return uval_[0] == trace_id.uval_[0] && uval_[1] == trace_id.uval_[1];
+      return uval_[0] == trace_id.uval_[0] && uval_[1] == trace_id.uval_[1]
+          && uval_[2] == trace_id.uval_[2] && uval_[3] == trace_id.uval_[3];
     }
 
     inline void mark_user_request()
@@ -130,7 +141,7 @@ struct ObCurTraceId {
       return 0 != id_.is_user_request_;
     }
 
-    inline int set(const char* buf)
+    inline int set(const char *buf)
     {
       int ret = OB_SUCCESS;
       if (OB_ISNULL(buf)) {
@@ -144,44 +155,56 @@ struct ObCurTraceId {
       return ret;
     }
 
+    inline int64_t hash() const
+    {
+      int64_t hash_value = 0;
+      hash_value = common::murmurhash(&uval_[0], sizeof(uint64_t), hash_value);
+      hash_value = common::murmurhash(&uval_[1], sizeof(uint64_t), hash_value);
+      hash_value = common::murmurhash(&uval_[2], sizeof(uint64_t), hash_value);
+      hash_value = common::murmurhash(&uval_[3], sizeof(uint64_t), hash_value);
+      return hash_value;
+    }
+
+    inline bool operator == (const TraceId &other) const
+    {
+      return equals(other);
+    }
   private:
-    union {
-      struct {
-        uint32_t ip_ : 32;
-        uint16_t port_ : 16;
-        uint8_t is_user_request_ : 1;
-        uint16_t reserved_ : 15;
-        uint64_t seq_ : 64;
+    union
+    {
+      struct
+      {
+        uint32_t ip_: 32;
+        uint16_t port_: 16;
+        uint8_t is_user_request_: 1;
+        uint8_t is_ipv6_:1;
+        uint16_t reserved_: 14;
+        uint64_t seq_: 64;
+        uint64_t ipv6_[2];
       } id_;
-      uint64_t uval_[2];
+      uint64_t uval_[4];
     };
   };
 
-  inline static void init(const ObAddr& ip_port)
+  inline static void init(const ObAddr &ip_port)
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->init(ip_port);
     }
   }
 
-  inline static void set(const uint64_t* uval)
+  inline static void set(const uint64_t *uval)
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->set(uval);
     }
   }
 
-  inline static void set(const uint64_t id, const uint64_t ipport = 0)
+  inline static void set(const TraceId &new_trace_id)
   {
-    uint64_t uval[2] = {ipport, id};
-    set(uval);
-  }
-
-  inline static void set(const TraceId& new_trace_id)
-  {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->set(new_trace_id);
     }
@@ -189,32 +212,40 @@ struct ObCurTraceId {
 
   inline static void reset()
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->reset();
     }
   }
+  static const char* get_trace_id_str()
+  {
+    return to_cstring(*get_trace_id());
+  }
   inline static const uint64_t* get()
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     return trace_id->get();
   }
   inline static uint64_t get_seq()
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     return trace_id->get_seq();
   }
 
   inline static const ObAddr get_addr()
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     return trace_id->get_addr();
   }
 
-  inline static TraceId* get_trace_id()
+  inline static TraceId *get_trace_id()
   {
+    #ifdef COMPILE_DLL_MODE
+    return &trace_id_;
+    #else
     static thread_local TraceId TRACE_ID;
     return &TRACE_ID;
+    #endif
   }
 
   inline static void mark_user_request()
@@ -227,19 +258,44 @@ struct ObCurTraceId {
     return get_trace_id()->is_user_request();
   }
 
-  inline static void set(const char* buf)
+  inline static void set(const char *buf)
   {
-    TraceId* trace_id = get_trace_id();
+    TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->set(buf);
     }
   }
+#ifdef COMPILE_DLL_MODE
+private:		
+  static TLOCAL(TraceId, trace_id_);
+#endif
 };
 
-int32_t LogExtraHeaderCallback(
-    char* buf, int32_t buf_size, int level, const char* file, int line, const char* function, pthread_t tid);
+class ObTraceIdGuard final
+{
+public:
+  explicit ObTraceIdGuard(const ObCurTraceId::TraceId &trace_id)
+    : old_trace_id_(), is_old_trace_saved_(false)
+  {
+    if (NULL != ObCurTraceId::get_trace_id()) {
+      old_trace_id_ = *ObCurTraceId::get_trace_id();
+      is_old_trace_saved_ = true;
+    }
+    ObCurTraceId::set(trace_id);
+  }
+  ~ObTraceIdGuard()
+  {
+    if (is_old_trace_saved_) {
+      ObCurTraceId::set(old_trace_id_);
+    }
+  }
+private:
+  ObCurTraceId::TraceId old_trace_id_;
+  bool is_old_trace_saved_;
+};
 
-}  // namespace common
-}  // namespace oceanbase
+}// namespace common
+}// namespace oceanbase
+
 
 #endif

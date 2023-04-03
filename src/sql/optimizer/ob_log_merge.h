@@ -14,96 +14,59 @@
 #define _OB_LOG_MERGE_H 1
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_insert.h"
-namespace oceanbase {
-namespace sql {
-class ObLogMerge : public ObLogInsert {
+namespace oceanbase
+{
+namespace sql
+{
+
+class ObLogMerge : public ObLogDelUpd
+{
 public:
-  ObLogMerge(ObLogPlan& plan)
-      : ObLogInsert(plan),
-        match_condition_exprs_(NULL),
-        insert_condition_exprs_(NULL),
-        update_condition_exprs_(NULL),
-        delete_condition_exprs_(NULL),
-        value_vector_(NULL),
-        rowkey_exprs_(NULL)
-  {}
-  virtual ~ObLogMerge()
-  {}
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  void set_match_condition(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    match_condition_exprs_ = expr;
-  }
-  const common::ObIArray<ObRawExpr*>* get_match_condition() const
-  {
-    return match_condition_exprs_;
-  }
+  ObLogMerge(ObDelUpdLogPlan &plan)
+      : ObLogDelUpd(plan),
+		index_upd_infos_(),
+		index_del_infos_()
+  { }
+  virtual ~ObLogMerge() {}
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int compute_sharding_info() override;
+  const common::ObIArray<ObRawExpr *> &get_insert_condition() const;
 
-  void set_insert_condition(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    insert_condition_exprs_ = expr;
-  }
-  const common::ObIArray<ObRawExpr*>* get_insert_condition() const
-  {
-    return insert_condition_exprs_;
-  }
+  const common::ObIArray<ObRawExpr *> &get_update_condition() const;
 
-  void set_update_condition(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    update_condition_exprs_ = expr;
-  }
-  const common::ObIArray<ObRawExpr*>* get_update_condition() const
-  {
-    return update_condition_exprs_;
-  }
+  const common::ObIArray<ObRawExpr *> &get_delete_condition() const;
 
-  void set_delete_condition(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    delete_condition_exprs_ = expr;
-  }
-  const common::ObIArray<ObRawExpr*>* get_delete_condition() const
-  {
-    return delete_condition_exprs_;
-  }
+  const char* get_name() const;
 
-  void set_rowkey_exprs(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    rowkey_exprs_ = expr;
-  }
-  const common::ObIArray<ObRawExpr*>* get_rowkey_exprs() const
-  {
-    return rowkey_exprs_;
-  }
+  bool is_insert_dml_info(const IndexDMLInfo *dml_info) const;
+  bool is_delete_dml_info(const IndexDMLInfo *dml_info) const;
+  int get_modified_index_id(common::ObIArray<uint64_t> &index_tids);
 
-  void set_value_vector(const common::ObIArray<ObRawExpr*>* expr)
-  {
-    value_vector_ = expr;
-  }
-  int add_delete_exprs_to_ctx(ObAllocExprContext& ctx);
-  int add_all_table_assignments_to_ctx(ObAllocExprContext& ctx);
-  virtual uint64_t hash(uint64_t seed) const override;
-  const char* get_name() const override;
+  int assign_dml_infos(const ObIArray<IndexDMLInfo *> &index_insert_infos,
+                       const ObIArray<IndexDMLInfo *> &index_update_infos,
+                       const ObIArray<IndexDMLInfo *> &index_delete_infos);
 
-  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  int add_merge_exprs_to_ctx(ObAllocExprContext& ctx, const ObIArray<ObRawExpr*>& exprs);
-  int classify_merge_subquery_expr(const ObIArray<ObRawExpr*>& exprs, ObIArray<ObRawExpr*>& subquery_exprs,
-      ObIArray<ObRawExpr*>& non_subquery_exprs);
-
-private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
-  int add_all_source_table_columns_to_ctx(ObAllocExprContext& ctx);
+  const ObIArray<IndexDMLInfo *> &get_update_infos() const { return index_upd_infos_; }
+  const ObIArray<IndexDMLInfo *> &get_delete_infos() const { return index_del_infos_; }
+  ObIArray<IndexDMLInfo *> &get_update_infos() { return index_upd_infos_; }
+  ObIArray<IndexDMLInfo *> &get_delete_infos() { return index_del_infos_; }
+  const common::ObIArray<ObPCParamEqualInfo> &get_equal_infos() const { return equal_infos_; }
+  int set_equal_infos(const ObIArray<ObPCParamEqualInfo> &equal_infos) { return equal_infos_.assign(equal_infos); }
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+protected:
+  int generate_rowid_expr_for_trigger() override;
+  int generate_multi_part_partition_id_expr() override;
+  virtual int gen_location_constraint(void *ctx) override;
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);
-
 private:
-  const common::ObIArray<ObRawExpr*>* match_condition_exprs_;
-  const common::ObIArray<ObRawExpr*>* insert_condition_exprs_;
-  const common::ObIArray<ObRawExpr*>* update_condition_exprs_;
-  const common::ObIArray<ObRawExpr*>* delete_condition_exprs_;
-  const common::ObIArray<ObRawExpr*>* value_vector_;
-  const common::ObIArray<ObRawExpr*>* rowkey_exprs_;
+  ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_upd_infos_;
+  ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_del_infos_;
+  common::ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_infos_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 
 #endif

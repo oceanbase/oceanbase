@@ -20,47 +20,36 @@
 #include "lib/queue/ob_lighty_queue.h"
 #include "lib/utility/serialization.h"
 #include "lib/thread/thread_mgr_interface.h"
-#include "election/ob_election_group_id.h"
-#include "election/ob_election_part_array_buf.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_cascad_member.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_thread_pool.h"
 #include "share/ob_thread_mgr.h"
+#include "share/ob_ls_id.h"
 #include "common/ob_clock_generator.h"
 
-namespace oceanbase {
-namespace obrpc {
-#define rpc_myassert(x) \
-  if (!(x)) {           \
-    ob_abort();         \
-  }
-class ObSingleRpcBuffer {
+namespace oceanbase
+{
+namespace obrpc
+{
+#define MYASSERT(x) if (!(x)) { ob_abort(); }
+class ObSingleRpcBuffer
+{
 public:
   enum { HEADER_SIZE = sizeof(ObBatchPacket) };
-  ObSingleRpcBuffer(int64_t seq, int64_t limit)
-      : seq_(seq), pos_(HEADER_SIZE), cnt_(0), capacity_(limit - sizeof(*this))
-  {}
-  ~ObSingleRpcBuffer()
-  {}
-  bool is_empty()
-  {
-    return cnt_ <= 0;
-  }
-  bool wait(int64_t seq)
-  {
-    return seq == ATOMIC_LOAD(&seq_);
-  }
-  void reuse(int64_t seq)
-  {
+  ObSingleRpcBuffer(int64_t seq, int64_t limit):
+      seq_(seq), pos_(HEADER_SIZE), cnt_(0), capacity_(limit - sizeof(*this)) {}
+  ~ObSingleRpcBuffer() {}
+  bool is_empty() { return cnt_ <= 0; }
+  bool wait(int64_t seq) { return seq == ATOMIC_LOAD(&seq_); }
+  void reuse(int64_t seq) {
     pos_ = HEADER_SIZE;
     cnt_ = 0;
     ATOMIC_STORE(&seq_, seq);
   }
-  char* alloc(int64_t size)
-  {
+  char* alloc(int64_t size) {
     char* ret = NULL;
-    rpc_myassert(size <= capacity_ - HEADER_SIZE);
+    MYASSERT(size <= capacity_ - HEADER_SIZE);
     int64_t limit = capacity_ - size;
     int64_t pos = faa_bounded(&pos_, size, limit);
     if (pos <= limit) {
@@ -69,24 +58,20 @@ public:
     }
     return ret;
   }
-  int64_t read(char*& buf, int64_t& cnt)
-  {
+  int64_t read(char*& buf, int64_t& cnt) {
     buf = buffer_;
     cnt = ATOMIC_LOAD(&cnt_);
     return ATOMIC_LOAD(&pos_);
   }
-
 private:
-  static int64_t faa_bounded(int64_t* addr, int64_t x, int64_t limit)
-  {
+  static int64_t faa_bounded(int64_t* addr, int64_t x, int64_t limit) {
     int64_t nv = ATOMIC_LOAD(addr);
     int64_t ov = 0;
-    while ((ov = nv) <= limit && ov != (nv = ATOMIC_VCAS(addr, ov, ov + x))) {
+    while((ov = nv) <= limit && ov != (nv = ATOMIC_VCAS(addr, ov, ov + x))) {
       PAUSE();
     }
     return ov;
   }
-
 private:
   int64_t seq_ CACHE_ALIGNED;
   int64_t pos_ CACHE_ALIGNED;
@@ -95,50 +80,46 @@ private:
   char buffer_[0];
 };
 
-class ObRingRpcBuffer {
+class ObRingRpcBuffer
+{
 public:
   typedef ObSingleRpcBuffer Buffer;
   typedef ObIFill Req;
   typedef ObSimpleReqHeader ReqHeader;
   enum { RESERVED_SIZE = 1024 };
-
 public:
   ObRingRpcBuffer(const int64_t buf_size, const int64_t buf_cnt)
       : read_seq_(0), fill_seq_(0), buf_size_(buf_size), buf_cnt_(buf_cnt)
   {
-    for (int i = 0; i < buf_cnt_; i++) {
-      new (get(i)) Buffer(i, buf_size);
+    for(int i = 0; i < buf_cnt_; i++) {
+      new(get(i))Buffer(i, buf_size);
     }
   }
-  ~ObRingRpcBuffer()
-  {}
-  bool write(const uint32_t batch_type, const uint32_t sub_type, const common::ObPartitionKey& pkey, const Req& req)
+  ~ObRingRpcBuffer() {}
+  bool write(const uint32_t batch_type, const uint32_t sub_type,
+             const Req& req)
   {
     ReqHeader* header = NULL;
     const int64_t req_size = req.get_req_size();
-    int64_t total_size = pkey.get_serialize_size() + req_size;
-    common::ObCurTraceId::TraceId* trace_id = common::ObCurTraceId::get_trace_id();
+    int64_t total_size = req_size;
+    common::ObCurTraceId::TraceId *trace_id = common::ObCurTraceId::get_trace_id();
     uint32_t flag = 0;
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
-      // with trace id
-      flag = 1;
-      total_size = total_size + trace_id->get_serialize_size();
-    }
+    // with trace id
+    flag = 1;
+    total_size = total_size + trace_id->get_serialize_size();
     if (total_size <= buf_size_ - RESERVED_SIZE) {
-      while (NULL == header) {
+      while(NULL == header) {
         CriticalGuard(get_qs());
         int64_t seq = get_fill_seq();
         Buffer* buffer = get(seq);
         if (buffer->wait(seq)) {
           if (NULL != (header = (ReqHeader*)buffer->alloc(sizeof(ReqHeader) + total_size))) {
             header->set(flag, batch_type, sub_type, (int32_t)total_size);
-            char* buf = (char*)(header + 1);
+            char *buf = (char*)(header + 1);
             int64_t pos = 0;
             int64_t filled_size = 0;
             int ret = common::OB_SUCCESS;
             if ((1 == flag) && OB_FAIL(trace_id->serialize(buf, total_size, pos))) {
-              header = NULL;
-            } else if (OB_FAIL(pkey.serialize(buf, total_size, pos))) {
               header = NULL;
             } else {
               req.fill_buffer(buf + pos, req_size, filled_size);
@@ -153,34 +134,31 @@ public:
     }
     return NULL != header;
   }
-  bool write(
-      const uint32_t batch_type, const uint32_t sub_type, const election::ObElectionGroupId& eg_id, const Req& req)
+  bool write(const uint32_t batch_type, const int16_t sub_type, const share::ObLSID& ls,
+             const Req& req)
   {
     ReqHeader* header = NULL;
     const int64_t req_size = req.get_req_size();
-    int64_t total_size = eg_id.get_serialize_size() + req_size;
-    common::ObCurTraceId::TraceId* trace_id = common::ObCurTraceId::get_trace_id();
+    int64_t total_size = ls.get_serialize_size() + req_size;
+    common::ObCurTraceId::TraceId *trace_id = common::ObCurTraceId::get_trace_id();
     uint32_t flag = 0;
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
-      // with trace id
-      flag = 1;
-      total_size = total_size + trace_id->get_serialize_size();
-    }
+    flag = 1;
+    total_size = total_size + trace_id->get_serialize_size();
     if (total_size <= buf_size_ - RESERVED_SIZE) {
-      while (NULL == header) {
+      while(NULL == header) {
         CriticalGuard(get_qs());
         int64_t seq = get_fill_seq();
         Buffer* buffer = get(seq);
         if (buffer->wait(seq)) {
           if (NULL != (header = (ReqHeader*)buffer->alloc(sizeof(ReqHeader) + total_size))) {
             header->set(flag, batch_type, sub_type, (int32_t)total_size);
-            char* buf = (char*)(header + 1);
+            char *buf = (char*)(header + 1);
             int64_t pos = 0;
             int64_t filled_size = 0;
             int ret = common::OB_SUCCESS;
             if ((1 == flag) && OB_FAIL(trace_id->serialize(buf, total_size, pos))) {
               header = NULL;
-            } else if (OB_FAIL(eg_id.serialize(buf, total_size, pos))) {
+            } else if (OB_FAIL(ls.serialize(buf, total_size, pos))) {
               header = NULL;
             } else {
               req.fill_buffer(buf + pos, req_size, filled_size);
@@ -195,11 +173,11 @@ public:
     }
     return NULL != header;
   }
-  int64_t read(int64_t& seq, char*& buf, int64_t& cnt, bool read_current)
-  {
+  int64_t read(int64_t& seq, char*& buf, int64_t& cnt, bool read_current) {
     int64_t size = 0;
     const int64_t cur_read_seq = get_read_seq();
-    if (cur_read_seq < get_fill_seq() || (read_current && !get(cur_read_seq)->is_empty())) {
+    if (cur_read_seq < get_fill_seq()
+        || (read_current && !get(cur_read_seq)->is_empty())) {
       seq = cur_read_seq;
       freeze(seq);
       update_read_seq(cur_read_seq + 1);
@@ -209,19 +187,16 @@ public:
     }
     return size;
   }
-  void reuse(int64_t seq)
-  {
+  void reuse(int64_t seq) {
     get(seq)->reuse(seq + buf_cnt_);
   }
-  void freeze()
-  {
+  void freeze() {
     const int64_t cur_read_seq = get_read_seq();
     if (!get(cur_read_seq)->is_empty()) {
       freeze(cur_read_seq);
     }
   }
-  bool is_empty() const
-  {
+  bool is_empty() const {
     bool bool_ret = false;
     const int64_t cur_read_seq = get_read_seq();
     if (cur_read_seq >= get_fill_seq() && get(cur_read_seq)->is_empty()) {
@@ -229,36 +204,17 @@ public:
     }
     return bool_ret;
   }
-
 protected:
-  int64_t get_fill_seq() const
-  {
-    return ATOMIC_LOAD(&fill_seq_);
-  }
-  int64_t get_read_seq() const
-  {
-    return ATOMIC_LOAD(&read_seq_);
-  }
-  common::ObQSync& get_qs()
-  {
+  int64_t get_fill_seq() const { return ATOMIC_LOAD(&fill_seq_); }
+  int64_t get_read_seq() const { return ATOMIC_LOAD(&read_seq_); }
+  common::ObQSync& get_qs() {
     static common::ObQSync qsync;
     return qsync;
   }
-  void freeze(int64_t seq)
-  {
-    common::inc_update(&fill_seq_, seq + 1);
-  }
-  void update_read_seq(const int64_t new_seq)
-  {
-    common::inc_update(&read_seq_, new_seq);
-  }
-
+  void freeze(int64_t seq) { common::inc_update(&fill_seq_, seq + 1); }
+  void update_read_seq(const int64_t new_seq) { common::inc_update(&read_seq_, new_seq); }
 private:
-  Buffer* get(int64_t seq) const
-  {
-    return (Buffer*)(buf_ + buf_size_ * (seq % buf_cnt_));
-  }
-
+  Buffer* get(int64_t seq) const { return (Buffer*)(buf_ + buf_size_ * (seq % buf_cnt_)); }
 private:
   int64_t read_seq_ CACHE_ALIGNED;
   int64_t fill_seq_ CACHE_ALIGNED;
@@ -267,73 +223,53 @@ private:
   char buf_[0];
 };
 
-class ObRpcBuffer : public common::SpHashNode {
+class ObRpcBuffer: public common::SpHashNode
+{
 public:
   typedef ObBatchPacket Packet;
   typedef ObRingRpcBuffer RingBuffer;
   typedef RingBuffer::Req Req;
   typedef ObBatchRpcProxy Rpc;
-  ObRpcBuffer(const uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id, const int batch_type,
-      const int64_t buf_size, const int64_t buf_cnt)
-      : common::SpHashNode(calc_hash(tenant_id, addr, dst_cluster_id) | 1),
-        tenant_id_(tenant_id),
-        server_(addr),
-        last_use_timestamp_(0),
-        dst_cluster_id_(dst_cluster_id),
-        batch_type_(batch_type),
-        buffer_(buf_size, buf_cnt)
+  ObRpcBuffer(const uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id, const int batch_type, const int64_t buf_size, const int64_t buf_cnt):
+      common::SpHashNode(calc_hash(tenant_id, addr, dst_cluster_id) | 1),
+      tenant_id_(tenant_id),
+      server_(addr),
+      last_use_timestamp_(0),
+      dst_cluster_id_(dst_cluster_id),
+      batch_type_(batch_type),
+      buffer_(buf_size, buf_cnt)
   {}
-  ~ObRpcBuffer()
-  {}
-  bool fill(const uint32_t sub_type, const common::ObPartitionKey& pkey, const Req& req)
-  {
+  ~ObRpcBuffer() {}
+  bool fill(const uint32_t sub_type, const Req& req) {
     record_use_time();
-    return buffer_.write(batch_type_, sub_type, pkey, req);
+    return buffer_.write(batch_type_, sub_type, req);
   }
-  bool fill(const uint32_t sub_type, const election::ObElectionGroupId& eg_id, const Req& req)
-  {
+  bool fill(const int16_t sub_type, const share::ObLSID& ls, const Req& req) {
     record_use_time();
-    return buffer_.write(batch_type_, sub_type, eg_id, req);
+    return buffer_.write(batch_type_, sub_type, ls, req);
   }
-  void freeze()
-  {
-    buffer_.freeze();
-  }
-  int64_t send(Rpc& rpc, uint64_t tenant_id, const common::ObAddr& sender, bool send_current);
+  void freeze() { buffer_.freeze(); }
+  int64_t send(Rpc& rpc, uint64_t tenant_id, const common::ObAddr &sender, bool send_current);
   void record_use_time()
   {
     const int64_t now = common::ObClockGenerator::getClock();
     common::inc_update(&last_use_timestamp_, now);
   }
-  int64_t get_last_use_ts() const
-  {
-    return ATOMIC_LOAD(&last_use_timestamp_);
-  }
-  uint64_t get_tenant_id() const
-  {
-    return tenant_id_;
-  }
-  common::ObAddr get_server() const
-  {
-    return server_;
-  }
-  int64_t get_dst_cluster_id() const
-  {
-    return ATOMIC_LOAD(&dst_cluster_id_);
-  }
-  bool is_empty() const
-  {
+  int64_t get_last_use_ts() const { return ATOMIC_LOAD(&last_use_timestamp_); }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  common::ObAddr get_server() const { return server_; }
+  int64_t get_dst_cluster_id() const { return ATOMIC_LOAD(&dst_cluster_id_); }
+  bool is_empty() const {
     return buffer_.is_empty();
   }
-  int64_t calc_hash(const uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id) const
+  int64_t calc_hash(const uint64_t tenant_id, const common::ObAddr &addr, const int64_t dst_cluster_id) const
   {
-    // server and cluster_id calc hash num equals ObCascadMember::hash()
+    // server和cluster_id计算hash值与ObCascadMember::hash()一样
     int64_t ret_hash = (addr.hash() | (dst_cluster_id << 32));
     ret_hash = common::murmurhash(&tenant_id, sizeof(tenant_id), ret_hash);
     return ret_hash;
   }
-  int compare(ObRpcBuffer* that)
-  {
+  int compare(ObRpcBuffer* that) {
     int ret = 0;
     if (this->hash_ > that->hash_) {
       ret = 1;
@@ -345,37 +281,29 @@ public:
       return 1;
     } else if (this->tenant_id_ < that->tenant_id_) {
       return -1;
-    } else if (this->server_ > that->server_) {
+    } else if(this->server_ > that->server_) {
       return 1;
-    } else if (this->server_ < that->server_) {
+    } else if(this->server_ < that->server_) {
       ret = -1;
-    } else if (this->dst_cluster_id_ > that->dst_cluster_id_) {
+    } else if(this->dst_cluster_id_ > that->dst_cluster_id_) {
       ret = 1;
-    } else if (this->dst_cluster_id_ < that->dst_cluster_id_) {
+    } else if(this->dst_cluster_id_ < that->dst_cluster_id_) {
       ret = -1;
     } else {
       ret = 0;
     }
     return ret;
   }
-  void set_dst_cluster_id(const int64_t cluster_id)
-  {
+  void set_dst_cluster_id(const int64_t cluster_id) {
     if (cluster_id == common::OB_INVALID_CLUSTER_ID) {
-      RPC_LOG(ERROR, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
+      RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
     } else if (cluster_id != dst_cluster_id_) {
       const int64_t old_cluster_id = dst_cluster_id_;
       dst_cluster_id_ = cluster_id;
-      RPC_LOG(INFO,
-          "update server dst_cluster_id finished",
-          "server",
-          server_,
-          "old cluster_id",
-          old_cluster_id,
-          "new cluster_id",
-          cluster_id);
+      RPC_LOG(INFO, "update server dst_cluster_id finished", "server", server_,
+              "old cluster_id", old_cluster_id, "new cluster_id", cluster_id);
     }
   }
-
 private:
   uint64_t tenant_id_;
   common::ObAddr server_;
@@ -385,23 +313,20 @@ private:
   RingBuffer buffer_;
 };
 
-class SingleWaitCond {
+class SingleWaitCond
+{
 public:
-  SingleWaitCond() : n_waiters_(0), futex_()
-  {}
-  ~SingleWaitCond()
-  {}
-  void signal()
-  {
-    auto& ready = futex_.val();
+  SingleWaitCond(): n_waiters_(0), futex_() {}
+  ~SingleWaitCond() {}
+  void signal() {
+    auto &ready = futex_.val();
     if (!ATOMIC_LOAD(&ready) && ATOMIC_BCAS(&ready, 0, 1)) {
       if (ATOMIC_LOAD(&n_waiters_) > 0) {
         futex_.wake(1);
       }
     }
   }
-  bool wait(int64_t timeout)
-  {
+  bool wait(int64_t timeout)  {
     bool ready = ATOMIC_LOAD(&futex_.val());
     if (!ready) {
       ATOMIC_FAA(&n_waiters_, 1);
@@ -412,13 +337,13 @@ public:
     }
     return ready;
   }
-
 private:
   int32_t n_waiters_;
-  lib::CoFutex futex_;
+  lib::ObFutex futex_;
 };
 
-class ObBatchRpcBase {
+class ObBatchRpcBase
+{
 public:
   enum { BUCKET_NUM = 64, BATCH_BUFFER_COUNT = 4 };
   typedef ObRpcBuffer RpcBuffer;
@@ -428,13 +353,13 @@ public:
   typedef common::FixedHash2<RpcBuffer> BufferMap;
   typedef SingleWaitCond SendCond;
   static const int64_t SVR_IDLE_TIME_THRESHOLD = 10 * 60 * 1000 * 1000L;  // 10 minutes
-  ObBatchRpcBase() : is_inited_(false), batch_type_(-1), self_(), delay_us_(0), rpc_(nullptr), buffer_map_(nullptr)
+  ObBatchRpcBase(): is_inited_(false), batch_type_(-1), self_(), delay_us_(0), rpc_(nullptr), buffer_map_(nullptr)
   {}
   ~ObBatchRpcBase()
   {
     if (is_inited_) {
       is_inited_ = false;
-      while (!buffer_map_->is_empty()) {
+      while (nullptr != buffer_map_ && !buffer_map_->is_empty()) {
         RpcBuffer* iter = NULL;
         if (NULL != (iter = buffer_map_->quick_next(iter))) {
           int cnt = 0;
@@ -456,11 +381,11 @@ public:
       RPC_LOG(INFO, "ObBatchRpcBase destroy finished");
     }
   }
-  int init(int64_t delay_us, const uint32_t batch_type, Rpc* rpc, const common::ObAddr& self_addr)
+  int init(int64_t delay_us, const uint32_t batch_type, Rpc* rpc, const common::ObAddr &self_addr)
   {
     int ret = common::OB_SUCCESS;
-    void* obj_buf = common::ob_malloc(sizeof(BufferMap), common::ObModIds::OB_RPC_BUFFER);
-    void* buf = common::ob_malloc(BUCKET_NUM * sizeof(common::SpHashNode), common::ObModIds::OB_RPC_BUFFER);
+    void *obj_buf = common::ob_malloc(sizeof(BufferMap), common::ObModIds::OB_RPC_BUFFER);
+    void *buf = common::ob_malloc(BUCKET_NUM * sizeof(common::SpHashNode), common::ObModIds::OB_RPC_BUFFER);
     if (NULL == obj_buf || NULL == buf) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       RPC_LOG(ERROR, "alloc memory failed", K(ret));
@@ -487,25 +412,23 @@ public:
     }
     return ret;
   }
-  int post(const uint64_t tenant_id, const common::ObAddr& dest, const int64_t dst_cluster_id,
-      const uint32_t batch_type, const uint32_t sub_type, const common::ObPartitionKey& pkey, const Req& req);
-  int post(const uint64_t tenant_id, const common::ObAddr& dest, const int64_t dst_cluster_id,
-      const uint32_t batch_type, const uint32_t sub_type, const election::ObElectionGroupId& eg_id, const Req& req);
+  int post(const uint64_t tenant_id, const common::ObAddr &dest, const int64_t dst_cluster_id,
+      const uint32_t batch_type, const uint32_t sub_type,
+      const Req& req);
+  int post(const uint64_t tenant_id, const common::ObAddr &dest, const int64_t dst_cluster_id,
+      const uint32_t batch_type, const int16_t sub_type,
+      const share::ObLSID &ls, const Req& req);
   void do_work();
-  int get_dst_svr_list(common::ObIArray<share::ObCascadMember>& dst_list);
-
+  int get_dst_svr_list(common::ObIArray<share::ObCascadMember> &dst_list);
 protected:
-  RpcBuffer* fetch(const uint64_t tenant_id, const common::ObAddr& server, const int64_t dst_cluster_id);
-  common::ObQSync& get_qs()
-  {
+  RpcBuffer* fetch(const uint64_t tenant_id, const common::ObAddr &server, const int64_t dst_cluster_id);
+  common::ObQSync& get_qs() {
     static common::ObQSync qsync;
     return qsync;
   }
-
 private:
   RpcBuffer* create_buffer(const uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id);
   void destroy_buffer(RpcBuffer* p);
-
 private:
   bool is_inited_;
   int batch_type_;
@@ -513,30 +436,25 @@ private:
   int64_t delay_us_;
   Rpc* rpc_;
   SendCond cond_;
-  BufferMap* buffer_map_;
+  BufferMap *buffer_map_;
 };
 
-class ObBatchRpc : public lib::TGRunnable {
+class ObBatchRpc: public lib::TGRunnable
+{
 public:
-  enum {
-    MAX_THREAD_COUNT = BATCH_REQ_TYPE_COUNT,
-    MINI_MODE_THREAD_COUNT = BATCH_REQ_TYPE_COUNT,
-  };
+  enum { MAX_THREAD_COUNT = BATCH_REQ_TYPE_COUNT,
+         MINI_MODE_THREAD_COUNT = BATCH_REQ_TYPE_COUNT, };
   typedef ObRpcBuffer::Rpc Rpc;
   typedef ObRpcBuffer::Req Req;
   ObBatchRpc() : thread_cnt_(!lib::is_mini_mode() ? MAX_THREAD_COUNT : MINI_MODE_THREAD_COUNT)
   {}
-  ~ObBatchRpc()
-  {
-    destroy();
-  }
-  int init(
-      rpc::frame::ObReqTransport* transport, rpc::frame::ObReqTransport* hp_transport, const common::ObAddr& self_addr)
+  ~ObBatchRpc() { destroy(); }
+  int init(rpc::frame::ObReqTransport *transport, rpc::frame::ObReqTransport *hp_transport,
+           const common::ObAddr &self_addr)
   {
     int ret = common::OB_SUCCESS;
     bool is_hp_eio_enabled = false;
-    if (static_cast<int32_t>(GCONF.high_priority_net_thread_count) > 0 &&
-        GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {
+    if (static_cast<int32_t>(GCONF.high_priority_net_thread_count) > 0) {
       is_hp_eio_enabled = true;
     }
 
@@ -545,7 +463,7 @@ public:
     } else if (is_hp_eio_enabled && OB_FAIL(hp_rpc_.init(hp_transport, self_addr))) {
       RPC_LOG(WARN, "hp_rpc init failed", K(ret));
     } else {
-      for (int i = 0; i < thread_cnt_; i++) {
+      for(int i = 0; i < thread_cnt_; i++) {
         if (is_hp_eio_enabled && is_hp_rpc(i)) {
           base_[i].init(get_batch_delay_us(i), i, &hp_rpc_, self_addr);
         } else {
@@ -556,52 +474,55 @@ public:
     }
     return ret;
   }
-  void destroy()
-  {
+  void destroy() {
     TG_STOP(lib::TGDefIDs::BRPC);
     TG_WAIT(lib::TGDefIDs::BRPC);
   }
-  void run1()
-  {
+  void run1() {
     int64_t idx = (int64_t)get_thread_idx();
     lib::set_thread_name("BRPC", idx);
-    while (!has_set_stop()) {
+    while(!has_set_stop()) {
       base_[idx].do_work();
     }
   }
-  int post(const uint64_t tenant_id, const common::ObAddr& dest, const int64_t dst_cluster_id,
-      const uint32_t batch_type, const uint32_t sub_type, const common::ObPartitionKey& pkey, const Req& req)
-  {
+  int post(const uint64_t tenant_id, const common::ObAddr &dest, const int64_t dst_cluster_id,
+           const uint32_t batch_type, const uint32_t sub_type,
+           const Req& req) {
     int ret = common::OB_SUCCESS;
     const int idx = get_batch_thread_idx(batch_type);
     if (OB_UNLIKELY(has_set_stop())) {
       ret = common::OB_NOT_RUNNING;
-    } else if (common::OB_INVALID_CLUSTER_ID == dst_cluster_id) {
+    } else if (common::OB_INVALID_CLUSTER_ID == dst_cluster_id
+          || !is_valid_tenant_id(tenant_id)
+          || !dest.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
     } else if (idx < thread_cnt_) {
-      ret = base_[idx].post(tenant_id, dest, dst_cluster_id, batch_type, sub_type, pkey, req);
+      ret = base_[idx].post(tenant_id, dest, dst_cluster_id, batch_type, sub_type, req);
     } else {
       ret = common::OB_ERR_UNEXPECTED;
     }
     return ret;
   }
-  int post(const uint64_t tenant_id, const common::ObAddr& dest, const int64_t dst_cluster_id,
-      const uint32_t batch_type, const uint32_t sub_type, const election::ObElectionGroupId& eg_id, const Req& req)
-  {
+  int post(const uint64_t tenant_id, const common::ObAddr &dest, const int64_t dst_cluster_id,
+           const uint32_t batch_type, const int16_t sub_type, const share::ObLSID& ls,
+           const Req& req) {
     int ret = common::OB_SUCCESS;
     const int idx = get_batch_thread_idx(batch_type);
     if (OB_UNLIKELY(has_set_stop())) {
       ret = common::OB_NOT_RUNNING;
-    } else if (common::OB_INVALID_CLUSTER_ID == dst_cluster_id) {
+    } else if (common::OB_INVALID_CLUSTER_ID == dst_cluster_id
+          || !is_valid_tenant_id(tenant_id)
+          || !dest.is_valid()
+          || !ls.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
     } else if (idx < thread_cnt_) {
-      ret = base_[idx].post(tenant_id, dest, dst_cluster_id, batch_type, sub_type, eg_id, req);
+      ret = base_[idx].post(tenant_id, dest, dst_cluster_id, batch_type, sub_type, ls, req);
     } else {
       ret = common::OB_ERR_UNEXPECTED;
     }
     return ret;
   }
-  int get_dst_svr_list(common::ObIArray<share::ObCascadMember>& dst_list);
+  int get_dst_svr_list(common::ObIArray<share::ObCascadMember> &dst_list);
 
 private:
   Rpc rpc_;
@@ -610,7 +531,8 @@ private:
   const int thread_cnt_;
 };
 
-};  // namespace obrpc
-};  // end namespace oceanbase
+}; // end namespace rpc
+}; // end namespace oceanbase
 
+#undef MYASSERT
 #endif /* OCEANBASE_RPC_OB_BATCH_RPC_H_ */

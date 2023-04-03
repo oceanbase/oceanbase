@@ -15,20 +15,22 @@
 
 #include "sql/resolver/ob_stmt_resolver.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObXaCommitResolver : public ObStmtResolver {
+class ObXaCommitResolver : public ObStmtResolver
+{
 public:
-  explicit ObXaCommitResolver(ObResolverParams& params);
+  explicit ObXaCommitResolver(ObResolverParams &params);
   virtual ~ObXaCommitResolver();
-  virtual int resolve(const ParseNode& parse_node);
-
+  virtual int resolve(const ParseNode &parse_node);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObXaCommitResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif

@@ -17,15 +17,23 @@ using namespace oceanbase;
 using namespace common;
 using namespace hash;
 
-struct PairValue {
+struct PairValue
+{
   int64_t key_;
   int64_t value_;
 
-  PairValue() : key_(0), value_(0)
-  {}
+  PairValue()
+  : key_(0),
+  value_(0)
+  {
 
-  PairValue(const int64_t key, const int64_t value) : key_(key), value_(value)
-  {}
+  }
+
+  PairValue(const int64_t key, const int64_t value)
+      : key_(key), value_(value)
+  {
+
+  }
 
   int64_t get_key() const
   {
@@ -34,7 +42,8 @@ struct PairValue {
 };
 
 template <class K, class V>
-struct GetKey {
+struct GetKey
+{
   K operator()(const V value) const
   {
     return value->get_key();
@@ -43,10 +52,10 @@ struct GetKey {
 
 TEST(TestObPointerHashMap, basic_test)
 {
-  ObPointerHashMap<int64_t, PairValue*, GetKey> hashmap;
+  ObPointerHashMap<int64_t, PairValue *, GetKey> hashmap;
   PairValue val1(1, 1);
   PairValue val2(2, 2);
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(1, &val1));
   ASSERT_EQ(OB_HASH_EXIST, hashmap.set_refactored(1, &val1));
   ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(1, &val1, 1));
@@ -73,10 +82,10 @@ TEST(TestObPointerHashMap, basic_test)
   ASSERT_EQ(0, hashmap.item_count());
 }
 
-// TODO
+//TODO
 TEST(TestObPointerHashMap, test_erase)
 {
-  ObPointerHashMap<int64_t, PairValue*, GetKey, 8 * 1024> hashmap;
+  ObPointerHashMap<int64_t, PairValue *, GetKey, 8 * 1024> hashmap;
   PairValue pair;
   pair.key_ = 1;
   for (int64_t i = 0; i < 11000; ++i) {
@@ -90,10 +99,10 @@ TEST(TestObPointerHashMap, test_erase_many)
 {
   const int64_t size_16k = 16 * 1024;
   const int64_t count = 1000;
-  ObPointerHashMap<int64_t, PairValue*, GetKey, size_16k> hashmap;  // 16K can contain 1400+ ponter
+  ObPointerHashMap<int64_t, PairValue *, GetKey, size_16k> hashmap; // 16K can contain 1400+ ponter
 
-  for (int64_t j = 0; j < 1000; ++j) {  // repeat 100 times, and will not extends
-    PairValue* pair = new PairValue[count];
+  for (int64_t j = 0; j < 1000; ++j) { // repeat 100 times, and will not extends
+    PairValue *pair = new PairValue[count];
     for (int64_t i = 0; i < count; ++i) {
       static int64_t value = 0;
       value++;
@@ -105,7 +114,7 @@ TEST(TestObPointerHashMap, test_erase_many)
       ASSERT_EQ(OB_SUCCESS, hashmap.erase_refactored(pair[i].key_));
     }
     printf("item_count=%ld, count=%ld\n", hashmap.item_count(), hashmap.count());
-    delete[] pair;
+    delete []pair;
     pair = NULL;
   }
   ASSERT_EQ(size_16k, hashmap.get_sub_map_mem_size());
@@ -113,15 +122,15 @@ TEST(TestObPointerHashMap, test_erase_many)
 
 TEST(TestObPointerHashMap, test_two_submap)
 {
-  ObPointerHashMap<int64_t, PairValue*, GetKey> hashmap;
+  ObPointerHashMap<int64_t, PairValue *, GetKey> hashmap;
 
-  PairValue* pairs = new PairValue[300000];
+  PairValue *pairs = new PairValue[300000];
   for (int64_t i = 0; i < 300000; ++i) {
     pairs[i].key_ = i;
     pairs[i].value_ = i;
   }
 
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   for (int64_t i = 0; i < 300000; ++i) {
     ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(pairs[i].key_, &pairs[i]));
     ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(pairs[i].key_, val));
@@ -161,7 +170,7 @@ TEST(TestObPointerHashMap, test_two_submap)
   ASSERT_EQ(0, hashmap.count());
   ASSERT_EQ(0, hashmap.item_count());
 
-  // reuse ok
+  //reuse ok
   for (int64_t i = 0; i < 300000; ++i) {
     ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(pairs[i].key_, &pairs[i]));
     ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(pairs[i].key_, val));
@@ -171,8 +180,8 @@ TEST(TestObPointerHashMap, test_two_submap)
   ASSERT_EQ(300000, hashmap.count());
   ASSERT_EQ(300000, hashmap.item_count());
 
-  // copy
-  ObPointerHashMap<int64_t, PairValue*, GetKey> hashmap_copy(hashmap);
+  //copy
+  ObPointerHashMap<int64_t, PairValue *, GetKey> hashmap_copy(hashmap);
   for (int64_t i = 0; i < 300000; ++i) {
     ASSERT_EQ(OB_SUCCESS, hashmap_copy.get_refactored(pairs[i].key_, val));
     ASSERT_EQ(i, val->value_);
@@ -180,21 +189,21 @@ TEST(TestObPointerHashMap, test_two_submap)
   ASSERT_EQ(300000, hashmap_copy.count());
   ASSERT_EQ(300000, hashmap_copy.item_count());
 
-  delete[] pairs;
+  delete [] pairs;
 }
 
 TEST(TestObPointerHashMap, test_large_pairs)
 {
-  ObPointerHashMap<int64_t, PairValue*, GetKey> hashmap;
+  ObPointerHashMap<int64_t, PairValue *, GetKey> hashmap;
 
   int64_t pair_count = 1000000;
-  PairValue* pairs = new PairValue[pair_count];
+  PairValue *pairs = new PairValue[pair_count];
   for (int64_t i = 0; i < pair_count; ++i) {
     pairs[i].key_ = i;
     pairs[i].value_ = i;
   }
 
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   for (int64_t i = 0; i < pair_count; ++i) {
     ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(pairs[i].key_, &pairs[i]));
     ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(pairs[i].key_, val));
@@ -205,15 +214,15 @@ TEST(TestObPointerHashMap, test_large_pairs)
   ASSERT_EQ(pair_count, hashmap.count());
   ASSERT_EQ(pair_count, hashmap.item_count());
 
-  delete[] pairs;
+  delete [] pairs;
 }
 
 TEST(TestObPointerHashMap, test_micro_benchmark)
 {
-  ObPointerHashMap<int64_t, PairValue*, GetKey> hashmap;
+  ObPointerHashMap<int64_t, PairValue *, GetKey> hashmap;
 
   int64_t pair_count = 250000;
-  PairValue* pairs = new PairValue[pair_count];
+  PairValue *pairs = new PairValue[pair_count];
   for (int64_t i = 0; i < pair_count; ++i) {
     pairs[i].key_ = i;
     pairs[i].value_ = i;
@@ -229,9 +238,9 @@ TEST(TestObPointerHashMap, test_micro_benchmark)
   int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
   int64_t set_time = end_time - start_time;
 
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
-  for (int64_t j = 0; j < 10; ++j) {
+  for (int64_t j = 0; j < 10; ++ j) {
     for (int64_t i = 0; i < pair_count; ++i) {
       if (0 != i % 3) {
         ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(pairs[i].key_, val));
@@ -245,17 +254,13 @@ TEST(TestObPointerHashMap, test_micro_benchmark)
   int64_t set_count = pair_count * 4 / 3;
   printf("hash map set_count=%ld, set_time=%ld, set_rate=%ld, get_count=%ld, "
          "get_time=%ld, get_rate=%ld\n",
-      set_count,
-      set_time,
-      set_count * 1000L * 1000L / set_time,
-      pair_count * 10,
-      get_time,
-      pair_count * 10 * 1000L * 1000L / get_time);
+         set_count, set_time, set_count * 1000L * 1000L / set_time,
+         pair_count * 10, get_time, pair_count * 10 * 1000L * 1000L / get_time);
 
-  delete[] pairs;
+  delete [] pairs;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

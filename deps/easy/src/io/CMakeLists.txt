@@ -11,4 +11,5 @@ easy_request.c
 easy_socket.c
 easy_ssl.c
 easy_summary.c
+easy_negotiation.c
 ev.c)

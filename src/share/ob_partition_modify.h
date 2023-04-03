@@ -16,14 +16,21 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_serialization.h"
-#include "common/ob_partition_key.h"
 #include "schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace share {
-enum PartitionSplitType { SPLIT_INVALID = 0, TABLE_SPLIT, PARTITION_SPLIT };
+namespace oceanbase
+{
+namespace share
+{
+enum PartitionSplitType
+{
+  SPLIT_INVALID = 0,
+  TABLE_SPLIT,
+  PARTITION_SPLIT
+};
 
-enum ObSplitProgress {
+enum ObSplitProgress
+{
   UNKNOWN_SPLIT_PROGRESS = -1,
   IN_SPLITTING = 0,
   LOGICAL_SPLIT_FINISH = 1,
@@ -31,22 +38,18 @@ enum ObSplitProgress {
   NEED_NOT_SPLIT = 10,
 };
 
-struct ObSplitInfo {
+struct ObSplitInfo
+{
 public:
   PartitionSplitType split_type_;
   schema::ObPartitionFuncType part_type_;
   uint64_t table_id_;
   uint64_t partition_id_;
   common::ObSEArray<uint64_t, 1> source_part_ids_;
-  ObSplitInfo()
-      : split_type_(SPLIT_INVALID),
-        part_type_(schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
-        table_id_(common::OB_INVALID_ID),
-        partition_id_(common::OB_INVALID_ID)
-  {}
-  ~ObSplitInfo()
-  {}
-  int assign(const ObSplitInfo& other);
+  ObSplitInfo() : split_type_(SPLIT_INVALID), part_type_(schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
+                  table_id_(common::OB_INVALID_ID), partition_id_(common::OB_INVALID_ID) {}
+  ~ObSplitInfo() {}
+  int assign(const ObSplitInfo &other);
   TO_STRING_KV(K_(split_type), K_(part_type), K_(table_id), K_(partition_id), K_(source_part_ids));
   void reset();
   void set_split_info(PartitionSplitType split_type, share::schema::ObPartitionFuncType part_type);
@@ -56,114 +59,60 @@ public:
   bool is_split_list_partition() const;
 };
 
-class ObSplitPartitionPair {
+
+class ObSplitPartitionPair
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObSplitPartitionPair() : src_pkey_(), dest_pkey_array_()
-  {}
-  ~ObSplitPartitionPair()
-  {}
-  int init(const common::ObPartitionKey& src_pkey, const common::ObIArray<common::ObPartitionKey>& dest_pkey_array);
+  ObSplitPartitionPair() : unused_(-1) {}
+  ~ObSplitPartitionPair() {}
+  int init();
   bool is_valid() const;
-  void reset()
-  {
-    src_pkey_.reset();
-    dest_pkey_array_.reset();
-  }
-  int assign(const ObSplitPartitionPair& other);
-  bool is_source_partition(const common::ObPartitionKey& pkey) const;
-  bool is_dest_partition(const common::ObPartitionKey& pkey) const;
-  const common::ObPartitionKey& get_source_pkey() const
-  {
-    return src_pkey_;
-  }
-  common::ObPartitionKey& get_source_pkey()
-  {
-    return src_pkey_;
-  }
-  const common::ObIArray<common::ObPartitionKey>& get_dest_array() const
-  {
-    return dest_pkey_array_;
-  }
-  common::ObIArray<common::ObPartitionKey>& get_dest_array()
-  {
-    return dest_pkey_array_;
-  }
+  void reset() {}
+  int assign(const ObSplitPartitionPair &other);
   int replace_tenant_id(const uint64_t new_tenant_id);
-  TO_STRING_KV(K_(src_pkey), K_(dest_pkey_array));
-
+  TO_STRING_KV(K_(unused));
 private:
-  // Split source
-  common::ObPartitionKey src_pkey_;
-  // Split destination
-  common::ObSArray<common::ObPartitionKey> dest_pkey_array_;
+  int64_t unused_;
 };
 
-class ObSplitPartition {
+class ObSplitPartition
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObSplitPartition() : split_info_(), schema_version_(0)
-  {}
-  ~ObSplitPartition()
-  {}
+  ObSplitPartition() : split_info_(), schema_version_(0) {}
+  ~ObSplitPartition() {}
   bool is_valid() const;
   void reset();
-  int assign(const ObSplitPartition& other);
-  int64_t get_schema_version() const
-  {
-    return schema_version_;
-  }
-  void set_schema_version(const int64_t schema_version)
-  {
-    schema_version_ = schema_version;
-  }
-  const common::ObIArray<ObSplitPartitionPair>& get_spp_array() const
-  {
-    return split_info_;
-  }
-  common::ObIArray<ObSplitPartitionPair>& get_spp_array()
-  {
-    return split_info_;
-  }
+  int assign(const ObSplitPartition &other);
+  int64_t get_schema_version() const { return schema_version_; }
+  void set_schema_version(const int64_t schema_version) {schema_version_ = schema_version; }
+  const common::ObIArray<ObSplitPartitionPair> &get_spp_array() const { return split_info_; }
+  common::ObIArray<ObSplitPartitionPair> &get_spp_array() { return split_info_; }
   int replace_tenant_id(const uint64_t new_tenant_id);
   TO_STRING_KV(K_(split_info), K_(schema_version));
-
 private:
-  // All copies of information that need to be split;
+  //All copies of information that need to be split;
   common::ObSArray<ObSplitPartitionPair> split_info_;
-  // The bottom layer needs to check that the schema_version is consistent with the schema_verion of the partition;
+  //The bottom layer needs to check that the schema_version is consistent with the schema_verion of the partition;
   int64_t schema_version_;
 };
 
-class ObPartitionSplitProgress {
+class ObPartitionSplitProgress
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObPartitionSplitProgress() : pkey_(), progress_(static_cast<int>(UNKNOWN_SPLIT_PROGRESS))
-  {}
-  ObPartitionSplitProgress(const common::ObPartitionKey& pkey, const int progress) : pkey_(pkey), progress_(progress)
-  {}
-  ~ObPartitionSplitProgress()
-  {}
-  const common::ObPartitionKey& get_pkey() const
-  {
-    return pkey_;
-  }
-  int get_progress() const
-  {
-    return progress_;
-  }
-  TO_STRING_KV(K_(pkey), K_(progress));
-
+  ObPartitionSplitProgress() : progress_(static_cast<int>(UNKNOWN_SPLIT_PROGRESS)) {}
+  ObPartitionSplitProgress(const int progress) : progress_(progress) {}
+  ~ObPartitionSplitProgress() {}
+  int get_progress() const { return progress_; }
+  TO_STRING_KV(K_(progress));
 private:
-  common::ObPartitionKey pkey_;
   int progress_;
 };
 
-}  // namespace share
+} // end namespace rootserver
 
-}  // end namespace oceanbase
+} // end namespace oceanbase
 
 #endif /* OB_PARTITION_MODIFY_H */

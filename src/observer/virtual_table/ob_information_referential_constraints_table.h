@@ -14,26 +14,32 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_REFERENTIAL_CONSTRAINTS_
 #include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObObj;
 
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObTableSchema;
 class ObDatabaseSchema;
 
-}  // namespace schema
-}  // namespace share
+}
+}
 
-namespace observer {
+namespace observer
+{
 
-class ObInfoSchemaReferentialConstraintsTable : public common::ObVirtualTableScannerIterator {
+class ObInfoSchemaReferentialConstraintsTable : public common::ObVirtualTableScannerIterator
+{
 public:
   ObInfoSchemaReferentialConstraintsTable();
   virtual ~ObInfoSchemaReferentialConstraintsTable();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
   inline void set_tenant_id(uint64_t tenant_id)
@@ -43,13 +49,19 @@ public:
 
 private:
   int add_fk_constraints_in_db(
-      const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, const int64_t col_count);
-  int add_fk_constraints_in_table(const share::schema::ObTableSchema& table_schema,
-      const common::ObString& database_name, common::ObObj* cells, const int64_t col_count);
+      const share::schema::ObDatabaseSchema &database_schema,
+      common::ObObj *cells,
+      const int64_t col_count);
+  int add_fk_constraints_in_table(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &database_name,
+      common::ObObj *cells,
+      const int64_t col_count);
   uint64_t tenant_id_;
 
 private:
-  enum REFERENTIAL_CONSTRAINTS_COLUMN_COUNT_COLUMN {
+  enum REFERENTIAL_CONSTRAINTS_COLUMN_COUNT_COLUMN
+  {
     CONSTRAINT_CATALOG = common::OB_APP_MIN_COLUMN_ID,
     CONSTRAINT_SCHEMA,
     CONSTRAINT_NAME,
@@ -67,6 +79,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaReferentialConstraintsTable);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_REFERENTIAL_CONSTRAINTS_ */

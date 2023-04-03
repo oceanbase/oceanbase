@@ -17,8 +17,10 @@
 #include "share/ob_define.h"
 #include "share/ob_truncated_string.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(TestTruncatedString, common)
 {
   // construct functions
@@ -33,12 +35,12 @@ TEST(TestTruncatedString, common)
   ASSERT_EQ(0, strcmp(to_cstring(printer_error), ""));
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

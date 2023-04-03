@@ -31,30 +31,38 @@ STAT_CLASS_DEF(TABLEAPI, 4096)
 #define OB_STAT_CLASS_H_
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 static const int64_t MAX_STAT_CLASS_NAME_LENGTH = 64;
 
-struct ObStatClassIds {
-  enum ObStatClassIdEnum {
+struct ObStatClassIds
+{
+  enum ObStatClassIdEnum
+  {
 #define STAT_CLASS_DEF(name, num) name = num,
 #include "lib/statistic_event/ob_stat_class.h"
 #undef STAT_CLASS_DEF
   };
 };
 
-struct ObStatClass {
+struct ObStatClass
+{
   char stat_class_[MAX_STAT_CLASS_NAME_LENGTH];
 };
 
+
 static const ObStatClass OB_STAT_CLASSES[] = {
-#define STAT_CLASS_DEF(name, num) {#name},
+#define STAT_CLASS_DEF(name, num) \
+  {#name},
 #include "lib/statistic_event/ob_stat_class.h"
 #undef STAT_CLASS_DEF
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+
 
 #endif /* OB_WAIT_CLASS_H_ */

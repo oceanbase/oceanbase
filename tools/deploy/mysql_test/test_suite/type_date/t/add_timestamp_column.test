@@ -1,0 +1,41 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL1
+##tags: ddl, datatype
+# description:
+#
+#bug:
+--disable_warnings
+drop table if exists stu;
+--enable_warnings
+
+create table stu(id int primary key, name char(20));
+
+insert into stu(id, name) values(1, 'zhang fei');
+
+insert into stu(id, name) values(2, 'zhao yun');
+
+insert into stu(id, name) values(3, 'zhen ji');
+
+insert into stu(id, name) values(4, 'zhou yu');
+
+insert into stu(id, name) values(5, 'zhu ge liang');
+
+insert into stu(id, name) values(6, 'ma chao');
+
+
+alter table stu add c1 int;
+
+alter table stu add column c2 char(90);
+
+alter table stu add column ctm2 timestamp default current_timestamp();
+
+
+
+insert into stu (id, name, c1) values (7, 'han mei mei', 18);
+
+insert into stu (id, name, c2) values (8, 'li lei', 'a boy');
+
+select id,name,c1,c2,length(ctm2) from stu;

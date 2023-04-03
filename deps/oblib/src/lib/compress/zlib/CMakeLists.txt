@@ -1,22 +1,30 @@
-ob_lib_add_target(oblib_compress_zlib
-  adler32.c
-  compress.c
-  crc32.c
-  deflate.c
-  gzclose.c
-  gzlib.c
-  gzread.c
-  gzwrite.c
-  infback.c
-  inffast.c
-  inflate.c
-  inftrees.c
-  trees.c
-  uncompr.c
-  zutil.c
-)
+oblib_add_library(zlib
+  zlib_src/adler32.c
+  zlib_src/compress.c
+  zlib_src/crc32.c
+  zlib_src/crc32.h
+  zlib_src/deflate.c
+  zlib_src/deflate.h
+  zlib_src/gzclose.c
+  zlib_src/gzguts.h
+  zlib_src/gzlib.c
+  zlib_src/gzread.c
+  zlib_src/gzwrite.c
+  zlib_src/infback.c
+  zlib_src/inffast.c
+  zlib_src/inffast.h
+  zlib_src/inffixed.h
+  zlib_src/inflate.c
+  zlib_src/inflate.h
+  zlib_src/inftrees.c
+  zlib_src/inftrees.h
+  zlib_src/trees.c
+  zlib_src/trees.h
+  zlib_src/uncompr.c
+  zlib_src/zconf.h
+  zlib_src/zlib.h
+  zlib_src/zutil.c
+  zlib_src/zutil.h)
 
-target_compile_options(oblib_compress_zlib PRIVATE -Wno-shift-negative-value -Wno-implicit-function-declaration)
-disable_pch(oblib_compress_zlib)
-target_link_libraries(oblib_compress_zlib)
+target_link_libraries(zlib)
 

@@ -13,25 +13,31 @@
 #define USING_LOG_PREFIX COMMON
 #include "share/ob_virtual_table_projector.h"
 #include "share/schema/ob_multi_version_schema_service.h"
-namespace oceanbase {
-namespace common {
-int ObVirtualTableProjector::project_row(const ObIArray<Column>& columns, ObNewRow& row, const bool full_columns)
+namespace oceanbase
+{
+namespace common
+{
+int ObVirtualTableProjector::project_row(const ObIArray<Column> &columns, ObNewRow &row, const bool full_columns)
 {
   int ret = OB_SUCCESS;
-  if (columns.count() <= 0) {
+  if (columns.count() < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("columns is empty", K(ret));
-  } else if (NULL == row.cells_) {
+  } else if (output_column_ids_.count() > row.count_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column num not match", KR(ret), K(row), K_(output_column_ids));
+  } else if (OB_ISNULL(row.cells_) && row.count_ != 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row.cells is null", K(ret));
+    LOG_WARN("row count is not valid", KR(ret), K(row));
+  } else if (OB_ISNULL(row.cells_)) {
+    // just skip, won't project row
+    // column not specified, eg: count(*)
   } else {
     int64_t cell_idx = 0;
-    FOREACH_CNT_X(column_id, output_column_ids_, OB_SUCCESS == ret)
-    {
+    FOREACH_CNT_X(column_id, output_column_ids_, OB_SUCCESS == ret) {
       bool find = false;
-      ObObj column_value;
-      FOREACH_CNT_X(column, columns, !find)
-      {
+      ObObj column_value = ObObj::make_nop_obj();
+      FOREACH_CNT_X(column, columns, !find) {
         if (*column_id == column->column_id_) {
           column_value = column->column_value_;
           find = true;
@@ -49,11 +55,12 @@ int ObVirtualTableProjector::project_row(const ObIArray<Column>& columns, ObNewR
   return ret;
 }
 
-int ObVirtualTableProjector::check_column_exist(
-    const share::schema::ObTableSchema* table, const char* column_name, bool& exist) const
+int ObVirtualTableProjector::check_column_exist(const share::schema::ObTableSchema *table,
+                                                const char* column_name,
+                                                bool &exist) const
 {
   int ret = OB_SUCCESS;
-  const share::schema::ObColumnSchemaV2* column_schema = NULL;
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
   exist = false;
   if (OB_ISNULL(table) || OB_ISNULL(column_name)) {
     ret = OB_INVALID_ARGUMENT;
@@ -63,8 +70,7 @@ int ObVirtualTableProjector::check_column_exist(
     LOG_WARN("fail to get column schema", KR(ret), K(column_name));
   } else {
     uint64_t table_column_id = column_schema->get_column_id();
-    FOREACH_CNT_X(column_id, output_column_ids_, OB_SUCCESS == ret)
-    {
+    FOREACH_CNT_X(column_id, output_column_ids_, OB_SUCCESS == ret) {
       if (*column_id == table_column_id) {
         exist = true;
         break;
@@ -75,10 +81,14 @@ int ObVirtualTableProjector::check_column_exist(
 }
 ////////////////////////////////////////////////////////////////
 ObSimpleVirtualTableIterator::ObSimpleVirtualTableIterator(uint64_t tenant_id, uint64_t table_id)
-    : tenant_id_(tenant_id), table_id_(table_id), schema_service_(NULL), table_schema_(NULL)
+    :tenant_id_(tenant_id),
+     table_id_(table_id),
+     schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
+     schema_service_(NULL),
+     table_schema_(NULL)
 {}
 
-int ObSimpleVirtualTableIterator::init(share::schema::ObMultiVersionSchemaService* schema_service)
+int ObSimpleVirtualTableIterator::init(share::schema::ObMultiVersionSchemaService *schema_service)
 {
   int ret = OB_SUCCESS;
   if (schema_service_ != NULL) {
@@ -112,18 +122,17 @@ int ObSimpleVirtualTableIterator::inner_open()
 int ObSimpleVirtualTableIterator::get_table_schema(uint64_t tenant_id, uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  const uint64_t my_table_id = combine_id(tenant_id, table_id);
-  if (OB_FAIL(schema_guard_.get_table_schema(my_table_id, table_schema_))) {
-    LOG_WARN("fail to get table schema", K(tenant_id), K(table_id), K(my_table_id), K(ret));
+  if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema_))) {
+    LOG_WARN("fail to get table schema", K(tenant_id), K(table_id), K(ret));
   } else if (NULL == table_schema_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_id));
-  } else {
-  }  // no more to do
+  } else {} // no more to do
   return ret;
 }
 
-int ObSimpleVirtualTableIterator::inner_get_next_row(common::ObNewRow*& row)
+int ObSimpleVirtualTableIterator::inner_get_next_row(
+    common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   columns_.reuse();
@@ -139,5 +148,6 @@ int ObSimpleVirtualTableIterator::inner_get_next_row(common::ObNewRow*& row)
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+
+}//end namespace common
+}//end namespace oceanbase

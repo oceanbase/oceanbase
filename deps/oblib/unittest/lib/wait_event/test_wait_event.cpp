@@ -14,8 +14,10 @@
 #include "lib/wait_event/ob_wait_event.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(ObWaitEventDesc, normal)
 {
   ObWaitEventDesc des1;
@@ -60,11 +62,13 @@ TEST(ObWaitEventStat, normal)
   ASSERT_EQ(stat3.total_timeouts_, 0);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+

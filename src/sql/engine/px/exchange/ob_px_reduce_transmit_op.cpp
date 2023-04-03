@@ -16,9 +16,11 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
 OB_SERIALIZE_MEMBER((ObPxReduceTransmitOpInput, ObPxTransmitOpInput));
 
@@ -50,5 +52,5 @@ int ObPxReduceTransmitOp::inner_close()
   return ObPxTransmitOp::inner_close();
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

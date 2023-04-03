@@ -16,14 +16,15 @@
 #include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_job.h"
 #include "lib/allocator/ob_allocator.h"
-#include "sql/engine/ob_phy_operator.h"
 #include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObLocalIdentityTaskSpliter::ObLocalIdentityTaskSpliter() : task_(NULL)
-{}
+ObLocalIdentityTaskSpliter::ObLocalIdentityTaskSpliter()
+  : task_(NULL)
+{
+}
 
 ObLocalIdentityTaskSpliter::~ObLocalIdentityTaskSpliter()
 {
@@ -33,7 +34,7 @@ ObLocalIdentityTaskSpliter::~ObLocalIdentityTaskSpliter()
   }
 }
 
-int ObLocalIdentityTaskSpliter::get_next_task(ObTaskInfo*& task)
+int ObLocalIdentityTaskSpliter::get_next_task(ObTaskInfo *&task)
 {
   int ret = OB_SUCCESS;
   if (OB_I(t1) OB_UNLIKELY(OB_ISNULL(allocator_) || OB_ISNULL(job_))) {
@@ -42,12 +43,12 @@ int ObLocalIdentityTaskSpliter::get_next_task(ObTaskInfo*& task)
   } else if (NULL != task_) {
     ret = OB_ITER_END;
   } else {
-    void* ptr = allocator_->alloc(sizeof(ObTaskInfo));
+    void *ptr = allocator_->alloc(sizeof(ObTaskInfo));
     if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail allocate ObTaskInfo", K(ret));
     } else {
-      task_ = new (ptr) ObTaskInfo(*allocator_);
+      task_ = new(ptr) ObTaskInfo(*allocator_);
       ObTaskID ob_task_id;
       ObTaskLocation task_loc;
       ob_task_id.set_ob_job_id(job_->get_ob_job_id());
@@ -58,11 +59,13 @@ int ObLocalIdentityTaskSpliter::get_next_task(ObTaskInfo*& task)
       task_->set_location_idx(0);
       task_->set_pull_slice_id(0);
       task_->set_task_location(task_loc);
-      task_->set_root_op(job_->get_root_op());
       task_->set_state(OB_TASK_STATE_NOT_INIT);
-      // in order to ensure that the second call to get_next_task can return OB_ITER_END
+      task_->set_root_spec(job_->get_root_spec());
+      // 将task_作为类成员的目的是为了保证第二次调用get_next_task能返回OB_ITER_END
       task = task_;
     }
   }
   return ret;
 }
+
+

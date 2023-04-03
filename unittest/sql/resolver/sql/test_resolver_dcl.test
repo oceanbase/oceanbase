@@ -6,7 +6,7 @@ create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions
 ### create
 create user 'hualong' identified by '123456'
 #create user 'hualong' identified by password '123456'
-create user 'hualong' identified by '123456', '' identified by '123456'
+create user 'hualong' identified by '123456', 'xiyu' identified by '123456'
 
 ### drop
 drop user 'hualong'

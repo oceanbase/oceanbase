@@ -23,7 +23,8 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
 
-ObReqQHandler::ObReqQHandler(ObReqTranslator& translator) : translator_(translator)
+ObReqQHandler::ObReqQHandler(ObReqTranslator &translator)
+    : translator_(translator)
 {
   // empty
 }
@@ -38,20 +39,20 @@ int ObReqQHandler::init()
   return translator_.init();
 }
 
-int ObReqQHandler::onThreadCreated(obsys::CThread* th)
+int ObReqQHandler::onThreadCreated(obsys::CThread *th)
 {
   UNUSED(th);
   LOG_INFO("new task thread create", K(&translator_));
   return translator_.th_init();
 }
 
-int ObReqQHandler::onThreadDestroy(obsys::CThread* th)
+int ObReqQHandler::onThreadDestroy(obsys::CThread *th)
 {
   UNUSED(th);
   return translator_.th_destroy();
 }
 
-bool ObReqQHandler::handlePacketQueue(ObRequest* req, void* /* arg */)
+bool ObReqQHandler::handlePacketQueue(ObRequest *req, void */* arg */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(req)) {
@@ -59,7 +60,7 @@ bool ObReqQHandler::handlePacketQueue(ObRequest* req, void* /* arg */)
     LOG_ERROR("invalid argument", K(req), K(ret));
   }
 
-  ObReqProcessor* processor = NULL;
+  ObReqProcessor *processor = NULL;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(translator_.translate(*req, processor))) {
       LOG_WARN("translate reqeust fail", K(*req), K(ret));
@@ -71,10 +72,10 @@ bool ObReqQHandler::handlePacketQueue(ObRequest* req, void* /* arg */)
   // returning code before.
   if (NULL == processor) {
     if (NULL != req) {
-      req->disconnect();
-      easy_request_wakeup(req->get_request());
+      on_translate_fail(req, ret);
     }
   } else {
+    req->set_trace_point(ObRequest::OB_EASY_REQUEST_QHANDLER_PROCESSOR_RUN);
     if (OB_FAIL(processor->run())) {
       LOG_WARN("process rpc fail", K(ret));
     }

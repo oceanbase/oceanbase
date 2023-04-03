@@ -24,27 +24,28 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "ob_fake_table.h"
+#include "share/ob_simple_mem_limit_getter.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 using oceanbase::sql::test::ObFakeTable;
 
-class TestMergeSort : public ObMergeSort {
+static ObSimpleMemLimitGetter getter;
+class TestMergeSort : public ObMergeSort
+{
 public:
-  TestMergeSort(ObIAllocator& alloc) : ObMergeSort(alloc)
-  {}
-  ~TestMergeSort()
-  {}
+  TestMergeSort(ObIAllocator &alloc) : ObMergeSort(alloc) {}
+  ~TestMergeSort() {}
 };
 
-class TestMergeSortTest : public oceanbase::blocksstable::TestDataFilePrepare {
+class TestMergeSortTest: public oceanbase::blocksstable::TestDataFilePrepare
+{
   static const int64_t SORT_BUF_SIZE = 2 * 1024 * 1024;
   static const int64_t EXPIRE_TIMESTAMP = 0;
   static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
   static const int64_t MACRO_BLOCK_COUNT = 50 * 1024;
   static const uint64_t TENATN_ID = 1;
-
 public:
   TestMergeSortTest();
   virtual ~TestMergeSortTest();
@@ -52,44 +53,52 @@ public:
   virtual void TearDown();
   int init_tenant_mgr();
   void destroy_tenant_mgr();
-
 private:
   // disallow copy
-  TestMergeSortTest(const TestMergeSortTest& other);
-  TestMergeSortTest& operator=(const TestMergeSortTest& other);
-
+  TestMergeSortTest(const TestMergeSortTest &other);
+  TestMergeSortTest& operator=(const TestMergeSortTest &other);
 protected:
   typedef ObSArray<ObSortColumn> ObSortColumns;
-  void sort_test(int64_t run_count, int64_t row_count, int64_t sort_col1, ObCollationType cs_type1, int64_t sort_col2,
-      ObCollationType cs_type2);
+  void sort_test(int64_t run_count, int64_t row_count,
+                 int64_t sort_col1, ObCollationType cs_type1,
+                 int64_t sort_col2, ObCollationType cs_type2);
   void sort_exception_test(int expect_ret);
-
 private:
-  int init_op(TestMergeSort& merge_sort, ObFakeTable& input_table, ObSortColumns& sort_cols, int64_t row_count,
-      int64_t sort_col1, ObCollationType cs_type1, int64_t sort_col2, ObCollationType cs_type2);
-  int init_data(TestMergeSort& merge_sort, ObBaseSort& in_mem_sort, ObFakeTable& input_table, ObSortColumns& sort_cols,
-      int64_t run_count, int64_t row_count);
-  void cons_sort_cols(
-      int64_t col1, ObCollationType cs_type1, int64_t col2, ObCollationType cs_type2, ObSortColumns& sort_cols);
-  void copy_cell_varchar(ObObj& cell, char* buf, int64_t buf_size);
-  void cons_new_row(ObNewRow& row, int64_t column_count);
-
+  int init_op(TestMergeSort &merge_sort,
+              ObFakeTable &input_table,
+              ObSortColumns &sort_cols,
+              int64_t row_count,
+              int64_t sort_col1, ObCollationType cs_type1,
+              int64_t sort_col2, ObCollationType cs_type2);
+  int init_data(TestMergeSort &merge_sort,
+                ObBaseSort &in_mem_sort,
+                ObFakeTable &input_table,
+                ObSortColumns &sort_cols,
+                int64_t run_count,
+                int64_t row_count);
+  void cons_sort_cols(int64_t col1, ObCollationType cs_type1,
+                      int64_t col2, ObCollationType cs_type2,
+                      ObSortColumns &sort_cols);
+  void copy_cell_varchar(ObObj &cell, char *buf, int64_t buf_size);
+  void cons_new_row(ObNewRow &row, int64_t column_count);
 private:
   ObPhysicalPlan physical_plan_;
   ObArenaAllocator alloc_;
 };
 
-TestMergeSortTest::TestMergeSortTest() : TestDataFilePrepare("TestMergeSort", MACRO_BLOCK_SIZE, MACRO_BLOCK_COUNT)
-{}
+TestMergeSortTest::TestMergeSortTest()
+  : TestDataFilePrepare(&getter, "TestMergeSort", MACRO_BLOCK_SIZE, MACRO_BLOCK_COUNT)
+{
+}
 
 TestMergeSortTest::~TestMergeSortTest()
-{}
+{
+}
 
 void TestMergeSortTest::SetUp()
 {
   TestDataFilePrepare::SetUp();
   FILE_MANAGER_INSTANCE_V2.init();
-  FILE_MANAGER_INSTANCE_V2.start();
   ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
 }
 
@@ -104,7 +113,6 @@ void TestMergeSortTest::TearDown()
 int TestMergeSortTest::init_tenant_mgr()
 {
   int ret = OB_SUCCESS;
-  ObTenantManager& tm = ObTenantManager::get_instance();
   ObAddr self;
   oceanbase::rpc::frame::ObReqTransport req_transport(NULL, NULL);
   oceanbase::obrpc::ObSrvRpcProxy rpc_proxy;
@@ -112,19 +120,12 @@ int TestMergeSortTest::init_tenant_mgr()
   oceanbase::share::ObRsMgr rs_mgr;
   int64_t tenant_id = 1;
   self.set_ip_addr("127.0.0.1", 8086);
-  ret = tm.init(self, rpc_proxy, rs_rpc_proxy, rs_mgr, &req_transport, &ObServerConfig::get_instance());
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(tenant_id);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.set_tenant_mem_limit(tenant_id, 2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SYS_TENANT_ID);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SERVER_TENANT_ID);
+  ret = getter.add_tenant(tenant_id,
+                          2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
   EXPECT_EQ(OB_SUCCESS, ret);
   const int64_t ulmt = 128LL << 30;
   const int64_t llmt = 128LL << 30;
-  ret = tm.set_tenant_mem_limit(OB_SYS_TENANT_ID, ulmt, llmt);
+  ret = getter.add_tenant(OB_SERVER_TENANT_ID, ulmt, llmt);
   EXPECT_EQ(OB_SUCCESS, ret);
   oceanbase::lib::set_memory_limit(128LL << 32);
   return ret;
@@ -132,27 +133,26 @@ int TestMergeSortTest::init_tenant_mgr()
 
 void TestMergeSortTest::destroy_tenant_mgr()
 {
-  ObTenantManager& tm = ObTenantManager::get_instance();
-  tm.destroy();
 }
 
-void TestMergeSortTest::sort_test(int64_t run_count, int64_t row_count, int64_t sort_col1, ObCollationType cs_type1,
-    int64_t sort_col2, ObCollationType cs_type2)
+void TestMergeSortTest::sort_test(int64_t run_count, int64_t row_count,
+                                int64_t sort_col1, ObCollationType cs_type1,
+                                int64_t sort_col2, ObCollationType cs_type2)
 {
   ObArenaAllocator alloc;
   TestMergeSort merge_sort(alloc_);
   ObBaseSort in_mem_sort;
   ObFakeTable input_table;
   ObSortColumns sort_cols;
-  const ObObj* cell1 = NULL;
-  const ObObj* cell2 = NULL;
+  const ObObj *cell1 = NULL;
+  const ObObj *cell2 = NULL;
   ObObj last_cell1;
   ObObj last_cell2;
   char varchar_buf[1024];
   ObNewRow row;
-  ASSERT_EQ(OB_SUCCESS, SLOGGER.begin(OB_LOG_CS_DAILY_MERGE));
-  ASSERT_EQ(
-      OB_SUCCESS, init_op(merge_sort, input_table, sort_cols, row_count, sort_col1, cs_type1, sort_col2, cs_type2));
+  // ASSERT_EQ(OB_SUCCESS, SLOGGER.begin(OB_LOG_CS_DAILY_MERGE));
+  ASSERT_EQ(OB_SUCCESS, init_op(merge_sort, input_table, sort_cols, row_count,
+                                sort_col1, cs_type1, sort_col2, cs_type2));
   ASSERT_EQ(OB_SUCCESS, init_data(merge_sort, in_mem_sort, input_table, sort_cols, run_count, row_count));
   ASSERT_EQ(OB_SUCCESS, merge_sort.do_merge_sort(input_table.get_column_count()));
   cons_new_row(row, input_table.get_column_count());
@@ -160,7 +160,7 @@ void TestMergeSortTest::sort_test(int64_t run_count, int64_t row_count, int64_t 
   last_cell1 = row.cells_[sort_col1];
   last_cell2 = row.cells_[sort_col2];
   int64_t total_row_count = run_count * row_count;
-  // int ret = OB_SUCCESS;
+  //int ret = OB_SUCCESS;
   for (int64_t i = 1; i < total_row_count; ++i) {
     merge_sort.get_next_row(row);
     cell1 = &row.cells_[sort_col1];
@@ -180,7 +180,7 @@ void TestMergeSortTest::sort_test(int64_t run_count, int64_t row_count, int64_t 
     }
   }
   ASSERT_EQ(OB_ITER_END, merge_sort.get_next_row(row));
-  ASSERT_EQ(OB_SUCCESS, SLOGGER.abort());
+  // ASSERT_EQ(OB_SUCCESS, SLOGGER.abort());
   return;
 }
 
@@ -200,10 +200,11 @@ void TestMergeSortTest::sort_exception_test(int expect_ret)
   ObCollationType cs_type1 = CS_TYPE_UTF8MB4_BIN;
   ObCollationType cs_type2 = CS_TYPE_UTF8MB4_BIN;
 
-  if (OB_FAIL(init_op(merge_sort, input_table, sort_cols, row_count, sort_col1, cs_type1, sort_col2, cs_type2))) {
-  } else if (OB_FAIL(init_data(merge_sort, in_mem_sort, input_table, sort_cols, run_count, row_count))) {
-  } else if (OB_FAIL(merge_sort.do_merge_sort(input_table.get_column_count()))) {
-  } else {
+  if (OB_FAIL(init_op(merge_sort, input_table, sort_cols, row_count,
+                      sort_col1, cs_type1, sort_col2, cs_type2))) {}
+  else if (OB_FAIL(init_data(merge_sort, in_mem_sort, input_table, sort_cols, run_count, row_count))) {}
+  else if (OB_FAIL(merge_sort.do_merge_sort(input_table.get_column_count()))) {}
+  else {
     ObNewRow row;
     cons_new_row(row, input_table.get_column_count());
     int64_t total_row_count = run_count * row_count;
@@ -220,8 +221,12 @@ void TestMergeSortTest::sort_exception_test(int expect_ret)
   }
 }
 
-int TestMergeSortTest::init_op(TestMergeSort& merge_sort, ObFakeTable& input_table, ObSortColumns& sort_cols,
-    int64_t row_count, int64_t sort_col1, ObCollationType cs_type1, int64_t sort_col2, ObCollationType cs_type2)
+int TestMergeSortTest::init_op(TestMergeSort &merge_sort,
+                             ObFakeTable &input_table,
+                             ObSortColumns &sort_cols,
+                             int64_t row_count,
+                             int64_t sort_col1, ObCollationType cs_type1,
+                             int64_t sort_col2, ObCollationType cs_type2)
 {
   int ret = OB_SUCCESS;
   ObString filename;
@@ -238,29 +243,32 @@ int TestMergeSortTest::init_op(TestMergeSort& merge_sort, ObFakeTable& input_tab
   return ret;
 }
 
-int TestMergeSortTest::init_data(TestMergeSort& merge_sort, ObBaseSort& in_mem_sort, ObFakeTable& input_table,
-    ObSortColumns& sort_cols, int64_t run_count, int64_t row_count)
+int TestMergeSortTest::init_data(TestMergeSort &merge_sort,
+                                 ObBaseSort &in_mem_sort,
+                                 ObFakeTable &input_table,
+                                 ObSortColumns &sort_cols,
+                                 int64_t run_count,
+                                 int64_t row_count)
 {
   int ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   bool need_false = false;
   // loop run_count to generate dumped runs.
   for (int i = 0; OB_SUCC(ret) && i < run_count; ++i) {
     ObExecContext exec_ctx;
     ObSQLSessionInfo my_session;
-    my_session.test_init(0, 0, 0, NULL);
+    my_session.test_init(0,0,0,NULL);
     exec_ctx.set_my_session(&my_session);
-    my_session.test_init(0, 0, 0, NULL);
+    my_session.test_init(0,0,0,NULL);
     in_mem_sort.reuse();
-    if (OB_FAIL(exec_ctx.init_phy_op(1))) {
-    } else if (OB_FAIL(exec_ctx.create_physical_plan_ctx())) {
-    } else if (OB_FAIL(in_mem_sort.set_sort_columns(sort_cols, 0))) {
-    } else if (OB_FAIL(input_table.open(exec_ctx))) {
-    } else {
+    if (OB_FAIL(exec_ctx.init_phy_op(1))) {}
+    else if (OB_FAIL(exec_ctx.create_physical_plan_ctx())) {}
+    else if (OB_FAIL(in_mem_sort.set_sort_columns(sort_cols, 0))) {}
+    else if (OB_FAIL(input_table.open(exec_ctx))) {}
+    else {
       for (int j = 0; OB_SUCC(ret) && j < row_count; ++j) {
-        if (OB_FAIL(input_table.get_next_row(exec_ctx, row))) {
-        } else if (OB_FAIL(in_mem_sort.add_row(*row, need_false))) {
-        }
+        if (OB_FAIL(input_table.get_next_row(exec_ctx, row))) {}
+        else if (OB_FAIL(in_mem_sort.add_row(*row, need_false))) {}
       }
     }
     ObSEArray<ObOpSchemaObj, 8> op_schema_objs;
@@ -268,17 +276,17 @@ int TestMergeSortTest::init_data(TestMergeSort& merge_sort, ObBaseSort& in_mem_s
       // do nothing
     } else {
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(in_mem_sort.sort_rows())) {
-    } else if (OB_FAIL(input_table.close(exec_ctx))) {
-    } else if (OB_FAIL(merge_sort.dump_base_run(in_mem_sort))) {
-    }
-  }  // end for i
+    if (OB_FAIL(ret)) {}
+    else if (OB_FAIL(in_mem_sort.sort_rows())) {}
+    else if (OB_FAIL(input_table.close(exec_ctx))) {}
+    else if (OB_FAIL(merge_sort.dump_base_run(in_mem_sort))) {}
+  } // end for i
   return ret;
 }
 
-void TestMergeSortTest::cons_sort_cols(
-    int64_t col1, ObCollationType cs_type1, int64_t col2, ObCollationType cs_type2, ObSortColumns& sort_cols)
+void TestMergeSortTest::cons_sort_cols(int64_t col1, ObCollationType cs_type1,
+                                     int64_t col2, ObCollationType cs_type2,
+                                     ObSortColumns &sort_cols)
 {
   ObSortColumn sort_col;
   sort_col.index_ = col1;
@@ -292,7 +300,7 @@ void TestMergeSortTest::cons_sort_cols(
   return;
 }
 
-void TestMergeSortTest::copy_cell_varchar(ObObj& cell, char* buf, int64_t buf_size)
+void TestMergeSortTest::copy_cell_varchar(ObObj &cell, char *buf, int64_t buf_size)
 {
   ObString str;
   ASSERT_EQ(OB_SUCCESS, cell.get_varchar(str));
@@ -303,9 +311,9 @@ void TestMergeSortTest::copy_cell_varchar(ObObj& cell, char* buf, int64_t buf_si
   return;
 }
 
-void TestMergeSortTest::cons_new_row(ObNewRow& row, int64_t column_count)
+void TestMergeSortTest::cons_new_row(ObNewRow &row, int64_t column_count)
 {
-  row.cells_ = static_cast<ObObj*>(malloc(column_count * sizeof(ObObj)));
+  row.cells_ = static_cast<ObObj *>(malloc(column_count * sizeof(ObObj)));
   row.count_ = column_count;
 }
 
@@ -315,12 +323,12 @@ TEST_F(TestMergeSortTest, sorted_int_int_test)
   int64_t sort_col2 = 2;
   ObCollationType cs_type1 = CS_TYPE_UTF8MB4_BIN;
   ObCollationType cs_type2 = CS_TYPE_UTF8MB4_BIN;
-  sort_test(4, 4, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 256, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 4096, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 4,    sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 256,   sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 4096,  sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(4, 65536, sort_col1, cs_type1, sort_col2, cs_type2);
 
-  sort_test(16, 4, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(16,  4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(256, 4, sort_col1, cs_type1, sort_col2, cs_type2);
 }
 
@@ -330,11 +338,11 @@ TEST_F(TestMergeSortTest, random_int_int_test)
   int64_t sort_col2 = 13;
   ObCollationType cs_type1 = CS_TYPE_UTF8MB4_BIN;
   ObCollationType cs_type2 = CS_TYPE_UTF8MB4_BIN;
-  sort_test(4, 16, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 256, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 4096, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 16,    sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 256,   sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 4096,  sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(4, 65536, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(16, 4, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(16,  4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(256, 4, sort_col1, cs_type1, sort_col2, cs_type2);
 }
 
@@ -344,27 +352,27 @@ TEST_F(TestMergeSortTest, random_varchar_int_test)
   int64_t sort_col2 = 1;
   ObCollationType cs_type1 = CS_TYPE_UTF8MB4_BIN;
   ObCollationType cs_type2 = CS_TYPE_UTF8MB4_BIN;
-  sort_test(4, 16, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 256, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 4096, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 16,    sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 256,   sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 4096,  sort_col1, cs_type1, sort_col2, cs_type2);
 
-  sort_test(16, 4, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(16,  4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(256, 4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(4, 65536, sort_col1, cs_type1, sort_col2, cs_type2);
   cs_type1 = CS_TYPE_UTF8MB4_GENERAL_CI;
-  sort_test(4, 16, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 256, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(4, 4096, sort_col1, cs_type1, sort_col2, cs_type2);
-  sort_test(16, 4, sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 16,    sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 256,   sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(4, 4096,  sort_col1, cs_type1, sort_col2, cs_type2);
+  sort_test(16,  4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(256, 4, sort_col1, cs_type1, sort_col2, cs_type2);
   sort_test(4, 65536, sort_col1, cs_type1, sort_col2, cs_type2);
 }
 
 #define SORT_EXCEPTION_TEST(file, func, key, err, expect_ret) \
-  do {                                                        \
-    TP_SET_ERROR("engine/sort/" file, func, key, err);        \
-    sort_exception_test(expect_ret);                          \
-    TP_SET_ERROR("engine/sort/" file, func, key, NULL);       \
+  do { \
+    TP_SET_ERROR("engine/sort/" file, func, key, err); \
+    sort_exception_test(expect_ret); \
+    TP_SET_ERROR("engine/sort/" file, func, key, NULL); \
   } while (0)
 
 TEST_F(TestMergeSortTest, sort_exception)
@@ -382,12 +390,12 @@ TEST_F(TestMergeSortTest, sort_exception)
   SORT_EXCEPTION_TEST("ob_merge_sort.cpp", "get_next_row", "t7", OB_ERROR, OB_ERROR);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -f test_merge_sort.log*");
   OB_LOGGER.set_file_name("test_merge_sort.log", true, true);
-  // OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  //OB_LOGGER.set_log_level("INFO");
+  ::testing::InitGoogleTest(&argc,argv);
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   return RUN_ALL_TESTS();
 }

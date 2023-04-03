@@ -25,771 +25,1775 @@ namespace share {
 namespace schema {
 class ObForeignKeyInfo;
 class ObTableSchema;
-}  // namespace schema
-}  // namespace share
+}
+}
 
 namespace sql {
 
-class ObStmtHint;
+struct ObStmtHint;
 struct ObTransformerCtx;
 struct ObStmtMapInfo;
 class ObUpdateStmt;
 class ObSQLSessionInfo;
 
 enum CheckStmtUniqueFlags {
-  FLAGS_DEFAULT = 0,               // nothing
-  FLAGS_IGNORE_DISTINCT = 1 << 0,  // for distinct
-  FLAGS_IGNORE_GROUP = 1 << 1,     // for group by
+  FLAGS_DEFAULT          = 0,      //nothing
+  FLAGS_IGNORE_DISTINCT  = 1 << 0, //for distinct
+  FLAGS_IGNORE_GROUP     = 1 << 1, //for group by
 };
 
-class ObTransformUtils {
-private:
-  struct UniqueCheckInfo {
-    UniqueCheckInfo()
-    {}
-    virtual ~UniqueCheckInfo()
-    {}
+enum NULLABLE_SCOPE {
+  NS_FROM     = 1 << 0,
+  NS_WHERE    = 1 << 1,
+  NS_GROUPBY  = 1 << 2,
+  NS_TOP      = 1 << 4
+};
+
+struct ObNotNullContext
+{
+  ObNotNullContext(ObTransformerCtx &ctx,
+                   const ObDMLStmt *stmt = NULL) : 
+    exec_ctx_(ctx.exec_ctx_), allocator_(ctx.allocator_),
+    is_for_ctas_(false), stmt_(stmt)
+  {}
+  
+  ObNotNullContext(const ObNotNullContext &other,
+                   const ObDMLStmt *stmt) :
+    exec_ctx_(other.exec_ctx_), allocator_(other.allocator_),
+    is_for_ctas_(other.is_for_ctas_), stmt_(stmt)
+  {}
+  
+  ObNotNullContext(ObExecContext *exec_ctx,
+                   ObIAllocator *allocator,
+                   const ObDMLStmt *stmt,
+                   bool is_for_ctas = false) 
+    : exec_ctx_(exec_ctx), allocator_(allocator), 
+      is_for_ctas_(is_for_ctas), stmt_(stmt)
+  {}
+  
+  ObNotNullContext() :
+    exec_ctx_(NULL), allocator_(NULL), is_for_ctas_(false), stmt_(NULL)
+  {}
+      
+  int generate_stmt_context(int64_t stmt_context = NULLABLE_SCOPE::NS_TOP);
+  
+  int add_joined_table(const JoinedTable *table);
+  
+  int add_filter(const ObIArray<ObRawExpr *> &filters);
+
+  int add_filter(ObRawExpr *filter);
+  
+  int remove_filter(ObRawExpr *filter);
+
+  int add_having_filter(const ObIArray<ObRawExpr *> &filters);
+
+  int add_having_filter(ObRawExpr *filter);
+
+  int remove_having_filter(ObRawExpr *filter);
+
+  inline void reset() {
+    group_clause_exprs_.reset();
+    right_table_ids_.reset();
+    filters_.reset();
+    having_filters_.reset();
+  }
+
+public:
+  // params
+  ObExecContext *exec_ctx_;
+  ObIAllocator *allocator_;
+  
+  // for CTAS in oracle mode
+  bool is_for_ctas_;
+  
+  // relation context
+  const ObDMLStmt *stmt_;
+  
+  ObArray<ObRawExpr *> group_clause_exprs_;
+  ObArray<uint64_t> right_table_ids_;
+  
+  ObArray<ObRawExpr *> having_filters_;
+  ObArray<ObRawExpr *> filters_;
+};
+
+
+class ObTransformUtils
+{
+  private:
+  struct UniqueCheckInfo
+  {
+    UniqueCheckInfo() {}
+    virtual ~UniqueCheckInfo() {}
 
     ObRelIds table_set_;
-    ObSEArray<ObRawExpr*, 4> const_exprs_;
+    ObSEArray<ObRawExpr *, 4> const_exprs_;
     EqualSets equal_sets_;
     ObFdItemSet fd_sets_;
     ObFdItemSet candi_fd_sets_;
-    ObSEArray<ObRawExpr*, 4> not_null_;
+    ObSEArray<ObRawExpr *, 4> not_null_;
 
-    int assign(const UniqueCheckInfo& other);
+    int assign(const UniqueCheckInfo &other);
     void reset();
 
-  private:
-    DISALLOW_COPY_AND_ASSIGN(UniqueCheckInfo);
+    private:
+      DISALLOW_COPY_AND_ASSIGN(UniqueCheckInfo);
   };
-  struct UniqueCheckHelper {
-    UniqueCheckHelper()
-        : alloc_(NULL), fd_factory_(NULL), expr_factory_(NULL), schema_checker_(NULL), session_info_(NULL)
-    {}
-    virtual ~UniqueCheckHelper()
-    {}
+  struct UniqueCheckHelper
+  {
+    UniqueCheckHelper() :
+      alloc_(NULL),
+      fd_factory_(NULL),
+      expr_factory_(NULL),
+      schema_checker_(NULL),
+      session_info_(NULL) {}
+    virtual ~UniqueCheckHelper() {}
 
-    ObIAllocator* alloc_;
-    ObFdItemFactory* fd_factory_;
-    ObRawExprFactory* expr_factory_;
-    ObSchemaChecker* schema_checker_;
-    ObSQLSessionInfo* session_info_;
-
+    ObIAllocator *alloc_;
+    ObFdItemFactory *fd_factory_;
+    ObRawExprFactory *expr_factory_;
+    ObSchemaChecker *schema_checker_;
+    ObSQLSessionInfo *session_info_;
   private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
 
 public:
-  enum NULLABLE_SCOPE {
-    NS_FROM     = 1 << 0,
-    NS_WHERE    = 1 << 1,
-    NS_GROUPBY  = 1 << 2,
-    NS_HAVING   = 1 << 3,
-    NS_TOP      = 1 << 4
+  struct LazyJoinInfo {
+    LazyJoinInfo()
+      :join_conditions_(),
+      right_table_(NULL)
+    {}
+    
+    void reset() {
+      join_conditions_.reset();
+      right_table_ = NULL;
+    }
+    int assign(const LazyJoinInfo &other);
+
+    TO_STRING_KV(
+      K(join_conditions_),
+      K(right_table_)
+    );
+
+    ObSEArray<ObRawExpr*, 4> join_conditions_;
+    TableItem *right_table_;
   };
 
-  static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
+  static int decorrelate(ObRawExpr *&expr, ObIArray<ObExecParamRawExpr *> &exec_params);
 
-  static int is_correlated_subquery(ObSelectStmt* subquery,
-                                    int32_t correlated_level,
-                                    bool &is_correlated);
+  static int decorrelate(ObIArray<ObRawExpr *> &exprs, ObIArray<ObExecParamRawExpr *> &exec_params);
 
-  static int is_direct_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated);
+  static int decorrelate(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr *> &exec_params);
+  
+  static int inherit_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                 ObQueryRefRawExpr *query_ref);
 
-  static int has_current_level_column(const ObRawExpr* expr, int32_t curlevel, bool& has);
+  static int get_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                             ObRawExpr *expr,
+                             ObIArray<ObExecParamRawExpr *> &used_params);
 
-  static int is_column_unique(
-      const ObRawExpr* expr, uint64_t table_id, ObSchemaChecker* schema_checker, bool& is_unique);
+  static int get_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                             ObSelectStmt *stmt,
+                             ObIArray<ObExecParamRawExpr *> &used_params);
 
-  static int is_columns_unique(
-      const ObIArray<ObRawExpr*>& exprs, uint64_t table_id, ObSchemaChecker* schema_checker, bool& is_unique);
+  static int is_correlated_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                const ObRawExpr *expr,
+                                bool &bret);
 
-  static int exprs_has_unique_subset(
-      const common::ObIArray<ObRawExpr*>& full, const common::ObRowkeyInfo& sub, bool& is_subset);
+  static int is_correlated_subquery(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                    const ObSelectStmt *stmt,
+                                    bool &bret);
 
-  static int add_new_table_item(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, ObSelectStmt* subquery, TableItem*& new_table_item);
+  static int is_simple_correlated_pred(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                       ObRawExpr *cond,
+                                       ObColumnRefRawExpr *&col_expr,
+                                       ObRawExpr *&const_expr);
 
-  static int add_new_joined_table(ObTransformerCtx* ctx, ObDMLStmt& stmt, const ObJoinType join_type,
-      TableItem* left_table, TableItem* right_table, const ObIArray<ObRawExpr*>& joined_conds, TableItem*& join_table,
-      bool add_table = true);
+  static int mark_correlated_expr(ObSelectStmt *stmt,
+                                  bool &is_stmt_marked,
+                                  ObIArray<ObRawExpr *> &all_mark_exprs);
 
-  static int merge_from_items_as_inner_join(ObTransformerCtx* ctx, ObDMLStmt& stmt, TableItem*& ret_table);
+  static int mark_correlated_expr(ObRawExpr *expr,
+                                  ObIArray<ObRawExpr *> &all_mark_exprs);
 
-  static int create_new_column_expr(ObTransformerCtx* ctx, const TableItem& table_item, const int64_t column_id,
-      const SelectItem& select_item, ObDMLStmt* stmt, ObColumnRefRawExpr*& new_expr);
+  static int unmark_correlated_expr(ObIArray<ObRawExpr *> &all_mark_exprs);
 
-  static int create_columns_for_view(
-      ObTransformerCtx* ctx, TableItem& view_table_item, ObDMLStmt* stmt, ObIArray<ObRawExpr*>& column_exprs);
+  static int add_correlated_flag(const ObIArray<ObExecParamRawExpr *> &param_exprs,
+                                 ObIArray<ObRawExpr *> &all_mark_exprs);
 
-  static int create_columns_for_view(ObTransformerCtx* ctx, TableItem& view_table_item, ObDMLStmt* stmt,
-      ObIArray<ObRawExpr*>& new_select_list, ObIArray<ObRawExpr*>& new_column_list);
+  static int has_nested_subquery(const ObQueryRefRawExpr *query_ref,
+                                 bool &has_nested);
 
-  static int find_base_info_for_stmt(
-      ObSelectStmt* stmt, uint64_t sel_idx, ObSelectStmt*& target_stmt, ObRawExpr*& target_expr);
+  static int is_column_unique(const ObRawExpr *expr,
+                              uint64_t table_id,
+                              ObSchemaChecker *schema_checker,
+                              ObSQLSessionInfo *session_info,
+                              bool &is_unique);
 
-  static int create_select_item(ObIAllocator& allocator, ObRawExpr* select_expr, ObSelectStmt* select_stmt);
+  static int is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
+                               uint64_t table_id,
+                               ObSchemaChecker *schema_checker,
+                               ObSQLSessionInfo *session_info,
+                               bool &is_unique);
 
-  static int create_select_item(ObIAllocator& allocator, ObIArray<ColumnItem>& column_items, ObSelectStmt* select_stmt);
+  static int exprs_has_unique_subset(const common::ObIArray<ObRawExpr*> &full,
+                                     const common::ObRowkeyInfo &sub,
+                                     bool &is_subset);
 
-  static int create_select_item(
-      ObIAllocator& allocator, common::ObIArray<ObRawExpr*>& select_exprs, ObSelectStmt* select_stmt);
+  static int add_new_table_item(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                ObSelectStmt *subquery,
+                                TableItem *&new_table_item);
 
-  static int copy_stmt(ObStmtFactory& stmt_factory, const ObDMLStmt* stmt, ObDMLStmt*& new_stmt);
+  static int add_new_joined_table(ObTransformerCtx *ctx,
+                                  ObDMLStmt &stmt,
+                                  const ObJoinType join_type,
+                                  TableItem *left_table,
+                                  TableItem *right_table,
+                                  const ObIArray<ObRawExpr*> &joined_conds,
+                                  TableItem *&join_table,
+                                  bool add_table = true);
 
-  static int deep_copy_stmt(
-      ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObDMLStmt* stmt, ObDMLStmt*& new_stmt);
+  static int merge_from_items_as_inner_join(ObTransformerCtx *ctx,
+                                            ObDMLStmt &stmt,
+                                            TableItem *&ret_table);
 
-  static int add_joined_table_single_table_ids(JoinedTable& joined_table, TableItem& child_table);
+  static int create_new_column_expr(ObTransformerCtx *ctx,
+                                    const TableItem &table_item,
+                                    const int64_t column_id,
+                                    const SelectItem &select_item,
+                                    ObDMLStmt *stmt,
+                                    ObColumnRefRawExpr *&new_expr);
 
-  static int deep_copy_order_items(ObRawExprFactory& expr_factory, const common::ObIArray<OrderItem>& input_items,
-      common::ObIArray<OrderItem>& output_items, const uint64_t copy_types, bool use_new_allocator = false);
-  static int deep_copy_semi_infos(ObRawExprFactory& expr_factory, const ObIArray<SemiInfo*>& input_semi_infos,
-      ObIArray<SemiInfo*>& output_semi_infos, const uint64_t copy_types);
-  static int deep_copy_column_items(ObRawExprFactory& expr_factory,
-      const common::ObIArray<ColumnItem>& input_column_items, common::ObIArray<ColumnItem>& output_column_items);
-  static int deep_copy_related_part_expr_arrays(ObRawExprFactory& expr_factory,
-      const ObIArray<ObDMLStmt::PartExprArray>& input_related_part_expr_arrays,
-      ObIArray<ObDMLStmt::PartExprArray>& output_related_part_expr_arrays, const uint64_t copy_types);
-  static int deep_copy_part_expr_items(ObRawExprFactory& expr_factory,
-      const common::ObIArray<ObDMLStmt::PartExprItem>& input_part_expr_items,
-      common::ObIArray<ObDMLStmt::PartExprItem>& output_part_expr_items, const uint64_t copy_types);
-  static int deep_copy_table_items(ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory,
-      const common::ObIArray<TableItem*>& input_table_items, common::ObIArray<TableItem*>& output_table_items);
-  static int deep_copy_join_tables(ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory,
-      const common::ObIArray<JoinedTable*>& input_joined_tables, common::ObIArray<JoinedTable*>& output_joined_tables,
-      const uint64_t copy_types);
-  static int deep_copy_join_table(ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory,
-      const JoinedTable& input_joined_table, JoinedTable*& output_joined_table, const uint64_t copy_types);
-  static int deep_copy_select_items(ObRawExprFactory& expr_factory,
-      const common::ObIArray<SelectItem>& input_select_items, common::ObIArray<SelectItem>& output_select_items,
-      const uint64_t copy_types);
+  static int create_columns_for_view(ObTransformerCtx *ctx,
+                                     TableItem &view_table_item,
+                                     ObDMLStmt *stmt,
+                                     ObIArray<ObRawExpr*> &column_exprs);
 
-  static int replace_equal_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
+  static int create_columns_for_view(ObTransformerCtx *ctx,
+                                     TableItem &view_table_item,
+                                     ObDMLStmt *stmt,
+                                     ObIArray<ObRawExpr *> &new_select_list,
+                                     ObIArray<ObRawExpr *> &new_column_list,
+                                     bool ignore_dup_select_expr = true,
+                                     bool repeated_select = false);
 
-  static int replace_equal_expr(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& current_exprs, ObRawExpr*& expr);
+  static int create_select_item(ObIAllocator &allocator,
+                                ObRawExpr *select_expr,
+                                ObSelectStmt *select_stmt);
 
-  static int replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
-  static int replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObDMLStmt* stmt);
+  static int create_select_item(ObIAllocator &allocator,
+                                ObIArray<ColumnItem> &column_items,
+                                ObSelectStmt *select_stmt);
 
-  static int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs, ObRawExpr*& expr);
+  static int create_select_item(ObIAllocator &allocator,
+                                const common::ObIArray<ObRawExpr*> &select_exprs,
+                                ObSelectStmt *select_stmt);
 
-  static int replace_expr_for_order_item(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& new_exprs, common::ObIArray<OrderItem>& order_items);
+  static int copy_stmt(ObStmtFactory &stmt_factory,
+                       const ObDMLStmt *stmt,
+                       ObDMLStmt *&new_stmt);
+
+  static int deep_copy_stmt(ObStmtFactory &stmt_factory,
+                            ObRawExprFactory &expr_factory,
+                            const ObDMLStmt *stmt,
+                            ObDMLStmt *&new_stmt);
+
+  /**
+   * @brief joined_table需要维护一个基表的table id列表
+   * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；
+   * 如果是joined_table,需要将它的single_table_ids全部搬过来
+   *
+   * todo(@ banliu.zyd) 这部分逻辑本来在resolver层，逻辑差别太大不好复用，
+   * 而这部分逻辑还是有必要单独提出来以增强代码可读性和代码复用，加个todo在这，
+   * 是因为这个函数目前作用单一，从功能上来看更应该是JoinedTable的一个成员方法
+   */
+  static int add_joined_table_single_table_ids(JoinedTable &joined_table, TableItem &child_table);
+
+  static int replace_expr(ObRawExpr *old_expr, ObRawExpr *new_expr, ObRawExpr *&expr);
+
+  static int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                          const common::ObIArray<ObRawExpr *> &new_exprs,
+                          ObRawExpr *&expr);
+
+  static int replace_expr_for_order_item(const common::ObIArray<ObRawExpr *> &other_exprs,
+                                         const common::ObIArray<ObRawExpr *> &new_exprs,
+                                         common::ObIArray<OrderItem> &order_items);
   template <typename T>
-  static int replace_specific_expr(
-      const common::ObIArray<T*>& other_subquery_exprs, const common::ObIArray<T*>& subquery_exprs, ObRawExpr*& expr);
+  static int replace_specific_expr(const common::ObIArray<T*> &other_subquery_exprs,
+                                   const common::ObIArray<T*> &subquery_exprs,
+                                   ObRawExpr *&expr);
 
   template <typename T>
-  static int replace_exprs(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& new_exprs, common::ObIArray<T*>& exprs);
+  static int replace_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
+                           const common::ObIArray<ObRawExpr *> &new_exprs,
+                           common::ObIArray<T*> &exprs);
 
-  static int update_table_id_for_from_item(const common::ObIArray<FromItem>& other_from_items,
-      const uint64_t old_table_id, const uint64_t new_table_id, common::ObIArray<FromItem>& from_items);
-  static int update_table_id_for_joined_tables(const common::ObIArray<JoinedTable*>& other_joined_tables,
-      const uint64_t old_table_id, const uint64_t new_table_id, common::ObIArray<JoinedTable*>& joined_tables);
-  static int update_table_id_for_joined_table(const JoinedTable& other_joined_table, const uint64_t old_table_id,
-      const uint64_t new_table_id, JoinedTable& joined_table);
-  static int update_table_id_for_part_item(const common::ObIArray<ObDMLStmt::PartExprItem>& other_part_items,
-      const uint64_t old_table_id, const uint64_t new_table_id, common::ObIArray<ObDMLStmt::PartExprItem>& part_items);
-  static int update_table_id_for_part_array(const common::ObIArray<ObDMLStmt::PartExprArray>& other_part_expr_arrays,
-      const uint64_t old_table_id, const uint64_t new_table_id,
-      common::ObIArray<ObDMLStmt::PartExprArray>& part_expr_arrays);
-  static int update_table_id_for_semi_info(const ObIArray<SemiInfo*>& other_semi_infos, const uint64_t old_table_id,
-      const uint64_t new_table_id, ObIArray<SemiInfo*>& semi_infos);
-  static int update_table_id_for_view_table_id(const common::ObIArray<uint64_t>& other_view_table_id,
-      const uint64_t old_table_id, const uint64_t new_table_id, common::ObIArray<uint64_t>& view_table_id);
-  static int update_table_id_for_column_item(const common::ObIArray<ColumnItem>& other_column_items,
-      const uint64_t old_table_id, const uint64_t new_table_id, const int32_t old_bit_id, const int32_t new_bit_id,
-      common::ObIArray<ColumnItem>& column_items);
-  static int update_table_id_for_stmt_hint(const ObStmtHint& other_stmt_hint, const uint64_t old_table_id,
-      const uint64_t new_table_id, const int32_t old_bit_id, const int32_t new_bit_id, ObStmtHint& stmt_hint);
-  static int update_table_id_index(const common::ObIArray<ObPQDistributeIndex>& old_ids, const int32_t old_bit_id,
-      const int32_t new_bit_id, common::ObIArray<ObPQDistributeIndex>& new_ids);
-  static int update_table_id_index(
-      const ObRelIds& old_ids, const int32_t old_bit_id, const int32_t new_bit_id, ObRelIds& new_ids);
-  static int update_table_id_index(const common::ObIArray<ObRelIds>& old_ids, const int32_t old_bit_id,
-      const int32_t new_bit_id, common::ObIArray<ObRelIds>& new_ids);
-  static int update_table_id(const common::ObIArray<uint64_t>& old_ids, const uint64_t old_table_id,
-      const uint64_t new_table_id, common::ObIArray<uint64_t>& new_ids);
-  static int update_table_id(const common::ObIArray<ObTablesIndex>& old_ids, const uint64_t old_table_id,
-      const uint64_t new_table_id, common::ObIArray<ObTablesIndex>& new_ids);
+  static int update_table_id_for_from_item(const common::ObIArray<FromItem> &other_from_items,
+                                           const uint64_t old_table_id,
+                                           const uint64_t new_table_id,
+                                           common::ObIArray<FromItem> &from_items);
+  static int update_table_id_for_joined_tables(const common::ObIArray<JoinedTable*> &other_joined_tables,
+                                               const uint64_t old_table_id,
+                                               const uint64_t new_table_id,
+                                               common::ObIArray<JoinedTable*> &joined_tables);
+  static int update_table_id_for_joined_table(const JoinedTable &other_joined_table,
+                                              const uint64_t old_table_id,
+                                              const uint64_t new_table_id,
+                                              JoinedTable &joined_table);
+  static int update_table_id_for_part_item(const common::ObIArray<ObDMLStmt::PartExprItem> &other_part_items,
+                                           const uint64_t old_table_id,
+                                           const uint64_t new_table_id,
+                                           common::ObIArray<ObDMLStmt::PartExprItem> &part_items);
+  static int update_table_id_for_check_constraint_items(
+             const common::ObIArray<ObDMLStmt::CheckConstraintItem> &other_check_constraint_items,
+             const uint64_t old_table_id,
+             const uint64_t new_table_id,
+             common::ObIArray<ObDMLStmt::CheckConstraintItem> &check_constraint_items);
+  static int update_table_id_for_semi_info(const ObIArray<SemiInfo*> &other_semi_infos,
+                                           const uint64_t old_table_id,
+                                           const uint64_t new_table_id,
+                                           ObIArray<SemiInfo*> &semi_infos);
+  static int update_table_id_for_column_item(const common::ObIArray<ColumnItem> &other_column_items,
+                                             const uint64_t old_table_id,
+                                             const uint64_t new_table_id,
+                                             const int32_t old_bit_id,
+                                             const int32_t new_bit_id,
+                                             common::ObIArray<ColumnItem> &column_items);
+  static int update_table_id_for_pseudo_columns(const ObIArray<ObRawExpr*> &other_pseudo_columns,
+                                                const uint64_t old_table_id,
+                                                const uint64_t new_table_id,
+                                                const int32_t old_bit_id,
+                                                const int32_t new_bit_id,
+                                                ObIArray<ObRawExpr*> &pseudo_columns);
+  static int update_table_id_index(const ObRelIds &old_ids,
+                                   const int32_t old_bit_id,
+                                   const int32_t new_bit_id,
+                                   ObRelIds &new_ids);
+  static int update_table_id(const common::ObIArray<uint64_t> &old_ids,
+                             const uint64_t old_table_id,
+                             const uint64_t new_table_id,
+                             common::ObIArray<uint64_t> &new_ids);
 
-  // for window function related transformatino
+  //仅供window function相关改写使用
   static bool is_valid_type(ObItemType expr_type);
 
-  static int is_expr_query(const ObSelectStmt* stmt, bool& is_expr_type);
+  /**
+   * @brief is_expr_query
+   * 如果一个子查询不引入新的relation，并且select item只有一项
+   * 那么它至多返回一个值，行为类似于一个表达式
+   */
+  static int is_expr_query(const ObSelectStmt *stmt, bool &is_expr_type);
+  
+  /**
+   * @brief is_aggr_query
+   * 如果一个查询的select item只有一项聚合函数，并且没有 group 表达式，那么该查询至多返回一个值
+   * 如果该查询不引用上层block的表，那么该查询可以独立于上层查询执行
+   */
+  static int is_aggr_query(const ObSelectStmt *stmt, bool &is_aggr_type);
 
-  static int is_aggr_query(const ObSelectStmt* stmt, bool& is_aggr_type);
+  /**
+   * @brief add_is_not_null
+   * 增加对 child_expr 结果的 not null 判断
+   * @param stmt
+   * @param child_expr
+   * @return
+   */
+  static int add_is_not_null(ObTransformerCtx *ctx, const ObDMLStmt *stmt,
+                             ObRawExpr *child_expr, ObOpRawExpr *&is_not_expr);
 
-  static int is_ref_outer_block_relation(const ObSelectStmt* stmt, const int32_t level, bool& ref_outer_block_relation);
+  static int is_column_nullable(const ObDMLStmt *stmt,
+                                ObSchemaChecker *schema_checker,
+                                const ObColumnRefRawExpr *col_expr,
+                                const ObSQLSessionInfo *session_info,
+                                bool &is_nullable);
 
-  static int add_is_not_null(ObTransformerCtx* ctx, ObDMLStmt* stmt, ObRawExpr* child_expr, ObOpRawExpr*& is_not_expr);
+  static int flatten_joined_table(ObDMLStmt *stmt);
 
-  static int is_column_nullable(
-      const ObDMLStmt* stmt, ObSchemaChecker* schema_checker, const ObColumnRefRawExpr* col_expr, bool& is_nullable);
+  static int flatten_expr(ObRawExpr *expr,
+                          common::ObIArray<ObRawExpr*> &flattened_exprs);
 
-  static int flatten_expr(common::ObIArray<ObRawExpr*>& exprs);
-  static int flatten_expr(ObRawExpr* expr, common::ObIArray<ObRawExpr*>& flattened_exprs);
+  static int find_not_null_expr(const ObDMLStmt &stmt,
+                                ObRawExpr *&not_null_expr,
+                                bool &is_valid,
+                                ObTransformerCtx *ctx);
+  
+  static int is_expr_not_null(ObTransformerCtx *ctx,
+                              const ObDMLStmt *stmt,
+                              const ObRawExpr *expr,
+                              int context_scope,
+                              bool &is_not_null,
+                              ObIArray<ObRawExpr *> *constraints = NULL);
 
-  static int check_stmt_output_nullable(const ObSelectStmt* stmt, const ObRawExpr* expr, bool& is_nullable);
+  static int is_expr_not_null(ObNotNullContext &ctx,
+                              const ObRawExpr *expr, 
+                              bool &is_not_null,
+                              ObIArray<ObRawExpr *> *constraints);
 
-  static int find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_expr, bool& is_valid);
+  static int is_column_expr_not_null(ObNotNullContext &ctx,
+                                     const ObColumnRefRawExpr *expr,
+                                     bool &is_not_null,
+                                     ObIArray<ObRawExpr *> *constraints);
 
-  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable);
+  static int is_set_expr_not_null(ObNotNullContext &ctx,
+                                  const ObSetOpRawExpr *expr,
+                                  bool &is_not_null,
+                                  ObIArray<ObRawExpr *> *constraints);
+  
+  static int is_const_expr_not_null(ObNotNullContext &ctx,
+                                    const ObRawExpr *expr,
+                                    bool &is_not_null,
+                                    bool &is_null);
 
-  static int check_is_not_null_column(const ObDMLStmt* stmt, const ObRawExpr* expr, bool& col_not_null);
+  static int is_general_expr_not_null(ObNotNullContext &ctx,
+                                      const ObRawExpr *expr,
+                                      bool &is_not_null,
+                                      ObIArray<ObRawExpr *> *constraints);
 
-  static int find_null_reject_exprs(const ObIArray<ObRawExpr*>& conditions, const ObIArray<ObRawExpr*>& exprs,
-      ObIArray<ObRawExpr*>& null_reject_exprs);
   /**
    * @brief has_null_reject_condition
-   * check is there null-reject conditions for the expr
+   * 判断 conditions 中是否存在空值拒绝条件
    */
-  static int has_null_reject_condition(
-      const ObIArray<ObRawExpr*>& conditions, const ObRawExpr* expr, bool& has_null_reject);
+  static int has_null_reject_condition(const ObIArray<ObRawExpr *> &conditions,
+                                       const ObRawExpr *expr,
+                                       bool &has_null_reject);
 
-  static int is_null_reject_conditions(
-      const ObIArray<ObRawExpr*>& conditions, const ObRelIds& target_table, bool& is_null_reject);
+  static int has_null_reject_condition(const ObIArray<ObRawExpr *> &conditions,
+                                       const ObIArray<ObRawExpr *> &targets,
+                                       bool &has_null_reject);
 
+  /**
+   * @brief is_null_reject_conditions
+   * 检查conditions是否有拒绝指定表集上空值的谓词
+   */
+  static int is_null_reject_conditions(const ObIArray<ObRawExpr *> &conditions,
+                                       const ObRelIds &target_table,
+                                       bool &is_null_reject);
+  
+  
   /**
    * @brief is_null_reject_condition
-   * check the result of the condition
-   * 1. when targets are null, condition return null;
-   * 2. when targets are null, condition return false
+   * 判断当前条件是否构成一个的空值拒绝条件，满足以下条件之一
+   * 1. targets 均为 null 时， condition = null;
+   * 2. targets 均为 null 时， condition = false
    */
-  static int is_null_reject_condition(
-      const ObRawExpr* condition, const ObIArray<const ObRawExpr*>& targets, bool& is_null_reject);
-
-  static int is_simple_null_reject(
-      const ObRawExpr* condition, const ObIArray<const ObRawExpr*>& targets, bool& is_null_reject);
-
-  static int is_null_propagate_expr(const ObRawExpr* expr, const ObIArray<ObRawExpr*>& targets, bool& bret);
-
-  static int is_null_propagate_expr(const ObRawExpr* expr, const ObIArray<const ObRawExpr*>& targets, bool& bret);
-
-  static int find_expr(const ObIArray<const ObRawExpr*>& source, const ObRawExpr* target, bool& bret);
-
-  static int find_expr(const ObIArray<OrderItem>& source, const ObRawExpr* target, bool& bret);
-
-  static int check_nullable_exprs_in_groupby(ObDMLStmt *stmt, ObRawExpr *expr, int nullable_scope, bool &found);
-
-  static int find_expr_in_groupby_clause(ObSelectStmt *select_stmt, ObRawExpr *column_expr, bool &found);
-  
-  static int find_expr_in_scala_groupby(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &found);
+  static int is_null_reject_condition(const ObRawExpr *condition,
+                                      const ObIArray<const ObRawExpr *> &targets,
+                                      bool &is_null_reject);
 
   /**
+   * @brief is_simple_null_reject
+   * 可能返回 false 的 null reject 条件
+   */
+  static int is_simple_null_reject(const ObRawExpr *condition,
+                                   const ObIArray<const ObRawExpr *> &targets,
+                                   bool &is_null_reject);
+
+  static int is_null_propagate_expr(const ObRawExpr *expr,
+                                    const ObIArray<ObRawExpr *> &targets,
+                                    bool &bret);
+
+  /**
+   * @brief is_null_propagate_expr
+   * 判断 expr 是否能够传递 target 产生的空值。
+   * 当 targets 均为 NULL 时，expr 输出必然为 NULL，检查以下条件是否成立：
+   * 1. targets 中的某个表达式 x_expr 存在于 expr 中
+   * 2. x_expr 所在的计算路径上，涉及的表达式如果输入为NULL，那么输出必然为NULL
+   */
+  static int is_null_propagate_expr(const ObRawExpr *expr,
+                                    const ObIArray<const ObRawExpr *> &targets,
+                                    bool &bret);
+
+  /**
+   * @brief find_expr
+   * 检查 target 是否存在于 source 中
+   */
+  static int find_expr(const ObIArray<const ObRawExpr *> &source,
+                       const ObRawExpr *target,
+                       bool &bret);
+
+  static int find_expr(ObIArray<ObRawExpr *> &source,
+                       ObRawExpr *target,
+                       bool &bret);
+
+  static int find_expr(const ObIArray<OrderItem> &source,
+                       const ObRawExpr *target,
+                       bool &bret);
+
+  template <typename T>
+  static int get_expr_idx(const ObIArray<T *> &source,
+                          const T *target,
+                          int64_t &idx);
+  /**
    * @brief is_null_propagate_type
-   * white list for null propagate expr
+   * 简单空值传递表达式类型的列表
    */
   static bool is_null_propagate_type(const ObItemType type);
 
-  static int get_simple_filter_column(
-      ObDMLStmt* stmt, ObRawExpr* expr, int64_t table_id, ObIArray<ObColumnRefRawExpr*>& col_exprs);
+  static bool is_not_null_deduce_type(const ObItemType type);
 
-  static int get_parent_stmt(
-      ObDMLStmt* root_stmt, ObDMLStmt* stmt, ObDMLStmt*& parent_stmt, int64_t& table_id, bool& is_valid);
+  static int get_simple_filter_column(const ObDMLStmt *stmt,
+                                      ObRawExpr *expr,
+                                      int64_t table_id,
+                                      ObIArray<ObColumnRefRawExpr*> &col_exprs);
 
-  static int get_simple_filter_column_in_parent_stmt(ObDMLStmt* root_stmt, ObDMLStmt* stmt, ObDMLStmt* view_stmt,
-      int64_t table_id, ObIArray<ObColumnRefRawExpr*>& col_exprs);
+  static int get_parent_stmt(const ObDMLStmt *root_stmt,
+                             const ObDMLStmt *stmt,
+                             const ObDMLStmt *&parent_stmt,
+                             int64_t &table_id,
+                             bool &is_valid);
 
-  static int get_filter_columns(
-      ObDMLStmt* root_stmt, ObDMLStmt* stmt, int64_t table_id, ObIArray<ObColumnRefRawExpr*>& col_exprs);
+  static int get_simple_filter_column_in_parent_stmt(const ObDMLStmt *root_stmt,
+                                                     const ObDMLStmt *stmt,
+                                                     const ObDMLStmt *view_stmt,
+                                                     int64_t table_id,
+                                                     ObIArray<ObColumnRefRawExpr*> &col_exprs);
 
-  static int check_column_match_index(ObDMLStmt* root_stmt, ObDMLStmt* stmt, ObSqlSchemaGuard* schema_guard,
-      const ObColumnRefRawExpr* col_expr, bool& is_match);
+  static int get_filter_columns(const ObDMLStmt *root_stmt,
+                                const ObDMLStmt *stmt,
+                                int64_t table_id,
+                                ObIArray<ObColumnRefRawExpr*> &col_exprs);
 
-  static int check_select_item_match_index(
-      ObDMLStmt* root_stmt, ObSelectStmt* stmt, ObSqlSchemaGuard* schema_guard, int64_t sel_index, bool& is_match);
+  static int check_column_match_index(const ObDMLStmt *root_stmt,
+                                      const ObDMLStmt *stmt,
+                                      ObSqlSchemaGuard *schema_guard,
+                                      const ObColumnRefRawExpr *col_expr,
+                                      bool &is_match);
 
-  static int is_match_index(ObSqlSchemaGuard* schema_guard, const ObDMLStmt* stmt, const ObColumnRefRawExpr* col_expr,
-      bool& is_match, EqualSets* equal_sets = NULL, ObIArray<ObColumnRefRawExpr*>* col_exprs = NULL);
+  static int check_select_item_match_index(const ObDMLStmt *root_stmt,
+                                           const ObSelectStmt *stmt,
+                                           ObSqlSchemaGuard *schema_guard,
+                                           int64_t sel_index,
+                                           bool &is_match);
 
-  static int is_match_index(const ObDMLStmt* stmt, const ObIArray<uint64_t>& index_cols,
-      const ObColumnRefRawExpr* col_expr, bool& is_match, EqualSets* equal_sets = NULL,
-      ObIArray<ObColumnRefRawExpr*>* col_exprs = NULL);
+  static int get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
+                                const ObDMLStmt *stmt,
+                                const TableItem *table_item,
+                                ObIArray<uint64_t> &index_ids);
 
-  static int extract_query_ref_expr(ObIArray<ObRawExpr*>& exprs, ObIArray<ObQueryRefRawExpr*>& subqueries);
+  static int is_match_index(ObSqlSchemaGuard *schema_guard,
+                            const ObDMLStmt *stmt,
+                            const ObColumnRefRawExpr *col_expr,
+                            bool &is_match,
+                            EqualSets *equal_sets = NULL,
+                            ObIArray<ObRawExpr*> *const_exprs = NULL,
+                            ObIArray<ObColumnRefRawExpr*> *col_exprs = NULL,
+                            const bool need_match_col_exprs = false);
 
-  static int extract_query_ref_expr(ObRawExpr* expr, ObIArray<ObQueryRefRawExpr*>& subqueries);
+  static int is_match_index(const ObDMLStmt *stmt,
+                            const ObIArray<uint64_t> &index_cols,
+                            const ObColumnRefRawExpr *col_expr,
+                            bool &is_match,
+                            EqualSets *equal_sets = NULL,
+                            ObIArray<ObRawExpr*> *const_exprs = NULL,
+                            ObIArray<ObColumnRefRawExpr*> *col_exprs = NULL,
+                            const bool need_match_col_exprs = false);
 
-  static int extract_aggr_expr(int32_t expr_level, ObIArray<ObRawExpr*>& exprs, ObIArray<ObAggFunRawExpr*>& aggrs);
+  static int classify_scalar_query_ref(ObIArray<ObRawExpr*> &exprs,
+                                       ObIArray<ObRawExpr*> &scalar_query_refs,
+                                       ObIArray<ObRawExpr*> &non_scalar_query_refs);
 
-  static int extract_aggr_expr(int32_t expr_level, ObRawExpr* expr, ObIArray<ObAggFunRawExpr*>& aggrs);
+  static int classify_scalar_query_ref(ObRawExpr *expr,
+                                       ObIArray<ObRawExpr*> &scalar_query_refs,
+                                       ObIArray<ObRawExpr*> &non_scalar_query_refs);
 
-  static int extract_winfun_expr(ObIArray<ObRawExpr*>& exprs, ObIArray<ObWinFunRawExpr*>& win_exprs);
+  static int extract_query_ref_expr(const ObIArray<ObRawExpr*> &exprs,
+                                    ObIArray<ObQueryRefRawExpr *> &subqueries,
+                                    const bool with_nested = true);
 
-  static int extract_winfun_expr(ObRawExpr* expr, ObIArray<ObWinFunRawExpr*>& win_exprs);
+  static int extract_query_ref_expr(ObRawExpr *expr,
+                                    ObIArray<ObQueryRefRawExpr *> &subqueries,
+                                    const bool with_nested = true);
+
+  static int extract_aggr_expr(ObIArray<ObRawExpr*> &exprs,
+                               ObIArray<ObAggFunRawExpr*> &aggrs);
+
+  static int extract_aggr_expr(ObRawExpr *expr,
+                               ObIArray<ObAggFunRawExpr*> &aggrs);
+
+  static int extract_winfun_expr(ObIArray<ObRawExpr*> &exprs,
+                                 ObIArray<ObWinFunRawExpr*> &win_exprs);
+
+  static int extract_winfun_expr(ObRawExpr *expr,
+                                 ObIArray<ObWinFunRawExpr*> &win_exprs);
+
+  static int extract_alias_expr(ObRawExpr *expr,
+                                ObIArray<ObAliasRefRawExpr *> &alias_exprs);
+
+  static int extract_alias_expr(ObIArray<ObRawExpr*> &exprs,
+                                ObIArray<ObAliasRefRawExpr *> &alias_exprs);
 
   /**
    * @brief check_foreign_primary_join
-   * check whether first-table join second-table is a primary-foreign join
+   * 检查first_table和second_table之间的连接是否为主外键连接
    *
-   * @param first_exprs             first table's join keys
-   * @param second_exprs            second table's join keys
-   * @param is_foreign_primary_join is a primary-foreign join
-   * @param is_first_table_parent   first_table is the parent table or not
+   * @param first_exprs             第一个表的连接列
+   * @param second_exprs            第二个表的连接列
+   * @param is_foreign_primary_join 是否为主外键连接
+   * @param is_first_table_parent   first_table是否为父表
    */
-  static int check_foreign_primary_join(const TableItem* first_table, const TableItem* second_table,
-      const ObIArray<const ObRawExpr*>& first_exprs, const ObIArray<const ObRawExpr*>& second_exprs,
-      ObSchemaChecker* schema_checker, bool& is_foreign_primary_join, bool& is_first_table_parent,
-      share::schema::ObForeignKeyInfo*& foreign_key_info);
-  static int check_foreign_primary_join(const TableItem* first_table, const TableItem* second_table,
-      const ObIArray<ObRawExpr*>& first_exprs, const ObIArray<ObRawExpr*>& second_exprs,
-      ObSchemaChecker* schema_checker, bool& is_foreign_primary_join, bool& is_first_table_parent,
-      share::schema::ObForeignKeyInfo*& foreign_key_info);
+  static int check_foreign_primary_join(const TableItem *first_table,
+                                        const TableItem * second_table,
+                                        const ObIArray<const ObRawExpr *> &first_exprs,
+                                        const ObIArray<const ObRawExpr *> &second_exprs,
+                                        ObSchemaChecker *schema_checker,
+                                        ObSQLSessionInfo *session_info,
+                                        bool &is_foreign_primary_join,
+                                        bool &is_first_table_parent,
+                                        share::schema::ObForeignKeyInfo *&foreign_key_info);
+  static int check_foreign_primary_join(const TableItem *first_table,
+                                        const TableItem * second_table,
+                                        const ObIArray< ObRawExpr *> &first_exprs,
+                                        const ObIArray< ObRawExpr *> &second_exprs,
+                                        ObSchemaChecker *schema_checker,
+                                        ObSQLSessionInfo *session_info,
+                                        bool &is_foreign_primary_join,
+                                        bool &is_first_table_parent,
+                                        share::schema::ObForeignKeyInfo *&foreign_key_info);
 
   /**
    * @brief is_all_foreign_key_involved
-   * check whether child_exprs and parents exprs covers all foreign-key columns
+   * 检查child_exprs和parent_exprs是否包含了子表和父表主外键约束中一一对应的所有的键
    *
-   * e.g. t2 has two foreign key constraints:
-   *                        foreign key (c1, c2) references t1(c1, c2)
-   *                        foreign key (c3, c4) references t1(c1, c2)
-   * the value of child_exprs and parent_exprs can be one of the followings:
-   *     1. child_exprs = [c1, c2] and parent_exprs = [c1, c2]
-   *     2. child_exprs = [c3, c4] and parent_exprs = [c1, c2]
+   * e.g. t2上存在两个外键约束foreign key (c1, c2) references t1(c1, c2)
+   *                        和foreign key (c3, c4) references t1(c1, c2)
+   *      则要求child_exprs = [c1, c2] 且 parent_exprs = [c1, c2]
+   *          或child_exprs = [c3, c4] 且 parent_exprs = [c1, c2]
    *
+   * @param is_all_involved       是否包含了主外键约束中一一对应的所有的键
    */
-  static int is_all_foreign_key_involved(const ObIArray<const ObRawExpr*>& child_exprs,
-      const ObIArray<const ObRawExpr*>& parent_exprs, const share::schema::ObForeignKeyInfo& info,
-      bool& is_all_involved);
-  static int is_all_foreign_key_involved(const ObIArray<ObRawExpr*>& child_exprs,
-      const ObIArray<ObRawExpr*>& parent_exprs, const share::schema::ObForeignKeyInfo& info, bool& is_all_involved);
+  static int is_all_foreign_key_involved(const ObIArray<const ObRawExpr *> &child_exprs,
+                                         const ObIArray<const ObRawExpr *> &parent_exprs,
+                                         const share::schema::ObForeignKeyInfo &info,
+                                         bool &is_all_involved);
+  static int is_all_foreign_key_involved(const ObIArray< ObRawExpr *> &child_exprs,
+                                         const ObIArray< ObRawExpr *> &parent_exprs,
+                                         const share::schema::ObForeignKeyInfo &info,
+                                         bool &is_all_involved);
 
   /**
    * @brief is_foreign_key_rely
-   * check whether the foreign key constraint is reliable
+   * 判定主外键是否可靠，在MYSQL模式下检查全局变量foreign_key_check
+   * 在ORACLE模式下检查foreign key info里面的enable_flag
    */
-  static int is_foreign_key_rely(
-      ObSQLSessionInfo* session_info, const share::schema::ObForeignKeyInfo* foreign_key_info, bool& is_rely);
+  static int is_foreign_key_rely (ObSQLSessionInfo* session_info,
+                                  const share::schema::ObForeignKeyInfo *foreign_key_info,
+                                  bool &is_rely);
+
+
+  static int check_stmt_limit_validity(ObTransformerCtx *ctx,
+                                       const ObSelectStmt *select_stmt,
+                                       bool &is_valid,
+                                       bool &need_add_const_constraint);
+
+  static int check_stmt_is_non_sens_dul_vals(ObTransformerCtx *ctx,
+                                             const ObDMLStmt *upper_stmt,
+                                             const ObDMLStmt *stmt,
+                                             bool &is_match,
+                                             bool &need_add_limit_constraint);
+
+  
+  /**
+   * @brief 
+   * to check if semi join can be transformed
+   *    select * from t1 where c1 = 3 or exists (select 1 from t1 left join t2 on t1.c1 = t2.c1);
+   * ==>
+   *    select * from t1 where c1 = 3 or exists (select 1 from t1);
+   * @param ctx 
+   * @param stmt 
+   * @param is_match 
+   * @param need_add_limit_constraint 
+   * @return int 
+   */
+  static int check_stmt_is_non_sens_dul_vals_rec(ObTransformerCtx *ctx,
+                                              const ObDMLStmt *stmt,
+                                              const ObRawExpr *expr,
+                                              bool &is_match,
+                                              bool &need_add_limit_constraint);
+  /**
+   * @brief check_exprs_unique
+   * 检查 exprs 在 table 上是否有唯一性
+   * @param stmt
+   * @param table
+   * @param exprs 需要检查唯一性的表达式集
+   * @param conditions 提供 null reject 检测谓词
+   * @param is_unique 是否有唯一性
+   */
+  static int check_exprs_unique(const ObDMLStmt &stmt,
+                                TableItem *table,
+                                const ObIArray<ObRawExpr*> &exprs,
+                                const ObIArray<ObRawExpr*> &conditions,
+                                ObSQLSessionInfo *session_info,
+                                ObSchemaChecker *schema_checker,
+                                bool &is_unique);
 
   /**
    * @brief check_exprs_unique
-   * given the output of a table, check whether exprs are unique
-   *
-   * @param conditions: potential null-reject conditions
-   * @param is_unique: is exprs unique or not
+   * 检查 exprs 在 table 上是否有唯一性
+   * @param stmt
+   * @param table
+   * @param exprs 需要检查唯一性的表达式集, 不考虑空值
+   * @param is_unique 是否有唯一性
    */
-  static int check_exprs_unique(ObDMLStmt& stmt, TableItem* table, const ObIArray<ObRawExpr*>& exprs,
-      const ObIArray<ObRawExpr*>& conditions, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      bool& is_unique);
-
-  static int check_exprs_unique(ObDMLStmt& stmt, TableItem* table, const ObIArray<ObRawExpr*>& exprs,
-      ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker, bool& is_unique);
+  static int check_exprs_unique(const ObDMLStmt &stmt,
+                                TableItem *table,
+                                const ObIArray<ObRawExpr*> &exprs,
+                                ObSQLSessionInfo *session_info,
+                                ObSchemaChecker *schema_checker,
+                                bool &is_unique);
 
   /**
    * @brief check_exprs_unique_on_table_items
-   * given the join results of multi table_items, check whether exprs are unique or not
+   * 检查 table_items 经过 conditions 连接后，exprs 是否有唯一性
    * @param stmt
-   * @param table_items: tables assoicated with join
-   * @param exprs
-   * @param conditions: potential join predicates
-   * @param is_strict: null value is consider to be differnt or not
-   * @param is_unique: unique or not
+   * @param table_items 表集
+   * @param exprs 需要检查唯一性的表达式集
+   * @param conditions from items的连接条件
+   * @param is_strict 是否考虑空值
+   * @param is_unique 是否有唯一性
    */
-  static int check_exprs_unique_on_table_items(ObDMLStmt* stmt, ObSQLSessionInfo* session_info,
-      ObSchemaChecker* schema_checker, const ObIArray<TableItem*>& table_items, const ObIArray<ObRawExpr*>& exprs,
-      const ObIArray<ObRawExpr*>& conditions, bool is_strict, bool& is_unique);
+  static int check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
+                                               ObSQLSessionInfo *session_info,
+                                               ObSchemaChecker *schema_checker,
+                                               const ObIArray<TableItem*> &table_items,
+                                               const ObIArray<ObRawExpr*> &exprs,
+                                               const ObIArray<ObRawExpr*> &conditions,
+                                               bool is_strict,
+                                               bool &is_unique);
+
+  static int check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
+                                               ObSQLSessionInfo *session_info,
+                                               ObSchemaChecker *schema_checker,
+                                               TableItem *table,
+                                               const ObIArray<ObRawExpr*> &exprs,
+                                               const ObIArray<ObRawExpr*> &conditions,
+                                               bool is_strict,
+                                               bool &is_unique);
 
   /**
    * @brief check_stmt_unique
-   * given a stmt, check whether its output is unique or not
+   * 检查 stmt 的 select 输出是否有唯一性
    * @param stmt
-   * @param is_strict: null is consider to be differnt or not
-   * @param is_unique: unique or not
+   * @param is_strict 是否考虑空值
+   * @param is_unique 是否有唯一性
    */
-  static int check_stmt_unique(ObSelectStmt* stmt, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      const bool is_strict, bool& is_unique);
+  static int check_stmt_unique(const ObSelectStmt *stmt,
+                               ObSQLSessionInfo *session_info,
+                               ObSchemaChecker *schema_checker,
+                               const bool is_strict,
+                               bool &is_unique);
 
-  static int check_stmt_unique(ObSelectStmt* stmt, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      const ObIArray<ObRawExpr*>& exprs, const bool is_strict, bool& is_unique,
-      const uint64_t extra_flag = FLAGS_DEFAULT);
+  /**
+   * @brief check_stmt_unique
+   * 检查 exprs 在 stmt 中是否有唯一性
+   * @param stmt
+   * @param exprs 需要检查唯一性的表达式集
+   * @param is_strict 是否考虑空值
+   * @param is_unique 是否有唯一性
+   * @param extra_flag 是否忽略 distinct/group 等对唯一性影响
+   */
+  static int check_stmt_unique(const ObSelectStmt *stmt,
+                               ObSQLSessionInfo *session_info,
+                               ObSchemaChecker *schema_checker,
+                               const ObIArray<ObRawExpr *> &exprs,
+                               const bool is_strict,
+                               bool &is_unique,
+                               const uint64_t extra_flag = FLAGS_DEFAULT);
 
   /**
    * @brief compute_stmt_property
-   * compute stmt output properties, i.e. fd_sets, equal_sets, const_exprs
+   * 计算 stmt 输出的 fd_sets/equal_sets/const_expr 等信息
    * @param stmt
-   * @param res_info results
-   * @param extra_flag whether ignore distinct/groupby
+   * @param res_info 计算结果
+   * @param extra_flag 是否忽略 distinct/group 等对信息影响
    */
-  static int compute_stmt_property(ObSelectStmt* stmt, UniqueCheckHelper& check_helper, UniqueCheckInfo& res_info,
-      const uint64_t extra_flags = FLAGS_DEFAULT);
+  static int compute_stmt_property(const ObSelectStmt *stmt,
+                                   UniqueCheckHelper &check_helper,
+                                   UniqueCheckInfo &res_info,
+                                   const uint64_t extra_flags = FLAGS_DEFAULT);
 
-  static int compute_set_stmt_property(ObSelectStmt* stmt, UniqueCheckHelper& check_helper, UniqueCheckInfo& res_info,
-      const uint64_t extra_flags = FLAGS_DEFAULT);
+  static int compute_set_stmt_property(const ObSelectStmt *stmt,
+                                       UniqueCheckHelper &check_helper,
+                                       UniqueCheckInfo &res_info,
+                                       const uint64_t extra_flags = FLAGS_DEFAULT);
 
-  static int compute_path_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, UniqueCheckInfo& res_info);
+  static int compute_path_property(const ObDMLStmt *stmt,
+                                   UniqueCheckHelper &check_helper,
+                                   UniqueCheckInfo &res_info);
 
-  static int compute_tables_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper,
-      const ObIArray<TableItem*>& table_items, const ObIArray<ObRawExpr*>& conditions, UniqueCheckInfo& res_info);
+  static int compute_tables_property(const ObDMLStmt *stmt,
+                                     UniqueCheckHelper &check_helper,
+                                     const ObIArray<TableItem*> &table_items,
+                                     const ObIArray<ObRawExpr*> &conditions,
+                                     UniqueCheckInfo &res_info);
 
-  static int compute_table_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, TableItem* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int compute_table_property(const ObDMLStmt *stmt,
+                                    UniqueCheckHelper &check_helper,
+                                    const TableItem *table,
+                                    ObIArray<ObRawExpr*> &cond_exprs,
+                                    UniqueCheckInfo &res_info);
 
-  static int compute_basic_table_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, TableItem* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int compute_basic_table_property(const ObDMLStmt *stmt,
+                                          UniqueCheckHelper &check_helper,
+                                          const TableItem *table,
+                                          ObIArray<ObRawExpr*> &cond_exprs,
+                                          UniqueCheckInfo &res_info);
+  
+  static int try_add_table_fd_for_rowid(const ObSelectStmt *stmt,
+                                        ObFdItemFactory &fd_factory,
+                                        ObIArray<ObFdItem *> &fd_item_set,
+                                        const ObSqlBitSet<> &tables);
 
-  static int compute_generate_table_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, TableItem* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int compute_generate_table_property(const ObDMLStmt *stmt,
+                                             UniqueCheckHelper &check_helper,
+                                             const TableItem *table,
+                                             ObIArray<ObRawExpr*> &cond_exprs,
+                                             UniqueCheckInfo &res_info);
 
-  static int compute_inner_join_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, JoinedTable* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int compute_inner_join_property(const ObDMLStmt *stmt,
+                                         UniqueCheckHelper &check_helper,
+                                         const JoinedTable *table,
+                                         ObIArray<ObRawExpr*> &cond_exprs,
+                                         UniqueCheckInfo &res_info);
 
-  static int compute_inner_join_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, UniqueCheckInfo& left_info,
-      UniqueCheckInfo& right_info, ObIArray<ObRawExpr*>& inner_join_cond_exprs, ObIArray<ObRawExpr*>& cond_exprs,
-      UniqueCheckInfo& res_info);
+  static int compute_inner_join_property(const ObDMLStmt *stmt,
+                                         UniqueCheckHelper &check_helper,
+                                         UniqueCheckInfo &left_info,
+                                         UniqueCheckInfo &right_info,
+                                         const ObIArray<ObRawExpr*> &inner_join_cond_exprs,
+                                         ObIArray<ObRawExpr*> &cond_exprs,
+                                         UniqueCheckInfo &res_info);
 
-  static int compute_outer_join_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, JoinedTable* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int compute_outer_join_property(const ObDMLStmt *stmt,
+                                         UniqueCheckHelper &check_helper,
+                                         const JoinedTable *table,
+                                         ObIArray<ObRawExpr*> &cond_exprs,
+                                         UniqueCheckInfo &res_info);
 
-  static int compute_connect_by_join_property(ObDMLStmt* stmt, UniqueCheckHelper& check_helper, JoinedTable* table,
-      ObIArray<ObRawExpr*>& cond_exprs, UniqueCheckInfo& res_info);
+  static int get_equal_set_conditions(ObRawExprFactory &expr_factory,
+                                      ObSQLSessionInfo *session_info,
+                                      const ObSelectStmt *stmt,
+                                      ObIArray<ObRawExpr*> &set_exprs,
+                                      ObIArray<ObRawExpr*> &equal_conds);
 
-  static int get_equal_set_conditions(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info,
-      ObSelectStmt* stmt, ObIArray<ObRawExpr*>& set_exprs, ObIArray<ObRawExpr*>& equal_conds);
+  static int get_expr_in_cast(ObIArray<ObRawExpr*> &input_exprs,
+                              ObIArray<ObRawExpr*> &output_exprs);
+  static ObRawExpr* get_expr_in_cast(ObRawExpr *expr);
 
-  static int get_expr_in_cast(ObIArray<ObRawExpr*>& input_exprs, ObIArray<ObRawExpr*>& output_exprs);
-  static ObRawExpr* get_expr_in_cast(ObRawExpr* expr);
+  static int add_cast_for_replace(ObRawExprFactory &expr_factory,
+                                  const ObRawExpr *from_expr,
+                                  ObRawExpr *&to_expr,
+                                  ObSQLSessionInfo *session_info);
 
-  static int extract_table_exprs(const ObDMLStmt& stmt, const ObIArray<ObRawExpr*>& source_exprs,
-      const TableItem& target, ObIArray<ObRawExpr*>& exprs);
+  static int extract_table_exprs(const ObDMLStmt &stmt,
+                                 const ObIArray<ObRawExpr *> &source_exprs,
+                                 const TableItem &target,
+                                 ObIArray<ObRawExpr *> &exprs);
 
-  static int extract_table_exprs(const ObDMLStmt& stmt, const ObIArray<ObRawExpr*>& source_exprs,
-      const ObIArray<TableItem*>& tables, ObIArray<ObRawExpr*>& exprs);
+  static int extract_table_exprs(const ObDMLStmt &stmt,
+                                 const ObIArray<ObRawExpr *> &source_exprs,
+                                 const ObIArray<TableItem*> &tables,
+                                 ObIArray<ObRawExpr *> &exprs);
 
-  static int extract_table_exprs(const ObDMLStmt& stmt, const ObIArray<ObRawExpr*>& source_exprs,
-      const ObSqlBitSet<>& table_set, ObIArray<ObRawExpr*>& table_exprs);
-  static int get_table_joined_exprs(const ObDMLStmt& stmt, const TableItem& source, const TableItem& target,
-      const ObIArray<ObRawExpr*>& conditions, ObIArray<ObRawExpr*>& target_exprs, ObSqlBitSet<>& join_source_ids,
-      ObSqlBitSet<>& join_target_ids);
+  static int extract_table_exprs(const ObDMLStmt &stmt,
+                                 const ObIArray<ObRawExpr *> &source_exprs,
+                                 const ObSqlBitSet<> &table_set,
+                                 ObIArray<ObRawExpr *> &table_exprs);
+  static int get_table_joined_exprs(const ObDMLStmt &stmt,
+                                    const TableItem &source,
+                                    const TableItem &target,
+                                    const ObIArray<ObRawExpr *> &conditions,
+                                    ObIArray<ObRawExpr *> &target_exprs,
+                                    ObSqlBitSet<> &join_source_ids,
+                                    ObSqlBitSet<> &join_target_ids);
 
-  static int get_table_joined_exprs(const ObDMLStmt& stmt, const ObIArray<TableItem*>& sources, const TableItem& target,
-      const ObIArray<ObRawExpr*>& conditions, ObIArray<ObRawExpr*>& target_exprs);
+  static int get_table_joined_exprs(const ObDMLStmt &stmt,
+                                    const ObIArray<TableItem *> &sources,
+                                    const TableItem &target,
+                                    const ObIArray<ObRawExpr *> &conditions,
+                                    ObIArray<ObRawExpr *> &target_exprs);
 
-  static int get_table_joined_exprs(const ObSqlBitSet<>& source_ids, const ObSqlBitSet<>& target_ids,
-      const ObIArray<ObRawExpr*>& conditions, ObIArray<ObRawExpr*>& target_exprs, ObSqlBitSet<>& join_source_ids,
-      ObSqlBitSet<>& join_target_ids);
+  static int get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
+                                    const ObSqlBitSet<> &target_ids,
+                                    const ObIArray<ObRawExpr *> &conditions,
+                                    ObIArray<ObRawExpr *> &target_exprs,
+                                    ObSqlBitSet<> &join_source_ids,
+                                    ObSqlBitSet<> &join_target_ids);
 
-  static int relids_to_table_items(ObDMLStmt* stmt, const ObRelIds& rel_ids, ObIArray<TableItem*>& rel_array);
-
-  static int relids_to_table_ids(ObDMLStmt* stmt, const ObSqlBitSet<>& rel_ids, ObIArray<uint64_t>& table_ids);
-
-  static int get_table_rel_ids(const ObDMLStmt& stmt, const TableItem& target, ObSqlBitSet<>& table_set);
-
-  static int get_table_rel_ids(const ObDMLStmt& stmt, const ObIArray<uint64_t>& table_ids, ObSqlBitSet<>& table_set);
-
-  static int get_table_rel_ids(const ObDMLStmt& stmt, const uint64_t table_id, ObSqlBitSet<>& table_set);
-
-  static int get_table_rel_ids(const ObDMLStmt& stmt, const ObIArray<TableItem*>& tables, ObSqlBitSet<>& table_set);
-
-  static int get_from_item(ObDMLStmt* stmt, TableItem* table, FromItem& from);
-
-  static int is_equal_correlation(ObRawExpr* cond, const int64_t stmt_level, bool& is_valid,
-      ObRawExpr** outer_param = NULL, ObRawExpr** inner_param = NULL);
-
-  static int is_semi_join_right_table(const ObDMLStmt& stmt, const uint64_t table_id, bool& is_semi_table);
+  static int get_from_item(ObDMLStmt *stmt, TableItem *table, FromItem &from);
+  
+  static int get_outer_join_right_tables(const JoinedTable &joined_table,
+                                         ObIArray<uint64_t> &table_ids);
 
   /**
-   * @brief is_common_comparsion_correlation
-   * expr(outer.c) = | <=> | > | >= | < | <= | != expr(inner.c)
+   * @brief is_equal_correlation
+   * expr(outer.c) = expr(inner.c)
+   * 1. 等值过滤条件
+   * 2. 一侧有且仅有上层的列
+   * 3. 一侧有且仅有本层的列
    * @return
    */
-  static int is_common_comparsion_correlation(ObRawExpr* cond, const int64_t stmt_level, bool& is_valid,
-      ObRawExpr** outer_param = NULL, ObRawExpr** inner_param = NULL);
+  static int is_equal_correlation(ObQueryRefRawExpr &query_ref,
+                                  ObRawExpr *cond,
+                                  bool &is_valid,
+                                  ObRawExpr **outer_param = NULL,
+                                  ObRawExpr **inner_param = NULL);
 
-  static int is_correlated_condition(ObRawExpr* left, ObRawExpr* right, const int64_t stmt_level, bool& is_valid);
+  static int is_semi_join_right_table(const ObDMLStmt &stmt,
+                                      const uint64_t table_id,
+                                      bool &is_semi_table);
 
-  static int merge_table_items(ObDMLStmt* stmt, const TableItem* source_table, const TableItem* target_table,
-      const ObIArray<int64_t>* output_map);
+  /**
+   * @brief trans_column_items
+   * 如果col0 \in source, col1 \in target，且两者指向相同的列；
+   * 那么删除col1，并将所有表达式中指向col1的指针改为指向col0。
+   *
+   * 如果col仅在target中使用，那么将col中的表信息改为source的信息
+   * @param stmt
+   * @param table_id
+   * @return
+   */
 
-  static int merge_table_items(ObSelectStmt* source_stmt, ObSelectStmt* target_stmt, const TableItem* source_table,
-      const TableItem* target_table, ObIArray<ObRawExpr*>& old_exprs, ObIArray<ObRawExpr*>& new_exprs);
+  static int merge_table_items(ObDMLStmt *stmt,
+                               const TableItem *source_table,
+                               const TableItem *target_table,
+                               const ObIArray<int64_t> *output_map,
+                               ObIArray<ObRawExpr *> *old_target_col_expr = NULL,
+                               ObIArray<ObRawExpr *> *new_target_col_expr = NULL);
 
-  static int find_parent_expr(ObDMLStmt* stmt, ObRawExpr* target, ObRawExpr*& root, ObRawExpr*& parent);
+  static int merge_table_items(ObSelectStmt *source_stmt,
+                               ObSelectStmt *target_stmt,
+                               const TableItem *source_table,
+                               const TableItem *target_table,
+                               ObIArray<ObRawExpr*> &old_exprs,
+                               ObIArray<ObRawExpr*> &new_exprs);
 
-  static int find_parent_expr(ObRawExpr* expr, ObRawExpr* target, ObRawExpr*& parent);
+  static int find_parent_expr(ObDMLStmt *stmt,
+                              ObRawExpr *target,
+                              ObRawExpr *&root,
+                              ObRawExpr *&parent);
 
-  static int find_relation_expr(ObDMLStmt* stmt, ObIArray<ObRawExpr*>& targets, ObIArray<ObRawExprPointer>& parents);
+  static int find_parent_expr(ObRawExpr *expr,
+                              ObRawExpr *target,
+                              ObRawExpr *&parent);
 
-  static int generate_not_null_column(ObTransformerCtx* ctx, ObDMLStmt* stmt, ObRawExpr*& not_null_column);
+  static int find_relation_expr(ObDMLStmt *stmt,
+                                ObIArray<ObRawExpr *> &targets,
+                                ObIArray<ObRawExprPointer> &parents);
 
-  static int generate_not_null_column(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, TableItem* item, ObRawExpr*& not_null_column);
+  static int generate_unique_key(ObTransformerCtx *ctx,
+                                 ObDMLStmt *stmt,
+                                 TableItem *item,
+                                 ObIArray<ObRawExpr *> &unique_keys);
 
-  static int generate_row_key_column(ObDMLStmt* stmt, ObRawExprFactory& expr_factory,
-      const share::schema::ObTableSchema& table_schema, uint64_t table_id, uint64_t row_key_id,
-      ObRawExpr*& row_key_expr);
+  /**
+   * @brief generate_unique_key
+   * 可以对stmt生成唯一键，需要调用
+   * check_can_set_stmt_unique
+   * 确认stmt有唯一键
+   */
+  static int generate_unique_key(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                ObSqlBitSet<> &ignore_tables,
+                                ObIArray<ObRawExpr *> &unique_keys);
 
-  static int generate_unique_key(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, TableItem* item, ObIArray<ObRawExpr*>& unique_keys);
+  static int check_loseless_join(ObDMLStmt *stmt,
+                                 ObTransformerCtx *ctx,
+                                 TableItem *source_table,
+                                 TableItem *target_table,
+                                 ObSQLSessionInfo *session_info,
+                                 ObSchemaChecker *schema_checker,
+                                 ObStmtMapInfo &stmt_map_info,
+                                 bool is_on_null_side,
+                                 bool &is_loseless,
+                                 EqualSets *input_equal_sets = NULL);
 
-  static int generate_unique_key(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, ObSqlBitSet<>& ignore_tables, ObIArray<ObRawExpr*>& unique_keys);
+  /**
+   * @brief check_relations_containment
+   * 检查两个关系集合的包含关系
+   * @param stmt
+   * @param source_rels 第一个关系集合
+   * @param target_rels 第二个关系集合
+   * @param stmt_map_infos 如果关系中有generated_table，stmt_map_info记录generated_table stmt各个stmt的映射关系
+   * @param rel_map_info 关系集合的映射
+   * @param is_contain 返回第二个关系集合是否包含第一个关系集合
+   */
+  static int check_relations_containment(ObDMLStmt *stmt,
+                                        const common::ObIArray<TableItem*> &source_rels,
+                                        const common::ObIArray<TableItem*> &target_rels,
+                                        common::ObIArray<ObStmtMapInfo> &stmt_map_infos,
+                                        common::ObIArray<int64_t> &rel_map_info,
+                                        bool &is_contain);
 
-  static int extract_column_exprs(ObDMLStmt* stmt, const int64_t stmt_level, const ObSqlBitSet<>& table_set,
-      const ObIArray<ObDMLStmt*>& ignore_stmts, common::ObIArray<ObRawExpr*>& columns);
+  static int check_table_item_containment(ObDMLStmt *stmt,
+                                          const TableItem *source_table,
+                                          ObDMLStmt *target_stmt,
+                                          const TableItem *target_table,
+                                          ObStmtMapInfo &stmt_map_info,
+                                          bool &is_contain);
 
-  static int extract_column_exprs(const ObIArray<ObRawExpr*>& exprs, const int64_t stmt_level,
-      const ObSqlBitSet<>& table_set, const ObIArray<ObDMLStmt*>& ignore_stmts, common::ObIArray<ObRawExpr*>& columns);
+  static int extract_lossless_join_columns(ObDMLStmt *stmt,
+                                           ObTransformerCtx *ctx,
+                                           const TableItem *source_table,
+                                           const TableItem *target_table,
+                                           const ObIArray<int64_t> &output_map,
+                                           ObIArray<ObRawExpr*> &source_exprs,
+                                           ObIArray<ObRawExpr*> &target_exprs,
+                                           EqualSets *input_equal_sets = NULL);
 
-  static int extract_column_exprs(ObRawExpr* expr, const int64_t stmt_level, const ObSqlBitSet<>& table_set,
-      const ObIArray<ObDMLStmt*>& ignore_stmts, common::ObIArray<ObRawExpr*>& columns);
+  static int extract_lossless_mapping_columns(ObDMLStmt *stmt,
+                                              const TableItem *source_table,
+                                              const TableItem *target_table,
+                                              const ObIArray<int64_t> &output_map,
+                                              ObIArray<ObRawExpr*> &candi_source_exprs,
+                                              ObIArray<ObRawExpr*> &candi_target_exprs);
+  static int adjust_agg_and_win_expr(ObSelectStmt *source_stmt,
+                                     ObRawExpr *&source_expr);
 
-  static bool is_subarray(const ObRelIds& table_ids, const common::ObIArray<ObRelIds>& other);
+  static int check_group_by_consistent(ObSelectStmt *sel_stmt,
+                                       bool &is_consistent);
 
-  static int check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* source_table,
-      TableItem* target_table, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      ObStmtMapInfo& stmt_map_info, bool& is_loseless, EqualSets* input_equal_sets = NULL);
+  static int contain_select_ref(ObRawExpr *expr, bool &has);
 
-  static int check_relations_containment(ObDMLStmt* stmt, const common::ObIArray<TableItem*>& source_rels,
-      const common::ObIArray<TableItem*>& target_rels, common::ObIArray<ObStmtMapInfo>& stmt_map_infos,
-      common::ObIArray<int64_t>& rel_map_info, bool& is_contain);
 
-  static int check_table_item_containment(ObDMLStmt* stmt, const TableItem* source_table, const TableItem* target_table,
-      ObStmtMapInfo& stmt_map_info, bool& is_contain);
+  static int remove_select_items(ObTransformerCtx *ctx,
+                                 const uint64_t table_id,
+                                 ObSelectStmt &child_stmt,
+                                 ObDMLStmt &upper_stmt,
+                                 ObIArray<ObRawExpr*> &removed_select_exprs);
 
-  static int extract_lossless_join_columns(ObDMLStmt* stmt, ObTransformerCtx* ctx, const TableItem* source_table,
-      const TableItem* target_table, const ObIArray<int64_t>& output_map, ObIArray<ObRawExpr*>& source_exprs,
-      ObIArray<ObRawExpr*>& target_exprs, EqualSets* input_equal_sets = NULL);
+  static int remove_select_items(ObTransformerCtx *ctx,
+                                 const uint64_t table_id,
+                                 ObSelectStmt &child_stmt,
+                                 ObDMLStmt &upper_stmt,
+                                 ObSqlBitSet<> &removed_idxs);
 
-  static int extract_lossless_mapping_columns(ObDMLStmt* stmt, const TableItem* source_table,
-      const TableItem* target_table, const ObIArray<int64_t>& output_map, ObIArray<ObRawExpr*>& candi_source_exprs,
-      ObIArray<ObRawExpr*>& candi_target_exprs);
-  static int adjust_agg_and_win_expr(ObSelectStmt* source_stmt, ObRawExpr*& source_expr);
+  static int remove_select_items(ObTransformerCtx *ctx,
+                                 ObSelectStmt &union_stmt,
+                                 ObSqlBitSet<> &removed_idxs);
 
-  static int check_group_by_consistent(ObSelectStmt* sel_stmt, bool& is_consistent);
+  static int create_dummy_select_item(ObSelectStmt &stmt, ObTransformerCtx *ctx);
 
-  static int contain_select_ref(ObRawExpr* expr, bool& has);
+  static int remove_column_if_no_ref(ObSelectStmt &stmt,
+                                     ObIArray<ObRawExpr*> &removed_exprs);
 
-  static int remove_select_items(ObTransformerCtx* ctx, const uint64_t table_id, ObSelectStmt& child_stmt,
-      ObDMLStmt& upper_stmt, ObIArray<ObRawExpr*>& removed_select_exprs);
+  static int create_set_stmt(ObTransformerCtx *ctx,
+                             const ObSelectStmt::SetOperator set_type,
+                             const bool is_distinct,
+                             ObIArray<ObSelectStmt*> &child_stmts,
+                             ObSelectStmt *&union_stmt);
 
-  static int remove_select_items(ObTransformerCtx* ctx, const uint64_t table_id, ObSelectStmt& child_stmt,
-      ObDMLStmt& upper_stmt, ObSqlBitSet<>& removed_idxs);
+  static int create_set_stmt(ObTransformerCtx *ctx,
+                             const ObSelectStmt::SetOperator set_type,
+                             const bool is_distinct,
+                             ObSelectStmt *left_stmt,
+                             ObSelectStmt *right_stmt,
+                             ObSelectStmt *&union_stmt);
 
-  static int remove_select_items(ObTransformerCtx* ctx, ObSelectStmt& union_stmt, ObSqlBitSet<>& removed_idxs);
+  static int pushdown_group_by(ObSelectStmt *parent_stmt,
+                               ObIArray<ObRawExpr *> &pushdown_groupby,
+                               ObIArray<ObRawExpr *> &pushdown_rollup,
+                               ObIArray<ObRawExpr *> &pushdown_aggr);
 
-  static int create_dummy_select_item(ObSelectStmt& stmt, ObTransformerCtx* ctx);
+  static int create_simple_view(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                ObSelectStmt *&view_stmt,
+                                bool push_subquery = true,
+                                bool push_conditions = true,
+                                bool push_group_by = false,
+                                ObAliasRefRawExpr *alias_expr = NULL);
 
-  static int remove_column_if_no_ref(ObSelectStmt& stmt, ObIArray<ObRawExpr*>& removed_exprs);
+  static int pushdown_pseudo_column_like_exprs(ObDMLStmt &upper_stmt,
+                                               ObIArray<ObRawExpr*> &pushdown_exprs);
 
-  static int create_union_stmt(
-      ObTransformerCtx* ctx, const bool is_distinct, ObIArray<ObSelectStmt*>& child_stmts, ObSelectStmt*& union_stmt);
+  static int adjust_updatable_view(ObRawExprFactory &expr_factory,
+                                   ObDelUpdStmt *stmt,
+                                   TableItem &view_table_item,
+                                   ObIArray<uint64_t>* origin_table_ids = NULL);
 
-  static int create_union_stmt(ObTransformerCtx* ctx, const bool is_distinct, ObSelectStmt* left_stmt,
-      ObSelectStmt* right_stmt, ObSelectStmt*& union_stmt);
+  static int create_stmt_with_generated_table(ObTransformerCtx *ctx,
+                                              ObSelectStmt *child_stmt,
+                                              ObSelectStmt *&parent_stmt);
 
-  static int create_simple_view(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, ObSelectStmt*& view_stmt, bool push_subquery = true);
+  static int create_stmt_with_basic_table(ObTransformerCtx *ctx,
+                                          ObDMLStmt *stmt,
+                                          TableItem *table,
+                                          ObSelectStmt *&simple_stmt);
 
-  static int adjust_updatable_view(ObRawExprFactory& expr_factory, ObDelUpdStmt* stmt, TableItem& view_table_item);
+  static int create_stmt_with_joined_table(ObTransformerCtx *ctx,
+                                           ObDMLStmt *stmt,
+                                           JoinedTable *joined_table,
+                                           ObSelectStmt *&simple_stmt);
 
-  static int push_down_groupby(ObTransformerCtx* ctx, ObSelectStmt* stmt, TableItem* view_table);
+  static int copy_joined_table_expr(ObRawExprFactory &expr_factory,
+                                    ObDMLStmt *stmt,
+                                    JoinedTable *table);
 
-  static int push_down_vector_assign(
-      ObTransformerCtx* ctx, ObUpdateStmt* stmt, ObAliasRefRawExpr* root_expr, TableItem* view_table);
+  static int inner_copy_joined_table_expr(ObRawExprCopier &copier,
+                                          JoinedTable *table);
 
-  static int create_stmt_with_generated_table(
-      ObTransformerCtx* ctx, ObSelectStmt* child_stmt, ObSelectStmt*& parent_stmt);
+  static int extract_right_tables_from_semi_infos(ObDMLStmt *stmt,
+                                                  const ObIArray<SemiInfo *> &semi_infos, 
+                                                  ObIArray<TableItem *> &tables);
 
-  static int create_stmt_with_basic_table(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, TableItem* table, ObSelectStmt*& simple_stmt);
+  static int can_push_down_filter_to_table(TableItem &table, bool &can_push);
 
-  static int create_stmt_with_joined_table(
-      ObTransformerCtx* ctx, ObDMLStmt* stmt, JoinedTable* joined_table, ObSelectStmt*& simple_stmt);
+  static int add_limit_to_semi_right_table(ObDMLStmt *stmt,
+                                           ObTransformerCtx *ctx,
+                                           SemiInfo *semi_info);
 
-  static int create_view_with_table(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* table, TableItem*& view_table);
+  static int replace_table_in_stmt(ObDMLStmt *stmt,
+                                   TableItem *other_table,
+                                   TableItem *current_table);
 
-  static int pushdown_semi_info_right_filter(ObDMLStmt* stmt, ObTransformerCtx* ctx, SemiInfo* semi_info);
+  static int remove_tables_from_stmt(ObDMLStmt *stmt,
+                                     TableItem *table_item,
+                                     ObIArray<uint64_t> &table_ids);
 
-  static int pushdown_semi_info_right_filter(
-      ObDMLStmt* stmt, ObTransformerCtx* ctx, SemiInfo* semi_info, ObIArray<ObRawExpr*>& right_filters);
+  static int replace_table_in_semi_infos(ObDMLStmt *stmt,
+                                         const TableItem *other_table,
+                                         const TableItem *current_table);
 
-  static int can_push_down_filter_to_table(TableItem& table, bool& can_push);
+  static int replace_table_in_joined_tables(ObDMLStmt *stmt,
+                                            TableItem *other_table,
+                                            TableItem *current_table);
+  static int replace_table_in_joined_tables(TableItem *table,
+                                            TableItem *other_table,
+                                            TableItem *current_table);
 
-  static int replace_table_in_stmt(ObDMLStmt* stmt, TableItem* other_table, TableItem* current_table);
+  static int classify_rownum_conds(ObDMLStmt &stmt,
+                                   ObIArray<ObRawExpr *> &spj_conds,
+                                   ObIArray<ObRawExpr *> &rownum_conds);
 
-  static int remove_tables_from_stmt(ObDMLStmt* stmt, TableItem* table_item, ObIArray<uint64_t>& table_ids);
+  static int rebuild_select_items(ObSelectStmt &stmt,
+                                  ObRelIds &output_rel_ids);
+  static int replace_columns_and_aggrs(ObRawExpr *&expr, ObTransformerCtx *ctx);
 
-  static int replace_table_in_semi_infos(ObDMLStmt* stmt, const TableItem* other_table, const TableItem* current_table);
+  static int build_const_expr_for_count(ObRawExprFactory &expr_factory,
+                                        const int64_t value,
+                                        ObConstRawExpr *&expr);
 
-  static int replace_table_in_joined_tables(ObDMLStmt* stmt, TableItem* other_table, TableItem* current_table);
-  static int replace_table_in_joined_tables(TableItem* table, TableItem* other_table, TableItem* current_table);
+  static int build_case_when_expr(ObDMLStmt &stmt,
+                                  ObRawExpr *expr,
+                                  ObRawExpr *then_expr,
+                                  ObRawExpr *default_expr,
+                                  ObRawExpr *&out_expr,
+                                  ObTransformerCtx *ctx);
+  static int build_row_expr(ObRawExprFactory& expr_factory,
+                            common::ObIArray<ObRawExpr*>& param_exprs,
+                            ObOpRawExpr*& row_expr);
 
-  static int get_from_tables(const ObDMLStmt& stmt, ObRelIds& output_rel_ids);
+  static int query_cmp_to_value_cmp(const ObItemType cmp_type, ObItemType& new_type);
 
-  static int classify_rownum_conds(
-      ObDMLStmt& stmt, ObIArray<ObRawExpr*>& spj_conds, ObIArray<ObRawExpr*>& rownum_conds);
+  static int merge_limit_as_zero(ObTransformerCtx &ctx,
+                                  ObRawExpr *view_limit,
+                                  ObRawExpr *upper_limit,
+                                  ObRawExpr *view_offset,
+                                  ObRawExpr *upper_offset,
+                                  ObRawExpr *&limit_expr,
+                                  ObRawExpr *&offset_expr,
+                                  bool &is_valid);
 
-  static int rebuild_select_items(ObSelectStmt& stmt, ObRelIds& output_rel_ids);
-  static int replace_columns_and_aggrs(ObRawExpr*& expr, ObTransformerCtx* ctx);
+  static int merge_limit_offset(ObTransformerCtx *ctx,
+                                ObRawExpr *view_limit,
+                                ObRawExpr *upper_limit,
+                                ObRawExpr *view_offset,
+                                ObRawExpr *upper_offset,
+                                ObRawExpr *&limit_expr,
+                                ObRawExpr *&offset_expr);
+  static int compare_const_expr_result(ObTransformerCtx *ctx,
+                                      ObRawExpr *expr,
+                                      ObItemType op_type,
+                                      int64_t value,
+                                      bool &is_true);
 
-  static int build_const_expr_for_count(ObRawExprFactory& expr_factory, const int64_t value, ObConstRawExpr*& expr);
+  static int compare_const_expr_result(ObTransformerCtx *ctx,
+                                        ObRawExpr &left_expr,
+                                        ObItemType op_type,
+                                        ObRawExpr &right_expr,
+                                        bool &is_true);
 
-  static int build_case_when_expr(ObDMLStmt& stmt, ObRawExpr* expr, ObRawExpr* then_expr, ObRawExpr* default_expr,
-      ObRawExpr*& out_expr, ObTransformerCtx* ctx);
+  static int create_dummy_add_zero(ObTransformerCtx *ctx, ObRawExpr *&expr);
 
-  static int merge_limit_offset(ObTransformerCtx* ctx, ObRawExpr* view_limit, ObRawExpr* upper_limit,
-      ObRawExpr* view_offset, ObRawExpr* upper_offset, ObRawExpr*& limit_expr, ObRawExpr*& offset_expr);
+  static int get_stmt_limit_value(const ObDMLStmt &stmt, int64_t &limit);
 
-  static int create_dummy_add_zero(ObTransformerCtx* ctx, ObRawExpr*& expr);
+  static int check_limit_value(const ObDMLStmt &stmt,
+                               ObExecContext *exec_ctx,
+                               ObIAllocator *allocator,
+                               int64_t limit,
+                               bool &is_equal,
+                               ObPCConstParamInfo &const_param_info);
 
-  static int get_stmt_limit_value(const ObDMLStmt& stmt, int64_t& limit);
+  static int convert_column_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &column_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                common::ObIArray<ObRawExpr*> &select_exprs);
 
-  static int check_limit_value(const ObDMLStmt& stmt, const ParamStore& param_store, ObSQLSessionInfo* session_info,
-      ObIAllocator* allocator, int64_t limit, bool& is_equal, bool add_param_constraint = false,
-      ObQueryCtx* query_ctx = NULL);
+  static int convert_set_op_expr_to_select_expr(const common::ObIArray<ObRawExpr*> &set_op_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                common::ObIArray<ObRawExpr*> &select_exprs);
 
-  static int convert_column_expr_to_select_expr(const common::ObIArray<ObRawExpr*>& column_exprs,
-      const ObSelectStmt& inner_stmt, common::ObIArray<ObRawExpr*>& select_exprs);
+  /**
+   * @brief convert_select_expr_to_column_expr
+   * 将视图的select expr转换为outer stmt对应的column expr
+   * @param select_exprs 视图的select exprs
+   * @param table_id 视图在outer stmt的table id
+   * @param column_exprs outer stmt对应的column exprs
+   */
+  static int convert_select_expr_to_column_expr(const common::ObIArray<ObRawExpr*> &select_exprs,
+                                                const ObSelectStmt &inner_stmt,
+                                                ObDMLStmt &outer_stmt,
+                                                uint64_t table_id,
+                                                common::ObIArray<ObRawExpr*> &column_exprs);
 
-  static int convert_select_expr_to_column_expr(const common::ObIArray<ObRawExpr*>& select_exprs,
-      const ObSelectStmt& inner_stmt, ObDMLStmt& outer_stmt, uint64_t table_id,
-      common::ObIArray<ObRawExpr*>& column_exprs);
+  static int pull_up_subquery(ObDMLStmt *parent_stmt,
+                              ObSelectStmt *child_stmt);
 
-  static int pull_up_subquery(ObDMLStmt* parent_stmt, ObSelectStmt* child_stmt);
+  static int right_join_to_left(ObDMLStmt *stmt);
 
-  static int right_join_to_left(ObDMLStmt* stmt);
+  static int change_join_type(TableItem *joined_table);
 
-  static int change_join_type(TableItem* joined_table);
+  static int get_subquery_expr_from_joined_table(ObDMLStmt *stmt,
+                                                 common::ObIArray<ObQueryRefRawExpr *> &subqueries);
 
-  static int get_subquery_expr_from_joined_table(ObDMLStmt* stmt, common::ObIArray<ObQueryRefRawExpr*>& subqueries);
+  static int get_on_conditions(ObDMLStmt &stmt,
+                              common::ObIArray<ObRawExpr *> &conditions);
 
-  static int get_on_conditions(ObDMLStmt& stmt, common::ObIArray<ObRawExpr*>& conditions);
+  static int get_on_condition(TableItem *table_item,
+                              common::ObIArray<ObRawExpr *> &conditions);
 
-  static int get_on_condition(TableItem* table_item, common::ObIArray<ObRawExpr*>& conditions);
+  static int get_semi_conditions(ObIArray<SemiInfo *> &semi_infos,
+                                 ObIArray<ObRawExpr *> &conditions);
 
-  static int get_semi_conditions(ObIArray<SemiInfo*>& semi_infos, ObIArray<ObRawExpr*>& conditions);
-
-  static int set_limit_expr(ObDMLStmt* stmt, ObTransformerCtx* ctx);
+  static int set_limit_expr(ObDMLStmt *stmt, ObTransformerCtx *ctx);
 
   //
   // pushdown_limit_count = NULL == limit_offset
   //                        ? limit_count
   //                        : limit_count + limit_offset
-  static int make_pushdown_limit_count(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session,
-      ObRawExpr* limit_count, ObRawExpr* limit_offset, ObRawExpr*& pushdown_limit_count);
+  static int make_pushdown_limit_count(ObRawExprFactory &expr_factory,
+                                       const ObSQLSessionInfo &session,
+                                       ObRawExpr *limit_count,
+                                       ObRawExpr *limit_offset,
+                                       ObRawExpr *&pushdown_limit_count);
 
-  static int recursive_set_stmt_unique(ObSelectStmt* select_stmt, ObTransformerCtx* ctx,
-      bool ignore_check_unique = false, common::ObIArray<ObRawExpr*>* unique_keys = NULL);
+  static int recursive_set_stmt_unique(ObSelectStmt *select_stmt,
+                                       ObTransformerCtx *ctx,
+                                       bool ignore_check_unique = false,
+                                       common::ObIArray<ObRawExpr *> *unique_keys = NULL);
 
-  static int check_can_set_stmt_unique(ObDMLStmt* stmt, bool& can_set_unique);
+  static int check_can_set_stmt_unique(ObDMLStmt *stmt,
+                                       bool &can_set_unique);
 
-  static int get_rel_ids_from_tables(ObDMLStmt* stmt, const ObIArray<TableItem*>& table_items, ObRelIds& rel_ids);
+  static int get_rel_ids_from_tables(const ObDMLStmt *stmt,
+                                     const ObIArray<TableItem*> &table_items,
+                                     ObRelIds &rel_ids);
 
-  static int get_rel_ids_from_join_table(ObDMLStmt* stmt, const JoinedTable* joined_table, ObRelIds& rel_ids);
+  static int get_rel_ids_from_tables(const ObDMLStmt *stmt,
+                                     const ObIArray<uint64_t> &table_ids,
+                                     ObRelIds &rel_ids);
 
-  static int adjust_single_table_ids(JoinedTable* joined_table);
+  static int get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
+                                             SemiInfo *info,
+                                             ObSqlBitSet<> &rel_ids);
 
-  static int adjust_single_table_ids(TableItem* table, common::ObIArray<uint64_t>& table_ids);
+  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                    const TableItem *table,
+                                    ObRelIds &rel_ids);
 
-  static int extract_table_items(TableItem* table_item, ObIArray<TableItem*>& table_items);
+  static int adjust_single_table_ids(JoinedTable *joined_table);
 
-  static int create_simplie_view(ObTransformerCtx* ctx, ObDMLStmt* stmt, ObSelectStmt*& view_stmt);
+  static int adjust_single_table_ids(TableItem *table,
+                                    common::ObIArray<uint64_t> &table_ids);
 
-  static int set_view_base_item(
-      ObDMLStmt* upper_stmt, TableItem* view_table, ObSelectStmt* view_stmt, TableItem* base_table);
+  static int extract_table_items(TableItem *table_item,
+                                 ObIArray<TableItem *> &table_items);
 
-  static int reset_stmt_column_item(
-      ObDMLStmt* stmt, ObIArray<ColumnItem>& column_items, ObIArray<ObRawExpr*>& column_expr);
+  static int set_view_base_item(ObDMLStmt *upper_stmt,
+                                TableItem *view_table,
+                                ObSelectStmt *view_stmt,
+                                TableItem *base_table);
 
-  static int get_base_column(ObDMLStmt* stmt, ObColumnRefRawExpr*& col);
+  static int reset_stmt_column_item(ObDMLStmt *stmt,
+                                    ObIArray<ColumnItem> &column_items,
+                                    ObIArray<ObRawExpr*> &column_expr);
 
-  static int get_post_join_exprs(ObDMLStmt* stmt, ObIArray<ObRawExpr*>& exprs, bool with_vector_assign = false);
+  static int get_base_column(const ObDMLStmt *stmt,
+                             ObColumnRefRawExpr *&col);
 
-  static int free_stmt(ObStmtFactory& stmt_factory, ObDMLStmt* stmt);
+  static int get_post_join_exprs(ObDMLStmt *stmt,
+                                 ObIArray<ObRawExpr *> &exprs,
+                                 bool with_vector_assign = false);
 
-  static int extract_shared_expr(ObDMLStmt* upper_stmt, ObDMLStmt* child_stmt, ObIArray<ObRawExpr*>& shared_exprs);
+  static int free_stmt(ObStmtFactory &stmt_factory, ObDMLStmt *stmt);
 
-  static int extract_stmt_column_contained_expr(
-      ObDMLStmt* stmt, int32_t stmt_level, ObIArray<ObRawExpr*>& contain_column_exprs);
+  static int extract_shared_expr(ObDMLStmt *upper_stmt,
+                                 ObDMLStmt *child_stmt,
+                                 ObIArray<ObRawExpr*> &shared_exprs,
+                                 ObIArray<DmlStmtScope> *scopes = NULL);
 
-  static int extract_column_contained_expr(
-      ObRawExpr* expr, int32_t stmt_level, ObIArray<ObRawExpr*>& contain_column_exprs);
+  static int check_for_update_validity(ObSelectStmt *stmt);
 
-  static int check_for_update_validity(ObSelectStmt* stmt);
+  static int is_question_mark_pre_param(const ObDMLStmt &stmt,
+                                        const int64_t param_idx,
+                                        bool &is_pre_param,
+                                        int64_t &pre_param_count);
 
-  static int is_question_mark_pre_param(const ObDMLStmt& stmt, const int64_t param_idx, bool& is_pre_param);
+  static int extract_pseudo_column_like_expr(ObIArray<ObRawExpr*> &exprs,
+                                             ObIArray<ObRawExpr *> &pseudo_column_like_exprs);
 
-  static int extract_pseudo_column_like_expr(
-      ObIArray<ObRawExpr*>& exprs, ObIArray<ObRawExpr*>& pseudo_column_like_exprs);
+  static int extract_pseudo_column_like_expr(ObRawExpr *expr,
+                                             ObIArray<ObRawExpr *> &pseudo_column_like_exprs);
 
-  static int extract_pseudo_column_like_expr(ObRawExpr* expr, ObIArray<ObRawExpr*>& pseudo_column_like_exprs);
+  static int adjust_pseudo_column_like_exprs(ObDMLStmt &stmt);
 
-  static int adjust_pseudo_column_like_exprs(ObDMLStmt& stmt);
+  static int check_has_rownum(const ObIArray<ObRawExpr *> &exprs, bool &has_rownum);
 
-  static int check_has_rownum(const ObIArray<ObRawExpr*>& exprs, bool& has_rownum);
+  static int check_subquery_match_index(ObTransformerCtx *ctx,
+                                        ObQueryRefRawExpr *query_ref,
+                                        ObSelectStmt *subquery,
+                                        bool &is_match);
 
-  static int create_view_with_from_items(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* table_item,
-      const ObIArray<ObRawExpr*>& new_select_exprs, const ObIArray<ObRawExpr*>& new_conds, TableItem*& view_table);
+  static int add_table_item(ObDMLStmt *stmt, TableItem *table_item);
 
-  static int add_table_item(ObDMLStmt* stmt, TableItem* table_item);
+  static int add_table_item(ObDMLStmt *stmt, ObIArray<TableItem *> &table_items);
 
-  static int add_table_item(ObDMLStmt* stmt, ObIArray<TableItem*>& table_items);
+  static int get_limit_value(ObRawExpr *limit_expr,
+                                      const ParamStore *param_store,
+                                      ObExecContext *exec_ctx,
+                                      ObIAllocator *allocator,
+                                      int64_t &limit_value,
+                                      bool &is_null_value);
 
-  static int replace_having_expr(ObSelectStmt* stmt, ObRawExpr* from, ObRawExpr* to);
-  static int check_subquery_match_index(ObTransformerCtx* ctx, ObSelectStmt* subquery, bool& is_match);
+  static int get_expr_int_value(ObRawExpr *expr,
+                             const ParamStore *param_store,
+                             ObExecContext *exec_ctx,
+                             ObIAllocator *allocator,
+                             int64_t &value,
+                             bool &is_null_value);
 
-  static int get_limit_value(const ObRawExpr* limit_expr, const ObDMLStmt* stmt, const ParamStore* param_store,
-      ObSQLSessionInfo* session_info, ObIAllocator* allocator, int64_t& limit_value, bool& is_null_value);
+  static int get_percentage_value(ObRawExpr *percent_expr,
+                                  const ObDMLStmt *stmt,
+                                  const ParamStore *param_store,
+                                  ObExecContext *exec_ctx,
+                                  ObIAllocator *allocator,
+                                  double &percent_value,
+                                  bool &is_null_value);
 
-  static int add_const_param_constraints(ObRawExpr* expr, ObQueryCtx* query_ctx, ObTransformerCtx* ctx);
+  static int add_const_param_constraints(ObRawExpr *expr,
+                                         ObTransformerCtx *ctx);
 
-  static int deep_copy_grouping_sets_items(ObRawExprFactory& expr_factory,
-      const common::ObIArray<ObGroupingSetsItem>& input_items, common::ObIArray<ObGroupingSetsItem>& output_items,
-      const uint64_t copy_types);
+  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                  ObTransformerCtx *trans_ctx);
 
-  static int deep_copy_multi_rollup_items(ObRawExprFactory& expr_factory,
-      const common::ObIArray<ObMultiRollupItem>& input_items, common::ObIArray<ObMultiRollupItem>& output_items,
-      const uint64_t copy_types);
+  static int replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
+                                                  ObRawExpr *expr_r,
+                                                  ObTransformerCtx *trans_ctx,
+                                                  bool &is_existed);
 
-  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt* select_stmt);
+  static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
+  static int add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
+                                     ObRawExpr *expr,
+                                     bool is_negative = false);
+  static bool check_objparam_negative(const ObObjParam &obj1);
+  static int add_param_bool_constraint(ObTransformerCtx *ctx,
+                                       ObRawExpr *bool_expr,
+                                       const bool is_true,
+                                       const bool ignore_const_check = false);
+  static int replace_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                        ObRawExpr *&expr,
+                                        bool need_query_compare,
+                                        ObTransformerCtx *tran_ctx,
+                                        bool in_add_expr);
+  static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
 
-  static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
+  static int add_param_not_null_constraint(ObTransformerCtx &ctx, 
+                                           ObIArray<ObRawExpr *> &not_null_exprs);
+  
+  static int add_param_not_null_constraint(ObTransformerCtx &ctx,
+                                           ObRawExpr *not_null_expr,
+                                           bool is_true = true);
+  static int add_param_null_constraint(ObTransformerCtx &ctx,
+                                      ObRawExpr *not_null_expr);
 
+  static int calc_expr_value(ObTransformerCtx &ctx, ObRawExpr *expr, bool &is_not_null);
+
+  static int get_all_child_stmts(ObDMLStmt *stmt,
+                                 ObIArray<ObSelectStmt*> &child_stmts,
+                                 hash::ObHashMap<uint64_t, ObDMLStmt *> *parent_map = NULL);
+
+  static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
+
+  static int check_project_pruning_validity(ObSelectStmt &stmt, bool &is_valid);
+
+  static int check_select_item_need_remove(const ObSelectStmt *stmt,
+                                           const int64_t idx,
+                                           bool &need_remove);
+
+  static int check_correlated_exprs_can_pullup(const ObQueryRefRawExpr &query_ref,
+                                               const ObSelectStmt &subquery,
+                                               bool &can_pullup);
+
+  static int check_correlated_exprs_can_pullup_for_set(const ObQueryRefRawExpr &query_ref,
+                                                       const ObSelectStmt &subquery,
+                                                       bool &can_pullup);
+
+  static int check_correlated_condition_isomorphic(ObSelectStmt *left_query,
+                                                   ObSelectStmt *right_query,
+                                                   const ObQueryRefRawExpr &left_query_ref,
+                                                   const ObQueryRefRawExpr &right_query_ref,
+                                                   bool &is_valid,
+                                                   ObIArray<ObRawExpr*> &left_new_select_exprs,
+                                                   ObIArray<ObRawExpr*> &right_new_select_exprs);
+
+  static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
+                                    ObIArray<ObRawExpr*> &right_exprs,
+                                    bool &is_same);
+
+  static int check_result_type_same(ObRawExpr* left_expr, 
+                                    ObRawExpr* right_expr,
+                                    bool &is_same);                                  
+
+  static int get_correlated_conditions(const ObIArray<ObExecParamRawExpr *> & exec_params,
+                                       const ObIArray<ObRawExpr*> &conds,
+                                       ObIArray<ObRawExpr*> &correlated_conds);
+
+  static int is_correlated_exprs_isomorphic(ObIArray<ObRawExpr *> &left_exprs,
+                                            ObIArray<ObRawExpr *> &right_exprs,
+                                            bool force_order,
+                                            bool &is_valid);
+
+  static int is_correlated_expr_isomorphic(ObRawExpr *left_expr,
+                                           ObRawExpr* right_expr,
+                                           bool &is_isomorphic);
+
+  static int check_fixed_expr_correlated(const ObQueryRefRawExpr &query_ref,
+                                         const ObSelectStmt &subquery,
+                                         bool &is_valid);
+
+  static int check_can_pullup_conds(const ObSelectStmt &subquery, bool &has_special_expr);
+
+  static int is_table_item_correlated(const ObQueryRefRawExpr &query_ref,
+                                      const ObSelectStmt &subquery,
+                                      bool &contains);
+
+  static int is_join_conditions_correlated(const ObQueryRefRawExpr &query_ref,
+                                           const ObSelectStmt *subquery,
+                                           bool &is_correlated);
+
+  static int check_semi_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                              const SemiInfo *semi_info,
+                                              bool &is_correlated);     
+
+  static int check_joined_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                const JoinedTable *joined_table,
+                                                bool &is_correlated);
+
+  static int check_correlated_having_expr_can_pullup(const ObQueryRefRawExpr &query_ref,
+                                                     const ObSelectStmt &subquery,
+                                                     bool has_special_expr,
+                                                     bool &can_pullup);
+
+  static int check_correlated_where_expr_can_pullup(const ObQueryRefRawExpr &query_ref,
+                                                    const ObSelectStmt &subquery,
+                                                    bool has_special_expr,
+                                                    bool &can_pullup);
+
+  static int is_select_item_contain_subquery(const ObSelectStmt *subquery,
+                                             bool &contain);
+
+  static int create_spj_and_pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
+                                                    ObSelectStmt *&subquery,
+                                                    ObTransformerCtx *ctx);
+
+  static int create_spj_and_pullup_correlated_exprs_for_set(const ObQueryRefRawExpr &query_ref,
+                                                            ObSelectStmt *&stmt,
+                                                            ObTransformerCtx *ctx);
+
+  static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
+                                    ObSelectStmt *right_query);
+
+  static int replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
+                                          const ObQueryRefRawExpr &query_ref,
+                                          int &pos,
+                                          ObIArray<ObRawExpr*> &new_column_list);
+
+  static int replace_none_correlated_expr(ObRawExpr *&expr,
+                                          const ObQueryRefRawExpr &query_ref,
+                                          int &pos,
+                                          ObIArray<ObRawExpr*> &new_column_list);
+
+  static int pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
+                                     ObIArray<ObRawExpr*> &exprs,
+                                     ObIArray<ObRawExpr*> &new_select_list);
+
+  static int pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
+                                    ObRawExpr *expr,
+                                    ObIArray<ObRawExpr*> &new_select_list,
+                                    bool &is_correlated);
+
+  static int pullup_correlated_select_expr(const ObQueryRefRawExpr &query_ref,
+                                           ObSelectStmt &stmt,
+                                           ObSelectStmt &view,
+                                           ObIArray<ObRawExpr*> &new_select_list);
+
+  static int pullup_correlated_conditions(const ObQueryRefRawExpr &query_ref,
+                                          ObIArray<ObRawExpr *> &exprs,
+                                          ObIArray<ObRawExpr *> &pullup_exprs,
+                                          ObIArray<ObRawExpr *> &new_select_list);
+
+  static int extract_rowid_exprs(ObIArray<ObRawExpr *> &exprs, ObIArray<ObRawExpr *> &rowid_exprs);
+
+  static int extract_rowid_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &rowid_exprs);
+
+  static int add_part_column_exprs_for_heap_table(const ObDMLStmt *stmt,
+                                                  const ObTableSchema *table_schema,
+                                                  const uint64_t table_id,
+                                                  ObIArray<ObRawExpr *> &unique_keys);
+
+  //whether it is the target table for batch stmt
+  static int is_batch_stmt_write_table(uint64_t table_id,
+                                       const ObDMLStmt &stmt,
+                                       bool &is_target_table);
+
+  static int move_expr_into_view(ObRawExprFactory &expr_factory,
+                                 ObDMLStmt &stmt,
+                                 TableItem &view,
+                                 ObIArray<ObRawExpr *> &exprs,
+                                 ObIArray<ObRawExpr *> &new_exprs,
+                                 ObIArray<ObQueryRefRawExpr *> *moved_query_refs = NULL);
+
+  static int get_generated_table_item(ObDMLStmt &parent_stmt,
+                                      ObDMLStmt *child_stmt,
+                                      TableItem *&table_item);
+
+  static int get_table_related_condition(ObDMLStmt &stmt,
+                                         const TableItem *table,
+                                         ObIArray<ObRawExpr *> &conditions);
+
+  static int get_condition_from_joined_table(ObDMLStmt &stmt,
+                                             const TableItem *target_table,
+                                             ObIArray<ObRawExpr *> &conditions);
+
+  static int extract_joined_table_condition(TableItem *table_item,
+                                            const TableItem *target_table,
+                                            ObIArray<ObRawExpr *> &conditions,
+                                            bool &add_on_condition);
+  /* extract all constant false exprs and constant true exprs in exprs*/
+  static int extract_const_bool_expr_info(ObTransformerCtx *ctx,
+                                          const common::ObIArray<ObRawExpr*> &exprs,
+                                          common::ObIArray<int64_t> &true_exprs,
+                                          common::ObIArray<int64_t> &false_exprs);
+  /* extract exprs in all_exprs whoes indexs are in target_idx to target_exprs */
+  static int extract_target_exprs_by_idx(const ObIArray<ObRawExpr*> &all_exprs,
+                                         const ObIArray<int64_t> &target_idx,
+                                         ObIArray<ObRawExpr*> &target_exprs);
+  static int calc_const_expr_result(ObRawExpr * expr,
+                                    ObTransformerCtx *ctx,
+                                    ObObj &result,
+                                    bool &calc_happend);
+  static int check_integer_result_type(common::ObIArray<ObRawExpr*> &exprs,
+                                       bool &is_valid_type);
+
+  static int construct_trans_table(const ObDMLStmt *stmt,
+                            const TableItem *table,
+                            ObIArray<TableItem *> &trans_tables);
+
+  static int construct_trans_tables(const ObDMLStmt *stmt,
+                                    const ObIArray<TableItem *> &tables,
+                                    ObIArray<TableItem *> &trans_tables);
+
+  static int get_exprs_relation_ids(ObIArray<ObRawExpr*> &exprs, ObSqlBitSet<> &exprs_relation_ids);
+
+  static int get_lazy_left_join(ObDMLStmt *stmt,
+                                const ObIArray<TableItem *> &tables,
+                                ObSqlBitSet<> &expr_relation_ids,
+                                ObIArray<LazyJoinInfo> &lazy_join_infos);
+  
+  static int is_null_propagate_expr(const ObRawExpr *expr,
+                                    const ObRawExpr *target,
+                                    bool &bret);
+
+  static int get_join_keys(ObIArray<ObRawExpr*> &conditions,
+                           ObSqlBitSet<> &table_ids,
+                           ObIArray<ObRawExpr*> &join_keys,
+                           bool &is_simply_join);
+
+  static int check_joined_table_combinable(ObDMLStmt *stmt,
+                                           JoinedTable *joined_table,
+                                           TableItem *target_table,
+                                           bool is_right_child,
+                                           bool &combinable);
+
+  static int rebuild_win_compare_range_expr(ObRawExprFactory* expr_factory,
+                                            ObWinFunRawExpr &win_expr,
+                                            ObRawExpr* order_expr);
+
+  static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
+                                             bool &is_valid);
+
+  static int replace_with_empty_view(ObTransformerCtx *ctx,
+                                     ObDMLStmt *stmt,
+                                     TableItem *&view_table,
+                                     TableItem *from_table,
+                                     ObIArray<SemiInfo *> *semi_infos = NULL);
+
+  static int replace_with_empty_view(ObTransformerCtx *ctx,
+                                     ObDMLStmt *stmt,
+                                     TableItem *&view_table,
+                                     ObIArray<TableItem *> &from_tables,
+                                     ObIArray<SemiInfo *> *semi_infos = NULL);
+
+  static int create_inline_view(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                TableItem *&view_table,
+                                TableItem * push_table,
+                                ObIArray<ObRawExpr *> *conditions = NULL,
+                                ObIArray<SemiInfo *> *semi_infos = NULL,
+                                ObIArray<ObRawExpr *> *select_exprs = NULL,
+                                ObIArray<ObRawExpr *> *group_exprs = NULL,
+                                ObIArray<ObRawExpr *> *rollup_exprs = NULL,
+                                ObIArray<ObRawExpr *> *having_exprs = NULL,
+                                ObIArray<OrderItem> *order_items = NULL);
+
+  static int create_inline_view(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                TableItem *&view_table,
+                                ObIArray<TableItem *> &from_tables,
+                                ObIArray<ObRawExpr *> *conditions = NULL,
+                                ObIArray<SemiInfo *> *semi_infos = NULL,
+                                ObIArray<ObRawExpr *> *select_exprs = NULL,
+                                ObIArray<ObRawExpr *> *group_exprs = NULL,
+                                ObIArray<ObRawExpr *> *rollup_exprs = NULL,
+                                ObIArray<ObRawExpr *> *having_exprs = NULL,
+                                ObIArray<OrderItem> *order_items = NULL);
+
+  /* Push all content of the parent stmt into an inline view,
+     and keep the ptr of the parent stmt  */
+  static int pack_stmt(ObTransformerCtx *ctx,
+                       ObSelectStmt *parent_stmt,
+                       ObSelectStmt **child_stmt_ptr = NULL);
+
+  static int generate_select_list(ObTransformerCtx *ctx,
+                                  ObDMLStmt *stmt,
+                                  TableItem *table,
+                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
+
+  static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
+                                ObIArray<ObRawExpr *> &output_exprs);
+
+  static int check_table_contain_in_semi(const ObDMLStmt *stmt,
+                                         const TableItem *table,
+                                         bool &is_contain);
+
+  static int check_has_assignment(const ObDMLStmt &stmt, bool &has_assignment);
+
+  static int check_exprs_contain_lob_type(ObIArray<ObRawExpr *> &exprs, bool &has_lob);
+
+  static int check_expr_contain_lob_type(ObRawExpr *expr, bool &has_lob);
+
+  static int extract_copier_exprs(ObRawExprCopier &copier,
+                                  ObIArray<ObRawExpr *> &old_exprs,
+                                  ObIArray<ObRawExpr *> &new_exprs);
+
+  static int transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
+                                               ObRawExpr *aggr,
+                                               ObTransformerCtx *ctx,
+                                               ObRawExpr *&out_expr);
+  template <typename T>
+  static int remove_dup_expr(ObIArray<T *> &check,
+                             ObIArray<T *> &base);
+
+  static int append_hashset(ObRawExpr *expr,
+                            hash::ObHashSet<uint64_t> &expr_set);
+
+  static int find_hashset(ObRawExpr *expr,
+                          hash::ObHashSet<uint64_t> &expr_set,
+                          ObIArray<ObRawExpr *> &common_exprs);
+
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObIArray<ObRawExpr *> &relation_exprs,
+                                  ObIArray<ObRawExpr *> &common_exprs);
 private:
-  static int create_select_item_for_subquery(
-      ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
+  static int inner_get_lazy_left_join(ObDMLStmt *stmt,
+                                      TableItem *table,
+                                      ObSqlBitSet<> &expr_relation_ids,
+                                      ObIArray<LazyJoinInfo> &lazy_join_infos,
+                                      bool in_full_join);
 
-  static int add_non_duplicated_select_expr(
-      ObIArray<ObRawExpr*>& add_select_exprs, ObIArray<ObRawExpr*>& org_select_exprs);
+  static int check_lazy_left_join_valid(ObDMLStmt *stmt,
+                                        JoinedTable *table,
+                                        ObSqlBitSet<> &expr_relation_ids,
+                                        bool in_full_join,
+                                        bool &is_valid);
+
+  static int check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
+                                                  TableItem *view_table,
+                                                  ObIArray<ObRawExpr*> &outer_join_conditions,
+                                                  bool &combinable);
+
+  static int inner_check_left_join_right_table_combinable(ObSelectStmt *child_stmt, 
+                                                          TableItem *table, 
+                                                          ObSqlBitSet<> &outer_expr_relation_ids, 
+                                                          bool &combinable);
+
+  static int get_view_exprs(ObDMLStmt *parent_stmt,
+                            TableItem *view_table,
+                            ObIArray<ObRawExpr*> &from_exprs, 
+                            ObIArray<ObRawExpr*> &view_exprs);
+
+  static int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
+                                            ObIArray<ObRawExpr*> &org_select_exprs);
+
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObSelectStmt *view_stmt,
+                                  ObIArray<ObRawExpr *> &common_exprs,
+                                  const ObIArray<ObRawExpr *> *extra_view_exprs = NULL);
+
+  static int generate_col_exprs(ObDMLStmt *stmt,
+                                const ObIArray<TableItem *> &tables,
+                                const ObIArray<ObRawExpr *> &tmp_select_exprs,
+                                const ObIArray<ObRawExpr *> &tmp_column_exprs,
+                                ObIArray<ObRawExpr *> &old_column_exprs,
+                                ObIArray<ObRawExpr *> &new_column_exprs);
+
+  static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
+
 };
 
+
 template <typename T>
-int ObTransformUtils::replace_exprs(const common::ObIArray<ObRawExpr*>& other_exprs,
-    const common::ObIArray<ObRawExpr*>& new_exprs, common::ObIArray<T*>& exprs)
+int ObTransformUtils::replace_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
+                                    const common::ObIArray<ObRawExpr *> &new_exprs,
+                                    common::ObIArray<T*> &exprs)
 {
   int ret = common::OB_SUCCESS;
   common::ObSEArray<T*, 4> temp_expr_array;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
-    ObRawExpr* temp_expr = exprs.at(i);
+    ObRawExpr *temp_expr = exprs.at(i);
     if (OB_ISNULL(temp_expr)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "expr is null", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, temp_expr))) {
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                      new_exprs,
+                                                      temp_expr))) {
       SQL_LOG(WARN, "failed to replace expr", K(ret));
     } else if (OB_FAIL(temp_expr_array.push_back(static_cast<T*>(temp_expr)))) {
       SQL_LOG(WARN, "failed to push back expr", K(ret));
-    } else { /*do nothing*/
-    }
+    } else { /*do nothing*/}
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(exprs.assign(temp_expr_array))) {
       SQL_LOG(WARN, "failed to assign expr", K(ret));
-    } else { /*do nothing*/
-    }
+    } else { /*do nothing*/ }
   }
   return ret;
 }
 
 template <typename T>
-int ObTransformUtils::replace_specific_expr(
-    const common::ObIArray<T*>& other_exprs, const common::ObIArray<T*>& current_exprs, ObRawExpr*& expr)
+int ObTransformUtils::replace_specific_expr(const common::ObIArray<T*> &other_exprs,
+                                            const common::ObIArray<T*> &current_exprs,
+                                            ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -797,24 +1801,74 @@ int ObTransformUtils::replace_specific_expr(
     SQL_LOG(WARN, "invalid argument", K(ret));
   } else if (OB_UNLIKELY(other_exprs.count() != current_exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_LOG(WARN, "should have equal column item count", K(other_exprs.count()), K(current_exprs.count()), K(ret));
+    SQL_LOG(WARN, "should have equal column item count", K(other_exprs.count()),
+        K(current_exprs.count()), K(ret));
   } else {
     bool is_find = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_find && i < other_exprs.count(); i++) {
-      if (OB_ISNULL(other_exprs.at(i)) || OB_ISNULL(current_exprs.at(i))) {
+      if (OB_ISNULL(other_exprs.at(i)) ||
+          OB_ISNULL(current_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "null column expr", K(other_exprs.at(i)), K(current_exprs.at(i)), K(ret));
+        SQL_LOG(WARN, "null column expr", K(other_exprs.at(i)),
+            K(current_exprs.at(i)), K(ret));
       } else if (expr == other_exprs.at(i)) {
         is_find = true;
         expr = current_exprs.at(i);
-      } else { /*do nothing*/
-      }
+      } else { /*do nothing*/ }
     }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+template <typename T>
+int ObTransformUtils::get_expr_idx(const ObIArray<T *> &source,
+                                const T *target,
+                                int64_t &idx)
+{
+  int ret = OB_SUCCESS;
+  idx = -1;
+  if (OB_ISNULL(target)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest expr is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && idx == -1 && i < source.count(); ++i) {
+    if (OB_ISNULL(source.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr in source is null", K(ret));
+    } else if (source.at(i) == target) {
+      idx = i;
+    }
+  }
+  return ret;
+}
+
+
+template <typename T>
+int ObTransformUtils::remove_dup_expr(common::ObIArray<T *> &check,
+                                      common::ObIArray<T *> &base)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<T *, 4> no_dup;
+  for (int64_t i = 0; i < base.count(); i++) {
+    int64_t idx = -1;
+    if (OB_FAIL(ObTransformUtils::get_expr_idx(check, base.at(i), idx))) {
+      LOG_WARN("find expr failed", K(ret));
+    } else if (idx != -1) {
+    } else if (OB_FAIL(no_dup.push_back(base.at(i)))) {
+      LOG_WARN("push back failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(base.assign(no_dup))) {
+      LOG_WARN("assign failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+} // namespace sql
+} // namespace oceanbase
+
+
 
 #endif /* OCEANBASE_SQL_REWRITE_OB_TRANSFORM_UTILS_H_ */

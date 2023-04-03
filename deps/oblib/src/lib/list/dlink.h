@@ -15,8 +15,10 @@
 #include "lib/ob_define.h"
 #include "lib/thread_local/ob_tsi_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // class CDLink
 // {
 // public:
@@ -245,7 +247,8 @@ namespace common {
 //   CDLink thread_head_[MAX_HEAD_NUM];
 // };
 
-};  // namespace common
-};  // end namespace oceanbase
+}; // end namespace list
+}; // end namespace oceanbase
+
 
 #endif /* OCEANBASE_LIST_DLINK_H_ */

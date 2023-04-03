@@ -87,7 +87,7 @@ class ObTableOperationRequest final
   OB_UNIS_VERSION(1);
 public:
   ObTableOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
-      partition_id_(common::OB_INVALID_ID), entity_type_(), table_operation_(),
+      tablet_id_(), entity_type_(), table_operation_(),
       consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
       returning_affected_rows_(false),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
@@ -97,7 +97,7 @@ public:
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),
-               K_(partition_id),
+               K_(tablet_id),
                K_(entity_type),
                K_(table_operation),
                K_(consistency_level),
@@ -111,8 +111,8 @@ public:
   ObString table_name_;
   /// table id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
   uint64_t table_id_;  // for optimize purpose
-  /// partition id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
-  uint64_t partition_id_;  // for optimize purpose
+  /// tablet id. If unknown, set it to be INVALID_TABLET_ID
+  common::ObTabletID tablet_id_;  // for optimize purpose
   /// entity type. Set it to gain better performance. If unknown, set it to be ObTableEntityType::DYNAMIC.
   ObTableEntityType entity_type_;  // for optimize purpose
   /// table operation.
@@ -136,30 +136,39 @@ class ObTableBatchOperationRequest final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableBatchOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
-      partition_id_(common::OB_INVALID_ID), entity_type_(), batch_operation_(),
-      consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
-      returning_affected_rows_(false),
-      binlog_row_image_type_(ObBinlogRowImageType::FULL)
+  ObTableBatchOperationRequest()
+      : credential_(),
+        table_name_(),
+        table_id_(common::OB_INVALID_ID),
+        tablet_id_(),
+        entity_type_(),
+        batch_operation_(),
+        consistency_level_(),
+        returning_rowkey_(false),
+        returning_affected_entity_(false),
+        returning_affected_rows_(false),
+        batch_operation_as_atomic_(false),
+        binlog_row_image_type_(ObBinlogRowImageType::FULL)
       {}
   ~ObTableBatchOperationRequest() {}
 
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),
-               K_(partition_id),
+               K_(tablet_id),
                K_(entity_type),
                K_(batch_operation),
                K_(consistency_level),
                K_(returning_rowkey),
                K_(returning_affected_entity),
-               K_(returning_affected_rows));
+               K_(returning_affected_rows),
+               K_(batch_operation_as_atomic));
 public:
   ObString credential_;
   ObString table_name_;
   uint64_t table_id_;  // for optimize purpose
-  /// partition id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
-  uint64_t partition_id_;  // for optimize purpose
+  /// tablet id. If unknown, set it to be INVALID_TABLET_ID
+  common::ObTabletID tablet_id_;  // for optimize purpose
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableBatchOperation batch_operation_;
   // Only support STRONG
@@ -170,27 +179,29 @@ public:
   bool returning_affected_entity_;
   /// whether return affected_rows
   bool returning_affected_rows_;
+  // batch oepration suppoert atomic operation
+  bool batch_operation_as_atomic_;
   /// Whether record the full row in binlog of modification
   ObBinlogRowImageType binlog_row_image_type_;
 };
 
 ////////////////////////////////////////////////////////////////
 // @see PCODE_DEF(OB_TABLE_API_EXECUTE_QUERY, 0x1104)
-class ObTableQueryRequest final
+class ObTableQueryRequest
 {
   OB_UNIS_VERSION(1);
 public:
   ObTableQueryRequest()
       :table_id_(common::OB_INVALID_ID),
-       partition_id_(common::OB_INVALID_ID),
+       tablet_id_(),
        entity_type_(ObTableEntityType::ET_DYNAMIC),
        consistency_level_(ObTableConsistencyLevel::STRONG)
   {}
 
-  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+  VIRTUAL_TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),
-               K_(partition_id),
+               K_(tablet_id),
                K_(entity_type),
                K_(consistency_level),
                K_(query));
@@ -198,21 +209,12 @@ public:
   ObString credential_;
   ObString table_name_;
   uint64_t table_id_;  // for optimize purpose
-  /// partition id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
-  uint64_t partition_id_;  // for optimize purpose
+  /// tablet id. If unknown, set it to be INVALID_TABLET_ID
+  common::ObTabletID tablet_id_;  // for optimize purpose
   ObTableEntityType entity_type_;  // for optimize purpose
   // only support STRONG
   ObTableConsistencyLevel consistency_level_;
   ObTableQuery query_;
-};
-
-class ObTableQueryResultIterator
-{
-public:
-  ObTableQueryResultIterator() {}
-  virtual ~ObTableQueryResultIterator() {}
-  virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
-  virtual bool has_more_result() const = 0;
 };
 
 class ObTableQueryAndMutateRequest final
@@ -221,24 +223,41 @@ class ObTableQueryAndMutateRequest final
 public:
   ObTableQueryAndMutateRequest()
       :table_id_(common::OB_INVALID_ID),
-      partition_id_(common::OB_INVALID_ID),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
   {}
+
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),
-               K_(partition_id),
+               K_(tablet_id),
                K_(entity_type),
                K_(query_and_mutate));
 public:
   ObString credential_;
   ObString table_name_;
   uint64_t table_id_;  // for optimize purpose
-  /// partition id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
-  uint64_t partition_id_;  // for optimize purpose
+  /// tablet id. Set it to gain better performance. If unknown, set it to be INVALID_TABLET_ID
+  common::ObTabletID tablet_id_;  // for optimize purpose
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableQueryAndMutate query_and_mutate_;
   ObBinlogRowImageType binlog_row_image_type_;
+};
+
+class ObTableQuerySyncRequest : public ObTableQueryRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQuerySyncRequest()
+      :query_session_id_(0),
+       query_type_(ObQueryOperationType::QUERY_MAX)
+  {}
+  virtual ~ObTableQuerySyncRequest(){}
+  INHERIT_TO_STRING_KV("ObTableQueryRequest", ObTableQueryRequest,
+               K_(query_session_id),
+               K_(query_type));
+public:
+  uint64_t query_session_id_;
+  ObQueryOperationType query_type_;
 };
 
 } // end namespace table

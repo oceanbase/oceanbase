@@ -1,0 +1,37 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL1
+# Test of modify time functions
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(pk int primary key, b datetime default now());
+
+
+insert into t1(pk) values(1);
+--real_sleep 1
+insert into t1(pk) values(2);
+--real_sleep 1
+
+--replace_column 2 searched
+select pk,b from t1;
+let $value_orig= query_get_value(select * from t1, b, 1);
+replace into t1(pk) values(1);
+--real_sleep 1
+replace into t1(pk) values(2);
+--real_sleep 1
+let $value_now= query_get_value(select * from t1, b, 1);
+if($value_now == $value_orig)
+{
+    --echo succeed
+}
+disable_query_log;
+--replace_column 2 searched
+eval select pk,b from t1 where b='$value_now';
+enable_query_log;
+
+

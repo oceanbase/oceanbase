@@ -15,15 +15,17 @@
 
 #include "sql/resolver/cmd/ob_system_cmd_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObDropRestorePointResolver : public ObSystemCmdResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropRestorePointResolver: public ObSystemCmdResolver
+{
 public:
-  explicit ObDropRestorePointResolver(ObResolverParams& params);
+  explicit ObDropRestorePointResolver(ObResolverParams &params);
   virtual ~ObDropRestorePointResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // types and constants
 private:
@@ -35,7 +37,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_DROP_RESTORE_POINT_RESOLVER_ */

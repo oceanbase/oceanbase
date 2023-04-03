@@ -15,20 +15,23 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprLastTraceId : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprLastTraceId : public ObStringExprOperator
+{
 public:
-  explicit ObExprLastTraceId(common::ObIAllocator& alloc);
+  explicit  ObExprLastTraceId(common::ObIAllocator &alloc);
   virtual ~ObExprLastTraceId();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const override;
-  static int eval_last_trace_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  static int eval_last_trace_id(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLastTraceId);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif

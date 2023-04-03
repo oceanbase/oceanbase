@@ -14,17 +14,16 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
-class TestWorkQueue : public ::testing::Test {
+class TestWorkQueue: public ::testing::Test
+{
 public:
   TestWorkQueue();
   virtual ~TestWorkQueue();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestWorkQueue);
-
 protected:
   // function members
 protected:
@@ -32,16 +31,20 @@ protected:
 };
 
 TestWorkQueue::TestWorkQueue()
-{}
+{
+}
 
 TestWorkQueue::~TestWorkQueue()
-{}
+{
+}
 
 void TestWorkQueue::SetUp()
-{}
+{
+}
 
 void TestWorkQueue::TearDown()
-{}
+{
+}
 
 TEST_F(TestWorkQueue, init)
 {
@@ -54,9 +57,12 @@ TEST_F(TestWorkQueue, init)
   ASSERT_EQ(OB_SUCCESS, wqueue.wait());
 }
 
-class ATimerTask : public ObAsyncTimerTask {
+class ATimerTask: public ObAsyncTimerTask
+{
 public:
-  ATimerTask(ObWorkQueue& queue, bool fail_it = false) : ObAsyncTimerTask(queue), fail_it_(fail_it)
+  ATimerTask(ObWorkQueue &queue, bool fail_it = false)
+      :ObAsyncTimerTask(queue),
+       fail_it_(fail_it)
   {
     set_retry_interval(0);
     set_retry_times(1);
@@ -80,25 +86,19 @@ public:
   {
     return sizeof(*this);
   }
-  virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override
+  virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override
   {
-    ObAsyncTask* task = NULL;
+    int ret = 0;
+    ObAsyncTask *task = NULL;
     if (buf == NULL || buf_size < sizeof(*this)) {
       OB_LOG(ERROR, "invalid argument");
     } else {
-      task = new (buf) ATimerTask(work_queue_, fail_it_);
+      task = new(buf) ATimerTask(work_queue_, fail_it_);
     }
     return task;
   }
-  static int64_t get_process_count()
-  {
-    return process_count_;
-  }
-  static void clear_process_count()
-  {
-    process_count_ = 0;
-  }
-
+  static int64_t get_process_count() { return process_count_; }
+  static void clear_process_count() { process_count_ = 0; }
 private:
   // types and constants
 private:
@@ -121,7 +121,8 @@ TEST_F(TestWorkQueue, async_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.start());
   ATimerTask task1(wqueue);
   ATimerTask::clear_process_count();
-  for (int64_t i = 0; i < 16; ++i) {
+  for (int64_t i = 0; i < 16; ++i)
+  {
     ASSERT_EQ(OB_SUCCESS, wqueue.add_async_task(task1));
   }
   sleep(3);
@@ -140,8 +141,9 @@ TEST_F(TestWorkQueue, on_shoot_timer_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.start());
   ATimerTask task1(wqueue);
   ATimerTask::clear_process_count();
-  for (int64_t i = 0; i < 16; ++i) {
-    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2 * 1000 * 1000, false));
+  for (int64_t i = 0; i < 16; ++i)
+  {
+    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2*1000*1000, false));
   }
   OB_LOG(INFO, "before sleep 1");
   sleep(1);
@@ -165,8 +167,9 @@ TEST_F(TestWorkQueue, repeat_timer_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.start());
   ATimerTask task1(wqueue);
   ATimerTask::clear_process_count();
-  for (int64_t i = 0; i < 16; ++i) {
-    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2 * 1000 * 1000, true));
+  for (int64_t i = 0; i < 16; ++i)
+  {
+    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2*1000*1000, true));
   }
   OB_LOG(INFO, "before sleep 1");
   sleep(1);
@@ -193,8 +196,9 @@ TEST_F(TestWorkQueue, retry_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.start());
   ATimerTask task1(wqueue, true);
   ATimerTask::clear_process_count();
-  for (int64_t i = 0; i < 16; ++i) {
-    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2 * 1000 * 1000, false));
+  for (int64_t i = 0; i < 16; ++i)
+  {
+    ASSERT_EQ(OB_SUCCESS, wqueue.add_timer_task(task1, 2*1000*1000, false));
   }
   OB_LOG(INFO, "before sleep 1");
   sleep(1);
@@ -218,8 +222,9 @@ TEST_F(TestWorkQueue, immediate_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.start());
   ATimerTask task1(wqueue);
   ATimerTask::clear_process_count();
-  for (int64_t i = 0; i < 16; ++i) {
-    ASSERT_EQ(OB_SUCCESS, wqueue.add_repeat_timer_task_schedule_immediately(task1, 2 * 1000 * 1000));
+  for (int64_t i = 0; i < 16; ++i)
+  {
+    ASSERT_EQ(OB_SUCCESS, wqueue.add_repeat_timer_task_schedule_immediately(task1, 2*1000*1000));
   }
   OB_LOG(INFO, "before sleep 1");
   sleep(1);
@@ -234,9 +239,9 @@ TEST_F(TestWorkQueue, immediate_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.wait());
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

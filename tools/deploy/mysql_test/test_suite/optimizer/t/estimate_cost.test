@@ -1,0 +1,264 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: zhenling.zzg
+#owner group: sql1
+# tags: optimizer
+
+--disable_warnings
+--disable_query_log
+--source mysql_test/include/index_quick_major.inc
+--real_sleep 1
+--disable_warnings
+drop table if exists test_table;
+--enable_warnings
+--enable_query_log
+
+create table test_table(id int primary key, name varchar(64), age int, description varchar(64), index index_1(age) local, index index_2(name) local);
+
+--let $count = 0
+while($count < 100)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name33', 33, 'rd1')
+  eval $stmt;
+  inc $count;
+}
+
+--let $count = 100
+while($count < 200)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name44', 44, 'rd2')
+  eval $stmt;
+  inc $count;
+}
+
+--let $count = 200
+while($count < 300)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name22', 22, 'rd3')
+  eval $stmt;
+  inc $count;
+}
+
+if ($TENANT =='oracle') {
+
+# case 1: all data in memtable, no sstable
+--echo case 1: all data in memtable, no sstable
+select count(*) from test_table;
+explain select * from test_table;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+--source mysql_test/include/minor_merge_tenant.inc
+call dbms_stats.gather_table_stats('TEST', 'test_table');
+
+# case 2: all data in sstable, not memtable data
+--echo case 2: all data in sstable, not memtable data
+select count(*) from test_table;
+explain select * from test_table;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 3: main table delete estimate cost
+--echo case 3: main table delete estimate cost
+delete from test_table where id < 50;
+
+select count(*) from test_table where id < 100;
+explain select * from test_table where id < 100;
+
+select count(*) from test_table where age = 33;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 33;
+
+select count(*) from test_table where name = 'name33';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name33';
+
+# case 4: main table delete -> insert estimate cost
+--echo case 4: main table delete -> insert estimate cost
+--let $count = 0
+while($count < 50)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name33', 33, 'rd1')
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id < 100;
+explain select * from test_table where id < 100;
+
+select count(*) from test_table where age = 33;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 33;
+
+select count(*) from test_table where name = 'name33';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name33';
+
+# case 5: main table update estimate cost
+--echo case 5: main table update estimate cost
+--let $count = 100
+while($count < 150)
+{
+  --let $stmt=update test_table set description = 'rd22' where id = $count
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 100 and id < 200;
+explain select * from test_table where id >= 100 and id < 200;
+
+select count(*) from test_table where age = 44;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 44;
+
+select count(*) from test_table where name = 'name44';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name44';
+
+# case 6: main table update -> delete estimate cost
+--echo case 6: main table update -> delete estimate cost
+delete from test_table where id >= 100 and id < 150;
+
+select count(*) from test_table where id >= 100 and id < 200;
+explain select * from test_table where id >= 100 and id < 200;
+
+select count(*) from test_table where age = 44;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 44;
+
+select count(*) from test_table where name = 'name44';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name44';
+
+# case 7: main table update -> delete -> insert estimate cost
+--echo case 7: main table update -> delete -> insert estimate cost
+--let $count = 100
+while($count < 150)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name44', 44, 'rd2')
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 100 and id < 200;
+explain select * from test_table where id >= 100 and id < 200;
+
+select count(*) from test_table where age = 44;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 44;
+
+select count(*) from test_table where name = 'name44';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name44';
+
+# case 8: index update estimate cost
+--echo case 8: index update estimate cost
+--let $count = 200
+while($count < 250)
+{
+  --let $stmt=update test_table set name = 'name55', age = 55 where id = $count
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 200;
+explain select * from test_table where id >= 200;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 9: index update -> update back estimate cost
+--echo case 9: index update ->update back estimate cost
+--let $count = 200
+while($count < 250)
+{
+  --let $stmt=update test_table set name = 'name22', age = 22 where id = $count
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 200;
+explain select * from test_table where id >= 200;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 10: main table insert estimate cost
+--echo case 10: main table insert estimate cost
+--let $count = 300
+while($count < 400)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name22', 22, 'rd3')
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 200;
+explain select * from test_table where id >= 200;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 11: main table insert -> update estimate cost
+--echo case 11: main table insert ->update estimate cost
+--let $count = 300
+while($count < 400)
+{
+  --let $stmt=update test_table set description = 'rd33' where id = $count
+  eval $stmt;
+  inc $count;
+}
+
+select count(*) from test_table where id >= 200;
+explain select * from test_table where id >= 200;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 12: main table insert -> update -> delete estimate cost
+--echo case 12: main table insert ->update -> delete estimate cost
+delete from test_table where id >= 300 and id < 400;
+
+select count(*) from test_table where id >= 200;
+explain select * from test_table where id >= 200;
+
+select count(*) from test_table where age = 22;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
+
+select count(*) from test_table where name = 'name22';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
+
+# case 13: main table insert extra 10000 row estimate cost
+--echo case 13: main table insert extra 10000 row estimate cost
+--disable_query_log
+--let $count = 400
+while($count < 10400)
+{
+  --let $stmt=insert into test_table(id, name, age, description) values ($count, 'name66', 66, 'rd6')
+  eval $stmt;
+  inc $count;
+}
+--enable_query_log
+
+select count(*) from test_table where id >= 400;
+explain select * from test_table where id >= 400;
+
+select count(*) from test_table where age = 66;
+explain select /*+index(test_table index_1)*/ * from test_table where age = 66;
+
+select count(*) from test_table where name = 'name66';
+explain select /*+index(test_table index_2)*/ * from test_table where name = 'name66';
+
+}
+drop table test_table;

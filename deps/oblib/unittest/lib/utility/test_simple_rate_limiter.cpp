@@ -11,9 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_simple_rate_limiter.h"
+#include "lib/oblog/ob_syslog_rate_limiter.h"
 
-using namespace ::oblib;
+//using namespace ::oblib;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
@@ -47,7 +47,7 @@ TEST(TestSimpleRateLimiter, Basic)
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

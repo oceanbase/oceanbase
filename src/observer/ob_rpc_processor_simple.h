@@ -17,67 +17,78 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
 
-#define OB_DEFINE_PROCESSOR(cls, pcode, pname) \
-  class pname : public obrpc::ObRpcProcessor<obrpc::Ob##cls##RpcProxy::ObRpc<pcode> >
+#define OB_DEFINE_PROCESSOR(cls, pcode, pname)                          \
+  class pname : public obrpc::ObRpcProcessor<                           \
+    obrpc::Ob ## cls ## RpcProxy::ObRpc<pcode> >
 
-#define OB_DEFINE_PROCESSOR_S(cls, pcode, pname)              \
-  OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
-  {                                                           \
-  public:                                                     \
-    explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
-    {}                                                        \
-                                                              \
-  protected:                                                  \
-    int process();                                            \
-                                                              \
-  private:                                                    \
-    const ObGlobalContext& gctx_;                             \
+#define OB_DEFINE_PROCESSOR_S(cls, pcode, pname)        \
+  OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)         \
+  {                                                     \
+  public:                                               \
+    explicit pname(const ObGlobalContext &gctx)         \
+        : gctx_(gctx)                                   \
+    {}                                                  \
+  protected: int process();                             \
+  private:                                              \
+    const ObGlobalContext &gctx_ __maybe_unused;        \
   }
 
-#define OB_DEFINE_PROCESSOR_SM(cls, pcode, pname)             \
-  OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
-  {                                                           \
-  public:                                                     \
-    explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
-    {}                                                        \
-                                                              \
-  protected:                                                  \
-    int process();                                            \
-    int after_process();                                      \
-                                                              \
-  private:                                                    \
-    const ObGlobalContext& gctx_;                             \
+#define OB_DEFINE_PROCESSOR_SM(cls, pcode, pname)       \
+  OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)         \
+  {                                                     \
+  public:                                               \
+    explicit pname(const ObGlobalContext &gctx)         \
+        : gctx_(gctx)                                   \
+    {}                                                  \
+  protected: int process(); int after_process(int error_code);        \
+  private:                                              \
+    const ObGlobalContext &gctx_;                       \
   }
 
 #define RPC_PROCESSOR_X(pcode, pname)           \
   OB_DEFINE_PROCESSOR(Srv, obrpc::pcode, pname) \
   {                                             \
   public:                                       \
-    explicit pname(int ret) : ret_(ret)         \
-    {}                                          \
-                                                \
+    explicit pname(int ret) : ret_(ret) {}  \
   protected:                                    \
     int process();                              \
-    int deserialize();                          \
-                                                \
-  private:                                      \
-    int ret_;                                   \
+    int deserialize() override;                         \
+private:                                                \
+    int ret_;                                           \
   }
 
-namespace oceanbase {
-namespace observer {
+#define OB_DEFINE_PROCESSOR_OBADMIN(cls, pcode, pname)        \
+  OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)         \
+  {                                                     \
+  public:                                               \
+    explicit pname(const ObGlobalContext &gctx)         \
+        : gctx_(gctx)                                   \
+    {}                                                  \
+  protected: int process();                             \
+  int before_process() { return req_->is_from_unix_domain()? OB_SUCCESS : OB_NOT_SUPPORTED;} \
+  private:                                              \
+    const ObGlobalContext &gctx_ __maybe_unused;        \
+  }
+
+namespace oceanbase
+{
+namespace observer
+{
 
 OB_DEFINE_PROCESSOR(Srv, obrpc::OB_GET_DIAGNOSE_ARGS, ObGetDiagnoseArgsP)
 {
 public:
-  ObGetDiagnoseArgsP() : pwbuf_(), passwd_(), argsbuf_()
+  ObGetDiagnoseArgsP()
+      : pwbuf_(), passwd_(), argsbuf_()
   {
-    passwd_.assign_buffer(pwbuf_, sizeof(pwbuf_));
+    passwd_.assign_buffer(pwbuf_, sizeof (pwbuf_));
   }
 
 protected:
   int process();
+  int before_process() { return req_->is_from_unix_domain()? OB_SUCCESS : OB_NOT_SUPPORTED;}
 
 private:
   char pwbuf_[64];
@@ -85,128 +96,87 @@ private:
   char argsbuf_[1024];
 };
 
-class ObGlobalContext;
+
+struct ObGlobalContext;
 
 RPC_PROCESSOR_X(OB_ERROR_PACKET, ObErrorP);
 
-OB_DEFINE_PROCESSOR_S(Common, OB_GET_ROLE, ObRpcGetRoleP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_SET_CONFIG, ObRpcSetConfigP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_ROOT_SERVER_ROLE, ObRpcGetRoleP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_SET_CONFIG, ObRpcSetConfigP);
+
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_CONFIG, ObRpcGetConfigP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_ADD_TENANT_TMP, ObRpcAddTenantTmpP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_SET_TENANT_CONFIG, ObRpcSetTenantConfigP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_NOTIFY_TENANT_SERVER_UNIT_RESOURCE, ObRpcNotifyTenantServerUnitResourceP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REACH_PARTITION_LIMIT, ObReachPartitionLimitP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_FROZEN_VERSION, ObCheckFrozenVersionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_FROZEN_SCN, ObCheckFrozenVersionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MIN_SSTABLE_SCHEMA_VERSION, ObGetMinSSTableSchemaVersionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_INIT_TENANT_CONFIG, ObInitTenantConfigP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LEADER_LOCATIONS, ObGetLeaderLocationsP);
 
 // oceanbase service provied
-OB_DEFINE_PROCESSOR_S(Srv, OB_CREATE_PARTITION, ObRpcCreatePartitionP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CREATE_PARTITION_BATCH, ObRpcCreatePartitionBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ROOT_PARTITION, ObRpcFetchRootPartitionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_SYS_LS, ObRpcFetchSysLSP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_RS_LIST, ObRpcBroadcastRsListP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_ADD_REPLICA, ObRpcAddReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_LOG_ARCHIVE_STATUS, ObRpcGetTenantLogArchiveStatusP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_LOG_ARCHIVE_STATUS_V2, ObRpcGetTenantLogArchiveStatusV2P);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_NON_PAXOS_REPLICA, ObRpcRemoveNonPaxosReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_MEMBER, ObRpcRemoveMemberP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_MIGRATE_REPLICA, ObRpcMigrateReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REBUILD_REPLICA, ObRpcRebuildReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_RESTORE_REPLICA, ObRpcRestoreReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_PHYSICAL_RESTORE_REPLICA, ObRpcPhysicalRestoreReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_REPLICA, ObRpcChangeReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_ADD_REPLICA_BATCH, ObRpcAddReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_NON_PAXOS_REPLICA_BATCH, ObRpcRemoveNonPaxosReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_MEMBER_BATCH, ObRpcRemoveMemberBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_MIGRATE_REPLICA_BATCH, ObRpcMigrateReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_STANDBY_CUTDATA_BATCH_TASK, ObRpcStandbyCutdataBatchTaskP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REBUILD_REPLICA_BATCH, ObRpcRebuildReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_COPY_SSTABLE_BATCH, ObRpcCopySSTableBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_REPLICA_BATCH, ObRpcChangeReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_MIGRATE_TASK_EXIST, ObRpcCheckMigrateTaskExistP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_MINOR_FREEZE, ObRpcMinorFreezeP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_SCHEMA_VERSION_ELAPSED, ObRpcCheckSchemaVersionElapsedP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_CTX_CREATE_TIMESTAMP_ELAPSED, ObRpcCheckCtxCreateTimestampElapsedP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MEMBER_LIST, ObRpcGetMemberListP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DDL_BUILD_SINGLE_REPLICA_REQUEST, ObRpcBuildDDLSingleReplicaRequestP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_TABLET_AUTOINC_SEQ_CACHE, ObRpcFetchTabletAutoincSeqCacheP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_TABLET_AUTOINC_SEQ, ObRpcBatchGetTabletAutoincSeqP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_SET_TABLET_AUTOINC_SEQ, ObRpcBatchSetTabletAutoincSeqP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_MODIFY_TIME_ELAPSED, ObRpcCheckCtxCreateTimestampElapsedP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_UPDATE_BASELINE_SCHEMA_VERSION, ObRpcUpdateBaselineSchemaVersionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SWITCH_LEADER, ObRpcSwitchLeaderP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_SWITCH_RS_LEADER, ObRpcBatchSwitchRsLeaderP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_SWITCH_LEADER_LIST, ObRpcSwitchLeaderListP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_SWITCH_LEADER_LIST_ASYNC, ObRpcSwitchLeaderListAsyncP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LEADER_CANDIDATES, ObRpcGetLeaderCandidatesP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LEADER_CANDIDATES_ASYNC, ObRpcGetLeaderCandidatesAsyncP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LEADER_CANDIDATES_ASYNC_V2, ObRpcGetLeaderCandidatesAsyncV2P);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_BATCH_SWITCH_RS_LEADER, ObRpcBatchSwitchRsLeaderP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_PARTITION_COUNT, ObRpcGetPartitionCountP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SWITCH_SCHEMA, ObRpcSwitchSchemaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_MEMORY_STAT, ObRpcRefreshMemStatP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_WASH_MEMORY_FRAGMENTATION, ObRpcWashMemFragmentationP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BOOTSTRAP, ObRpcBootstrapP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_IS_EMPTY_SERVER, ObRpcIsEmptyServerP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_DEPLOYMENT_MODE, ObRpcCheckDeploymentModeP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_PARTITION_STAT, ObRpcGetPartitionStatP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_SYNC_VALUE, ObRpcSyncAutoincValueP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAR_AUTOINC_CACHE, ObRpcClearAutoincCacheP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_DUMP_MEMTABLE, ObDumpMemtableP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_AS_SINGLE_REPLICA, ObForceSetAsSingleReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_REMOVE_REPLICA, ObForceRemoveReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_REPLICA_NUM, ObForceSetReplicaNumP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_RESET_PARENT, ObForceResetParentP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_PARENT, ObForceSetParentP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_PURGE_MEMTABLE, ObHaltPrewarmP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_DUMP_MEMTABLE, ObDumpMemtableP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_DUMP_TX_DATA_MEMTABLE, ObDumpTxDataMemtableP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_DUMP_SINGLE_TX_DATA, ObDumpSingleTxDataP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_PURGE_MEMTABLE, ObHaltPrewarmP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_PURGE_MEMTABLE_ASYNC, ObHaltPrewarmAsyncP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SWITCH_ILOG_FILE, ObForceSwitchILogFileP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_ALL_AS_SINGLE_REPLICA, ObForceSetAllAsSingleReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_MODIFY_QUORUM_BATCH, ObRpcModifyQuorumBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_REPLICA_BATCH, ObRpcBackupReplicaBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_SERVER_LIST, ObForceSetServerListP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_SWITCH_ILOG_FILE, ObForceSwitchILogFileP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_SET_ALL_AS_SINGLE_REPLICA, ObForceSetAllAsSingleReplicaP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_SET_SERVER_LIST, ObForceSetServerListP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_TASK_EXIST, ObRpcCheckBackupTaskExistP);
 OB_DEFINE_PROCESSOR_S(Common, OB_CHECK_BACKUP_SCHEDULER_WORKING, ObRpcCheckBackupSchuedulerWorkingP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_BATCH, ObRpcValidateBackupBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_ARCHIVE_LOG_BATCH, ObRpcBackupArchiveLogBatchP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_BACKUPSET_BATCH, ObRpcBackupBackupsetBatchP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_LS_DATA, ObRpcBackupLSDataP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_COMPL_LOG, ObRpcBackupLSComplLOGP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_BUILD_INDEX, ObRpcBackupBuildIndexP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DELETE_BACKUP_LS_TASK, ObRpcBackupLSCleanP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_META, ObRpcBackupMetaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_CHECK_TABLET_CREATE_TS, ObRpcBackupCheckTabletP);
 
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_MIGRATE_REPLICA, ObRpcLSMigrateReplicaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_ADD_REPLICA, ObRpcLSAddReplicaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_TYPE_TRANSFORM, ObRpcLSTypeTransformP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_REMOVE_PAXOS_REPLICA, ObRpcLSRemovePaxosReplicaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_REMOVE_NONPAXOS_REPLICA, ObRpcLSRemoveNonPaxosReplicaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_MODIFY_PAXOS_REPLICA_NUMBER, ObRpcLSModifyPaxosReplicaNumberP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LS_CHECK_DR_TASK_EXIST, ObRpcLSCheckDRTaskExistP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REPORT_REPLICA, ObReportReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_REPORT_SINGLE_REPLICA, ObReportSingleReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_RECYCLE_REPLICA, ObRecycleReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAR_LOCATION_CACHE, ObClearLocationCacheP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_DROP_REPLICA, ObDropReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SET_DS_ACTION, ObSetDSActionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REQUEST_HEARTBEAT, ObRequestHeartbeatP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_UPDATE_CLUSTER_INFO, ObUpdateClusterInfoP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_SYS_SCHEMA, ObBroadcastSysSchemaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_PARTITION_TABLE, ObCheckPartitionTableP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_IO_CALIBRATION, ObRefreshIOCalibrationP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_EXECUTE_IO_BENCHMARK, ObExecuteIOBenchmarkP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SYNC_PARTITION_TABLE, ObSyncPartitionTableP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_SYNC_PG_PARTITION_TABLE, ObSyncPGPartitionMTP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MEMBER_LIST_AND_LEADER, ObRpcGetMemberListAndLeaderP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MEMBER_LIST_AND_LEADER_V2, ObRpcGetMemberListAndLeaderV2P);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_MEMBER_LIST_AND_LEADER, ObRpcBatchGetMemberListAndLeaderP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_ROLE, ObRpcBatchGetRoleP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_LOCATIONS, ObRpcBroadcastLocationsP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_PROTECTION_LEVEL, ObRpcBatchGetProtectionLevelP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NEED_OFFLINE_REPLICA, ObRpcCheckNeedOffineReplicaP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_FLASHBACK_INFO_DUMP, ObRpcCheckFlashbackInfoDumpP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DETECT_MASTER_RS_LS, ObRpcDetectMasterRsLSP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_FLUSH_CACHE, ObFlushCacheP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SET_TP, ObRpcSetTPP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CANCEL_SYS_TASK, ObCancelSysTaskP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SET_DISK_VALID, ObSetDiskValidP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_ADD_DISK, ObAddDiskP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_DROP_DISK, ObDropDiskP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_DANGLING_REPLICA_EXIST, ObCheckDanglingReplicaExistP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_UNIQUE_INDEX_REQUEST, ObCheckUniqueIndexRequestP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CALC_COLUMN_CHECKSUM_REQUEST, ObCalcColumnChecksumRequestP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_SPLIT_PARTITION, ObRpcSplitPartitionP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_SPLIT_PARTITION, ObRpcBatchSplitPartitionP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_SINGLE_REPLICA_MAJOR_SSTABLE_EXIST, ObCheckSingleReplicaMajorSSTableExistP);
-OB_DEFINE_PROCESSOR_S(
-    Srv, OB_CHECK_SINGLE_REPLICA_MAJOR_SSTABLE_EXIST_WITH_TIME, ObCheckSingleReplicaMajorSSTableExistWithTimeP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_ALL_REPLICA_MAJOR_SSTABLE_EXIST, ObCheckAllReplicaMajorSSTableExistP);
-OB_DEFINE_PROCESSOR_S(
-    Srv, OB_CHECK_ALL_REPLICA_MAJOR_SSTABLE_EXIST_WITH_TIME, ObCheckAllReplicaMajorSSTableExistWithTimeP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_QUERY_MAX_DECIDED_TRANS_VERSION, ObQueryMaxDecidedTransVersionP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_QUERY_IS_VALID_MEMBER, ObQueryIsValidMemberP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_QUERY_MAX_FLUSHED_ILOG_ID, ObQueryMaxFlushedILogIdP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_DISABLE_BLACKLIST, ObForceDisableBlacklistP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_ENABLE_BLACKLIST, ObForceEnableBlacklistP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_CLEAR_BLACKLIST, ObForceClearBlacklistP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_WAIT_LEADER, ObBatchWaitLeaderP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_WRITE_CUTDATA_CLOG, ObBatchWriteCutdataClogP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_START_ELECTION, ObBatchTranslatePartitionP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_DISABLE_BLACKLIST, ObForceDisableBlacklistP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_ENABLE_BLACKLIST, ObForceEnableBlacklistP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_FORCE_CLEAR_BLACKLIST, ObForceClearBlacklistP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_PARTITION_CHECK_LOG, ObCheckPartitionLogP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_PARTITION_STOP_WRITE, ObStopPartitionWriteP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SERVER_UPDATE_STAT_CACHE, ObUpdateLocalStatCacheP);
@@ -218,15 +188,35 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_HA_GTS_GET_RESPONSE, ObHaGtsGetResponseP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_HA_GTS_HEARTBEAT, ObHaGtsHeartbeatP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_HA_GTS_UPDATE_META, ObHaGtsUpdateMetaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_HA_GTS_CHANGE_MEMBER, ObHaGtsChangeMemberP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_SET_MEMBER_LIST, ObSetMemberListBatchP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_REFRESHED_SCHEMA_VERSION, ObGetTenantSchemaVersionP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_GET_REMOTE_TENANT_GROUP_STRING, ObGetRemoteTenantGroupStringP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_UPDATE_TENANT_MEMORY, ObUpdateTenantMemoryP);
-OB_DEFINE_PROCESSOR_S(Common, OB_GET_MASTER_RS, ObRpcGetMasterRSP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_PHYSICAL_FLASHBACK_SUCC, ObCheckPhysicalFlashbackSUCCP);
+OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_UPDATE_TENANT_MEMORY, ObUpdateTenantMemoryP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_RENEW_IN_ZONE_HB, ObRenewInZoneHbP);
-OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_PART_TRANS_CTX, ObKillPartTransCtxP);
-}  // end of namespace observer
-}  // end of namespace oceanbase
+OB_DEFINE_PROCESSOR_S(Srv, OB_PRE_PROCESS_SERVER, ObPreProcessServerP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_PRE_BOOTSTRAP_CREATE_SERVER_WORKING_DIR, ObPreBootstrapCreateServerWorkingDirP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_HANDLE_PART_TRANS_CTX, ObHandlePartTransCtxP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_SERVER_FLUSH_OPT_STAT_MONITORING_INFO, ObFlushLocalOptStatMonitoringInfoP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_SET_MEMBER_LIST, ObRpcSetMemberListP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CREATE_LS, ObRpcCreateLSP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CREATE_TABLET, ObRpcCreateTabletP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_BROADCAST_SCHEMA, ObBatchBroadcastSchemaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DROP_TABLET, ObRpcDropTabletP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_REMOTE_WRITE_DDL_REDO_LOG, ObRpcRemoteWriteDDLRedoLogP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_REMOTE_WRITE_DDL_COMMIT_LOG, ObRpcRemoteWriteDDLCommitLogP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_LS_CAN_OFFLINE, ObRpcCheckLSCanOfflineP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAN_SEQUENCE_CACHE, ObCleanSequenceCacheP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_REGISTER_TX_DATA, ObRegisterTxDataP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_QUERY_LS_IS_VALID_MEMBER, ObQueryLSIsValidMemberP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECKPOINT_SLOG, ObCheckpointSlogP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_DEST_CONNECTIVITY, ObRpcCheckBackupDestConnectivityP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LS_ACCESS_MODE, ObRpcGetLSAccessModeP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHANGE_LS_ACCESS_MODE, ObRpcChangeLSAccessModeP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LS_SYNC_SCN, ObRpcGetLSSyncScnP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_LOG_FORCE_SET_LS_AS_SINGLE_REPLICA, ObForceSetLSAsSingleReplicaP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_ESTIMATE_TABLET_BLOCK_COUNT, ObEstimateTabletBlockCountP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DDL_CHECK_TABLET_MERGE_STATUS, ObRpcDDLCheckTabletMergeStatusP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_TENANT_INFO, ObRefreshTenantInfoP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_SYNC_REWRITE_RULES, ObSyncRewriteRulesP);
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_OBSERVER_OB_RPC_PROCESSOR_SIMPLE_H_ */

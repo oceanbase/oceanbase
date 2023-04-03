@@ -1,0 +1,26 @@
+name: feature request
+description: feature request for OceanBase
+title: "[feat.]: "
+labels: [feature]
+assignees:
+  - caifeizhi
+body:
+  - type: checkboxes
+    attributes:
+      label: Please check the issue list for the same feature first
+      options:
+        - label: Please checked issue list and confirm this feature is encountered for the first time.
+          required: true
+        - label: Please try full text in English and attach precise description.
+          required: true
+  - type: textarea
+    attributes:
+      label: A full description of the feature and provide some example if the same feature exists in other products, such as mysql  
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: other information
+    validations:
+      required: false

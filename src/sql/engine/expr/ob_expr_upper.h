@@ -13,10 +13,13 @@
 #ifndef _OB_SQL_EXPR_UPPER_H_
 #define _OB_SQL_EXPR_UPPER_H_
 
-// todo: remove this file.
+// todo(jiuren): remove this file.
 
-namespace oceanbase {
-namespace sql {}
-}  // namespace oceanbase
+namespace oceanbase
+{
+namespace sql
+{
+}
+}
 
 #endif /* _OB_SQL_EXPR_UPPER_H_ */

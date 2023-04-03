@@ -15,20 +15,25 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprEffectiveTenantId : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprEffectiveTenantId : public ObFuncExprOperator
+{
 public:
-  explicit ObExprEffectiveTenantId(common::ObIAllocator& alloc);
+  explicit  ObExprEffectiveTenantId(common::ObIAllocator &alloc);
   virtual ~ObExprEffectiveTenantId();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int eval_effective_tenant_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type0(ObExprResType &type,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int eval_effective_tenant_id(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprEffectiveTenantId);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_EFFECTIVE_TENANT_ID_ */
+

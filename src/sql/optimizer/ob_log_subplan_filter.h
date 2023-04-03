@@ -15,129 +15,149 @@
 
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObBasicCostInfo;
-class ObLogSubPlanFilter : public ObLogicalOperator {
+namespace oceanbase
+{
+namespace sql
+{
+struct ObBasicCostInfo;
+class ObLogSubPlanFilter : public ObLogicalOperator
+{
 public:
-  ObLogSubPlanFilter(ObLogPlan& plan)
+  ObLogSubPlanFilter(ObLogPlan &plan)
       : ObLogicalOperator(plan),
+        dist_algo_(DIST_INVALID_METHOD),
+        subquery_exprs_(),
         exec_params_(),
         onetime_exprs_(),
         init_plan_idxs_(),
         one_time_idxs_(),
-        update_set_(false)
+        update_set_(false),
+        enable_das_batch_rescans_(false)
   {}
-  ~ObLogSubPlanFilter()
-  {}
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  int allocate_exchange_post(AllocExchContext* ctx) override;
-  int check_if_match_partition_wise(const AllocExchContext& ctx, bool& is_partition_wise);
-  int has_serial_child(bool& has_serial_child);
-  int get_equal_key(const AllocExchContext& ctx, ObLogicalOperator* child, common::ObIArray<ObRawExpr*>& left_key,
-      common::ObIArray<ObRawExpr*>& right_key);
-
-  int inner_get_equal_key(ObLogicalOperator* child, common::ObIArray<ObRawExpr*>& filters,
-      common::ObIArray<ObRawExpr*>& left_key, common::ObIArray<ObRawExpr*>& right_key);
-
-  int extract_correlated_keys(const ObLogicalOperator* op, common::ObIArray<ObRawExpr*>& left_key,
-      common::ObIArray<ObRawExpr*>& right_key, common::ObIArray<ObRawExpr*>& nullsafe_left_key,
-      common::ObIArray<ObRawExpr*>& nullsafe_right_key);
-  int gen_filters();
-  int gen_output_columns();
+  ~ObLogSubPlanFilter() {}
   virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering() override;
-  virtual int transmit_local_ordering() override;
+  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  int inner_est_cost(double &first_child_card, double &op_cost);
 
+  inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
+  {
+    return append(subquery_exprs_, query_exprs);
+  }
+
+  inline int add_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params)
+  {
+    return append(exec_params_, exec_params);
+  }
   /**
    *  Get the exec params
    */
-  inline const common::ObIArray<std::pair<int64_t, ObRawExpr*> >& get_exec_params()
-  {
-    return exec_params_;
-  }
+  inline const common::ObIArray<ObExecParamRawExpr*> &get_exec_params() const { return exec_params_; }
 
-  /**
-   *  Set the exec params
-   */
-  inline int add_exec_params(const common::ObIArray<std::pair<int64_t, ObRawExpr*> >& params)
-  {
-    return append(exec_params_, params);
-  }
+  inline common::ObIArray<ObExecParamRawExpr *> &get_exec_params() { return exec_params_; }
 
-  inline const common::ObIArray<std::pair<int64_t, ObRawExpr*> >& get_onetime_exprs() const
-  {
-    return onetime_exprs_;
-  }
+  inline bool has_exec_params() const { return !exec_params_.empty(); }
 
-  inline common::ObIArray<std::pair<int64_t, ObRawExpr*> >& get_onetime_exprs()
-  {
-    return onetime_exprs_;
-  }
+  inline const common::ObIArray<ObExecParamRawExpr *> &get_onetime_exprs() const { return onetime_exprs_; }
 
-  inline int add_onetime_exprs(const common::ObIArray<std::pair<int64_t, ObRawExpr*> >& onetime_exprs)
+  inline common::ObIArray<ObExecParamRawExpr *> &get_onetime_exprs() { return onetime_exprs_; }
+
+  inline int add_onetime_exprs(const common::ObIArray<ObExecParamRawExpr*> &onetime_exprs)
   {
     return append(onetime_exprs_, onetime_exprs);
   }
 
-  inline const common::ObBitSet<>& get_onetime_idxs()
-  {
-    return one_time_idxs_;
-  }
+  inline const common::ObBitSet<> &get_onetime_idxs() { return one_time_idxs_; }
 
-  inline int add_onetime_idxs(const common::ObBitSet<>& one_time_idxs)
-  {
-    return one_time_idxs_.add_members(one_time_idxs);
-  }
+  inline int add_onetime_idxs(const common::ObBitSet<> &one_time_idxs) { return one_time_idxs_.add_members(one_time_idxs); }
 
-  inline const common::ObBitSet<>& get_initplan_idxs()
-  {
-    return init_plan_idxs_;
-  }
+  inline const common::ObBitSet<> &get_initplan_idxs() { return init_plan_idxs_; }
 
-  inline int add_initplan_idxs(const common::ObBitSet<>& init_plan_idxs)
-  {
-    return init_plan_idxs_.add_members(init_plan_idxs);
-  }
+  inline int add_initplan_idxs(const common::ObBitSet<> &init_plan_idxs) { return init_plan_idxs_.add_members(init_plan_idxs); }
 
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  bool should_be_produced_by_subplan_filter(const ObRawExpr* subexpr, const ObRawExpr* expr);
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  bool is_my_subquery_expr(const ObQueryRefRawExpr* query_expr);
-  bool is_my_onetime_expr(const ObRawExpr* expr);
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
-  int get_subquery_exprs(ObIArray<ObRawExpr*>& subquery_exprs);
+  bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
+  bool is_my_exec_expr(const ObRawExpr *expr);
+  bool is_my_onetime_expr(const ObRawExpr *expr);
 
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int re_calc_cost() override;
-  int get_children_cost_info(common::ObIArray<ObBasicCostInfo>& children_cost_info);
-  uint64_t hash(uint64_t seed) const override;
+  virtual int inner_replace_op_exprs(
+      const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
+
+  // 从子节点中抽取估算代价相关的信息，存入children_cost_info中
+  int get_children_cost_info(double &first_child_refine_card, common::ObIArray<ObBasicCostInfo> &children_cost_info);
   void set_update_set(bool update_set)
-  {
-    update_set_ = update_set;
-  }
-  bool is_update_set()
-  {
-    return update_set_;
-  }
-  int allocate_granule_pre(AllocGIContext& ctx) override;
-  int allocate_granule_post(AllocGIContext& ctx) override;
+  { update_set_ = update_set; }
+  bool is_update_set() { return update_set_; }
+  int allocate_granule_pre(AllocGIContext &ctx);
+  int allocate_granule_post(AllocGIContext &ctx);
   virtual int compute_one_row_info() override;
+  virtual int compute_sharding_info() override;
+  inline DistAlgo get_distributed_algo() { return dist_algo_; }
+  inline void set_distributed_algo(const DistAlgo set_dist_algo) { dist_algo_ = set_dist_algo; }
+
+  int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
+  common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
+
+  inline bool enable_das_batch_rescans() { return enable_das_batch_rescans_; }
+  inline void set_enable_das_batch_rescans(bool flag) { enable_das_batch_rescans_ = flag; }
+  int check_and_set_use_batch();
+  int check_if_match_das_batch_rescan(ObLogicalOperator *root,
+                                      bool &enable_das_batch_rescans);
+  int set_use_das_batch(ObLogicalOperator* root);
+
   int allocate_startup_expr_post() override;
+
+  int allocate_startup_expr_post(int64_t child_idx) override;
+
+  int allocate_subquery_id();
+
+  int replace_nested_subquery_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
+  int get_repart_sharding_info(ObLogicalOperator* child_op,
+                               ObShardingInfo *&strong_sharding,
+                               ObIArray<ObShardingInfo*> &weak_sharding);
+
+  int rebuild_repart_sharding_info(const ObShardingInfo *input_sharding,
+                                   ObIArray<ObRawExpr*> &src_keys,
+                                   ObIArray<ObRawExpr*> &target_keys,
+                                   EqualSets &input_esets,
+                                   ObShardingInfo *&out_sharding);
+
+private:
+  int extract_exist_style_subquery_exprs(ObRawExpr *expr,
+                                         ObIArray<ObRawExpr*> &exist_style_exprs);
+  int check_expr_contain_row_subquery(const ObRawExpr *expr,
+                                         bool &contains);
 protected:
-  common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> exec_params_;
-  common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> onetime_exprs_;
+  DistAlgo dist_algo_;
+  common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;
+  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> exec_params_;
+  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_;
+
+  //InitPlan idxs，InitPlan只算一次，需要存储结果
   common::ObBitSet<> init_plan_idxs_;
+  //One-Time idxs，One-Time只算一次，不用存储结果
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
+  common::ObSEArray<bool , 8, common::ModulePageAllocator, true> enable_px_batch_rescans_;
 
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+  bool enable_das_batch_rescans_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);
 };
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} // end of namespace sql
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_LOG_SUBPLAN_FILTER_H_
+
+#endif // OCEANBASE_SQL_OB_LOG_SUBPLAN_FILTER_H_

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define private public
-#define protected public
+#define private  public
+#define protected  public
 #ifndef OCEANBASE_UNITTEST_SQL_ENGINE_SET_OB_SET_TEST_UTIL_H_
 #define OCEANBASE_UNITTEST_SQL_ENGINE_SET_OB_SET_TEST_UTIL_H_
 #include <gtest/gtest.h>
@@ -21,15 +21,14 @@
 #include "sql/ob_sql_define.h"
 #include "sql/engine/test_engine_util.h"
 
-class TestSetOperatorFactory {
+class TestSetOperatorFactory
+{
 public:
-  TestSetOperatorFactory()
-  {}
-  ~TestSetOperatorFactory()
-  {}
+  TestSetOperatorFactory() {}
+  ~TestSetOperatorFactory() {}
 
-  static void init(
-      ObExecContext& ctx, ObMergeSetOperator* set_operator, int64_t col_count, bool distinct, bool set_direction)
+  static void init(ObExecContext &ctx, ObMergeSetOperator *set_operator, int64_t col_count, bool distinct,
+                   bool set_direction)
   {
     ASSERT_FALSE(NULL == set_operator);
     set_operator->reset();
@@ -42,7 +41,7 @@ public:
     result_table_.reuse();
 
     set_operator->init(col_count);
-    int32_t projector[3] = {1, 2, 3};
+    int32_t projector[3] = {1,2,3};
     fake_table1_.set_column_count(col_count);
     fake_table2_.set_column_count(col_count);
     result_table_.set_column_count(col_count);
@@ -52,8 +51,7 @@ public:
     result_table_.set_projector(projector, col_count);
     set_operator->set_projector(projector, col_count);
     for (int64_t i = 0; i < col_count; ++i) {
-      ASSERT_EQ(OB_SUCCESS,
-          set_operator->add_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())));
+      ASSERT_EQ(OB_SUCCESS, set_operator->add_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())));
       if (set_direction && (i % 2)) {
         ASSERT_EQ(OB_SUCCESS, set_operator->add_set_direction(oceanbase::sql::NULLS_LAST_DESC));
       } else {
@@ -84,23 +82,10 @@ public:
     ASSERT_EQ(OB_SUCCESS, ctx.get_my_session()->set_time_zone(ObString("+8:00"), true, true));
   }
 
-  static ObFakeTable& get_fake_table1()
-  {
-    return fake_table1_;
-  }
-  static ObFakeTable& get_fake_table2()
-  {
-    return fake_table2_;
-  }
-  static ObFakeTable& get_result_table()
-  {
-    return result_table_;
-  }
-  static ObPhysicalPlan& get_physical_plan()
-  {
-    return physical_plan_;
-  }
-
+  static ObFakeTable &get_fake_table1() { return fake_table1_; }
+  static ObFakeTable &get_fake_table2() { return fake_table2_; }
+  static ObFakeTable &get_result_table() { return result_table_; }
+  static ObPhysicalPlan &get_physical_plan() { return physical_plan_; }
 private:
   static ObPhysicalPlan physical_plan_;
   static ObFakeTable fake_table1_;

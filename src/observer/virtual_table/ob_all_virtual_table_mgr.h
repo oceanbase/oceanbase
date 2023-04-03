@@ -13,74 +13,81 @@
 #ifndef SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_TABLE_MGR_H_
 #define SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_TABLE_MGR_H_
 
-#include "share/ob_virtual_table_scanner_iterator.h"
-#include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
+#include "lib/guard/ob_shared_guard.h"
+#include "observer/omt/ob_multi_tenant.h"
+#include "share/ob_scanner.h"
+#include "share/ob_virtual_table_scanner_iterator.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_i_table.h"
-#include "storage/ob_pg_mgr.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
-namespace oceanbase {
-namespace observer {
-class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator {
-  enum COLUMN_ID_LIST {
+namespace oceanbase
+{
+namespace storage
+{
+class ObTenantTabletIterator;
+}
+namespace observer
+{
+class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
+                             public omt::ObMultiTenantOperator
+{
+  enum COLUMN_ID_LIST
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     TENANT_ID,
+    LS_ID,
     TABLE_TYPE,
-    TABLE_ID,
-    PARTITION_ID,
-    INDEX_ID,
-    BASE_VERSION,
-    MULTI_VERSION_START,
-    SNAPSHOT_VERSION,
-    MAX_MERGED_VERSION,
+    TABLET_ID,
+    START_LOG_SCN,
+    END_LOG_SCN,
     UPPER_TRANS_VERSION,
-    START_LOG_TS,
-    END_LOG_TS,
-    MAX_LOG_TS,
-    OB_VERSION,
-    LOGICAL_DATA_VERSION,
     SIZE,
-    COMPACT_ROW,
-    IS_ACTIVE,
-    TIMESTAMP,
+    DATA_BLOCK_CNT,
+    INDEX_BLOCK_CNT,
+    LINKED_BLOCK_CNT,
     REF,
-    WRITE_REF,
-    TRX_COUNT,
-    PENDING_CB_COUNT,
-    CONTAIN_UNCOMMITTED_ROW
+    IS_ACTIVE,
+    CONTAIN_UNCOMMITTED_ROW,
+    NESTED_OFFSET,
+    NESTED_SIZE
   };
-
 public:
   ObAllVirtualTableMgr();
   virtual ~ObAllVirtualTableMgr();
-  int init();
-
+  int init(common::ObIAllocator *allocator);
 public:
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_addr(common::ObAddr& addr)
-  {
-    addr_ = addr;
-  }
-
+  inline void set_addr(common::ObAddr &addr) { addr_ = addr; }
 private:
-  int get_next_table(storage::ObITable*& table);
+  // 过滤得到需要处理的租户
+  virtual bool is_need_process(uint64_t tenant_id) override;
+  // 处理当前迭代的租户
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  // 释放上一个租户的资源
+  virtual void release_last_tenant() override;
 
+  int get_next_tablet();
+  int get_next_table(storage::ObITable *&table);
 private:
   common::ObAddr addr_;
+  storage::ObTenantTabletIterator *tablet_iter_;
+  common::ObArenaAllocator tablet_allocator_;
+  ObTabletHandle tablet_handle_;
+  int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  storage::ObIPartitionGroupIterator* pg_iter_;
-  storage::ObTablesHandle pg_tables_handle_;
-  common::ObArray<storage::ObSSTable*> sstables_;
-  storage::ObTablesHandle memtable_handle_;
+  common::ObArray<storage::ObITable *> all_tables_;
   int64_t table_idx_;
-  int64_t memtable_idx_;
-
+  void *iter_buf_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableMgr);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_TABLE_MGR_H_ */

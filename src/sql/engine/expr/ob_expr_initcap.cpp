@@ -14,69 +14,57 @@
 
 #include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_initcap.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "common/data_buffer.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprInitcap::ObExprInitcap(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1)
-{}
+ObExprInitcap::ObExprInitcap(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1)
+{
+}
 
 ObExprInitcap::~ObExprInitcap()
-{}
+{
+}
 
-int ObExprInitcap::calc_result_type1(ObExprResType& type, ObExprResType& text, ObExprTypeCtx& type_ctx) const
+int ObExprInitcap::calc_result_type1(ObExprResType &type,
+                                     ObExprResType &text,
+                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObBasicSessionInfo* session = type_ctx.get_session();
+  const ObBasicSessionInfo *session = type_ctx.get_session();
   ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
 
   CK(OB_NOT_NULL(session));
   OZ(params.push_back(&text));
-  OZ(aggregate_string_type_and_charset_oracle(*session, params, type, true));
+  OZ(aggregate_string_type_and_charset_oracle(*session, params, type, PREFER_VAR_LEN_CHAR));
   OZ(deduce_string_param_calc_type_and_charset(*session, type, params));
   if (OB_SUCC(ret)) {
-    if (type.is_varchar() || type.is_nvarchar2()) {
-      type.set_length(
-          text.get_length() > OB_MAX_ORACLE_VARCHAR_LENGTH ? OB_MAX_ORACLE_VARCHAR_LENGTH : text.get_length());
-    } else if (type.is_char() || type.is_nchar()) {
-      type.set_length(
-          text.get_length() > OB_MAX_ORACLE_CHAR_LENGTH_BYTE ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : text.get_length());
+    common::ObLength result_len = text.get_calc_length();
+    if (OB_UNLIKELY(!ObCharset::is_valid_collation(type.get_collation_type()))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid charset", K(type), K(ret));
     } else {
-      type.set_length(text.get_length());
+      result_len *= ObCharset::get_charset(type.get_collation_type())->caseup_multiply;
+      type.set_length(result_len);
     }
   }
   return ret;
 }
 
-int ObExprInitcap::calc_result1(ObObj& result, const ObObj& text_obj, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ObString text_str;
-  ObString res_str;
-  if (text_obj.is_null_oracle()) {
-    result.set_null();
-  } else if (OB_FAIL(text_obj.get_string(text_str))) {
-    LOG_WARN("get string from obj failed", K(ret), K(text_obj));
-  } else if (OB_FAIL(initcap_string(text_str, text_obj.get_collation_type(), expr_ctx.calc_buf_, res_str))) {
-    LOG_WARN("initcap string failed", K(ret), K(text_obj));
-  } else {
-    ObObjType res_type = get_result_type().get_type();
-    if (ob_is_text_tc(res_type)) {
-      result.set_lob_value(res_type, res_str.ptr(), res_str.length());
-    } else {
-      result.set_string(result_type_.get_type(), res_str);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int ObExprInitcap::initcap_string(
-    const ObString& text, const ObCollationType cs_type, ObIAllocator* allocator, ObString& res_str)
+// last_has_first_letter is used to assign has_first_letter at the beginning, and return last state of text
+int ObExprInitcap::initcap_string(const ObString &text,
+                                  const ObCollationType cs_type,
+                                  ObIAllocator *allocator,
+                                  ObString &res_str,
+                                  bool &last_has_first_letter)
 {
   int ret = OB_SUCCESS;
 
@@ -85,10 +73,10 @@ int ObExprInitcap::initcap_string(
     LOG_WARN("allocator is null", K(ret));
   } else {
 
-    int64_t case_multiply =
-        std::max(ObCharset::get_charset(cs_type)->caseup_multiply, ObCharset::get_charset(cs_type)->casedn_multiply);
+    int64_t case_multiply = std::max(ObCharset::get_charset(cs_type)->caseup_multiply,
+                                     ObCharset::get_charset(cs_type)->casedn_multiply);
     int64_t buf_len = case_multiply * text.length();
-    char* buf = static_cast<char*>(allocator->alloc(buf_len));
+    char *buf = static_cast<char *>(allocator->alloc(buf_len));
     int64_t pos = 0;
 
     if (OB_ISNULL(buf)) {
@@ -98,7 +86,7 @@ int ObExprInitcap::initcap_string(
       ObStringScanner scanner(text, cs_type);
       ObString cur_letter;
       int32_t wchar = 0;
-      bool has_first_letter = false;
+      bool has_first_letter = last_has_first_letter;
 
       if (1 == case_multiply) {
         MEMCPY(buf, text.ptr(), text.length());
@@ -112,13 +100,14 @@ int ObExprInitcap::initcap_string(
           LOG_WARN("fail to get next character", K(ret), K(scanner));
         } else {
           bool is_alphanumeric =
-              (wchar <= INT8_MAX && ob_isalnum(ObCharset::get_charset(CS_TYPE_UTF8MB4_GENERAL_CI), wchar));
+              (wchar <= INT8_MAX
+               && ob_isalnum(ObCharset::get_charset(CS_TYPE_UTF8MB4_GENERAL_CI), wchar));
           if (is_alphanumeric) {
-            char* src_ptr = (1 == case_multiply) ? buf + pos : cur_letter.ptr();
+            char *src_ptr = (1 == case_multiply) ? buf + pos : cur_letter.ptr();
             int64_t buf_remain = cur_letter.length() * case_multiply;
-            int64_t write_len = has_first_letter
-                                    ? ObCharset::casedn(cs_type, src_ptr, cur_letter.length(), buf + pos, buf_remain)
-                                    : ObCharset::caseup(cs_type, src_ptr, cur_letter.length(), buf + pos, buf_remain);
+            int64_t write_len = has_first_letter ?
+                  ObCharset::casedn(cs_type, src_ptr, cur_letter.length(), buf + pos, buf_remain)
+                : ObCharset::caseup(cs_type, src_ptr, cur_letter.length(), buf + pos, buf_remain);
             if (OB_UNLIKELY(0 == write_len)) {
               ret = OB_ERR_UNEXPECTED;
             } else {
@@ -133,6 +122,7 @@ int ObExprInitcap::initcap_string(
         }
       }
       if (OB_SUCC(ret)) {
+        last_has_first_letter = has_first_letter;
         res_str.assign_ptr(buf, pos);
       }
     }
@@ -141,38 +131,93 @@ int ObExprInitcap::initcap_string(
   return ret;
 }
 
-int calc_initcap_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg_datum = NULL;
+  ObDatum *arg_datum = NULL;
   ObString res_str;
-  char* res_buf = NULL;
+  char *res_buf = NULL;
   ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
-  int64_t case_multiply =
-      std::max(ObCharset::get_charset(cs_type)->caseup_multiply, ObCharset::get_charset(cs_type)->casedn_multiply);
+  int64_t case_multiply = std::max(ObCharset::get_charset(cs_type)->caseup_multiply,
+                                   ObCharset::get_charset(cs_type)->casedn_multiply);
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg_datum))) {
     LOG_WARN("eval arg 0 failed", K(ret), K(expr));
   } else if (arg_datum->is_null()) {
     res_datum.set_null();
-  } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, arg_datum->len_ * case_multiply))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
   } else {
-    ObDataBuffer buf_alloc(res_buf, arg_datum->len_ * case_multiply);
-    if (OB_FAIL(ObExprInitcap::initcap_string(
-            arg_datum->get_string(), expr.args_[0]->datum_meta_.cs_type_, &buf_alloc, res_str))) {
-      LOG_WARN("initcap string failed", K(ret), K(arg_datum->get_string()));
-    } else if (0 == res_str.length()) {
-      // initcap is only for oracle mode. set res be null when string length is 0.
-      res_datum.set_null();
-    } else {
-      res_datum.set_string(res_str);
+    if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+      if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, arg_datum->len_ * case_multiply))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        ObDataBuffer buf_alloc(res_buf, arg_datum->len_ * case_multiply);
+        bool last_has_first_letter = false;
+        if (OB_FAIL(ObExprInitcap::initcap_string(arg_datum->get_string(),
+                                                  cs_type,
+                                                  &buf_alloc,
+                                                  res_str,
+                                                  last_has_first_letter))) {
+          LOG_WARN("initcap string failed", K(ret), K(arg_datum->get_string()));
+        }
+      }
+    } else { // text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, cs_type,
+                                  arg_datum->get_string(),
+                                  expr.args_[0]->obj_meta_.has_lob_header());
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+      int64_t input_byte_len = 0;
+      int64_t buf_size = 0;
+      if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+      } else if (OB_FAIL(input_iter.get_byte_len(input_byte_len))) {
+        LOG_WARN("get input byte len failed");
+      } else if (OB_FAIL(output_result.init(input_byte_len * case_multiply))) {
+        LOG_WARN("init stringtext result failed");
+      } else if (input_byte_len == 0) {
+        // do nothing, let res_str become empty string
+        res_str.assign_ptr(NULL, 0);
+      } else if (OB_FAIL(output_result.get_reserved_buffer(res_buf, buf_size))) {
+        LOG_WARN("stringtext result reserve buffer failed");
+      } else {
+        ObTextStringIterState state;
+        ObString input_data;
+        bool last_has_first_letter = false;
+        while (OB_SUCC(ret)
+              && buf_size > 0
+              && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
+          ObDataBuffer buf_alloc(res_buf, buf_size);
+          if (OB_FAIL(ObExprInitcap::initcap_string(input_data,
+                                                    cs_type,
+                                                    &buf_alloc,
+                                                    res_str,
+                                                    last_has_first_letter))) {
+            LOG_WARN("initcap string failed", K(ret), K(input_data));
+          } else if (OB_FAIL(output_result.lseek(res_str.length(), 0))) {
+            LOG_WARN("result lseek failed", K(ret));
+          } else {
+            res_buf = res_buf + res_str.length();
+            buf_size = buf_size - res_str.length();
+          }
+        }
+        output_result.get_result_buffer(res_str);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (0 == res_str.length()) {
+        // initcap is only for oracle mode. set res be null when string length is 0.
+        res_datum.set_null();
+      } else {
+        res_datum.set_string(res_str);
+      }
     }
   }
   return ret;
 }
 
-int ObExprInitcap::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprInitcap::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                           ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -181,5 +226,5 @@ int ObExprInitcap::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, 
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* sql */
+} /* oceanbase */

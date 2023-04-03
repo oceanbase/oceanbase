@@ -26,17 +26,28 @@
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
-#include "storage/transaction/ob_trans_rpc.h"
-#include "storage/transaction/ob_gts_rpc.h"
-#include "storage/transaction/ob_dup_table_rpc.h"
-#include "storage/transaction/ob_gts_response_handler.h"
-#include "storage/transaction/ob_weak_read_service_rpc_define.h"  // weak_read_service
-#include "election/ob_election_rpc.h"
-#include "clog/ob_log_rpc_processor.h"
-#include "clog/ob_log_external_rpc.h"
-#include "clog/ob_clog_sync_rpc.h"
+#include "sql/das/ob_das_rpc_processor.h"
+#include "storage/tx/ob_trans_rpc.h"
+#include "storage/tx/ob_gts_rpc.h"
+#include "storage/tx/ob_dup_table_rpc.h"
+#include "storage/tx/ob_ts_response_handler.h"
+#include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
 #include "observer/ob_rpc_processor_simple.h"
+#include "observer/ob_inner_sql_rpc_processor.h"
 #include "observer/ob_srv_task.h"
+#include "logservice/palf/log_rpc_processor.h"
+#include "logservice/logrpc/ob_log_rpc_processor.h"
+#include "logservice/cdcservice/ob_cdc_rpc_processor.h"
+
+#include "observer/table/ob_table_rpc_processor.h"
+#include "observer/table/ob_table_execute_processor.h"
+#include "observer/table/ob_table_batch_execute_processor.h"
+#include "observer/table/ob_table_query_processor.h"
+#include "observer/table/ob_table_query_and_mutate_processor.h"
+
+#include "observer/dbms_job/ob_dbms_job_rpc_processor.h"
+#include "storage/tx_storage/ob_tenant_freezer_rpc.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_processor.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -45,23 +56,22 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
-using namespace oceanbase::clog;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::obmysql;
 
-void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator* xlator)
-{
+void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcGetRoleP, gctx_);
-  RPC_PROCESSOR(ObRpcBatchGetRoleP, gctx_);
-  RPC_PROCESSOR(ObRpcBroadcastLocationsP, gctx_);
-  RPC_PROCESSOR(ObRpcGetMasterRSP, gctx_);
+  RPC_PROCESSOR(ObRpcDetectMasterRsLSP, gctx_);
   RPC_PROCESSOR(ObRpcSetConfigP, gctx_);
   RPC_PROCESSOR(ObRpcGetConfigP, gctx_);
-  RPC_PROCESSOR(ObRpcAddTenantTmpP, gctx_);
+  RPC_PROCESSOR(ObRpcSetTenantConfigP, gctx_);
   RPC_PROCESSOR(ObRpcNotifyTenantServerUnitResourceP, gctx_);
   RPC_PROCESSOR(ObCheckFrozenVersionP, gctx_);
   RPC_PROCESSOR(ObGetDiagnoseArgsP);
   RPC_PROCESSOR(ObGetMinSSTableSchemaVersionP, gctx_);
+  RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
+  RPC_PROCESSOR(ObGetLeaderLocationsP, gctx_);
+  RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
 
   // interrupt
   RPC_PROCESSOR(obrpc::ObInterruptProcessor);
@@ -70,89 +80,145 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(dtl::ObDtlSendMessageP);
   RPC_PROCESSOR(dtl::ObDtlBCSendMessageP);
 
-  // tenant manager
-  RPC_PROCESSOR(ObTenantMgrP, gctx_.rs_rpc_proxy_, gctx_.rs_mgr_, gctx_.par_ser_);
-  // session
+  // tenant freezer
+  RPC_PROCESSOR(ObTenantFreezerP);
+  //session
   RPC_PROCESSOR(ObRpcKillSessionP, gctx_);
 
   // BatchRpc
-  RPC_PROCESSOR(ObBatchP, gctx_.par_ser_);
+  RPC_PROCESSOR(ObBatchP);
   // server blacklist
   RPC_PROCESSOR(ObBlacklistReqP);
   RPC_PROCESSOR(ObBlacklistRespP);
 
   // election provided
-  RPC_PROCESSOR(ObElectionP, gctx_.par_ser_);
+//  RPC_PROCESSOR(ObElectionP);
   RPC_PROCESSOR(ObRequestHeartbeatP, gctx_);
   RPC_PROCESSOR(ObFlushCacheP, gctx_);
   RPC_PROCESSOR(ObUpdateTenantMemoryP, gctx_);
 
-  // backup
+  //backup
   RPC_PROCESSOR(ObRpcCheckBackupSchuedulerWorkingP, gctx_);
+
+  //dbms_job
+  RPC_PROCESSOR(ObRpcRunDBMSJobP, gctx_);
+
+  // inner sql
+  RPC_PROCESSOR(ObInnerSqlRpcP, gctx_);
+
+  //dbms_scheduler
+  RPC_PROCESSOR(ObRpcRunDBMSSchedJobP, gctx_);
 }
 
-void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator* xlator)
-{
-  // RPC_PROCESSOR(ObGetLatestSchemaVersionP, gctx_.schema_service_);
+void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator *xlator) {
+  //RPC_PROCESSOR(ObGetLatestSchemaVersionP, gctx_.schema_service_);
   RPC_PROCESSOR(ObGetAllSchemaP, gctx_.schema_service_);
   RPC_PROCESSOR(ObRpcSetTPP, gctx_);
   RPC_PROCESSOR(ObSetDiskValidP, gctx_);
 }
 
-void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator* xlator)
-{
+void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator) {
   // transaction provided
-  RPC_PROCESSOR(ObTransP, gctx_.par_ser_);
-  RPC_PROCESSOR(ObTransRespP, gctx_.par_ser_);
+  RPC_PROCESSOR(ObTxCommitP);
+  RPC_PROCESSOR(ObTxCommitRespP);
+  RPC_PROCESSOR(ObTxAbortP);
+  RPC_PROCESSOR(ObTxRollbackSPP);
+  RPC_PROCESSOR(ObTxKeepaliveP);
+  RPC_PROCESSOR(ObTxKeepaliveRespP);
   RPC_PROCESSOR(ObDupTableLeaseRequestMsgP, gctx_);
   RPC_PROCESSOR(ObDupTableLeaseResponseMsgP, gctx_);
   RPC_PROCESSOR(ObRedoLogSyncRequestP, gctx_);
   RPC_PROCESSOR(ObRedoLogSyncResponseP, gctx_);
+  RPC_PROCESSOR(ObPreCommitRequestP, gctx_);
+  RPC_PROCESSOR(ObPreCommitResponseP, gctx_);
+  // for xa
+  RPC_PROCESSOR(ObTxSubPrepareP);
+  RPC_PROCESSOR(ObTxSubPrepareRespP);
+  RPC_PROCESSOR(ObTxSubCommitP);
+  RPC_PROCESSOR(ObTxSubCommitRespP);
+  RPC_PROCESSOR(ObTxSubRollbackP);
+  RPC_PROCESSOR(ObTxSubRollbackRespP);
+  // for standby
+  RPC_PROCESSOR(ObTxAskStateP);
+  RPC_PROCESSOR(ObTxAskStateRespP);
+  RPC_PROCESSOR(ObTxCollectStateP);
+  RPC_PROCESSOR(ObTxCollectStateRespP);
+  // for tx free route
+  RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
+  RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);
+  RPC_PROCESSOR(ObTxFreeRoutePushStateP);
 }
 
-void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator* xlator)
-{
+void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {
   // clog provided
-  RPC_PROCESSOR(ObLogRpcProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogReqStartPosByLogIdProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogExternalFetchLogProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessorWithBreakpoint, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogReqStartPosByLogIdProcessorWithBreakpoint, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogOpenStreamProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogStreamFetchLogProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogLeaderHeartbeatProcessor, gctx_.par_ser_);
+  /*
+  RPC_PROCESSOR(ObLogRpcProcessor);
+  RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessor);
+  RPC_PROCESSOR(ObLogExternalFetchLogProcessor);
+  RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessorWithBreakpoint);
+  RPC_PROCESSOR(ObLogOpenStreamProcessor);
+  RPC_PROCESSOR(ObLSFetchLogProcessor);
+  RPC_PROCESSOR(ObLogLeaderHeartbeatProcessor);
 
-  RPC_PROCESSOR(ObLogGetMCTsProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogGetMcCtxArrayProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogGetPriorityArrayProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogGetRemoteLogProcessor, gctx_.par_ser_);
+  RPC_PROCESSOR(ObLogGetMCTsProcessor);
+  RPC_PROCESSOR(ObLogGetMcCtxArrayProcessor);
+  RPC_PROCESSOR(ObLogGetPriorityArrayProcessor);
+  RPC_PROCESSOR(ObLogGetRemoteLogProcessor);
+  RPC_PROCESSOR(ObLogGetPhysicalRestoreStateProcessor);
+  */
 }
 
-void oceanbase::observer::init_srv_xlator_for_executor(ObSrvRpcXlator* xlator)
+void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 {
-  // executor
+  RPC_PROCESSOR(logservice::LogMembershipChangeP);
+  RPC_PROCESSOR(logservice::LogGetPalfStatReqP);
+  RPC_PROCESSOR(logservice::LogGetLeaderMaxScnP);
+  RPC_PROCESSOR(logservice::LogChangeAccessModeP);
+  RPC_PROCESSOR(logservice::LogFlashbackMsgP);
+}
 
+void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
+{
+  RPC_PROCESSOR(palf::LogPushReqP);
+  RPC_PROCESSOR(palf::LogPushRespP);
+  RPC_PROCESSOR(palf::LogFetchReqP);
+  RPC_PROCESSOR(palf::LogPrepareReqP);
+  RPC_PROCESSOR(palf::LogPrepareRespP);
+  RPC_PROCESSOR(palf::LogChangeConfigMetaReqP);
+  RPC_PROCESSOR(palf::LogChangeConfigMetaRespP);
+  RPC_PROCESSOR(palf::LogChangeModeMetaReqP);
+  RPC_PROCESSOR(palf::LogChangeModeMetaRespP);
+  RPC_PROCESSOR(palf::LogNotifyRebuildReqP);
+  RPC_PROCESSOR(palf::CommittedInfoP);
+  RPC_PROCESSOR(palf::LogLearnerReqP);
+  RPC_PROCESSOR(palf::LogRegisterParentReqP);
+  RPC_PROCESSOR(palf::LogRegisterParentRespP);
+  RPC_PROCESSOR(palf::ElectionPrepareRequestMsgP);
+  RPC_PROCESSOR(palf::ElectionPrepareResponseMsgP);
+  RPC_PROCESSOR(palf::ElectionAcceptRequestMsgP);
+  RPC_PROCESSOR(palf::ElectionAcceptResponseMsgP);
+  RPC_PROCESSOR(palf::ElectionChangeLeaderMsgP);
+  RPC_PROCESSOR(palf::LogGetMCStP);
+  RPC_PROCESSOR(palf::LogGetStatP);
+}
+
+void oceanbase::observer::init_srv_xlator_for_cdc(ObSrvRpcXlator *xlator)
+{
+  RPC_PROCESSOR(ObCdcLSReqStartLSNByTsP);
+  RPC_PROCESSOR(ObCdcLSFetchLogP);
+  RPC_PROCESSOR(ObCdcLSFetchMissingLogP);
+}
+
+void oceanbase::observer::init_srv_xlator_for_executor(ObSrvRpcXlator *xlator) {
+  // executor
   RPC_PROCESSOR(ObRpcRemoteExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcDistExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcTaskCompleteP, gctx_);
-  RPC_PROCESSOR(ObRpcTaskNotifyFetchP, gctx_);
-  RPC_PROCESSOR(ObRpcTaskFetchResultP, gctx_);
-  RPC_PROCESSOR(ObRpcTaskFetchIntermResultP, gctx_);
-  RPC_PROCESSOR(ObRpcTaskKillP, gctx_);
-  RPC_PROCESSOR(ObRpcCloseResultP, gctx_);
-  RPC_PROCESSOR(ObRpcAPDistExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcMiniTaskExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcAPMiniDistExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcBKGDDistExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcBKGDTaskCompleteP, gctx_);
   RPC_PROCESSOR(ObRpcLoadDataTaskExecuteP, gctx_);
-  RPC_PROCESSOR(ObFetchIntermResultItemP, gctx_);
   RPC_PROCESSOR(ObRpcLoadDataShuffleTaskExecuteP, gctx_);
   RPC_PROCESSOR(ObRpcLoadDataInsertTaskExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcAPPingSqlTaskP, gctx_);
   RPC_PROCESSOR(ObRpcRemoteSyncExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcRemoteASyncExecuteP, gctx_);
-  RPC_PROCESSOR(ObRpcRemotePostResultP, gctx_);
-  RPC_PROCESSOR(ObCheckBuildIndexTaskExistP, gctx_);
+  RPC_PROCESSOR(ObDASSyncAccessP, gctx_);
+  RPC_PROCESSOR(ObDASSyncFetchP);
+  RPC_PROCESSOR(ObDASAsyncEraseP);
+  RPC_PROCESSOR(ObRpcEraseIntermResultP, gctx_);
+  RPC_PROCESSOR(ObDASAsyncAccessP, gctx_);
 }

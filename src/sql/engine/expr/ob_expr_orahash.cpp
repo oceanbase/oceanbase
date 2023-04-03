@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_orahash.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_func_part_hash.h"
@@ -24,169 +24,38 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
-ObExprOrahash::ObExprOrahash(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ORAHASH, N_ORAHASH, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
-{}
-
-ObExprOrahash::~ObExprOrahash()
-{}
-
-int ObExprOrahash::calc_resultN(ObObj& result, const ObObj* objs, int64_t param_num, ObExprCtx& expr_ctx) const
+ObExprOrahash::ObExprOrahash(ObIAllocator &alloc)
+  :ObFuncExprOperator(alloc, T_FUN_SYS_ORAHASH, N_ORAHASH, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
 {
-  int ret = OB_SUCCESS;
-  uint64_t hval = 0;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init.", K(ret));
-  } else {
-    number::ObNumber numhash;
-    int64_t bval = MAX_BUCKETS, sval = 0;
-    if (is_any_null(objs, param_num)) {
-      result.set_null();
-    } else {
-      switch (param_num) {
-        case 1:
-          break;
-        case 2:  // buckets
-          ret = get_int64_value(objs[1], expr_ctx, bval);
-          break;
-        case 3:  // buckets and seed
-          if (OB_SUCC(get_int64_value(objs[1], expr_ctx, bval))) {
-            if (OB_FAIL(get_int64_value(objs[2], expr_ctx, sval))) {
-              LOG_WARN("parse seed value failed.", K(ret));
-            }
-          } else {
-            LOG_WARN("parse bucket value failed.", K(ret));
-          }
-          break;
-        default:
-          if (param_num < 1) {
-            ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
-            LOG_WARN("not enough arguments", K(ret));
-          } else {
-            ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
-            LOG_WARN("Too many arguments.", K(ret));
-          }
-          break;
-      }
-      if (OB_SUCC(ret)) {
-        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3000) {
-          if (ObExprFuncPartOldHash::is_virtual_part_for_oracle(expr_ctx.exec_ctx_->get_task_executor_ctx())) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support for virtual tables.", K(ret));
-          } else {
-            bval = bval + 1;  // consistent with oracle
-            if (0 == sval) {
-              ObObj tmpres;
-              if (OB_FAIL(ObExprFuncPartOldHash::calc_value_for_oracle(objs, 1, tmpres))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("Failed to calc hash value", K(ret));
-              } else {
-                int64_t val = tmpres.get_int();
-                // hval = hash_mod_oracle(val, static_cast<uint64_t>(bval));
-                int64_t tmphval = 0;
-                if (OB_FAIL(schema::ObPartitionUtils::calc_hash_part_idx(val, bval, tmphval))) {
-                  LOG_WARN("failed to calc hash part index.", K(ret));
-                }
-                hval = static_cast<uint64_t>(tmphval);
-              }
-            } else {
-              hval = ObExprFuncPartOldHash::calc_hash_value_with_seed(objs[0], sval);
-              hval = hval % bval;
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_SUCC(numhash.from(hval, *(expr_ctx.calc_buf_)))) {
-                result.set_number(numhash);
-              } else {
-                LOG_WARN("set result number failed.", K(ret));
-              }
-            } else {
-              // do nothing;
-            }
-          }
-        } else if (ObExprFuncPartHash::is_virtual_part_for_oracle(expr_ctx.exec_ctx_->get_task_executor_ctx())) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support for virtual tables.", K(ret));
-        } else {
-          bval = bval + 1;  // consistent with oracle
-          if (0 == sval) {  // When seed is 0, it needs to be consistent with the result of partition by
-            ObObj tmpres;
-            if (OB_FAIL(ObExprFuncPartHash::calc_value_for_oracle(objs, 1, tmpres))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("Failed to calc hash value", K(ret));
-            } else {
-              int64_t val = tmpres.get_int();
-              // hval = hash_mod_oracle(val, static_cast<uint64_t>(bval));
-              int64_t tmphval = 0;
-              if (OB_FAIL(schema::ObPartitionUtils::calc_hash_part_idx(val, bval, tmphval))) {
-                LOG_WARN("failed to calc hash part index.", K(ret));
-              }
-              hval = static_cast<uint64_t>(tmphval);
-            }
-          } else {
-            hval = ObExprFuncPartHash::calc_hash_value_with_seed(objs[0], sval);
-            hval = hval % bval;
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_SUCC(numhash.from(hval, *(expr_ctx.calc_buf_)))) {
-              result.set_number(numhash);
-            } else {
-              LOG_WARN("set result number failed.", K(ret));
-            }
-          } else {
-            // do nothing;
-          }
-        }
-      } else {
-        // do nothing;
-      }
-    }
-  }
-  return ret;
 }
 
-int ObExprOrahash::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types, int64_t param_num, ObExprTypeCtx& type_ctx) const
+ObExprOrahash::~ObExprOrahash()
+{
+}
+
+int ObExprOrahash::calc_result_typeN(ObExprResType &type,
+                                     ObExprResType *types,
+                                     int64_t param_num,
+                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  switch (param_num) {
-    case 1:
-      if (OB_UNLIKELY(types[0].is_lob() || types[0].is_ext())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("inconsistent type", K(ret));
-      }
-      break;
-    case 2:
-      if (!(types[1].is_numeric_type() || types[1].is_null())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-        LOG_WARN("inconsistent type", K(ret), K(param_num));
-      }
-      break;
-    case 3:
-      if (!((types[1].is_numeric_type() || types[1].is_null()) && (types[2].is_numeric_type() || types[2].is_null()))) {
-        ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-        LOG_WARN("inconsistent type", K(ret), K(param_num));
-      }
-      break;
-    default:
-      if (param_num < 1) {
-        ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
-        LOG_WARN("not enough arguments.", K(ret));
-      } else {
-        ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
-        LOG_WARN("Too many arguments.", K(ret));
-      }
-      break;
-  }
-  if (OB_SUCC(ret)) {
+  UNUSED(type_ctx);
+  if (param_num < 1) {
+    ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
+    LOG_WARN("not enough arguments.", K(ret));
+  } else if (param_num > 3) {
+    ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
+    LOG_WARN("Too many arguments.", K(ret));
+  } else if (OB_UNLIKELY(types[0].is_lob() || types[0].is_ext())) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("inconsistent type", K(ret));
+  } else {
     type.set_number();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
     type.set_calc_type(common::ObNumberType);
   }
-  const ObSQLSessionInfo* session = type_ctx.get_session();
-  CK(OB_NOT_NULL(session));
-  if (OB_SUCC(ret) && session->use_static_typing_engine()) {
+  if (OB_SUCC(ret)) {
     if (1 < param_num && !types[1].is_null()) {
       types[1].set_calc_type(ObIntType);
     }
@@ -197,6 +66,7 @@ int ObExprOrahash::calc_result_typeN(
   return ret;
 }
 
+//算法详见
 uint64_t ObExprOrahash::hash_mod_oracle(uint64_t val, uint64_t buckets) const
 {
   uint64_t N = 1;
@@ -208,8 +78,8 @@ uint64_t ObExprOrahash::hash_mod_oracle(uint64_t val, uint64_t buckets) const
     mask = mask >> 1;
   }
 
-  uint64_t part_id = val % N;
-  if (part_id + N < buckets && (val & N) == N) {
+  uint64_t part_id= val % N;
+  if (part_id + N < buckets && (val & N) == N){
     part_id += N;
   }
   return part_id;
@@ -235,14 +105,15 @@ bool ObExprOrahash::is_valid_number(const int64_t& input)
   return ret;
 }
 
-int ObExprOrahash::get_int64_value(const ObObj& obj, ObExprCtx& expr_ctx, int64_t& val) const
+int ObExprOrahash::get_int64_value(const ObObj &obj, ObExprCtx &expr_ctx, int64_t &val) const
 {
   int ret = OB_SUCCESS;
-  EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
+  EXPR_DEFINE_CAST_CTX(expr_ctx,  CM_NONE);
   EXPR_GET_INT64_V2(obj, val);
   if (OB_FAIL(ret)) {
     LOG_WARN("get int64 failed.", K(ret), K(val), K(obj));
-    if (ret == OB_DATA_OUT_OF_RANGE) {
+    // 为了和oralce兼容，ora_hash(expr, 1e33)这种场景下，ob报的是OB_DATA_OUT_OF_RANGE，oracle是illegal argument
+    if (ret == OB_DATA_OUT_OF_RANGE){
       ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
       LOG_WARN("error code covered for compatiable with oracle", K(ret));
     }
@@ -255,7 +126,7 @@ int ObExprOrahash::get_int64_value(const ObObj& obj, ObExprCtx& expr_ctx, int64_
   return ret;
 }
 
-bool ObExprOrahash::is_any_null(const ObObj* objs, const int64_t num) const
+bool ObExprOrahash::is_any_null(const ObObj *objs, const int64_t num) const
 {
   bool ret = false;
   for (int i = 0; i < num; i++) {
@@ -264,7 +135,7 @@ bool ObExprOrahash::is_any_null(const ObObj* objs, const int64_t num) const
   return ret;
 }
 
-int ObExprOrahash::eval_orahash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprOrahash::eval_orahash(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
   // ora_hash(expr, bucket, seed);
@@ -292,37 +163,34 @@ int ObExprOrahash::eval_orahash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res
         ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
         LOG_WARN("illegal argument for ora_hash function", K(ret), K(bval), K(sval));
       }
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3000) {
-        OV(!ObExprFuncPartOldHash::is_virtual_part_for_oracle(ctx.exec_ctx_.get_task_executor_ctx()), OB_NOT_SUPPORTED);
-      } else {
-        OV(!ObExprFuncPartHash::is_virtual_part_for_oracle(ctx.exec_ctx_.get_task_executor_ctx()), OB_NOT_SUPPORTED);
-      }
+      OV(!ObExprFuncPartHash::is_virtual_part_for_oracle(
+         ctx.exec_ctx_.get_task_executor_ctx()), OB_NOT_SUPPORTED);
       if (OB_SUCC(ret)) {
         uint64_t hval = 0;
-        bval = bval + 1;  // consistent with oracle
+        bval = bval + 1; // consistent with oracle
         ObExpr mock_expr = expr;
         mock_expr.arg_cnt_ = 1;
         ObDatum mock_res;
         int64_t hval_int = 0;
         mock_res.pack_ = sizeof(hval_int);
         mock_res.int_ = &hval_int;
-        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3000) {
-          if (OB_FAIL(ObExprFuncPartOldHash::eval_oracle_old_part_hash(mock_expr, ctx, mock_res, sval))) {
-            LOG_WARN("eval_hash_val failed", K(ret));
-          }
-        } else if (OB_FAIL(ObExprFuncPartHash::eval_oracle_part_hash(mock_expr, ctx, mock_res, sval))) {
+        if (OB_FAIL(ObExprFuncPartHash::eval_oracle_part_hash(mock_expr, ctx, mock_res, sval))) {
           LOG_WARN("eval_hash_val failed", K(ret));
         }
-        if (OB_SUCC(ret)) {
+        if(OB_SUCC(ret)) {
           if (0 == sval) {
+            // seed 为0的时候，需要和partition by的结果一致
             hval_int = std::abs(hval_int);
             int64_t tmp_hval = 0;
-            if (OB_FAIL(schema::ObPartitionUtils::calc_hash_part_idx(hval_int, bval, tmp_hval))) {
+            if (OB_FAIL(share::schema::ObPartitionUtils::calc_hash_part_idx(hval_int, bval, tmp_hval))) {
               LOG_WARN("failed to calc hash part index.", K(ret));
             } else {
               hval = static_cast<uint64_t>(tmp_hval);
             }
           } else {
+            // 老引擎下调用了ObExprFuncPartHash::calc_value_for_oracle()由于没有做static_cast
+            // 所以结果跟这里直接调用ObExprFuncPartHash::eval_oracle_part_hash()结果有出入
+            // 应该是老引擎的bug
             hval = static_cast<uint64_t>(hval_int);
             hval = hval % bval;
           }
@@ -342,7 +210,8 @@ int ObExprOrahash::eval_orahash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res
   return ret;
 }
 
-int ObExprOrahash::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const
+int ObExprOrahash::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                           ObExpr &expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);

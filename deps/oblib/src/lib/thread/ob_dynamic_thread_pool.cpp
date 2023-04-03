@@ -13,23 +13,33 @@
 #include "ob_dynamic_thread_pool.h"
 #include "lib/thread/ob_thread_name.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObDynamicThreadInfo::ObDynamicThreadInfo()
-    : tid_(-1), idx_(-1), pool_(NULL), is_stop_(false), is_alive_(false), error_thread_(false)
-{}
+  : tid_(-1),
+    idx_(-1),
+    pool_(NULL),
+    is_stop_(false),
+    is_alive_(false),
+    error_thread_(false)
+{
+}
+
+
 
 ObDynamicThreadPool::ObDynamicThreadPool()
-    : is_inited_(false),
-      is_stop_(false),
-      thread_num_(0),
-      task_queue_(),
-      cond_(),
-      need_idle_(true),
-      start_thread_num_(0),
-      stop_thread_num_(0),
-      thread_name_(nullptr)
+  : is_inited_(false),
+    is_stop_(false),
+    thread_num_(0),
+    task_queue_(),
+    cond_(),
+    need_idle_(true),
+    start_thread_num_(0),
+    stop_thread_num_(0),
+    thread_name_(nullptr)
 {
   for (int64_t i = 0; i < MAX_THREAD_NUM; ++i) {
     thread_infos_[i].idx_ = i;
@@ -40,7 +50,7 @@ ObDynamicThreadPool::ObDynamicThreadPool()
 ObDynamicThreadPool::~ObDynamicThreadPool()
 {
   if (!is_stop_) {
-    COMMON_LOG(ERROR, "ObDynamicThreadPool is destruction before stop");
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ObDynamicThreadPool is destruction before stop");
     is_stop_ = true;
   }
   destroy();
@@ -65,7 +75,7 @@ int ObDynamicThreadPool::init(const char* thread_name)
     thread_name_ = thread_name;
     is_inited_ = true;
     is_stop_ = false;
-    ATOMIC_STORE(&thread_num_, 0);
+    ATOMIC_STORE(&thread_num_ , 0);
 
     if (OB_FAIL(start())) {
       COMMON_LOG(WARN, "failed to start dynamic thread pool", K(ret));
@@ -88,7 +98,7 @@ int ObDynamicThreadPool::set_task_thread_num(const int64_t thread_num)
     COMMON_LOG(WARN, "invalid thread num", K(ret), K(thread_num));
   } else if (cur_thread_num != thread_num) {
     COMMON_LOG(INFO, "set dynamic thread pool thread num", K(cur_thread_num), K(thread_num));
-    ATOMIC_STORE(&thread_num_, thread_num);
+    ATOMIC_STORE(&thread_num_ , thread_num);
     wakeup();
   }
   return ret;
@@ -124,7 +134,7 @@ void ObDynamicThreadPool::task_thread_idle()
   ObThreadCondGuard guard(task_thread_cond_);
   if (OB_SUCCESS != (tmp_ret = task_thread_cond_.wait(DEFAULT_CHECK_TIME_MS))) {
     if (OB_TIMEOUT != tmp_ret) {
-      STORAGE_LOG(WARN, "failed to idle", K(tmp_ret));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to idle", K(tmp_ret));
     }
   }
 }
@@ -138,20 +148,20 @@ void ObDynamicThreadPool::run1()
   }
   while (!is_stop_) {
     if (OB_SUCCESS != (tmp_ret = check_thread_status())) {
-      COMMON_LOG(WARN, "failed to check_thread_status", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "failed to check_thread_status", K(tmp_ret));
     }
     ObThreadCondGuard guard(cond_);
     if (need_idle_) {
       if (OB_SUCCESS != (tmp_ret = cond_.wait(DEFAULT_CHECK_TIME_MS))) {
         if (OB_TIMEOUT != tmp_ret) {
-          STORAGE_LOG(WARN, "failed to idle", K(tmp_ret));
+          STORAGE_LOG_RET(WARN, tmp_ret, "failed to idle", K(tmp_ret));
         }
       }
     }
     need_idle_ = true;
   }
   if (OB_SUCCESS != (tmp_ret = stop_all_threads())) {
-    COMMON_LOG(WARN, "failed to stop all threads", K(tmp_ret));
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to stop all threads", K(tmp_ret));
   }
 }
 
@@ -166,7 +176,7 @@ int ObDynamicThreadPool::check_thread_status()
     COMMON_LOG(WARN, "not inited", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_THREAD_NUM; ++i) {
-    ObDynamicThreadInfo& thread_info = thread_infos_[i];
+    ObDynamicThreadInfo &thread_info = thread_infos_[i];
     if (i < thread_num) {
       if (!thread_info.is_alive_) {
         if (OB_SUCCESS != (tmp_ret = start_thread(thread_info))) {
@@ -192,17 +202,17 @@ int ObDynamicThreadPool::stop_all_threads()
 
   COMMON_LOG(INFO, "start stop all thread", KP(this));
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_THREAD_NUM; ++i) {
-    ObDynamicThreadInfo& thread_info = thread_infos_[i];
+    ObDynamicThreadInfo &thread_info = thread_infos_[i];
     thread_info.is_stop_ = true;
   }
   task_thread_cond_.broadcast();
 
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_THREAD_NUM; ++i) {
-    ObDynamicThreadInfo& thread_info = thread_infos_[i];
+    ObDynamicThreadInfo &thread_info = thread_infos_[i];
     if (thread_info.is_alive_) {
       if (OB_SUCCESS != (tmp_ret = stop_thread(thread_info))) {
         COMMON_LOG(WARN, "failed to start thread", K(tmp_ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        ret = OB_SUCC(ret)? tmp_ret : ret;
       }
     }
   }
@@ -213,7 +223,7 @@ int ObDynamicThreadPool::stop_all_threads()
   return ret;
 }
 
-int ObDynamicThreadPool::start_thread(ObDynamicThreadInfo& thread_info)
+int ObDynamicThreadPool::start_thread(ObDynamicThreadInfo &thread_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -243,7 +253,7 @@ int ObDynamicThreadPool::start_thread(ObDynamicThreadInfo& thread_info)
   return ret;
 }
 
-int ObDynamicThreadPool::stop_thread(ObDynamicThreadInfo& thread_info)
+int ObDynamicThreadPool::stop_thread(ObDynamicThreadInfo &thread_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -269,7 +279,7 @@ int ObDynamicThreadPool::stop_thread(ObDynamicThreadInfo& thread_info)
   return ret;
 }
 
-int ObDynamicThreadPool::pop_task(ObDynamicThreadTask*& task)
+int ObDynamicThreadPool::pop_task(ObDynamicThreadTask *&task)
 {
   int ret = OB_SUCCESS;
   task = NULL;
@@ -288,7 +298,7 @@ int ObDynamicThreadPool::pop_task(ObDynamicThreadTask*& task)
   return ret;
 }
 
-int ObDynamicThreadPool::add_task(ObDynamicThreadTask* task)
+int ObDynamicThreadPool::add_task(ObDynamicThreadTask *task)
 {
   int ret = OB_SUCCESS;
 
@@ -307,18 +317,16 @@ int ObDynamicThreadPool::add_task(ObDynamicThreadTask* task)
   return ret;
 }
 
-void* ObDynamicThreadPool::task_thread_func(void* data)
+void *ObDynamicThreadPool::task_thread_func(void *data)
 {
   int tmp_ret = OB_SUCCESS;
 
   if (NULL == data) {
     tmp_ret = OB_ERR_SYS;
-    COMMON_LOG(ERROR, "data must not null", K(tmp_ret), K(data));
+    COMMON_LOG_RET(ERROR, tmp_ret, "data must not null", K(tmp_ret), K(data));
   } else {
-    ObDynamicThreadInfo* thread_info = reinterpret_cast<ObDynamicThreadInfo*>(data);
-    ObDynamicThreadTask* task = NULL;
-    void* buf = reinterpret_cast<void*>(lib::get_default_runtime_context());
-    new (buf) lib::ObRuntimeContext();
+    ObDynamicThreadInfo *thread_info = reinterpret_cast<ObDynamicThreadInfo *>(data);
+    ObDynamicThreadTask *task = NULL;
 
     while (!thread_info->is_stop_) {
       task = NULL;
@@ -329,10 +337,10 @@ void* ObDynamicThreadPool::task_thread_func(void* data)
           } else if (OB_IN_STOP_STATE == tmp_ret) {
             break;
           } else {
-            COMMON_LOG(WARN, "failed to pop task", K(tmp_ret));
+            COMMON_LOG_RET(WARN, tmp_ret, "failed to pop task", K(tmp_ret));
           }
         } else if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
-          COMMON_LOG(WARN, "failed to process task", K(tmp_ret), K(*thread_info));
+          COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
         }
       }
     }
@@ -341,5 +349,5 @@ void* ObDynamicThreadPool::task_thread_func(void* data)
   return NULL;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

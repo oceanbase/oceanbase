@@ -18,16 +18,20 @@
 #include "common/ob_common_utility.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/utility/utility.h"
+#include "lib/net/ob_net_util.h"
 #include "common/ob_record_header.h"
 #include "common/ob_zone.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema.h"
+#include "share/unit/ob_unit_resource.h"     // ObUnitResource
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+namespace oceanbase
+{
+namespace common
+{
 
-namespace oceanbase {
-namespace common {
 int64_t get_cpu_count()
 {
   int64_t cpu_cnt = GCONF.cpu_count;
@@ -36,19 +40,22 @@ int64_t get_cpu_count()
 
 using namespace share;
 
-ObServerConfig::ObServerConfig() : disk_actual_space_(0), self_addr_(), system_config_(NULL)
-{}
+ObServerConfig::ObServerConfig()
+    : disk_actual_space_(0), self_addr_(), system_config_(NULL)
+{
+}
 
 ObServerConfig::~ObServerConfig()
-{}
+{
+}
 
-ObServerConfig& ObServerConfig::get_instance()
+ObServerConfig &ObServerConfig::get_instance()
 {
   static ObServerConfig config;
   return config;
 }
 
-int ObServerConfig::init(const ObSystemConfig& config)
+int ObServerConfig::init(const ObSystemConfig &config)
 {
   int ret = OB_SUCCESS;
   system_config_ = &config;
@@ -58,11 +65,6 @@ int ObServerConfig::init(const ObSystemConfig& config)
   return ret;
 }
 
-bool ObServerConfig::enable_static_engine_for_query() const
-{
-  return _enable_static_typing_engine && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000;
-}
-
 bool ObServerConfig::in_upgrade_mode() const
 {
   bool bret = false;
@@ -70,82 +72,15 @@ bool ObServerConfig::in_upgrade_mode() const
     bret = true;
   } else {
     obrpc::ObUpgradeStage stage = GCTX.get_upgrade_stage();
-    bret = (stage >= obrpc::OB_UPGRADE_STAGE_PREUPGRADE && stage <= obrpc::OB_UPGRADE_STAGE_POSTUPGRADE);
+    bret = (stage >= obrpc::OB_UPGRADE_STAGE_PREUPGRADE
+            && stage <= obrpc::OB_UPGRADE_STAGE_POSTUPGRADE);
   }
   return bret;
 }
 
-int64_t ObServerConfig::get_server_memory_limit()
+bool ObServerConfig::in_dbupgrade_stage() const
 {
-  int64_t memory = 0;
-  if (0 != memory_limit.get()) {
-    memory = memory_limit;
-  } else {
-    memory = get_phy_mem_size() * memory_limit_percentage / 100;
-  }
-  return memory;
-}
-
-int64_t ObServerConfig::get_server_memory_avail()
-{
-  return get_server_memory_limit() - get_reserved_server_memory();
-}
-
-int64_t ObServerConfig::get_reserved_server_memory()
-{
-  return system_memory;
-}
-
-int64_t ObServerConfig::get_min_sys_tenant_memory()
-{
-  int64_t min_sys_tenant_memory =
-      std::min(static_cast<int64_t>(MIN_SYS_TENANT_MEM_FACTOR * static_cast<double>(get_server_memory_avail())),
-          DEFAULT_MIN_SYS_MEMORY);
-
-  return min_sys_tenant_memory;
-}
-
-int64_t ObServerConfig::get_max_sys_tenant_memory()
-{
-  int64_t max_sys_tenant_memory =
-      std::min(static_cast<int64_t>(MAX_SYS_TENANT_MEM_FACTOR * static_cast<double>(get_server_memory_avail())),
-          DEFAULT_MAX_SYS_MEMORY);
-
-  return max_sys_tenant_memory;
-}
-
-int64_t ObServerConfig::get_or_update_sql_audit_memory_limit()
-{
-  const int64_t OB_MAX_SQL_AUDIT_MEM_LIMIT_LENGTH = 64;
-  const int64_t memory_avail = get_server_memory_avail();            // memory for tenants
-  const int64_t current_limit = sql_audit_memory_limit.get_value();  // current using memory limit
-  if (memory_avail > 0) {
-    int64_t sql_audit_memory =
-        std::min(current_limit, static_cast<int64_t>(SQL_AUDIT_MEM_FACTOR * static_cast<double>(memory_avail)));
-    if (sql_audit_memory < sql_audit_memory_limit && sql_audit_memory > 0) {
-      char str[OB_MAX_SQL_AUDIT_MEM_LIMIT_LENGTH];
-      IGNORE_RETURN snprintf(str, OB_MAX_SQL_AUDIT_MEM_LIMIT_LENGTH, "%ldB", sql_audit_memory);
-      IGNORE_RETURN sql_audit_memory_limit.set_value(str);
-    }
-  } else {
-    LOG_ERROR("Got invalid avail memory", K(memory_avail));
-  }
-
-  return sql_audit_memory_limit;
-}
-
-int64_t ObServerConfig::get_log_archive_concurrency() const
-{
-  const int64_t max_thread_num = std::max(128L /*min thread num*/, get_cpu_num());
-  int64_t thread_num = GCONF.log_archive_concurrency;
-  return min(thread_num, max_thread_num);
-}
-
-int64_t ObServerConfig::get_log_restore_concurrency() const
-{
-  const int64_t max_thread_num = std::max(128L /*min thread num*/, get_cpu_num());
-  int64_t thread_num = GCONF.log_restore_concurrency;
-  return min(thread_num, max_thread_num);
+  return obrpc::OB_UPGRADE_STAGE_DBUPGRADE == GCTX.get_upgrade_stage();
 }
 
 int ObServerConfig::read_config()
@@ -154,7 +89,6 @@ int ObServerConfig::read_config()
   int temp_ret = OB_SUCCESS;
   ObSystemConfigKey key;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-
   if (OB_UNLIKELY(true != self_addr_.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
   } else {
@@ -176,16 +110,6 @@ int ObServerConfig::read_config()
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_SUCCESS != (temp_ret = check_and_refresh_major_compact_trigger())) {
-        OB_LOG(WARN, "Failed to check and refresh major_compact_trigger", K(temp_ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_SUCCESS != (temp_ret = check_backup_manager_parameter())) {
-        OB_LOG(WARN, "Failed to check backup manager parameter", K(temp_ret));
-      }
-    }
   }
   return ret;
 }
@@ -200,7 +124,8 @@ int ObServerConfig::check_all() const
       OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
     } else if (!it->second->check()) {
       int temp_ret = OB_INVALID_CONFIG;
-      OB_LOG(WARN, "Configure setting invalid", "name", it->first.str(), "value", it->second->str(), K(temp_ret));
+      OB_LOG_RET(WARN, temp_ret, "Configure setting invalid",
+             "name", it->first.str(), "value", it->second->str(), K(temp_ret));
     } else {
       // do nothing
     }
@@ -220,40 +145,13 @@ int ObServerConfig::strict_check_special() const
   return ret;
 }
 
-int ObServerConfig::check_and_refresh_major_compact_trigger()
-{
-  int ret = OB_SUCCESS;
-
-  if (minor_freeze_times != major_compact_trigger) {
-    OB_LOG(INFO,
-        "Invalid major_compact_trigger value, temporarily keep it same with minor_freeze_times",
-        K(minor_freeze_times.get_value()),
-        K(major_compact_trigger.get_value()));
-    major_compact_trigger = minor_freeze_times.get_value();
-    major_compact_trigger.set_version(minor_freeze_times.version());
-  }
-
-  return ret;
-}
-
-int ObServerConfig::check_backup_manager_parameter()
-{
-  int ret = OB_SUCCESS;
-  if (_auto_update_reserved_backup_timestamp && auto_delete_expired_backup) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(ERROR, "backup manager can not both update reserved backup timestamp and delete backup");
-  }
-  return ret;
-}
-
-
 void ObServerConfig::print() const
 {
   OB_LOG(INFO, "===================== *begin server config report * =====================");
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
-      OB_LOG(WARN, "config item is null", "name", it->first.str());
+      OB_LOG_RET(WARN, OB_ERROR, "config item is null", "name", it->first.str());
     } else {
       _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
     }
@@ -261,7 +159,7 @@ void ObServerConfig::print() const
   OB_LOG(INFO, "===================== *stop server config report* =======================");
 }
 
-int ObServerConfig::deserialize_with_compat(const char* buf, const int64_t data_len, int64_t& pos)
+int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (data_len - pos < MIN_LENGTH) {
@@ -278,8 +176,8 @@ int ObServerConfig::deserialize_with_compat(const char* buf, const int64_t data_
       /* try old version */
       pos = saved_pos;
       ObRecordHeader header;
-      const char* const p_header = buf + pos;
-      const char* const p_data = p_header + header.get_serialize_size();
+      const char *const p_header = buf + pos;
+      const char *const p_data = p_header + header.get_serialize_size();
       const int64_t pos_data = pos + header.get_serialize_size();
       if (OB_FAIL(header.deserialize(buf, data_len, pos))) {
         LOG_ERROR("deserialize header failed", K(ret));
@@ -290,7 +188,8 @@ int ObServerConfig::deserialize_with_compat(const char* buf, const int64_t data_
         LOG_ERROR("check magic number failed", K_(header.magic), K(ret));
       } else if (data_len - pos_data != header.data_zlength_) {
         ret = OB_INVALID_DATA;
-        LOG_ERROR("check data len failed", K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
+        LOG_ERROR("check data len failed",
+                  K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
       } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - pos_data))) {
         LOG_ERROR("check data checksum failed", K(ret));
       } else if (OB_FAIL(add_extra_config(buf + pos))) {
@@ -298,22 +197,81 @@ int ObServerConfig::deserialize_with_compat(const char* buf, const int64_t data_
       } else {
         pos += header.data_length_;
       }
-    }  // if
+    } // if
   }
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObServerConfig)
+ObServerMemoryConfig::ObServerMemoryConfig()
+  : memory_limit_(0), system_memory_(0)
+{}
+
+ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
+{
+  static ObServerMemoryConfig memory_config;
+  return memory_config;
+}
+
+int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
+{
+  int ret = OB_SUCCESS;
+  int64_t memory_limit = server_config.memory_limit;
+  if (0 == memory_limit) {
+    memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
+  }
+  int64_t system_memory = server_config.system_memory;
+  if (0 == system_memory) {
+    int64_t memory_limit_g = memory_limit >> 30;
+    if (memory_limit_g < 4) {
+      LOG_ERROR("memory_limit with unexpected value", K(memory_limit));
+    } else if (memory_limit_g <= 8) {
+      system_memory = 2LL << 30;
+    } else if (memory_limit_g <= 16) {
+      system_memory = 3LL << 30;
+    } else if (memory_limit_g <= 32) {
+      system_memory = 5LL << 30;
+    } else if (memory_limit_g <= 48) {
+      system_memory = 7LL << 30;
+    } else if (memory_limit_g <= 64) {
+      system_memory = 10LL << 30;
+    } else {
+      system_memory = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
+    }
+  }
+  if (memory_limit > system_memory) {
+    memory_limit_ = memory_limit;
+    system_memory_ = system_memory;
+    LOG_INFO("update memory_limit or system_memory success",
+              K(memory_limit_), K(system_memory_));
+  } else {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("update memory_limit or system_memory failed",
+              K(memory_limit), K(system_memory));
+  }
+  return ret;
+}
+
+void ObServerMemoryConfig::set_server_memory_limit(int64_t memory_limit)
+{
+  if (memory_limit > system_memory_) {
+    LOG_INFO("update memory_limit success", K(memory_limit), K(system_memory_));
+  } else {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "update memory_limit failed", K(memory_limit), K(system_memory_));
+  }
+}
+
+int ObServerConfig::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObRecordHeader header;
+  // 这里 header 的序列化方法用的是非变长序列化，不对数字做编码
   int64_t header_len = header.get_serialize_size();
   int64_t expect_data_len = get_serialize_size_() - header_len;
 
-  char* const p_header = buf + pos;
-  char* const p_data = p_header + header_len;
+  char *const p_header = buf + pos;
+  char *const p_data   = p_header + header_len;
   const int64_t data_pos = pos + header_len;
-  int64_t saved_header_pos = pos;
+  int64_t saved_header_pos     = pos;
   pos += header_len;
 
   // data first
@@ -326,12 +284,32 @@ OB_DEF_SERIALIZE(ObServerConfig)
     header.data_length_ = static_cast<int32_t>(pos - data_pos);
     header.data_zlength_ = header.data_length_;
     if (header.data_zlength_ != expect_data_len) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected data size", K_(header.data_zlength), K(expect_data_len));
+      LOG_WARN("unexpected data size", K_(header.data_zlength),
+                                          K(expect_data_len));
     } else {
       header.data_checksum_ = ob_crc64(p_data, pos - data_pos);
       header.set_header_checksum();
       ret = header.serialize(buf, buf_len, saved_header_pos);
+    }
+  }
+  return ret;
+}
+
+int ObServerConfig::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+      LOG_WARN("ObServerConfig serialize fail", K(ret));
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
     }
   }
   return ret;
@@ -345,8 +323,8 @@ OB_DEF_DESERIALIZE(ObServerConfig)
     // header
     ObRecordHeader header;
     int64_t header_len = header.get_serialize_size();
-    const char* const p_header = buf + pos;
-    const char* const p_data = p_header + header_len;
+    const char *const p_header = buf + pos;
+    const char *const p_data = p_header + header_len;
     const int64_t data_pos = pos + header_len;
     if (OB_FAIL(header.deserialize(buf, data_len, pos))) {
       LOG_ERROR("deserialize header failed", K(ret));
@@ -357,12 +335,14 @@ OB_DEF_DESERIALIZE(ObServerConfig)
       LOG_ERROR("check magic number failed", K_(header.magic), K(ret));
     } else if (data_len - data_pos != header.data_zlength_) {
       ret = OB_INVALID_DATA;
-      LOG_ERROR("check data len failed", K(data_len), K(data_pos), K_(header.data_zlength), K(ret));
-    } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - data_pos))) {
+      LOG_ERROR("check data len failed",
+                K(data_len), K(data_pos), K_(header.data_zlength), K(ret));
+    } else if (OB_FAIL(header.check_payload_checksum(p_data,
+                                                     data_len - data_pos))) {
       LOG_ERROR("check data checksum failed", K(ret));
     } else if (OB_FAIL(ObCommonConfig::deserialize(buf, data_len, pos))) {
       LOG_ERROR("deserialize cluster config failed", K(ret));
-    } else if (OB_FAIL(OTC_MGR.deserialize(buf, data_len, pos))) {
+    } else if (OB_FAIL(OTC_MGR.deserialize(buf, data_len, pos))){
       LOG_ERROR("deserialize tenant config failed", K(ret));
     }
   }
@@ -382,13 +362,18 @@ OB_DEF_SERIALIZE_SIZE(ObServerConfig)
   return len;
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+namespace obrpc {
+bool enable_pkt_nio() {
+  return GCONF._enable_pkt_nio && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+}
+}
+} // end of namespace oceanbase
 
-namespace easy {
+namespace easy
+{
 int64_t get_easy_per_dest_memory_limit()
 {
-  return GCONF.__easy_memory_limit;  // no global memory limit for easy, just use GCONF.__easy_memory_limit as per
-                                     // server dest limit
+  return GCONF.__easy_memory_limit; // no global memory limit for easy, just use GCONF.__easy_memory_limit as per server dest limit
 }
-};  // namespace easy
+};

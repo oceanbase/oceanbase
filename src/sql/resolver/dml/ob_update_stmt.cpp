@@ -14,194 +14,85 @@
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace oceanbase::common;
 
 ObUpdateStmt::ObUpdateStmt()
-    : ObDelUpdStmt(stmt::T_UPDATE), tables_assignments_(), low_priority_(false), update_set_(false)
-{}
+  : ObDelUpdStmt(stmt::T_UPDATE),
+    table_info_()
+{
+}
 
 ObUpdateStmt::~ObUpdateStmt()
-{}
+{
+}
 
-int ObUpdateStmt::deep_copy_stmt_struct(
-    ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObDMLStmt& input)
+int ObUpdateStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
+                                        ObRawExprCopier &expr_copier,
+                                        const ObDMLStmt &input)
 {
   int ret = OB_SUCCESS;
-  const ObUpdateStmt& other = static_cast<const ObUpdateStmt&>(input);
+  const ObUpdateStmt &other = static_cast<const ObUpdateStmt &>(input);
   if (OB_UNLIKELY(get_stmt_type() != input.get_stmt_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt type does not match", K(ret));
-  } else if (OB_FAIL(ObDelUpdStmt::deep_copy_stmt_struct(stmt_factory, expr_factory, input))) {
+  } else if (OB_FAIL(ObDelUpdStmt::deep_copy_stmt_struct(allocator,
+                                                         expr_copier,
+                                                         input))) {
     LOG_WARN("failed to deep copy stmt struct", K(ret));
-  } else if (OB_FAIL(tables_assignments_.prepare_allocate(other.tables_assignments_.count()))) {
-    LOG_WARN("failed to prepare allocate table assignment array", K(ret));
-  } else {
-    low_priority_ = other.low_priority_;
-    update_set_ = other.update_set_;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    if (OB_FAIL(tables_assignments_.at(i).deep_copy(expr_factory, other.tables_assignments_.at(i)))) {
-      LOG_WARN("failed to deep copy table assignment", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(refill_global_index_dml_info(expr_factory, other.use_static_typing_engine_))) {
-      LOG_WARN("fail refill index assignment info", K(ret));
-    }
-  }
+  } else if (OB_FAIL(deep_copy_stmt_objects<ObUpdateTableInfo>(allocator,
+                                                               expr_copier,
+                                                               other.table_info_,
+                                                               table_info_))) {
+    LOG_WARN("failed do deep copy table info", K(ret));
+  } else { /*do nothing*/ }
+
   return ret;
 }
 
-int ObUpdateStmt::assign(const ObUpdateStmt& other)
+int ObUpdateStmt::assign(const ObUpdateStmt &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObDelUpdStmt::assign(other))) {
     LOG_WARN("failed to copy stmt", K(ret));
-  } else if (OB_FAIL(tables_assignments_.assign(other.tables_assignments_))) {
-    LOG_WARN("failed to assign tables assignments", K(ret));
-  } else {
-    low_priority_ = other.low_priority_;
-    update_set_ = other.update_set_;
-  }
+  } else if (OB_FAIL(table_info_.assign(other.table_info_))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObUpdateStmt::update_base_tid_cid()
+int ObUpdateStmt::check_table_be_modified(uint64_t ref_table_id, bool& found) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::update_base_tid_cid())) {
-    LOG_WARN("failed to update base tid and cid", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    ObTableAssignment& table_assign = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
-      ObColumnRefRawExpr* col = table_assign.assignments_.at(j).column_expr_;
-      ColumnItem* col_item = NULL;
-      if (OB_ISNULL(col_item = get_column_item_by_id(col->get_table_id(), col->get_column_id()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get column item", K(ret), K(col_item));
-      } else {
-        table_assign.assignments_.at(j).base_table_id_ = col_item->base_tid_;
-        table_assign.assignments_.at(j).base_column_id_ = col_item->base_cid_;
-      }
+  found = false;
+  for (int64_t i = 0; !found && i < table_info_.count(); i++) {
+    if (NULL != table_info_.at(i) && table_info_.at(i)->ref_table_id_ == ref_table_id) {
+      found = true;
     }
   }
-  return ret;
+  return OB_SUCCESS;
 }
 
-int ObUpdateStmt::replace_inner_stmt_expr(
-    const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs)
+int ObUpdateStmt::get_assign_values(ObIArray<ObRawExpr *> &exprs,
+                                    bool with_vector_assgin) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); i++) {
-      if (OB_FAIL(replace_table_assign_exprs(other_exprs, new_exprs, tables_assignments_.at(i).assignments_))) {
-        LOG_WARN("failed to replace table assign exprs", K(ret));
-      } else { /*do nothing*/
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::inner_get_relation_exprs(RelExprCheckerBase& expr_checker)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    ObTableAssignment& table_assign = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
-      ObAssignment& assign = table_assign.assignments_.at(j);
-      ObRawExpr*& expr = assign.expr_;
-      ObRawExpr*& column_expr = reinterpret_cast<ObRawExpr*&>(assign.column_expr_);
-      if (OB_FAIL(expr_checker.add_expr(expr))) {
-        LOG_WARN("add assign expr to relation exprs failed", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(column_expr))) {
-        LOG_WARN("add assign expr to relation exprs failed", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-      LOG_WARN("get delup stmt relation exprs failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::get_tables_assignments_exprs(ObIArray<ObRawExpr*>& exprs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    const ObTableAssignment& table_assignment = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < table_assignment.assignments_.count(); ++j) {
-      const ObAssignment& assignment = table_assignment.assignments_.at(j);
-      if (OB_FAIL(exprs.push_back(assignment.expr_))) {
-        LOG_WARN("failed to push back exprs", K(ret));
-      } else { /*do nothing*/
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::replace_expr_in_stmt(ObRawExpr* from, ObRawExpr* to)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    ObTableAssignment& table_assign = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
-      ObAssignment& assign = table_assign.assignments_.at(j);
-      if (assign.expr_ == from) {
-        assign.expr_ = to;
-      }
-    }
-  }
-  // replace expr in IndexDMLInfo
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns_.count(); i++) {
-    ObIArray<IndexDMLInfo>& index_dml_infos = all_table_columns_.at(i).index_dml_infos_;
-    for (int64_t j = 0; OB_SUCC(ret) && j < index_dml_infos.count(); j++) {
-      IndexDMLInfo& index_dml_info = index_dml_infos.at(j);
-      ObAssignments& assignments = index_dml_info.assignments_;
-      for (int64_t j = 0; OB_SUCC(ret) && j < assignments.count(); ++j) {
-        ObAssignment& assign = assignments.at(j);
-        if (assign.expr_ == from) {
-          assign.expr_ = to;
-        }
-      }
-      auto& column_convert_exprs = index_dml_info.column_convert_exprs_;
-      for (int64_t j = 0; OB_SUCC(ret) && j < column_convert_exprs.count(); ++j) {
-        if (column_convert_exprs.at(j) == from) {
-          column_convert_exprs.at(j) = to;
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(ObDelUpdStmt::replace_expr_in_stmt(from, to))) {
-    LOG_WARN("replace expr in stmt failed", K(ret));
-  }
-  return ret;
-}
-
-int ObUpdateStmt::has_special_expr(const ObExprInfoFlag flag, bool& has) const
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(ObDMLStmt::has_special_expr(flag, has))) {
-    LOG_WARN("failed to check rownum in stmt", K(ret));
-  } else if (!has) {
-    for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_tables_assignments().count(); ++i) {
-      const ObTableAssignment& table_assignment = get_tables_assignments().at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && !has && j < table_assignment.assignments_.count(); ++j) {
-        ObRawExpr* expr = table_assignment.assignments_.at(j).expr_;
-        if (OB_ISNULL(expr)) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    if (OB_ISNULL(table_info_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_info_.at(i)->assignments_.count(); ++j) {
+        const ObAssignment &assign = table_info_.at(i)->assignments_.at(j);
+        if (OB_ISNULL(assign.expr_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Update assignment expr is null", K(ret));
-        } else if (expr->has_flag(flag)) {
-          has = true;
+          LOG_WARN("assgin expr is null", K(ret));
+        } else if (assign.expr_->has_flag(CNT_ALIAS) && !with_vector_assgin) {
+          /* do nothing */
+        } else if (OB_FAIL(exprs.push_back(assign.expr_))) {
+          LOG_WARN("failed to push back assign value expr", K(ret));
         }
       }
     }
@@ -209,25 +100,8 @@ int ObUpdateStmt::has_special_expr(const ObExprInfoFlag flag, bool& has) const
   return ret;
 }
 
-int ObUpdateStmt::get_assign_values(ObIArray<ObRawExpr*>& exprs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-    const ObTableAssignment& table_assign = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
-      const ObAssignment& assign = table_assign.assignments_.at(j);
-      if (OB_ISNULL(assign.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("assgin expr is null", K(ret));
-      } else if (OB_FAIL(exprs.push_back(assign.expr_))) {
-        LOG_WARN("failed to push back assign value expr", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::get_vector_assign_values(ObQueryRefRawExpr* query_ref, ObIArray<ObRawExpr*>& assign_values) const
+int ObUpdateStmt::get_vector_assign_values(ObQueryRefRawExpr *query_ref,
+                                           ObIArray<ObRawExpr *> &assign_values) const
 {
   int ret = OB_SUCCESS;
   int64_t vector_size = 0;
@@ -236,146 +110,172 @@ int ObUpdateStmt::get_vector_assign_values(ObQueryRefRawExpr* query_ref, ObIArra
     LOG_WARN("query ref expr is null", K(ret), K(query_ref));
   } else {
     vector_size = query_ref->get_ref_stmt()->get_select_item_size();
-  }
-  if (is_update_set() && vector_size > 1) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables_assignments_.count(); ++i) {
-      const ObTableAssignment& table_assign = tables_assignments_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
-        const ObAssignment& assign = table_assign.assignments_.at(j);
-        ObAliasRefRawExpr* alias = NULL;
-        if (OB_FAIL(ObRawExprUtils::find_alias_expr(assign.expr_, alias))) {
-          LOG_WARN("failed to find alias expr", K(ret));
-        } else if (alias == NULL) {
-          // do nothing
-        } else if (alias->get_param_expr(0) == query_ref) {
-          int64_t project_index = alias->get_project_index();
-          if (project_index < 0 || project_index >= vector_size) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("project index is invalid", K(ret));
-          } else if (assign_values.empty() && OB_FAIL(assign_values.prepare_allocate(vector_size))) {
-            LOG_WARN("failed to prepare allocate vector array", K(ret));
-          } else {
-            assign_values.at(project_index) = alias;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::check_assign()
-{
-  int ret = OB_SUCCESS;
-  bool has_vector_assign = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !has_vector_assign && i < tables_assignments_.count(); ++i) {
-    const ObTableAssignment& table_assign = tables_assignments_.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && !has_vector_assign && j < table_assign.assignments_.count(); ++j) {
-      const ObAssignment& assign = table_assign.assignments_.at(j);
-      ObAliasRefRawExpr* alias = NULL;
-      if (OB_FAIL(ObRawExprUtils::find_alias_expr(assign.expr_, alias))) {
-        LOG_WARN("failed to find alias expr", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+      if (OB_ISNULL(table_info_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
       } else {
-        has_vector_assign = (alias != NULL);
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_info_.at(i)->assignments_.count(); ++j) {
+          const ObAssignment &assign = table_info_.at(i)->assignments_.at(j);
+          ObAliasRefRawExpr *alias = NULL;
+          if (OB_FAIL(ObRawExprUtils::find_alias_expr(assign.expr_, alias))) {
+            LOG_WARN("failed to find alias expr", K(ret));
+          } else if (alias == NULL) {
+            // do nothing
+          } else if (alias->get_param_expr(0) == query_ref) {
+            int64_t project_index = alias->get_project_index();
+            if (project_index < 0 || project_index >= vector_size) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("project index is invalid", K(ret));
+            } else if (assign_values.empty() &&
+                       OB_FAIL(assign_values.prepare_allocate(vector_size))) {
+              LOG_WARN("failed to prepare allocate vector array", K(ret));
+            } else {
+              assign_values.at(project_index) = alias;
+            }
+          }
+        }
       }
     }
-  }
-  if (OB_SUCC(ret) && !has_vector_assign) {
-    set_update_set(false);
   }
   return ret;
 }
 
-const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
-    ObIAllocator& allocator, int64_t table_idx, int64_t index_idx) const
+int ObUpdateStmt::part_key_is_updated(bool &is_updated) const
 {
   int ret = OB_SUCCESS;
-  ObTablesAssignments* tables_assignments = nullptr;  // Multi-table
-  ObTableAssignment* table_assignments = nullptr;     // for one table multi assignment
-  void* buf1 = nullptr;
-  void* buf2 = nullptr;
-  if (table_idx < 0 || table_idx >= tables_assignments_.count()) {
-    // no need set ret
-    LOG_WARN("invalid table idx", K(table_idx), K(index_idx));
-  } else if (index_idx < 0 || index_idx >= all_table_columns_.at(table_idx).index_dml_infos_.count()) {
-    // no need set ret
-    LOG_WARN("invalid index idx", K(table_idx), K(index_idx));
-  } else if (nullptr == (buf1 = allocator.alloc(sizeof(ObTablesAssignments)))) {
-    // no need set ret
-    LOG_WARN("no memory", KP(buf1));
-  } else if (nullptr == (buf2 = allocator.alloc(sizeof(ObTableAssignment)))) {
-    // no need set ret
-    LOG_WARN("no memory", KP(buf2));
+  is_updated = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); i++) {
+    if (OB_ISNULL(table_info_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!table_info_.at(i)->is_link_table_ &&
+               OB_FAIL(check_part_key_is_updated(table_info_.at(i)->assignments_,
+                                                 is_updated))) {
+      LOG_WARN("failed to check partition key is updated", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return  ret;
+}
+
+int ObUpdateStmt::get_assignments_exprs(ObIArray<ObRawExpr*> &exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObUpdateTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < table_info->assignments_.count(); ++j) {
+      if (OB_FAIL(exprs.push_back(table_info->assignments_.at(j).expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUpdateStmt::get_dml_table_infos(ObIArray<ObDmlTableInfo*>& dml_table_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(dml_table_info, table_info_))) {
+    LOG_WARN("failed to append table info", K(ret));
+  }
+  return ret;
+}
+
+int ObUpdateStmt::get_dml_table_infos(ObIArray<const ObDmlTableInfo*>& dml_table_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(dml_table_info, table_info_))) {
+    LOG_WARN("failed to append table info", K(ret));
+  }
+  return ret;
+}
+
+int ObUpdateStmt::get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObUpdateTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    } else if (OB_FAIL(append(view_check_exprs, table_info->view_check_exprs_))) {
+      LOG_WARN("failed to append view check exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int64_t ObUpdateStmt::get_instead_of_trigger_column_count() const
+{
+  const TableItem *table_item = NULL;
+  int64_t column_count = 0;
+  if (1 == table_info_.count() &&
+      NULL != table_info_.at(0) &&
+      NULL != (table_item = get_table_item_by_id(table_info_.at(0)->table_id_)) &&
+      table_item->is_view_table_ &&
+      NULL != table_item->ref_query_) {
+    column_count = table_item->ref_query_->get_select_item_size();
+  }
+  return column_count;
+}
+
+int ObUpdateStmt::remove_table_item_dml_info(const TableItem* table)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = 0;
+  if (OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else {
-    tables_assignments = new (buf1) ObTablesAssignments();
-    table_assignments = new (buf2) ObTableAssignment();
-    const ObTableAssignment& assignments = tables_assignments_.at(table_idx);
-    const IndexDMLInfo& dml_index_info = all_table_columns_.at(table_idx).index_dml_infos_.at(index_idx);
-    if (OB_FAIL(table_assignments->assignments_.assign(dml_index_info.assignments_))) {
-      LOG_WARN("fail copy array", K(ret));
-    } else {
-      bool is_update_part_key = false;
-      bool is_update_unique_key = false;
-      if (dml_index_info.all_part_num_ > 1) {  // Only partition tables have part_key
-        for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
-          uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
-          for (int j = 0; j < dml_index_info.part_key_ids_.count(); ++j) {
-            if (dml_index_info.part_key_ids_.at(j) == col_id) {
-              is_update_part_key = true;
-              break;
-            }
-          }
-        }
-      }
-
-      if (share::schema::ObSimpleTableSchemaV2::is_global_unique_index_table(dml_index_info.index_type_)) {
-        for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
-          uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
-          for (int j = 0; j < dml_index_info.primary_key_ids_.count(); ++j) {
-            if (dml_index_info.primary_key_ids_.at(j) == col_id) {
-              is_update_unique_key = true;
-              break;
-            }
-          }
-        }
-      }
-
-      // [pdml]: 对于每个索引表单独计算，不应该继承主表的属性
-      table_assignments->is_update_part_key_ = is_update_part_key;
-      table_assignments->is_update_unique_key_ = is_update_unique_key;
-      table_assignments->table_id_ = dml_index_info.table_id_;
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(tables_assignments->push_back(*table_assignments))) {
-        LOG_WARN("fail save table_assignments to array", K(ret));
+    for (; idx < table_info_.count(); ++idx) {
+      if (OB_ISNULL(table_info_.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (table_info_.at(idx)->table_id_ == table->table_id_) {
+        break;
       }
     }
-  }
-  if (OB_FAIL(ret)) {
-    tables_assignments = nullptr;
-  }
-  return tables_assignments;
-}
-
-int ObUpdateStmt::refill_global_index_dml_info(ObRawExprFactory& expr_factory, bool use_static_typing_engine)
-{
-  int ret = OB_SUCCESS;
-  const ObTablesAssignments& table_assign = get_tables_assignments();
-  ObIArray<TableColumns>& all_table_columns = get_all_table_columns();
-  CK(table_assign.count() == all_table_columns.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_assign.count(); ++i) {
-    const ObAssignments& assignments = table_assign.at(i).assignments_;
-    ObIArray<IndexDMLInfo>& index_infos = all_table_columns.at(i).index_dml_infos_;
-    for (int64_t j = 0; OB_SUCC(ret) && j < index_infos.count(); ++j) {
-      IndexDMLInfo& index_info = index_infos.at(j);
-      if (OB_FAIL(index_info.init_assignment_info(assignments, expr_factory, use_static_typing_engine))) {
-        LOG_WARN("init index assignment info failed", K(i), K(ret));
-      }
+    if (idx >= table_info_.count()) {
+      // not find, do nothing
+    } else if (table_info_.count() == 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can not remove all dml table", K(ret));
+    } else if (OB_FAIL(table_info_.remove(idx))) {
+      LOG_WARN("failed to remove dml table info", K(ret));
     }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObUpdateStmt::remove_invalid_assignment()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObUpdateTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      for (int64_t j = table_info->assignments_.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
+        ObAssignment& assign = table_info->assignments_.at(j);
+        if (OB_ISNULL(assign.column_expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (!assign.column_expr_->is_const_expr()) {
+          // do nothing
+        } else if (OB_FAIL(table_info->assignments_.remove(j))) {
+          LOG_WARN("failed to remove assignment", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+} //namespace sql
+} //namespace oceanbase

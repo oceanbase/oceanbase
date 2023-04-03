@@ -1,12 +1,16 @@
 
 # charset objects used for proxy_parser
 set(ob_sql_parser_charset_object_list
-  ob_ctype_bin.c
-  ob_ctype_mb.c
-  ob_ctype_simple.c
-  ob_ctype_utf8.c
-  ob_ctype.c
-  ob_dtoa.c
+  ob_ctype_bin_os.cc
+  ob_ctype_gb18030_os.cc
+  ob_ctype_gbk_os.cc
+  ob_ctype_latin1_os.cc
+  ob_ctype_mb_os.cc
+  ob_ctype_simple_os.cc
+  ob_ctype_os.cc
+  ob_ctype_utf16_os.cc
+  ob_ctype_utf8_os.cc
+  ob_dtoa_os.cc
 )
 
 list(TRANSFORM ob_sql_parser_charset_object_list
@@ -14,6 +18,7 @@ list(TRANSFORM ob_sql_parser_charset_object_list
 
 # hash objects used for proxy parser
 set(ob_sql_parser_hash_object_list
+  murmur_hash.h
   murmur_hash.cpp
 )
 
@@ -22,43 +27,46 @@ list(TRANSFORM ob_sql_parser_hash_object_list
 
 add_library(ob_sql_parser_base INTERFACE)
 target_include_directories(ob_sql_parser_base INTERFACE
-  ${PROJECT_SOURCE_DIR}/deps/oblib/src/common/sql_mode/)
+  ${PROJECT_SOURCE_DIR}/deps/oblib/src/common/sql_mode/
+  ${PROJECT_SOURCE_DIR}/src/objit/include/objit/common)
 
 # parser objects for proxy parser
 set(ob_inner_sql_parser_object_list
   non_reserved_keywords_mysql_mode.c
+  ob_item_type_str.h
   ob_non_reserved_keywords.c
+  ob_non_reserved_keywords.h
   ob_sql_parser.cpp
+  ob_sql_parser.h
+  parse_define.h
   parse_malloc.cpp
+  parse_malloc.h
   parse_node.c
+  parse_node.h
   parse_node_hash.cpp
+  parse_node_hash.h
+  ob_char_type.h
+  ob_fast_parser.h
+  ob_fast_parser.cpp
   sql_parser_base.c
+  sql_parser_base.h
+  sql_parser_base.h
   sql_parser_mysql_mode_lex.c
+  sql_parser_mysql_mode_lex.h
   sql_parser_mysql_mode_tab.c
+  sql_parser_mysql_mode_tab.h
   parser_utility.cpp
+  parser_utility.h
   type_name.c
 )
 
 # parser objects for server parser
 set(ob_extra_sql_parser_object_list
   ob_parser.cpp
+  ob_parser.h
+  ob_parser_utils.h
   parser_proxy_func.cpp
-)
-
-ob_set_subtarget(inner_sql_parser
-  ${ob_inner_sql_parser_object_list}
-)
-
-ob_set_subtarget(sql_parser_charset
-  ${ob_sql_parser_charset_object_list}
-)
-
-ob_set_subtarget(sql_parser_hash
-  ${ob_sql_parser_hash_object_list}
-)
-
-ob_set_subtarget(extra_sql_parser
-  ${ob_extra_sql_parser_object_list}
+  parser_proxy_func.h
 )
 
 # ob_sql_proxy_parser_objects is the static library for proxy, it does not link against observer
@@ -76,10 +84,13 @@ add_library(ob_sql_server_parser_objects OBJECT
 target_link_libraries(ob_sql_proxy_parser_objects PUBLIC ob_base ob_sql_parser_base)
 target_link_libraries(ob_sql_server_parser_objects PUBLIC ob_base)
 
-target_compile_definitions(ob_sql_proxy_parser_objects PUBLIC SQL_PARSER_COMPILATION)
+if (WITH_COVERAGE)
+  # 排除少量sql解析文件，不参与coverage编译，clang针对于特殊语法文件会core
+  config_remove_coverage_flag(ob_sql_proxy_parser_objects)
+  config_remove_coverage_flag(ob_sql_server_parser_objects)
+endif()
 
-disable_pch(ob_sql_server_parser_objects)
-disable_pch(ob_sql_proxy_parser_objects)
+target_compile_definitions(ob_sql_proxy_parser_objects PUBLIC SQL_PARSER_COMPILATION)
 
 add_library(ob_sql_proxy_parser_static
   STATIC

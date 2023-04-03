@@ -1,0 +1,43 @@
+result_format: 4
+
+
+
+set @@ob_enable_plan_cache = 0;
+
+select sys_privilege_check('table_acc', effective_tenant_id(), 'oceanbase', '__all_user');
++------------------------------------------------------------------------------------+
+| sys_privilege_check('table_acc', effective_tenant_id(), 'oceanbase', '__all_user') |
++------------------------------------------------------------------------------------+
+|                                                                                  0 |
++------------------------------------------------------------------------------------+
+select sys_privilege_check('db_acc', effective_tenant_id(), 'oceanbase_', '__all_user_');
++-----------------------------------------------------------------------------------+
+| sys_privilege_check('db_acc', effective_tenant_id(), 'oceanbase_', '__all_user_') |
++-----------------------------------------------------------------------------------+
+|                                                                                 0 |
++-----------------------------------------------------------------------------------+
+
+drop database if exists espcndb;
+create database espcndb;
+
+create user espcnouser;
+grant all on test.* to espcnouser;
+
+
+select sys_privilege_check('db_acc', effective_tenant_id(), 'test', 't');
++-------------------------------------------------------------------+
+| sys_privilege_check('db_acc', effective_tenant_id(), 'test', 't') |
++-------------------------------------------------------------------+
+|                                                                 0 |
++-------------------------------------------------------------------+
+select sys_privilege_check('db_acc', effective_tenant_id(), 'espcndb', 't');
++----------------------------------------------------------------------+
+| sys_privilege_check('db_acc', effective_tenant_id(), 'espcndb', 't') |
++----------------------------------------------------------------------+
+|                                                                   -1 |
++----------------------------------------------------------------------+
+
+drop user espcnouser;
+drop database espcnouser;
+ERROR HY000: Can't drop database 'espcnouser'; database doesn't exist
+

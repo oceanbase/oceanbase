@@ -18,15 +18,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
-ObGrantStmt::ObGrantStmt(ObIAllocator* name_pool)
+namespace oceanbase
+{
+namespace sql
+{
+ObGrantStmt::ObGrantStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_GRANT),
       priv_set_(0),
       grant_level_(OB_PRIV_INVALID_LEVEL),
       database_(),
       table_(),
       tenant_id_(OB_INVALID_ID),
+      masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
       user_name_set_(),
@@ -41,7 +44,8 @@ ObGrantStmt::ObGrantStmt(ObIAllocator* name_pool)
       upd_col_ids_(),
       ref_col_ids_(),
       ref_query_(NULL)
-{}
+{
+}
 
 ObGrantStmt::ObGrantStmt()
     : ObDDLStmt(NULL, stmt::T_GRANT),
@@ -50,6 +54,7 @@ ObGrantStmt::ObGrantStmt()
       database_(),
       table_(),
       tenant_id_(OB_INVALID_ID),
+      masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
       user_name_set_(),
@@ -64,13 +69,17 @@ ObGrantStmt::ObGrantStmt()
       upd_col_ids_(),
       ref_col_ids_(),
       ref_query_(NULL)
-{}
+{
+}
 
 ObGrantStmt::~ObGrantStmt()
-{}
+{
+}
 
-int ObGrantStmt::add_user(const common::ObString& user_name, const common::ObString& host_name,
-    const common::ObString& pwd, const common::ObString& need_enc)
+int ObGrantStmt::add_user(const common::ObString &user_name,
+                          const common::ObString &host_name,
+                          const common::ObString &pwd,
+                          const common::ObString &need_enc)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(users_.add_string(user_name))) {
@@ -82,12 +91,12 @@ int ObGrantStmt::add_user(const common::ObString& user_name, const common::ObStr
   } else if (OB_FAIL(users_.add_string(need_enc))) {
     LOG_WARN("failed to add need enc", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int ObGrantStmt::add_role(const common::ObString& role)
+int ObGrantStmt::add_role(const common::ObString &role)
 {
   int ret = OB_SUCCESS;
   if (OB_HASH_EXIST == role_name_set_.exist_refactored(role)) {
@@ -107,7 +116,8 @@ int ObGrantStmt::add_role(const common::ObString& role)
 // Pust the first user_name and host_name into role[0] and role[1]
 // And the rest of user_names and host_names shall be saved in remain_roles
 // The remain_roles is used to keep compatibility with previouse logic
-int ObGrantStmt::add_user(const common::ObString& user_name, const common::ObString& host_name)
+int ObGrantStmt::add_user(const common::ObString &user_name,
+                          const common::ObString &host_name)
 {
   int ret = OB_SUCCESS;
   if (OB_HASH_EXIST == user_name_set_.exist_refactored(user_name)) {
@@ -148,37 +158,37 @@ void ObGrantStmt::set_priv_set(ObPrivSet priv_set)
   priv_set_ = priv_set;
 }
 
-int ObGrantStmt::set_database_name(const ObString& database)
+int ObGrantStmt::set_database_name(const ObString &database)
 {
   int ret = OB_SUCCESS;
   database_ = database;
   return ret;
 }
 
-int ObGrantStmt::set_table_name(const ObString& table)
+int ObGrantStmt::set_table_name(const ObString &table)
 {
   int ret = OB_SUCCESS;
   table_ = table;
   return ret;
 }
 
-int ObGrantStmt::set_priv_array(const share::ObRawPrivArray& array_in)
+int ObGrantStmt::set_priv_array(const share::ObRawPrivArray &array_in)
 {
   int ret = OB_SUCCESS;
-  OZ(sys_priv_array_.assign(array_in));
-  OZ(grant_arg_.sys_priv_array_.assign(array_in));
+  OZ (sys_priv_array_.assign(array_in));
+  OZ (grant_arg_.sys_priv_array_.assign(array_in));
   return ret;
 }
 
-int ObGrantStmt::set_obj_priv_array(const share::ObRawObjPrivArray& array_in)
+int ObGrantStmt::set_obj_priv_array(const share::ObRawObjPrivArray &array_in)
 {
   int ret = OB_SUCCESS;
-  OZ(obj_priv_array_.assign(array_in));
-  OZ(grant_arg_.obj_priv_array_.assign(array_in));
+  OZ (obj_priv_array_.assign(array_in));
+  OZ (grant_arg_.obj_priv_array_.assign(array_in));
   return ret;
 }
 
-int ObGrantStmt::add_grantee(const ObString& grantee)
+int ObGrantStmt::add_grantee(const ObString &grantee)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(grantees_.add_string(grantee))) {
@@ -187,31 +197,25 @@ int ObGrantStmt::add_grantee(const ObString& grantee)
   return ret;
 }
 
-int64_t ObGrantStmt::to_string(char* buf, const int64_t buf_len) const
+int64_t ObGrantStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (NULL != buf) {
     J_OBJ_START();
-    J_KV(N_STMT_TYPE,
-        ((int)stmt_type_),
-        "priv_set",
-        share::schema::ObPrintPrivSet(priv_set_),
-        "grant_level",
-        ob_priv_level_str(grant_level_),
-        "database",
-        database_,
-        "table",
-        table_,
-        "users",
-        users_,
-        "object_type",
-        object_type_,
-        "object_id",
-        object_id_);
+    J_KV(N_STMT_TYPE, ((int)stmt_type_),
+         "priv_set", share::schema::ObPrintPrivSet(priv_set_),
+         "grant_level", ob_priv_level_str(grant_level_),
+         "database", database_,
+         "table", table_,
+         "users", users_,
+         "object_type", object_type_,
+         "object_id", object_id_);
     J_OBJ_END();
   }
   return pos;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+

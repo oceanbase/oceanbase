@@ -14,32 +14,34 @@
 #define _OCEANBASE_SQL_ENGINE_EXPR_PART_ID_PSEUDO_COLUMN_FOR_PDML_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_expr_res_type.h"
+#include "share/ob_i_sql_expression.h"
 
-// Provide the function of calculating partition id in the pdml function,
-// the specific calculation method is:
-// 1. When the child operator (such as Table scan) calculates a row,
-//    fills the corresponding partition id into the ObExecContext in ObExprCtx
-// 2. ObExprPartIdPseudoColumn expression directly obtains the corresponding partition id from ObExprCtx
-namespace oceanbase {
-namespace sql {
-using namespace oceanbase::common;
-
-class ObExprPartIdPseudoColumn : public ObFuncExprOperator {
+// 为pdml功能中提供计算partition id的功能，具体的计算方法为：
+// 1. child算子（例如Table scan）在计算一行时，将对应的partition id填充到ObExprCtx中的ObExecContext中
+// 2. ObExprPartIdPseudoColumn表达式直接从ObExprCtx中获得对应的partition id
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprPartIdPseudoColumn: public ObFuncExprOperator
+{
 public:
-  explicit ObExprPartIdPseudoColumn(ObIAllocator& alloc);
+  explicit ObExprPartIdPseudoColumn(common::ObIAllocator &alloc);
   virtual ~ObExprPartIdPseudoColumn();
 
-  virtual int calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type0(ObExprResType &type,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result0(ObObj& result, ObExprCtx& expr_ctx) const;
   // 3.0 engine
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_part_id(const ObExpr &expr, ObEvalCtx &ctx, common::ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPartIdPseudoColumn);
 };
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
 #endif

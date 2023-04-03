@@ -16,8 +16,10 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "share/schema/ob_table_schema.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
 OB_DEF_SERIALIZE(ObPartitionScanRanges)
@@ -47,7 +49,7 @@ OB_DEF_DESERIALIZE(ObPartitionScanRanges)
     if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
       LOG_WARN("fail to decode key ranges count", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
       if (OB_ISNULL(deserialize_allocator_)) {
         ret = OB_NOT_INIT;
         LOG_WARN("deserialize allocator is NULL", K(ret));
@@ -107,8 +109,8 @@ OB_DEF_DESERIALIZE(ObMultiPartitionsRangesWarpper)
     if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
       LOG_WARN("fail to decode partition ranges count", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
-      ObPartitionScanRanges* partition_ranges = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
+      ObPartitionScanRanges *partition_ranges = nullptr;
       if (OB_FAIL(get_new_partition_ranges(partition_ranges))) {
         LOG_WARN("Failed to get new partition ranges", K(ret));
       } else {
@@ -145,7 +147,7 @@ int ObMultiPartitionsRangesWarpper::init(int64_t expect_partition_cnt)
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_idx(int64_t idx, ObPartitionScanRanges*& partition_ranges)
+int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_idx(int64_t idx, ObPartitionScanRanges *&partition_ranges)
 {
   int ret = OB_SUCCESS;
   partition_ranges = nullptr;
@@ -159,14 +161,12 @@ int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_idx(int64_t idx, ObP
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_partition_id(
-    int64_t partition_id, ObPartitionScanRanges*& partition_ranges)
+int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_partition_id(int64_t partition_id, ObPartitionScanRanges *&partition_ranges)
 {
   int ret = OB_SUCCESS;
   partition_ranges = nullptr;
-  ARRAY_FOREACH_X(partitions_ranges_, idx, cnt, OB_SUCC(ret))
-  {
-    ObPartitionScanRanges* tmp_partition_ranges = partitions_ranges_.at(idx);
+  ARRAY_FOREACH_X(partitions_ranges_, idx, cnt, OB_SUCC(ret)) {
+    ObPartitionScanRanges *tmp_partition_ranges = partitions_ranges_.at(idx);
     if (nullptr == tmp_partition_ranges) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("The partition ranges is null", K(ret));
@@ -180,10 +180,10 @@ int ObMultiPartitionsRangesWarpper::get_partition_ranges_by_partition_id(
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::get_new_partition_ranges(ObPartitionScanRanges*& partition_ranges)
+int ObMultiPartitionsRangesWarpper::get_new_partition_ranges(ObPartitionScanRanges *&partition_ranges)
 {
   int ret = OB_SUCCESS;
-  void* buf = allocator_.alloc(sizeof(ObPartitionScanRanges));
+  void *buf = allocator_.alloc(sizeof(ObPartitionScanRanges));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("No memory", K(ret));
@@ -195,11 +195,15 @@ int ObMultiPartitionsRangesWarpper::get_new_partition_ranges(ObPartitionScanRang
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx& eval_ctx, int64_t part_id, int64_t ref_table_id,
-    const common::ObIArray<ObExpr*>& exprs, const bool table_has_hidden_pk, int64_t& part_row_cnt)
+int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx &eval_ctx,
+                                              int64_t part_id,
+                                              int64_t ref_table_id,
+                                              const common::ObIArray<ObExpr *> &exprs,
+                                              const bool table_has_hidden_pk,
+                                              int64_t &part_row_cnt)
 {
   int ret = OB_SUCCESS;
-  ObPartitionScanRanges* partition_ranges = nullptr;
+  ObPartitionScanRanges *partition_ranges = nullptr;
   ObNewRange main_table_rowkey_range;
   main_table_rowkey_range.table_id_ = ref_table_id;
   ObNewRange hold_range;
@@ -232,13 +236,13 @@ int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx& eval_ctx, int64_t part_
      * which will be used in multi_table_scan operator.
      * */
     if (0 == main_table_rowkey_.count_) {
+      // 如果主表中包含隐藏主键, 说明全局索引扫描吐出的行中除了主键还包含了分区键, 保存的时候需要将分区键剔除出去
       int64_t rowkey_count = exprs.count();
       if (table_has_hidden_pk) {
         if (OB_UNLIKELY(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS) > exprs.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row count should large than hidden pk count",
-              K(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS)),
-              K(exprs.count()));
+              K(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS)), K(exprs.count()));
         } else {
           rowkey_count = ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS);
         }
@@ -249,10 +253,10 @@ int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx& eval_ctx, int64_t part_
     }
     // shallow copy, cause we will deep copy the range later
     for (int64_t i = 0; OB_SUCC(ret) && i < main_table_rowkey_.get_count(); ++i) {
-      ObDatum* datum = NULL;
-      ObDatum& col_datum = exprs.at(i)->locate_expr_datum(eval_ctx);
-      if (OB_FAIL(
-              col_datum.to_obj(main_table_rowkey_.cells_[i], exprs.at(i)->obj_meta_, exprs.at(i)->obj_datum_map_))) {
+      ObDatum &col_datum = exprs.at(i)->locate_expr_datum(eval_ctx);
+      if (OB_FAIL(col_datum.to_obj(main_table_rowkey_.cells_[i],
+                                   exprs.at(i)->obj_meta_,
+                                   exprs.at(i)->obj_datum_map_))) {
         LOG_WARN("convert datum to obj failed", K(ret));
       }
     }
@@ -267,6 +271,7 @@ int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx& eval_ctx, int64_t part_
     LOG_DEBUG("construct range", K(main_table_rowkey_range));
   }
 
+  // 将下层行的cells深考，作为主表查询ObNewRange中rowkey的objs.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(deep_copy_range(allocator_, main_table_rowkey_range, hold_range))) {
       LOG_WARN("Hold the range in this op ctx failed", K(ret));
@@ -277,23 +282,21 @@ int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx& eval_ctx, int64_t part_
     }
   }
 
-  LOG_DEBUG("Add range",
-      K(part_id),
-      K(exprs),
-      K(main_table_rowkey_range),
-      K(main_table_rowkey_range.get_start_key()),
-      K(main_table_rowkey_range.get_end_key()),
-      K(hold_range),
-      KPC(partition_ranges));
+  LOG_DEBUG("Add range", K(part_id), K(exprs), K(main_table_rowkey_range),
+            K(main_table_rowkey_range.get_start_key()), K(main_table_rowkey_range.get_end_key()),
+            K(hold_range), KPC(partition_ranges));
 
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::add_range(int64_t part_id, int64_t ref_table_id, const common::ObNewRow* row,
-    const bool table_has_hidden_pk, int64_t& part_row_cnt)
+int ObMultiPartitionsRangesWarpper::add_range(int64_t part_id,
+                                              int64_t ref_table_id,
+                                              const common::ObNewRow *row,
+                                              const bool table_has_hidden_pk,
+                                              int64_t &part_row_cnt)
 {
   int ret = OB_SUCCESS;
-  ObPartitionScanRanges* partition_ranges = nullptr;
+  ObPartitionScanRanges *partition_ranges = nullptr;
   ObNewRange main_table_rowkey_range;
   main_table_rowkey_range.table_id_ = ref_table_id;
   ObNewRange hold_range;
@@ -316,19 +319,19 @@ int ObMultiPartitionsRangesWarpper::add_range(int64_t part_id, int64_t ref_table
      * Init the new main table row, for example:
      * Primary key is id, varchar(68), KEY `idx_gmt_compensate_nofity` (`gmt_compensate`) STORING (`status`) GLOBAL
      * Tsc in logical plan : access([per.id], [per.status]), partitions(p0)
-     * Tsc output row = {row:[{"VARCHAR":"2088201800000072862812", collation:"utf8mb4_bin"}, {"VARCHAR":"F",
-     * collation:"utf8mb4_bin"}], projector:[0]} Main_table_rowkey_ should be {row:[{"VARCHAR":"2088201800000072862812",
-     * collation:"utf8mb4_bin"}} Because the main table only need the column named 'id' as rowkey. Then we use this row
-     * to construct a new scan range, which will be used in multi_table_scan operator.
+     * Tsc output row = {row:[{"VARCHAR":"2088201800000072862812", collation:"utf8mb4_bin"}, {"VARCHAR":"F", collation:"utf8mb4_bin"}], projector:[0]}
+     * Main_table_rowkey_ should be {row:[{"VARCHAR":"2088201800000072862812", collation:"utf8mb4_bin"}}
+     * Because the main table only need the column named 'id' as rowkey.
+     * Then we use this row to construct a new scan range, which will be used in multi_table_scan operator.
      * */
     if (0 == main_table_rowkey_.count_) {
+      // 如果主表中包含隐藏主键, 说明全局索引扫描吐出的行中除了主键还包含了分区键, 保存的时候需要将分区键剔除出去
       int64_t rowkey_count = row->get_count();
       if (table_has_hidden_pk) {
         if (OB_UNLIKELY(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS) > row->get_count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row count should large than hidden pk count",
-              K(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS)),
-              K(row->get_count()));
+              K(ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS)), K(row->get_count()));
         } else {
           rowkey_count = ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS);
         }
@@ -354,8 +357,7 @@ int ObMultiPartitionsRangesWarpper::add_range(int64_t part_id, int64_t ref_table
     LOG_DEBUG("construct range", K(main_table_rowkey_range));
   }
 
-  // Examine the cells of the lower row as the main table
-  // to query the objs of rowkey in ObNewRange
+  // 将下层行的cells深考，作为主表查询ObNewRange中rowkey的objs.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(deep_copy_range(allocator_, main_table_rowkey_range, hold_range))) {
       LOG_WARN("Hold the range in this op ctx failed", K(ret));
@@ -366,21 +368,15 @@ int ObMultiPartitionsRangesWarpper::add_range(int64_t part_id, int64_t ref_table
     }
   }
 
-  LOG_DEBUG("Add range",
-      KP(row),
-      K(main_table_rowkey_range),
-      K(main_table_rowkey_range.get_start_key()),
-      K(main_table_rowkey_range.get_end_key()),
-      K(hold_range),
-      KPC(partition_ranges));
+  LOG_DEBUG("Add range", KP(row), K(main_table_rowkey_range), K(main_table_rowkey_range.get_start_key()), K(main_table_rowkey_range.get_end_key()), K(hold_range), KPC(partition_ranges));
 
   return ret;
 }
 
-int ObMultiPartitionsRangesWarpper::init_main_table_rowkey(const int64_t column_count, common::ObNewRow& row)
+int ObMultiPartitionsRangesWarpper::init_main_table_rowkey(const int64_t column_count, common::ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (column_count <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(column_count));
@@ -388,7 +384,7 @@ int ObMultiPartitionsRangesWarpper::init_main_table_rowkey(const int64_t column_
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory for row failed", "size", column_count * sizeof(ObObj));
   } else {
-    row.cells_ = new (ptr) common::ObObj[column_count];
+    row.cells_ = new(ptr) common::ObObj[column_count];
     row.count_ = column_count;
   }
   return ret;
@@ -397,7 +393,7 @@ int ObMultiPartitionsRangesWarpper::init_main_table_rowkey(const int64_t column_
 void ObMultiPartitionsRangesWarpper::release()
 {
   for (int64_t i = 0; i < partitions_ranges_.count(); ++i) {
-    ObPartitionScanRanges* partition_ranges = nullptr;
+    ObPartitionScanRanges *partition_ranges = nullptr;
     if (nullptr == (partition_ranges = partitions_ranges_.at(i))) {
       // do nothing
     } else {
@@ -414,7 +410,7 @@ int64_t ObMultiPartitionsRangesWarpper::to_string(char* buf, const int64_t buf_l
 {
   int64_t pos = 0;
   for (int64_t i = 0; i < partitions_ranges_.count(); ++i) {
-    ObPartitionScanRanges* partition_ranges = nullptr;
+    ObPartitionScanRanges *partition_ranges = nullptr;
     if (nullptr == (partition_ranges = partitions_ranges_.at(i))) {
       // do nothing
     } else {
@@ -426,11 +422,13 @@ int64_t ObMultiPartitionsRangesWarpper::to_string(char* buf, const int64_t buf_l
   return pos;
 }
 
-int ObMultiPartitionsRangesWarpper::get_next_ranges(
-    int64_t idx, int64_t& partition_id, ObIArray<ObNewRange>& ranges, int64_t& next_idx)
+int ObMultiPartitionsRangesWarpper::get_next_ranges(int64_t idx,
+                                                    int64_t &partition_id,
+                                                    ObIArray<ObNewRange> &ranges,
+                                                    int64_t &next_idx)
 {
   int ret = OB_SUCCESS;
-  ObPartitionScanRanges* partition_ranges = nullptr;
+  ObPartitionScanRanges *partition_ranges = nullptr;
   const GetRangeMode mode = mode_;
   bool next_partition = false;
   if (idx < 0 || idx >= partitions_ranges_.count()) {
@@ -450,7 +448,8 @@ int ObMultiPartitionsRangesWarpper::get_next_ranges(
     ranges.reset();
     if (range_offset_ >= partition_ranges->ranges_.count()) {
       ret = OB_ARRAY_OUT_OF_RANGE;
-      LOG_WARN("Invalid idx, out of range", K(ret), K(range_offset_), K(partition_ranges->ranges_.count()));
+      LOG_WARN("Invalid idx, out of range", K(ret), K(range_offset_),
+          K(partition_ranges->ranges_.count()));
     } else if (OB_FAIL(ranges.push_back(partition_ranges->ranges_.at(range_offset_)))) {
       LOG_WARN("Failed to push back range", K(ret));
     } else {
@@ -464,5 +463,8 @@ int ObMultiPartitionsRangesWarpper::get_next_ranges(
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+
+

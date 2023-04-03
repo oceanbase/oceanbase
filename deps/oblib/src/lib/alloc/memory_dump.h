@@ -13,37 +13,49 @@
 #ifndef OCEANBASE_DUMP_MEMORY_H_
 #define OCEANBASE_DUMP_MEMORY_H_
 
+#include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/queue/ob_lighty_queue.h"
-#include "lib/thread/thread_pool.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/rc/context.h"
 #include "lib/thread/thread_mgr_interface.h"
 
-// This file will be placed under lib for a short period of time to facilitate unit testing. After the function is
-// stable, move to ob The corresponding MySimpleThreadPool will also be deleted
+// This file will be placed under lib for a short period of time to facilitate unit testing. After the function is stable, move to ob
+// The corresponding MySimpleThreadPool will also be deleted
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 class ObAllVirtualMemoryInfo;
+class ObMallocSampleInfo;
 }
-namespace lib {
-class MemoryContext;
-class AChunk;
-class ABlock;
-class AObject;
+namespace lib
+{
+struct AChunk;
+struct ABlock;
+struct AObject;
 class ObTenantCtxAllocator;
-}  // namespace lib
-namespace common {
-enum DumpType { DUMP_CONTEXT, DUMP_CHUNK, STAT_LABEL };
+}
+namespace common
+{
+enum DumpType
+{
+  DUMP_CONTEXT,
+  DUMP_CHUNK,
+  STAT_LABEL
+};
 
-class ObMemoryDumpTask {
+class ObMemoryDumpTask
+{
 public:
-  TO_STRING_KV(K(type_), K(dump_all_), KP(p_context_), K(slot_idx_), K(dump_tenant_ctx_), K(tenant_id_), K(ctx_id_),
-      KP(p_chunk_));
+  TO_STRING_KV(K(type_), K(dump_all_), KP(p_context_), K(slot_idx_),
+               K(dump_tenant_ctx_), K(tenant_id_), K(ctx_id_), KP(p_chunk_));
   DumpType type_;
   bool dump_all_;
-  union {
+  union
+  {
     struct {
-      void* p_context_;
+      void *p_context_;
       int slot_idx_;
     };
     struct {
@@ -53,23 +65,26 @@ public:
           int64_t tenant_id_;
           int64_t ctx_id_;
         };
-        void* p_chunk_;
+        void *p_chunk_;
       };
     };
   };
 };
 
-struct LabelItem {
+struct LabelItem
+{
   LabelItem()
   {
-    MEMSET(this, 0, sizeof(*this));
+    MEMSET(this, 0 , sizeof(*this));
   }
   char str_[lib::AOBJECT_LABEL_SIZE + 1];
   int str_len_;
   int64_t hold_;
   int64_t used_;
   int64_t count_;
-  LabelItem& operator+=(const LabelItem& item)
+  int64_t block_cnt_;
+  int64_t chunk_cnt_;
+  LabelItem &operator +=(const LabelItem &item)
   {
     hold_ += item.hold_;
     used_ += item.used_;
@@ -77,73 +92,82 @@ struct LabelItem {
     return *this;
   }
 };
-
-class LabelMap : public common::hash::ObHashMap<ObString, LabelItem*> {
-public:
-  common::ObLocalModSet* mod_set_ = nullptr;
+struct LabelInfoItem
+{
+  LabelInfoItem()
+  {}
+  LabelInfoItem(LabelItem* litem, void *chunk, void *block)
+    : litem_(litem), chunk_(chunk), block_(block)
+  {}
+  LabelItem* litem_;
+  void *chunk_;
+  void *block_;
 };
 
-using lib::ABlock;
+typedef common::hash::ObHashMap<ObString, LabelInfoItem, hash::NoPthreadDefendMode> LabelMap;
+
 using lib::AChunk;
+using lib::ABlock;
 using lib::AObject;
-class ObMemoryDump : public lib::TGRunnable {
+class ObMemoryDump : public lib::TGRunnable
+{
 public:
-  static constexpr const char* LOG_FILE = "log/memory_meta";
-
+  static constexpr const char *LOG_FILE = "log/memory_meta";
 private:
-  friend class observer::ObAllVirtualMemoryInfo;
-  friend class lib::ObTenantCtxAllocator;
+friend class observer::ObAllVirtualMemoryInfo;
+friend class lib::ObTenantCtxAllocator;
 
-  static const int64_t TASK_NUM = 8;
-  static const int PRINT_BUF_LEN = 1L << 20;
-  static const int64_t MAX_MEMORY = 1L << 40;  // 1T
-  static const int MAX_CHUNK_CNT = MAX_MEMORY / (2L << 20);
-  static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
-  static const int MAX_LABEL_ITEM_CNT = 16L << 10;
-  static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
-  static const int64_t LOG_BUF_LEN = 8L << 10;
+static const int64_t TASK_NUM = 8;
+static const int PRINT_BUF_LEN = 1L << 20;
+static const int64_t MAX_MEMORY = 1L << 40; // 1T
+static const int MAX_CHUNK_CNT = MAX_MEMORY / (2L << 20);
+static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
+static const int MAX_LABEL_ITEM_CNT = 16L << 10;
+static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
+static const int64_t LOG_BUF_LEN = 64L << 10;
 
-  struct TenantCtxRange {
-    static bool compare(const TenantCtxRange& tcr, const std::pair<uint64_t, uint64_t>& cmp_val)
-    {
-      return tcr.tenant_id_ < cmp_val.first || (tcr.tenant_id_ == cmp_val.first && tcr.ctx_id_ < cmp_val.second);
-    }
-    uint64_t tenant_id_;
-    uint64_t ctx_id_;
-    // [start_, end_)
-    int start_;
-    int end_;
-    common::ObLocalModSet* mod_set_;
-  };
+struct TenantCtxRange
+{
+  static bool compare(const TenantCtxRange &tcr,
+                      const std::pair<uint64_t, uint64_t> &cmp_val)
+  {
+    return tcr.tenant_id_ < cmp_val.first ||
+      (tcr.tenant_id_ == cmp_val.first && tcr.ctx_id_ < cmp_val.second);
+  }
+  uint64_t tenant_id_;
+  uint64_t ctx_id_;
+  // [start_, end_)
+  int start_;
+  int end_;
+};
 
-  struct Stat {
-    LabelItem up2date_items_[MAX_LABEL_ITEM_CNT];
-    TenantCtxRange tcrs_[MAX_TENANT_CNT * ObCtxIds::MAX_CTX_ID];
-    int tcr_cnt_ = 0;
-  };
+struct Stat {
+  LabelItem up2date_items_[MAX_LABEL_ITEM_CNT];
+  TenantCtxRange tcrs_[MAX_TENANT_CNT * ObCtxIds::MAX_CTX_ID];
+  lib::ObMallocSampleMap  malloc_sample_map_;
+  int tcr_cnt_ = 0;
+};
 
-  struct PreAllocMemory {
-    char print_buf_[PRINT_BUF_LEN];
-    char array_buf_[MAX_CHUNK_CNT * sizeof(void*)];
-    char tenant_ids_buf_[MAX_TENANT_CNT * sizeof(uint64_t)];
-    char stats_buf_[sizeof(Stat) * 2];
-    char log_buf_[LOG_BUF_LEN];
-  };
+struct PreAllocMemory
+{
+  char print_buf_[PRINT_BUF_LEN];
+  char array_buf_[MAX_CHUNK_CNT * sizeof(void*)];
+  char tenant_ids_buf_[MAX_TENANT_CNT * sizeof(uint64_t)];
+  char stats_buf_[sizeof(Stat) * 2];
+  char log_buf_[LOG_BUF_LEN];
+};
 
 public:
   ObMemoryDump();
   ~ObMemoryDump();
-  static ObMemoryDump& get_instance();
+  static ObMemoryDump &get_instance();
   int init();
   void destroy();
-  bool is_inited() const
+  bool is_inited() const { return is_inited_; }
+  int push(void *task);
+  ObMemoryDumpTask *alloc_task()
   {
-    return is_inited_;
-  }
-  int push(void* task);
-  ObMemoryDumpTask* alloc_task()
-  {
-    ObMemoryDumpTask* task = nullptr;
+    ObMemoryDumpTask *task = nullptr;
     lib::ObMutexGuard guard(task_mutex_);
     int pos = -1;
     if ((pos = ffsl(avaliable_task_set_))) {
@@ -154,44 +178,42 @@ public:
     }
     return task;
   }
-  void free_task(void* task)
+  void free_task(void *task)
   {
-    int pos = (ObMemoryDumpTask*)task - &tasks_[0];
+    int pos = (ObMemoryDumpTask *)task - &tasks_[0];
     abort_unless(pos >= 0 && pos < TASK_NUM);
     lib::ObMutexGuard guard(task_mutex_);
     avaliable_task_set_ |= (1 << pos);
   }
-
+  int load_malloc_sample_map(lib::ObMallocSampleMap& malloc_sample_map);
 private:
   void run1() override;
-  void handle(void* task);
-
+  void handle(void *task);
 private:
-  AChunk* find_chunk(void* ptr);
-
+  AChunk *find_chunk(void *ptr);
 private:
   ObLightyQueue queue_;
   lib::ObMutex task_mutex_;
   ObMemoryDumpTask tasks_[TASK_NUM];
   int64_t avaliable_task_set_;
-  char* print_buf_;
+  char *print_buf_;
   union {
-    void* array_;
-    AChunk** chunks_;
+    void *array_;
+    AChunk **chunks_;
   };
-  uint64_t* tenant_ids_;
+  uint64_t *tenant_ids_;
   lib::MemoryContext dump_context_;
   LabelMap lmap_;
   common::ObLatch iter_lock_;
-  Stat* r_stat_;
-  Stat* w_stat_;
-  char* log_buf_;
-
+  Stat *r_stat_;
+  Stat *w_stat_;
+  char *log_buf_;
+  int huge_segv_cnt_;
   bool is_inited_;
 };
 
-extern void get_tenant_ids(uint64_t* ids, int cap, int& cnt);
-}  // namespace common
-}  // namespace oceanbase
+extern void get_tenant_ids(uint64_t *ids, int cap, int &cnt);
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_DUMP_MEMORY_H_
+#endif // OCEANBASE_DUMP_MEMORY_H_

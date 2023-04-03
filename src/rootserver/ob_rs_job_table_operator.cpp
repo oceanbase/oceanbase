@@ -51,37 +51,35 @@ int ObRsJobInfo::deep_copy_self()
 
 const char* const ObRsJobTableOperator::TABLE_NAME = "__all_rootservice_job";
 
-static const char* job_type_str_array[JOB_TYPE_MAX] = {NULL,
-    "ALTER_TENANT_LOCALITY",
-    "ALTER_TABLE_LOCALITY",
-    "MIGRATE_UNIT",
-    "ROLLBACK_ALTER_TENANT_LOCALITY",
-    "ROLLBACK_ALTER_TABLE_LOCALITY",
-    "DELETE_SERVER",
-    "RESTORE_TENANT",
-    "SHRINK_RESOURCE_POOL_UNIT_NUM",
-    "MIGRATE_META_TABLE",
-    "ROLLBACK_MIGRATE_META_TABLE",
-    "ALTER_TABLEGROUP_LOCALITY",
-    "ROLLBACK_ALTER_TABLEGROUP_LOCALITY",
-    "BUILD_GC_PARTITION",
-    "MIGRATE_SEQUENCE_TABLE",
-    "SCHEMA_SPLIT",
-    "UPGRADE_STORAGE_FORMAT_VERSION",
-    "STOP_SCHEMA_SPLIT",
-    "STOP_UPGRADE_STORAGE_FORMAT_VERSION",
-    "MIGRATE_PARTITION_META_TABLE",
-    "STOP_MIGRATE_PARTITION_META_TABLE",
-    "STATISTIC_PRIMARY_ZONE_ENTITY_COUNT",
-    "CREATE_HA_GTS_UTIL",
-    "CREATE_INNER_SCHEMA",
-    "UPDATE_TABLE_SCHEMA_VERSION",
-    "SCHEMA_SPLIT_V2",
-    "RUN_UPGRADE_POST_JOB",
-    "SCHEMA_REVISE"};
+static const char* job_type_str_array[JOB_TYPE_MAX] = {
+  NULL,
+  "ALTER_TENANT_LOCALITY",
+  "ROLLBACK_ALTER_TENANT_LOCALITY",
+  "MIGRATE_UNIT",
+  "DELETE_SERVER",
+  "SHRINK_RESOURCE_POOL_UNIT_NUM",
+  "SHRINK_RESOURCE_TENANT_UNIT_NUM",
+  "RESTORE_TENANT",
+  "UPGRADE_STORAGE_FORMAT_VERSION",
+  "STOP_UPGRADE_STORAGE_FORMAT_VERSION",
+  "CREATE_INNER_SCHEMA",
+  "UPGRADE_POST_ACTION",
+  "UPGRADE_SYSTEM_VARIABLE",
+  "UPGRADE_SYSTEM_TABLE",
+  "UPGRADE_BEGIN",
+  "UPGRADE_VIRTUAL_SCHEMA",
+  "UPGRADE_SYSTEM_PACKAGE",
+  "UPGRADE_ALL_POST_ACTION",
+  "UPGRADE_INSPECTION",
+  "UPGRADE_END",
+  "UPGRADE_ALL"
+};
 
 const char* ObRsJobTableOperator::get_job_type_str(ObRsJobType job_type)
 {
+  STATIC_ASSERT(ARRAYSIZEOF(job_type_str_array) == JOB_TYPE_MAX,
+                "type string array size mismatch with enum ObRsJobType");
+
   const char* str = NULL;
   if (job_type > JOB_TYPE_INVALID && job_type < JOB_TYPE_MAX) {
     str = job_type_str_array[job_type];
@@ -89,11 +87,12 @@ const char* ObRsJobTableOperator::get_job_type_str(ObRsJobType job_type)
   return str;
 }
 
-ObRsJobType ObRsJobTableOperator::get_job_type(const common::ObString& job_type_str)
+ObRsJobType ObRsJobTableOperator::get_job_type(const common::ObString &job_type_str)
 {
   ObRsJobType ret_job_type = JOB_TYPE_INVALID;
   for (int i = 0; i < static_cast<int>(JOB_TYPE_MAX); ++i) {
-    if (NULL != job_type_str_array[i] && 0 == job_type_str.case_compare(job_type_str_array[i])) {
+    if (NULL != job_type_str_array[i]
+        && 0 == job_type_str.case_compare(job_type_str_array[i])) {
       ret_job_type = static_cast<ObRsJobType>(i);
       break;
     }
@@ -101,13 +100,19 @@ ObRsJobType ObRsJobTableOperator::get_job_type(const common::ObString& job_type_
   return ret_job_type;
 }
 
-static const char* job_status_str_array[JOB_STATUS_MAX] = {NULL, "INPROGRESS", "SUCCESS", "FAILED"};
+static const char* job_status_str_array[JOB_STATUS_MAX] = {
+  NULL,
+  "INPROGRESS",
+  "SUCCESS",
+  "FAILED"
+};
 
-ObRsJobStatus ObRsJobTableOperator::get_job_status(const common::ObString& job_status_str)
+ObRsJobStatus ObRsJobTableOperator::get_job_status(const common::ObString &job_status_str)
 {
   ObRsJobStatus ret_job_status = JOB_STATUS_INVALID;
   for (int i = 0; i < static_cast<int>(JOB_STATUS_MAX); ++i) {
-    if (NULL != job_status_str_array[i] && 0 == job_status_str.case_compare(job_status_str_array[i])) {
+    if (NULL != job_status_str_array[i]
+        && 0 == job_status_str.case_compare(job_status_str_array[i])) {
       ret_job_status = static_cast<ObRsJobStatus>(i);
       break;
     }
@@ -115,14 +120,20 @@ ObRsJobStatus ObRsJobTableOperator::get_job_status(const common::ObString& job_s
   return ret_job_status;
 }
 
+
 ObRsJobTableOperator::ObRsJobTableOperator()
-    : inited_(false), max_job_id_(-1), row_count_(-1), sql_client_(NULL), rs_addr_()
+    :inited_(false),
+     max_job_id_(-1),
+     row_count_(-1),
+     sql_client_(NULL),
+     rs_addr_()
 {}
 
-int ObRsJobTableOperator::init(common::ObMySQLProxy* sql_client, const common::ObAddr& rs_addr)
+int ObRsJobTableOperator::init(common::ObMySQLProxy *sql_client, const common::ObAddr &rs_addr)
 {
   int ret = OB_SUCCESS;
-  if (NULL == sql_client || !rs_addr.is_valid()) {
+  if (NULL == sql_client
+      || !rs_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(sql_client), K(rs_addr));
   } else if (inited_) {
@@ -136,12 +147,12 @@ int ObRsJobTableOperator::init(common::ObMySQLProxy* sql_client, const common::O
   return ret;
 }
 
-int ObRsJobTableOperator::create_job(
-    ObRsJobType job_type, share::ObDMLSqlSplicer& dml, int64_t& job_id, common::ObISQLClient& trans)
+int ObRsJobTableOperator::create_job(ObRsJobType job_type, share::ObDMLSqlSplicer &dml, int64_t &job_id, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const char* job_type_str = NULL;
-  if (JOB_TYPE_INVALID == job_type || NULL == (job_type_str = get_job_type_str(job_type))) {
+  if (JOB_TYPE_INVALID == job_type
+      || NULL == (job_type_str = get_job_type_str(job_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid job type", K(ret), K(job_type), K(job_type_str));
   } else if (!inited_) {
@@ -154,7 +165,8 @@ int ObRsJobTableOperator::create_job(
     char ip_buf[common::MAX_IP_ADDR_LENGTH];
     (void)rs_addr_.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(dml.add_gmt_create(now)) || OB_FAIL(dml.add_gmt_modified(now))) {
+		} else if (OB_FAIL(dml.add_gmt_create(now))
+               || OB_FAIL(dml.add_gmt_modified(now))) {
       LOG_WARN("failed to add gmt time", K(ret), K(now));
     } else if (OB_FAIL(dml.add_column("job_id", job_id))) {
       LOG_WARN("failed to add column", K(ret), K(job_id));
@@ -164,8 +176,8 @@ int ObRsJobTableOperator::create_job(
       LOG_WARN("failed to add column", K(ret), K(job_type_str));
     } else if (OB_FAIL(dml.add_column("job_status", job_status_str_array[JOB_STATUS_INPROGRESS]))) {
       LOG_WARN("failed to add column", K(ret), K(job_type_str));
-    } else if (OB_FAIL(dml.add_column("rs_svr_ip", ip_buf)) ||
-               OB_FAIL(dml.add_column("rs_svr_port", rs_addr_.get_port()))) {
+    } else if (OB_FAIL(dml.add_column("rs_svr_ip", ip_buf))
+               || OB_FAIL(dml.add_column("rs_svr_port", rs_addr_.get_port()))) {
       LOG_WARN("failed to add column", K(ret));
     }
 
@@ -193,7 +205,7 @@ int ObRsJobTableOperator::create_job(
   return ret;
 }
 
-int ObRsJobTableOperator::get_job(int64_t job_id, ObRsJobInfo& job_info)
+int ObRsJobTableOperator::get_job(int64_t job_id, ObRsJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   if (job_id < 0) {
@@ -204,9 +216,8 @@ int ObRsJobTableOperator::get_job(int64_t job_id, ObRsJobInfo& job_info)
     LOG_WARN("not init", K(ret));
   } else {
     ObSqlString sql;
-    SMART_VAR(common::ObMySQLProxy::MySQLResult, res)
-    {
-      common::sqlclient::ObMySQLResult* result = NULL;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE job_id = %ld", TABLE_NAME, job_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(sql_client_->read(res, sql.ptr()))) {
@@ -226,7 +237,7 @@ int ObRsJobTableOperator::get_job(int64_t job_id, ObRsJobInfo& job_info)
   return ret;
 }
 
-int ObRsJobTableOperator::cons_job_info(const sqlclient::ObMySQLResult& res, ObRsJobInfo& job_info)
+int ObRsJobTableOperator::cons_job_info(const sqlclient::ObMySQLResult &res, ObRsJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   ////////////////
@@ -239,8 +250,8 @@ int ObRsJobTableOperator::cons_job_info(const sqlclient::ObMySQLResult& res, ObR
   // @FIXME
   job_info.gmt_create_ = 0;
   job_info.gmt_modified_ = 0;
-  // EXTRACT_DATETIME_FIELD_MYSQL(res, "gmt_create", job_info.gmt_create_);
-  // EXTRACT_DATETIME_FIELD_MYSQL(res, "gmt_modified", job_info.gmt_modified_);
+  //EXTRACT_DATETIME_FIELD_MYSQL(res, "gmt_create", job_info.gmt_create_);
+  //EXTRACT_DATETIME_FIELD_MYSQL(res, "gmt_modified", job_info.gmt_modified_);
   char svr_ip[OB_IP_STR_BUFF] = "";
   int64_t svr_port = 0;
   int64_t tmp_real_str_len = 0;
@@ -252,7 +263,7 @@ int ObRsJobTableOperator::cons_job_info(const sqlclient::ObMySQLResult& res, ObR
   ////////////////
   // optional fields:
   ////////////////
-  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(res, "return_code", job_info.return_code_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(res, "result_code", job_info.result_code_, int64_t);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(res, "tenant_id", job_info.tenant_id_, int64_t);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(res, "tenant_name", job_info.tenant_name_);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(res, "database_id", job_info.database_id_, int64_t);
@@ -275,7 +286,7 @@ int ObRsJobTableOperator::cons_job_info(const sqlclient::ObMySQLResult& res, ObR
   return ret;
 }
 
-int ObRsJobTableOperator::find_job(share::ObDMLSqlSplicer& pairs, ObRsJobInfo& job_info, common::ObISQLClient& trans)
+int ObRsJobTableOperator::find_job(share::ObDMLSqlSplicer &pairs, ObRsJobInfo &job_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -283,9 +294,8 @@ int ObRsJobTableOperator::find_job(share::ObDMLSqlSplicer& pairs, ObRsJobInfo& j
     LOG_WARN("not init", K(ret));
   } else {
     ObSqlString sql;
-    SMART_VAR(common::ObMySQLProxy::MySQLResult, res)
-    {
-      common::sqlclient::ObMySQLResult* result = NULL;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE ", TABLE_NAME))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(pairs.splice_predicates(sql))) {
@@ -302,14 +312,13 @@ int ObRsJobTableOperator::find_job(share::ObDMLSqlSplicer& pairs, ObRsJobInfo& j
         ret = OB_ENTRY_NOT_EXIST;
       } else if (OB_FAIL(cons_job_info(*result, job_info))) {
         LOG_WARN("failed to construct job info", K(ret));
-      } else {
-      }
+      } else {}
     }
   }
   return ret;
 }
 
-int ObRsJobTableOperator::update_job(int64_t job_id, share::ObDMLSqlSplicer& dml, common::ObISQLClient& trans)
+int ObRsJobTableOperator::update_job(int64_t job_id, share::ObDMLSqlSplicer &dml, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -334,14 +343,13 @@ int ObRsJobTableOperator::update_job(int64_t job_id, share::ObDMLSqlSplicer& dml
       } else if (!is_single_row(affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("insert succeeded but affected_rows is not one", K(ret), K(affected_rows));
-      } else {
-      }
+      } else {}
     }
   }
   return ret;
 }
 
-int ObRsJobTableOperator::update_job_progress(int64_t job_id, int64_t progress, common::ObISQLClient& trans)
+int ObRsJobTableOperator::update_job_progress(int64_t job_id, int64_t progress, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer pairs;
@@ -356,12 +364,12 @@ int ObRsJobTableOperator::update_job_progress(int64_t job_id, int64_t progress, 
   return ret;
 }
 
-int ObRsJobTableOperator::complete_job(int64_t job_id, int return_code, common::ObISQLClient& trans)
+int ObRsJobTableOperator::complete_job(int64_t job_id, int result_code, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer pairs;
-  if (OB_SUCCESS == return_code) {
-    if (OB_FAIL(pairs.add_column("return_code", 0))) {
+  if (OB_SUCCESS == result_code) {
+    if (OB_FAIL(pairs.add_column("result_code", 0))) {
       LOG_WARN("failed to add column", K(ret));
     } else if (OB_FAIL(pairs.add_column("progress", 100))) {
       LOG_WARN("failed to add column", K(ret));
@@ -369,7 +377,7 @@ int ObRsJobTableOperator::complete_job(int64_t job_id, int return_code, common::
       LOG_WARN("failed to add column", K(ret));
     }
   } else {
-    if (OB_FAIL(pairs.add_column("return_code", return_code))) {
+    if (OB_FAIL(pairs.add_column("result_code", result_code))) {
       LOG_WARN("failed to add column", K(ret));
     } else if (OB_FAIL(pairs.add_column("job_status", job_status_str_array[JOB_STATUS_FAILED]))) {
       LOG_WARN("failed to add column", K(ret));
@@ -380,13 +388,13 @@ int ObRsJobTableOperator::complete_job(int64_t job_id, int return_code, common::
     if (OB_FAIL(update_job(job_id, pairs, trans))) {
       LOG_WARN("failed to update job", K(ret), K(job_id));
     } else {
-      LOG_INFO("rootservice job completed", K(job_id), K(return_code));
+      LOG_INFO("rootservice job completed", K(job_id), K(result_code));
     }
   }
   return ret;
 }
 
-int ObRsJobTableOperator::load_max_job_id(int64_t& max_job_id, int64_t& row_count)
+int ObRsJobTableOperator::load_max_job_id(int64_t &max_job_id, int64_t &row_count)
 {
   int ret = OB_SUCCESS;
   max_job_id = -1;
@@ -396,9 +404,8 @@ int ObRsJobTableOperator::load_max_job_id(int64_t& max_job_id, int64_t& row_coun
     LOG_WARN("not init", K(ret));
   } else {
     ObSqlString sql;
-    SMART_VAR(common::ObMySQLProxy::MySQLResult, res)
-    {
-      common::sqlclient::ObMySQLResult* result = NULL;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("SELECT count(*) as COUNT, max(job_id) as MAX_JOB_ID FROM %s", TABLE_NAME))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(sql_client_->read(res, sql.ptr()))) {
@@ -416,7 +423,7 @@ int ObRsJobTableOperator::load_max_job_id(int64_t& max_job_id, int64_t& row_coun
         } else {
           EXTRACT_INT_FIELD_MYSQL(*result, "MAX_JOB_ID", max_job_id, int64_t);
           if (OB_SUCC(ret) && (max_job_id < 0)) {
-            max_job_id = 0;  // max_job_id < 0 may occur when OceanBase is in upgrading
+            max_job_id = 0; // max_job_id < 0 may occur when OceanBase is in upgrading
           }
         }
       }
@@ -425,7 +432,7 @@ int ObRsJobTableOperator::load_max_job_id(int64_t& max_job_id, int64_t& row_coun
   return ret;
 }
 
-int ObRsJobTableOperator::alloc_job_id(int64_t& job_id)
+int ObRsJobTableOperator::alloc_job_id(int64_t &job_id)
 {
   int ret = OB_SUCCESS;
   if (ATOMIC_LOAD(&max_job_id_) < 0) {
@@ -472,20 +479,21 @@ int ObRsJobTableOperator::delete_rows()
     int64_t affected_rows = 0;
     if (row_count <= MAX_ROW_COUNT) {
       // do nothing
-    } else if (OB_FAIL(
-                   sql.assign_fmt("DELETE FROM %s ORDER BY job_id LIMIT %ld", TABLE_NAME, row_count - MAX_ROW_COUNT))) {
+    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s ORDER BY job_id LIMIT %ld",
+                                      TABLE_NAME, row_count-MAX_ROW_COUNT))) {
       LOG_WARN("failed to assign sql", K(ret));
     } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected_rows))) {
       LOG_WARN("execute sql failed", K(sql), K(ret));
     } else {
-      LOG_DEBUG("delete old rows from __all_rootservice_job", K(affected_rows), K(row_count), "sql", sql.ptr());
+      LOG_DEBUG("delete old rows from __all_rootservice_job",
+                K(affected_rows), K(row_count), "sql", sql.ptr());
       (void)ATOMIC_SAF(&row_count_, affected_rows);
     }
   }
   return ret;
 }
 
-ObRsJobTableOperator& ObRsJobTableOperatorSingleton::get_instance()
+ObRsJobTableOperator &ObRsJobTableOperatorSingleton::get_instance()
 {
   static ObRsJobTableOperator the_one;
   return the_one;

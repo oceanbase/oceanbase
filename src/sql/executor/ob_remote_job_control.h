@@ -15,18 +15,21 @@
 
 #include "sql/executor/ob_job_control.h"
 
-namespace oceanbase {
-namespace sql {
-class ObRemoteJobControl : public ObJobControl {
+namespace oceanbase
+{
+namespace sql
+{
+class ObRemoteJobControl : public ObJobControl
+{
 public:
   explicit ObRemoteJobControl();
   virtual ~ObRemoteJobControl();
 
-  virtual int get_ready_jobs(common::ObIArray<ObJob*>& jobs, bool serial_schedule = false) const;
-
+  virtual int get_ready_jobs(common::ObIArray<ObJob*> &jobs, 
+      bool serial_schedule = false) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteJobControl);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_REMOTE_JOB_CONTROL_ */

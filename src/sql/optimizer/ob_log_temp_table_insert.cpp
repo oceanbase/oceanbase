@@ -26,44 +26,89 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::sql::log_op_def;
 
-ObLogTempTableInsert::ObLogTempTableInsert(ObLogPlan& plan)
-    : ObLogicalOperator(plan), ref_table_id_(OB_INVALID_ID), temp_table_name_()
-{}
+ObLogTempTableInsert::ObLogTempTableInsert(ObLogPlan &plan)
+    : ObLogicalOperator(plan),
+      temp_table_id_(OB_INVALID_ID),
+      temp_table_name_()
+{
+}
 
 ObLogTempTableInsert::~ObLogTempTableInsert()
-{}
+{
+}
 
-int ObLogTempTableInsert::allocate_exchange_post(AllocExchContext* ctx)
+int ObLogTempTableInsert::compute_sharding_info()
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  ObLogicalOperator* child = NULL;
-  if (OB_ISNULL(child = get_child(first_child))) {
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(get_plan()), K(ret));
+  } else if (child->is_match_all()) {
+    //temp table insert is a data-shared operator, can not be match all 
+    strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
+  } else if (child->is_single()) {
+    strong_sharding_ = child->get_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
+  } else {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+  }
+  return ret;
+}
+
+int ObLogTempTableInsert::compute_op_ordering()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
-  } else if (child->get_sharding_info().is_distributed()) {
-    sharding_info_.set_location_type(child->get_sharding_info().get_location_type());
-  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-    LOG_WARN("failed to copy sharding info", K(ret));
-  } else if (sharding_info_.is_match_all()) {
-    sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
-  }
+  } else if (child->is_single()) {
+    if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
+      LOG_WARN("failed to compute op ordering", K(ret));
+    } else { /*do nothing*/ }
+  } else { /*do nothing*/ }
   return ret;
 }
 
 int ObLogTempTableInsert::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+  int64_t parallel = 0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY((parallel = child->get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else {
-    double op_cost = ObOptEstCost::cost_material(child->get_card(), child->get_width());
+    double per_dop_card = child->get_card() / parallel;
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    double op_cost = ObOptEstCost::cost_material(per_dop_card, 
+                                                 child->get_width(),
+                                                 opt_ctx.get_cost_model_type());
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);
     set_card(child->get_card());
-    set_width(child->get_width());
+  }
+  return ret;
+}
+
+int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    ObString &name = get_table_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
   }
   return ret;
 }

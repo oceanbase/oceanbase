@@ -496,7 +496,7 @@ select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -572,9 +572,9 @@ select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -607,7 +607,7 @@ select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN"
       ],
       "rel_id": [
@@ -765,9 +765,9 @@ select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -1030,9 +1030,9 @@ select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -1747,7 +1747,7 @@ select sum(c1) + sum(c3) from t2 group by c2 having sum(c3) > 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG",
         "UNKNOWN"
       ],
@@ -1876,9 +1876,9 @@ select sum(c1) + sum(c3) from t2 group by c2 having sum(c3) > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -2353,7 +2353,7 @@ select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 1
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -2429,9 +2429,9 @@ select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3096,9 +3096,9 @@ select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 1
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -36138,7 +36138,7 @@ select t1.c1, t1.c2+1 from (select * from t1) t1
         "expr_info": [
           "CNT_CONST",
           "CNT_COLUMN",
-          "CNT_PARAM",
+          "CNT_STATIC_PARAM",
           "UNKNOWN"
         ],
         "rel_id": [
@@ -36219,10 +36219,10 @@ select t1.c1, t1.c2+1 from (select * from t1) t1
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -41674,10 +41674,10 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -41708,7 +41708,7 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_JOIN_COND"
       ],
       "rel_id": [
@@ -41786,7 +41786,7 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             2
@@ -41861,9 +41861,9 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -41960,7 +41960,7 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -41992,7 +41992,7 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
                 "IS_CALCULABLE_EXPR",
                 "IS_CONST_EXPR",
                 "CNT_CONST",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "CNT_CALCULABLE_EXPR"
               ],
               "rel_id": [
@@ -42022,9 +42022,9 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -42054,9 +42054,9 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -42088,9 +42088,9 @@ select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -42534,7 +42534,7 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -42566,7 +42566,7 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -42641,9 +42641,9 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -42675,9 +42675,9 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -42707,9 +42707,9 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -42742,7 +42742,7 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -42894,9 +42894,9 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -42926,9 +42926,9 @@ select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -43611,7 +43611,7 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -43643,7 +43643,7 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -43675,7 +43675,7 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
                 1
@@ -43750,9 +43750,9 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -43784,9 +43784,9 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -43865,7 +43865,7 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -44017,9 +44017,9 @@ select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -44708,7 +44708,7 @@ select * from t1 where c1 = now()
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -44784,10 +44784,10 @@ select * from t1 where c1 = now()
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -45383,7 +45383,7 @@ select * from t1 where c1 = 'test'
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -45459,10 +45459,10 @@ select * from t1 where c1 = 'test'
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -45559,7 +45559,7 @@ select * from t1 where c1 = 'test'
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -45591,9 +45591,9 @@ select * from t1 where c1 = 'test'
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46089,7 +46089,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -46121,7 +46121,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46197,9 +46197,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46232,7 +46232,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46308,10 +46308,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46341,10 +46341,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46377,7 +46377,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46453,10 +46453,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46486,10 +46486,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46522,7 +46522,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46598,9 +46598,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46636,7 +46636,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR"
       ],
       "rel_id": [
@@ -46669,7 +46669,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46745,9 +46745,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46780,7 +46780,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -46856,9 +46856,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -46893,7 +46893,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -46975,10 +46975,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -47008,10 +47008,10 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -47108,7 +47108,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47140,9 +47140,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -47183,7 +47183,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47215,9 +47215,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -47258,7 +47258,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47290,9 +47290,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -47333,7 +47333,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47365,9 +47365,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -47408,7 +47408,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47440,9 +47440,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -47483,7 +47483,7 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -47515,9 +47515,9 @@ select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -48144,7 +48144,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -48220,9 +48220,9 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -48255,7 +48255,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -48331,9 +48331,9 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -48366,7 +48366,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN"
       ],
       "rel_id": [
@@ -48517,9 +48517,9 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -48583,7 +48583,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -48659,10 +48659,10 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -48692,10 +48692,10 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -48792,7 +48792,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -48824,9 +48824,9 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -48867,7 +48867,7 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -48899,9 +48899,9 @@ select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 a
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -49398,7 +49398,7 @@ select c1, c2 from t1 where (c1, c2) in ((1, 2))
         "CNT_CONST_EXPR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN"
       ],
       "rel_id": [
@@ -49557,7 +49557,7 @@ select c1, c2 from t1 where (c1, c2) in ((1, 2))
           "expr_info": [
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -49586,9 +49586,9 @@ select c1, c2 from t1 where (c1, c2) in ((1, 2))
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -49618,9 +49618,9 @@ select c1, c2 from t1 where (c1, c2) in ((1, 2))
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -50175,7 +50175,7 @@ select * from t1 where not (c1 > 1 and c2 < 10)
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -50209,7 +50209,7 @@ select * from t1 where not (c1 > 1 and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -50285,9 +50285,9 @@ select * from t1 where not (c1 > 1 and c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -50320,7 +50320,7 @@ select * from t1 where not (c1 > 1 and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_RANGE_COND"
           ],
@@ -50402,9 +50402,9 @@ select * from t1 where not (c1 > 1 and c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -50958,7 +50958,7 @@ select * from t1 where not (c1 > 1 or c2 < 10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -51034,9 +51034,9 @@ select * from t1 where not (c1 > 1 or c2 < 10)
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -51069,7 +51069,7 @@ select * from t1 where not (c1 > 1 or c2 < 10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -51151,9 +51151,9 @@ select * from t1 where not (c1 > 1 or c2 < 10)
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -51705,7 +51705,7 @@ select * from t1 where not (not (c1 > 1))
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -51781,9 +51781,9 @@ select * from t1 where not (not (c1 > 1))
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -52336,7 +52336,7 @@ select * from t1 where not (not (c1 > 1) and c2 < 10)
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -52370,7 +52370,7 @@ select * from t1 where not (not (c1 > 1) and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -52446,9 +52446,9 @@ select * from t1 where not (not (c1 > 1) and c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -52481,7 +52481,7 @@ select * from t1 where not (not (c1 > 1) and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_RANGE_COND"
           ],
@@ -52563,9 +52563,9 @@ select * from t1 where not (not (c1 > 1) and c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -53119,7 +53119,7 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -53195,9 +53195,9 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -53230,7 +53230,7 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -53312,9 +53312,9 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -53347,7 +53347,7 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -53423,9 +53423,9 @@ select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -53977,7 +53977,7 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN"
       ],
       "rel_id": [
@@ -54010,7 +54010,7 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -54086,9 +54086,9 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -54121,7 +54121,7 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_RANGE_COND"
           ],
@@ -54203,9 +54203,9 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -54238,7 +54238,7 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -54314,9 +54314,9 @@ select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -54871,7 +54871,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -54905,7 +54905,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN"
           ],
           "rel_id": [
@@ -54938,7 +54938,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "IS_RANGE_COND"
               ],
               "rel_id": [
@@ -55014,9 +55014,9 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -55049,7 +55049,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "UNKNOWN",
                 "IS_RANGE_COND"
               ],
@@ -55131,9 +55131,9 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -55168,7 +55168,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN"
           ],
           "rel_id": [
@@ -55201,7 +55201,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "IS_RANGE_COND"
               ],
               "rel_id": [
@@ -55277,9 +55277,9 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -55312,7 +55312,7 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "UNKNOWN",
                 "IS_RANGE_COND"
               ],
@@ -55394,9 +55394,9 @@ select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -55953,7 +55953,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -55987,7 +55987,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -56063,9 +56063,9 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -56098,7 +56098,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_RANGE_COND"
           ],
@@ -56180,9 +56180,9 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -56218,7 +56218,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -56252,7 +56252,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_RANGE_COND"
           ],
           "rel_id": [
@@ -56328,9 +56328,9 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -56363,7 +56363,7 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_RANGE_COND"
           ],
@@ -56445,9 +56445,9 @@ select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -60848,7 +60848,7 @@ select c1 from t1 where c2 = 1+1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_SIMPLE_COND"
       ],
@@ -60930,10 +60930,10 @@ select c1 from t1 where c2 = 1+1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -61028,7 +61028,7 @@ select c1 from t1 where c2 = 1+1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -61058,9 +61058,9 @@ select c1 from t1 where c2 = 1+1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -61090,9 +61090,9 @@ select c1 from t1 where c2 = 1+1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -61399,7 +61399,7 @@ select c1 from t1 where c1 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -61475,9 +61475,9 @@ select c1 from t1 where c1 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -61842,7 +61842,7 @@ select c1 column1 from t1 where c1 > 2
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -61918,9 +61918,9 @@ select c1 column1 from t1 where c1 > 2
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -62472,7 +62472,7 @@ select c1, c2 from t1 table1 where table1.c2 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_SIMPLE_COND"
       ],
@@ -62554,9 +62554,9 @@ select c1, c2 from t1 table1 where table1.c2 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -63107,10 +63107,10 @@ select c1, c2 from t1 where 1 >1
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -63203,7 +63203,7 @@ select c1, c2 from t1 where 1 >1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -63233,9 +63233,9 @@ select c1, c2 from t1 where 1 >1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -63265,9 +63265,9 @@ select c1, c2 from t1 where 1 >1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -63761,7 +63761,7 @@ select * from t1 where c1 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -63837,9 +63837,9 @@ select * from t1 where c1 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -64264,7 +64264,7 @@ select c1 from t1 where c2 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_SIMPLE_COND"
       ],
@@ -64346,9 +64346,9 @@ select c1 from t1 where c2 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -64773,7 +64773,7 @@ select c1 from t1 where 1 = c2
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_SIMPLE_COND"
       ],
@@ -64806,9 +64806,9 @@ select c1 from t1 where 1 = c2
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -65222,7 +65222,7 @@ select c1 from t1 where c1 = 1 and c1 =2
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -65298,9 +65298,9 @@ select c1 from t1 where c1 = 1 and c1 =2
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -65333,7 +65333,7 @@ select c1 from t1 where c1 = 1 and c1 =2
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -65409,9 +65409,9 @@ select c1 from t1 where c1 = 1 and c1 =2
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -74737,7 +74737,7 @@ select * from t1 having c1 > 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -74813,9 +74813,9 @@ select * from t1 having c1 > 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -75367,7 +75367,7 @@ select * from t1 having sum(c1) > 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -75489,9 +75489,9 @@ select * from t1 having sum(c1) > 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -76133,7 +76133,7 @@ select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -76255,9 +76255,9 @@ select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -76290,7 +76290,7 @@ select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG",
         "UNKNOWN"
       ],
@@ -76419,9 +76419,9 @@ select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -77081,7 +77081,7 @@ select c1 from t1 group by c2 having c2 > 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "UNKNOWN",
         "IS_RANGE_COND"
       ],
@@ -77163,9 +77163,9 @@ select c1 from t1 group by c2 having c2 > 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -77717,7 +77717,7 @@ select c1, c2 from t1 table1 having sum(table1.c2) < 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG",
         "UNKNOWN"
       ],
@@ -77846,9 +77846,9 @@ select c1, c2 from t1 table1 having sum(table1.c2) < 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -78309,7 +78309,7 @@ select c1 from t1 having t1.c1 > 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -78385,9 +78385,9 @@ select c1 from t1 having t1.c1 > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -78752,7 +78752,7 @@ select c1 from t1 having c1 > 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -78828,9 +78828,9 @@ select c1 from t1 having c1 > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -79255,7 +79255,7 @@ select c1 from t1 having sum(c2)>1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG",
         "UNKNOWN"
       ],
@@ -79384,9 +79384,9 @@ select c1 from t1 having sum(c2)>1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -80011,7 +80011,7 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -80045,7 +80045,7 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
             "IS_AGG",
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG"
           ],
           "rel_id": [
@@ -80079,7 +80079,7 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
                 1
@@ -80154,9 +80154,9 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -80201,9 +80201,9 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -80335,7 +80335,7 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
         "IS_AGG",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -80369,7 +80369,7 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -80444,9 +80444,9 @@ select c1, sum(c2) column2 from t1 having sum(c1+1)>1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -81008,7 +81008,7 @@ select * from t1 having sum(1) > 1
       },
       "expr_info": [
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -81040,7 +81040,7 @@ select * from t1 having sum(1) > 1
           "expr_info": [
             "IS_AGG",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG"
           ],
           "rel_id": [
@@ -81073,9 +81073,9 @@ select * from t1 having sum(1) > 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -81118,9 +81118,9 @@ select * from t1 having sum(1) > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -81155,7 +81155,7 @@ select * from t1 having sum(1) > 1
       "expr_info": [
         "IS_AGG",
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -81188,9 +81188,9 @@ select * from t1 having sum(1) > 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -88492,7 +88492,7 @@ select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR",
         "UNKNOWN"
       ],
@@ -88526,7 +88526,7 @@ select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_SIMPLE_COND"
           ],
           "rel_id": [
@@ -88602,9 +88602,9 @@ select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -88637,7 +88637,7 @@ select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "UNKNOWN",
             "IS_SIMPLE_COND"
           ],
@@ -88719,9 +88719,9 @@ select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -91908,9 +91908,9 @@ select c1, c2 from t1 limit 2, 10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -93035,9 +93035,9 @@ select c1, c2 from t1 limit 2 offset 10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -94224,9 +94224,9 @@ select * from t1 limit 1, 1
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -120329,10 +120329,10 @@ select current_timestamp()
         },
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM",
-          "IS_EXEC_PARM"
+          "CNT_STATIC_PARAM",
+          "IS_DYNAMIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -122388,10 +122388,10 @@ select 1 collate utf8_general_ci < _utf8 'abcd' collate utf8_general_ci;
         },
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM",
-          "IS_EXEC_PARM"
+          "CNT_STATIC_PARAM",
+          "IS_DYNAMIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -127828,7 +127828,7 @@ select X.c1 from t1 AS X group by X.c2 having (X.c1 = 1);
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -127904,9 +127904,9 @@ select X.c1 from t1 AS X group by X.c2 having (X.c1 = 1);
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -146744,10 +146744,10 @@ select default(c1) from t2;
         },
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM",
-          "IS_EXEC_PARM"
+          "CNT_STATIC_PARAM",
+          "IS_DYNAMIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -147729,7 +147729,7 @@ select 1 from t1,t2 group by t1.c1,t2.c1 having t1.c1 =1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -147805,9 +147805,9 @@ select 1 from t1,t2 group by t1.c1,t2.c1 having t1.c1 =1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -148260,7 +148260,7 @@ select c1 from t1 as x group by x.c1,c1 having c1 =1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -148336,9 +148336,9 @@ select c1 from t1 as x group by x.c1,c1 having c1 =1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -148791,7 +148791,7 @@ select c1 from t1 as x group by x.c1,c1 having x.c1 =1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -148867,9 +148867,9 @@ select c1 from t1 as x group by x.c1,c1 having x.c1 =1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -149130,7 +149130,7 @@ select c3 from t3 where c3>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -149206,10 +149206,10 @@ select c3 from t3 where c3>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -149306,7 +149306,7 @@ select c3 from t3 where c3>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -149338,9 +149338,9 @@ select c3 from t3 where c3>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -159300,7 +159300,7 @@ select * from t2 where (1) in (c2, (select c2 from t1));
         "IS_IN",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_IN",
         "CNT_SUB_QUERY"
       ],
@@ -159334,9 +159334,9 @@ select * from t2 where (1) in (c2, (select c2 from t1));
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],

@@ -14,7 +14,7 @@
 #define OCEANBASE_SHARE_OB_WEB_SERVICE_ROOT_ADDR_H_
 
 #include "share/ob_root_addr_agent.h"
-#include "share/ob_cluster_type.h"  // ObClusterType
+#include "share/ob_cluster_role.h"        // ObClusterRole
 #include "share/ob_cluster_sync_status.h"
 #include "lib/json/ob_json.h"
 #include "lib/ob_define.h"
@@ -38,23 +38,30 @@
 #define JSON_STANDBY "STANDBY"
 #define JSON_TIMESTAMP "timestamp"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObSqlString;
+class ObString;
+class ObIAllocator;
 }
-namespace obrpc {
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
-namespace share {
+namespace share
+{
 
-struct ObRedoTransportOption {
+struct ObRedoTransportOption
+{
   OB_UNIS_VERSION(1);
-
 public:
-  static const int64_t DEFAULT_NET_TIMEOUT = 30 * 1000 * 1000;  // 30s
-  static const int64_t DEFAULT_REOPEN = 300 * 1000 * 1000;      // 300s
-  static const int64_t DEFAULT_MAX_FAILURE = 0;                 // 0 always retry
-  enum RedoOptionProfile {
+  static const int64_t DEFAULT_NET_TIMEOUT = 30 * 1000 * 1000; //30s
+  static const int64_t DEFAULT_REOPEN = 300 * 1000 * 1000; //300s
+  static const int64_t DEFAULT_MAX_FAILURE = 0;//0 always retry
+  enum RedoOptionProfile
+  {
     INVALID_TYPE = -1,
     SYNC = 0,
     ASYNC,
@@ -66,9 +73,10 @@ public:
   int64_t reopen_;
   int64_t max_failure_;
   bool is_sync_;
-  ObRedoTransportOption()
-      : net_timeout_(DEFAULT_NET_TIMEOUT), reopen_(DEFAULT_REOPEN), max_failure_(DEFAULT_MAX_FAILURE), is_sync_(false)
-  {}
+  ObRedoTransportOption() : net_timeout_(DEFAULT_NET_TIMEOUT),
+                          reopen_(DEFAULT_REOPEN),
+                          max_failure_(DEFAULT_MAX_FAILURE),
+                          is_sync_(false) {}
   void reset()
   {
     net_timeout_ = DEFAULT_NET_TIMEOUT;
@@ -76,103 +84,100 @@ public:
     max_failure_ = DEFAULT_MAX_FAILURE;
     is_sync_ = false;
   }
-  ObRedoTransportOption& operator=(const ObRedoTransportOption& other);
-  int assign(const ObRedoTransportOption& other);
-  bool operator!=(const ObRedoTransportOption& other) const;
-  bool operator==(const ObRedoTransportOption& other) const;
-  int append_redo_transport_options_change(const common::ObString& redo_transport_options_str);
-  int get_redo_transport_options_str(common::ObSqlString& str) const;
+  ObRedoTransportOption &operator =(const ObRedoTransportOption &other);
+  int assign(const ObRedoTransportOption &other);
+  bool operator !=(const ObRedoTransportOption &other) const;
+  bool operator ==(const ObRedoTransportOption &other) const;
+  int append_redo_transport_options_change(const common::ObString &redo_transport_options_str);
+  int get_redo_transport_options_str(common::ObSqlString &str) const;
+  bool get_is_sync() const { return is_sync_; }
   TO_STRING_KV(K_(net_timeout), K_(reopen), K_(max_failure), K_(is_sync));
-
 private:
-  RedoOptionProfile str_to_redo_transport_options(const char* str);
+  RedoOptionProfile str_to_redo_transport_options(const char *str);
 };
 
-struct ObClusterRsAddr {
+struct ObClusterRsAddr
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObClusterRsAddr() : cluster_id_(common::OB_INVALID_ID), addr_()
+  ObClusterRsAddr()
+    : cluster_id_(common::OB_INVALID_ID),
+      addr_()
   {}
-  virtual ~ObClusterRsAddr()
-  {}
+  virtual ~ObClusterRsAddr() {}
   void reset();
   bool is_valid() const;
-  int assign(const ObClusterRsAddr& other);
+  int assign(const ObClusterRsAddr &other);
   TO_STRING_KV(K_(cluster_id), K_(addr));
-
 public:
   int64_t cluster_id_;
   common::ObAddr addr_;
 };
 
-struct ObClusterAddr {
+struct ObClusterAddr
+{
   OB_UNIS_VERSION(1);
-
 public:
   int64_t cluster_id_;
-  common::ObClusterType cluster_type_;
+  common::ObClusterRole cluster_role_;
   common::ObClusterStatus cluster_status_;
   int64_t timestamp_;
-  common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> cluster_name_;
+  common::ObFixedLengthString<common::OB_MAX_CLUSTER_NAME_LENGTH> cluster_name_;
   ObAddrList addr_list_;
   ObAddrList readonly_addr_list_;
-  // unique internal label of cluster
+  //unique internal label of cluster
   int64_t cluster_idx_;
-  int64_t current_scn_;  // the current flashback point of cluster
+  int64_t current_scn_;//the current flashback point of cluster
   share::ObRedoTransportOption redo_transport_options_;
   common::ObProtectionLevel protection_level_;
 
   share::ObClusterSyncStatus sync_status_;
   int64_t last_hb_ts_;
-  ObClusterAddr()
-      : cluster_id_(common::OB_INVALID_ID),
-        cluster_type_(common::INVALID_CLUSTER_TYPE),
-        cluster_status_(common::INVALID_CLUSTER_STATUS),
-        timestamp_(0),
-        cluster_name_(),
-        addr_list_(),
-        readonly_addr_list_(),
-        cluster_idx_(common::OB_INVALID_INDEX),
-        current_scn_(common::OB_INVALID_VERSION),
-        redo_transport_options_(),
-        protection_level_(common::MAXIMUM_PERFORMANCE_LEVEL),
-        sync_status_(NOT_AVAILABLE),
-        last_hb_ts_(common::OB_INVALID_TIMESTAMP)
-  {}
+  ObClusterAddr() : cluster_id_(common::OB_INVALID_ID), cluster_role_(common::INVALID_CLUSTER_ROLE),
+    cluster_status_(common::INVALID_CLUSTER_STATUS), timestamp_(0),
+    cluster_name_(), addr_list_(), readonly_addr_list_(),
+    cluster_idx_(common::OB_INVALID_INDEX),
+    current_scn_(common::OB_INVALID_VERSION),
+    redo_transport_options_(),
+    protection_level_(common::INVALID_PROTECTION_LEVEL),
+    sync_status_(NOT_AVAILABLE), last_hb_ts_(common::OB_INVALID_TIMESTAMP) {}
   void reset();
-  int assign(const ObClusterAddr& other);
+  int assign(const ObClusterAddr &other);
   bool is_valid() const;
-  int get_addr_list_str(common::ObString& addr_list_str);
+  int get_addr_list_str(common::ObString &addr_list_str);
+  int append_redo_transport_options_change(common::ObString &redo_transport_options,
+                                           common::ObIAllocator &alloc) const;
+  int construct_rootservice_list(common::ObString &rootservice_list,
+                                 common::ObIAllocator &alloc) const;
+
   bool is_added() const
-  {
-    return common::CLUSTER_VALID == cluster_status_ || common::CLUSTER_DISABLED == cluster_status_;
-  }
-  bool operator==(const ObClusterAddr& other) const;
-  TO_STRING_KV(K_(cluster_id), K_(cluster_type), K_(cluster_status), K_(timestamp), K_(cluster_name), K_(addr_list),
-      K_(readonly_addr_list), K_(cluster_idx), K_(current_scn), K_(redo_transport_options), K_(protection_level),
-      K_(sync_status), K_(last_hb_ts));
+  { return common::INVALID_CLUSTER_STATUS != cluster_status_
+           && common::REGISTERED != cluster_status_
+           && common::MAX_CLUSTER_STATUS != cluster_status_; }
+  bool operator==(const ObClusterAddr &other) const;
+  TO_STRING_KV(K_(cluster_id), K_(cluster_role), K_(cluster_status),
+               K_(timestamp), K_(cluster_name),
+               K_(addr_list), K_(readonly_addr_list), K_(cluster_idx),
+               K_(current_scn), K_(redo_transport_options), K_(protection_level),
+               K_(sync_status), K_(last_hb_ts));
 };
 
 typedef common::ObIArray<ObClusterAddr> ObClusterIAddrList;
 typedef common::ObSArray<ObClusterAddr> ObClusterAddrList;
 // store and fetch root server address list via REST style web service.
-class ObWebServiceRootAddr : public ObRootAddrAgent {
+class ObWebServiceRootAddr : public ObRootAddrAgent
+{
 public:
-  static const int64_t MAX_RECV_CONTENT_LEN = 512 * 1024;  // 512KB
+  static const int64_t MAX_RECV_CONTENT_LEN = 512 * 1024; // 512KB
 
-  ObWebServiceRootAddr()
-  {}
-  virtual ~ObWebServiceRootAddr()
-  {}
+  ObWebServiceRootAddr() {}
+  virtual ~ObWebServiceRootAddr() {}
 
-  virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp) override;
-  virtual int fetch(
-      ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ) override;
-  virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
-      common::ObClusterType& cluster_type) override;
-  virtual int delete_cluster(const int64_t cluster_id) override;
+  virtual int store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                    const bool force, const common::ObClusterRole cluster_role,
+                    const int64_t timestamp);
+  virtual int fetch(ObIAddrList &add_list,
+                    ObIAddrList &readonly_addr_list);
   /// get RS_LIST from URL
   ///
   /// @param [in] appanme              cluster appanme
@@ -183,15 +188,31 @@ public:
   ///
   /// @retval OB_SUCCESS       success
   /// @retval other error code fail
-  static int fetch_rs_list_from_url(const char* appname, const char* url, const int64_t timeout_ms,
-      ObIAddrList& rs_list, ObIAddrList& readonly_rs_list, common::ObClusterType& cluster_type);
+  static int fetch_rs_list_from_url(
+      const char *appname,
+      const char *url,
+      const int64_t timeout_ms,
+      ObIAddrList &rs_list,
+      ObIAddrList &readonly_rs_list,
+      common::ObClusterRole &cluster_role);
 
-  static int get_all_cluster_info(common::ObServerConfig* config, ObClusterIAddrList& cluster_list);
-  static int to_json(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const char* appname,
-      const int64_t cluster_id, const common::ObClusterType cluster_type, const int64_t timestamp,
-      common::ObSqlString& json);
-  static int from_json(const char* json_str, const char* appname, ObClusterAddr& cluster);
-  static int parse_data(const json::Value* data, ObClusterAddr& cluster);
+  static int get_all_cluster_info(common::ObServerConfig *config,
+                                  ObClusterIAddrList &cluster_list);
+  static int to_json(
+      const ObIAddrList &addr_list,
+      const ObIAddrList &readonly_addr_list,
+      const char *appname,
+      const int64_t cluster_id,
+      const common::ObClusterRole cluster_role,
+      const int64_t timestamp,
+      common::ObSqlString &json);
+  static int from_json(
+      const char *json_str,
+      const char *appname,
+      ObClusterAddr &cluster);
+  static int parse_data(const json::Value *data,
+                        ObClusterAddr &cluster);
+  static int get_addr_list(json::Value *&rs_list, ObIAddrList &addr_list);
 
 private:
   /// store rs_list to URL
@@ -204,31 +225,38 @@ private:
   ///
   /// @retval OB_SUCCESS success
   /// @retval other error code fail
-  static int store_rs_list_on_url(const ObIAddrList& rs_list, const ObIAddrList& readonly_rs_list, const char* appname,
-      const int64_t cluster_id, const common::ObClusterType cluster_type, const char* url, const int64_t timeout_ms,
+  static int store_rs_list_on_url(
+      const ObIAddrList &rs_list,
+      const ObIAddrList &readonly_rs_list,
+      const char *appname,
+      const int64_t cluster_id,
+      const common::ObClusterRole cluster_role,
+      const char *url,
+      const int64_t timeout_ms,
       const int64_t timestamp);
-  static int get_addr_list(json::Value*& rs_list, ObIAddrList& addr_list);
-  static int add_to_list(
-      common::ObString& addr_str, const int64_t sql_port, common::ObString& role, ObIAddrList& addr_list);
+  static int add_to_list(common::ObString &addr_str, const int64_t sql_port,
+                         common::ObString &role, ObIAddrList &addr_list);
 
   // call web service, if post_data not NULL use POST method, else use GET method.
-  static int call_service(const char* post_data, common::ObSqlString& content, const char* config_url,
-      const int64_t timeout_ms, const bool is_delete = false);
+  static int call_service(const char *post_data,
+      common::ObSqlString &content,
+      const char *config_url,
+      const int64_t timeout_ms,
+      const bool is_delete = false);
 
   // curl write date interface
-  static int64_t curl_write_data(void* ptr, int64_t size, int64_t nmemb, void* stream);
-  static int build_new_config_url(char* buf, const int64_t buf_len, const char* config_url, const int64_t cluster_id);
-  // static int get_all_cluster_info(const char *json_str,
+  static int64_t curl_write_data(void *ptr, int64_t size, int64_t nmemb, void *stream);
+  static int build_new_config_url(char* buf, const int64_t buf_len,
+                                  const char* config_url, const int64_t cluster_id);
+  //static int get_all_cluster_info(const char *json_str,
   //                                ObClusterIAddrList &cluster_list);
-  static int check_store_result(const common::ObSqlString& content);
-  int fetch_rslist_by_id(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
-      common::ObClusterType& cluster_type);
+  static int check_store_result(const common::ObSqlString &content);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObWebServiceRootAddr);
 };
 
-}  // end namespace share
-}  // namespace oceanbase
+} // end namespace share
+} // end oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_WEB_SERVICE_ROOT_ADDR_H_
+#endif // OCEANBASE_SHARE_OB_WEB_SERVICE_ROOT_ADDR_H_

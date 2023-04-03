@@ -13,31 +13,24 @@
 #ifndef OCEANBASE_LIB_OB_QUEUE_
 #define OCEANBASE_LIB_OB_QUEUE_
 
-#include <stdlib.h>  // NULL
+#include <stdlib.h>     // NULL
 #include <errno.h>
 #include "lib/ob_define.h"
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
-struct ObLink {
-  ObLink() : next_(NULL)
-  {}
-  ~ObLink()
-  {
-    next_ = NULL;
-  }
+namespace oceanbase
+{
+namespace common
+{
+struct ObLink
+{
+  ObLink() : next_(NULL) {}
+  ~ObLink() { next_ = NULL; }
 
-  ObLink* next_;
+  ObLink *next_;
 
-  void reset()
-  {
-    next_ = NULL;
-  }
-  bool is_deleted() const
-  {
-    return ((uint64_t)next_) & 1;
-  }
+  void reset() { next_ = NULL; }
+  bool is_deleted() const { return ((uint64_t)next_) & 1; }
 };
 
 inline bool is_last_bit_set(uint64_t x)
@@ -51,29 +44,30 @@ inline uint64_t clear_last_bit(uint64_t x)
 }
 
 // try until last_bit is set; return value before CAS
-inline uint64_t set_last_bit(uint64_t* addr)
+inline uint64_t set_last_bit(uint64_t *addr)
 {
   uint64_t ov = 0;
-  uint64_t nv = ATOMIC_LOAD(addr);  // newest value before CAS
-  while (0 == ((ov = nv) & 1) && ov != (nv = ATOMIC_VCAS(addr, ov, ov | 1))) {
+  uint64_t nv  = ATOMIC_LOAD(addr); //newest value before CAS
+  while (0 == ((ov = nv) & 1)
+         && ov != (nv = ATOMIC_VCAS(addr, ov, ov | 1))) {
     // do nothing
   }
   return nv;
 }
 
-inline void unset_last_bit(uint64_t* addr)
+inline void unset_last_bit(uint64_t *addr)
 {
   ATOMIC_STORE(addr, clear_last_bit(ATOMIC_LOAD(addr)));
 }
 
-inline ObLink* link_next(ObLink* cur)
+inline ObLink *link_next(ObLink *cur)
 {
-  return (ObLink*)clear_last_bit((uint64_t)ATOMIC_LOAD(&cur->next_));
+  return (ObLink *)clear_last_bit((uint64_t)ATOMIC_LOAD(&cur->next_));
 }
 
 // return prev->next_ before CAS
 // success is return == next
-inline ObLink* link_insert(ObLink* prev, ObLink* target, ObLink* next)
+inline ObLink *link_insert(ObLink *prev, ObLink *target, ObLink *next)
 {
   target->next_ = next;
   return ATOMIC_VCAS(&prev->next_, next, target);
@@ -81,12 +75,12 @@ inline ObLink* link_insert(ObLink* prev, ObLink* target, ObLink* next)
 
 // return prev->next_ before CAS
 // success is return == target
-inline ObLink* link_del(ObLink* prev, ObLink* target, ObLink*& next)
+inline ObLink *link_del(ObLink *prev, ObLink *target, ObLink *&next)
 {
-  ObLink* ret = NULL;
-  if (!is_last_bit_set((uint64_t)(next = (ObLink*)set_last_bit((uint64_t*)(&target->next_))))) {
+  ObLink *ret = NULL;
+  if (!is_last_bit_set((uint64_t)(next = (ObLink *)set_last_bit((uint64_t *)(&target->next_))))) {
     if (target != (ret = ATOMIC_VCAS(&prev->next_, target, next))) {
-      unset_last_bit((uint64_t*)(&target->next_));
+      unset_last_bit((uint64_t *)(&target->next_));
     }
   }
   return ret;
@@ -94,12 +88,25 @@ inline ObLink* link_del(ObLink* prev, ObLink* target, ObLink*& next)
 
 // return first node that >= key
 // make sure start > key
-template <typename T>
-T* ol_search(T* start, T* key, T*& prev)
+template<typename T>
+T *ol_search(T *start, T *key, T *&prev)
 {
-  T* next = NULL;
+  T *next = NULL;
   prev = start;
-  while (NULL != (next = (T*)link_next(prev)) && next->compare(key) < 0) {
+  while (NULL != (next = (T *)link_next(prev))
+         && next->compare(key) < 0) {
+    prev = next;
+  }
+  return next;
+}
+
+template<typename T, typename Comparator>
+T *ol_search(T *start, Comparator &cmp, T *&prev)
+{
+  T *next = NULL;
+  prev = start;
+  while (NULL != (next = (T *)link_next(prev))
+         && cmp(next) < 0) {
     prev = next;
   }
   return next;
@@ -107,22 +114,23 @@ T* ol_search(T* start, T* key, T*& prev)
 
 // return first node that > key
 // make sure start > key
-template <typename T>
-T* ol_search_next(T* start, T* key, T*& prev)
+template<typename T>
+T *ol_search_next(T *start, T *key, T *&prev)
 {
-  T* next = NULL;
+  T *next = NULL;
   prev = start;
-  while (NULL != (next = (T*)link_next(prev)) && next->compare(key) <= 0) {
+  while (NULL != (next = (T *)link_next(prev))
+         && next->compare(key) <= 0) {
     prev = next;
   }
   return next;
 }
 
-template <typename T>
-int ol_get(T* start, T* key, T*& target)
+template<typename T>
+int ol_get(T *start, T *key, T *&target)
 {
   int err = 0;
-  T* prev = NULL;
+  T *prev = NULL;
   target = ol_search(start, key, prev);
   if (NULL == target || 0 != target->compare(key)) {
     err = -ENOENT;
@@ -130,8 +138,20 @@ int ol_get(T* start, T* key, T*& target)
   return err;
 }
 
-template <typename T>
-int _ol_insert(T* start, T* target)
+template<typename T, typename Comparator>
+int ol_get(T *start, Comparator &cmp, T *&target)
+{
+  int err = 0;
+  T *prev = NULL;
+  target = ol_search(start, cmp, prev);
+  if (NULL == target || 0 != cmp(target)) {
+    err = -ENOENT;
+  }
+  return err;
+}
+
+template<typename T>
+    int _ol_insert(T* start, T* target)
 {
   int err = 0;
   T* prev = NULL;
@@ -144,7 +164,7 @@ int _ol_insert(T* start, T* target)
   return err;
 }
 
-template <typename T>
+template<typename T>
 int _ol_del(T* start, T* key, T*& target)
 {
   int err = 0;
@@ -163,31 +183,63 @@ int _ol_del(T* start, T* key, T*& target)
   return err;
 }
 
+template<typename T, typename Comparator>
+int _ol_del(T* start, Comparator &cmp, T*& target)
+{
+  int err = 0;
+  T* prev = NULL;
+  T* next = NULL;
+  target = ol_search(start, cmp, prev);
+  if (NULL == target || 0 != cmp(target)) {
+    err = -ENOENT;
+  } else if (target == link_del(prev, target, (ObLink*&)next)) {
+    err = 0;
+  } else if (is_last_bit_set((uint64_t)next)) {
+    err = -ENOENT;
+  } else {
+    err = -EAGAIN;
+  }
+  return err;
+}
+
 // make sure start is valid all time
-template <typename T>
+template<typename T>
 int ol_insert(T* start, T* target)
 {
   int err = 0;
-  while (-EAGAIN == (err = _ol_insert(start, target)))
+  while(-EAGAIN == (err = _ol_insert(start, target)))
     ;
   return err;
 }
 
 // make sure start is valid all time
-template <typename T>
+template<typename T>
 int ol_del(T* start, T* key, T*& target)
 {
   int err = 0;
-  while (-EAGAIN == (err = _ol_del(start, key, target)))
+  while(-EAGAIN == (err = _ol_del(start, key, target)))
     ;
   return err;
 }
 
-struct ObDLink : public ObLink {
-  ObDLink() : ObLink(), prev_(NULL)
-  {}
-  ~ObDLink()
-  {}
+template<typename T, typename Comparator>
+int ol_del(T* start, Comparator &cmp, T*& target)
+{
+  int err = 0;
+  while(-EAGAIN == (err = _ol_del(start, cmp, target)))
+    ;
+  return err;
+}
+
+struct ObDLink: public ObLink
+{
+  ObDLink(): ObLink(), prev_(NULL) {}
+  ~ObDLink() {}
+  void reset()
+  {
+    ObLink::reset();
+    prev_ = NULL;
+  }
   ObDLink* prev_;
 };
 
@@ -195,7 +247,7 @@ struct ObDLink : public ObLink {
 inline void try_correct_prev_link(ObDLink* target, ObDLink* prev)
 {
   if (NULL != target) {
-    while (true) {
+    while(true) {
       // all threads DO FAS to make sure that one operation will correct the target->prev_ after all operation stop.
       ObDLink* old_prev = ATOMIC_TAS(&target->prev_, prev);
       if (ATOMIC_LOAD(&prev->next_) == target) {
@@ -218,7 +270,7 @@ inline int dl_insert(ObDLink* prev, ObDLink* target)
 {
   int err = 0;
   target->prev_ = prev;
-  while (true) {
+  while(true) {
     ObLink* next = link_next(prev);
     if (next == link_insert(prev, target, next)) {
       try_correct_prev_link((ObDLink*)next, target);
@@ -233,7 +285,7 @@ inline int dl_insert(ObDLink* prev, ObDLink* target)
 inline int dl_insert_before(ObDLink* next, ObDLink* target)
 {
   int err = 0;
-  while (true) {
+  while(true) {
     ObDLink* prev = ATOMIC_LOAD(&next->prev_);
     target->prev_ = prev;
     if (next == link_insert(prev, target, next)) {
@@ -247,7 +299,7 @@ inline int dl_insert_before(ObDLink* next, ObDLink* target)
 inline ObDLink* search_direct_prev(ObDLink* prev, ObDLink* target)
 {
   ObDLink* next = NULL;
-  while ((next = (ObDLink*)link_next(prev)) != target) {
+  while((next = (ObDLink*)link_next(prev)) != target) {
     prev = next;
   }
   return prev;
@@ -257,7 +309,7 @@ inline ObDLink* search_direct_prev(ObDLink* prev, ObDLink* target)
 inline int dl_del(ObDLink* target)
 {
   int err = 0;
-  while (0 == err) {
+  while(0 == err) {
     ObDLink* prev = search_direct_prev(ATOMIC_LOAD(&target->prev_), target);
     ObDLink* next = NULL;
     if (target == link_del(prev, target, (ObLink*&)next)) {
@@ -269,6 +321,6 @@ inline int dl_del(ObDLink* target)
   }
   return err;
 }
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_LIB_OB_QUEUE_
+} // namespace common
+} // namespace oceanbase
+#endif // OCEANBASE_LIB_OB_QUEUE_

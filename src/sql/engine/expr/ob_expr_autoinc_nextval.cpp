@@ -18,40 +18,61 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
-namespace sql {
-ObExprAutoincNextval::ObExprAutoincNextval(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_AUTOINC_NEXTVAL, N_AUTOINC_NEXTVAL, ONE_OR_TWO, NOT_ROW_DIMENSION)
+namespace sql
 {
+OB_SERIALIZE_MEMBER_INHERIT(ObExprAutoincNextval, ObExprOperator);
+ObExprAutoincNextval::ObExprAutoincNextval(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc,
+                         T_FUN_SYS_AUTOINC_NEXTVAL,
+                         N_AUTOINC_NEXTVAL,
+                         ZERO_OR_ONE,
+                         NOT_ROW_DIMENSION)
+{
+  /* NextVal是一个人肉生成的FuncOp */
   disable_operand_auto_cast();
 }
 
-ObExprAutoincNextval::~ObExprAutoincNextval()
-{}
 
-int ObExprAutoincNextval::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types_array, int64_t param_num, ObExprTypeCtx& type_ctx) const
+ObExprAutoincNextval::~ObExprAutoincNextval()
+{
+}
+
+
+int ObExprAutoincNextval::calc_result_typeN(ObExprResType &type,
+                                     ObExprResType *types_array,
+                                     int64_t param_num,
+                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  type.set_uint64();
-  type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
-  type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
-  type.set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+  if (param_num == 1) {
+    // 显式插入一个值，如 nextval(16, __values.c1)
+    // 此场景下 nextval 的返回值类型和插入值保持一致
+    type = types_array[0];
+  } else {
+    type.set_uint64();
+    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
+    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
+  }
+  type.set_result_flag(NOT_NULL_FLAG);
+
 
   CK(NULL != type_ctx.get_session());
-  if (OB_SUCC(ret) && type_ctx.get_session()->use_static_typing_engine()) {
-    CK(types_array[0].is_uint64());
-    if (OB_SUCC(ret) && 2 == param_num) {
+  if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && 1 == param_num) {
       // column_conv() is add before nextval() in static tying engine. Parameter 2 is converted
       // to defined type, only int/uint/float/double allowed.
       ObObjTypeClass tc = ob_obj_type_class(type.get_type());
-      if (!(ObNullTC == tc || ObIntTC == tc || ObUIntTC == tc || ObFloatTC == tc || ObDoubleTC == tc)) {
+      if (!(ObNullTC == tc || ObIntTC == tc || ObUIntTC == tc
+           || ObFloatTC == tc || ObDoubleTC == tc)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("only int/uint/float/double type class supported for auto_increment column", K(ret));
+        LOG_WARN("only int/uint/float/double type class supported for auto_increment column",
+                 K(ret));
       } else {
-        static_cast<ObObjMeta&>(type) = types_array[1];
+        static_cast<ObObjMeta &>(type) = types_array[0];
       }
     }
   }
@@ -59,142 +80,66 @@ int ObExprAutoincNextval::calc_result_typeN(
   return ret;
 }
 
-int ObExprAutoincNextval::calc_resultN(
-    ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
+//check generate auto-inc value or not and cast.
+int ObExprAutoincNextval::check_and_cast(ObObj &result,
+                                         ObObjType result_type,
+                                         const ObObj *objs_array,
+                                         int64_t param_num,
+                                         ObExprCtx &expr_ctx,
+                                         AutoincParam *autoinc_param,
+                                         bool &is_to_generate,
+                                         uint64_t &casted_value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(1 != param_num && 2 != param_num) || OB_ISNULL(objs_array) || OB_ISNULL(expr_ctx.phy_plan_ctx_) ||
-      OB_UNLIKELY(!objs_array[0].is_uint64())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument(s)", K(ret), K(objs_array), K(param_num), K(objs_array), K(expr_ctx.phy_plan_ctx_));
-  } else {
-    ObAutoincrementService& auto_service = ObAutoincrementService::get_instance();
-    ObPhysicalPlanCtx* plan_ctx = expr_ctx.phy_plan_ctx_;
-    ObIArray<AutoincParam>& autoinc_params = plan_ctx->get_autoinc_params();
-    bool is_to_generate = false;
-    AutoincParam* autoinc_param = NULL;
-    uint64_t autoinc_col_id = objs_array[0].get_uint64();
-    for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_params.count(); ++i) {
-      if (autoinc_col_id == autoinc_params.at(i).autoinc_col_id_) {
-        autoinc_param = &(autoinc_params.at(i));
-        break;
-      }
-    }
-    // this column with column_index is auto-increment column
-    if (OB_ISNULL(autoinc_param)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("should find auto-increment param", K(ret));
-    }
-
-    // sync last user specified value first(compatible with MySQL)
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(auto_service.sync_insert_value_local(*autoinc_param))) {
-        LOG_WARN("failed to sync last insert value", K(ret));
-      }
-    }
-
-    uint64_t casted_value = 0;
-    if (OB_SUCC(ret)) {
-      uint64_t new_val = 0;
-      // check : to generate auto-increment value or not
-      if (OB_FAIL(
-              check_and_cast(result, objs_array, param_num, expr_ctx, autoinc_param, is_to_generate, casted_value))) {
-        LOG_WARN("check generation failed", K(ret));
-
-      } else if (is_to_generate && OB_FAIL(generate_autoinc_value(new_val, auto_service, autoinc_param, plan_ctx))) {
-        LOG_WARN("generate autoinc value failed", K(ret));
-      } else if (is_to_generate) {
-        result.set_uint64(new_val);
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (autoinc_param->autoinc_desired_count_ > 0) {
-        --autoinc_param->autoinc_desired_count_;
-      }
-
-      if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID != autoinc_param->autoinc_col_id_) {
-        if (is_to_generate) {
-          plan_ctx->set_autoinc_col_value(result.get_uint64());
-        } else {
-          plan_ctx->set_autoinc_col_value(casted_value);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-// check generate auto-inc value or not and cast.
-int ObExprAutoincNextval::check_and_cast(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx,
-    AutoincParam* autoinc_param, bool& is_to_generate, uint64_t& casted_value)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(autoinc_param) || OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(objs_array)) {
+  if (OB_ISNULL(autoinc_param) ||
+      OB_ISNULL(expr_ctx.my_session_) ||
+      OB_ISNULL(objs_array)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument(s)", K(ret));
   } else if (1 == param_num) {
     is_to_generate = true;
   } else if (2 == param_num) {
-    expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);
+    // 如果是严格模式，则不合规的转换会报错，如 "abc" 不会被转换成 0
+    if (CM_IS_STRICT_MODE(expr_ctx.my_session_->get_sql_mode())) {
+      expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);
+    }
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    const ObObj& param = objs_array[1];
+    const ObObj &param = objs_array[1];
+    bool try_sync = true;
     if (param.is_null()) {
       is_to_generate = true;
-    } else if (!(SMO_NO_AUTO_VALUE_ON_ZERO & expr_ctx.my_session_->get_sql_mode())) {
+    } else {
+      bool auto_val_on_zero = (!(SMO_NO_AUTO_VALUE_ON_ZERO & expr_ctx.my_session_->get_sql_mode()));
       // generate value on zero
-      if (param.is_zero()) {
+      if (auto_val_on_zero && param.is_zero()) {
         is_to_generate = true;
       } else {
-        EXPR_GET_UINT64_V2(param, casted_value);
+        ret = get_casted_value_by_result_type(cast_ctx,
+                                              result_type,
+                                              param,
+                                              casted_value,
+                                              try_sync);
         if (OB_SUCC(ret)) {
-          if (0 == casted_value) {
+          if (auto_val_on_zero && 0 == casted_value) {
             // casted to zero; generate auto-increment value too
             is_to_generate = true;
           }
         } else {
-          // the code "EXPR_GET_UINT64_V2(param, casted_value)" above is wrong,
-          // auto increment column can be int or double in mysql, the correct operation
-          // should be:
-          // 1. cast param to column type, not the hard-coding 'uint'.
-          // 2. if cast failed and sql mode is non-strict, set is_to_generate to true.
-          //
-          // cases below are all in non-strict mode.
-          //
-          // case 1:
-          // column c1 is tinyint auto increment without unsigned, then insert -12 into c1.
-          // -12 should be casted to tinyint or int, and we will not generate next value.
-          // but we try to cast -12 to uint and get an error, we MUST NOT set is_to_generate
-          // to true below.
-          //
-          // case 2:
-          // column c1 is tinyint auto increment without unsigned, then insert 'abc' into c1.
-          // try to cast 'abc' to tinyint or uint will always throw an error, but this time
-          // we MUST set is_to_generate to true to generate nextval.
-          //
-          // so I removed the condition 'is_strict_mode(expr_ctx.my_session_->get_sql_mode())'
-          // below, until we cast param to column type.
-
-          if (autoinc_param->is_ignore_ || false /*!is_strict_mode(expr_ctx.my_session_->get_sql_mode())*/) {
+          // see:
+          if (autoinc_param->is_ignore_) {
             is_to_generate = true;
           }
         }
       }
-    }  // end else if
+    } //end else if
 
     // do not generate; sync value specified by user
     if (OB_SUCC(ret)) {
       if (!is_to_generate) {
         result = param;
-        // sync value
-        if (0 == casted_value) {
-          EXPR_GET_UINT64_V2(param, casted_value);
-        }
-        if (OB_SUCC(ret)) {
-          if (casted_value > autoinc_param->value_to_sync_) {
-            autoinc_param->value_to_sync_ = casted_value;
-            autoinc_param->sync_flag_ = true;
-          }
+        if (try_sync && casted_value > autoinc_param->value_to_sync_) {
+          autoinc_param->value_to_sync_ = casted_value;
+          autoinc_param->sync_flag_ = true;
         }
       }
     }
@@ -206,6 +151,7 @@ int ObExprAutoincNextval::check_and_cast(ObObj& result, const ObObj* objs_array,
       autoinc_param->value_to_sync_ = 0;
       autoinc_param->sync_flag_ = true;
     }
+    // 如果是严格模式，则不合规的转换会报错，如 "abc" 不会被转换成 0
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Error unexpected", K(ret), K(param_num));
@@ -213,8 +159,53 @@ int ObExprAutoincNextval::check_and_cast(ObObj& result, const ObObj* objs_array,
   return ret;
 }
 
-int ObExprAutoincNextval::get_uint_value(
-    const ObExpr& input_expr, ObDatum* input_value, bool& is_zero, uint64_t& casted_value)
+
+// 这个函数要解决的问题是：当用户插入一个负数到 signed int 自增列时，
+// 要允许插入。需要一个机制来判断：用户插入的是负数。本函数就是解决这个问题
+//
+// 详细 MySQL 行为参考 ：
+//
+// 出参说明：
+// casted_value 用于设置到 ObPacket 的 lii_ 域，是一个 unsigned 值
+//    当 param 是一个负数的时候，casted_value = UINT64_MAX
+// try_sync 是为了处理兼容性问题：当 casted_value = UINT64_MAX 时，
+//    通过设置 try_sync = false，使得不去和 last_sync_value 比较，
+//    否则总是会把 UINT64_MAX sync 到其它节点作为插入的最大值。这不对。
+int ObExprAutoincNextval::get_casted_value_by_result_type(ObCastCtx &cast_ctx,
+                                                          ObObjType result_type,
+                                                          const ObObj &param,
+                                                          uint64_t &casted_value,
+                                                          bool &try_sync)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_object;
+  const ObObj *res_object = nullptr;
+  if (OB_FAIL(ObObjCaster::to_type(result_type,
+                                   cast_ctx,
+                                   param,
+                                   tmp_object,
+                                   res_object))) {
+    LOG_TRACE("fail cast param", K(param), K(ret));
+  } else if (res_object->is_unsigned()) {
+    // unsigned, cast to uint64_t
+    EXPR_GET_UINT64_V2(*res_object, casted_value);
+  } else {
+    // signed, cast to int64_t
+    int64_t value = 0;
+    EXPR_GET_INT64_V2(*res_object, value);
+    if (value < 0) {
+      try_sync = false;
+      casted_value = UINT64_MAX;
+    } else {
+      casted_value = static_cast<uint64_t>(value);
+    }
+  }
+  return ret;
+}
+
+int ObExprAutoincNextval::get_uint_value(const ObExpr &input_expr,
+                                         ObDatum *input_value,
+                                         bool &is_zero, uint64_t &casted_value)
 {
   int ret = OB_SUCCESS;
   if (NULL == input_value || input_value->is_null()) {
@@ -253,22 +244,32 @@ int ObExprAutoincNextval::get_uint_value(
       }
       default:
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("only int/float/double types support auto increment", K(ret), K(input_expr.datum_meta_));
+        LOG_WARN("only int/float/double types support auto increment",
+                 K(ret), K(input_expr.datum_meta_));
     }
   }
   return ret;
 }
 
-int ObExprAutoincNextval::get_input_value(const ObExpr& input_expr, ObEvalCtx& ctx, ObDatum* input_value,
-    share::AutoincParam& autoinc_param, bool& is_to_generate, uint64_t& casted_value)
+int ObExprAutoincNextval::get_input_value(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          ObDatum *input_value,
+                                          share::AutoincParam &autoinc_param,
+                                          bool &is_to_generate,
+                                          uint64_t &casted_value)
 {
   int ret = OB_SUCCESS;
   if (NULL == input_value || input_value->is_null()) {
     is_to_generate = true;
   } else {
     bool is_zero = false;
-    if (OB_FAIL(get_uint_value(input_expr, input_value, is_zero, casted_value))) {
-      LOG_WARN("get casted unsigned int value failed", K(ret));
+    if (expr.arg_cnt_ == 1) {
+      if (OB_ISNULL(expr.args_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr.args_ is null", K(ret));
+      } else if (OB_FAIL(get_uint_value(*expr.args_[0], input_value, is_zero, casted_value))) {
+        LOG_WARN("get casted unsigned int value failed", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (!(SMO_NO_AUTO_VALUE_ON_ZERO & ctx.exec_ctx_.get_my_session()->get_sql_mode())) {
@@ -291,11 +292,15 @@ int ObExprAutoincNextval::get_input_value(const ObExpr& input_expr, ObEvalCtx& c
   return ret;
 }
 
-int ObExprAutoincNextval::generate_autoinc_value(
-    uint64_t& new_val, ObAutoincrementService& auto_service, AutoincParam* autoinc_param, ObPhysicalPlanCtx* plan_ctx)
+int ObExprAutoincNextval::generate_autoinc_value(const ObSQLSessionInfo &my_session,
+                                                 uint64_t &new_val,
+                                                 ObAutoincrementService &auto_service,
+                                                 AutoincParam *autoinc_param,
+                                                 ObPhysicalPlanCtx *plan_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(autoinc_param) || OB_ISNULL(plan_ctx)) {
+  if (OB_ISNULL(autoinc_param) ||
+      OB_ISNULL(plan_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument(s)", K(ret), K(autoinc_param), K(plan_ctx));
   } else {
@@ -305,7 +310,7 @@ int ObExprAutoincNextval::generate_autoinc_value(
     }
     if (OB_SUCC(ret)) {
       uint64_t value = 0;
-      CacheHandle*& cache_handle = autoinc_param->cache_handle_;
+      CacheHandle *&cache_handle = autoinc_param->cache_handle_;
       // get cache handle when allocate first auto-increment value
       if (OB_ISNULL(cache_handle)) {
         if (OB_FAIL(auto_service.get_handle(*autoinc_param, cache_handle))) {
@@ -334,45 +339,52 @@ int ObExprAutoincNextval::generate_autoinc_value(
 
       if (OB_SUCC(ret)) {
         new_val = value;
-        if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID != autoinc_param->autoinc_col_id_) {
-          plan_ctx->set_autoinc_id_tmp(value);
-        }
+        plan_ctx->set_autoinc_id_tmp(value);
       }
     }
   }
   return ret;
 }
 
-int ObExprAutoincNextval::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
+int ObExprAutoincNextval::cg_expr(
+        ObExprCGCtx &op_cg_ctx,
+        const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  CK(1 == rt_expr.arg_cnt_ || 2 == rt_expr.arg_cnt_);
-  rt_expr.eval_func_ = eval_nextval;
+  CK(0 == rt_expr.arg_cnt_ || 1 == rt_expr.arg_cnt_);
+  if (OB_FAIL(ObAutoincNextvalInfo::init_autoinc_nextval_info(
+          op_cg_ctx.allocator_, raw_expr, rt_expr, type_))) {
+    LOG_WARN("fail to init_autoinc_nextval_info", K(ret), K(type_));
+  } else {
+    rt_expr.eval_func_ = eval_nextval;
+  }
   return ret;
 }
 
-int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprAutoincNextval::eval_nextval(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* col_id = NULL;
-  ObDatum* input_value = NULL;
-  ObPhysicalPlanCtx* plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
-  if (OB_ISNULL(plan_ctx)) {
+  ObDatum *input_value = NULL;
+  ObPhysicalPlanCtx *plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+  ObSQLSessionInfo *my_session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no phy plan context", K(ret));
-  } else if (OB_FAIL(expr.eval_param_value(ctx, col_id, input_value))) {
+  } else if (OB_FAIL(expr.eval_param_value(ctx, input_value))) {
     LOG_WARN("evaluate parameter failed", K(ret));
-  } else if (col_id->is_null()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("id is null", K(ret));
   } else {
-    ObAutoincrementService& auto_service = ObAutoincrementService::get_instance();
-    ObIArray<AutoincParam>& autoinc_params = plan_ctx->get_autoinc_params();
+    uint64_t autoinc_table_id =
+            static_cast<ObAutoincNextvalInfo *>(expr.extra_info_)->autoinc_table_id_;
+    uint64_t autoinc_col_id =
+            static_cast<ObAutoincNextvalInfo *>(expr.extra_info_)->autoinc_col_id_;
+    ObAutoincrementService &auto_service = ObAutoincrementService::get_instance();
+    ObIArray<AutoincParam> &autoinc_params = plan_ctx->get_autoinc_params();
     bool is_to_generate = false;
-    AutoincParam* autoinc_param = NULL;
-    uint64_t autoinc_col_id = col_id->get_uint();
+    AutoincParam *autoinc_param = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_params.count(); ++i) {
-      if (autoinc_col_id == autoinc_params.at(i).autoinc_col_id_) {
+      if (autoinc_table_id == autoinc_params.at(i).autoinc_table_id_ &&
+          autoinc_col_id == autoinc_params.at(i).autoinc_col_id_) {
         autoinc_param = &(autoinc_params.at(i));
         break;
       }
@@ -393,16 +405,18 @@ int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDat
     uint64_t new_val = 0;
     if (OB_SUCC(ret)) {
       // check : to generate auto-increment value or not
-      if (OB_FAIL(get_input_value(*expr.args_[1], ctx, input_value, *autoinc_param, is_to_generate, new_val))) {
+      if (OB_FAIL(get_input_value(
+              expr, ctx, input_value, *autoinc_param, is_to_generate, new_val))) {
         LOG_WARN("check generation failed", K(ret));
-      } else if (is_to_generate && OB_FAIL(generate_autoinc_value(new_val, auto_service, autoinc_param, plan_ctx))) {
+      } else if (is_to_generate && OB_FAIL(generate_autoinc_value(*my_session, new_val, auto_service,
+                                                                  autoinc_param, plan_ctx))) {
         LOG_WARN("generate autoinc value failed", K(ret));
       }
     }
 
     if (OB_SUCC(ret)) {
       if (!is_to_generate) {
-        expr_datum.set_datum(*input_value);  // keep the input datum
+        expr_datum.set_datum(*input_value); // keep the input datum
       } else {
         ObObjTypeClass tc = ob_obj_type_class(expr.datum_meta_.type_);
         switch (tc) {
@@ -421,7 +435,8 @@ int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDat
           }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("only int/float/double types support auto increment", K(ret), K(expr.datum_meta_));
+            LOG_WARN("only int/float/double types support auto increment",
+                     K(ret), K(expr.datum_meta_));
           }
         }
       }
@@ -431,16 +446,100 @@ int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDat
       if (autoinc_param->autoinc_desired_count_ > 0) {
         --autoinc_param->autoinc_desired_count_;
       }
-
-      if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID != autoinc_param->autoinc_col_id_) {
-        if (is_to_generate) {
-          plan_ctx->set_autoinc_col_value(new_val);
-        }
-      }
+      plan_ctx->set_autoinc_col_value(new_val);
     }
   }
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+OB_SERIALIZE_MEMBER(ObAutoincNextvalExtra,
+                    autoinc_table_id_,
+                    autoinc_col_id_,
+                    autoinc_table_name_,
+                    autoinc_column_name_);
+
+int ObAutoincNextvalExtra::init_autoinc_nextval_extra(common::ObIAllocator *allocator,
+                                                      ObRawExpr *&expr,
+                                                      const uint64_t autoinc_table_id,
+                                                      const uint64_t autoinc_col_id,
+                                                      const ObString autoinc_table_name,
+                                                      const ObString autoinc_column_name)
+{
+  int ret = OB_SUCCESS;
+  ObAutoincNextvalExtra *autoinc_nextval_extra = NULL;
+  void *buf = NULL;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObAutoincNextvalExtra)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else {
+    autoinc_nextval_extra = new(buf) ObAutoincNextvalExtra();
+    autoinc_nextval_extra->autoinc_table_id_ = autoinc_table_id;
+    autoinc_nextval_extra->autoinc_col_id_ = autoinc_col_id;
+    autoinc_nextval_extra->autoinc_table_name_ = autoinc_table_name;
+    autoinc_nextval_extra->autoinc_column_name_ = autoinc_column_name;
+  }
+  if (OB_SUCC(ret)) {
+    expr->set_extra(reinterpret_cast<uint64_t>(autoinc_nextval_extra));
+    LOG_DEBUG("succ init_autoinc_nextval_extra", KPC(autoinc_nextval_extra));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObAutoincNextvalInfo, autoinc_table_id_, autoinc_col_id_);
+
+int ObAutoincNextvalInfo::init_autoinc_nextval_info(common::ObIAllocator *allocator,
+                                                    const ObRawExpr &raw_expr,
+                                                    ObExpr &expr,
+                                                    const ObExprOperatorType type)
+{
+  int ret = OB_SUCCESS;
+  ObAutoincNextvalExtra *autoinc_nextval_extra = NULL;
+  ObAutoincNextvalInfo *autoinc_nextval_info = NULL;
+  void *buf = NULL;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObAutoincNextvalInfo)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(autoinc_nextval_extra =
+          reinterpret_cast<ObAutoincNextvalExtra *>(raw_expr.get_extra()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw_expr.extra_ is null", K(ret));
+  } else {
+    autoinc_nextval_info = new(buf) ObAutoincNextvalInfo(*allocator, type);
+    autoinc_nextval_info->autoinc_table_id_ = autoinc_nextval_extra->autoinc_table_id_;
+    autoinc_nextval_info->autoinc_col_id_ = autoinc_nextval_extra->autoinc_col_id_;
+  }
+  if (OB_SUCC(ret)) {
+    expr.extra_info_ = autoinc_nextval_info;
+    LOG_DEBUG("succ init_autoinc_nextval_info", KPC(autoinc_nextval_info));
+  }
+  return ret;
+}
+
+int ObAutoincNextvalInfo::deep_copy(common::ObIAllocator &allocator,
+                                    const ObExprOperatorType type,
+                                    ObIExprExtraInfo *&copied_info) const
+{
+  int ret = OB_SUCCESS;
+  ObAutoincNextvalInfo *copied_autoinc_nextval_info = NULL;
+  if (OB_FAIL(ObExprExtraInfoFactory::alloc(allocator, type, copied_info))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc expr extra info", K(ret));
+  } else if (OB_ISNULL(copied_autoinc_nextval_info =
+          dynamic_cast<ObAutoincNextvalInfo *>(copied_autoinc_nextval_info))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else {
+    copied_autoinc_nextval_info->autoinc_table_id_ = autoinc_table_id_;
+    copied_autoinc_nextval_info->autoinc_col_id_ = autoinc_col_id_;
+  }
+  return ret;
+}
+
+}//end namespace sql
+}//end namespace oceanbase

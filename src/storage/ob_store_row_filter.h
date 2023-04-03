@@ -15,45 +15,44 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "common/ob_partition_key.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObPartMgr;
 }
-namespace sql {
+namespace sql
+{
 class ObTableLocation;
 class ObExecContext;
-}  // namespace sql
-namespace storage {
+}
+namespace storage
+{
 struct ObStoreRow;
 
-class ObIStoreRowFilter {
+class ObIStoreRowFilter
+{
 public:
-  virtual int check(const ObStoreRow& store_row, bool& is_filtered) const = 0;
-  virtual int init(const sql::ObTableLocation* part_filter, sql::ObExecContext* exec_ctx, common::ObPartMgr* part_mgr,
-      const common::ObPartitionKey& pkey) = 0;
+  virtual int check(const ObStoreRow &store_row, bool &is_filtered) const = 0;
+  virtual int init(const sql::ObTableLocation *part_filter, sql::ObExecContext *exec_ctx) = 0;
+  virtual ~ObIStoreRowFilter() = default;
   VIRTUAL_TO_STRING_KV("", "");
 };
 
-class ObStoreRowFilter : public ObIStoreRowFilter {
+class ObStoreRowFilter : public ObIStoreRowFilter
+{
 public:
-  ObStoreRowFilter() : part_filter_(NULL), exec_ctx_(NULL), part_mgr_(NULL), pkey_()
-  {}
-  virtual ~ObStoreRowFilter()
-  {}
-  int init(const sql::ObTableLocation* part_filter, sql::ObExecContext* exec_ctx, common::ObPartMgr* part_mgr,
-      const common::ObPartitionKey& pkey) override;
-  int check(const ObStoreRow& store_row, bool& is_filtered) const override;
-  TO_STRING_KV(KP_(part_filter), KP_(exec_ctx), KP_(part_mgr), K_(pkey));
-
+  ObStoreRowFilter() : part_filter_(NULL), exec_ctx_(NULL) {}
+  virtual ~ObStoreRowFilter() {}
+  int init(const sql::ObTableLocation *part_filter, sql::ObExecContext *exec_ctx);
+  int check(const ObStoreRow &store_row, bool &is_filtered) const override;
+  TO_STRING_KV(KP_(part_filter), KP_(exec_ctx));
 private:
-  const sql::ObTableLocation* part_filter_;
-  sql::ObExecContext* exec_ctx_;
-  common::ObPartMgr* part_mgr_;
-  common::ObPartitionKey pkey_;
+  const sql::ObTableLocation *part_filter_;
+  sql::ObExecContext *exec_ctx_;
 };
 
-}  // namespace storage
-}  // namespace oceanbase
+}
+}
 #endif

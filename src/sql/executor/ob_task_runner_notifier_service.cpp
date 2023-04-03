@@ -16,36 +16,45 @@
 #include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_task.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObTaskRunnerNotifierService* ObTaskRunnerNotifierService::instance_ = NULL;
+ObTaskRunnerNotifierService *ObTaskRunnerNotifierService::instance_ = NULL;
 
-ObTaskRunnerNotifierService::ObTaskRunnerNotifierService() : inited_(false), notifier_map_()
-{}
+ObTaskRunnerNotifierService::ObTaskRunnerNotifierService()
+  : inited_(false),
+    notifier_map_()
+{
+}
 
 ObTaskRunnerNotifierService::~ObTaskRunnerNotifierService()
-{}
+{
+}
 
 void ObTaskRunnerNotifierService::ObKillTaskRunnerNotifier::operator()(
-    hash::HashMapPair<ObTaskID, ObTaskRunnerNotifier*>& entry)
+    hash::HashMapPair<ObTaskID, ObTaskRunnerNotifier*> &entry)
 {
   ret_ = OB_SUCCESS;
   if (OB_ISNULL(entry.second)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_ERROR("notifier is NULL", K(ret_), "key", entry.first);
+    LOG_ERROR_RET(ret_, "notifier is NULL", K(ret_), "key", entry.first);
   } else {
     if (OB_SUCCESS != (ret_ = entry.second->kill())) {
-      LOG_WARN("notify kill task failed", K(ret_));
+      LOG_WARN_RET(ret_, "notify kill task failed", K(ret_));
     }
   }
 }
 
-ObTaskRunnerNotifierService::Guard::Guard(const ObTaskID& task_id, ObTaskRunnerNotifier* notifier) : task_id_(task_id)
+
+ObTaskRunnerNotifierService::Guard::Guard(const ObTaskID &task_id, ObTaskRunnerNotifier *notifier)
+  : task_id_(task_id)
 {
   int ret = OB_SUCCESS;
   if (NULL != notifier && NULL != ObTaskRunnerNotifierService::get_instance()) {
-    if (OB_FAIL(ObTaskRunnerNotifierService::get_instance()->register_notifier(task_id, notifier))) {
+    if (OB_FAIL(ObTaskRunnerNotifierService::get_instance()->register_notifier(
+        task_id, notifier))) {
       LOG_WARN("register notifier failed", K(ret), K(task_id));
     }
   }
@@ -76,67 +85,69 @@ int ObTaskRunnerNotifierService::build_instance()
   if (OB_UNLIKELY(NULL != instance_)) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("instance is not NULL, build twice", K(ret));
-  } else if (OB_ISNULL(instance_ = OB_NEW(ObTaskRunnerNotifierService, ObModIds::OB_SQL_EXECUTOR))) {
+  } else if (OB_ISNULL(instance_ = OB_NEW(ObTaskRunnerNotifierService,
+                                          "TaskRunnerSer"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("instance is NULL, unexpected", K(ret));
   } else if (OB_FAIL(instance_->init())) {
     instance_->reset();
-    OB_DELETE(ObTaskRunnerNotifierService, ObModIds::OB_SQL_EXECUTOR, instance_);
+    OB_DELETE(ObTaskRunnerNotifierService, "TaskRunnerSer", instance_);
     instance_ = NULL;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to init task runner notifier service", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-ObTaskRunnerNotifierService* ObTaskRunnerNotifierService::get_instance()
+ObTaskRunnerNotifierService *ObTaskRunnerNotifierService::get_instance()
 {
-  ObTaskRunnerNotifierService* instance = NULL;
+  ObTaskRunnerNotifierService *instance = NULL;
   if (OB_ISNULL(instance_) || OB_UNLIKELY(!instance_->inited_)) {
-    LOG_ERROR("instance is NULL or not inited", K(instance_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "instance is NULL or not inited", K(instance_));
   } else {
     instance = instance_;
   }
   return instance;
 }
 
-int ObTaskRunnerNotifierService::register_notifier(const ObTaskID& key, ObTaskRunnerNotifier* notifier)
+int ObTaskRunnerNotifierService::register_notifier(const ObTaskID &key,
+                                                   ObTaskRunnerNotifier *notifier)
 {
   int ret = OB_SUCCESS;
-  ObTaskRunnerNotifierService* notifier_service = NULL;
+  ObTaskRunnerNotifierService *notifier_service = NULL;
   if (OB_ISNULL(notifier)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("notifier is NULL", K(ret));
-  } else if (OB_ISNULL(notifier_service = ObTaskRunnerNotifierService::get_instance())) {
+  } else if (OB_ISNULL(notifier_service =
+                       ObTaskRunnerNotifierService::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("notifier service is NULL", K(ret));
   } else if (OB_FAIL(notifier_service->set_notifier(key, notifier))) {
     LOG_WARN("fail to set notifier", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int ObTaskRunnerNotifierService::unregister_notifier(const ObTaskID& key)
+int ObTaskRunnerNotifierService::unregister_notifier(const ObTaskID &key)
 {
   int ret = OB_SUCCESS;
-  ObTaskRunnerNotifierService* notifier_service = NULL;
-  if (OB_ISNULL(notifier_service = ObTaskRunnerNotifierService::get_instance())) {
+  ObTaskRunnerNotifierService *notifier_service = NULL;
+  if (OB_ISNULL(notifier_service =
+                ObTaskRunnerNotifierService::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("notifier service is NULL", K(ret));
   } else if (OB_FAIL(notifier_service->erase_notifier(key))) {
     LOG_WARN("fail to erase notifier", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int ObTaskRunnerNotifierService::kill_task_runner(const ObTaskID& key, bool* is_running)
+int ObTaskRunnerNotifierService::kill_task_runner(const ObTaskID &key, bool *is_running)
 {
   int ret = OB_SUCCESS;
-  ObTaskRunnerNotifierService* notifier_service = NULL;
-  if (OB_ISNULL(notifier_service = ObTaskRunnerNotifierService::get_instance())) {
+  ObTaskRunnerNotifierService *notifier_service = NULL;
+  if (OB_ISNULL(notifier_service =
+                ObTaskRunnerNotifierService::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("notifier service is NULL", K(ret));
   } else {
@@ -164,7 +175,8 @@ int ObTaskRunnerNotifierService::kill_task_runner(const ObTaskID& key, bool* is_
 int ObTaskRunnerNotifierService::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(notifier_map_.create(NOTIFIER_MAP_BUCKET_SIZE, ObModIds::OB_SQL_EXECUTOR))) {
+  if (OB_FAIL(notifier_map_.create(NOTIFIER_MAP_BUCKET_SIZE,
+                                   "TaskRunnerSer"))) {
     LOG_WARN("fail to create notifier map", K(ret));
   } else {
     inited_ = true;
@@ -172,7 +184,7 @@ int ObTaskRunnerNotifierService::init()
   return ret;
 }
 
-int ObTaskRunnerNotifierService::set_notifier(const ObTaskID& key, ObTaskRunnerNotifier* notifier)
+int ObTaskRunnerNotifierService::set_notifier(const ObTaskID &key, ObTaskRunnerNotifier *notifier)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -189,7 +201,7 @@ int ObTaskRunnerNotifierService::set_notifier(const ObTaskID& key, ObTaskRunnerN
   return ret;
 }
 
-int ObTaskRunnerNotifierService::erase_notifier(const ObTaskID& key)
+int ObTaskRunnerNotifierService::erase_notifier(const ObTaskID &key)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -203,8 +215,8 @@ int ObTaskRunnerNotifierService::erase_notifier(const ObTaskID& key)
   return ret;
 }
 
-template <class _callback>
-int ObTaskRunnerNotifierService::atomic(const ObTaskID& key, _callback& callback)
+template<class _callback>
+int ObTaskRunnerNotifierService::atomic(const ObTaskID &key, _callback &callback)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -218,5 +230,9 @@ int ObTaskRunnerNotifierService::atomic(const ObTaskID& key, _callback& callback
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */
+
+
+
+

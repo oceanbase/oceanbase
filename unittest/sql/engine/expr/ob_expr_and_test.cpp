@@ -17,48 +17,50 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprAndTest : public ::testing::Test {
-public:
-  ObExprAndTest();
-  virtual ~ObExprAndTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprAndTest(const ObExprAndTest& other);
-  ObExprAndTest& operator=(const ObExprAndTest& other);
-
-protected:
-  // data members
+class ObExprAndTest: public ::testing::Test
+{
+  public:
+    ObExprAndTest();
+    virtual ~ObExprAndTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprAndTest(const ObExprAndTest &other);
+    ObExprAndTest& operator=(const ObExprAndTest &other);
+  protected:
+    // data members
 };
 
 ObExprAndTest::ObExprAndTest()
-{}
+{
+}
 
 ObExprAndTest::~ObExprAndTest()
-{}
+{
+}
 
 void ObExprAndTest::SetUp()
-{}
+{
+}
 
 void ObExprAndTest::TearDown()
-{}
+{
+}
 
-// calc result
+//calc result
 #define R2(t1, v1, t2, v2, rtype, res) LOGIC_EXPECT2(ObExprAnd, &buf, calc_result2, t1, v1, t2, v2, rtype, res)
-#define R3(t1, v1, t2, v2, t3, v3, rtype, res) \
-  LOGIC_EXPECT3(ObExprAnd, &buf, calc_result3, t1, v1, t2, v2, t3, v3, rtype, res)
+#define R3(t1, v1, t2, v2, t3, v3, rtype, res) LOGIC_EXPECT3(ObExprAnd, &buf, calc_result3, t1, v1, t2, v2, t3, v3, rtype, res)
 #define RN(num, rtype, res, ...) LOGIC_EXPECTN(ObExprAnd, num, rtype, res, __VA_ARGS__)
 
-// calc result error
+//calc result error
 #define E2(t1, v1, t2, v2) LOGIC_ERROR2(ObExprAnd, calc_result2, t1, v1, t2, v2)
 #define E3(t1, v1, t2, v2, t3, v3) LOGIC_ERROR3(ObExprAnd, calc_result3, t1, v1, t2, v2, t3, v3)
-#define EN(num, ...) LOGIC_ERRORN(ObExprAnd, num, __VA_ARGS__)
+#define EN(num, ...) LOGIC_ERRORN(ObExprAnd, num,  __VA_ARGS__)
 
-// calc type
+//calc type
 #define T2(t1, t2, res) LOGIC_EXPECT_TYPE2(ObExprAnd, calc_result_type2, t1, t2, res)
-#define T3(t1, t2, t3, res) LOGIC_EXPECT_TYPE3(ObExprAnd, calc_result_type3, t1, t2, t3, res)
+#define T3(t1, t2, t3,res) LOGIC_EXPECT_TYPE3(ObExprAnd, calc_result_type3, t1, t2, t3, res)
 #define TN(num, res, ...) LOGIC_EXPECT_TYPEN(ObExprAnd, num, res, __VA_ARGS__)
 
 //#define TE2(t1, t2, res) LOGIC_EXPECT_TYPE_WITH_ROW(ObExprAnd, calc_result_type2, t1, t2, res)
@@ -171,6 +173,7 @@ TEST_F(ObExprAndTest, type_test)
   T2(ObBoolType, ObExtendType, OB_ERR_INVALID_TYPE_FOR_OP);
   T2(ObBoolType, ObBoolType, ObBoolType);
 
+
   T3(ObIntType, ObNullType, ObNullType, ObNullType);
   T3(ObIntType, ObNullType, ObIntType, ObNullType);
   T3(ObIntType, ObNullType, ObFloatType, ObNullType);
@@ -274,6 +277,7 @@ TEST_F(ObExprAndTest, type_test)
   T3(ObDoubleType, ObBoolType, ObModifyTimeType, OB_ERR_INVALID_TYPE_FOR_OP);
   T3(ObDoubleType, ObBoolType, ObExtendType, OB_ERR_INVALID_TYPE_FOR_OP);
   T3(ObDoubleType, ObBoolType, ObBoolType, ObBoolType);
+
 
   TN(2, ObNullType, ObNullType, ObNullType);
   TN(2, ObNullType, ObIntType, ObNullType);
@@ -649,14 +653,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObNullType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObNullType);
   TN(6, ObNullType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObNullType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObNullType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObNullType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObNullType);
   TN(6, ObNullType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObNullType);
   TN(6, ObNullType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObNullType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObNullType);
@@ -668,14 +665,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -687,14 +677,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -706,14 +689,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -725,14 +701,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -744,14 +713,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -763,14 +725,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -782,14 +737,7 @@ TEST_F(ObExprAndTest, type_test)
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObFloatType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDoubleType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObDateTimeType, ObBoolType);
-  TN(6,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      ObIntType,
-      ObFloatType,
-      ObDoubleType,
-      ObUnknownType,
-      ObPreciseDateTimeType,
-      ObBoolType);
+  TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObPreciseDateTimeType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObVarcharType, ObBoolType);
   TN(6, ObBoolType, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObUnknownType, ObBoolType);
   TN(6, OB_ERR_INVALID_TYPE_FOR_OP, ObIntType, ObFloatType, ObDoubleType, ObUnknownType, ObCreateTimeType, ObBoolType);
@@ -800,8 +748,8 @@ TEST_F(ObExprAndTest, type_test)
 
 TEST_F(ObExprAndTest, result2_test)
 {
-  // calc result2
-  // null type
+  //calc result2
+  //null type
   /* lt   lv  rt   rv  restype     res.get_bool()*/
   ObExprStringBuf buf;
   R2(null, 0, null, 0, ObNullType, OB_OBJ_TYPE_ERROR);
@@ -816,7 +764,7 @@ TEST_F(ObExprAndTest, result2_test)
   R2(null, 0, ext, 0, ObNullType, OB_ERR_INVALID_TYPE_FOR_OP);
   R2(null, 0, bool, 0, ObBoolType, 0);
   R2(null, 0, unknown, 0, ObNullType, OB_ERR_INVALID_TYPE_FOR_OP);
-  // int type
+  //int type
   R2(int, 0, null, 0, ObBoolType, 0);
   R2(int, 1, null, 0, ObNullType, OB_OBJ_TYPE_ERROR);
   R2(int, 0, int, 0, ObBoolType, 0);
@@ -862,7 +810,7 @@ TEST_F(ObExprAndTest, result2_test)
   R2(int, 1, bool, 0, ObBoolType, 0);
   R2(int, 1, bool, 1, ObBoolType, 1);
 
-  // float type
+  //float type
   R2(float, float(0.0), null, 0, ObBoolType, 0);
   R2(float, float(0.1), null, 0, ObNullType, OB_OBJ_TYPE_ERROR);
   R2(float, float(0.0), int, 0, ObBoolType, 0);
@@ -908,7 +856,7 @@ TEST_F(ObExprAndTest, result2_test)
   R2(float, float(0.1), bool, 0, ObBoolType, 0);
   R2(float, float(0.1), bool, 1, ObBoolType, 1);
 
-  // double
+  //double
   R2(double, 0.0, null, 0, ObBoolType, 0);
   R2(double, 1.0, null, 0, ObNullType, OB_OBJ_TYPE_ERROR);
   R2(double, 0.0, int, 0, ObBoolType, 0);
@@ -1273,8 +1221,8 @@ TEST_F(ObExprAndTest, result2_test)
 
 TEST_F(ObExprAndTest, result3_test)
 {
-  // calc result3
-  // null type
+  //calc result3
+  //null type
   /* at   av  bt   bv  ct   cv    restype     res.get_bool()*/
   ObExprStringBuf buf;
   R3(null, 0, null, 0, bool, 1, ObNullType, OB_OBJ_TYPE_ERROR);
@@ -1337,8 +1285,8 @@ TEST_F(ObExprAndTest, result3_test)
 
 TEST_F(ObExprAndTest, resultN_test)
 {
-  // calc result3
-  // null type
+  //calc result3
+  //null type
   // num, rtype, res, at av  bt bv  ct cv dt dv...
   ObExprStringBuf buf;
   RN(2, ObNullType, OB_OBJ_TYPE_ERROR, null, 0, null, 0);
@@ -1385,7 +1333,7 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(2, ObBoolType, 0, int, 1, bool, 0);
   RN(2, ObBoolType, 1, int, 1, bool, 1);
 
-  // RN3
+  //RN3
   RN(3, ObBoolType, 0, null, 0, null, 0, int, 0);
   RN(3, ObNullType, OB_OBJ_TYPE_ERROR, null, 0, int, 1, int, 1);
   RN(3, ObBoolType, 0, int, 0, int, 0, int, 1);
@@ -1429,7 +1377,7 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(3, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, bool, 0, ext, 1);
   RN(3, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, bool, 1, ext, 2);
 
-  // RN4
+  //RN4
   RN(4, ObBoolType, 0, null, 0, null, 0, int, 0, double, 0.0);
   RN(4, ObNullType, OB_OBJ_TYPE_ERROR, null, 0, int, 1, int, 1, double, 3.0);
   RN(4, ObBoolType, 0, int, 0, int, 0, int, 1, float, float(1));
@@ -1473,7 +1421,8 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(4, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, bool, 0, ext, 1, double, 3.4);
   RN(4, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, bool, 1, ext, 2, double, 3.4);
 
-  // RN5
+
+  //RN5
   RN(5, ObBoolType, 0, null, 0, null, 0, int, 0, double, 2.0, int, 2);
   RN(5, ObNullType, OB_OBJ_TYPE_ERROR, null, 0, int, 1, int, 1, double, 3.0, int, 3);
   RN(5, ObBoolType, 0, int, 0, int, 0, int, 1, float, float(1), int, 4);
@@ -1517,72 +1466,16 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(5, ObBoolType, 0, int, 1, bool, 0, int, 1, double, 3.4, int, 3);
   RN(5, ObBoolType, 1, int, 1, bool, 1, int, 2, double, 3.4, int, 3);
 
-  // RN6
+  //RN6
   RN(6, ObBoolType, 0, null, 0, null, 0, int, 0, double, 2.0, int, 2, varchar, "1");
   RN(6, ObNullType, OB_OBJ_TYPE_ERROR, null, 0, int, 1, int, 1, double, 3.0, int, 3, varchar, "true");
   RN(6, ObBoolType, 0, int, 0, int, 0, int, 1, float, float(1), int, 4, varchar, "1");
   RN(6, ObBoolType, 0, int, 0, int, 1, int, 1, float, float(1), int, 4, varchar, "1");
   RN(6, ObBoolType, 0, int, 1, int, 0, int, 1, float, float(1), int, 4, varchar, "1");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      float,
-      0.0,
-      int,
-      1,
-      float,
-      float(1),
-      ctime,
-      4,
-      varchar,
-      "1hello");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      float,
-      1.0,
-      int,
-      1,
-      float,
-      float(1),
-      ctime,
-      4,
-      varchar,
-      "1hello");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      float,
-      0.0,
-      int,
-      1,
-      float,
-      float(1),
-      ctime,
-      4,
-      varchar,
-      "1hello");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      float,
-      1.0,
-      int,
-      1,
-      float,
-      float(1),
-      ctime,
-      4,
-      varchar,
-      "1hello");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, float, 0.0, int, 1, float, float(1), ctime, 4, varchar, "1hello");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, float, 1.0, int, 1, float, float(1), ctime, 4, varchar, "1hello");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, float, 0.0, int, 1, float, float(1), ctime, 4, varchar, "1hello");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, float, 1.0, int, 1, float, float(1), ctime, 4, varchar, "1hello");
   RN(6, ObBoolType, 0, int, 0, double, 1.0, float, float(1), double, 2.0, varchar, "true", int, 2);
   RN(6, ObBoolType, 0, int, 1, double, 0.0, float, float(1), double, 2.0, varchar, "true", int, 2);
   RN(6, ObBoolType, 1, int, 1, double, 1.0, float, float(1), double, 2.0, varchar, "true", int, 2);
@@ -1590,160 +1483,20 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(6, ObBoolType, 0, int, 0, int, 1, float, float(1), int, 1, varchar, "1", int, 2);
   RN(6, ObBoolType, 0, int, 1, int, 0, float, float(1), int, 1, varchar, "1", int, 2);
   RN(6, ObBoolType, 1, int, 1, int, 1, float, float(1), int, 1, varchar, "1", int, 2);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      precise_datetime,
-      0,
-      datetime,
-      2,
-      ext,
-      1,
-      double,
-      3.4,
-      varchar,
-      "time");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      precise_datetime,
-      1,
-      datetime,
-      2,
-      ext,
-      1,
-      double,
-      3.4,
-      varchar,
-      "time");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      precise_datetime,
-      0,
-      datetime,
-      2,
-      ext,
-      1,
-      double,
-      3.4,
-      varchar,
-      "time");
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      precise_datetime,
-      1,
-      datetime,
-      2,
-      ext,
-      1,
-      double,
-      3.4,
-      varchar,
-      "time");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, precise_datetime, 0, datetime, 2, ext, 1, double, 3.4, varchar, "time");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, precise_datetime, 1, datetime, 2, ext, 1, double, 3.4, varchar, "time");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, precise_datetime, 0, datetime, 2, ext, 1, double, 3.4, varchar, "time");
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, precise_datetime, 1, datetime, 2, ext, 1, double, 3.4, varchar, "time");
   RN(6, ObBoolType, OB_ERR_CAST_VARCHAR_TO_BOOL, int, 0, varchar, "0", int, 2, varchar, "2hello", double, 3.4, int, 0);
   RN(6, ObBoolType, OB_ERR_CAST_VARCHAR_TO_BOOL, int, 0, varchar, "1", int, 2, varchar, "2hello", double, 3.4, int, 0);
   RN(6, ObBoolType, OB_ERR_CAST_VARCHAR_TO_BOOL, int, 1, varchar, "0", int, 2, varchar, "2hello", double, 3.4, int, 0);
   RN(6, ObBoolType, OB_ERR_CAST_VARCHAR_TO_BOOL, int, 1, varchar, "1", int, 2, varchar, "2hello", double, 3.4, int, 0);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      unknown,
-      0,
-      datetime,
-      2,
-      varchar,
-      "2hello",
-      double,
-      3.4,
-      int,
-      0);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      unknown,
-      0,
-      datetime,
-      2,
-      varchar,
-      "2hello",
-      double,
-      3.4,
-      int,
-      0);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      int,
-      0,
-      varchar,
-      "1",
-      precise_datetime,
-      2,
-      float,
-      float(2.3),
-      mtime,
-      4);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      0,
-      int,
-      1,
-      varchar,
-      "1",
-      precise_datetime,
-      2,
-      float,
-      float(2.3),
-      mtime,
-      4);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      int,
-      0,
-      varchar,
-      "1",
-      precise_datetime,
-      2,
-      float,
-      float(2.3),
-      mtime,
-      4);
-  RN(6,
-      ObBoolType,
-      OB_ERR_INVALID_TYPE_FOR_OP,
-      int,
-      1,
-      int,
-      1,
-      varchar,
-      "1",
-      precise_datetime,
-      2,
-      float,
-      float(2.3),
-      mtime,
-      4);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, unknown, 0, datetime, 2, varchar, "2hello", double, 3.4, int, 0);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, unknown, 0, datetime, 2, varchar, "2hello", double, 3.4, int, 0);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, int, 0, varchar, "1", precise_datetime, 2, float, float(2.3), mtime, 4);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 0, int, 1, varchar, "1", precise_datetime, 2, float, float(2.3), mtime, 4);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, int, 0, varchar, "1", precise_datetime, 2, float, float(2.3), mtime, 4);
+  RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, int, 1, varchar, "1", precise_datetime, 2, float, float(2.3), mtime, 4);
   RN(6, ObBoolType, 0, int, 0, int, 0, varchar, "1", int, 3, float, float(2.3), double, 0.00);
   RN(6, ObBoolType, 0, int, 0, int, 1, varchar, "1", int, 3, float, float(2.3), double, 0.00);
   RN(6, ObBoolType, 0, int, 1, int, 0, varchar, "1", int, 3, float, float(2.3), double, 0.00);
@@ -1758,8 +1511,9 @@ TEST_F(ObExprAndTest, resultN_test)
   RN(6, ObBoolType, OB_ERR_INVALID_TYPE_FOR_OP, int, 1, bool, 1, ext, 2, double, 3.4, int, 3, varchar, "3hello");
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

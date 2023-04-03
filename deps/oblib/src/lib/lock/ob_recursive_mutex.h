@@ -14,31 +14,36 @@
 #define OB_RECURSIVE_MUTEX_H_
 
 #include "lib/lock/ob_latch.h"
+#include "lib/lock/ob_lock_guard.h"
 
-namespace oceanbase {
-namespace common {
-class ObRecursiveMutex {
+namespace oceanbase
+{
+namespace common
+{
+class ObRecursiveMutex
+{
 public:
-  explicit ObRecursiveMutex(const uint32_t latch_id = ObLatchIds::DEFAULT_RECURSIVE_MUTEX);
+  explicit ObRecursiveMutex(const uint32_t latch_id);
   ~ObRecursiveMutex();
   int lock();
   int unlock();
   int trylock();
-
 private:
   ObLatch latch_;
   uint32_t latch_id_;
   uint32_t lock_cnt_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveMutex);
 };
 
-inline ObRecursiveMutex::ObRecursiveMutex(const uint32_t latch_id) : latch_(), latch_id_(latch_id), lock_cnt_(0)
-{}
+inline ObRecursiveMutex::ObRecursiveMutex(const uint32_t latch_id)
+  : latch_(), latch_id_(latch_id), lock_cnt_(0)
+{
+}
 
 inline ObRecursiveMutex::~ObRecursiveMutex()
-{}
+{
+}
 
 inline int ObRecursiveMutex::lock()
 {
@@ -86,7 +91,7 @@ inline int ObRecursiveMutex::trylock()
   return ret;
 }
 
-typedef ObLockGuard<ObRecursiveMutex> ObRecursiveMutexGuard;
-}  // namespace common
-}  // namespace oceanbase
+typedef lib::ObLockGuard<ObRecursiveMutex> ObRecursiveMutexGuard;
+}
+}
 #endif

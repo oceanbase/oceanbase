@@ -15,41 +15,44 @@
 #include <gtest/gtest.h>
 using namespace oceanbase::common;
 
-class TestRowStore : public ::testing::Test {
+class TestRowStore: public ::testing::Test
+{
 public:
   TestRowStore();
   virtual ~TestRowStore();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  TestRowStore(const TestRowStore& other);
-  TestRowStore& operator=(const TestRowStore& other);
-
+  TestRowStore(const TestRowStore &other);
+  TestRowStore& operator=(const TestRowStore &other);
 protected:
-  void add_row(int32_t i, int64_t COL_NUM, ObRowStore& store, int expect_ret = OB_SUCCESS);
-  void add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
-  void verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
-  void add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
-  void verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
-  void verify_rows_by_deep_copy(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
+  void add_row(int32_t i, int64_t COL_NUM, ObRowStore &store, int expect_ret = OB_SUCCESS);
+  void add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store);
+  void verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store);
+  void add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store);
+  void verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store);
+  void verify_rows_by_deep_copy(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store);
   // data members
 };
 
 TestRowStore::TestRowStore()
-{}
+{
+}
 
 TestRowStore::~TestRowStore()
-{}
+{
+}
 
 void TestRowStore::SetUp()
-{}
+{
+}
 
 void TestRowStore::TearDown()
-{}
+{
+}
 
-void TestRowStore::add_row(int32_t i, int64_t COL_NUM, ObRowStore& store, int expect_ret /*=OB_SUCCESS*/)
+void TestRowStore::add_row(int32_t i, int64_t COL_NUM, ObRowStore &store, int expect_ret /*=OB_SUCCESS*/)
 {
   // 1. fill data
   ObNewRow row;
@@ -58,24 +61,24 @@ void TestRowStore::add_row(int32_t i, int64_t COL_NUM, ObRowStore& store, int ex
   row.count_ = COL_NUM;
   int ret = OB_SUCCESS;
   for (int j = 0; OB_SUCC(ret) && j < COL_NUM; ++j) {
-    row.cells_[j].set_int(i * COL_NUM + j);
-  }  // end for
+    row.cells_[j].set_int(i*COL_NUM+j);
+  } // end for
   ASSERT_EQ(expect_ret, store.add_row(row));
   //_OB_LOG(INFO, "row=%s", S(row));
 }
 
-void TestRowStore::add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store)
+void TestRowStore::add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
 {
   // 1. fill data
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < ROW_NUM; ++i) {
     add_row(i, COL_NUM, store);
-  }  // end for
+  } // end for
   _OB_LOG(INFO, "store=%s", S(store));
   ASSERT_EQ(ROW_NUM, store.get_row_count());
 }
 
-void TestRowStore::verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store)
+void TestRowStore::verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
 {
   int ret = OB_SUCCESS;
   ObRowStore::Iterator it = store.begin();
@@ -89,10 +92,9 @@ void TestRowStore::verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& sto
       OK(it.get_next_row(row2));
       ASSERT_EQ(COL_NUM, row2.count_);
       for (int j = 0; OB_SUCC(ret) && j < COL_NUM; ++j) {
-        ASSERT_EQ(row2.cells_[j].get_int(), i * COL_NUM + j);
-        ;
-      }  // end for
-    }    // end for
+        ASSERT_EQ(row2.cells_[j].get_int(), i*COL_NUM+j);;
+      } // end for
+    } // end for
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2));
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2));
     // test iterator reset
@@ -115,7 +117,7 @@ TEST_F(TestRowStore, serialization_2)
 
 TEST_F(TestRowStore, serialization_3)
 {
-  // the data_buffer_size of BlockInfo is 8157,between 8152 and 8196
+  //the data_buffer_size of BlockInfo is 8157,between 8152 and 8196
   int ret = OB_SUCCESS;
   ObRowStore store;
   ObNewRow row;
@@ -123,20 +125,20 @@ TEST_F(TestRowStore, serialization_3)
   for (int64_t i = 0; i < 2756; ++i) {
     objs[i].set_int(i);
   }
-  row.cells_ = const_cast<ObObj*>(objs);
+  row.cells_ = const_cast<ObObj *>(objs);
   row.count_ = 2756;
 
   ret = store.add_row(row);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // serialize
+  //serialize
   int64_t serialize_size = store.get_serialize_size();
-  char* buf = static_cast<char*>(ob_malloc(serialize_size, ObModIds::TEST));
+  char *buf = static_cast<char*>(ob_malloc(serialize_size, ObModIds::TEST));
   int64_t pos = 0;
   ret = store.serialize(buf, serialize_size, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // deserialize
+  //deserialize
   ObRowStore store_des;
   int64_t pos_des = 0;
   ret = store_des.deserialize(buf, serialize_size, pos_des);
@@ -179,7 +181,7 @@ TEST_F(TestRowStore, add_row)
   }
 }
 
-void TestRowStore::add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store)
+void TestRowStore::add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
 {
   ASSERT_EQ(OB_SUCCESS, store.init_reserved_column_count(5));
   ASSERT_EQ(OB_INVALID_ARGUMENT, store.add_reserved_column(-1));
@@ -195,19 +197,19 @@ void TestRowStore::add_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore
   row.cells_ = objs;
   row.count_ = COL_NUM;
   int ret = OB_SUCCESS;
-  const ObRowStore::StoredRow* stored_row = NULL;
+  const ObRowStore::StoredRow *stored_row = NULL;
   for (int i = 0; OB_SUCC(ret) && i < ROW_NUM; ++i) {
     for (int j = 0; OB_SUCC(ret) && j < COL_NUM; ++j) {
-      row.cells_[j].set_int(i * COL_NUM + j);
-    }  // end for
+      row.cells_[j].set_int(i*COL_NUM+j);
+    } // end for
     OK(store.add_row(row, stored_row, i, true));
     ASSERT_EQ(5, stored_row->reserved_cells_count_);
-  }  // end for
+  } // end for
   _OB_LOG(INFO, "store=%s", S(store));
   ASSERT_EQ(ROW_NUM, store.get_row_count());
 }
 
-void TestRowStore::verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store)
+void TestRowStore::verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
 {
   _OB_LOG(INFO, "verify rows payload");
   int ret = OB_SUCCESS;
@@ -215,7 +217,7 @@ void TestRowStore::verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowSt
   ObNewRow row2;
   ObObj objs[COL_NUM];
   ObString compact_row;
-  ObRowStore::StoredRow* stored_row = NULL;
+  ObRowStore::StoredRow *stored_row = NULL;
   ASSERT_EQ(OB_INVALID_ARGUMENT, it.get_next_row(row2));
   for (int round = 0; round < 3; ++round) {
     row2.count_ = COL_NUM;
@@ -225,18 +227,17 @@ void TestRowStore::verify_rows_payload(int64_t COL_NUM, int64_t ROW_NUM, ObRowSt
       ASSERT_EQ(COL_NUM, row2.count_);
       ASSERT_NE(0, compact_row.length());
       ASSERT_EQ(5, stored_row->reserved_cells_count_);
-      ASSERT_EQ(i * COL_NUM + 1, stored_row->reserved_cells_[0].get_int());
-      ASSERT_EQ(i * COL_NUM + 3, stored_row->reserved_cells_[1].get_int());
-      ASSERT_EQ(i * COL_NUM + 5, stored_row->reserved_cells_[2].get_int());
-      ASSERT_EQ(i * COL_NUM + 7, stored_row->reserved_cells_[3].get_int());
-      ASSERT_EQ(i * COL_NUM + 9, stored_row->reserved_cells_[4].get_int());
+      ASSERT_EQ(i*COL_NUM+1, stored_row->reserved_cells_[0].get_int());
+      ASSERT_EQ(i*COL_NUM+3, stored_row->reserved_cells_[1].get_int());
+      ASSERT_EQ(i*COL_NUM+5, stored_row->reserved_cells_[2].get_int());
+      ASSERT_EQ(i*COL_NUM+7, stored_row->reserved_cells_[3].get_int());
+      ASSERT_EQ(i*COL_NUM+9, stored_row->reserved_cells_[4].get_int());
       ASSERT_EQ(i, stored_row->payload_);
       // verify row data
       for (int j = 0; OB_SUCC(ret) && j < COL_NUM; ++j) {
-        ASSERT_EQ(row2.cells_[j].get_int(), i * COL_NUM + j);
-        ;
-      }  // end for
-    }    // end for
+        ASSERT_EQ(row2.cells_[j].get_int(), i*COL_NUM+j);;
+      } // end for
+    } // end for
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2));
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2));
     // test iterator reset
@@ -263,7 +264,7 @@ TEST_F(TestRowStore, rollback_get_last_row)
   static const int64_t COL_NUM = 18;
   int ret = OB_SUCCESS;
   ObRowStore store1;
-  const ObRowStore::StoredRow* stored_row = NULL;
+  const ObRowStore::StoredRow *stored_row = NULL;
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, store1.get_last_row(stored_row));
   // add->get->rollback->add->get->rollback
   for (int round = 1; OB_SUCC(ret) && round < 1024; ++round) {
@@ -294,7 +295,7 @@ TEST_F(TestRowStore, rollback_get_last_row)
       ASSERT_EQ(OB_NOT_SUPPORTED, store1.rollback_last_row());
     }
     store1.clear_rows();
-  }  // end for
+  } // end for
 }
 
 TEST_F(TestRowStore, serialization_etc)
@@ -305,7 +306,7 @@ TEST_F(TestRowStore, serialization_etc)
   add_rows_payload(COL_NUM, ROW_NUM, store1);
   ASSERT_TRUE(!store1.is_read_only());
   // column consistency check
-  add_row(0, COL_NUM - 1, store1, OB_INVALID_ARGUMENT);
+  add_row(0, COL_NUM-1, store1, OB_INVALID_ARGUMENT);
   // serialize
   const int64_t BUF_SIZE = store1.get_serialize_size();
   char* buf = static_cast<char*>(ob_malloc(BUF_SIZE, ObModIds::TEST));
@@ -319,12 +320,12 @@ TEST_F(TestRowStore, serialization_etc)
   OK(store2.deserialize(buf, len, pos));
   verify_rows_payload(COL_NUM, ROW_NUM, store2);
   // get_last_row
-  const ObRowStore::StoredRow* stored_row = NULL;
+  const ObRowStore::StoredRow *stored_row = NULL;
   OK(store2.get_last_row(stored_row));
   ASSERT_TRUE(0 < stored_row->compact_row_size_);
   // read only
   ASSERT_TRUE(!store2.is_read_only());
-  // add_row(0, COL_NUM, store2, OB_ERR_READ_ONLY);
+  //add_row(0, COL_NUM, store2, OB_ERR_READ_ONLY);
   ob_free(buf);
 }
 
@@ -334,19 +335,19 @@ TEST_F(TestRowStore, KVCacheAPIs)
   static const int64_t ROW_NUM = 10240;
   ObRowStore store1;
   add_rows_payload(COL_NUM, ROW_NUM, store1);
-  static const int64_t BUF_SIZE = 1024 * 1024 * 10;
+  static const int64_t BUF_SIZE = 1024*1024*10;
   char* buf = static_cast<char*>(ob_malloc(BUF_SIZE, ObModIds::TEST));
   ASSERT_TRUE(NULL != buf);
   // clone
   _OB_LOG(INFO, "meta_size=%d copy_size=%d", store1.get_meta_size(), store1.get_copy_size());
-  ObRowStore* store2 = store1.clone(buf, BUF_SIZE);
+  ObRowStore *store2 = store1.clone(buf, BUF_SIZE);
   ASSERT_TRUE(NULL == store2);
   store2 = store1.clone(NULL, BUF_SIZE);
   ASSERT_TRUE(NULL == store2);
 
   store1.reset();
   add_rows(COL_NUM, ROW_NUM, store1);
-  ObRowStore* store3 = store1.clone(buf, BUF_SIZE);
+  ObRowStore *store3 = store1.clone(buf, BUF_SIZE);
   ASSERT_TRUE(NULL != store3);
   ASSERT_TRUE(store3->is_read_only());
   verify_rows(COL_NUM, ROW_NUM, *store3);
@@ -396,17 +397,17 @@ TEST_F(TestRowStore, mem_block_management)
   int ret = OB_SUCCESS;
   for (int32_t i = 0; OB_SUCC(ret) && i < 128; ++i) {
     OK(store1.add_row(row));
-  }  // end for
+  } // end for
 
   // 256K buffer
-  static const int64_t BUF_256K = 256 * 1024L;  // 256K
+  static const int64_t BUF_256K = 256*1024L;  // 256K
   char* buf256k = (char*)ob_malloc(BUF_256K, ObModIds::TEST);
   ObString str256k(BUF_256K, BUF_256K, buf256k);
   objs[0].set_varchar(str256k);
   OK(store1.add_row(row));
 
   // 2M buffer
-  static const int64_t BUF_2M = 2 * 1024 * 1024;  // 2M
+  static const int64_t BUF_2M = 2*1024*1024;  // 2M
   char* buf2m = (char*)ob_malloc(BUF_2M, ObModIds::TEST);
   ObString str2m(BUF_2M, BUF_2M, buf2m);
   objs[0].set_varchar(str2m);
@@ -418,20 +419,19 @@ TEST_F(TestRowStore, mem_block_management)
   ob_free(buf2m);
 }
 
-void TestRowStore::verify_rows_by_deep_copy(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store)
+void TestRowStore::verify_rows_by_deep_copy(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore &store)
 {
   int ret = OB_SUCCESS;
   ObRowStore::Iterator it = store.begin();
-  ObNewRow* row2 = NULL;
+  ObNewRow *row2 = NULL;
   for (int round = 0; round < 3; ++round) {
     for (int i = 0; OB_SUCC(ret) && i < ROW_NUM; ++i) {
       OK(it.get_next_row(row2, NULL));
       ASSERT_EQ(COL_NUM, row2->count_);
       for (int j = 0; OB_SUCC(ret) && j < COL_NUM; ++j) {
-        ASSERT_EQ(row2->cells_[j].get_int(), i * COL_NUM + j);
-        ;
-      }  // end for
-    }    // end for
+        ASSERT_EQ(row2->cells_[j].get_int(), i*COL_NUM+j);;
+      } // end for
+    } // end for
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2, NULL));
     ASSERT_EQ(OB_ITER_END, it.get_next_row(row2, NULL));
     // test iterator reset
@@ -444,7 +444,9 @@ TEST_F(TestRowStore, row_store_by_deep_copy)
   static const int64_t COL_NUM = 18;
   static const int64_t ROW_NUM = 10240;
 
-  ObRowStore store1(ObModIds::TEST, OB_SERVER_TENANT_ID, false);
+  ObRowStore store1(ObModIds::TEST,
+                    OB_SERVER_TENANT_ID,
+                    false);
   ASSERT_EQ(0, store1.get_used_mem_size());
   ASSERT_EQ(0, store1.get_block_count());
   ASSERT_TRUE(!store1.is_read_only());
@@ -475,9 +477,9 @@ TEST_F(TestRowStore, row_store_by_deep_copy)
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO", "WARN");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

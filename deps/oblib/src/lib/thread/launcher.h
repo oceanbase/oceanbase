@@ -57,43 +57,42 @@ namespace lib {
 //   }
 // }
 ////
-// Holistic principle
+// 整体原则
 //
-// 1. Launcher state transition rules:
+// 1. Launcher状态转换规则:
 //
 //     init/destroy        start     stop
-// Uninitialized <===> Initialization without start ==> started ==> stopping
-//                                    /\                               ||
-//                                    ||             wait              ||
-//                                    \=================================/
+// 未初始化 <===> 初始化未启动 ==> 已启动 ==> 正在停止
+//                  /\                     ||
+//                  ||         wait        ||
+//                  \=======================/
 //
-// 2. Init and destroy appear in pairs, start and stop appear in pairs.
-// 3. Do not start the thread in init, and do not stop the thread in destroy, which will disrupt the outer logic.
-// 4. When implementing init, if you fail halfway, you need to call the destroy function of the member that has been
-// init successfully, so there should be no redundant state. The start function is the same.
-// 5. Wrong state transitions, such as calling the start method when "uninitialized", are bugs to be fixed. It is
-// recommended to print the ERROR log for early exposure.
-// 6. All self-contained thread classes should inherit and follow this set of rules.
+// 2. init和destroy配对出现，start和stop配对出现。
+// 3. init不要启动线程，也不要到destroy中再停线程，这会打乱外层的逻辑。
+// 4. 实现init时，如果中途失败需要调用已经init成功成员的destroy函数，
+//    不要出现多余的状态。start函数同理。
+// 5. 错误的状态转移，比如“未初始化”时调用start方法，属于要修复的BUG。
+//    推荐打印ERROR日志提早暴露。
+// 6. 所有自包含线程的类都应该继承并遵循这套规则。
 //
 class ILauncher {
 public:
-  virtual ~ILauncher()
-  {}
+  virtual ~ILauncher() {}
 
-  // Initialize resources
+  // 初始化资源
   virtual int init() = 0;
-  // Start thread
+  // 启动线程
   virtual int start() = 0;
-  // Stop thread
+  // 停止线程
   //
-  // Note that the return of this interface does not guarantee that the thread has stopped, only the call to wait()
-  // returns to indicate that the thread has exited.
+  // 注意该接口返回并不保证线程已经停止，只有调用wait返回了才表示线程已经退出。
   virtual void stop() = 0;
-  // Used in conjunction with the stop interface, wait() returns to indicate that all threads have successfully exited.
+  // 和stop接口配合使用，wait返回表示所有线程都已经成功退出。
   virtual void wait() = 0;
-  // Free up resources.
+  // 释放资源。
   virtual void destroy() = 0;
 };
 
-}  // namespace lib
-}  // namespace oceanbase
+
+}  // lib
+}  // oceanbase

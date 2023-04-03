@@ -16,51 +16,74 @@
 #include "lib/container/ob_array_serialization.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObCommonRpcProxy;
-class ObCreateRoleArg;
+struct ObCreateRoleArg;
 class ObDropUserArg;
-}  // namespace obrpc
-namespace sql {
+struct ObAlterRoleArg;
+}
+namespace sql
+{
 class ObExecContext;
 class ObCreateRoleStmt;
 class ObDropRoleStmt;
-class ObCreateRoleExecutor {
+class ObAlterRoleStmt;
+class ObCreateRoleExecutor
+{
 public:
-  ObCreateRoleExecutor()
-  {}
-  virtual ~ObCreateRoleExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObCreateRoleStmt& stmt);
-  static int encrypt_passwd(
-      const common::ObString& passwd, common::ObString& encrypted_passwd, char* enc_buf, int64_t buf_len);
-
+  ObCreateRoleExecutor() {}
+  virtual ~ObCreateRoleExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateRoleStmt &stmt);
+  static int encrypt_passwd(const common::ObString& passwd,
+                            common::ObString& encrypted_passwd,
+                            char *enc_buf,
+                            int64_t buf_len);
 private:
-  int create_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObCreateRoleArg& arg) const;
-  int drop_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg) const;
-
+  int create_role(obrpc::ObCommonRpcProxy *rpc_proxy,
+                  const obrpc::ObCreateRoleArg &arg) const;
+  int drop_role(obrpc::ObCommonRpcProxy *rpc_proxy,
+                  const obrpc::ObDropUserArg &arg) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoleExecutor);
 };
 
-class ObDropRoleExecutor {
+class ObDropRoleExecutor
+{
 public:
-  ObDropRoleExecutor()
-  {}
-  virtual ~ObDropRoleExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObDropRoleStmt& stmt);
-  static int encrypt_passwd(
-      const common::ObString& passwd, common::ObString& encrypted_passwd, char* enc_buf, int64_t buf_len);
-
+  ObDropRoleExecutor() {}
+  virtual ~ObDropRoleExecutor() {}
+  int execute(ObExecContext &ctx, ObDropRoleStmt &stmt);
+  static int encrypt_passwd(const common::ObString& passwd,
+                            common::ObString& encrypted_passwd,
+                            char *enc_buf,
+                            int64_t buf_len);
 private:
-  int drop_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg) const;
-
+  int drop_role(obrpc::ObCommonRpcProxy *rpc_proxy,
+                  const obrpc::ObDropUserArg &arg) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropRoleExecutor);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_CMD_USER_CMD_EXECUTOR_
+class ObAlterRoleExecutor
+{
+public:
+  ObAlterRoleExecutor() {}
+  virtual ~ObAlterRoleExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterRoleStmt &stmt);
+  static int encrypt_passwd(const common::ObString& passwd,
+                            common::ObString& encrypted_passwd,
+                            char *enc_buf,
+                            int64_t buf_len);
+private:
+  int alter_role(obrpc::ObCommonRpcProxy *rpc_proxy,
+                 const obrpc::ObAlterRoleArg &arg) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterRoleExecutor);
+};
+
+}
+}
+#endif //OCEANBASE_SQL_ENGINE_CMD_USER_CMD_EXECUTOR_

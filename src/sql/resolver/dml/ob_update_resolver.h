@@ -14,66 +14,52 @@
 #define OCEANBASE_SQL_RESOLVER_DML_OB_UPDATE_RESOLVER_H_
 
 #include "lib/hash/ob_placement_hashset.h"
-#include "sql/resolver/dml/ob_dml_resolver.h"
+#include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObUpdateResolver : public ObDMLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObUpdateResolver : public ObDelUpdResolver
+{
 public:
-  static const int64_t TABLE = 0;       /* 0. table node */
-  static const int64_t UPDATE_LIST = 1; /* 1. update list */
-  static const int64_t WHERE = 2;       /* 2. where node */
-  static const int64_t ORDER_BY = 3;    /* 3. order by node */
-  static const int64_t LIMIT = 4;       /* 4. limit node */
-  static const int64_t WHEN = 5;        /* 5. when node */
-  static const int64_t HINT = 6;        /* 6. hint node */
-  static const int64_t IGNORE = 7;      /*7. ignore node */
-  static const int64_t RETURNING = 8;   /*8. returning node */
+  static const int64_t WITH_MYSQL = 0;         /*10. with_clause node in mysql mode*/
+  static const int64_t TABLE = 1;              /* 0. table node */
+  static const int64_t UPDATE_LIST = 2;       /* 1. update list */
+  static const int64_t WHERE = 3;              /* 2. where node */
+  static const int64_t ORDER_BY = 4;        /* 3. order by node */
+  static const int64_t LIMIT = 5;              /* 4. limit node */
+  static const int64_t WHEN = 6;                /* 5. when node */
+  static const int64_t HINT = 7;                /* 6. hint node */
+  static const int64_t IGNORE = 8;               /*7. ignore node */
+  static const int64_t RETURNING = 9;           /*8. returning node */
+  static const int64_t ERRORLOGGING = 10;           /*9. error_logging node */
+
 public:
-  explicit ObUpdateResolver(ObResolverParams& params);
+  explicit ObUpdateResolver(ObResolverParams &params);
   virtual ~ObUpdateResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-  inline ObUpdateStmt* get_update_stmt()
-  {
-    return static_cast<ObUpdateStmt*>(stmt_);
-  }
-
-protected:
-  /**
-   *  For update stmt, we need to add the table to the from_item in order to reuse
-   *  the same cost model to generate the access path like in the 'select' stmt case.
-   *  It sounds weird though...
-   */
-  virtual int resolve_table_list(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
+  inline ObUpdateStmt *get_update_stmt() { return static_cast<ObUpdateStmt*>(stmt_); }
 private:
-  int add_related_columns_to_stmt();
-  int resolve_cascade_updated_global_index(
-      const ObTableAssignment& ta, common::ObIArray<uint64_t>& cascade_global_index);
-  int resolve_multi_table_dml_info(const ObTableAssignment& ta, common::ObIArray<uint64_t>& global_index);
-  int check_multi_update_key_conflict();
-
+  int resolve_table_list(const ParseNode &parse_tree);
+  int generate_update_table_info(ObTableAssignment &table_assign);
+  int check_multi_update_table_conflict();
+  int check_join_update_conflict();
+  int is_join_table_update(const ObDMLStmt *stmt, bool &is_multi_table);
+  int check_update_assign_duplicated(const ObUpdateStmt *update_stmt);
   int check_view_updatable();
+  int try_expand_returning_exprs();
+  int try_add_remove_const_expr_for_assignments();
+  bool is_parent_col_self_ref_fk(uint64_t parent_col_id,
+                                 const common::ObIArray<share::schema::ObForeignKeyInfo> &fk_infos);
 
-  // following two funcs are for forigien key self reference(engine 3.0)
-  // e.g.: update t1 set col = const_val;
-  //       will add remove_const above const_val when col is parent column of a foreign key.
-  //       see ObTableModifyOp::do_handle()
-  int try_add_remove_const_expr(IndexDMLInfo& index_info);
-  bool is_parent_col_self_ref_fk(
-      uint64_t parent_col_id, const common::ObIArray<share::schema::ObForeignKeyInfo>& fk_infos);
-  int try_add_rowid_column_to_stmt(const ObTableAssignment& tas);
-  int is_multi_table_update(const ObDMLStmt* stmt, bool& is_multi_table);
-  int check_safe_update_mode(ObUpdateStmt* update_stmt);
-
-private:
-  bool has_add_all_rowkey_;
-  bool has_add_all_columns_;
-  common::hash::ObPlacementHashSet<uint64_t> update_column_ids_;
+  int check_safe_update_mode(ObUpdateStmt *update_stmt);
+  int resolve_update_constraints();
+  int generate_batched_stmt_info();
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 #endif /* OCEANBASE_SQL_RESOLVER_DML_OB_UPDATE_RESOLVER_H_ */

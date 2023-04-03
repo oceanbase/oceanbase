@@ -17,21 +17,27 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObRawExprResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObRawExprResolver
+{
 public:
-  ObRawExprResolver()
-  {}
+  ObRawExprResolver() {}
 
-  virtual ~ObRawExprResolver()
-  {}
+  virtual ~ObRawExprResolver() {}
 
-  virtual int resolve(const ParseNode* node, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns,
-      common::ObIArray<ObVarInfo>& sys_vars, common::ObIArray<ObSubQueryInfo>& sub_query_info,
-      common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, common::ObIArray<ObWinFunRawExpr*>& win_exprs,
-      common::ObIArray<ObOpRawExpr*>& op_exprs, common::ObIArray<ObUserVarIdentRawExpr*>& user_var_exprs) = 0;
-
+  virtual int resolve(const ParseNode *node,
+                      ObRawExpr *&expr,
+                      common::ObIArray<ObQualifiedName> &columns,
+                      common::ObIArray<ObVarInfo> &sys_vars,
+                      common::ObIArray<ObSubQueryInfo> &sub_query_info,
+                      common::ObIArray<ObAggFunRawExpr*> &aggr_exprs,
+                      common::ObIArray<ObWinFunRawExpr*> &win_exprs,
+                      common::ObIArray<ObUDFInfo> &udf_exprs,
+                      common::ObIArray<ObOpRawExpr*> &op_exprs,
+                      common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs) = 0;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolver);
@@ -40,7 +46,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_RAW_EXPR_RESOLVER_H */

@@ -19,86 +19,45 @@
 #include "lib/net/ob_addr.h"
 #include "sql/executor/ob_task_id.h"
 
-namespace oceanbase {
-namespace sql {
-class ObSliceID final {
+namespace oceanbase
+{
+namespace sql
+{
+class ObSliceID final
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObSliceID() : ob_task_id_(), slice_id_(common::OB_INVALID_ID){};
+  ObSliceID() : ob_task_id_(), slice_id_(common::OB_INVALID_ID) {};
 
-  inline void set_ob_task_id(const ObTaskID& ob_task_id)
-  {
-    ob_task_id_ = ob_task_id;
-  }
-  inline void set_ob_job_id(const ObJobID& ob_job_id)
-  {
-    ob_task_id_.set_ob_job_id(ob_job_id);
-  }
-  inline void set_server(const common::ObAddr& server)
-  {
-    ob_task_id_.set_server(server);
-  }
-  inline void set_execution_id(const uint64_t execution_id)
-  {
-    ob_task_id_.set_execution_id(execution_id);
-  }
-  inline void set_job_id(const uint64_t job_id)
-  {
-    ob_task_id_.set_job_id(job_id);
-  }
-  inline void set_task_id(const uint64_t task_id)
-  {
-    ob_task_id_.set_task_id(task_id);
-  }
-  inline void set_slice_id(const uint64_t slice_id)
-  {
-    slice_id_ = slice_id;
-  }
-  inline const ObTaskID& get_ob_task_id() const
-  {
-    return ob_task_id_;
-  }
-  inline const ObJobID& get_ob_job_id() const
-  {
-    return ob_task_id_.get_ob_job_id();
-  }
-  inline const common::ObAddr& get_server() const
-  {
-    return ob_task_id_.get_server();
-  }
-  inline uint64_t get_execution_id() const
-  {
-    return ob_task_id_.get_execution_id();
-  }
-  inline uint64_t get_job_id() const
-  {
-    return ob_task_id_.get_job_id();
-  }
-  inline uint64_t get_task_id() const
-  {
-    return ob_task_id_.get_task_id();
-  }
-  inline uint64_t get_slice_id() const
-  {
-    return slice_id_;
-  }
+  inline void set_ob_task_id(const ObTaskID &ob_task_id) { ob_task_id_ = ob_task_id; }
+  inline void set_ob_job_id(const ObJobID &ob_job_id) { ob_task_id_.set_ob_job_id(ob_job_id); }
+  inline void set_server(const common::ObAddr &server) { ob_task_id_.set_server(server); }
+  inline void set_execution_id(const uint64_t execution_id) { ob_task_id_.set_execution_id(execution_id); }
+  inline void set_job_id(const uint64_t job_id) { ob_task_id_.set_job_id(job_id); }
+  inline void set_task_id(const uint64_t task_id) { ob_task_id_.set_task_id(task_id); }
+  inline void set_slice_id(const uint64_t slice_id) { slice_id_ = slice_id; }
+  inline const ObTaskID &get_ob_task_id() const { return ob_task_id_; }
+  inline const ObJobID &get_ob_job_id() const { return ob_task_id_.get_ob_job_id(); }
+  inline const common::ObAddr &get_server() const { return ob_task_id_.get_server(); }
+  inline uint64_t get_execution_id() const { return ob_task_id_.get_execution_id(); }
+  inline uint64_t get_job_id() const { return ob_task_id_.get_job_id(); }
+  inline uint64_t get_task_id() const { return ob_task_id_.get_task_id(); }
+  inline uint64_t get_slice_id() const { return slice_id_; }
 
-  inline int64_t hash() const
+  inline int64_t hash() const { return ob_task_id_.hash() + slice_id_; }
+  inline bool equal(const ObSliceID &id) const
   {
-    return ob_task_id_.hash() + slice_id_;
+    return id.ob_task_id_.equal(ob_task_id_)
+        && id.slice_id_ == slice_id_;
   }
-  inline bool equal(const ObSliceID& id) const
-  {
-    return id.ob_task_id_.equal(ob_task_id_) && id.slice_id_ == slice_id_;
-  }
-  inline bool operator==(const ObSliceID& id) const
+  inline bool operator==(const ObSliceID &id) const
   {
     return equal(id);
   }
   inline bool is_valid() const
   {
-    return ob_task_id_.is_valid() && common::OB_INVALID_ID != slice_id_;
+    return ob_task_id_.is_valid() &&
+           common::OB_INVALID_ID != slice_id_;
   }
 
   inline void reset()
@@ -107,7 +66,8 @@ public:
     slice_id_ = common::OB_INVALID_ID;
   }
 
-  TO_STRING_KV(N_OB_TASK_ID, ob_task_id_, N_SLICE_ID, slice_id_);
+  TO_STRING_KV(N_OB_TASK_ID, ob_task_id_,
+               N_SLICE_ID, slice_id_);
 
 private:
   /* variables */
@@ -115,7 +75,7 @@ private:
   uint64_t slice_id_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_SLICE_ID_ */
 //// end of header file

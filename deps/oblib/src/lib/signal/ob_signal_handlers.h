@@ -17,8 +17,11 @@
 #include <stdint.h>
 #include <time.h>
 
-namespace oceanbase {
-namespace common {}  // namespace common
-}  // namespace oceanbase
+namespace oceanbase
+{
+namespace common
+{
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SIGNAL_HANDLERS_H_
+#endif // OCEANBASE_SIGNAL_HANDLERS_H_

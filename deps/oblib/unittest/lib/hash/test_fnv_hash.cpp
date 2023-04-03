@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdint.h>
+#include<stdint.h>
 #include "lib/hash/fnv_hash.h"
 #include "gtest/gtest.h"
 
@@ -18,11 +18,11 @@ using namespace oceanbase;
 using namespace common;
 using namespace common::hash;
 
-#define TEST_IT(str, fnv1, fnv1a)                                          \
-  do {                                                                     \
+#define TEST_IT(str, fnv1, fnv1a)                                         \
+  do {                                                                    \
     const uint64_t hash_val = fnv1_32_and_fnv1a_32_compile_time_hash(str); \
-    ASSERT_EQ(hash_val >> 32, fnv1);                                       \
-    ASSERT_EQ((hash_val << 32) >> 32, fnv1a);                              \
+    ASSERT_EQ(hash_val >> 32, fnv1);                                      \
+    ASSERT_EQ((hash_val << 32) >> 32, fnv1a);                             \
   } while (0)
 
 TEST(Test_FNV_HASH, baisc)
@@ -42,11 +42,11 @@ TEST(Test_FNV_HASH, for_logger)
 #define STRINGIZE(x) STRINGIZE_(x)
 #define FILE "/data/1/oceanbase/deps/oblib/src/lib/ob_allocator_v2.cpp"
 #define LINE 27
-  static_assert(fnv_hash_for_logger(FILE "" STRINGIZE(LINE)) == 0xe4ba9a6b0a4736fb, "static check");
+  static_assert(fnv_hash_for_logger(FILE""STRINGIZE(LINE)) == 0xe4ba9a6b0a4736fb, "static check");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

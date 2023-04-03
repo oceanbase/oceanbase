@@ -14,13 +14,17 @@
 #include "common/ob_store_range.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+
+namespace oceanbase
+{
+namespace common
+{
 
 ObVersion ObVersion::MIN_VERSION(0);
 ObVersion ObVersion::MAX_VERSION(INT32_MAX, INT16_MAX);
-OB_SERIALIZE_MEMBER(ObVersion, version_);
-int ObVersion::fixed_length_encode(char* buf, const int64_t buf_len, int64_t& pos) const
+OB_SERIALIZE_MEMBER(ObVersion,
+                    version_);
+int ObVersion::fixed_length_encode(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -33,7 +37,7 @@ int ObVersion::fixed_length_encode(char* buf, const int64_t buf_len, int64_t& po
   }
   return ret;
 }
-int ObVersion::fixed_length_decode(const char* buf, const int64_t data_len, int64_t& pos)
+int ObVersion::fixed_length_decode(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -54,76 +58,7 @@ int64_t ObVersion::get_fixed_length_encoded_size() const
   return size;
 }
 
-// ObObjs in start_key/end_key are only shallow-copied
-int ObNewRange::to_store_range(
-    const ObIArray<ObOrderType>& column_orders, ObStoreRange& store_range, ObIAllocator& allocator) const
-{
-  int ret = OB_SUCCESS;
-
-  if (column_orders.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR, "invalid argument", K(column_orders.count()));
-  } else if (!start_key_.is_valid() || !end_key_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR, "invalid argument", K(start_key_), K(end_key_), K(ret));
-  } else if (start_key_.get_obj_cnt() != column_orders.count() || end_key_.get_obj_cnt() != column_orders.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR,
-        "range key obj_cnt and rowkey_cnt does not match!",
-        K(start_key_.get_obj_cnt()),
-        K(end_key_.get_obj_cnt()),
-        K(column_orders.count()),
-        K(ret));
-  } else {
-    ObObj* start_key_array = NULL;
-    ObObj* end_key_array = NULL;
-    int64_t rowkey_cnt = column_orders.count();
-
-    if (OB_ISNULL(start_key_array = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * rowkey_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      COMMON_LOG(WARN, "allocate memory for start_key_array failed", K(rowkey_cnt), K(ret));
-    } else if (OB_ISNULL(end_key_array = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * rowkey_cnt)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      COMMON_LOG(WARN, "allocate memory for end_key_array failed", K(rowkey_cnt), K(ret));
-    } else {
-      bool swapped = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
-        ObOrderType order = column_orders.at(i);
-        if (ObOrderType::ASC == order) {
-          start_key_array[i] = start_key_.get_obj_ptr()[i];
-          end_key_array[i] = end_key_.get_obj_ptr()[i];
-        } else if (ObOrderType::DESC == order) {
-          swapped = true;
-          start_key_array[i] = end_key_.get_obj_ptr()[i];
-          end_key_array[i] = start_key_.get_obj_ptr()[i];
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          COMMON_LOG(ERROR, "illegal column order value!", K(ret), K(order));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        store_range.set_start_key(ObStoreRowkey(start_key_array, rowkey_cnt));
-        store_range.set_end_key(ObStoreRowkey(end_key_array, rowkey_cnt));
-        store_range.set_table_id(table_id_);
-        store_range.set_border_flag(border_flag_);
-        // if swap happened, we need to swap border as well
-        if (swapped && (border_flag_.inclusive_start() != border_flag_.inclusive_end())) {
-          if (border_flag_.inclusive_start()) {
-            store_range.set_left_open();
-            store_range.set_right_closed();
-          } else {
-            store_range.set_left_closed();
-            store_range.set_right_open();
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int64_t ObNewRange::to_plain_string(char* buffer, const int64_t length) const
+int64_t ObNewRange::to_plain_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   if (NULL == buffer || 0 >= length) {
@@ -150,7 +85,7 @@ int64_t ObNewRange::to_plain_string(char* buffer, const int64_t length) const
   return pos;
 }
 
-int64_t ObNewRange::to_simple_string(char* buffer, const int64_t length) const
+int64_t ObNewRange::to_simple_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   if (NULL == buffer || 0 >= length) {
@@ -160,6 +95,7 @@ int64_t ObNewRange::to_simple_string(char* buffer, const int64_t length) const
     } else {
       databuff_printf(buffer, length, pos, "table_id:null,");
     }
+    databuff_printf(buffer, length, pos, "group_idx:%d,", group_idx_);
     if (border_flag_.inclusive_start()) {
       databuff_printf(buffer, length, pos, "[");
     } else {
@@ -177,7 +113,7 @@ int64_t ObNewRange::to_simple_string(char* buffer, const int64_t length) const
   return pos;
 }
 
-int64_t ObNewRange::to_string(char* buffer, const int64_t length) const
+int64_t ObNewRange::to_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   if (NULL == buffer || 0 >= length) {
@@ -203,49 +139,69 @@ uint64_t ObNewRange::hash() const
   }
   hash_val = murmurhash(&table_id_, sizeof(uint64_t), 0);
   hash_val = murmurhash(&flag, sizeof(int8_t), hash_val);
-  if (NULL != start_key_.ptr() && start_key_.length() > 0) {
+  if (NULL != start_key_.ptr()
+      && start_key_.length() > 0) {
     hash_val = start_key_.murmurhash(hash_val);
   }
-  if (NULL != end_key_.ptr() && end_key_.length() > 0) {
+  if (NULL != end_key_.ptr()
+      && end_key_.length() > 0) {
     hash_val = end_key_.murmurhash(hash_val);
   }
+  hash_val = murmurhash(&flag_, sizeof(bool), hash_val);
 
   return hash_val;
 };
 
-int ObNewRange::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObNewRange::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(buf_len), K(ret));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, static_cast<int64_t>(table_id_)))) {
-    COMMON_LOG(WARN, "serialize table_id failed.", KP(buf), K(buf_len), K(pos), K_(table_id), K(ret));
-  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, border_flag_.get_data()))) {
-    COMMON_LOG(WARN, "serialize border_flag failed.", KP(buf), K(buf_len), K(pos), K_(border_flag), K(ret));
+  } else if (OB_FAIL(serialization::encode_vi64(
+      buf, buf_len, pos, static_cast<int64_t>(table_id_)))) {
+    COMMON_LOG(WARN, "serialize table_id failed.",
+               KP(buf), K(buf_len), K(pos), K_(table_id), K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(
+      buf, buf_len, pos, border_flag_.get_data()))) {
+    COMMON_LOG(WARN, "serialize border_flag failed.",
+               KP(buf), K(buf_len), K(pos), K_(border_flag), K(ret));
   } else if (OB_FAIL(start_key_.serialize(buf, buf_len, pos))) {
-    COMMON_LOG(WARN, "serialize start_key failed.", KP(buf), K(buf_len), K(pos), K_(start_key), K(ret));
+    COMMON_LOG(WARN, "serialize start_key failed.",
+               KP(buf), K(buf_len), K(pos), K_(start_key), K(ret));
   } else if (OB_FAIL(end_key_.serialize(buf, buf_len, pos))) {
-    COMMON_LOG(WARN, "serialize end_key failed.", KP(buf), K(buf_len), K(pos), K_(end_key), K(ret));
+    COMMON_LOG(WARN, "serialize end_key failed.",
+               KP(buf), K(buf_len), K(pos), K_(end_key), K(ret));
+  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, flag_))) {
+    COMMON_LOG(WARN, "serialize flag failed.",
+               KP(buf), K(buf_len), K(pos), K_(flag), K(ret));
   }
   return ret;
 }
 
-int ObNewRange::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+int ObNewRange::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int8_t flag = 0;
   if (NULL == buf || data_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(data_len), K(ret));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, reinterpret_cast<int64_t*>(&table_id_)))) {
-    COMMON_LOG(WARN, "deserialize table_id failed.", KP(buf), K(data_len), K(pos), K_(table_id), K(ret));
+  } else if (OB_FAIL(serialization::decode_vi64(
+      buf, data_len, pos, reinterpret_cast<int64_t *>(&table_id_)))) {
+    COMMON_LOG(WARN, "deserialize table_id failed.",
+               KP(buf), K(data_len), K(pos), K_(table_id), K(ret));
   } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &flag))) {
-    COMMON_LOG(WARN, "deserialize flag failed.", KP(buf), K(data_len), K(pos), K(flag), K(ret));
+    COMMON_LOG(WARN, "deserialize flag failed.",
+               KP(buf), K(data_len), K(pos), K(flag), K(ret));
   } else if (OB_FAIL(start_key_.deserialize(buf, data_len, pos))) {
-    COMMON_LOG(WARN, "deserialize start_key failed.", KP(buf), K(data_len), K(pos), K_(start_key), K(ret));
+    COMMON_LOG(WARN, "deserialize start_key failed.",
+               KP(buf), K(data_len), K(pos), K_(start_key), K(ret));
   } else if (OB_FAIL(end_key_.deserialize(buf, data_len, pos))) {
-    COMMON_LOG(WARN, "deserialize end_key failed.", KP(buf), K(data_len), K(pos), K_(end_key), K(ret));
+    COMMON_LOG(WARN, "deserialize end_key failed.",
+               KP(buf), K(data_len), K(pos), K_(end_key), K(ret));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &flag_))) {
+    COMMON_LOG(WARN, "deserialize flag failed.",
+               KP(buf), K(data_len), K(pos), K_(flag), K(ret));
   } else {
     border_flag_.set_data(flag);
   }
@@ -261,14 +217,21 @@ int64_t ObNewRange::get_serialize_size(void) const
 
   total_size += start_key_.get_serialize_size();
   total_size += end_key_.get_serialize_size();
+  total_size += serialization::encoded_length_vi64(flag_);
 
   return total_size;
 }
+const int64_t ObVersionRange::MIN_VERSION;
 
-ObVersionRange::ObVersionRange() : multi_version_start_(-1), base_version_(-1), snapshot_version_(-1)
-{}
+ObVersionRange::ObVersionRange()
+  : multi_version_start_(-1),
+    base_version_(-1),
+    snapshot_version_(-1)
+{
+}
 
-OB_SERIALIZE_MEMBER(ObVersionRange, multi_version_start_, base_version_, snapshot_version_);
+
+OB_SERIALIZE_MEMBER(ObVersionRange, multi_version_start_,base_version_,snapshot_version_);
 
 int64_t ObVersionRange::hash() const
 {
@@ -279,7 +242,7 @@ int64_t ObVersionRange::hash() const
   return hash_value;
 }
 
-void ObVersionRange::union_version_range(const ObVersionRange& range)
+void ObVersionRange::union_version_range(const ObVersionRange &range)
 {
   if (!is_valid()) {
     *this = range;
@@ -293,28 +256,32 @@ void ObVersionRange::union_version_range(const ObVersionRange& range)
   }
 }
 
-bool ObVersionRange::contain(const ObVersionRange& range) const
+bool ObVersionRange::contain(const ObVersionRange &range) const
 {
   bool bret = false;
-  if (is_valid() && base_version_ <= range.base_version_ && snapshot_version_ >= range.snapshot_version_) {
+  if (is_valid() &&
+      base_version_ <= range.base_version_
+      && snapshot_version_ >= range.snapshot_version_) {
     bret = true;
   }
   return bret;
 }
 
-ObLogTsRange::ObLogTsRange() : start_log_ts_(MIN_TS), end_log_ts_(MIN_TS), max_log_ts_(MIN_TS)
-{}
+ObNewVersionRange::ObNewVersionRange()
+  : base_version_(-1),
+    snapshot_version_(-1)
+{
+}
 
-OB_SERIALIZE_MEMBER(ObLogTsRange, start_log_ts_, end_log_ts_, max_log_ts_);
+OB_SERIALIZE_MEMBER(ObNewVersionRange, base_version_,snapshot_version_);
 
-int64_t ObLogTsRange::hash() const
+int64_t ObNewVersionRange::hash() const
 {
   int64_t hash_value = 0;
-  hash_value = common::murmurhash(&start_log_ts_, sizeof(start_log_ts_), hash_value);
-  hash_value = common::murmurhash(&end_log_ts_, sizeof(end_log_ts_), hash_value);
-  hash_value = common::murmurhash(&max_log_ts_, sizeof(max_log_ts_), hash_value);
+  hash_value = common::murmurhash(&base_version_, sizeof(base_version_), hash_value);
+  hash_value = common::murmurhash(&snapshot_version_, sizeof(snapshot_version_), hash_value);
   return hash_value;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

@@ -14,15 +14,24 @@
 
 #include "ob_event_history_table_operator.h"
 #include "share/config/ob_server_config.h"
+#include "share/deadlock/ob_deadlock_inner_table_service.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace lib;
 using namespace common;
 
-ObEventTableClearTask::ObEventTableClearTask(ObEventHistoryTableOperator& rs_event_operator,
-    ObEventHistoryTableOperator& server_event_operator, common::ObWorkQueue& work_queue)
-    : ObAsyncTimerTask(work_queue), rs_event_operator_(rs_event_operator), server_event_operator_(server_event_operator)
+ObEventTableClearTask::ObEventTableClearTask(
+    ObEventHistoryTableOperator &rs_event_operator,
+    ObEventHistoryTableOperator &server_event_operator,
+    ObEventHistoryTableOperator &deadlock_history_operator,
+    common::ObWorkQueue &work_queue)
+    : ObAsyncTimerTask(work_queue),
+      rs_event_operator_(rs_event_operator),
+      server_event_operator_(server_event_operator),
+      deadlock_history_operator_(deadlock_history_operator)
 {
   set_retry_times(0);  // don't retry when process failed
 }
@@ -36,32 +45,43 @@ int ObEventTableClearTask::process()
   } else if (!server_event_operator_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("server_event_operator not init", K(ret));
+  } else if (!deadlock_history_operator_.is_inited()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("deadlock_history_operator_ not init", K(ret));
   } else if (OB_FAIL(rs_event_operator_.async_delete())) {
     LOG_WARN("async_delete failed", K(ret));
   } else if (OB_FAIL(server_event_operator_.async_delete())) {
+    LOG_WARN("async_delete failed", K(ret));
+  } else if (OB_FAIL(deadlock_history_operator_.async_delete())) {
     LOG_WARN("async_delete failed", K(ret));
   }
   return ret;
 }
 
-ObAsyncTask* ObEventTableClearTask::deep_copy(char* buf, const int64_t buf_size) const
+ObAsyncTask *ObEventTableClearTask::deep_copy(char *buf, const int64_t buf_size) const
 {
-  ObEventTableClearTask* task = NULL;
+  ObEventTableClearTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
-    task = new (buf) ObEventTableClearTask(rs_event_operator_, server_event_operator_, work_queue_);
+    task = new(buf) ObEventTableClearTask(rs_event_operator_,
+                                          server_event_operator_,
+                                          deadlock_history_operator_,
+                                          work_queue_);
   }
   return task;
 }
 
 ////////////////////////////////////////////////////////////////
 ObEventHistoryTableOperator::ObEventTableUpdateTask::ObEventTableUpdateTask(
-    ObEventHistoryTableOperator& table_operator, const bool is_delete)
-    : IObDedupTask(T_RS_ET_UPDATE), table_operator_(table_operator), is_delete_(is_delete)
-{}
+    ObEventHistoryTableOperator &table_operator, const bool is_delete)
+  : IObDedupTask(T_RS_ET_UPDATE), table_operator_(table_operator), is_delete_(is_delete)
+{
+}
 
-int ObEventHistoryTableOperator::ObEventTableUpdateTask::init(const char* ptr, const int64_t buf_size)
+
+int ObEventHistoryTableOperator::ObEventTableUpdateTask::init(const char *ptr,
+    const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ptr) || buf_size <= 0) {
@@ -74,6 +94,7 @@ int ObEventHistoryTableOperator::ObEventTableUpdateTask::init(const char* ptr, c
   return ret;
 }
 
+
 bool ObEventHistoryTableOperator::ObEventTableUpdateTask::is_valid() const
 {
   return table_operator_.is_inited() && !sql_.empty();
@@ -83,44 +104,47 @@ int64_t ObEventHistoryTableOperator::ObEventTableUpdateTask::hash() const
 {
   int64_t hash_value = 0;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else {
     hash_value = reinterpret_cast<int64_t>(sql_.ptr());
   }
   return hash_value;
 }
 
-bool ObEventHistoryTableOperator::ObEventTableUpdateTask::operator==(const common::IObDedupTask& other) const
+bool ObEventHistoryTableOperator::ObEventTableUpdateTask::operator==(
+    const common::IObDedupTask &other) const
 {
   bool is_equal = false;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else if (this->get_type() != other.get_type()) {
     is_equal = false;
   } else {
-    const ObEventTableUpdateTask& o = static_cast<const ObEventTableUpdateTask&>(other);
+    const ObEventTableUpdateTask &o = static_cast<const ObEventTableUpdateTask &>(other);
     if (!o.is_valid()) {
-      LOG_WARN("invalid event table update task", "task", o);
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", o);
     } else if (this == &other) {
       is_equal = true;
     } else {
-      is_equal = (&(this->table_operator_) == &(o.table_operator_)) && this->sql_ == o.sql_ &&
-                 this->is_delete_ == o.is_delete_;
+      is_equal = (&(this->table_operator_) == &(o.table_operator_))
+          && this->sql_ == o.sql_ && this->is_delete_ == o.is_delete_;
     }
   }
   return is_equal;
 }
 
-IObDedupTask* ObEventHistoryTableOperator::ObEventTableUpdateTask::deep_copy(char* buf, const int64_t buf_size) const
+IObDedupTask *ObEventHistoryTableOperator::ObEventTableUpdateTask::deep_copy(
+    char *buf, const int64_t buf_size) const
 {
-  ObEventTableUpdateTask* task = NULL;
+  ObEventTableUpdateTask *task = NULL;
   if (!this->is_valid()) {
-    LOG_WARN("invalid event table update task", "task", *this);
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid event table update task", "task", *this);
   } else if (NULL == buf || buf_size < get_deep_copy_size()) {
-    LOG_WARN("invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size), "need size", get_deep_copy_size());
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size),
+        "need size", get_deep_copy_size());
   } else {
     task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_);
-    char* ptr = buf + sizeof(ObEventTableUpdateTask);
+    char *ptr = buf + sizeof(ObEventTableUpdateTask);
     MEMCPY(ptr, sql_.ptr(), sql_.length());
     task->assign_ptr(ptr, sql_.length());
   }
@@ -140,21 +164,17 @@ int ObEventHistoryTableOperator::ObEventTableUpdateTask::process()
 }
 
 ObEventHistoryTableOperator::ObEventHistoryTableOperator()
-    : inited_(false),
-      stopped_(false),
-      last_event_ts_(0),
-      lock_(ObLatchIds::RS_EVENT_TS_LOCK),
-      proxy_(NULL),
-      event_queue_(),
-      event_table_name_(NULL),
-      self_addr_(),
-      is_rootservice_event_history_(false)
-{}
+  : inited_(false), stopped_(false), last_event_ts_(0),
+    lock_(ObLatchIds::RS_EVENT_TS_LOCK), proxy_(NULL), event_queue_(),
+    event_table_name_(NULL), self_addr_(), is_rootservice_event_history_(false)
+{
+}
 
 ObEventHistoryTableOperator::~ObEventHistoryTableOperator()
-{}
+{
+}
 
-int ObEventHistoryTableOperator::init(common::ObMySQLProxy& proxy)
+int ObEventHistoryTableOperator::init(common::ObMySQLProxy &proxy)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -162,16 +182,11 @@ int ObEventHistoryTableOperator::init(common::ObMySQLProxy& proxy)
     LOG_WARN("init twice", K(ret));
   } else {
     const int64_t thread_count = 1;
-    if (OB_FAIL(event_queue_.init(
-            thread_count, "EvtHisUpdTask", TASK_QUEUE_SIZE, TASK_MAP_SIZE, TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
-      LOG_WARN("task_queue_ init failed",
-          K(thread_count),
-          LITERAL_K(TASK_QUEUE_SIZE),
-          LITERAL_K(TASK_MAP_SIZE),
-          LITERAL_K(TOTAL_LIMIT),
-          LITERAL_K(HOLD_LIMIT),
-          LITERAL_K(PAGE_SIZE),
-          K(ret));
+    if (OB_FAIL(event_queue_.init(thread_count, "EvtHisUpdTask", TASK_QUEUE_SIZE, TASK_MAP_SIZE,
+        TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
+      LOG_WARN("task_queue_ init failed", K(thread_count), LITERAL_K(TASK_QUEUE_SIZE),
+          LITERAL_K(TASK_MAP_SIZE), LITERAL_K(TOTAL_LIMIT), LITERAL_K(HOLD_LIMIT),
+          LITERAL_K(PAGE_SIZE), K(ret));
     } else {
       event_queue_.set_label(ObModIds::OB_RS_EVENT_QUEUE);
       proxy_ = &proxy;
@@ -190,7 +205,7 @@ void ObEventHistoryTableOperator::destroy()
   inited_ = false;
 }
 
-int ObEventHistoryTableOperator::add_event(const char* module, const char* event)
+int ObEventHistoryTableOperator::add_event(const char *module, const char *event)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -202,13 +217,15 @@ int ObEventHistoryTableOperator::add_event(const char* module, const char* event
   } else {
     const int64_t now = ObTimeUtility::current_time();
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_gmt_create(now)) || OB_FAIL(dml.add_column("module", module)) ||
-        OB_FAIL(dml.add_column("event", event))) {
+    if (OB_FAIL(dml.add_gmt_create(now))
+        || OB_FAIL(dml.add_column("module", module))
+        || OB_FAIL(dml.add_column("event", event))) {
       LOG_WARN("add column failed", K(ret));
     } else {
       ObSqlString sql;
       if (OB_FAIL(dml.splice_insert_sql(event_table_name_, sql))) {
-        LOG_WARN("splice_insert_sql failed", "table_name", event_table_name_, K(ret));
+        LOG_WARN("splice_insert_sql failed",
+            "table_name", event_table_name_, K(ret));
       } else if (OB_FAIL(add_task(sql))) {
         LOG_WARN("add_task failed", K(sql), K(ret));
       }
@@ -217,7 +234,7 @@ int ObEventHistoryTableOperator::add_event(const char* module, const char* event
   return ret;
 }
 
-int ObEventHistoryTableOperator::gen_event_ts(int64_t& event_ts)
+int ObEventHistoryTableOperator::gen_event_ts(int64_t &event_ts)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -232,7 +249,7 @@ int ObEventHistoryTableOperator::gen_event_ts(int64_t& event_ts)
   return ret;
 }
 
-int ObEventHistoryTableOperator::add_task(const ObSqlString& sql, const bool is_delete)
+int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_delete)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -246,7 +263,7 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString& sql, const bool is_
     LOG_WARN("observer is stopped, cancel task", K(sql), K(is_delete), K(ret));
   } else {
     ObEventTableUpdateTask task(*this, is_delete);
-    if (OB_FAIL(task.init(sql.ptr(), sql.length() + 1))) {  // extra byte for '\0'
+    if (OB_FAIL(task.init(sql.ptr(), sql.length() + 1))) { // extra byte for '\0'
       LOG_WARN("task init error", K(ret));
     } else if (OB_FAIL(event_queue_.add_task(task))) {
       if (OB_EAGAIN == ret) {
@@ -263,7 +280,7 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString& sql, const bool is_
   return ret;
 }
 
-int ObEventHistoryTableOperator::process_task(const ObString& sql, const bool is_delete)
+int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is_delete)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -308,5 +325,5 @@ int ObEventHistoryTableOperator::process_task(const ObString& sql, const bool is
   return ret;
 }
 
-}  // namespace share
-}  // end namespace oceanbase
+}//end namespace rootserver
+}//end namespace oceanbase

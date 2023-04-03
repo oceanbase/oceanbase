@@ -13,51 +13,55 @@
 #ifndef OCEANBASE_STORAGE_OB_RESOURCE_MAP_H_
 #define OCEANBASE_STORAGE_OB_RESOURCE_MAP_H_
 
-#include "lib/lock/ob_spin_rwlock.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/hash/ob_hashutils.h"
+#include "lib/lock/ob_bucket_lock.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class SpinRWLock;
 class SpinRLockGuard;
 class SpinWLockGuard;
-}  // namespace common
-namespace storage {
+}
+namespace storage
+{
 
 template <typename Key, typename Value>
 class ObResourceMap;
 
 template <typename Value>
-class ObResourceValueStore {
+class ObResourceValueStore
+{
 public:
   ObResourceValueStore();
   virtual ~ObResourceValueStore();
   virtual int inc_ref_cnt();
-  virtual int dec_ref_cnt(int64_t& ref_cnt);
+  virtual int dec_ref_cnt(int64_t &ref_cnt);
   virtual int64_t get_ref_cnt() const;
-  Value* get_value_ptr() const
-  {
-    return ptr_;
-  }
-  void set_value_ptr(Value* ptr)
-  {
-    ptr_ = ptr;
-  }
+  Value *get_value_ptr() const { return ptr_; }
+  void set_value_ptr(Value *ptr) { ptr_ = ptr; }
+
+  TO_STRING_KV(KPC_(ptr), K_(ref_cnt));
 
 private:
-  Value* ptr_;
+  Value *ptr_;
   int64_t ref_cnt_;
 };
 
 template <typename Value>
-ObResourceValueStore<Value>::ObResourceValueStore() : ptr_(NULL), ref_cnt_(0)
-{}
+ObResourceValueStore<Value>::ObResourceValueStore()
+  : ptr_(NULL), ref_cnt_(0)
+{
+}
 
 template <typename Value>
 ObResourceValueStore<Value>::~ObResourceValueStore()
-{}
+{
+}
 
 template <typename Value>
 int ObResourceValueStore<Value>::inc_ref_cnt()
@@ -68,7 +72,7 @@ int ObResourceValueStore<Value>::inc_ref_cnt()
 }
 
 template <typename Value>
-int ObResourceValueStore<Value>::dec_ref_cnt(int64_t& ref_cnt)
+int ObResourceValueStore<Value>::dec_ref_cnt(int64_t &ref_cnt)
 {
   int ret = common::OB_SUCCESS;
   bool finished = false;
@@ -90,140 +94,170 @@ int64_t ObResourceValueStore<Value>::get_ref_cnt() const
 }
 
 template <typename Value>
-class ObResourceHandle {
+class ObResourceHandle
+{
   template <typename, typename>
   friend class oceanbase::storage::ObResourceMap;
-
 public:
-  ObResourceHandle() : ptr_(NULL)
+  ObResourceHandle()
+    : ptr_(NULL)
   {}
-  virtual ~ObResourceHandle()
-  {}
-  Value* get_resource_ptr() const
-  {
-    return NULL == ptr_ ? NULL : ptr_->get_value_ptr();
-  }
+  virtual ~ObResourceHandle() {}
+  Value *get_resource_ptr() const { return NULL == ptr_ ? NULL : ptr_->get_value_ptr(); }
+  int64_t get_ref_cnt() const { return NULL == ptr_ ? 0 : ptr_->get_ref_cnt(); }
   virtual void reset() = 0;
-
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObResourceHandle);
-  ObResourceValueStore<Value>* ptr_;
+  ObResourceValueStore<Value> *ptr_;
 };
 
 template <typename Key, typename Value>
-class ObResourceDefaultCallback {
+class ObResourceDefaultCallback
+{
 public:
-  ObResourceDefaultCallback(){};
-  virtual ~ObResourceDefaultCallback()
-  {}
-  int operator()(common::hash::HashMapPair<Key, Value*>& pair)
-  {
-    UNUSED(pair);
-    return common::OB_SUCCESS;
-  }
+  ObResourceDefaultCallback() {};
+  virtual ~ObResourceDefaultCallback() {}
+  int operator()(common::hash::HashMapPair<Key, Value*> &pair) { UNUSED(pair); return common::OB_SUCCESS; }
 };
 
 template <typename Key, typename Value, typename Callback>
-class ObForeachCallbackAdaptor {
+class ObForeachCallbackAdaptor
+{
 public:
-  ObForeachCallbackAdaptor(Callback& callback);
+  ObForeachCallbackAdaptor(Callback &callback);
   virtual ~ObForeachCallbackAdaptor();
-  int operator()(common::hash::HashMapPair<Key, ObResourceValueStore<Value>*>& pair);
-
+  int operator()(common::hash::HashMapPair<Key, ObResourceValueStore<Value>*> &pair);
 private:
-  Callback& callback_;
+  Callback &callback_;
 };
 
 template <typename Key, typename Value, typename Callback>
-ObForeachCallbackAdaptor<Key, Value, Callback>::ObForeachCallbackAdaptor(Callback& callback) : callback_(callback)
-{}
+ObForeachCallbackAdaptor<Key, Value, Callback>::ObForeachCallbackAdaptor(Callback &callback)
+  : callback_(callback)
+{
+}
 
 template <typename Key, typename Value, typename Callback>
 ObForeachCallbackAdaptor<Key, Value, Callback>::~ObForeachCallbackAdaptor()
-{}
+{
+}
 
 template <typename Key, typename Value, typename Callback>
 int ObForeachCallbackAdaptor<Key, Value, Callback>::operator()(
-    common::hash::HashMapPair<Key, ObResourceValueStore<Value>*>& pair)
+    common::hash::HashMapPair<Key, ObResourceValueStore<Value> *> &pair)
 {
-  common::hash::HashMapPair<Key, Value*> adapter_pair;
+  common::hash::HashMapPair<Key, Value *> adapter_pair;
   adapter_pair.first = pair.first;
   adapter_pair.second = pair.second->get_value_ptr();
+  static_assert(std::is_same<decltype(callback_(*( common::hash::HashMapPair<Key, Value *>*)0)), int>::value,
+      "hash table foreach callback format error");
   return callback_(adapter_pair);
 }
 
 template <typename Key, typename Value>
-class ObResourceMap {
+class ObResourceMap
+{
 public:
-  explicit ObResourceMap();
+  ObResourceMap();
   virtual ~ObResourceMap();
-  int init(const int64_t bucket_num, const char* label, const int64_t total_limit, const int64_t hold_limit,
-      const int64_t page_size);
+  int init(const int64_t bucket_num, const uint64_t tenant_id, const char *label,
+      const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
+  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
+  int get(const Key &key, ObResourceHandle<Value> &handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
   template <typename Callback = ObResourceDefaultCallback<Key, Value>>
-  int get(const Key& key, ObResourceHandle<Value>& handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
+  int set(const Key &key, Value &value, Callback callback = ObResourceDefaultCallback<Key, Value>());
+  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
+  int erase(const Key &key, Callback callback = ObResourceDefaultCallback<Key, Value>());
   template <typename Callback = ObResourceDefaultCallback<Key, Value>>
-  int set(const Key& key, Value& value, Callback callback = ObResourceDefaultCallback<Key, Value>());
-  template <typename Callback = ObResourceDefaultCallback<Key, Value>>
-  int erase(const Key& key, Callback callback = ObResourceDefaultCallback<Key, Value>());
-  template <typename Callback = ObResourceDefaultCallback<Key, Value>>
-  int foreach (Callback& callback);
+  int foreach(Callback &callback);
   void destroy();
-  int dec_handle_ref(ObResourceValueStore<Value>* ptr);
-  common::ObIAllocator& get_allocator()
-  {
-    return allocator_;
-  }
-
-private:
-  int inc_handle_ref(ObResourceValueStore<Value>* ptr);
-  void free_resource(ObResourceValueStore<Value>* ptr);
-
-private:
+  int dec_handle_ref(ObResourceValueStore<Value> *ptr);
+  common::ObIAllocator &get_allocator() { return allocator_; }
+  int inc_handle_ref(ObResourceValueStore<Value> *ptr);
+protected:
+  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
+  int get_without_lock(
+      const Key &key,
+      ObResourceHandle<Value> &handle,
+      Callback callback = ObResourceDefaultCallback<Key, Value>());
+  void free_resource(ObResourceValueStore<Value> *ptr);
+protected:
   typedef ObResourceValueStore<Value> ValueStore;
-  typedef common::hash::ObHashMap<Key, ValueStore*, common::hash::NoPthreadDefendMode> MAP;
+  typedef common::hash::ObHashMap<Key, ValueStore *, common::hash::NoPthreadDefendMode> MAP;
   MAP map_;
   common::ObConcurrentFIFOAllocator allocator_;
-  common::SpinRWLock lock_;
+  common::ObBucketLock bucket_lock_;
+  common::hash::hash_func<Key> hash_func_;
   bool is_inited_;
 };
 
 template <typename Key, typename Value>
-ObResourceMap<Key, Value>::ObResourceMap() : map_(), allocator_(), lock_(), is_inited_(false)
-{}
+ObResourceMap<Key, Value>::ObResourceMap()
+  : map_(), allocator_(), bucket_lock_(), is_inited_(false)
+{
+}
 
 template <typename Key, typename Value>
 ObResourceMap<Key, Value>::~ObResourceMap()
-{}
+{
+}
 
 template <typename Key, typename Value>
-int ObResourceMap<Key, Value>::init(const int64_t bucket_num, const char* label, const int64_t total_limit,
-    const int64_t hold_limit, const int64_t page_size)
+int ObResourceMap<Key, Value>::init(
+    const int64_t bucket_num,
+    const uint64_t tenant_id,
+    const char *label,
+    const int64_t total_limit,
+    const int64_t hold_limit,
+    const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
+  const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObResourceMap has already been inited", K(ret));
-  } else if (OB_UNLIKELY(bucket_num <= 0 || total_limit <= 0 || hold_limit <= 0 || page_size <= 0)) {
+  } else if (OB_UNLIKELY(bucket_num <= 0 || total_limit <= 0 || hold_limit <= 0 || page_size <= 0
+      || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit), K(page_size));
-  } else if (OB_FAIL(map_.create(bucket_num, label))) {
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit),
+        K(page_size), K(tenant_id));
+  } else if (OB_FAIL(bucket_lock_.init(bkt_num))) {
+    STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
+  } else if (OB_FAIL(map_.create(bkt_num, label, label, tenant_id))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
+  } else if (OB_UNLIKELY(bkt_num != map_.bucket_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "lock buckets isn't equal to map buckets, which could cause concurrency issues", K(ret),
+        K(bkt_num), K(map_.bucket_count()));
   } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
     allocator_.set_label(label);
     is_inited_ = true;
+    STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
   }
   return ret;
 }
 
 template <typename Key, typename Value>
 template <typename Callback>
-int ObResourceMap<Key, Value>::get(const Key& key, ObResourceHandle<Value>& handle, Callback callback)
+int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle, Callback callback)
+{
+  common::ObBucketHashRLockGuard guard(bucket_lock_, hash_func_(key));
+  handle.reset();
+  return get_without_lock(key, handle, callback);
+}
+
+template <typename Key,
+          typename Value>
+template <typename Callback>
+int ObResourceMap<Key, Value>::get_without_lock(
+    const Key &key,
+    ObResourceHandle<Value> &handle,
+    Callback callback)
 {
   int ret = common::OB_SUCCESS;
-  common::SpinRLockGuard guard(lock_);
-  ValueStore* ptr = NULL;
+  ValueStore *ptr = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
@@ -234,7 +268,7 @@ int ObResourceMap<Key, Value>::get(const Key& key, ObResourceHandle<Value>& hand
       ret = common::OB_ENTRY_NOT_EXIST;
     }
   } else {
-    common::hash::HashMapPair<Key, Value*> pair;
+    common::hash::HashMapPair<Key, Value *> pair;
     pair.first = key;
     pair.second = ptr->get_value_ptr();
     if (OB_FAIL(callback(pair))) {
@@ -250,18 +284,18 @@ int ObResourceMap<Key, Value>::get(const Key& key, ObResourceHandle<Value>& hand
 
 template <typename Key, typename Value>
 template <typename Callback>
-int ObResourceMap<Key, Value>::set(const Key& key, Value& value, Callback callback)
+int ObResourceMap<Key, Value>::set(const Key &key, Value &value, Callback callback)
 {
   int ret = common::OB_SUCCESS;
-  Value* ptr = NULL;
-  ValueStore* value_store = NULL;
+  Value *ptr = NULL;
+  ValueStore *value_store = NULL;
   const int64_t buf_size = value.get_deep_copy_size() + sizeof(ValueStore);
-  char* buf = NULL;
-  common::SpinWLockGuard guard(lock_);
+  char *buf = NULL;
+  common::ObBucketHashWLockGuard guard(bucket_lock_, hash_func_(key));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
-  } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buf_size));
   } else {
@@ -270,7 +304,7 @@ int ObResourceMap<Key, Value>::set(const Key& key, Value& value, Callback callba
       STORAGE_LOG(WARN, "fail to deep copy value", K(ret));
     } else {
       value_store->set_value_ptr(ptr);
-      common::hash::HashMapPair<Key, Value*> pair;
+      common::hash::HashMapPair<Key, Value *> pair;
       pair.first = key;
       pair.second = value_store->get_value_ptr();
       if (OB_FAIL(callback(pair))) {
@@ -291,11 +325,11 @@ int ObResourceMap<Key, Value>::set(const Key& key, Value& value, Callback callba
 
 template <typename Key, typename Value>
 template <typename Callback>
-int ObResourceMap<Key, Value>::erase(const Key& key, Callback callback)
+int ObResourceMap<Key, Value>::erase(const Key &key, Callback callback)
 {
   int ret = common::OB_SUCCESS;
-  common::SpinWLockGuard guard(lock_);
-  ValueStore* ptr = NULL;
+  common::ObBucketHashWLockGuard guard(bucket_lock_, hash_func_(key));
+  ValueStore *ptr = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
@@ -304,7 +338,7 @@ int ObResourceMap<Key, Value>::erase(const Key& key, Callback callback)
   } else if (OB_FAIL(map_.erase_refactored(key))) {
     STORAGE_LOG(WARN, "fail to erase from map", K(ret));
   } else {
-    common::hash::HashMapPair<Key, Value*> pair;
+    common::hash::HashMapPair<Key, Value *> pair;
     pair.first = key;
     pair.second = ptr->get_value_ptr();
     if (OB_FAIL(callback(pair))) {
@@ -318,10 +352,11 @@ int ObResourceMap<Key, Value>::erase(const Key& key, Callback callback)
 
 template <typename Key, typename Value>
 template <typename Callback>
-int ObResourceMap<Key, Value>::foreach (Callback& callback)
+int ObResourceMap<Key, Value>::foreach(Callback &callback)
 {
   int ret = common::OB_SUCCESS;
   ObForeachCallbackAdaptor<Key, Value, Callback> callback_adpator(callback);
+  common::ObBucketWLockAllGuard guard(bucket_lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObResrouceMap has not been inited", K(ret));
@@ -332,11 +367,11 @@ int ObResourceMap<Key, Value>::foreach (Callback& callback)
 }
 
 template <typename Key, typename Value>
-void ObResourceMap<Key, Value>::free_resource(ValueStore* value_store)
+void ObResourceMap<Key, Value>::free_resource(ValueStore *value_store)
 {
   if (NULL != value_store) {
-    char* buf = reinterpret_cast<char*>(value_store);
-    Value* ptr = value_store->get_value_ptr();
+    char *buf = reinterpret_cast<char *>(value_store);
+    Value *ptr = value_store->get_value_ptr();
     value_store->~ValueStore();
     value_store = NULL;
     if (NULL != ptr) {
@@ -351,22 +386,26 @@ void ObResourceMap<Key, Value>::free_resource(ValueStore* value_store)
 template <typename Key, typename Value>
 void ObResourceMap<Key, Value>::destroy()
 {
-  common::SpinWLockGuard guard(lock_);
-  typename MAP::iterator iter;
-  for (iter = map_.begin(); iter != map_.end(); iter++) {
-    ValueStore* value_store = iter->second;
-    if (OB_NOT_NULL(value_store)) {
-      STORAGE_LOG(WARN, "exception: this value should be erased before.", K(*value_store->get_value_ptr()));
-      free_resource(value_store);
+  {
+    common::ObBucketWLockAllGuard guard(bucket_lock_);
+    typename MAP::iterator iter;
+    for (iter = map_.begin(); iter != map_.end(); iter++) {
+      ValueStore *value_store = iter->second;
+      if (OB_NOT_NULL(value_store)) {
+        STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "exception: this value should be erased before.",
+                K(*value_store->get_value_ptr()));
+        free_resource(value_store);
+      }
     }
   }
+  bucket_lock_.destroy();
   map_.destroy();
   allocator_.destroy();
   is_inited_ = false;
 }
 
 template <typename Key, typename Value>
-int ObResourceMap<Key, Value>::inc_handle_ref(ValueStore* ptr)
+int ObResourceMap<Key, Value>::inc_handle_ref(ValueStore *ptr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -382,7 +421,7 @@ int ObResourceMap<Key, Value>::inc_handle_ref(ValueStore* ptr)
 }
 
 template <typename Key, typename Value>
-int ObResourceMap<Key, Value>::dec_handle_ref(ValueStore* ptr)
+int ObResourceMap<Key, Value>::dec_handle_ref(ValueStore *ptr)
 {
   int ret = common::OB_SUCCESS;
   int64_t ref_cnt = 0;

@@ -1,0 +1,56 @@
+# 功能介绍
+
+ObSQLSessionMgr是Observer中用来管理Session的模块，其功能主要分为两块：ObSQLSessionInfo内存的管理和sessid的管理。
+
+### ObSQLSessionInfo内存管理
+
+ObSQLSessionMgr负责并发情况下ObSQLSessionInfo的创建、获取和销毁。
+
+### Session ID管理
+
+ObSQLSessionMgr负责为每一个连接分配session id，并保证sessid的全局唯一；其次，在observer同obproxy共同部署时，ObSQLSessionMgr需要满足ObProxy Saved Login的需求。
+
+### 配合proxy进行session和sessid的管理
+
+#### ObProxy saved_login机制
+
+对于client、ObProxy、ObServer之间有一个约定：如果在client连接ObProxy以后，在连接不断开的情况下，ObProxy与ObServer的所有连接均采用相同的sessid。例如：在ObProxy客户端部署的情况下，ObProxy第一次连接ObServer_1，ObServer_1为其分配sessid_1；此后ObProxy在连接其他ObServer时，均采用sessid_1进行登录。
+
+为了实现 saved_login的，observer采用了switch_sessid的机制；在处理connect请求时，Observer如果发现是proxy的请求，则将当前分配的sessid转换为proxy请求包里面的sessid；该sessid就作为当前连接的唯一标识。
+
+# 实现思路
+### ObSQLSessionInfo内存管理
+
+ObSQLSessionMgr采用ObConcurrentHashMapWithHazardValue<Key, Value *> 并发数据结构来管理ObSQLSessionInfo的创建、查询和销毁。ObSQLSessionMgr主要提供create_session/get_session/rever_session/free_session接口。
+- 通过create_session接口创建新的ObSQLSessionInfo，同时会给该ObSQLSessionInfo增加引用计数；
+- 通过get_session接口获取已经创建的ObSQLSessionInfo，同时会给该ObSQLSessionInfo增加引用计数；
+- 通过free_session接口释放ObSQLSessionInfo的内存；调用free_session后会检查该ObSQLSessionInfo的引用计数，如果为0则物理上删除该ObSQLSessionInfo所占有的内存，否则仅在逻辑上删除该ObSQLSessionInfo；
+- 通过revert_session接口，减少相应ObSQLSessionInfo的引用计数。
+
+### Session ID 管理
+
+对于session id有如下三个基本概念：sessid, sessid_seq, session_key.
+
+#### sessid
+
+sessid是session的唯一标识符，为了兼容mysql采用uint32_t表示；同时为了满足sessid的集群全局唯一，32位采用如下方式进行划分：
+- 第0~15位：sessid_seq，observer为每个新建立的连接递增分配的16位id
+- 第16~30位：为server_id，observer启动后会接受到RS为其分配的server_id，将其存放到32位的全局sessid中，用来保证sessid集群全局唯一。注：在启动的短暂时间内，observer并没有接收到RS为其分配的server_id，此时server_id为0，这种情况仅允许tenant_name为空的租户（当前等同于系统租户）登陆，其他情况新到来的连接会返回OB_SERVER_IS_INITING的错误。
+- 第31位：用来区分是observer还是obproxy生成的sessid，其中1表示observer生成的sessid，0表示obproxy生成的sessid。注：ObProxy在客户端部署的情况下，采用ObServer为其分配的sessid进行saved_login；ObProxy在集中部署的情况下，采用自己分配的sessid进行saved_login。
+
+#### sessid_seq
+
+observer采用16位递增id表示当前server分配的sessid_seq。分配策略如下：
+- ObServer reboot后,sessid_seq从0开始分配，随着连接的到来逐渐递增，如果增加到2^16 - 1，下一次则继续从0开始分配；
+- ObServer restart后，local_sessid的初始值需要从__all_server表中的first_sessid列中读取；注：为了处理ObProxy Saved_login的情况；
+- 在local_sessid递增的过程中，会更新__all_server中的first_sessid列，使得ObServer restart后能够从上次分配的id值继续分配；
+- ObSQLSessionMgr中通过ObConcurrentBitset来存储已经被分配出去的sessid_seq ,每次分配sessid_seq时会查询该bitset，如果sessid_seq已经分配，则id继续递增；
+
+#### session_key
+
+为了解决ObServer在接收客户端断连接请求后，未能及时释放sessid的问题，引入了session_key的概念;
+- session_key为含有version和sessid两个成员变量的结构体，session_key作为ObSQLSessionInfo在session map中的key；通过session_key对ObSQLSessioInfo进行create_session/get_session/free_session；
+- 当ObServer接收到断连接请求后，在on_disconnect接口中，对sessid 进行unused，并将相应的ObSQLSessionInfo设置为shadow
+- 如果proxy采取saved_login，并使用相同的sessid，observer如果判断出当前full_sessid对应的ObSQLSessionInfo为shadow，则会创建一个新的ObSQLSessionInfo，并指定一个可用的version。
+
+

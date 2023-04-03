@@ -16,7 +16,8 @@
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-class FixedSizeBlockAllocatorTest : public ::testing::Test {
+class FixedSizeBlockAllocatorTest: public ::testing::Test
+{
 public:
   FixedSizeBlockAllocatorTest();
   virtual ~FixedSizeBlockAllocatorTest();
@@ -25,33 +26,37 @@ public:
 
 private:
   // disallow copy
-  FixedSizeBlockAllocatorTest(const FixedSizeBlockAllocatorTest& other);
-  FixedSizeBlockAllocatorTest& operator=(const FixedSizeBlockAllocatorTest& other);
+  FixedSizeBlockAllocatorTest(const FixedSizeBlockAllocatorTest &other);
+  FixedSizeBlockAllocatorTest& operator=(const FixedSizeBlockAllocatorTest &other);
 };
 
 FixedSizeBlockAllocatorTest::FixedSizeBlockAllocatorTest()
-{}
+{
+}
 
 FixedSizeBlockAllocatorTest::~FixedSizeBlockAllocatorTest()
-{}
+{
+}
 
 void FixedSizeBlockAllocatorTest::SetUp()
-{}
+{
+}
 
 void FixedSizeBlockAllocatorTest::TearDown()
-{}
+{
+}
 
 TEST(FixedSizeBlockAllocator, basic_test)
 {
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int64_t total_block_num = 10;
   allocator.init(total_block_num);
 
   EXPECT_EQ(total_block_num, allocator.get_total_block_num());
 
-  void* buf = allocator.alloc();
+  void *buf = allocator.alloc();
   EXPECT_TRUE(NULL != buf);
   EXPECT_EQ(total_block_num - 1, allocator.get_free_block_num());
 
@@ -64,14 +69,14 @@ TEST(FixedSizeBlockAllocator, basic_test)
 
 TEST(FixedSizeBlockAllocator, multiple_alloc)
 {
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int64_t total_block_num = 10;
   allocator.init(total_block_num);
 
-  void* buff[total_block_num];
-  void* last_ptr = NULL;
+  void *buff[total_block_num];
+  void *last_ptr = NULL;
   for (int i = 0; i < total_block_num; i++) {
     buff[i] = allocator.alloc();
     EXPECT_EQ(total_block_num - i - 1, allocator.get_free_block_num());
@@ -90,8 +95,8 @@ TEST(FixedSizeBlockAllocator, multiple_alloc)
 TEST(FixedSizeBlockAllocator, invalid_init)
 {
   // block number is negative
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int ret = allocator.init(-1);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
@@ -101,7 +106,7 @@ TEST(FixedSizeBlockAllocator, invalid_init)
 
   // block size is too large
   const int64_t large_block_size = ObFixedSizeBlockAllocator<block_size>::MAX_MEMORY_ALLOCATION * 2;
-  auto& large_allocator = ObFixedSizeBlockAllocator<large_block_size>::get_instance();
+  auto &large_allocator = ObFixedSizeBlockAllocator<large_block_size>::get_instance();
 
   ret = large_allocator.init(10);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
@@ -112,8 +117,8 @@ TEST(FixedSizeBlockAllocator, invalid_init)
 
 TEST(FixedSizeBlockAllocator, exceed_max_block_num)
 {
-  const int64_t block_size = OB_DEFAULT_MACRO_BLOCK_SIZE * 2;  // 4M
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = OB_DEFAULT_MACRO_BLOCK_SIZE * 2; // 4M
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   const int64_t block_num = allocator.MAX_MEMORY_ALLOCATION / OB_DEFAULT_MACRO_BLOCK_SIZE;
 
@@ -126,18 +131,18 @@ TEST(FixedSizeBlockAllocator, exceed_max_block_num)
 
 TEST(FixedSizeBlockAllocator, free_invalid_block)
 {
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int64_t total_block_num = 10;
   allocator.init(total_block_num);
 
-  void* buf = allocator.alloc();
+  void *buf = allocator.alloc();
   EXPECT_TRUE(NULL != buf);
   EXPECT_EQ(total_block_num - 1, allocator.get_free_block_num());
   EXPECT_EQ(total_block_num, allocator.get_total_block_num());
 
-  void* invalid_buf = NULL;
+  void *invalid_buf = NULL;
   allocator.free(invalid_buf);
   EXPECT_EQ(total_block_num - 1, allocator.get_free_block_num());
 
@@ -151,13 +156,13 @@ TEST(FixedSizeBlockAllocator, free_invalid_block)
 
 TEST(FixedSizeBlockAllocator, resize)
 {
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int64_t total_block_num = 3;
   allocator.init(total_block_num);
 
-  void* buf = allocator.alloc();
+  void *buf = allocator.alloc();
   EXPECT_TRUE(NULL != buf);
   EXPECT_EQ(total_block_num - 1, allocator.get_free_block_num());
   EXPECT_EQ(total_block_num, allocator.get_total_block_num());
@@ -167,16 +172,16 @@ TEST(FixedSizeBlockAllocator, resize)
   EXPECT_EQ(total_block_num, allocator.get_total_block_num());
 
   int64_t alloc_cnt = total_block_num + 1;
-  void* buf_array[alloc_cnt];
-  void* last_ptr = NULL;
+  void *buf_array[alloc_cnt];
+  void *last_ptr = NULL;
   for (int i = 0; i < alloc_cnt; i++) {
     buf_array[i] = allocator.alloc();
     EXPECT_NE(buf_array[i], last_ptr);
     last_ptr = buf_array[i];
-    if (i < total_block_num) {  // not reach total_block_num yet
+    if (i < total_block_num) { // not reach total_block_num yet
       EXPECT_EQ(total_block_num - i - 1, allocator.get_free_block_num());
       EXPECT_EQ(total_block_num, allocator.get_total_block_num());
-    } else {  // reach total_block_num, automatically expand
+    } else { // reach total_block_num, automatically expand
       EXPECT_EQ(total_block_num * 2 - i - 1, allocator.get_free_block_num());
       EXPECT_EQ(total_block_num * 2, allocator.get_total_block_num());
     }
@@ -192,14 +197,14 @@ TEST(FixedSizeBlockAllocator, resize)
 
 TEST(FixedSizeBlockAllocator, multiple_resize)
 {
-  const int64_t block_size = 1 << 13;  // 8K
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  const int64_t block_size = 1 << 13; // 8K
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
 
   int64_t total_block_num = 3;
   allocator.init(total_block_num);
 
   int64_t curr_total_block_num = total_block_num;
-  void* buf_arr[4 * total_block_num];
+  void * buf_arr[4 * total_block_num];
   for (int i = 0; i < 4 * total_block_num; i++) {
     buf_arr[i] = allocator.alloc();
     EXPECT_TRUE(NULL != buf_arr[i]);
@@ -228,17 +233,19 @@ TEST(FixedSizeBlockAllocator, multiple_resize)
 TEST(FixedSizeBlockAllocator, overlimit_resize)
 {
   const int64_t block_size = ObFixedSizeBlockAllocator<2048>::MAX_MEMORY_ALLOCATION / 2;
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
   allocator.init(1);
 
-  void* ptr_arr[3];
-  for (int i = 0; i < 3; i++) {
+  void * ptr_arr[3];
+  for (int i =0; i < 3; i++)
+  {
     ptr_arr[i] = allocator.alloc();
     if (i == 1) {
       EXPECT_TRUE(NULL != ptr_arr[i]);
       EXPECT_EQ(0, allocator.get_free_block_num());
       EXPECT_EQ(2, allocator.get_total_block_num());
-    } else if (i == 2) {
+    } else if (i == 2)
+    {
       EXPECT_TRUE(NULL == ptr_arr[i]);
       EXPECT_EQ(0, allocator.get_free_block_num());
       EXPECT_EQ(2, allocator.get_total_block_num());
@@ -249,9 +256,9 @@ TEST(FixedSizeBlockAllocator, overlimit_resize)
 
 TEST(FixedSizeBlockMemoryContext, simple)
 {
-  const int64_t block_size = 1 << 13;  // 8K
+  const int64_t block_size = 1 << 13; // 8K
   int64_t block_num = 3;
-  auto& allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
+  auto &allocator = ObFixedSizeBlockAllocator<block_size>::get_instance();
   allocator.init(block_num);
   int ret = OB_SUCCESS;
 
@@ -261,7 +268,7 @@ TEST(FixedSizeBlockMemoryContext, simple)
     EXPECT_EQ(OB_SUCCESS, ret);
     EXPECT_EQ(block_num, allocator.get_total_block_num());
 
-    void* buf[block_num + 1];
+    void *buf[block_num + 1];
     for (int i = 0; i < block_num + 1; i++) {
       buf[i] = mem_ctx.alloc();
       EXPECT_TRUE(NULL != buf[i]);
@@ -269,7 +276,7 @@ TEST(FixedSizeBlockMemoryContext, simple)
 
       if (i < block_num) {
         EXPECT_EQ(block_num - i - 1, allocator.get_free_block_num());
-      } else {  // underlying ObFixedSizeBlockAllocator will automatically expand capacity
+      } else { // underlying ObFixedSizeBlockAllocator will automatically expand capacity
         EXPECT_EQ(block_num * 2 - i - 1, allocator.get_free_block_num());
       }
     }
@@ -286,7 +293,7 @@ TEST(FixedSizeBlockMemoryContext, simple)
   EXPECT_EQ(block_num, allocator.get_free_block_num());
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   ::testing::InitGoogleTest(&argc, argv);

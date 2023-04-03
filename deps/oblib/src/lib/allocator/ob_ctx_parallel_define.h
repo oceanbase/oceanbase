@@ -10,14 +10,17 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_
-#define OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_
+#ifndef  OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_
+#define  OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_
 
 #include "lib/allocator/ob_mod_define.h"
 
-namespace oceanbase {
-namespace common {
-struct ObCtxParallel {
+namespace oceanbase
+{
+namespace common
+{
+struct ObCtxParallel
+{
 public:
   ObCtxParallel()
   {
@@ -26,12 +29,12 @@ public:
     }
 #define CTX_PARALLEL_DEF(name, parallel) parallel_[ObCtxIds::name] = parallel;
     CTX_PARALLEL_DEF(DEFAULT_CTX_ID, 32)
-    CTX_PARALLEL_DEF(LIBEASY, 8)
+    CTX_PARALLEL_DEF(LIBEASY, 32)
     CTX_PARALLEL_DEF(PLAN_CACHE_CTX_ID, 4)
     CTX_PARALLEL_DEF(LOGGER_CTX_ID, 1)
 #undef CTX_PARALLEL_DEF
   }
-  static ObCtxParallel& instance();
+  static ObCtxParallel &instance();
   int parallel_of_ctx(int64_t ctx_id) const
   {
     int p = 0;
@@ -40,13 +43,12 @@ public:
     }
     return p;
   }
-
 private:
   const static int DEFAULT_CTX_PARALLEL = 8;
   int parallel_[ObCtxIds::MAX_CTX_ID];
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_
+#endif //OCEANBASE_COMMON_CTX_PARALLEL_DEFINE_H_

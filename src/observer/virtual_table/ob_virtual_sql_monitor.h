@@ -17,33 +17,36 @@
 #include "common/ob_range.h"
 #include "observer/mysql/ob_ra_queue.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObTableSchema;
 class ObMultiVersionSchemaService;
-}  // namespace schema
-}  // namespace share
-namespace sql {
+}
+}
+namespace sql
+{
 class ObMonitorInfoManager;
 class ObPhyPlanMonitorInfo;
-}  // namespace sql
-namespace observer {
-class ObVirtualSqlMonitor : public common::ObVirtualTableProjector {
+}
+namespace observer
+{
+class ObVirtualSqlMonitor : public common::ObVirtualTableProjector
+{
 public:
   ObVirtualSqlMonitor();
   virtual ~ObVirtualSqlMonitor();
   int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  int set_addr(const common::ObAddr& addr);
-  void set_tenant_id(int64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-
+  int set_addr(const common::ObAddr &addr);
+  void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
 private:
-  enum COLUMN_ID {
+enum COLUMN_ID
+  {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
     SVR_PORT,
@@ -61,13 +64,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualSqlMonitor);
   int get_next_monitor_info();
   static const int64_t OB_MAX_INFO_LENGTH = 1024;
-
 private:
-  sql::ObMonitorInfoManager* monitor_manager_;
+  sql::ObMonitorInfoManager *monitor_manager_;
   int64_t start_id_;
   int64_t end_id_;
   common::ObRaQueue::Ref ref_;
-  sql::ObPhyPlanMonitorInfo* plan_info_;
+  sql::ObPhyPlanMonitorInfo *plan_info_;
   int64_t tenant_id_;
   int64_t request_id_;
   int64_t plan_id_;
@@ -78,6 +80,6 @@ private:
   char info_buf_[OB_MAX_INFO_LENGTH];
   int64_t execution_time_;
 };
-}  // namespace observer
-}  // namespace oceanbase
+} //namespace observer
+} //namespace oceanbase
 #endif

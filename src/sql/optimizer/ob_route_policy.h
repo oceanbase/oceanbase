@@ -18,70 +18,87 @@
 #include "lib/list/ob_list.h"
 #include "common/ob_zone_status.h"
 #include "common/ob_zone_type.h"
+#include "share/location_cache/ob_location_struct.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "share/ob_server_locality_cache.h"
 #include "share/ob_server_status.h"
-namespace oceanbase {
-namespace storage {
-class ObPartitionService;
-}
-namespace sql {
-class ObPhyPartitionLocationInfo;
-class ObPhyTableLocationInfo;
-enum ObRoutePolicyType {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCandiTabletLoc;
+class ObCandiTableLoc;
+enum ObRoutePolicyType
+{
   INVALID_POLICY = 0,
   READONLY_ZONE_FIRST = 1,
   ONLY_READONLY_ZONE = 2,
   UNMERGE_ZONE_FIRST = 3,
+  // 仅在非读写分离场景中有效, server端的路由规则和非读写分离下普通弱读相同,
+  // 即使客户端将请求路由到partition主上, 也在本地执行，
+  // 区别在于返回给OCJ && ObProxy的反馈不同;
   UNMERGE_FOLLOWER_FIRST = 4,
   POLICY_TYPE_MAX
 };
 
-struct ObRoutePolicyCtx {
+struct ObRoutePolicyCtx
+{
   ObRoutePolicyCtx()
-      : policy_type_(POLICY_TYPE_MAX),
-        consistency_level_(common::INVALID_CONSISTENCY),
-        is_proxy_priority_hit_support_(false)
-  {}
+    :policy_type_(POLICY_TYPE_MAX),
+     consistency_level_(common::INVALID_CONSISTENCY),
+     is_proxy_priority_hit_support_(false),
+     tenant_id_(OB_INVALID_TENANT_ID),
+     max_read_stale_time_(0)
+   {}
 
-  TO_STRING_KV(K(policy_type_), K(consistency_level_), K(is_proxy_priority_hit_support_));
+  TO_STRING_KV(K(policy_type_),
+               K(consistency_level_),
+               K(is_proxy_priority_hit_support_),
+               K(tenant_id_),
+               K(max_read_stale_time_));
 
   ObRoutePolicyType policy_type_;
   common::ObConsistencyLevel consistency_level_;
   bool is_proxy_priority_hit_support_;
+  uint64_t tenant_id_;
+  int64_t max_read_stale_time_;
 };
 
-class ObRoutePolicy {
+class ObRoutePolicy
+{
 public:
-  enum PositionType {
+  enum PositionType
+  {
     SAME_SERVER = 0,
     SAME_IDC = 1,
     SAME_REGION = 2,
     OTHER_REGION = 3,
     POSITION_TYPE_MAX,
   };
-  enum MergeStatus {
+  enum MergeStatus
+  {
     MERGING,
     NOMERGING,
     MERGE_STATUS_MAX,
   };
-  class ReplicaAttribute {
+  class ReplicaAttribute
+  {
   public:
-    ReplicaAttribute()
-        : pos_type_(POSITION_TYPE_MAX),
-          merge_status_(MERGE_STATUS_MAX),
-          zone_status_(share::ObZoneStatus::UNKNOWN),
-          zone_type_(common::ZONE_TYPE_INVALID),
-          start_service_time_(0),
-          server_stop_time_(0),
-          server_status_(share::ObServerStatus::OB_DISPLAY_MAX)
-    {}
-    ~ReplicaAttribute()
-    {}
-    bool operator==(const ReplicaAttribute& other_attr) const
+  ReplicaAttribute()
+      :pos_type_(POSITION_TYPE_MAX),
+        merge_status_(MERGE_STATUS_MAX),
+        zone_status_(share::ObZoneStatus::UNKNOWN),
+        zone_type_(common::ZONE_TYPE_INVALID),
+        start_service_time_(0),
+        server_stop_time_(0),
+        server_status_(share::ObServerStatus::OB_DISPLAY_MAX)
+        {}
+    ~ReplicaAttribute(){}
+    bool operator==(const ReplicaAttribute &other_attr) const
     {
       bool bool_ret = false;
-      if (merge_status_ == other_attr.merge_status_ && zone_type_ == other_attr.zone_type_) {
+      if (merge_status_ == other_attr.merge_status_
+          && zone_type_ == other_attr.zone_type_) {
         if (pos_type_ == SAME_SERVER) {
           bool_ret = (other_attr.pos_type_ == SAME_SERVER || other_attr.pos_type_ == SAME_IDC);
         } else if (pos_type_ == SAME_IDC) {
@@ -102,8 +119,7 @@ public:
       server_stop_time_ = 0;
       server_status_ = share::ObServerStatus::OB_DISPLAY_MAX;
     }
-    TO_STRING_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_),
-        K(server_stop_time_), K(server_status_));
+    TO_STRING_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_), K(server_stop_time_), K(server_status_));
     PositionType pos_type_;
     MergeStatus merge_status_;
     share::ObZoneStatus::Status zone_status_;
@@ -112,94 +128,102 @@ public:
     int64_t server_stop_time_;
     share::ObServerStatus::DisplayStatus server_status_;
   };
-  class CandidateReplica final : public share::ObReplicaLocation {
+  class CandidateReplica final : public share::ObLSReplicaLocation
+  {
   public:
-    CandidateReplica() : ObReplicaLocation(), attr_(), is_filter_(false), replica_idx_(common::OB_INVALID_INDEX)
+    CandidateReplica()
+      : ObLSReplicaLocation(),
+        attr_(),
+        is_filter_(false),
+        replica_idx_(common::OB_INVALID_INDEX)
     {}
-    CandidateReplica(const share::ObReplicaLocation& replica_location)
-        : ObReplicaLocation(replica_location), attr_(), is_filter_(false), replica_idx_(common::OB_INVALID_INDEX)
+   CandidateReplica(const share::ObLSReplicaLocation &replica_location)
+      : ObLSReplicaLocation(replica_location),
+        attr_(),
+        is_filter_(false),
+        replica_idx_(common::OB_INVALID_INDEX)
     {}
-    bool is_usable() const
-    {
-      return is_filter_ == false;
-    }
+    bool is_usable() const { return is_filter_ == false; }
     void reset()
     {
-      ObReplicaLocation::reset();
+      ObLSReplicaLocation::reset();
       attr_.reset();
       is_filter_ = false;
     }
-    int assign(CandidateReplica& other)
-    {
-      int ret = common::OB_SUCCESS;
-      server_ = other.server_;
-      role_ = other.role_;
-      sql_port_ = other.sql_port_;
-      reserved_ = other.reserved_;
-      replica_type_ = other.replica_type_;
-      attr_ = other.attr_;
-      is_filter_ = other.is_filter_;
-      replica_idx_ = other.replica_idx_;
-      return ret;
-    }
+    int assign(CandidateReplica &other);
 
   public:
-    TO_STRING_KV(K(server_), K(role_), K(sql_port_), K(replica_type_), K(attr_), K(is_filter_), K(replica_idx_));
+    INHERIT_TO_STRING_KV("ls_replica_location", ObLSReplicaLocation,
+                         K(attr_), K(is_filter_), K(replica_idx_));
     ReplicaAttribute attr_;
     bool is_filter_;
-    int64_t replica_idx_;  // invalid
+    int64_t replica_idx_;//invalid
   };
-
 public:
-  ObRoutePolicy(const common::ObAddr& addr, storage::ObPartitionService& part_service)
-      : local_addr_(addr),
-        local_locality_(),
-        server_locality_array_(),
-        partition_service_(part_service),
-        has_refresh_locality_(false),
-        has_readonly_zone_(false),
-        is_inited_(false)
+  ObRoutePolicy(const common::ObAddr &addr)
+      :local_addr_(addr),
+      local_locality_(),
+      server_locality_array_(),
+      has_refresh_locality_(false),
+      has_readonly_zone_(false),
+      is_inited_(false)
   {}
-  ~ObRoutePolicy()
-  {}
+  ~ObRoutePolicy() {}
   int init();
-  int calculate_replica_priority(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx& ctx);
-  int init_candidate_replicas(common::ObIArray<CandidateReplica>& candi_replicas);
-  int select_replica_with_priority(const ObRoutePolicyCtx& route_policy_ctx,
-      const common::ObIArray<CandidateReplica>& replica_array, ObPhyPartitionLocationInfo& phy_part_loc_info);
-  int select_intersect_replica(ObRoutePolicyCtx& route_policy_ctx,
-      common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list,
-      common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator>& intersect_server_list,
-      bool& is_proxy_hit);
+  int calculate_replica_priority(const ObAddr &local_server,
+                                 const share::ObLSID &ls_id,
+                                 common::ObIArray<CandidateReplica>& candi_replicas,
+                                 ObRoutePolicyCtx &ctx);
+  int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
+  int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
+                                   const common::ObIArray<CandidateReplica> &replica_array,
+                                   ObCandiTabletLoc &phy_part_loc_info);
+  int select_intersect_replica(ObRoutePolicyCtx &route_policy_ctx,
+                               common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+                               common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator> &intersect_server_list,
+                               bool &is_proxy_hit);
 
-  TO_STRING_KV(K(local_addr_), K(local_locality_), K(server_locality_array_), K(has_refresh_locality_),
-      K(has_readonly_zone_), K(is_inited_));
+  TO_STRING_KV(K(local_addr_),
+               K(local_locality_),
+               K(server_locality_array_),
+               K(has_refresh_locality_),
+               K(has_readonly_zone_),
+               K(is_inited_));
 
-  inline bool is_follower_first_route_policy_type(const ObRoutePolicyCtx& ctx) const
+  inline bool is_follower_first_route_policy_type(const ObRoutePolicyCtx &ctx) const
   {
     return !has_readonly_zone_ && (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_);
   }
 
-  static int get_server_locality(const common::ObAddr& addr,
-      const common::ObIArray<share::ObServerLocality>& server_locality_array, share::ObServerLocality& svr_locality);
-  static bool is_same_idc(const share::ObServerLocality& locality1, const share::ObServerLocality& locality2);
-  static bool is_same_region(const share::ObServerLocality& locality1, const share::ObServerLocality& locality2);
+  static int get_server_locality(const common::ObAddr &addr,
+                                 const common::ObIArray<share::ObServerLocality> &server_locality_array,
+                                 share::ObServerLocality &svr_locality);
+  static bool is_same_idc(const share::ObServerLocality &locality1,
+                          const share::ObServerLocality &locality2);
+  static bool is_same_region(const share::ObServerLocality &locality1,
+                             const share::ObServerLocality &locality2);
 
 protected:
-  int init_candidate_replica(
-      const common::ObIArray<share::ObServerLocality>& server_locality_array, CandidateReplica& candi_replica);
-  int calc_position_type(const share::ObServerLocality& candi_locality, CandidateReplica& candi_replica);
-  int calc_intersect_repllica(const common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list,
-      common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator>& intersect_server_list);
-  int get_merge_status(const share::ObServerLocality& candi_locality, CandidateReplica& candi_replica);
-  int get_zone_status(const share::ObServerLocality& candi_locality, CandidateReplica& candi_replica);
+  int init_candidate_replica(const common::ObIArray<share::ObServerLocality> &server_locality_array,
+                             CandidateReplica &candi_replica);
+  int calc_position_type(const share::ObServerLocality &candi_locality,
+                         CandidateReplica &candi_replica);
+  int calc_intersect_repllica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+                              common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator> &intersect_server_list);
+  int get_merge_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
+  int get_zone_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
 
-  int filter_replica(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx& ctx);
-  int weak_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx& ctx);
-  int strong_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx& ctx);
-  inline ObRoutePolicyType get_calc_route_policy_type(const ObRoutePolicyCtx& ctx) const
+  int filter_replica(const ObAddr &local_server,
+                     const share::ObLSID &ls_id,
+                     common::ObIArray<CandidateReplica>& candi_replicas,
+                     ObRoutePolicyCtx &ctx);
+  int weak_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
+  int strong_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
+  inline ObRoutePolicyType get_calc_route_policy_type(const ObRoutePolicyCtx &ctx) const
   {
-
+    // 集群为读写zone时，忽略ob_route_policy系统变量的值，按照READONLY_ZONE_FIRST处理
+    // 集群为读写zone时, 且ob_route_policy为UNMERGE_FOLLOWER_FIRST时，同样按照READONLY_ZONE_FIRST处理, 但会增加反馈内容
+    // 集群为有只读zone时，且ob_route_policy为UNMERGE_FOLLOWER_FIRST时, 同样按照READONLY_ZONE_FIRST处理，此时不会增加反馈内容
     ObRoutePolicyType type = INVALID_POLICY;
     if (has_readonly_zone_) {
       if (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_) {
@@ -212,17 +236,15 @@ protected:
     }
     return type;
   }
-
 protected:
   common::ObAddr local_addr_;
   share::ObServerLocality local_locality_;
   common::ObSEArray<share::ObServerLocality, 32> server_locality_array_;
-  storage::ObPartitionService& partition_service_;
   bool has_refresh_locality_;
   bool has_readonly_zone_;
   bool is_inited_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 #endif

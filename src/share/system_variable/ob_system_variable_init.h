@@ -15,9 +15,13 @@
 #include "share/system_variable/ob_sys_var_class_type.h"
 #include <stdint.h>
 #include "common/object/ob_object.h"
-namespace oceanbase {
-namespace share {
-struct ObSysVarFlag {
+namespace oceanbase
+{
+namespace share
+{
+// ObSysVarFlag的值不可随意增删改, 有任何增删改要同时同步到sql/session/gen_ob_sys_variables.py的flag_value_dict变量中
+struct ObSysVarFlag
+{
   const static int64_t NONE = 0LL;
   const static int64_t GLOBAL_SCOPE = 1LL;
   const static int64_t SESSION_SCOPE = (1LL << 1);
@@ -33,7 +37,7 @@ struct ObSysVarFlag {
   const static int64_t WITH_UPGRADE = (1LL << 11);
   const static int64_t MYSQL_ONLY = (1LL << 12);
 };
-struct ObSysVarFromJson {
+struct ObSysVarFromJson{
   ObSysVarClassType id_;
   common::ObString name_;
   common::ObObjType data_type_;
@@ -52,28 +56,11 @@ struct ObSysVarFromJson {
   common::ObString get_meta_type_func_;
   common::ObString session_special_update_func_;
 
-  ObSysVarFromJson()
-      : id_(SYS_VAR_INVALID),
-        name_(""),
-        data_type_(common::ObNullType),
-        value_(""),
-        min_val_(""),
-        max_val_(""),
-        enum_names_(""),
-        info_(""),
-        flags_(ObSysVarFlag::NONE),
-        alias_(""),
-        base_class_(""),
-        on_check_and_convert_func_(),
-        on_update_func_(),
-        to_select_obj_func_(),
-        to_show_str_func_(),
-        get_meta_type_func_(),
-        session_special_update_func_()
-  {}
+  ObSysVarFromJson():id_(SYS_VAR_INVALID), name_(""), data_type_(common::ObNullType), value_(""), min_val_(""), max_val_(""), enum_names_(""), info_(""), flags_(ObSysVarFlag::NONE), alias_(""), base_class_(""), on_check_and_convert_func_(), on_update_func_(), to_select_obj_func_(), to_show_str_func_(), get_meta_type_func_(), session_special_update_func_() {}
 };
 
-class ObSysVariables {
+class ObSysVariables
+{
 public:
   static int64_t get_all_sys_var_count();
   static ObSysVarClassType get_sys_var_id(int64_t i);
@@ -88,20 +75,21 @@ public:
   static bool is_oracle_only(int64_t i);
   static bool is_mysql_only(int64_t i);
   static common::ObString get_alias(int64_t i);
-  static const common::ObObj& get_default_value(int64_t i);
+  static const common::ObObj &get_default_value(int64_t i);
   static int64_t get_amount();
-  static int set_value(const char* name, const char* new_value);
-  static int set_value(const common::ObString& name, const common::ObString& new_value);
+  static int set_value(const char *name, const char * new_value);
+  static int set_value(const common::ObString &name, const common::ObString &new_value);
   static int init_default_values();
 };
 
-class ObSysVarsToIdxMap {
+class ObSysVarsToIdxMap
+{
 public:
   static int64_t get_store_idx(int64_t var_id);
   static bool has_invalid_sys_var_id();
 };
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SHARE_SYSTEM_VARIABLE_OB_SYSTEM_VARIABLE_INIT_ */

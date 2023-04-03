@@ -1,0 +1,277 @@
+result_format: 4
+
+
+set @@ob_enable_plan_cache = 0;
+
+select regexp_like('abc', 'a.*') from dual;
++---------------------------+
+| regexp_like('abc', 'a.*') |
++---------------------------+
+|                         1 |
++---------------------------+
+select regexp_like('abc', 'a.* ') from dual;
++----------------------------+
+| regexp_like('abc', 'a.* ') |
++----------------------------+
+|                          0 |
++----------------------------+
+select regexp_like('abc', 'a.* ', NULL) from dual;
++----------------------------------+
+| regexp_like('abc', 'a.* ', NULL) |
++----------------------------------+
+|                             NULL |
++----------------------------------+
+select regexp_like('abc', 'a.* ', 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_like('abc', NULL) from dual;
++--------------------------+
+| regexp_like('abc', NULL) |
++--------------------------+
+|                     NULL |
++--------------------------+
+select regexp_like(NULL, 'a.*') from dual;
++--------------------------+
+| regexp_like(NULL, 'a.*') |
++--------------------------+
+|                     NULL |
++--------------------------+
+
+select regexp_like(123, 123) from dual;
++-----------------------+
+| regexp_like(123, 123) |
++-----------------------+
+|                     1 |
++-----------------------+
+select regexp_like('我是好人', '.是.*') from dual;
++---------------------------------------+
+| regexp_like('我是好人', '.是.*')      |
++---------------------------------------+
+|                                     1 |
++---------------------------------------+
+
+select regexp_instr('abcadef', 'a.') from dual;
++-------------------------------+
+| regexp_instr('abcadef', 'a.') |
++-------------------------------+
+|                             1 |
++-------------------------------+
+select regexp_instr('abcadef', 'a.', 1, 2) from dual;
++-------------------------------------+
+| regexp_instr('abcadef', 'a.', 1, 2) |
++-------------------------------------+
+|                                   4 |
++-------------------------------------+
+select regexp_instr('abcadef', 'a.', 1, 2, 0) from dual;
++----------------------------------------+
+| regexp_instr('abcadef', 'a.', 1, 2, 0) |
++----------------------------------------+
+|                                      4 |
++----------------------------------------+
+select regexp_instr('abcadef', 'a.', 1, 2, 1) from dual;
++----------------------------------------+
+| regexp_instr('abcadef', 'a.', 1, 2, 1) |
++----------------------------------------+
+|                                      6 |
++----------------------------------------+
+select regexp_instr('abcadef', 'a.', 0, 2, 1) from dual;
+ERROR HY000: Incorrect arguments to use position or occurrence or return_option or subexpr in regexp_instr
+select regexp_instr('abcadef', 'a.', 1, 0, 1) from dual;
++----------------------------------------+
+| regexp_instr('abcadef', 'a.', 1, 0, 1) |
++----------------------------------------+
+|                                      3 |
++----------------------------------------+
+select regexp_instr('abcadef', 'a.', 1, 2, -1) from dual;
+ERROR HY000: Incorrect arguments to use position or occurrence or return_option or subexpr in regexp_instr
+select regexp_instr('abcadef', 'a.', 100, 2) from dual;
+ERROR 42000: Got error 'U_INDEX_OUTOFBOUNDS_ERROR' from regexp
+select regexp_instr('abcadef', 'a.', 1, 200) from dual;
++---------------------------------------+
+| regexp_instr('abcadef', 'a.', 1, 200) |
++---------------------------------------+
+|                                     0 |
++---------------------------------------+
+select regexp_instr('abcadef', 'a. ', 1, 2, 1, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_instr('', 'a. ', 1, 2, 1, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_instr('abcadef', '', 1, 2, 1, 'x') from dual;
+ERROR 42000: Got error from regexp
+select regexp_instr('abcadef', 'a. ', NULL, 2, 1, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_instr('abcadef', 'a. ', 1, NULL, 1, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_instr('abcadef', 'a. ', 1, 2, NULL, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_instr('abcadef', 'a. ', 1, 2, 1, NULL) from dual;
++-----------------------------------------------+
+| regexp_instr('abcadef', 'a. ', 1, 2, 1, NULL) |
++-----------------------------------------------+
+|                                          NULL |
++-----------------------------------------------+
+
+select regexp_instr(12341834, 1.3, '1', '2', 1) from dual;
++------------------------------------------+
+| regexp_instr(12341834, 1.3, '1', '2', 1) |
++------------------------------------------+
+|                                        8 |
++------------------------------------------+
+select regexp_instr('我是好人', '是.') from dual;
++--------------------------------------+
+| regexp_instr('我是好人', '是.')      |
++--------------------------------------+
+|                                    2 |
++--------------------------------------+
+
+select regexp_substr('abcadef', 'a.', 1) from dual;
++-----------------------------------+
+| regexp_substr('abcadef', 'a.', 1) |
++-----------------------------------+
+| ab                                |
++-----------------------------------+
+select regexp_substr('abcadef', 'a.', 1, 2) from dual;
++--------------------------------------+
+| regexp_substr('abcadef', 'a.', 1, 2) |
++--------------------------------------+
+| ad                                   |
++--------------------------------------+
+select regexp_substr('abcadef', 'a.', 0, 2) from dual;
+ERROR HY000: Incorrect arguments to use position or occurrence or subexpr in regexp_substr
+select regexp_substr('abcadef', 'a.', 1, 0) from dual;
+ERROR HY000: Incorrect arguments to use position or occurrence or subexpr in regexp_substr
+select regexp_substr('abcadef', 'a.', 10, 2) from dual;
+ERROR 42000: Got error 'U_INDEX_OUTOFBOUNDS_ERROR' from regexp
+select regexp_substr('abcadef', 'a.', 1, 10) from dual;
++---------------------------------------+
+| regexp_substr('abcadef', 'a.', 1, 10) |
++---------------------------------------+
+| NULL                                  |
++---------------------------------------+
+select regexp_substr('abcadef', 'a. ', 1, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_substr('', 'a. ', 1, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_substr('abcadef', '', 1, 2, 'x') from dual;
+ERROR 42000: Got error from regexp
+select regexp_substr('abcadef', 'a. ', NULL, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_substr('abcadef', 'a. ', 1, NULL, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_substr('abcadef', 'a. ', 1, 2, NULL) from dual;
++---------------------------------------------+
+| regexp_substr('abcadef', 'a. ', 1, 2, NULL) |
++---------------------------------------------+
+| NULL                                        |
++---------------------------------------------+
+
+select regexp_substr(12341834, 1.3, '1.9', '2') from dual;
++------------------------------------------+
+| regexp_substr(12341834, 1.3, '1.9', '2') |
++------------------------------------------+
+| 183                                      |
++------------------------------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.9'
+select regexp_replace('我是好人', '是.') from dual;
++----------------------------------------+
+| regexp_replace('我是好人', '是.')      |
++----------------------------------------+
+| 我人                                   |
++----------------------------------------+
+
+select regexp_replace('abcadef', 'a.') from dual;
++---------------------------------+
+| regexp_replace('abcadef', 'a.') |
++---------------------------------+
+| cef                             |
++---------------------------------+
+select regexp_replace('abcadef', 'a.*') from dual;
++----------------------------------+
+| regexp_replace('abcadef', 'a.*') |
++----------------------------------+
+|                                  |
++----------------------------------+
+select regexp_replace('abcadef', 'a.', 'X') from dual;
++--------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X') |
++--------------------------------------+
+| XcXef                                |
++--------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 1) from dual;
++-----------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 1) |
++-----------------------------------------+
+| XcXef                                   |
++-----------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 1, 2) from dual;
++--------------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 1, 2) |
++--------------------------------------------+
+| abcXef                                     |
++--------------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 2, 1) from dual;
++--------------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 2, 1) |
++--------------------------------------------+
+| abcXef                                     |
++--------------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 2, 2) from dual;
++--------------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 2, 2) |
++--------------------------------------------+
+| abcadef                                    |
++--------------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 1, 0) from dual;
++--------------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 1, 0) |
++--------------------------------------------+
+| XcXef                                      |
++--------------------------------------------+
+select regexp_replace('abcadef', 'a.', 'X', 1, -1) from dual;
+ERROR HY000: Incorrect arguments to use position or occurrence in regexp_replace
+select regexp_replace('abcadef', 'a.', 'X', 10, 2) from dual;
+ERROR 42000: Got error 'U_INDEX_OUTOFBOUNDS_ERROR' from regexp
+select regexp_replace('abcadef', 'a.', 'X', 1, 100) from dual;
++----------------------------------------------+
+| regexp_replace('abcadef', 'a.', 'X', 1, 100) |
++----------------------------------------------+
+| abcadef                                      |
++----------------------------------------------+
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2) from dual;
++---------------------------------------------+
+| regexp_replace('abcadef', 'a. ', 'X', 1, 2) |
++---------------------------------------------+
+| abcadef                                     |
++---------------------------------------------+
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_replace('', 'a. ', 'X', 1, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_replace('abcadef', '', 'X', 1, 2, 'x') from dual;
+ERROR 42000: Got error from regexp
+select regexp_replace('abcadef', 'a. ', NULL, 1, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_replace('abcadef', 'a. ', 'X', NULL, 2, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_replace('abcadef', 'a. ', 'X', 1, NULL, 'x') from dual;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2, NULL) from dual;
++---------------------------------------------------+
+| regexp_replace('abcadef', 'a. ', 'X', 1, 2, NULL) |
++---------------------------------------------------+
+| NULL                                              |
++---------------------------------------------------+
+
+select regexp_replace(12341834, 1.3, 99, '1', '2') from dual;
++---------------------------------------------+
+| regexp_replace(12341834, 1.3, 99, '1', '2') |
++---------------------------------------------+
+| 1234994                                     |
++---------------------------------------------+
+select regexp_replace('我是好人', '是.', '.....') from dual;
++-------------------------------------------------+
+| regexp_replace('我是好人', '是.', '.....')      |
++-------------------------------------------------+
+| 我.....人                                       |
++-------------------------------------------------+
+

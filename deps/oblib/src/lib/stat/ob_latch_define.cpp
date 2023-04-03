@@ -11,14 +11,17 @@
  */
 
 #include "lib/stat/ob_latch_define.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const ObLatchDesc OB_LATCHES[] = {
 #define LATCH_DEF(def, id, name, policy, max_spin_cnt, max_yield_cnt, wait_event, display_name) \
-  {id, name, ObLatchPolicy::policy, max_spin_cnt, max_yield_cnt, ObWaitEventIds::wait_event, display_name},
+    {id, name, ObLatchPolicy::policy, max_spin_cnt, max_yield_cnt, ObWaitEventIds::wait_event, display_name},
 #include "lib/stat/ob_latch_define.h"
 #undef LATCH_DEF
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+

@@ -19,22 +19,26 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/utility/utility.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
-int ObPhyOperatorStats::init(ObIAllocator* alloc, int64_t op_count)
+namespace oceanbase
+{
+namespace sql
+{
+int ObPhyOperatorStats::init(ObIAllocator *alloc, int64_t op_count)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (OB_ISNULL(alloc) || OB_UNLIKELY(op_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(alloc), K(op_count));
+    LOG_WARN("invalid argument", K(ret),K(alloc), K(op_count));
   } else {
     array_size_ = op_count * StatId::MAX_STAT * COPY_COUNT;
+    //2是为了保存plan_id 和operation_id
+    //没有必须要存operation id , 可以通过下标计算出来
     if (OB_ISNULL(ptr = alloc->alloc(sizeof(int64_t) * array_size_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc memory for aray", K(ret), K_(array_size));
     } else {
-      op_stats_array_ = static_cast<int64_t*>(ptr);
+      op_stats_array_ = static_cast<int64_t *>(ptr);
       memset(op_stats_array_, 0, sizeof(int64_t) * array_size_);
       op_count_ = op_count;
     }
@@ -57,7 +61,7 @@ int ObPhyOperatorStats::init(ObIAllocator* alloc, int64_t op_count)
  * COPY = 10
  */
 
-int ObPhyOperatorStats::add_op_stat(ObPhyOperatorMonitorInfo& info)
+int ObPhyOperatorStats::add_op_stat(ObPhyOperatorMonitorInfo &info)
 {
   int ret = OB_SUCCESS;
   const int64_t COPY_SIZE = op_count_ * StatId::MAX_STAT;
@@ -80,7 +84,9 @@ int ObPhyOperatorStats::add_op_stat(ObPhyOperatorMonitorInfo& info)
   return ret;
 }
 
-int ObPhyOperatorStats::get_op_stat_accumulation(ObPhysicalPlan* plan, int64_t op_id, ObOperatorStat& stat)
+int ObPhyOperatorStats::get_op_stat_accumulation(ObPhysicalPlan *plan,
+                                                 int64_t op_id,
+                                                 ObOperatorStat &stat)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(plan)) {
@@ -101,14 +107,15 @@ int ObPhyOperatorStats::get_op_stat_accumulation(ObPhysicalPlan* plan, int64_t o
         exec_times = ATOMIC_LOAD(&(execution_times_));
         stat.init();
         stat.execute_times_ = exec_times;
-        retry_times--;
+        retry_times --;
         for (int64_t i = 0; i < COPY_COUNT; i++) {
           copy_start_index = op_first_index + i * COPY_SIZE;
           stat.input_rows_ += ATOMIC_LOAD(&(op_stats_array_[copy_start_index + StatId::INPUT_ROWS]));
-          stat.rescan_times_ += ATOMIC_LOAD(&(op_stats_array_[copy_start_index + StatId::RESCAN_TIMES]));
+          stat.rescan_times_ += ATOMIC_LOAD(&(op_stats_array_[copy_start_index +StatId::RESCAN_TIMES]));
           stat.output_rows_ += ATOMIC_LOAD(&(op_stats_array_[copy_start_index + StatId::OUTPUT_ROWS]));
         }
-      } while (exec_times != ATOMIC_LOAD(&(execution_times_)) && retry_times > 0);
+      } while (exec_times != ATOMIC_LOAD(&(execution_times_))
+               && retry_times > 0);
     }
     if (OB_SUCC(ret)) {
       stat.operation_id_ = op_id;
@@ -117,5 +124,5 @@ int ObPhyOperatorStats::get_op_stat_accumulation(ObPhysicalPlan* plan, int64_t o
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

@@ -1,0 +1,450 @@
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+create table t3(c1 int primary key,c2 int) partition by hash(c1) partitions 5;
+create table t4(c1 int primary key,c2 int) partition by hash(c1) partitions 6;
+insert into t3 values(0,0);
+insert into t3 values(1,0);
+insert into t3 values(2,1);
+insert into t3 values(3,2);
+insert into t3 values(4,3);
+insert into t3 values(5,4);
+insert into t3 values(6,5);
+insert into t4 values(1,0);
+insert into t4 values(2,1);
+insert into t4 values(3,2);
+insert into t4 values(4,3);
+insert into t4 values(5,4);
+insert into t4 values(6,5);
+insert into t4 values(7,5);
+commit;
+create table t5(c1 int primary key,c2 int);
+insert into t5 values(1,1);
+insert into t5 values(2,2);
+insert into t5 values(3,3);
+insert into t5 values(4,4);
+insert into t5 values(5,5);
+insert into t5 values(6,6);
+commit;
+create table t1(c1 int,c2 int) partition by hash(c1) partitions 5;
+create table t2(c1 int,c2 int) partition by hash(c2) partitions 6;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+insert into t1 values(4,4);
+insert into t1 values(5,5);
+insert into t1 values(6,6);
+insert into t2 values(1,1);
+insert into t2 values(2,2);
+insert into t2 values(3,3);
+insert into t2 values(4,4);
+insert into t2 values(5,5);
+insert into t2 values(6,6);
+commit;
+result_format: 4
+explain_protocol: 1
+set @@ob_enable_plan_cache = 0;
+
+EXPLAIN BASIC select * from t3 a ;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   TABLE SCAN          |a       |
+=====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      dop=1
+  2 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      force partition granule
+  3 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+select * from t3 a ;
++----+------+
+| c1 | c2   |
++----+------+
+|  0 |    0 |
+|  5 |    4 |
+|  1 |    0 |
+|  6 |    5 |
+|  2 |    1 |
+|  3 |    2 |
+|  4 |    3 |
++----+------+
+
+##ms coord output 列与child不一致，所以后续就改成了拿数据时直接采用child_expxs
+EXPLAIN BASIC select /*+ parallel(2) NO_USE_HASH_AGGREGATION */  a.c1,a.c2+a.c1 from t3 a group by a.c1,a.c2 order by a.c2+1+a.c1;
+Query Plan
+========================================
+|ID|OPERATOR                  |NAME    |
+----------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |
+|1 | EXCHANGE OUT DISTR       |:EX10000|
+|2 |  SORT                    |        |
+|3 |   PX BLOCK ITERATOR      |        |
+|4 |    TABLE SCAN            |a       |
+========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=256
+      sort_keys([a.c2 + 1 + a.c1, ASC])
+  1 - output([a.c2 + 1 + a.c1], [INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c2 + 1 + a.c1], [a.c1], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c2 + 1 + a.c1, ASC])
+  3 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=256
+  4 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+select /*+ parallel(2) NO_USE_HASH_AGGREGATION */  a.c1,a.c2+a.c1 from t3 a group by a.c1,a.c2 order by a.c2+1+a.c1;
++----+-----------+
+| c1 | a.c2+a.c1 |
++----+-----------+
+|  0 |         0 |
+|  1 |         1 |
+|  2 |         3 |
+|  3 |         5 |
+|  4 |         7 |
+|  5 |         9 |
+|  6 |        11 |
++----+-----------+
+
+##ms receieve local order
+EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2=b.c1 order by a.c1,a.c2;
+Query Plan
+============================================
+|ID|OPERATOR                      |NAME    |
+--------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |
+|1 | EXCHANGE OUT DISTR           |:EX10001|
+|2 |  SORT                        |        |
+|3 |   HASH RIGHT OUTER JOIN      |        |
+|4 |    EXCHANGE IN DISTR         |        |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      PX BLOCK ITERATOR       |        |
+|7 |       TABLE SCAN             |a       |
+|8 |    PX PARTITION ITERATOR     |        |
+|9 |     TABLE SCAN               |b       |
+============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2, ASC])
+  1 - output([a.c1], [a.c2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2, ASC])
+  3 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      equal_conds([a.c2 = b.c1]), other_conds(nil)
+  4 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      (#keys=1, [a.c2]), dop=2
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+  8 - output([b.c1]), filter(nil), rowset=256
+      affinitize
+  9 - output([b.c1]), filter(nil), rowset=256
+      access([b.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2=b.c1 order by a.c1,a.c2;
++----+------+
+| c1 | c2   |
++----+------+
+| NULL | NULL |
+|  0 |    0 |
+|  1 |    0 |
+|  2 |    1 |
+|  3 |    2 |
+|  4 |    3 |
+|  5 |    4 |
+|  6 |    5 |
++----+------+
+EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2+2=b.c1+1 order by a.c1,a.c2+2;
+Query Plan
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |PX COORDINATOR MERGE SORT        |        |
+|1 | EXCHANGE OUT DISTR              |:EX10001|
+|2 |  SORT                           |        |
+|3 |   SHARED HASH RIGHT OUTER JOIN  |        |
+|4 |    EXCHANGE IN DISTR            |        |
+|5 |     EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|6 |      PX BLOCK ITERATOR          |        |
+|7 |       TABLE SCAN                |a       |
+|8 |    PX BLOCK ITERATOR            |        |
+|9 |     TABLE SCAN                  |b       |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
+  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
+  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
+      equal_conds([a.c2 + 2 = b.c1 + 1]), other_conds(nil)
+  4 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      dop=2
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+  8 - output([b.c1]), filter(nil), rowset=256
+  9 - output([b.c1]), filter(nil), rowset=256
+      access([b.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2+2=b.c1+1 order by a.c1,a.c2+2;
++----+------+
+| c1 | c2   |
++----+------+
+| NULL | NULL |
+|  0 |    0 |
+|  1 |    0 |
+|  2 |    1 |
+|  3 |    2 |
+|  4 |    3 |
+|  5 |    4 |
+|  6 |    5 |
++----+------+
+EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on abs(a.c2)+2=b.c1 order by a.c1,a.c2+2;
+Query Plan
+============================================
+|ID|OPERATOR                      |NAME    |
+--------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |
+|1 | EXCHANGE OUT DISTR           |:EX10001|
+|2 |  SORT                        |        |
+|3 |   HASH RIGHT OUTER JOIN      |        |
+|4 |    EXCHANGE IN DISTR         |        |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      PX BLOCK ITERATOR       |        |
+|7 |       TABLE SCAN             |a       |
+|8 |    PX PARTITION ITERATOR     |        |
+|9 |     TABLE SCAN               |b       |
+============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
+  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
+  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
+      equal_conds([abs(cast(a.c2, BIGINT(-1, 0))) + 2 = b.c1]), other_conds(nil)
+  4 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=256
+      (#keys=1, [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), dop=2
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+  8 - output([b.c1]), filter(nil), rowset=256
+      affinitize
+  9 - output([b.c1]), filter(nil), rowset=256
+      access([b.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on abs(a.c2)+2=b.c1 order by a.c1,a.c2+2;
++----+------+
+| c1 | c2   |
++----+------+
+| NULL | NULL |
+| NULL | NULL |
+|  0 |    0 |
+|  1 |    0 |
+|  2 |    1 |
+|  3 |    2 |
+|  4 |    3 |
+|  5 |    4 |
++----+------+
+
+## ms receive global order subplan not supported, core, ignore
+## broadcast shuffle
+EXPLAIN BASIC select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
+Query Plan
+============================================
+|ID|OPERATOR                      |NAME    |
+--------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |
+|1 | EXCHANGE OUT DISTR           |:EX10001|
+|2 |  SORT                        |        |
+|3 |   HASH JOIN                  |        |
+|4 |    PX PARTITION ITERATOR     |        |
+|5 |     TABLE SCAN               |b       |
+|6 |    EXCHANGE IN DISTR         |        |
+|7 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|8 |      PX BLOCK ITERATOR       |        |
+|9 |       TABLE SCAN             |a       |
+============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [b.c1, ASC])
+  1 - output([a.c1], [b.c1], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [b.c1, ASC])
+  3 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
+      equal_conds([a.c1 = b.c2]), other_conds(nil)
+  4 - output([b.c2], [b.c1]), filter(nil), rowset=256
+      affinitize
+  5 - output([b.c2], [b.c1]), filter(nil), rowset=256
+      access([b.c2], [b.c1]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      (#keys=1, [a.c1]), dop=2
+  8 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+|    1 |    1 |    1 |    1 |
+|    2 |    2 |    2 |    2 |
+|    3 |    3 |    3 |    3 |
+|    4 |    4 |    4 |    4 |
+|    5 |    5 |    5 |    5 |
+|    6 |    6 |    6 |    6 |
++------+------+------+------+
+
+EXPLAIN BASIC select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
+Query Plan
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |PX COORDINATOR MERGE SORT        |        |
+|1 | EXCHANGE OUT DISTR              |:EX10001|
+|2 |  SORT                           |        |
+|3 |   SHARED HASH JOIN              |        |
+|4 |    EXCHANGE IN DISTR            |        |
+|5 |     EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|6 |      PX BLOCK ITERATOR          |        |
+|7 |       TABLE SCAN                |b       |
+|8 |    PX BLOCK ITERATOR            |        |
+|9 |     TABLE SCAN                  |a       |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [b.c1 + 2, ASC])
+  1 - output([a.c1], [b.c1 + 2], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
+      dop=2
+  2 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
+      sort_keys([a.c1, ASC], [b.c1 + 2, ASC])
+  3 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
+      equal_conds([a.c1 + 2 = b.c2 + 1]), other_conds(nil)
+  4 - output([b.c1], [b.c2]), filter(nil), rowset=256
+  5 - output([b.c1], [b.c2]), filter(nil), rowset=256
+      dop=2
+  6 - output([b.c2], [b.c1]), filter(nil), rowset=256
+  7 - output([b.c2], [b.c1]), filter(nil), rowset=256
+      access([b.c2], [b.c1]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+|    1 |    1 |    2 |    2 |
+|    2 |    2 |    3 |    3 |
+|    3 |    3 |    4 |    4 |
+|    4 |    4 |    5 |    5 |
+|    5 |    5 |    6 |    6 |
++------+------+------+------+
+
+EXPLAIN BASIC select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
+Query Plan
+=============================================
+|ID|OPERATOR                       |NAME    |
+---------------------------------------------
+|0 |PX COORDINATOR MERGE SORT      |        |
+|1 | EXCHANGE OUT DISTR            |:EX10002|
+|2 |  MERGE GROUP BY               |        |
+|3 |   SORT                        |        |
+|4 |    HASH JOIN                  |        |
+|5 |     EXCHANGE IN DISTR         |        |
+|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|
+|7 |       PX BLOCK ITERATOR       |        |
+|8 |        TABLE SCAN             |a       |
+|9 |     EXCHANGE IN DISTR         |        |
+|10|      EXCHANGE OUT DISTR (HASH)|:EX10001|
+|11|       PX BLOCK ITERATOR       |        |
+|12|        TABLE SCAN             |b       |
+=============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256
+      sort_keys([b.c2, ASC], [T_FUN_SUM(a.c1), ASC])
+  1 - output([b.c2], [T_FUN_SUM(a.c1)], [INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256
+      dop=2
+  2 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256
+      group([b.c2]), agg_func([T_FUN_SUM(a.c1)])
+  3 - output([b.c2], [a.c1]), filter(nil), rowset=256
+      sort_keys([b.c2, ASC])
+  4 - output([b.c2], [a.c1]), filter(nil), rowset=256
+      equal_conds([a.c1 = b.c2]), other_conds(nil)
+  5 - output([a.c1]), filter(nil), rowset=256
+  6 - output([a.c1]), filter(nil), rowset=256
+      (#keys=1, [a.c1]), dop=2
+  7 - output([a.c1]), filter(nil), rowset=256
+  8 - output([a.c1]), filter(nil), rowset=256
+      access([a.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+  9 - output([b.c2]), filter(nil), rowset=256
+ 10 - output([b.c2]), filter(nil), rowset=256
+      (#keys=1, [b.c2]), dop=2
+ 11 - output([b.c2]), filter(nil), rowset=256
+ 12 - output([b.c2]), filter(nil), rowset=256
+      access([b.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
++------+---------+
+| c2   | sum(c1) |
++------+---------+
+|    1 |       1 |
+|    2 |       2 |
+|    3 |       3 |
+|    4 |       4 |
+|    5 |       5 |
+|    6 |       6 |
++------+---------+
+
+
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;

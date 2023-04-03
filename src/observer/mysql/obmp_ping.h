@@ -15,13 +15,16 @@
 
 #include "observer/mysql/obmp_base.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObMPPing : public ObMPBase {
+class ObMPPing : public ObMPBase
+{
 public:
-  static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_PING;
-  explicit ObMPPing(const ObGlobalContext& gctx);
+  static const obmysql::ObMySQLCmd COM = obmysql::COM_PING;
+  explicit ObMPPing(const ObGlobalContext &gctx);
   virtual ~ObMPPing();
 
 protected:
@@ -31,9 +34,10 @@ protected:
 private:
   common::ObString sql_;
   DISALLOW_COPY_AND_ASSIGN(ObMPPing);
-};  // end of class ObMPPing
+}; // end of class ObMPPing
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_MYSQL_OBMP_PING_H_
+
+#endif // OCEANBASE_OBSERVER_MYSQL_OBMP_PING_H_

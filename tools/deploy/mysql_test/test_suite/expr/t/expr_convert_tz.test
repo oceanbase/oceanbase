@@ -1,0 +1,155 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=on;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL2
+# Test of functions convert_tz
+
+
+--echo ================ expression convert_tz ================
+--source mysql_test/test_suite/otimestamp/t/otimestamp_import_time_zone_mysql.inc
+# 直接时刻类型
+SELECT CONVERT_TZ('2021-01-01 12:00:00','+00:00','+08:00');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','+01:00','+08:00');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','+01:00','+06:30');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','+01:00','+10:10');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','+01:30','+13:00');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','-11:30','+13:00');
+SELECT CONVERT_TZ('2021-01-01 12:00:00','-12:00','+13:00');
+SELECT CONVERT_TZ('2021-01-01 00:00:00','-12:00','+13:00');
+SELECT CONVERT_TZ('2021-01-01 23:59:59','-12:00','+13:00');
+SELECT CONVERT_TZ('2021-01-01 13:19:38','-10:38','+10:12');
+SELECT CONVERT_TZ('2021-01-01 12:23:35','-09:23','-11:11');
+SELECT CONVERT_TZ('2021-01-01 00:01:00','+10:00','-11:00');
+SELECT CONVERT_TZ('2021-01-01 00:11:00','+00:00','-11:00');
+SELECT CONVERT_TZ('2021-03-01 00:11:00','+00:00','-11:00');
+SELECT CONVERT_TZ('2021-06-01 00:11:00','+00:00','-11:00');
+SELECT CONVERT_TZ('2020-03-01 00:11:00','+00:00','-11:00');
+SELECT CONVERT_TZ('2020-02-28 23:11:00','-00:00','+11:00');
+SELECT CONVERT_TZ('2020-12-31 23:11:00','-05:00','+11:00');
+
+#直接时刻类型异常
+SELECT CONVERT_TZ('2020-12-31 23:11:00',null,'+11:00');
+SELECT CONVERT_TZ('2020-12-31 23:11:00','+11:00', null);
+SELECT CONVERT_TZ(null,'-13:00','+11:00');
+SELECT CONVERT_TZ(null, null,'+11:00');
+SELECT CONVERT_TZ(null, null, null);
+
+#时区类型
+SELECT CONVERT_TZ('2020-12-31 23:11:00','America/Merida','Asia/Tokyo');
+SELECT CONVERT_TZ('2021-01-01 00:11:00','America/Merida','Australia/Darwin');
+SELECT CONVERT_TZ('2021-01-01 00:11:00','America/Merida','Europe/Amsterdam');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','Europe/Amsterdam','America/Merida');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','MET','Libya');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','MET','MST');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','PRC','MST');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','PRC','ROC');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','UCT','ROC');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','Universal','ROC');
+SELECT CONVERT_TZ('2021-01-01 07:11:00','Pacific/Marquesas','ROC');
+SELECT CONVERT_TZ('2021-02-28 17:11:00','GMT+0','ROC');
+SELECT CONVERT_TZ('2021-02-28 17:11:00','GMT+0','Singapore');
+SELECT CONVERT_TZ('2021-02-28 17:11:00','US/Michigan','ROC');
+
+#时区类型异常
+SELECT CONVERT_TZ('2021-02-28 17:11:00', null,'ROC');
+SELECT CONVERT_TZ('2021-02-28 17:11:00','US/Michigan', null);
+SELECT CONVERT_TZ('2021-02-28 17:11:00', null, null);
+
+#混合类型
+SELECT CONVERT_TZ('2021-02-28 17:11:00', '+00:00','ROC');
+SELECT CONVERT_TZ('2021-02-28 17:11:00', '+00:00','US/Michigan');
+SELECT CONVERT_TZ('2021-02-28 17:11:00', 'ROC','+00:00');
+SELECT CONVERT_TZ('2021-02-28 17:11:00', 'US/Michigan', '+00:00');
+SELECT CONVERT_TZ('2021-02-28 17:11:00', 'ROC','+12:58');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', 'UCT','-12:58');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', '-12:58','UCT');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', '-12:58','US/Michigan');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', '+05:12','MET');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', '+03:32','PRC');
+SELECT CONVERT_TZ('2021-01-01 07:11:00', '+11:32','PRC');
+
+##bugfix:
+SELECT CONVERT_TZ('2004-01-01 12:00:00','-13:00','+10:00');
+SELECT CONVERT_TZ('2004-01-01 12:00:00','-12:00','+14:00');
+SELECT CONVERT_TZ('2004-01-01 12:00:00','-13:00','ABC');
+SELECT CONVERT_TZ('2004-01-01 12:00:00','-12:00','OK');
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(c1 timestamp);
+insert into t values(CONVERT_TZ('2004-01-01 12:00:00','-13:00','+10:00'));
+insert into t values(CONVERT_TZ('2004-01-01 12:00:00','-12:00','+14:00'));
+insert into t values(CONVERT_TZ('2004-01-01 12:00:00','-13:00','ABC'));
+insert into t values(CONVERT_TZ('2004-01-01 12:00:00','-12:00','OK'));
+select * from t;
+delete from t;
+
+## test result out of range
+select convert_tz('9999-12-31 20:00:00', '+02:00', '+06:00');
+select convert_tz('0000-01-01 01:00:00', '+00:00', '-02:00');
+insert into t values(convert_tz('9999-12-31 20:00:00', '+02:00', '+06:00'));
+insert into t values(convert_tz('0000-01-01 01:00:00', '+00:00', '-02:00'));
+select * from t;
+
+
+##bugfix:
+SELECT CONVERT_TZ(123456,'-12:00','+10:00');
+SELECT CONVERT_TZ('','-12:00','+10:00');
+SELECT CONVERT_TZ('aa','-12:00','+10:00');
+SELECT CONVERT_TZ('张三','-12:00','+10:00');
+SELECT CONVERT_TZ('1asd561ad','-12:00','+10:00');
+SELECT CONVERT_TZ('￥￥%……&*￥','-12:00','+10:00');
+
+
+##bugfix:
+drop table t;
+create table t(c1 year);
+insert into t values('1901'),('2155'), ('0000'), ('0001');
+SELECT c1, CONVERT_TZ(c1,'+00:00','+00:00') from t;
+
+
+##bugfix:
+drop table t;
+create table t(a1 int,a2 year,c1 timestamp,c2 timestamp);
+insert into t values(1,'1998','1998-12-12 12:12:12','2038-01-19 03:14:07');
+insert into t values(2,'2002','2002-02-02 10:00:00','2034-02-22 00:50:20');
+insert into t values(3,'2006','2006-04-15 06:06:20','2038-01-19 03:14:07');
+insert into t values(4,'2012','2012-12-12 12:12:12','2030-08-16 14:05:50');
+select c1,c2 ,case c1 when convert_tz(c1,'+06:00','+00:00')<'2006-04-15 06:06:20' then convert_tz('2020-02-02 02:02:02','+00:00','+00:00') else convert_tz('1999-09-09 09:09:09','+00:00','+00:00') end as c1 from t;
+drop table t;
+
+create table t(c1 timestamp(0), c2 timestamp(3), c3 decimal(20,4));
+insert into t values('2020-01-01 12:00:00.123456', '2020-01-01 12:00:00.123456', '20200101120000.123456');
+select c1, convert_tz(c1, '+00:00', '+08:00') from t;
+select c2, convert_tz(c2, '+00:00', '+08:00') from t;
+select c3, convert_tz(c3, '+00:00', '+08:00') from t;
+drop table t;
+
+
+##bugfix:
+SELECT CONVERT_TZ('2007-03-11 2:00:00','US/Eastern','US/Central') AS time1,
+		CONVERT_TZ('2007-03-11 2:00:01','US/Eastern','US/Central') AS time2,
+		CONVERT_TZ('2007-03-11 3:00:00','US/Eastern','US/Central') AS time3,
+		CONVERT_TZ('2007-03-11 3:00:01','US/Eastern','US/Central') AS time4;
+
+SELECT CONVERT_TZ('2007-03-11 2:00:00','US/Eastern','+00:00') AS time1,
+		CONVERT_TZ('2007-03-11 3:00:00','US/Eastern','+00:00') AS time2,
+		CONVERT_TZ('2007-03-11 3:00:01','US/Eastern','+00:00') AS time3;
+
+SELECT CONVERT_TZ('2007-11-04 01:00:00','US/Eastern','+00:00') AS time1,
+		CONVERT_TZ('2007-11-04 01:00:01','US/Eastern','+00:00') AS time2,
+		CONVERT_TZ('2007-11-04 02:00:00','US/Eastern','+00:00') AS time3,
+		CONVERT_TZ('2007-11-04 02:00:01','US/Eastern','+00:00') AS time4;
+
+create table t(c1 datetime);
+insert into t values('2007-03-11 2:00:00'), ('2007-03-11 2:00:01'), ('2007-03-11 3:00:00'), ('2007-03-11 3:00:01');
+insert into t values('2007-11-04 1:00:00'), ('2007-11-04 1:00:01'), ('2007-11-04 2:00:00'), ('2007-11-04 2:00:01');
+select convert_tz(c1, 'US/Eastern', '+00:00') from t;
+drop table t;
+
+create table t(c1 timestamp);
+insert into t values('2007-03-11 1:59:59'), ('2007-03-11 3:00:00'), ('2007-03-11 3:00:01');
+insert into t values('2007-11-04 1:00:00'), ('2007-11-04 1:00:01'), ('2007-11-04 2:00:00'), ('2007-11-04 2:00:01');
+select convert_tz(c1, 'US/Eastern', '+00:00') from t;
+drop table t;

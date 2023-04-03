@@ -1,0 +1,15 @@
+See `ob_physical_plan.h' and `ob_phy_operator.h' for the interfaces of this module.
+
+ObPhysicalPlan内存管理约束:
+要求同一个phy_plan中的所有内存空间都从同一个allocator中进行分配，在析构phy_plan的时候并不会调用其他
+成员的析构函数，而是直接调用allocator.clear()，直接将所有空间释放掉；
+以后添加任何新的成员的时候，也必须从phy_plan的allocator中申请空间。否则会造成内存泄露，这里说的新成员
+不仅包括phy_plan类的成员，也包括phy_op/sql_expression/expr_op等所有隶属于同一个phy_plan对象内的所有内容；
+
+
+
+
+
+
+
+

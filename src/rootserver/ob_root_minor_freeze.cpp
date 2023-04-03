@@ -15,20 +15,30 @@
 #include "ob_root_minor_freeze.h"
 
 #include "share/ob_srv_rpc_proxy.h"
-#include "share/partition_table/ob_partition_table_operator.h"
+#include "share/location_cache/ob_location_service.h"
 #include "lib/container/ob_se_array.h"
+#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace obrpc;
+using namespace share;
+using namespace share::schema;
 
-namespace rootserver {
+namespace rootserver
+{
 ObRootMinorFreeze::ObRootMinorFreeze()
-    : inited_(false), stopped_(false), rpc_proxy_(NULL), server_manager_(NULL), unit_manager_(NULL), pt_operator_(NULL)
-{}
+    :inited_(false),
+     stopped_(false),
+     rpc_proxy_(NULL),
+     server_manager_(NULL),
+     unit_manager_(NULL)
+{
+}
 
 ObRootMinorFreeze::~ObRootMinorFreeze()
 {
@@ -38,8 +48,9 @@ ObRootMinorFreeze::~ObRootMinorFreeze()
   }
 }
 
-int ObRootMinorFreeze::init(ObSrvRpcProxy& rpc_proxy, ObServerManager& server_manager, ObUnitManager& unit_manager,
-    share::ObPartitionTableOperator& pt_operator)
+int ObRootMinorFreeze::init(ObSrvRpcProxy &rpc_proxy,
+                            ObServerManager &server_manager,
+                            ObUnitManager &unit_manager)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -49,7 +60,6 @@ int ObRootMinorFreeze::init(ObSrvRpcProxy& rpc_proxy, ObServerManager& server_ma
     rpc_proxy_ = &rpc_proxy;
     server_manager_ = &server_manager;
     unit_manager_ = &unit_manager;
-    pt_operator_ = &pt_operator;
     stopped_ = false;
     inited_ = true;
   }
@@ -74,7 +84,8 @@ int ObRootMinorFreeze::destroy()
   return ret;
 }
 
-inline int ObRootMinorFreeze::check_cancel() const
+inline
+int ObRootMinorFreeze::check_cancel() const
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -87,7 +98,8 @@ inline int ObRootMinorFreeze::check_cancel() const
   return ret;
 }
 
-inline bool ObRootMinorFreeze::is_server_alive(const ObAddr& server) const
+inline
+bool ObRootMinorFreeze::is_server_alive(const ObAddr &server) const
 {
   int ret = OB_SUCCESS;
   bool is_alive = false;
@@ -102,16 +114,17 @@ inline bool ObRootMinorFreeze::is_server_alive(const ObAddr& server) const
   return is_alive;
 }
 
-int ObRootMinorFreeze::get_tenant_server_list(uint64_t tenant_id, ObIArray<ObAddr>& target_server_list) const
+int ObRootMinorFreeze::get_tenant_server_list(uint64_t tenant_id,
+                                              ObIArray<ObAddr> &target_server_list) const
 {
   int ret = OB_SUCCESS;
 
   target_server_list.reset();
-  ObSEArray<uint64_t, 4> pool_ids;
+  ObSEArray<uint64_t, 2> pool_ids;
   if (OB_FAIL(unit_manager_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
     LOG_WARN("fail to get pool ids of tenant", K(tenant_id), K(ret));
   } else {
-    ObSEArray<share::ObUnitInfo, 256> units;
+    ObSEArray<share::ObUnitInfo, 4> units;
 
     for (int i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {
       units.reset();
@@ -120,7 +133,7 @@ int ObRootMinorFreeze::get_tenant_server_list(uint64_t tenant_id, ObIArray<ObAdd
       } else {
         for (int j = 0; j < units.count(); ++j) {
           if (OB_LIKELY(units.at(j).is_valid())) {
-            const share::ObUnit& unit = units.at(j).unit_;
+            const share::ObUnit &unit = units.at(j).unit_;
             if (is_server_alive(unit.migrate_from_server_)) {
               if (OB_FAIL(target_server_list.push_back(unit.migrate_from_server_))) {
                 LOG_WARN("fail to push server, ", K(ret));
@@ -141,8 +154,7 @@ int ObRootMinorFreeze::get_tenant_server_list(uint64_t tenant_id, ObIArray<ObAdd
   return ret;
 }
 
-int ObRootMinorFreeze::try_minor_freeze(const ObIArray<uint64_t>& tenant_ids, const ObPartitionKey& partition_key,
-    const ObIArray<ObAddr>& server_list, const common::ObZone& zone) const
+int ObRootMinorFreeze::try_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg) const
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -150,22 +162,26 @@ int ObRootMinorFreeze::try_minor_freeze(const ObIArray<uint64_t>& tenant_ids, co
     LOG_WARN("ObRootMinorFreeze not init", K(ret));
   } else {
     ParamsContainer params;
-
-    if (partition_key.is_valid()) {
-      if (OB_FAIL(init_params_by_partition(partition_key, zone, server_list, params))) {
-        LOG_WARN("fail to init param by partition key, ", K(partition_key), K(ret));
+    if ((arg.ls_id_.is_valid() && arg.ls_id_.id() > 0) || arg.tablet_id_.is_valid()) {
+      if (1 == arg.tenant_ids_.count()) {
+        if (OB_FAIL(init_params_by_ls_or_tablet(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_, params))) {
+          LOG_WARN("fail to init param by tablet_id");
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("only one tenant is required for tablet_freeze", K(ret), K(arg));
       }
-    } else if (tenant_ids.count() > 0) {
-      if (OB_FAIL(init_params_by_tenant(tenant_ids, zone, server_list, params))) {
-        LOG_WARN("fail to init param by tenant, ", K(tenant_ids), K(ret));
+    } else if (arg.tenant_ids_.count() > 0) {
+      if (OB_FAIL(init_params_by_tenant(arg.tenant_ids_, arg.zone_, arg.server_list_, params))) {
+        LOG_WARN("fail to init param by tenant, ", K(ret), K(arg));
       }
-    } else if (server_list.count() == 0 && zone.size() > 0) {
-      if (OB_FAIL(init_params_by_zone(zone, params))) {
-        LOG_WARN("fail to init param by tenant, ", K(tenant_ids), K(ret));
+    } else if (arg.server_list_.count() == 0 && arg.zone_.size() > 0) {
+      if (OB_FAIL(init_params_by_zone(arg.zone_, params))) {
+        LOG_WARN("fail to init param by zone, ", K(ret), K(arg));
       }
     } else {
-      if (OB_FAIL(init_params_by_server(server_list, params))) {
-        LOG_WARN("fail to init param by server, ", K(server_list), K(ret));
+      if (OB_FAIL(init_params_by_server(arg.server_list_, params))) {
+        LOG_WARN("fail to init param by server, ", K(ret), K(arg));
       }
     }
 
@@ -179,7 +195,7 @@ int ObRootMinorFreeze::try_minor_freeze(const ObIArray<uint64_t>& tenant_ids, co
   return ret;
 }
 
-int ObRootMinorFreeze::do_minor_freeze(const ParamsContainer& params) const
+int ObRootMinorFreeze::do_minor_freeze(const ParamsContainer &params) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -188,11 +204,13 @@ int ObRootMinorFreeze::do_minor_freeze(const ParamsContainer& params) const
   LOG_INFO("do minor freeze", K(params));
 
   for (int64_t i = 0; i < params.get_params().count() && OB_SUCC(check_cancel()); ++i) {
-    const MinorFreezeParam& param = params.get_params().at(i);
+    const MinorFreezeParam &param = params.get_params().at(i);
 
-    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = proxy.call(param.server, MINOR_FREEZE_TIMEOUT, param.arg)))) {
-      LOG_WARN("proxy call failed", K(tmp_ret), K(param.arg), "dest addr", param.server);
-      failure_cnt++;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = proxy.call(param.server,
+                                                        MINOR_FREEZE_TIMEOUT, param.arg)))) {
+      LOG_WARN("proxy call failed", K(tmp_ret), K(param.arg),
+               "dest addr", param.server);
+      failure_cnt ++;
     }
   }
 
@@ -201,25 +219,25 @@ int ObRootMinorFreeze::do_minor_freeze(const ParamsContainer& params) const
   } else {
     for (int i = 0; i < proxy.get_results().count(); ++i) {
       if (OB_SUCCESS != (tmp_ret = static_cast<int>(*proxy.get_results().at(i)))) {
-        LOG_WARN("fail to do minor freeze on target server, ",
-            K(tmp_ret),
-            "dest addr:",
-            proxy.get_dests().at(i),
-            "param:",
-            proxy.get_args().at(i));
-        failure_cnt++;
+        LOG_WARN("fail to do minor freeze on target server, ", K(tmp_ret),
+                 "dest addr:", proxy.get_dests().at(i),
+                 "param:", proxy.get_args().at(i));
+        failure_cnt ++;
       }
     }
   }
 
   if (0 != failure_cnt && OB_CANCELED != ret) {
     ret = OB_PARTIAL_FAILED;
+    LOG_WARN("minor freeze partial failed", KR(ret), K(failure_cnt));
   }
 
   return ret;
 }
 
-int ObRootMinorFreeze::is_server_belongs_to_zone(const ObAddr& addr, const ObZone& zone, bool& server_in_zone) const
+int ObRootMinorFreeze::is_server_belongs_to_zone(const ObAddr &addr,
+                                                 const ObZone &zone,
+                                                 bool &server_in_zone) const
 {
   int ret = OB_SUCCESS;
   ObZone server_zone;
@@ -240,49 +258,53 @@ int ObRootMinorFreeze::is_server_belongs_to_zone(const ObAddr& addr, const ObZon
   return ret;
 }
 
-int ObRootMinorFreeze::init_params_by_partition(const ObPartitionKey& partition_key, const ObZone& zone,
-    const ObIArray<ObAddr>& server_list, ParamsContainer& params) const
+int ObRootMinorFreeze::init_params_by_ls_or_tablet(const uint64_t tenant_id,
+                                                   share::ObLSID ls_id,
+                                                   const common::ObTabletID &tablet_id,
+                                                   ParamsContainer &params) const
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!partition_key.is_valid())) {
+  const int64_t expire_renew_time = INT64_MAX;
+  share::ObLSLocation location;
+  bool is_cache_hit = false;
+  if (OB_UNLIKELY(OB_ISNULL(GCTX.location_service_))) {
     ret = OB_ERR_UNEXPECTED;
-  } else {
-    if (server_list.count() > 0) {
-      for (int i = 0; i < server_list.count() && OB_SUCC(ret); ++i) {
-        if (is_server_alive(server_list.at(i))) {
-          if (OB_FAIL(params.add_partition_server(partition_key, server_list.at(i)))) {
-            LOG_WARN("fail to add partiton server", K(ret));
-          }
-        } else {
-          ret = OB_SERVER_NOT_ACTIVE;
-          LOG_WARN("server not alive or invalid", "server", server_list.at(i), K(ret));
-        }
-      }
-    } else {
-      ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
-      share::ObPartitionInfo partition_info;
-      partition_info.set_allocator(&allocator);
-      const share::ObPartitionReplica* leader_replica = NULL;
+    LOG_WARN("location service ptr is null", KR(ret));
+  } else if (tablet_id.is_valid() && !ls_id.is_valid()) {
+    // get ls id by tablet_id
+    if (tablet_id.is_ls_inner_tablet()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can not minor freeze inner tablet without specifying ls id", K(tenant_id), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(GCTX.location_service_->get(tenant_id, tablet_id, expire_renew_time, is_cache_hit, ls_id))) {
+      LOG_WARN("fail to get ls id according to tablet_id", K(ret), K(tenant_id), K(tablet_id));
+    }
+  }
 
-      if (OB_FAIL(pt_operator_->get(partition_key.get_table_id(), partition_key.get_partition_id(), partition_info))) {
-        LOG_WARN("fail to get partition info", K(ret), K(partition_key));
-      } else if (OB_FAIL(partition_info.find_leader_v2(leader_replica))) {
-        LOG_WARN("fail to get leader", K(ret), K(partition_info));
-      } else if (OB_UNLIKELY(NULL == leader_replica)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("leader replica is NULL", K(ret));
-      } else {
-        const share::ObPartitionReplica::MemberList& members = leader_replica->member_list_;
-        bool server_in_zone = false;
-        for (int64_t i = 0; i < members.count() && OB_SUCC(ret); ++i) {
-          const ObAddr& server = members[i];
-          if (OB_FAIL(is_server_belongs_to_zone(server, zone, server_in_zone))) {
-            LOG_WARN("fail to check server", K(ret));
-          } else if (server_in_zone && OB_FAIL(params.add_partition_server(partition_key, members[i]))) {
-            LOG_WARN("fail to add partiton server", K(i), K(members), K(partition_key), K(ret));
-          }
+  if (OB_FAIL(ret)) {
+  } else if (ls_id.is_valid()) {
+    // get ls location by ls_id
+    if (OB_FAIL(GCTX.location_service_->get(
+            GCONF.cluster_id, tenant_id, ls_id, expire_renew_time, is_cache_hit, location))) {
+      LOG_WARN("get ls location failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ls_id or tablet_id", KR(ret), K(ls_id), K(tablet_id));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    const ObIArray<ObLSReplicaLocation> &ls_locations = location.get_replica_locations();
+    for (int i = 0; i < ls_locations.count() && OB_SUCC(ret); ++i) {
+      const ObAddr &server = ls_locations.at(i).get_server();
+      if (is_server_alive(server)) {
+        if (OB_FAIL(params.push_back_param(server, tenant_id, ls_id, tablet_id))) {
+          LOG_WARN("fail to add tenant & server, ", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
         }
+      } else {
+        int tmp_ret = OB_SERVER_NOT_ACTIVE;
+        LOG_WARN("server not alive or invalid", "server", server, K(tmp_ret), K(tenant_id), K(ls_id), K(tablet_id));
       }
     }
   }
@@ -290,8 +312,10 @@ int ObRootMinorFreeze::init_params_by_partition(const ObPartitionKey& partition_
   return ret;
 }
 
-int ObRootMinorFreeze::init_params_by_tenant(const ObIArray<uint64_t>& tenant_ids, const ObZone& zone,
-    const ObIArray<ObAddr>& server_list, ParamsContainer& params) const
+int ObRootMinorFreeze::init_params_by_tenant(const ObIArray<uint64_t> &tenant_ids,
+                                             const ObZone &zone,
+                                             const ObIArray<ObAddr> &server_list,
+                                             ParamsContainer &params) const
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 256> target_server_list;
@@ -300,7 +324,7 @@ int ObRootMinorFreeze::init_params_by_tenant(const ObIArray<uint64_t>& tenant_id
     if (server_list.count() > 0) {
       for (int j = 0; j < server_list.count() && OB_SUCC(ret); ++j) {
         if (is_server_alive(server_list.at(j))) {
-          if (OB_FAIL(params.add_tenant_server(tenant_ids.at(i), server_list.at(j)))) {
+          if (OB_FAIL(params.push_back_param(server_list.at(j), tenant_ids.at(i)))) {
             LOG_WARN("fail to add tenant & server, ", K(ret));
           }
         } else {
@@ -309,25 +333,28 @@ int ObRootMinorFreeze::init_params_by_tenant(const ObIArray<uint64_t>& tenant_id
         }
       }
     } else {
+      // TODO: filter servers according to tenant_id
       if (OB_FAIL(get_tenant_server_list(tenant_ids.at(i), target_server_list))) {
         LOG_WARN("fail to get tenant server list, ", K(ret));
       } else {
         bool server_in_zone = false;
         for (int j = 0; j < target_server_list.count() && OB_SUCC(ret); ++j) {
-          const ObAddr& server = target_server_list.at(j);
+          const ObAddr &server = target_server_list.at(j);
           if (OB_FAIL(is_server_belongs_to_zone(server, zone, server_in_zone))) {
             LOG_WARN("fail to check server", K(ret));
-          } else if (server_in_zone && OB_FAIL(params.add_tenant_server(tenant_ids.at(i), server))) {
+          } else if (server_in_zone && OB_FAIL(params.push_back_param(server, tenant_ids.at(i)))) {
             LOG_WARN("fail to add tenant & server", K(ret));
           }
         }
       }
     }
   }
+
   return ret;
 }
 
-int ObRootMinorFreeze::init_params_by_zone(const ObZone& zone, ParamsContainer& params) const
+int ObRootMinorFreeze::init_params_by_zone(const ObZone &zone,
+                                           ParamsContainer &params) const
 {
   int ret = OB_SUCCESS;
   ObArray<ObAddr> target_server_list;
@@ -342,7 +369,7 @@ int ObRootMinorFreeze::init_params_by_zone(const ObZone& zone, ParamsContainer& 
       LOG_WARN("empty zone or invalid", K(zone), K(ret));
     } else {
       for (int i = 0; i < target_server_list.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(params.add_server(target_server_list.at(i)))) {
+        if (OB_FAIL(params.push_back_param(target_server_list.at(i)))) {
           LOG_WARN("fail to add server", K(ret));
         }
       }
@@ -351,13 +378,14 @@ int ObRootMinorFreeze::init_params_by_zone(const ObZone& zone, ParamsContainer& 
   return ret;
 }
 
-int ObRootMinorFreeze::init_params_by_server(const ObIArray<ObAddr>& server_list, ParamsContainer& params) const
+int ObRootMinorFreeze::init_params_by_server(const ObIArray<ObAddr> &server_list,
+                                             ParamsContainer &params) const
 {
   int ret = OB_SUCCESS;
   if (server_list.count() > 0) {
     for (int i = 0; i < server_list.count() && OB_SUCC(ret); ++i) {
       if (is_server_alive(server_list.at(i))) {
-        if (OB_FAIL(params.add_server(server_list.at(i)))) {
+        if (OB_FAIL(params.push_back_param(server_list.at(i)))) {
           LOG_WARN("fail to add server, ", K(ret));
         }
       } else {
@@ -366,7 +394,7 @@ int ObRootMinorFreeze::init_params_by_server(const ObIArray<ObAddr>& server_list
       }
     }
   } else {
-    ObZone zone;  // empty zone, get all server status
+    ObZone zone; // empty zone, get all server status
     ObSEArray<ObAddr, 256> target_server_list;
 
     // get all alive server
@@ -374,7 +402,7 @@ int ObRootMinorFreeze::init_params_by_server(const ObIArray<ObAddr>& server_list
       LOG_WARN("fail to get alive servers, ", K(ret));
     } else {
       for (int i = 0; i < target_server_list.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(params.add_server(target_server_list.at(i)))) {
+        if (OB_FAIL(params.push_back_param(target_server_list.at(i)))) {
           LOG_WARN("fail to add server, ", K(ret));
         }
       }
@@ -384,29 +412,19 @@ int ObRootMinorFreeze::init_params_by_server(const ObIArray<ObAddr>& server_list
   return ret;
 }
 
-int ObRootMinorFreeze::ParamsContainer::add_server(const ObAddr& server)
+int ObRootMinorFreeze::ParamsContainer::push_back_param(const common::ObAddr &server,
+                                                        const uint64_t tenant_id,
+                                                        share::ObLSID ls_id,
+                                                        const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
 
   MinorFreezeParam param;
   param.server = server;
-  // leave empty with param.arg means **all**
+  param.arg.ls_id_ = ls_id;
+  param.arg.tablet_id_ = tablet_id;
 
-  if (OB_FAIL(params_.push_back(param))) {
-    LOG_WARN("fail to push server, ", K(ret));
-  }
-
-  return ret;
-}
-
-int ObRootMinorFreeze::ParamsContainer::add_tenant_server(uint64_t tenant_id, const ObAddr& server)
-{
-  int ret = OB_SUCCESS;
-
-  MinorFreezeParam param;
-  param.server = server;
-
-  if (OB_FAIL(param.arg.tenant_ids_.push_back(tenant_id))) {
+  if (0 != tenant_id && OB_FAIL(param.arg.tenant_ids_.push_back(tenant_id))) {
     LOG_WARN("fail to push tenant_id, ", K(ret));
   } else if (OB_FAIL(params_.push_back(param))) {
     LOG_WARN("fail to push tenant_id & server, ", K(ret));
@@ -415,20 +433,5 @@ int ObRootMinorFreeze::ParamsContainer::add_tenant_server(uint64_t tenant_id, co
   return ret;
 }
 
-int ObRootMinorFreeze::ParamsContainer::add_partition_server(const ObPartitionKey& partition_key, const ObAddr& server)
-{
-  int ret = OB_SUCCESS;
-
-  MinorFreezeParam param;
-  param.server = server;
-  param.arg.partition_key_ = partition_key;
-
-  if (OB_FAIL(params_.push_back(param))) {
-    LOG_WARN("fail to push tenant_id & server, ", K(ret));
-  }
-
-  return ret;
-}
-
-}  // namespace rootserver
-}  // namespace oceanbase
+} // namespace rootserver
+} // namespace oceanbase

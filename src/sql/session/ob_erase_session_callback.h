@@ -12,17 +12,21 @@
 
 #ifndef OCEANBASE_SQL_SESSION_ERASE_SESSION_CALLBACK_
 #define OCEANBASE_SQL_SESSION_ERASE_SESSION_CALLBACK_
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObEndTransReq;
 }
-namespace sql {
-class ObIEraseSessionCallback {
+namespace sql
+{
+class ObIEraseSessionCallback
+{
 public:
   ObIEraseSessionCallback();
   virtual ~ObIEraseSessionCallback();
-  virtual int callback(common::ObEndTransReq& req) = 0;
+  virtual int callback(common::ObEndTransReq &req) = 0;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_SESSION_ERASE_SESSION_CALLBACK_ */

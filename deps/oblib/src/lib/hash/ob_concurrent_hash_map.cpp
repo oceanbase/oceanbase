@@ -13,10 +13,12 @@
 #include <lib/hash/ob_concurrent_hash_map.h>
 #include <lib/allocator/ob_malloc.h>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-int HashAlloc::init(const lib::ObLabel& label, const uint64_t tenant_id)
+int HashAlloc::init(const lib::ObLabel &label, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)) {
@@ -29,15 +31,15 @@ int HashAlloc::init(const lib::ObLabel& label, const uint64_t tenant_id)
   return ret;
 }
 
-void* HashAlloc::alloc(const int64_t sz)
+void *HashAlloc::alloc(const int64_t sz)
 {
-  void* p = NULL;
+  void *p = NULL;
   int ret = OB_SUCCESS;
   if (sz <= 0) {
     COMMON_LOG(WARN, "invalid argument", K(sz));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    while (!ATOMIC_LOAD(&is_inited_)) {
+    while(!ATOMIC_LOAD(&is_inited_)) {
       if (ATOMIC_BCAS(&size_, 0, sz)) {
         if (0 != (ret = alloc_.init(sz, label_, tenant_id_))) {
           ATOMIC_STORE(&size_, 0);
@@ -55,7 +57,7 @@ void* HashAlloc::alloc(const int64_t sz)
   return p;
 }
 
-void HashAlloc::free(void* p)
+void HashAlloc::free(void *p)
 {
   if (p != NULL) {
     alloc_.free(p);
@@ -63,7 +65,7 @@ void HashAlloc::free(void* p)
   }
 }
 
-int ArrayAlloc::init(const lib::ObLabel& label, const uint64_t tenant_id)
+int ArrayAlloc::init(const lib::ObLabel &label, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)) {
@@ -76,11 +78,11 @@ int ArrayAlloc::init(const lib::ObLabel& label, const uint64_t tenant_id)
   return ret;
 }
 
-void* ArrayAlloc::alloc(const int64_t sz)
+void *ArrayAlloc::alloc(const int64_t sz)
 {
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (sz <= 0) {
-    COMMON_LOG(WARN, "invalid argument", K(sz));
+    COMMON_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", K(sz));
   } else {
     ObMemAttr attr(tenant_id_, label_);
     ptr = ob_malloc(sz, attr);
@@ -88,7 +90,7 @@ void* ArrayAlloc::alloc(const int64_t sz)
   return ptr;
 }
 
-void ArrayAlloc::free(void* p)
+void ArrayAlloc::free(void *p)
 {
   if (p != NULL) {
     ob_free(p);
@@ -96,5 +98,5 @@ void ArrayAlloc::free(void* p)
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

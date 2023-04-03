@@ -16,31 +16,28 @@
 #define private public
 #include "lib/container/ob_bitmap.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace unittest {
-class TestObBitmap : public ::testing::Test {
+namespace unittest
+{
+class TestObBitmap: public ::testing::Test
+{
 public:
   static constexpr uint64_t bits_per_memblock()
   {
     return ObBitmap::BITS_PER_BLOCK * ObBitmap::BLOCKS_PER_MEM_BLOCK;
   }
-  TestObBitmap(){};
-  virtual ~TestObBitmap(){};
+  TestObBitmap() {};
+  virtual ~TestObBitmap() {};
 
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  static void SetUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
-
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
 protected:
   ModulePageAllocator allocator_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(TestObBitmap);
 };
@@ -59,10 +56,10 @@ TEST_F(TestObBitmap, basic_funcs)
   EXPECT_EQ(0, bitmap.block_index(63));
   EXPECT_EQ(1, bitmap.block_index(64));
 
-  EXPECT_EQ(static_cast<ObBitmap::block_type>(1), bitmap.bit_mask(0));
-  EXPECT_EQ(static_cast<ObBitmap::block_type>(2), bitmap.bit_mask(1));
-  EXPECT_EQ(static_cast<ObBitmap::block_type>(4), bitmap.bit_mask(2));
-  EXPECT_EQ(static_cast<ObBitmap::block_type>(8), bitmap.bit_mask(3));
+  EXPECT_EQ(static_cast<ObBitmap::size_type>(1), bitmap.bit_mask(0));
+  EXPECT_EQ(static_cast<ObBitmap::size_type>(2), bitmap.bit_mask(1));
+  EXPECT_EQ(static_cast<ObBitmap::size_type>(4), bitmap.bit_mask(2));
+  EXPECT_EQ(static_cast<ObBitmap::size_type>(8), bitmap.bit_mask(3));
 
   EXPECT_TRUE(bitmap.is_all_false());
   EXPECT_FALSE(bitmap.is_all_true());
@@ -85,12 +82,12 @@ TEST_F(TestObBitmap, and_or_not)
   EXPECT_EQ(OB_SUCCESS, right.init(512));
   for (int64_t i = 10; i < 20; ++i) {
     EXPECT_EQ(OB_SUCCESS, left.set(i, true));
-    EXPECT_EQ(OB_SUCCESS, right.set(i + 5, true));
+    EXPECT_EQ(OB_SUCCESS, right.set(i+5, true));
   }
 
-  EXPECT_EQ(10, left.popcnt_);
+  EXPECT_EQ(10, left.popcnt());
   EXPECT_EQ(OB_SUCCESS, left.bit_and(right));
-  EXPECT_EQ(5, left.popcnt_);
+  EXPECT_EQ(5, left.popcnt());
 
   left.reuse();
   right.reuse();
@@ -107,11 +104,11 @@ TEST_F(TestObBitmap, and_or_not)
 
   for (int64_t i = 4090; i < 4100; ++i) {
     EXPECT_EQ(OB_SUCCESS, left.set(i, true));
-    EXPECT_EQ(OB_SUCCESS, right.set(i + 5, true));
+    EXPECT_EQ(OB_SUCCESS, right.set(i+5, true));
   }
   EXPECT_EQ(OB_SUCCESS, left.bit_not());
-  EXPECT_EQ(bits_per_memblock() + 1024 - 10, left.popcnt_);
-  ObBitmap::MemBlock* walk = left.header_;
+  EXPECT_EQ(bits_per_memblock() + 1024 - 10, left.popcnt());
+  ObBitmap::MemBlock *walk = left.header_;
   ObBitmap::size_type popcnt = 0;
   int64_t counted_bits = 0;
   while (NULL != walk && counted_bits < left.valid_bits_) {
@@ -121,9 +118,9 @@ TEST_F(TestObBitmap, and_or_not)
     }
     walk = walk->next_;
   }
-  EXPECT_EQ(popcnt, left.popcnt_);
+  EXPECT_EQ(popcnt, left.popcnt());
   EXPECT_EQ(OB_SUCCESS, left.bit_not());
-  EXPECT_EQ(10, left.popcnt_);
+  EXPECT_EQ(10, left.popcnt());
   for (int64_t i = 4090; i < 4100; ++i) {
     EXPECT_TRUE(left.test(i));
   }
@@ -131,9 +128,9 @@ TEST_F(TestObBitmap, and_or_not)
   EXPECT_FALSE(left.test(4101));
 
   EXPECT_EQ(OB_SUCCESS, left.bit_and(right));
-  EXPECT_EQ(5, left.popcnt_);
+  EXPECT_EQ(5, left.popcnt());
   EXPECT_EQ(OB_SUCCESS, left.bit_or(right));
-  EXPECT_EQ(10, left.popcnt_);
+  EXPECT_EQ(10, left.popcnt());
 }
 
 TEST_F(TestObBitmap, load_from_array)
@@ -144,13 +141,22 @@ TEST_F(TestObBitmap, load_from_array)
   ObBitmap::size_type data[] = {7, 7, 7, 7, 7};
   EXPECT_EQ(OB_SUCCESS, bitmap.load_blocks_from_array(data, 64 * 5));
   EXPECT_EQ(64 * 5, bitmap.size());
-  EXPECT_EQ(3 * 5, bitmap.popcnt_);
+  EXPECT_EQ(3 * 5, bitmap.popcnt());
+
+  bitmap.expand_size(4096);
+  ObBitmap::size_type data2[64];
+  for (int64_t i = 0; i < 64; i++) {
+    data2[i] = 7;
+  }
+  EXPECT_EQ(OB_SUCCESS, bitmap.load_blocks_from_array(data2, 64 * 64));
+  EXPECT_EQ(64 * 64, bitmap.size());
+  EXPECT_EQ(3 * 64, bitmap.popcnt());
 }
 
-}  // end of namespace unittest
-}  // end of namespace oceanbase
+} // end of namespace unittest
+} // end of namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);

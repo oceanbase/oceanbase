@@ -14,32 +14,30 @@
 #define OCEANBASE_SRC_SQL_ENGINE_CMD_OB_DBLINK_EXECUTOR_H_
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObCreateDbLinkStmt;
 class ObDropDbLinkStmt;
 
-class ObCreateDbLinkExecutor {
+class ObCreateDbLinkExecutor
+{
 public:
-  ObCreateDbLinkExecutor()
-  {}
-  virtual ~ObCreateDbLinkExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObCreateDbLinkStmt& stmt);
-
+  ObCreateDbLinkExecutor() {}
+  virtual ~ObCreateDbLinkExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateDbLinkStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateDbLinkExecutor);
 };
 
-class ObDropDbLinkExecutor {
+class ObDropDbLinkExecutor
+{
 public:
-  ObDropDbLinkExecutor()
-  {}
-  virtual ~ObDropDbLinkExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObDropDbLinkStmt& stmt);
-
+  ObDropDbLinkExecutor() {}
+  virtual ~ObDropDbLinkExecutor() {}
+  int execute(ObExecContext &ctx, ObDropDbLinkStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropDbLinkExecutor);
 };

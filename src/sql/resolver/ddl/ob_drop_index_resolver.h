@@ -17,15 +17,17 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObDropIndexResolver : public ObDDLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropIndexResolver : public ObDDLResolver
+{
 public:
-  explicit ObDropIndexResolver(ObResolverParams& params);
+  explicit ObDropIndexResolver(ObResolverParams &params);
   virtual ~ObDropIndexResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropIndexResolver);
 };

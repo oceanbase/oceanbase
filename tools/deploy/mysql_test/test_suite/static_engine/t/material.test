@@ -1,0 +1,47 @@
+# owner: peihan.dph
+# owner group: sql2
+# tags: optimizer
+
+--result_format 4
+--explain_protocol 0
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+sleep 2;
+
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+
+create table t1(c1 int,c2 int,c3 int);
+create table t2(c1 int,c2 int,c3 int);
+
+insert into t1 values(1,2,3);
+insert into t1 values(1,2,3);
+insert into t1 values(0,2,3);
+insert into t1 values(2,2,3);
+insert into t1 values(3,2,3);
+
+insert into t2 values(2,2,3);
+insert into t2 values(2,2,3);
+insert into t2 values(0,2,3);
+insert into t2 values(1,2,3);
+insert into t2 values(null,2,3);
+commit;
+
+connection syscon;
+sleep 2;
+
+--explain_protocol 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+#set  @@ob_enable_trace_log=1;
+#set  @@ob_log_level='trace';
+explain select * from t1,t2;
+select * from t1,t2;
+
+connection syscon;
+sleep 2;
+--sleep 2

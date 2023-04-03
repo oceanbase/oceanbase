@@ -1,0 +1,70 @@
+result_format: 4
+
+drop table if exists t1;
+create table t1 (c1 varchar(50), c2 varchar(50));
+insert into t1 (c1, c2) values ('abc1', '^abc[0-9]?$');
+insert into t1 (c1, c2) values ('abc1', '^abd');
+
+drop table if exists t2;
+create table t2 (a varchar(50));
+insert into t2 values ("abc1");
+
+
+set @@ob_enable_plan_cache = 0;
+
+select 'abcdef' regexp '^abc.*';
++--------------------------+
+| 'abcdef' regexp '^abc.*' |
++--------------------------+
+|                        1 |
++--------------------------+
+select 'abcdef' regexp '^abd.*';
++--------------------------+
+| 'abcdef' regexp '^abd.*' |
++--------------------------+
+|                        0 |
++--------------------------+
+
+select '' regexp '^$';
++----------------+
+| '' regexp '^$' |
++----------------+
+|              1 |
++----------------+
+select 'a' regexp '';
+ERROR 42000: Got error from regexp
+select NULL regexp 'a';
++-----------------+
+| NULL regexp 'a' |
++-----------------+
+|            NULL |
++-----------------+
+select 'a' regexp NULL;
++-----------------+
+| 'a' regexp NULL |
++-----------------+
+|            NULL |
++-----------------+
+
+select c2, c2 regexp 'abc' from t1;
++-------------+-----------------+
+| c2          | c2 regexp 'abc' |
++-------------+-----------------+
+| ^abc[0-9]?$ |               1 |
+| ^abd        |               0 |
++-------------+-----------------+
+select c2, (select a regexp c2 from t2) from t1;
++-------------+------------------------------+
+| c2          | (select a regexp c2 from t2) |
++-------------+------------------------------+
+| ^abc[0-9]?$ |                            1 |
+| ^abd        |                            0 |
++-------------+------------------------------+
+select c1, c2, c1 regexp c2 from t1;
++------+-------------+--------------+
+| c1   | c2          | c1 regexp c2 |
++------+-------------+--------------+
+| abc1 | ^abc[0-9]?$ |            1 |
+| abc1 | ^abd        |            0 |
++------+-------------+--------------+
+

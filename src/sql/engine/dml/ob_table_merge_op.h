@@ -16,128 +16,118 @@
 #include "sql/engine/ob_operator.h"
 #include "lib/container/ob_fixed_array.h"
 #include "sql/engine/dml/ob_table_modify_op.h"
-#include "storage/ob_dml_param.h"
+#include "storage/access/ob_dml_param.h"
 
-namespace oceanbase {
-namespace storage {
-class ObPartitionService;
+namespace oceanbase
+{
+namespace storage
+{
 class ObDMLBaseParam;
-}  // namespace storage
-namespace sql {
+}
+namespace sql
+{
 
-class ObTableMergeOpInput : public ObTableModifyOpInput {
+class ObTableMergeOpInput : public ObTableModifyOpInput
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTableMergeOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
+  ObTableMergeOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+  : ObTableModifyOpInput(ctx, spec)
   {}
-  virtual ~ObTableMergeOpInput()
-  {}
+  virtual ~ObTableMergeOpInput() {}
 };
 
-class ObTableMergeSpec : public ObTableModifySpec {
+class ObTableMergeSpec : public ObTableModifySpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTableMergeSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
+  ObTableMergeSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
-  INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(has_insert_clause), K_(has_update_clause), K_(delete_conds),
-      K_(update_conds), K_(insert_conds), K_(update_conds), K_(rowkey_exprs));
+  //This interface is only allowed to be used in a single-table DML operator,
+  //it is invalid when multiple tables are modified in one DML operator
+  virtual int get_single_dml_ctdef(const ObDMLBaseCtDef *&dml_ctdef) const override;
 
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
+                       K_(has_insert_clause),
+                       K_(has_update_clause),
+                       K_(delete_conds),
+                       K_(update_conds),
+                       K_(insert_conds),
+                       K_(update_conds),
+                       K_(distinct_key_exprs));
 private:
-  template <class T>
-  inline int add_id_to_array(T& array, uint64_t id);
-
-public:
-  inline int add_delete_column_id(uint64_t column_id)
-  {
-    return add_id_to_array(delete_column_ids_, column_id);
-  }
-  int set_updated_column_info(
-      int64_t array_index, uint64_t column_id, uint64_t project_index, bool auto_filled_timestamp);
-  int init_updated_column_count(common::ObIAllocator& allocator, int64_t count);
+  template <class T> inline int add_id_to_array(T& array, uint64_t id);
 
 public:
   bool has_insert_clause_;
   bool has_update_clause_;
-
   ExprFixedArray delete_conds_;
   ExprFixedArray update_conds_;
   ExprFixedArray insert_conds_;
+  // 堆表: distinct_key_exprs_ = rowkey + part_key
+  // 其他表: distinct_key_exprs_ = rowkey
+  ExprFixedArray distinct_key_exprs_;
+  common::ObFixedArray<ObMergeCtDef*, common::ObIAllocator> merge_ctdefs_;
 
-  ExprFixedArray rowkey_exprs_;
-  common::ObFixedArray<uint64_t, common::ObIAllocator> delete_column_ids_;
-
-  common::ObFixedArray<uint64_t, common::ObIAllocator> updated_column_ids_;
-  common::ObFixedArray<ColumnContent, common::ObIAllocator> updated_column_infos_;
-  ExprFixedArray old_row_;
-  ExprFixedArray new_row_;
+private:
+  common::ObIAllocator &alloc_;
 };
 
-////////////////////////////////////// ObTableMergeOp //////////////////////////////////////
-class ObTableMergeOp : public ObTableModifyOp {
+class ObTableMergeOp: public ObTableModifyOp
+{
 public:
-  ObTableMergeOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input);
-  virtual ~ObTableMergeOp()
-  {}
+  ObTableMergeOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInput *input);
+  virtual ~ObTableMergeOp() {}
 
   virtual int inner_open();
   virtual int inner_close();
-  virtual int rescan();
-  virtual int inner_get_next_row();
-  virtual void destroy()
-  {
-    insert_row_store_.reset();
-    affected_rows_ = 0;
-    ObTableModifyOp::destroy();
-  }
-  int check_is_match(bool& is_match);
-  int calc_condition(const ObIArray<ObExpr*>& exprs, bool& is_true_cond);
-  int calc_delete_condition(const ObIArray<ObExpr*>& exprs, bool& is_true_cond);
-  int process_insert(storage::ObPartitionService* partition_service, const transaction::ObTransDesc& trans_desc,
-      const storage::ObDMLBaseParam& dml_param, const common::ObPartitionKey& pkey);
-  int insert_all_rows(storage::ObPartitionService* partition_service, const transaction::ObTransDesc& trans_desc,
-      const storage::ObDMLBaseParam& dml_param, const common::ObPartitionKey& pkey);
+  virtual int inner_rescan();
+  int check_is_match(bool &is_match);
+  int calc_condition(const ObIArray<ObExpr*> &exprs, bool &is_true_cond);
+  int calc_delete_condition(const ObIArray<ObExpr*> &exprs, bool &is_true_cond);
+  void release_merge_rtdef();
 
-  void inc_affected_rows()
-  {}
-  void inc_found_rows()
-  {}
-  void inc_changed_rows()
-  {}
+  // 这些接口仅仅兼容接口，不实际改动
+  void inc_affected_rows() { }
+  void inc_found_rows() { }
+  void inc_changed_rows() { }
+  int do_update();
+  int update_row_das();
+  int delete_row_das();
+  int do_insert();
+protected:
+  int check_is_distinct(bool &conflict);
+
+  // when update with partition key, we will delete row from old partition first,
+  // then insert new row to new partition
+  int calc_update_tablet_loc(const ObUpdCtDef &upd_ctdef,
+                             ObUpdRtDef &upd_rtdef,
+                             ObDASTabletLoc *&old_tablet_loc,
+                             ObDASTabletLoc *&new_tablet_loc);
+
+  int calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
+                             ObInsRtDef &ins_rtdef,
+                             ObDASTabletLoc *&tablet_loc);
+  int calc_delete_tablet_loc(const ObDelCtDef &del_ctdef,
+                             ObDelRtDef &del_rtdef,
+                             ObDASTabletLoc *&tablet_loc);
+  int inner_open_with_das();
+  int open_table_for_each();
+  int close_table_for_each();
+  virtual int write_row_to_das_buffer() override;
+  virtual int write_rows_post_proc(int last_errno) override;
+  virtual int check_need_exec_single_row() override;
 
 protected:
-  int generate_origin_row(bool& conflict);
-
-private:
-  int process_update(storage::ObPartitionService* partition_service, const common::ObPartitionKey& pkey,
-      storage::ObDMLBaseParam& dml_param);
-  int update_row(storage::ObPartitionService* partition_service, const common::ObPartitionKey& pkey,
-      storage::ObDMLBaseParam& dml_param);
-  int lock_row(storage::ObPartitionService* partition_service, const common::ObPartitionKey& pkey,
-      storage::ObDMLBaseParam& dml_param);
-  void reset()
-  {
-    affected_rows_ = 0;
-    part_infos_.reset();
-  }
-  int do_table_merge();
-
-protected:
-  common::ObNewRow insert_row_;
-  common::ObRowStore insert_row_store_;
-  common::ObNewRow old_row_;
-  common::ObNewRow new_row_;
   int64_t affected_rows_;
-  storage::ObDMLBaseParam dml_param_;
-  common::ObSEArray<DMLPartInfo, 1> part_infos_;
+  common::ObArrayWrap<ObMergeRtDef> merge_rtdefs_;
 };
 
 template <class T>
 int ObTableMergeSpec::add_id_to_array(T& array, uint64_t id)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!common::is_valid_id(id))) {
+  if (OB_UNLIKELY(!common::is_valid_id(id))){
     ret = common::OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "invalid argument", K(id));
   } else if (OB_FAIL(array.push_back(id))) {
@@ -146,7 +136,7 @@ int ObTableMergeSpec::add_id_to_array(T& array, uint64_t id)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 
 #endif /* _SQL_ENGINE_DML_OB_TABLE_MERGE_OP_H */

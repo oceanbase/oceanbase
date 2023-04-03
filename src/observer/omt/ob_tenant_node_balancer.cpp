@@ -28,10 +28,13 @@
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "storage/blocksstable/ob_store_file.h"
-#include "storage/ob_partition_service.h"
-#include "storage/ob_tenant_config_mgr.h"
-#include "storage/ob_tenant_meta_memory_mgr.h"
+#include "storage/blocksstable/ob_block_manager.h"
+#include "logservice/palf/palf_options.h"
+#include "logservice/ob_server_log_block_mgr.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 
 using namespace oceanbase::obsys;
 using namespace oceanbase::lib;
@@ -42,10 +45,7 @@ using namespace oceanbase::observer;
 using namespace oceanbase::storage;
 
 ObTenantNodeBalancer::ObTenantNodeBalancer()
-    : omt_(NULL),
-      myaddr_(),
-      unit_getter_(),
-      lock_(common::ObLatchIds::CONFIG_LOCK),
+    : omt_(NULL), myaddr_(), unit_getter_(), lock_(common::ObLatchIds::CONFIG_LOCK),
       refresh_interval_(10L * 1000L * 1000L)
 {
   if (lib::is_mini_mode()) {
@@ -59,14 +59,15 @@ ObTenantNodeBalancer::~ObTenantNodeBalancer()
   myaddr_.reset();
 }
 
-int ObTenantNodeBalancer::init(ObMultiTenant* omt, common::ObMySQLProxy& sql_proxy, const common::ObAddr& myaddr)
+int ObTenantNodeBalancer::init(ObMultiTenant *omt, common::ObMySQLProxy &sql_proxy,
+    const common::ObAddr &myaddr)
 {
   int ret = OB_SUCCESS;
   myaddr_ = myaddr;
   if (OB_FAIL(unit_getter_.init(sql_proxy, &GCONF))) {
     LOG_ERROR("init unit getter fail", K(ret));
   } else {
-    omt_ = omt;
+    omt_= omt;
     myaddr_ = myaddr;
   }
   return ret;
@@ -78,13 +79,28 @@ void ObTenantNodeBalancer::run1()
   lib::set_thread_name("OmtNodeBalancer");
   while (!has_set_stop()) {
     TenantUnits units;
-    if (OB_FAIL(unit_getter_.get_server_tenant_configs(myaddr_, units))) {
+    int64_t sys_unit_cnt = 0;
+    ObCurTraceId::init(GCONF.self_addr_);
+    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+      // do nothing if not finish replaying slog
+      LOG_INFO("server slog not finish replaying, need wait");
+      ret = OB_NEED_RETRY;
+    } else if (OB_FAIL(unit_getter_.get_sys_unit_count(sys_unit_cnt))) {
+      LOG_WARN("get sys unit count fail", KR(ret));
+    } else if (sys_unit_cnt <= 0) {
+      // check wether sys tenant has been created, do nothing if sys tenant has not been created
+      LOG_INFO("sys tenant has not been created, tenant node balancer can not run, need wait",
+          K(sys_unit_cnt));
+      ret = OB_NEED_RETRY;
+    } else if (OB_FAIL(unit_getter_.get_server_tenant_configs(myaddr_, units))) {
       LOG_WARN("get server tenant units fail", K(myaddr_), K(ret));
     } else if (OB_FAIL(refresh_tenant(units))) {
       LOG_WARN("failed to refresh tenant", K(ret), K(units));
     } else if (FALSE_IT(periodically_check_tenant())) {
       // never reach here
     }
+
+    FLOG_INFO("refresh tenant units", K(sys_unit_cnt), K(units), KR(ret));
 
     // will try to update tma whether tenant unit is changed or not,
     // because memstore_limit_percentage may be changed
@@ -100,139 +116,138 @@ void ObTenantNodeBalancer::run1()
     } else if (OB_FAIL(OTC_MGR.refresh_tenants(tenants))) {
       LOG_WARN("fail refresh tenant config", K(tenants), K(ret));
     }
+    if (OB_SUCCESS != (tmp_ret = GCTX.log_block_mgr_->try_resize())) {
+      LOG_WARN("ObServerLogBlockMgr try_resize failed", K(tmp_ret));
+    }
+
+    FLOG_INFO("refresh tenant config", K(tenants), K(ret));
+
 
     USLEEP(refresh_interval_);  // sleep 10s
   }
 }
 
-// tenant units loaded from file must be updated successfully
-int ObTenantNodeBalancer::update_tenant(TenantUnits& units, const bool is_local)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  // no matter whether success or not before
-  if (OB_FAIL(check_new_tenant(units))) {
-    tmp_ret = ret;
-    LOG_WARN("check and add new tenant fail", K(ret));
-  } else if (0 != units.count() || !is_local) {
-    omt_->set_synced();
-  }
-
-  // This func is called when restart(is_local=true) or run1(is_local=false).
-  // So we need update tenant allocator here.
-  if (OB_SUCCESS != (tmp_ret = TMA_MGR_INSTANCE.update_tenant_mem_limit(units))) {
-    LOG_WARN("TMA_MGR_INSTANCE.update_tenant_mem_limit failed", K(tmp_ret));
-  } else {
-    LOG_INFO("TMA_MGR_INSTANCE.update_tenant_mem_limit success", K(units), K(is_local));
-  }
-
-  if (OB_FAIL(check_del_tenant(units))) {
-    tmp_ret = ret;
-    LOG_WARN("check delete tenant fail", K(ret));
-  }
-
-  ret = tmp_ret;
-  return ret;
-}
-
-int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConfig& unit)
+int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConfig &unit)
 {
   LOG_INFO("succ to receive notify of creating tenant", K(unit));
   int ret = OB_SUCCESS;
+  bool is_hidden_sys = false;
+  bool unit_id_exist = false;
 
   if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit));
-  } else if (ObTenantManager::get_instance().has_tenant(unit.tenant_id_) && OB_SYS_TENANT_ID != unit.tenant_id_) {
+  } else if (is_meta_tenant(unit.tenant_id_)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not create meta tenant", K(ret), K(unit));
+  } else if (OB_FAIL(omt_->check_if_hidden_sys(unit.tenant_id_, is_hidden_sys))) {
+    LOG_WARN("fail to check_if_hidden_sys", KR(ret), K(unit));
+  } else if (omt_->has_tenant(unit.tenant_id_) && !is_hidden_sys) {
     ret = OB_TENANT_EXIST;
-    LOG_WARN("tenant has exist", K(ret), K(unit));
+    LOG_WARN("tenant has exist", KR(ret), K(unit));
+  } else if (is_user_tenant(unit.tenant_id_) && omt_->has_tenant(gen_meta_tenant_id(unit.tenant_id_))) {
+    ret = OB_TENANT_EXIST;
+    LOG_WARN("meta tenant has exist", KR(ret), K(unit));
+   // TODO(fenggu.yh) 临时注释，防止创建租户失败
+  //} else if (OB_FAIL(omt_->check_if_unit_id_exist(unit.unit_id_, unit_id_exist))) {
+  //  LOG_WARN("fail to check_if_unit_id_exist", KR(ret), K(unit));
+  } else if (unit_id_exist) { // the unit may be wait_gc status
+    ret = OB_ENTRY_EXIST;
+    LOG_WARN("unit_id exist", KR(ret), K(unit));
   } else {
-    ObUnitInfoGetter::ObTenantConfig config;
-    config.tenant_id_ = unit.tenant_id_;
-    config.has_memstore_ = (unit.replica_type_ != REPLICA_TYPE_LOGONLY);
-    config.unit_stat_ = ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL;
-    config.config_ = unit.unit_config_;
-    config.mode_ = unit.compat_mode_;
-    config.create_timestamp_ = ObTimeUtility::current_time();
+    const uint64_t tenant_id = unit.tenant_id_;
+    ObUnitInfoGetter::ObTenantConfig basic_tenant_unit;
+    ObUnitInfoGetter::ObTenantConfig meta_tenant_unit;
+    const bool has_memstore = (unit.replica_type_ != REPLICA_TYPE_LOGONLY);
+    const int64_t create_timestamp = ObTimeUtility::current_time();
+    basic_tenant_unit.unit_status_ = ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL;
+    const int64_t create_tenant_timeout_ts = THIS_WORKER.get_timeout_ts();
 
-    if (!unit.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(unit));
-    } else if (OB_FAIL(create_new_tenant(config))) {
-      LOG_WARN("failed to refresh tenant", K(ret), K(unit), K(config));
+    if (create_tenant_timeout_ts < create_timestamp) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("notify_create_tenant has timeout", K(ret), K(create_timestamp), K(create_tenant_timeout_ts));
+    } else if (OB_FAIL(basic_tenant_unit.init(tenant_id,
+                                       unit.unit_id_,
+                                       ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,
+                                       unit.unit_config_,
+                                       unit.compat_mode_,
+                                       create_timestamp,
+                                       has_memstore,
+                                       false /*is_removed*/))) {
+      LOG_WARN("fail to init user tenant config", KR(ret), K(unit));
+    } else if (is_user_tenant(tenant_id)
+        && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
+      LOG_WARN("divide meta tenant failed", KR(ret), K(unit), K(basic_tenant_unit));
+    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, create_tenant_timeout_ts))) {
+      LOG_WARN("failed to create new tenant", KR(ret), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     } else {
-      LOG_INFO("succ to create new tenant", K(unit), K(config));
+      ret = OB_SUCCESS;
+      LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit), K(create_tenant_timeout_ts));
+    }
+    // create meta tenant
+    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+      if (OB_FAIL(check_new_tenant(meta_tenant_unit, create_tenant_timeout_ts))) {
+        LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
+      } else {
+        ret = OB_SUCCESS;
+        LOG_INFO("succ to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
+      }
     }
   }
+
+  // In standby cluster, may repeat create tenant, if if_not_grant_ is true, ignore OB_TENANT_EXIST
+  if (OB_TENANT_EXIST == ret && unit.if_not_grant_) {
+    if (GCTX.is_standby_cluster()) {
+      ret = OB_SUCCESS;
+    }
+  }
+
   return ret;
 }
 
-// Only mark a deletion here, delete tenant will be excute in refresh_tenant
+// 标记删除，而不是直接删，是因为并发时，另一个线程可能刷到tenant了，但是还没有refresh tenant，
+// 此时drop tenant将tenant删除了，另一个线程过一会refresh tenant时，又给加回来了
+// 所以这里只做标记，删除tenant统一在refresh tenant里做
 int ObTenantNodeBalancer::try_notify_drop_tenant(const int64_t tenant_id)
 {
-  LOG_INFO("succ to receive notify of dropping tenant", K(tenant_id));
+  LOG_INFO("[DELETE_TENANT] succ to receive notify of dropping tenant", K(tenant_id));
   int ret = OB_SUCCESS;
   TenantUnits units;
   TCWLockGuard guard(lock_);
 
-  if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(units))) {
-    LOG_WARN("failed to get tenant units", K(ret));
-  } else {
-    for (int64_t i = 0; i < units.count(); i++) {
-      if (units.at(i).tenant_id_ == tenant_id) {
-        units.at(i).is_removed_ = true;
-      }
-    }
-
-    if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().write_tenant_units(units))) {
-      LOG_WARN("failed to write tenant units", K(ret));
-    } else {
-      LOG_INFO("succ to mark drop tenant", K(tenant_id), K(units));
-    }
+  if (OB_FAIL(omt_->mark_del_tenant(tenant_id))) {
+    LOG_WARN("failed to mark del tenant", K(ret));
+  }  else {
+    ret = OB_SUCCESS;
+    LOG_INFO("[DELETE_TENANT] succ to mark drop tenant", K(tenant_id), K(units));
   }
 
   return ret;
 }
 
-int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource& server_resource)
+int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_resource)
 {
   int ret = OB_SUCCESS;
   server_resource.reset();
   TenantUnits tenant_units;
 
-  if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(tenant_units))) {
+  if (OB_FAIL(omt_->get_tenant_units(tenant_units))) {
     LOG_WARN("failed to get tenant units");
   } else {
     for (int64_t i = 0; i < tenant_units.count(); i++) {
-      server_resource.max_cpu_ += tenant_units.at(i).config_.max_cpu_;
-      server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu_;
-      server_resource.max_memory_ += tenant_units.at(i).config_.max_memory_;
-      server_resource.min_memory_ += tenant_units.at(i).config_.min_memory_;
+      // META tenant and USER tenant share CPU resource, so skip META tenant
+      if (! is_meta_tenant(tenant_units.at(i).tenant_id_)) {
+        server_resource.max_cpu_ += tenant_units.at(i).config_.max_cpu();
+        server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu();
+      }
+
+      server_resource.memory_size_ += tenant_units.at(i).config_.memory_size();
+      server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
     }
   }
   return ret;
 }
 
-// locked in the caller
-bool ObTenantNodeBalancer::is_tenant_exist(const int64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  bool is_exist = false;
-  TenantUnits tenant_units;
-
-  if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(tenant_units))) {
-    LOG_WARN("failed to get tenant units", K(ret));
-  } else {
-    for (int64_t i = 0; i < tenant_units.count(); i++) {
-      if (tenant_id == tenant_units.at(i).tenant_id_) {
-        is_exist = true;
-        break;
-      }
-    }
-  }
-
-  return is_exist;
-}
 
 int ObTenantNodeBalancer::lock_tenant_balancer()
 {
@@ -244,67 +259,38 @@ int ObTenantNodeBalancer::unlock_tenant_balancer()
   return lock_.unlock();
 }
 
-int ObTenantNodeBalancer::check_del_tenant(TenantUnits& units)
+int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, TenantUnits &units)
 {
   int ret = OB_SUCCESS;
-  TenantIdList ids(nullptr, ObModIds::OMT);
-  ids.set_label(ObModIds::OMT);
-  omt_->get_tenant_ids(ids);
 
-  for (auto it = ids.begin(); it != ids.end(); it++) {
-    const auto id = *it;
-    if (OB_SYS_TENANT_ID == id) {
-      // TODO: sys tenant can't be deleted right now.
-      continue;
-    } else if (OB_SERVER_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.system_cpu_quota, GCONF.system_cpu_quota);
-    } else if (OB_ELECT_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.election_cpu_quota, GCONF.election_cpu_quota);
-    } else if (OB_LOC_CORE_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.core_location_cpu_quota(), GCONF.core_location_cpu_quota());
-    } else if (OB_LOC_ROOT_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.root_location_cpu_quota(), GCONF.root_location_cpu_quota());
-    } else if (OB_LOC_SYS_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.sys_location_cpu_quota(), GCONF.sys_location_cpu_quota());
-    } else if (OB_LOC_USER_TENANT_ID == id) {
-      omt_->modify_tenant(id, GCONF.user_location_cpu_quota(), GCONF.user_location_cpu_quota());
-    } else if (OB_EXT_LOG_TENANT_ID == id) {
-      continue;
-    } else if (OB_MONITOR_TENANT_ID == id) {
-      continue;
-    } else if (OB_DTL_TENANT_ID == id) {
-      continue;
-    } else if (OB_RS_TENANT_ID == id) {
-      continue;
-    } else if (OB_SVR_BLACKLIST_TENANT_ID == id) {
-      continue;
-    } else if (OB_DATA_TENANT_ID == id) {
-      continue;
-    } else if (OB_DIAG_TENANT_ID == id) {
-      continue;
-    } else {
-      bool tenant_exists = false;
-      for (auto punit = units.begin(); punit != units.end(); punit++) {
-        if (id == punit->tenant_id_) {
-          tenant_exists = true;
-          break;
-        }
+  for (int64_t i = 0; i < local_units.count(); i++) {
+    bool tenant_exists = false;
+    const ObUnitInfoGetter::ObTenantConfig &local_unit = local_units.at(i);
+    for (auto punit = units.begin(); punit != units.end(); punit++) {
+      if (local_unit.tenant_id_ == punit->tenant_id_) {
+        tenant_exists = true;
+        break;
       }
-      if (!tenant_exists) {
-        if (OB_FAIL(omt_->del_tenant(id))) {
-          LOG_WARN("delete tenant fail", K(id), K(ret));
-          ret = OB_SUCCESS;
+    }
+    if (!tenant_exists) {
+      LOG_INFO("[DELETE_TENANT] begin to delete tenant", K(local_unit));
+      if (OB_SYS_TENANT_ID == local_unit.tenant_id_) {
+        LOG_INFO("[DELETE_TENANT] need convert_real_to_hidden_sys_tenant");
+        if (OB_FAIL(omt_->convert_real_to_hidden_sys_tenant())) {
+          LOG_INFO("fail to convert_real_to_hidden_sys_tenant", K(ret));
         }
+      } else if (OB_FAIL(omt_->del_tenant(local_unit.tenant_id_))) {
+        LOG_WARN("delete tenant fail", K(local_unit), K(ret));
       }
     }
   }
+
   return ret;
 }
 
-int ObTenantNodeBalancer::check_new_tenant(TenantUnits& units)
+int ObTenantNodeBalancer::check_new_tenants(TenantUnits &units)
 {
   int ret = OB_SUCCESS;
-  ObTenantManager& omti = ObTenantManager::get_instance();
 
   DEBUG_SYNC(CHECK_NEW_TENANT);
 
@@ -318,192 +304,187 @@ int ObTenantNodeBalancer::check_new_tenant(TenantUnits& units)
   return ret;
 }
 
-int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig& config)
+int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
-  ObTenantManager& omti = ObTenantManager::get_instance();
 
-  DEBUG_SYNC(CHECK_NEW_TENANT);
+  const int64_t tenant_id = unit.tenant_id_;
+  ObTenant *tenant = nullptr;
+  bool is_new_tenant = true;
+  bool is_config_changed = true;
+  ObUnitInfoGetter::ObTenantConfig old_unit;
 
-  const int64_t id = config.tenant_id_;
-  int64_t mem_limit = config.config_.max_memory_;
-  if (!omti.has_tenant(id)) {
-    if (OB_FAIL(omti.add_tenant(id))) {
-      LOG_WARN("failed to add tenant", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObMallocAllocator* malloc_allocator = ObMallocAllocator::get_instance();
-    if (OB_ISNULL(malloc_allocator)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("malloc allocator is NULL", K(ret));
+  if (OB_SYS_TENANT_ID == tenant_id) {
+    if (OB_SUCC(omt_->get_tenant(tenant_id, tenant))) {
+      if (tenant->is_hidden()) {
+        if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
+          LOG_WARN("fail to create real sys tenant", K(unit));
+        }
+      } else { // is real sys tenant
+        old_unit = tenant->get_unit();
+        if (unit == old_unit) {
+          // has real sys tenant and config not change, do nothing
+        } else if (OB_FAIL(omt_->update_tenant_unit(unit))) {
+          LOG_ERROR("fail to update sys tenant config", K(ret), K(tenant_id));
+        }
+      }
     } else {
-      for (uint64_t ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-        if (OB_FAIL(malloc_allocator->create_tenant_ctx_allocator(id, ctx_id))) {
-          LOG_ERROR("create tenant allocator fail", K(ret), K(ctx_id));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        const int64_t pre_mem_limit = malloc_allocator->get_tenant_limit(id);
-        const int64_t mem_hold = malloc_allocator->get_tenant_hold(id);
-        const int64_t target_mem_limit = mem_limit;
-        // make sure half reserve memory available
-        if (target_mem_limit < pre_mem_limit) {
-          mem_limit =
-              mem_hold + static_cast<int64_t>(static_cast<double>(target_mem_limit) * TENANT_RESERVE_MEM_RATIO / 2.);
-          if (mem_limit < target_mem_limit) {
-            mem_limit = target_mem_limit;
-          }
-          if (mem_limit < pre_mem_limit) {
-            LOG_INFO("reduce memory quota", K(mem_limit), K(pre_mem_limit), K(target_mem_limit), K(mem_hold));
-          } else {
-            mem_limit = pre_mem_limit;
-            LOG_WARN("try to reduce memory quota, but free memory not enough",
-                K(mem_limit),
-                K(pre_mem_limit),
-                K(target_mem_limit),
-                K(mem_hold));
-          }
-        }
-        if (mem_limit != pre_mem_limit) {
-          malloc_allocator->set_tenant_limit(id, mem_limit);
-        }
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("real or hidden sys tenant must be exist", K(ret));
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    int64_t min_mem = 0;
-    int64_t max_mem = 0;
-    if (OB_FAIL(omti.get_tenant_mem_limit(id, min_mem, max_mem))) {
-      if (OB_NOT_REGISTERED == ret) {  // tenant mem limit has not been setted
-        ret = OB_SUCCESS;
+  } else { // not sys tenant
+    if (OB_SUCC(omt_->get_tenant(tenant_id, tenant))) {
+      is_new_tenant = false;
+      old_unit = tenant->get_unit();
+      if (unit == old_unit) {
+        is_config_changed = false;
       } else {
-        LOG_WARN("get tenant memory fail", K(id));
+        is_config_changed = true;
       }
+    } else {
+      ret = OB_SUCCESS;
+      is_new_tenant = true;
+      is_config_changed = true;
     }
+
     if (OB_SUCC(ret)) {
-      if (min_mem != config.config_.min_memory_ || max_mem != mem_limit) {
-        LOG_INFO("tenant memory changed",
-            "before_min",
-            min_mem,
-            "before_max",
-            max_mem,
-            "after_min",
-            config.config_.min_memory_,
-            "after_max",
-            mem_limit);
-        omti.set_tenant_mem_limit(id, config.config_.min_memory_, mem_limit);
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const double min_cpu = static_cast<double>(config.config_.min_cpu_);
-    const double max_cpu = static_cast<double>(config.config_.max_cpu_);
-    if (!omt_->has_tenant(id)) {
-      if (OB_FAIL(omt_->add_tenant(id, min_cpu, max_cpu))) {
-        if (ret != OB_TENANT_EXIST) {
-          LOG_WARN("add tenant fail", K(id), K(min_cpu), K(max_cpu), K(ret));
-        } else {
-          LOG_WARN("tenant exist, need retry", K(id), K(min_cpu), K(max_cpu), K(ret));
-        }
+      if (!is_config_changed) {
+        // do nothing
       } else {
-        LOG_INFO("add new tenant", K(id), K(min_cpu), K(max_cpu));
-      }
-    } else {
-      if (OB_FAIL(omt_->modify_tenant(id, min_cpu, max_cpu))) {
-        LOG_WARN("modify tenant failed", K(id), K(min_cpu), K(max_cpu));
+        if (is_new_tenant) {
+          ObTenantMeta tenant_meta;
+          ObTenantSuperBlock super_block(tenant_id, false/*is_hidden*/); // empty super block
+          if (OB_FAIL(tenant_meta.build(unit, super_block))) {
+            LOG_WARN("fail to build tenant meta", K(ret));
+          } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true/* write_slog */, abs_timeout_us))) {
+            LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
+          }
+        } else if (OB_FAIL(omt_->update_tenant_unit(unit))) {
+          LOG_WARN("fail to update tenant config", K(ret), K(tenant_id));
+        }
       }
     }
   }
-
+  if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
+    if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
+      LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+    }
+  }
   return ret;
 }
 
 void ObTenantNodeBalancer::periodically_check_tenant()
 {
   int ret = OB_SUCCESS;
-  TenantList tmp_tenants(0, nullptr, ObModIds::OMT);
+  struct TenantHandlePair {
+    ObTenant *tenant_;
+    ObLDHandle *handle_;
+    TO_STRING_KV(KP(tenant_));
+  };
+  ObSEArray<TenantHandlePair, 32> pairs;
   omt_->lock_tenant_list();
-  TenantList& tenants = omt_->get_tenant_list();
-  ObArray<ObLDHandle*> handles;
+  TenantList &tenants = omt_->get_tenant_list();
   ObArenaAllocator alloc("lock_diagnose");
-  for (TenantList::iterator it = tenants.begin(); OB_SUCC(ret) && it != tenants.end(); it++) {
-    void* ptr = nullptr;
-    ObLDHandle* handle = nullptr;
-    if (!OB_ISNULL(*it)) {
-      if (OB_FAIL(tmp_tenants.push_back(*it))) {
-        LOG_WARN("failed to push back tenant", K(ret));
-      } else if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObLDHandle)))) {
+  for (TenantList::iterator it = tenants.begin();
+       it != tenants.end();
+       it++) {
+    void *ptr = nullptr;
+    ObLDHandle *handle = nullptr;
+    if (!OB_ISNULL(*it) && !(*it)->has_stopped()) {
+      if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObLDHandle)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc", K(ret));
       } else if (FALSE_IT(handle = new (ptr) ObLDHandle())) {
       } else if (OB_FAIL((*it)->rdlock(*handle))) {
         LOG_WARN("failed to rd lock tenant", K(ret));
       } else {
-        ret = handles.push_back(handle);
+        TenantHandlePair pair;
+        pair.tenant_ = *it;
+        pair.handle_ = handle;
+        if (OB_FAIL(pairs.push_back(pair))) {
+          LOG_WARN("failed to push back tenant", K(ret));
+        } else {/*do-nothing*/}
+        // cleanup
+        if (OB_FAIL(ret)) {
+          IGNORE_RETURN (*it)->unlock(*handle);
+        }
       }
     }
   }
   omt_->unlock_tenant_list();
 
   int i = 0;
-  for (TenantList::iterator it = tmp_tenants.begin(); OB_SUCC(ret) && it != tmp_tenants.end(); it++) {
-    if (!OB_ISNULL(*it)) {
-      (*it)->periodically_check();
-      IGNORE_RETURN(*it)->unlock(*handles[i++]);
-    }
+  for (auto it = pairs.begin();
+       it != pairs.end();
+       it++) {
+    (*it).tenant_->periodically_check();
+    IGNORE_RETURN (*it).tenant_->unlock(*(*it).handle_);
   }
 }
 
-// Although unit has been deleted, the local cached unit cannot be deleted if the tenant still has partition in this
-// server
-int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits& old_tenants, TenantUnits& new_tenants)
+// Although unit has been deleted, the local cached unit cannot be deleted if the tenant still holds resource
+int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants, TenantUnits &new_tenants)
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  bool is_exist = false;
+  bool is_released = false;
   TenantUnits tenants;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < old_tenants.count(); i++) {
     found = false;
+    const ObUnitInfoGetter::ObTenantConfig &tenant_config = old_tenants.at(i);
     for (int64_t j = 0; j < new_tenants.count(); j++) {
-      if (old_tenants.at(i).tenant_id_ == new_tenants.at(j).tenant_id_) {
-        new_tenants.at(j).create_timestamp_ = old_tenants.at(i).create_timestamp_;
-        new_tenants.at(j).is_removed_ = old_tenants.at(i).is_removed_;
+      if (tenant_config.tenant_id_ == new_tenants.at(j).tenant_id_) {
+        new_tenants.at(j).create_timestamp_ = tenant_config.create_timestamp_;
+        new_tenants.at(j).is_removed_ = tenant_config.is_removed_;
         found = true;
         break;
       }
     }
 
     if (!found) {
-      if (OB_FAIL(ObPartitionService::get_instance().check_tenant_pg_exist(old_tenants.at(i).tenant_id_, is_exist))) {
-        LOG_WARN("failed to check tenant pg exist", K(ret), "tenant id", old_tenants.at(i).tenant_id_);
-      } else if (is_exist) {
-        // do nothing
-      } else if (OB_FAIL(storage::ObTableMgr::get_instance().check_tenant_sstable_exist(
-                     old_tenants.at(i).tenant_id_, is_exist))) {
-        LOG_WARN("failed to check tenant sstable exist", K(ret));
+      ObTenant *tenant = nullptr;
+      MTL_SWITCH(tenant_config.tenant_id_) {
+        if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(*MTL(ObLSService *),
+            is_released, "[DELETE_TENANT]"))) {
+          LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_config));
+        } else if (!is_released) {
+          // can not release now. do nothing
+        } else {
+          // check ls service safe to destroy.
+          is_released = MTL(ObLSService *)->safe_to_destroy();
+        }
       }
 
       if (OB_SUCC(ret)) {
         // remove local units after RECYCLE_LATENCY to avoid removing by mistake
         // but if marked removed, remove it directly without waiting
-        if ((!old_tenants.at(i).is_removed_ &&
-                ObTimeUtility::current_time() - old_tenants.at(i).create_timestamp_ < RECYCLE_LATENCY) ||
-            is_exist) {
-          if (OB_FAIL(tenants.push_back(old_tenants.at(i)))) {
-            LOG_WARN("failed to push back tenant", K(ret));
+        const int64_t now_time = ObTimeUtility::current_time();
+        const int64_t life_time = now_time - tenant_config.create_timestamp_;
+        if ((!tenant_config.is_removed_ && life_time < RECYCLE_LATENCY) || !is_released) {
+          if (OB_FAIL(tenants.push_back(tenant_config))) {
+            LOG_WARN("failed to push back tenant", KR(ret));
           } else {
-            LOG_INFO("old tenant can't be dropped",
-                K(is_exist),
-                "create timestamp",
-                old_tenants.at(i).create_timestamp_,
-                "tenant id",
-                old_tenants.at(i).tenant_id_);
+            // update tenant unit status which need be deleted
+            // need wait gc in observer
+            // NOTE: only update unit status when can not release resource
+            if (!is_released) {
+              tenants.at(tenants.count() - 1).unit_status_ =
+                  ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
+            }
+
+            LOG_INFO("[DELETE_TENANT] tenant has been dropped. can not delete tenant",
+                K(is_released),
+                "is_removed", tenant_config.is_removed_,
+                "create_timestamp", tenant_config.create_timestamp_,
+                K(life_time), K(tenant_config));
           }
+        } else {
+            LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
+                K(is_released),
+                "is_removed", tenant_config.is_removed_,
+                "create_timestamp", tenant_config.create_timestamp_,
+                K(life_time), K(tenant_config));
         }
       }
     }
@@ -518,91 +499,57 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits& old_tenants
   return ret;
 }
 
-int ObTenantNodeBalancer::refresh_tenant(TenantUnits& units)
+int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
 {
   int ret = OB_SUCCESS;
+
   TenantUnits local_units;
-
-  {
-    TCWLockGuard guard(lock_);
-    if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(local_units))) {
-      LOG_WARN("failed to get tenant units");
-    } else if (OB_FAIL(fetch_effective_tenants(local_units, units))) {
-      LOG_WARN("failed to fetch effective tenants", K(local_units));
-    } else if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().write_tenant_units(units))) {
-      LOG_WARN("failed to write tenant units", K(ret));
-    }
+  if (OB_FAIL(omt_->get_tenant_units(local_units))) {
+    LOG_WARN("failed to get local tenant units");
+  } else if (OB_FAIL(fetch_effective_tenants(local_units, units))) {
+    LOG_WARN("failed to fetch effective tenants", K(local_units));
   }
+
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(update_tenant(units, false /*is_local*/))) {
-      LOG_WARN("failed to update tenant units", K(ret), K(local_units), K(units));
-    } else {
-      LOG_INFO("succ to update tenant", K(local_units), K(units));
+    if (OB_FAIL(check_new_tenants(units))) {
+      LOG_WARN("check and add new tenant fail", K(ret));
+    } else if (FALSE_IT(omt_->set_synced())) {
+    } else if (OB_FAIL(check_del_tenants(local_units, units))) {
+      LOG_WARN("check delete tenant fail", K(ret));
     }
   }
+
   return ret;
 }
 
-int ObTenantNodeBalancer::create_new_tenant(ObUnitInfoGetter::ObTenantConfig& unit)
-{
-  int ret = OB_SUCCESS;
-  TenantUnits units;
-  TCWLockGuard guard(lock_);
-
-  if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(units))) {
-    LOG_WARN("failed to get tenant units", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); i++) {
-      if (units.at(i).tenant_id_ == unit.tenant_id_ && OB_SYS_TENANT_ID != unit.tenant_id_) {
-        ret = OB_TENANT_EXIST;
-        LOG_WARN("tenant has exist", K(ret), K(unit));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(units.push_back(unit))) {
-        LOG_WARN("failed to push back unit", K(ret));
-      } else if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().write_tenant_units(units))) {
-        LOG_WARN("failed to write tenant units", K(ret));
-      } else if (OB_FAIL(check_new_tenant(unit))) {
-        LOG_WARN("failed to update tenant units", K(ret));
-      } else {
-        LOG_INFO("succ to create new tenant", K(unit), K(units));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTenantNodeBalancer::update_tenant_memory(const obrpc::ObTenantMemoryArg& tenant_memory)
+int ObTenantNodeBalancer::update_tenant_memory(const obrpc::ObTenantMemoryArg &tenant_memory)
 {
   int ret = OB_SUCCESS;
   const int64_t tenant_id = tenant_memory.tenant_id_;
   const int64_t memory_size = tenant_memory.memory_size_;
   const int64_t refresh_interval = tenant_memory.refresh_interval_;
-  TenantUnits units;
+
+  ObUnitInfoGetter::ObTenantConfig unit;
+  int64_t allowed_mem_limit = 0;
+
   TCWLockGuard guard(lock_);
 
   if (!tenant_memory.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_memory));
-  } else if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(units))) {
-    LOG_WARN("failed to get tenant units", K(ret), K(tenant_memory), K(units));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); i++) {
-      if (units.at(i).tenant_id_ == tenant_id) {
-        units.at(i).config_.max_memory_ = memory_size;
-      }
-    }
+  } else if (OB_FAIL(omt_->get_tenant_unit(tenant_id, unit))) {
+    LOG_WARN("failed to get tenant config", K(ret), K(tenant_id));
+  }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_tenant(units, true /*is_local*/))) {
-        LOG_WARN("failed to update tenant units", K(ret), K(tenant_memory), K(units));
-      } else {
-        refresh_interval_ = refresh_interval * 1000L * 1000L;
-        LOG_INFO("succ to admin update tenant", K(tenant_id), K(memory_size), K(units));
-      }
-    }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(omt_->update_tenant_memory(tenant_id, memory_size, allowed_mem_limit))) {
+    LOG_WARN("failed to update tenant memory", K(ret), K(tenant_id), K(memory_size));
+  } else if (OB_FAIL(omt_->update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+    LOG_WARN("set_tenant_freezer_mem_limit failed", K(ret), K(tenant_id));
+  } else {
+    refresh_interval_ = refresh_interval * 1000L * 1000L;
+    LOG_INFO("succ to admin update tenant memory", K(tenant_id), K(memory_size));
   }
 
   return ret;

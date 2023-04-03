@@ -13,16 +13,20 @@
 #ifndef OCEANBASE_OBSERVER_MYSQL_OBMP_STMT_EXECUTE_H_
 #define OCEANBASE_OBSERVER_MYSQL_OBMP_STMT_EXECUTE_H_
 
+
 #include "lib/container/ob_2d_array.h"
 #include "sql/ob_sql_context.h"
 #include "observer/mysql/obmp_base.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "sql/plan_cache/ob_prepare_stmt_struct.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-struct ObSavedException {
+struct ObSavedException
+{
   int pos_;
   int32_t error_code_;
   common::ObString error_msg_;
@@ -30,49 +34,69 @@ struct ObSavedException {
   TO_STRING_KV(K(pos_), K(error_code_), K(error_msg_));
 };
 
-typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> ParamStore;
+typedef common::ParamStore ParamStore;
 
-class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
+enum ObPSCursorType
+{
+  ObNormalType,
+  ObExecutePsCursorType,
+  ObPrexecutePsCursorType
+};
+
+class ObMPStmtExecute : public ObMPBase
+{
 public:
-  static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_EXECUTE;
+  static const obmysql::ObMySQLCmd COM = obmysql::COM_STMT_EXECUTE;
+  const uint32_t DEFAULT_ITERATION_COUNT = 1;
 
-  explicit ObMPStmtExecute(const ObGlobalContext& gctx);
-  virtual ~ObMPStmtExecute()
-  {}
+  explicit ObMPStmtExecute(const ObGlobalContext &gctx);
+  virtual ~ObMPStmtExecute() {}
 
   // Parse basic param value, no MYSQL_TYPE_COMPLEX or MYSQL_TYPE_CURSOR.
   // see parse_param_value()
-  static int parse_basic_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
-      const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-      const common::ObTimeZoneInfo* tz_info, ObObj& param);
-  static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type, const char*& data, ObObj& param);
-  static int parse_oracle_timestamp_value(
-      const obmysql::EMySQLFieldType field_type, const char*& data, const ObTimeConvertCtx& cvrt_ctx, ObObj& param);
-  static int parse_mysql_time_value(const char*& data, ObObj& param);
-  static int parse_oracle_interval_ym_value(const char*& data, ObObj& param);
-  static int parse_oracle_interval_ds_value(const char*& data, ObObj& param);
-  int64_t get_single_process_timestamp() const
-  {
-    return single_process_timestamp_;
-  }
-  int64_t get_exec_start_timestamp() const
-  {
-    return exec_start_timestamp_;
-  }
-  int64_t get_exec_end_timestamp() const
-  {
-    return exec_end_timestamp_;
-  }
-  int64_t get_send_timestamp() const
-  {
-    return get_receive_timestamp();
-  }
+  static int parse_basic_param_value(ObIAllocator &allocator,
+                                    const uint32_t type,
+                                    const ObCharsetType charset,
+                                    const ObCollationType cs_type,
+                                    const ObCollationType ncs_type,
+                                    const char *& data,
+                                    const common::ObTimeZoneInfo *tz_info,
+                                    ObObj &param,
+                                    bool is_complex_element = false);
+  static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type,
+                                    const char *&data,
+                                    ObObj &param,
+                                    const common::ObTimeZoneInfo *tz_info);
+  static int parse_integer_value(const uint32_t type,
+                                 const char *&data,
+                                 ObObj &param,
+                                 ObIAllocator &allocator,
+                                 bool is_complex_element = false);
+  static int parse_oracle_timestamp_value(const obmysql::EMySQLFieldType field_type, const char *&data,
+                                    const ObTimeConvertCtx &cvrt_ctx, ObObj &param);
+  static int parse_mysql_time_value(const char *&data, ObObj &param);
+  static int parse_oracle_interval_ym_value(const char *&data, ObObj &param);
+  static int parse_oracle_interval_ds_value(const char *&data, ObObj &param);
+  int64_t get_single_process_timestamp() const { return single_process_timestamp_; }
+  int64_t get_exec_start_timestamp() const { return exec_start_timestamp_; }
+  int64_t get_exec_end_timestamp() const { return exec_end_timestamp_; }
+  int64_t get_send_timestamp() const { return get_receive_timestamp(); }
   virtual int flush_buffer(const bool is_last) override
   {
     return ObMPBase::flush_buffer(is_last);
   }
-  inline bool support_send_long_data(const uint32_t type)
-  {
+  int init_for_arraybinding(ObIAllocator &alloc);
+  int init_arraybinding_paramstore(ObIAllocator &alloc);
+  int init_arraybinding_fields_and_row(ObMySQLResultSet &result);
+  int set_session_active(sql::ObSQLSessionInfo &session) const;
+  int after_do_process_for_arraybinding(ObMySQLResultSet &result);
+  inline void set_arraybounding(bool is_arraybinding) { is_arraybinding_ = is_arraybinding; }
+  inline bool get_arraybounding() { return is_arraybinding_; }
+  inline void set_save_exception(bool is_save_exception) { is_save_exception_ = is_save_exception; }
+  inline bool get_save_exception() { return is_save_exception_; }
+  // response need send long data
+  virtual bool is_send_long_data() { return false;}
+  inline bool support_send_long_data(const uint32_t type) {
     bool is_support = false;
     switch (type) {
       case obmysql::MYSQL_TYPE_OB_NVARCHAR2:
@@ -90,91 +114,128 @@ public:
       case obmysql::MYSQL_TYPE_OB_UROWID:
       case obmysql::MYSQL_TYPE_ORA_BLOB:
       case obmysql::MYSQL_TYPE_ORA_CLOB:
+      case obmysql::MYSQL_TYPE_JSON:
+      case obmysql::MYSQL_TYPE_GEOMETRY:
         is_support = true;
         break;
       case obmysql::MYSQL_TYPE_COMPLEX:
-        is_support = share::is_oracle_mode() ? true : false;
+        is_support = lib::is_oracle_mode() ? true : false;
         break;
-      default:
+      default :
         is_support = false;
     }
     return is_support;
   }
-  inline int32_t get_param_num()
-  {
-    return params_num_;
-  }
-  inline void set_param_num(int32_t num)
-  {
-    params_num_ = num;
-  }
+  inline int32_t get_param_num() { return params_num_; }
+  inline void set_param_num(int32_t num) { params_num_ = num; }
 
 protected:
-  virtual int deserialize() override
+  virtual int deserialize()  { return common::OB_SUCCESS; }
+  virtual int process();
+  int response_result(ObMySQLResultSet &result,
+                      sql::ObSQLSessionInfo &session,
+                      bool force_sync_resp,
+                      bool &async_resp_used);
+  inline void set_single_process_timestamp(int64_t single_process_timestamp)
   {
-    return common::OB_SUCCESS;
+    single_process_timestamp_ = single_process_timestamp;
   }
-  virtual int process() override;
-  virtual void disconnect() override
+  inline void set_exec_start_timestamp(int64_t time) { exec_start_timestamp_ = time; }
+  ParamStore *get_params() { return params_; }
+  inline void set_param(ParamStore *params) { params_ = params; }
+  sql::ObSqlCtx &get_ctx() { return ctx_; }
+  ObQueryRetryCtrl &get_retry_ctrl() { return retry_ctrl_; }
+  void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_execute_time(const sql::ObPhysicalPlan *plan, const int64_t end_time) const;
+  int request_params(sql::ObSQLSessionInfo *session,
+                     const char* &pos,
+                     uint32_t ps_stmt_checksum,
+                     ObIAllocator &alloc,
+                     int32_t all_param_num);
+  int parse_request_type(const char* &pos,
+                         int64_t num_of_params,
+                         int8_t new_param_bound_flag,
+                         ObCollationType cs_type,
+                         ObCollationType ncs_type,
+                         sql::ParamTypeArray &param_types,
+                         sql::ParamTypeInfoArray &param_type_infos
+                         /*ParamCastArray param_cast_infos*/);
+  int parse_request_param_value(ObIAllocator &alloc,
+                                sql::ObSQLSessionInfo *session,
+                                const char* &pos,
+                                int64_t idx,
+                                obmysql::EMySQLFieldType &param_type,
+                                sql::TypeInfo &param_type_info,
+                                ObObjParam &param,
+                                const char *bitmap);
+  int store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session);
+  int execute_response(sql::ObSQLSessionInfo &session,
+                        ObMySQLResultSet &result,
+                        const bool enable_perf_event,
+                        bool &need_response_error,
+                        bool &is_diagnostics_stmt,
+                        int64_t &execution_id,
+                        const bool force_sync_resp,
+                        bool &async_resp_used);
+  virtual bool is_prexecute() const { return false; }
+  inline bool is_execute_ps_cursor() { return ObExecutePsCursorType == ps_cursor_type_; }
+  inline bool is_prexecute_ps_cursor() { return ObPrexecutePsCursorType == ps_cursor_type_; }
+  inline bool is_ps_cursor() { return ObNormalType != ps_cursor_type_; }
+  inline void set_ps_cursor_type(ObPSCursorType type) { ps_cursor_type_ = type; }
+  inline bool is_pl_stmt(sql::stmt::StmtType stmt_type) const
   {
-    ObMPBase::disconnect();
+    return (sql::stmt::T_CALL_PROCEDURE  == stmt_type || sql::stmt::T_ANONYMOUS_BLOCK == stmt_type);
   }
-  virtual void update_last_pkt_pos() override
-  {
-    if (NULL != ez_buf_) {
-      comp_context_.update_last_pkt_pos(ez_buf_->last);
-    }
-  }
-  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL) override
-  {
-    return ObMPBase::send_error_packet(err, errmsg, is_partition_hit, extra_err_info);
-  }
-  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param) override
-  {
-    return ObMPBase::send_ok_packet(session, ok_param);
-  }
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result) override
-  {
-    return ObMPBase::send_eof_packet(session, result);
-  }
-  virtual bool need_send_extra_ok_packet() override
-  {
-    return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
-  }
-  virtual int response_packet(obmysql::ObMySQLPacket& pkt) override
-  {
-    return ObMPBase::response_packet(pkt);
-  }
-  virtual int after_process() override
-  {
-    return ObMPBase::after_process();
-  }
+  void set_curr_sql_idx(int64_t curr_sql_idx) { curr_sql_idx_ = curr_sql_idx; }
+  int64_t get_curr_sql_idx() { return curr_sql_idx_; }
 
 private:
   // for arraybinding
-  int init_field_for_arraybinding();
-  int init_row_for_arraybinding(ObIAllocator& alloc);
-  int init_for_arraybinding(ObIAllocator& alloc);
-  int check_param_type_for_arraybinding(sql::ObSQLSessionInfo* session_info, sql::ParamTypeInfoArray& param_type_infos);
-  int check_param_value_for_arraybinding(ObObjParam& param);
+  int init_arraybinding_field(int64_t column_field_cnt, const ColumnsFieldIArray *column_fields);
+
+  int init_row_for_arraybinding(ObIAllocator &alloc, int64_t array_binding_row_num);
+  int check_param_type_for_arraybinding(
+    sql::ObSQLSessionInfo *session_info, sql::ParamTypeInfoArray &param_type_infos);
+  int check_param_value_for_arraybinding(ObObjParam &param);
   int construct_execute_param_for_arraybinding(int64_t pos);
   void reset_collection_param_for_arraybinding();
-  int save_exception_for_arraybinding(int64_t pos, int error_code, ObIArray<ObSavedException>& exception_array);
-  int after_do_process_for_arraybinding(ObMySQLResultSet& result);
+  int save_exception_for_arraybinding(
+    int64_t pos, int error_code, ObIArray<ObSavedException> &exception_array);
+  //int after_do_process_for_arraybinding(ObMySQLResultSet &result);
   int response_result_for_arraybinding(
-      sql::ObSQLSessionInfo& session_info, ObIArray<ObSavedException>& exception_array);
-  int send_eof_packet_for_arraybinding(sql::ObSQLSessionInfo& session_info);
+      sql::ObSQLSessionInfo &session_info, ObIArray<ObSavedException> &exception_array);
+  int send_eof_packet_for_arraybinding(sql::ObSQLSessionInfo &session_info);
 
-  int do_process_single(
-      sql::ObSQLSessionInfo& session, const bool has_more_result, const bool force_sync_resp, bool& async_resp_used);
-  int do_process(
-      sql::ObSQLSessionInfo& session, const bool has_more_result, const bool force_sync_resp, bool& async_resp_used);
-  int set_session_active(sql::ObSQLSessionInfo& session) const;
+  int do_process_single(sql::ObSQLSessionInfo &session,
+                        ParamStore *param_store,
+                        const bool has_more_result,
+                        const bool force_sync_resp,
+                        bool &async_resp_used);
+  int do_process(sql::ObSQLSessionInfo &session,
+                 ParamStore *param_store,
+                 const bool has_more_result,
+                 const bool force_sync_resp,
+                 bool &async_resp_used);
+  int process_retry(sql::ObSQLSessionInfo &session,
+                    ParamStore *param_store,
+                    bool has_more_result,
+                    bool force_sync_resp,
+                    bool &async_resp_used);
 
-  int process_execute_stmt(const sql::ObMultiStmtItem& multi_stmt_item, sql::ObSQLSessionInfo& session,
-      bool has_more_result, bool fore_sync_resp, bool& async_resp_used);
-  int response_result(
-      ObMySQLResultSet& result, sql::ObSQLSessionInfo& session, bool force_sync_resp, bool& async_resp_used);
+  int process_execute_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
+                           sql::ObSQLSessionInfo &session,
+                           bool has_more_result,
+                           bool fore_sync_resp,
+                           bool &async_resp_used);
+
+  int try_batch_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
+                                        bool has_more_result,
+                                        bool force_sync_resp,
+                                        bool &async_resp_used,
+                                        bool &optimization_done);
+
+  int is_arraybinding_returning(sql::ObSQLSessionInfo &session, bool &is_ab_return);
+
 
   //
   // %charset is current charset of data, %cs_type and %ncs_type is destination collation.
@@ -185,53 +246,79 @@ private:
   //
   // in mysql: %charset is charset of %cs_type, %ncs_type is not used
   // in oracle: %cs_type is server collation whose charset may differ with %charset
-  int parse_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
-      const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-      const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, 
-      ObObjParam& param, int16_t param_id);
-  int decode_type_info(const char*& buf, sql::TypeInfo& type_info);
+  int parse_param_value(ObIAllocator& allocator,
+                        const uint32_t type,
+                        const ObCharsetType charset,
+                        const ObCollationType cs_type,
+                        const ObCollationType ncs_type,
+                        const char *&data,
+                        const common::ObTimeZoneInfo *tz_info,
+                        sql::TypeInfo *type_info,
+                        ObObjParam &param,
+                        int16_t param_id = OB_INVALID_INDEX);
+  int parse_complex_param_value(ObIAllocator &allocator,
+                        const ObCharsetType charset,
+                        const ObCollationType cs_type,
+                        const ObCollationType ncs_type,
+                        const char *&data,
+                        const common::ObTimeZoneInfo *tz_info,
+                        sql::TypeInfo *type_info,
+                        ObObjParam &param);
+  int decode_type_info(const char*& buf, sql::TypeInfo &type_info);
+  int get_udt_by_name(ObString relation_name,
+                        ObString type_name,
+                        const share::schema::ObUDTTypeInfo *&udt_info);
+  int get_package_type_by_name(ObIAllocator &allocator,
+                        const sql::TypeInfo *type_info,
+                        const pl::ObUserDefinedType *&pl_type);
+  int get_pl_type_by_type_info(ObIAllocator &allocator,
+                        const sql::TypeInfo *type_info,
+                        const pl::ObUserDefinedType *&pl_type);
 
-  virtual int before_response() override
-  {
-    return OB_SUCCESS;
-  }
-  virtual int before_process() override;
-  void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  virtual int before_process();
+  int response_query_header(sql::ObSQLSessionInfo &session, pl::ObDbmsCursorInfo &cursor);
+  //重载response，在response中不去调用flush_buffer(true)；flush_buffer(true)在需要回包时显示调用
+
 
   // copy or convert string, resove %extra_buf_len before result string.
-  static int copy_or_convert_str(common::ObIAllocator& allocator, const common::ObCollationType src_type,
-      const common::ObCollationType dst_type, const common::ObString& src, common::ObString& out,
-      int64_t extra_buf_len = 0);
-
-private:
+  static int copy_or_convert_str(common::ObIAllocator &allocator,
+                                 const common::ObCollationType src_type,
+                                 const common::ObCollationType dst_type,
+                                 const common::ObString &src,
+                                 common::ObString &out,
+                                 int64_t extra_buf_len = 0);
+protected:
   ObQueryRetryCtrl retry_ctrl_;
   sql::ObSqlCtx ctx_;
   int64_t stmt_id_;
   sql::stmt::StmtType stmt_type_;
-  ParamStore* params_;
+  ParamStore *params_;
 
-  ParamStore* arraybinding_params_;
-  ColumnsFieldArray* arraybinding_columns_;
-  ObNewRow* arraybinding_row_;
+  ParamStore *arraybinding_params_;
+  ColumnsFieldArray *arraybinding_columns_;
+  ObNewRow *arraybinding_row_;
 
   bool is_arraybinding_;
   bool is_save_exception_;
   int64_t arraybinding_size_;
   int64_t arraybinding_rowcnt_;
 
-  bool is_cursor_readonly_;  // cursor read only
+  ObPSCursorType ps_cursor_type_;   // cursor read only 类型的语句
 
   int64_t single_process_timestamp_;
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
-  uint64_t params_num_;
-
+  bool prepare_packet_sent_;
+  uint64_t params_num_; 
+  int64_t params_value_len_;
+  char *params_value_;
+  int64_t curr_sql_idx_; // only for arraybinding
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);
 
-};  // end of class
+}; //end of class
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} //end of namespace observer
+} //end of namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_MYSQL_OBMP_STMT_EXECUTE_H__
+#endif //OCEANBASE_OBSERVER_MYSQL_OBMP_STMT_EXECUTE_H__

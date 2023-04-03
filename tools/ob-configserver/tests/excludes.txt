@@ -1,0 +1,5 @@
+github.com/oceanbase/configserver/cmd
+github.com/oceanbase/configserver/ent
+github.com/oceanbase/configserver/config
+github.com/oceanbase/configserver/lib/trace
+github.com/oceanbase/configserver/lib/net

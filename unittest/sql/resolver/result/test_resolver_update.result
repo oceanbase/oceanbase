@@ -1029,10 +1029,10 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -1122,7 +1122,7 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -1274,9 +1274,9 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -1726,10 +1726,10 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -1819,7 +1819,7 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -1971,9 +1971,9 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -2423,10 +2423,10 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -2516,7 +2516,7 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -2668,9 +2668,9 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3120,10 +3120,10 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -3213,7 +3213,7 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -3365,9 +3365,9 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3817,10 +3817,10 @@ update rongxuan.t1 set c1 = 1
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -3910,7 +3910,7 @@ update rongxuan.t1 set c1 = 1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -4062,9 +4062,9 @@ update rongxuan.t1 set c1 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -4514,10 +4514,10 @@ update rongxuan.t1 table1 set c1 =1
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -4607,7 +4607,7 @@ update rongxuan.t1 table1 set c1 =1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -4759,9 +4759,9 @@ update rongxuan.t1 table1 set c1 =1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -5211,10 +5211,10 @@ update t1 set c1 = 1
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -5304,7 +5304,7 @@ update t1 set c1 = 1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -5456,9 +5456,9 @@ update t1 set c1 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6524,10 +6524,10 @@ update test set c5 = 1
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -6617,7 +6617,7 @@ update test set c5 = 1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -6769,9 +6769,9 @@ update test set c5 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -7606,10 +7606,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -7649,7 +7649,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -7725,9 +7725,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -7810,7 +7810,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -7962,9 +7962,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -8416,7 +8416,7 @@ update test set c7 = 3 where c1 = 0
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -8570,7 +8570,7 @@ update test set c7 = 3 where c1 = 0
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                   1
@@ -8645,9 +8645,9 @@ update test set c7 = 3 where c1 = 0
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -9154,7 +9154,7 @@ update test set c7 = 3 where c1 = 0
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -9308,7 +9308,7 @@ update test set c7 = 3 where c1 = 0
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM",
+                  "CNT_STATIC_PARAM",
                   "CNT_FUNC"
                 ],
                 "rel_id": [
@@ -9342,7 +9342,7 @@ update test set c7 = 3 where c1 = 0
                       "IS_FUNC",
                       "CNT_CONST",
                       "CNT_COLUMN",
-                      "CNT_PARAM",
+                      "CNT_STATIC_PARAM",
                       "CNT_FUNC"
                     ],
                     "rel_id": [
@@ -9496,7 +9496,7 @@ update test set c7 = 3 where c1 = 0
                         "expr_info": [
                           "CNT_CONST",
                           "CNT_COLUMN",
-                          "CNT_PARAM"
+                          "CNT_STATIC_PARAM"
                         ],
                         "rel_id": [
                           1
@@ -9527,9 +9527,9 @@ update test set c7 = 3 where c1 = 0
                             },
                             "expr_info": [
                               "IS_CONST",
-                              "IS_PARAM",
+                              "IS_STATIC_PARAM",
                               "CNT_CONST",
-                              "CNT_PARAM"
+                              "CNT_STATIC_PARAM"
                             ],
                             "rel_id": [
                             ],
@@ -9609,9 +9609,9 @@ update test set c7 = 3 where c1 = 0
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -10787,10 +10787,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -10830,7 +10830,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -10906,9 +10906,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -10991,7 +10991,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -11143,9 +11143,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -11595,10 +11595,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -11638,7 +11638,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -11714,9 +11714,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -11799,7 +11799,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -11951,9 +11951,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -12403,10 +12403,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -12446,7 +12446,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -12522,9 +12522,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -12607,7 +12607,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -12759,9 +12759,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -13211,10 +13211,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -13253,10 +13253,10 @@ update test set c7 = 3 where c1 = 0
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -13337,7 +13337,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -13489,9 +13489,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -13530,7 +13530,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -13560,9 +13560,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -13592,9 +13592,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -14042,10 +14042,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -14164,7 +14164,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -14316,9 +14316,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -14768,10 +14768,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -14890,7 +14890,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -15042,9 +15042,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -15494,10 +15494,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -15569,9 +15569,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -15647,7 +15647,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -15799,9 +15799,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -16251,10 +16251,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -16326,9 +16326,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -16404,7 +16404,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -16556,9 +16556,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -17008,10 +17008,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -17083,9 +17083,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -17161,7 +17161,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -17313,9 +17313,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -17765,10 +17765,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -17840,9 +17840,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -17918,7 +17918,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -18070,9 +18070,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -18522,10 +18522,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -18662,7 +18662,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -18814,9 +18814,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -19266,10 +19266,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -19406,7 +19406,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -19558,9 +19558,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -20010,10 +20010,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -20150,7 +20150,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -20302,9 +20302,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -20754,10 +20754,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -20941,7 +20941,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -21093,9 +21093,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -21545,10 +21545,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -21685,7 +21685,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -21837,9 +21837,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -22289,10 +22289,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -22429,7 +22429,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -22581,9 +22581,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -23033,10 +23033,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -23220,7 +23220,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -23372,9 +23372,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -23824,10 +23824,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -23917,7 +23917,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -24069,9 +24069,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -24521,10 +24521,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -24614,7 +24614,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -24766,9 +24766,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -25218,10 +25218,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -25311,7 +25311,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -25463,9 +25463,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -26034,7 +26034,7 @@ update test set c7 = 3 where c1 = 0
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -26188,7 +26188,7 @@ update test set c7 = 3 where c1 = 0
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                   1
@@ -26263,9 +26263,9 @@ update test set c7 = 3 where c1 = 0
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -26342,7 +26342,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -26418,9 +26418,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -27031,7 +27031,7 @@ update test set c7 = 3 where c1 = 0
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -27185,7 +27185,7 @@ update test set c7 = 3 where c1 = 0
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM",
+                  "CNT_STATIC_PARAM",
                   "CNT_FUNC"
                 ],
                 "rel_id": [
@@ -27219,7 +27219,7 @@ update test set c7 = 3 where c1 = 0
                       "IS_FUNC",
                       "CNT_CONST",
                       "CNT_COLUMN",
-                      "CNT_PARAM",
+                      "CNT_STATIC_PARAM",
                       "CNT_FUNC"
                     ],
                     "rel_id": [
@@ -27373,7 +27373,7 @@ update test set c7 = 3 where c1 = 0
                         "expr_info": [
                           "CNT_CONST",
                           "CNT_COLUMN",
-                          "CNT_PARAM"
+                          "CNT_STATIC_PARAM"
                         ],
                         "rel_id": [
                           1
@@ -27404,9 +27404,9 @@ update test set c7 = 3 where c1 = 0
                             },
                             "expr_info": [
                               "IS_CONST",
-                              "IS_PARAM",
+                              "IS_STATIC_PARAM",
                               "CNT_CONST",
-                              "CNT_PARAM"
+                              "CNT_STATIC_PARAM"
                             ],
                             "rel_id": [
                             ],
@@ -27486,9 +27486,9 @@ update test set c7 = 3 where c1 = 0
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -27572,10 +27572,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -27653,10 +27653,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -27696,7 +27696,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -27772,9 +27772,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -27807,7 +27807,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -27883,9 +27883,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -28044,9 +28044,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -28122,7 +28122,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -28274,9 +28274,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -28317,7 +28317,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -28469,9 +28469,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -29040,7 +29040,7 @@ update test set c7 = 3 where c1 = 0
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -29194,7 +29194,7 @@ update test set c7 = 3 where c1 = 0
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM",
+                  "CNT_STATIC_PARAM",
                   "CNT_FUNC"
                 ],
                 "rel_id": [
@@ -29228,7 +29228,7 @@ update test set c7 = 3 where c1 = 0
                       "IS_FUNC",
                       "CNT_CONST",
                       "CNT_COLUMN",
-                      "CNT_PARAM",
+                      "CNT_STATIC_PARAM",
                       "CNT_FUNC"
                     ],
                     "rel_id": [
@@ -29382,7 +29382,7 @@ update test set c7 = 3 where c1 = 0
                         "expr_info": [
                           "CNT_CONST",
                           "CNT_COLUMN",
-                          "CNT_PARAM"
+                          "CNT_STATIC_PARAM"
                         ],
                         "rel_id": [
                           1
@@ -29413,9 +29413,9 @@ update test set c7 = 3 where c1 = 0
                             },
                             "expr_info": [
                               "IS_CONST",
-                              "IS_PARAM",
+                              "IS_STATIC_PARAM",
                               "CNT_CONST",
-                              "CNT_PARAM"
+                              "CNT_STATIC_PARAM"
                             ],
                             "rel_id": [
                             ],
@@ -29495,9 +29495,9 @@ update test set c7 = 3 where c1 = 0
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -29581,10 +29581,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -29662,10 +29662,10 @@ update test set c7 = 3 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -29705,7 +29705,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -29781,9 +29781,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -29816,7 +29816,7 @@ update test set c7 = 3 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -29892,9 +29892,9 @@ update test set c7 = 3 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -30053,9 +30053,9 @@ update test set c7 = 3 where c1 = 0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -30131,7 +30131,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -30283,9 +30283,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -30326,7 +30326,7 @@ update test set c7 = 3 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -30478,9 +30478,9 @@ update test set c7 = 3 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -32448,10 +32448,10 @@ update test set c4 = 1 where c1 =0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -32491,7 +32491,7 @@ update test set c4 = 1 where c1 =0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -32567,9 +32567,9 @@ update test set c4 = 1 where c1 =0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -32652,7 +32652,7 @@ update test set c4 = 1 where c1 =0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -32804,9 +32804,9 @@ update test set c4 = 1 where c1 =0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -33872,10 +33872,10 @@ update test set c1 = 1 where c1 = 0
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -33915,7 +33915,7 @@ update test set c1 = 1 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -33991,9 +33991,9 @@ update test set c1 = 1 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -34076,7 +34076,7 @@ update test set c1 = 1 where c1 = 0
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -34228,9 +34228,9 @@ update test set c1 = 1 where c1 = 0
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -34768,10 +34768,10 @@ update t4 set c2 = 1 where c1 = 2
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -34811,7 +34811,7 @@ update t4 set c2 = 1 where c1 = 2
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -34887,9 +34887,9 @@ update t4 set c2 = 1 where c1 = 2
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -34972,7 +34972,7 @@ update t4 set c2 = 1 where c1 = 2
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -35124,9 +35124,9 @@ update t4 set c2 = 1 where c1 = 2
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -35664,10 +35664,10 @@ update t4 set c3 = 5, c4 = 6
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -35745,10 +35745,10 @@ update t4 set c3 = 5, c4 = 6
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -35838,7 +35838,7 @@ update t4 set c3 = 5, c4 = 6
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -35990,9 +35990,9 @@ update t4 set c3 = 5, c4 = 6
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -36033,7 +36033,7 @@ update t4 set c3 = 5, c4 = 6
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -36185,9 +36185,9 @@ update t4 set c3 = 5, c4 = 6
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -36725,10 +36725,10 @@ update t4 set c2 =6,c3=7 where c1>0;
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -36806,10 +36806,10 @@ update t4 set c2 =6,c3=7 where c1>0;
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -36849,7 +36849,7 @@ update t4 set c2 =6,c3=7 where c1>0;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -36925,9 +36925,9 @@ update t4 set c2 =6,c3=7 where c1>0;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -37010,7 +37010,7 @@ update t4 set c2 =6,c3=7 where c1>0;
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -37162,9 +37162,9 @@ update t4 set c2 =6,c3=7 where c1>0;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -37205,7 +37205,7 @@ update t4 set c2 =6,c3=7 where c1>0;
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -37357,9 +37357,9 @@ update t4 set c2 =6,c3=7 where c1>0;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],

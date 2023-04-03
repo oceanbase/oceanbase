@@ -17,102 +17,100 @@
 #include "lib/net/ob_addr.h"
 #include "share/ob_rpc_struct.h"
 
-namespace oceanbase {
-namespace common {
-template <typename T>
-class ObIArray;
-struct ObPartitionKey;
-}  // namespace common
-
-namespace obrpc {
-class ObSrvRpcProxy;
-}  // end namespace obrpc
-
-namespace share {
-class ObPartitionTableOperator;
+namespace oceanbase
+{
+namespace common
+{
+  template <typename T> class ObIArray;
 }
 
-namespace rootserver {
+namespace obrpc
+{
+class ObSrvRpcProxy;
+}//end namespace obrpc
+
+namespace rootserver
+{
 class ObServerManager;
 class ObUnitManager;
 
-class ObRootMinorFreeze {
+class ObRootMinorFreeze
+{
 public:
   ObRootMinorFreeze();
   virtual ~ObRootMinorFreeze();
 
-  int init(obrpc::ObSrvRpcProxy& rpc_proxy, ObServerManager& server_manager, ObUnitManager& unit_manager,
-      share::ObPartitionTableOperator& pt_operator);
+  int init(obrpc::ObSrvRpcProxy &rpc_proxy,
+           ObServerManager &server_manager,
+           ObUnitManager &unit_manager);
   void start();
   void stop();
   int destroy();
-
-  int try_minor_freeze(const common::ObIArray<uint64_t>& tenant_ids, const common::ObPartitionKey& partition_key_,
-      const common::ObIArray<common::ObAddr>& server_list, const common::ObZone& zone) const;
-
+  int try_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg) const;
 private:
-  typedef struct MinorFreezeParam {
+  typedef struct MinorFreezeParam
+  {
     common::ObAddr server;
     obrpc::ObMinorFreezeArg arg;
 
     TO_STRING_KV(K(server), K(arg));
   } MinorFreezeParam;
 
-  class ParamsContainer {
+  class ParamsContainer
+  {
   public:
-    void reset()
-    {
-      params_.reset();
-    }
-    bool is_empty() const
-    {
-      return params_.count() <= 0;
-    }
-    const common::ObIArray<MinorFreezeParam>& get_params() const
-    {
-      return params_;
-    }
+    void reset() { params_.reset(); }
+    bool is_empty() const { return params_.count() <= 0; }
+    const common::ObIArray<MinorFreezeParam> &get_params() const { return params_; }
 
-    int add_server(const common::ObAddr& server);
-    int add_tenant_server(const uint64_t tenant_id, const common::ObAddr& server);
-    int add_partition_server(const common::ObPartitionKey& partition_key, const common::ObAddr& server);
+    int push_back_param(const common::ObAddr &server,
+                        const uint64_t tenant_id = 0,
+                        share::ObLSID ls_id = share::INVALID_LS,
+                        const common::ObTabletID &tablet_id = ObTabletID(ObTabletID::INVALID_TABLET_ID));
 
     TO_STRING_KV(K_(params));
-
   private:
-    common::ObSEArray<MinorFreezeParam, 256> params_;
+    common::ObSEArray<MinorFreezeParam, 32> params_;
   };
 
   static const int64_t MAX_FREEZE_OP_RETRY_CNT = 5;
-  static const int64_t MINOR_FREEZE_TIMEOUT = (1000 * 30 + 1000) * 1000;  // copy from major freeze
+  static const int64_t MINOR_FREEZE_TIMEOUT = (1000 * 30 + 1000) * 1000; // copy from major freeze
 
-  int is_server_belongs_to_zone(const common::ObAddr& addr, const common::ObZone& zone, bool& server_in_zone) const;
+  int is_server_belongs_to_zone(const common::ObAddr &addr,
+                                const common::ObZone &zone,
+                                bool &server_in_zone) const;
 
-  int init_params_by_partition(const common::ObPartitionKey& partition_key, const common::ObZone& zone,
-      const common::ObIArray<common::ObAddr>& server_list, ParamsContainer& params) const;
+  int init_params_by_ls_or_tablet(const uint64_t tenant_id,
+                                  share::ObLSID ls_id,
+                                  const common::ObTabletID &tablet_id,
+                                  ParamsContainer &params) const;
+  int init_params_by_tenant(const common::ObIArray<uint64_t> &tenant_ids,
+                            const common::ObZone &zone,
+                            const common::ObIArray<common::ObAddr> &server_list,
+                            ParamsContainer &params) const;
 
-  int init_params_by_tenant(const common::ObIArray<uint64_t>& tenant_ids, const common::ObZone& zone,
-      const common::ObIArray<common::ObAddr>& server_list, ParamsContainer& params) const;
+  int init_params_by_zone(const common::ObZone &zone,
+                          ParamsContainer &params) const;
 
-  int init_params_by_zone(const common::ObZone& zone, ParamsContainer& params) const;
+  int init_params_by_server(const common::ObIArray<common::ObAddr> &server_list,
+                            ParamsContainer &params) const;
 
-  int init_params_by_server(const common::ObIArray<common::ObAddr>& server_list, ParamsContainer& params) const;
-
-  int do_minor_freeze(const ParamsContainer& params) const;
+  int do_minor_freeze(const ParamsContainer &params) const;
 
   int check_cancel() const;
-  bool is_server_alive(const common::ObAddr& server) const;
-  int get_tenant_server_list(uint64_t tenant_id, common::ObIArray<common::ObAddr>& target_server_list) const;
+  bool is_server_alive(const common::ObAddr &server) const;
+  int get_tenant_server_list(uint64_t tenant_id,
+                             common::ObIArray<common::ObAddr> &target_server_list) const;
+
 
   bool inited_;
   bool stopped_;
-  obrpc::ObSrvRpcProxy* rpc_proxy_;
-  ObServerManager* server_manager_;
-  ObUnitManager* unit_manager_;
-  share::ObPartitionTableOperator* pt_operator_;
+  obrpc::ObSrvRpcProxy *rpc_proxy_;
+  ObServerManager *server_manager_;
+  ObUnitManager *unit_manager_;
 };
 
-}  // namespace rootserver
-}  // namespace oceanbase
+}
+}
 
 #endif /* OCEANBASE_ROOTSERVER_OB_ROOT_MINOR_FREEZE_H_ */

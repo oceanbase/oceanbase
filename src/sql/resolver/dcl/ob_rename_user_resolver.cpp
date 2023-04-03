@@ -17,17 +17,20 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-ObRenameUserResolver::ObRenameUserResolver(ObResolverParams& params) : ObDCLResolver(params)
-{}
+ObRenameUserResolver::ObRenameUserResolver(ObResolverParams &params)
+    : ObDCLResolver(params)
+{
+}
 
 ObRenameUserResolver::~ObRenameUserResolver()
-{}
+{
+}
 
-int ObRenameUserResolver::resolve(const ParseNode& parse_tree)
+int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObRenameUserStmt* rename_user_stmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObRenameUserStmt *rename_user_stmt = NULL;
 
   if (OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
@@ -40,12 +43,12 @@ int ObRenameUserResolver::resolve(const ParseNode& parse_tree)
       stmt_ = rename_user_stmt;
       rename_user_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
       for (int i = 0; i < node->num_child_ && OB_SUCCESS == ret; ++i) {
-        ParseNode* rename_info = NULL;
+        ParseNode *rename_info = NULL;
         if (OB_ISNULL(rename_info = node->children_[i])) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("Child should not be NULL", K(ret), K(i));
-        } else if (4 == rename_info->num_child_ && T_RENAME_INFO == rename_info->type_ &&
-                   NULL != rename_info->children_[0] && NULL != rename_info->children_[2]) {
+        } else if (4 == rename_info->num_child_ && T_RENAME_INFO == rename_info->type_
+                   && NULL != rename_info->children_[0] && NULL != rename_info->children_[2]) {
           ObString from_user(rename_info->children_[0]->str_len_, rename_info->children_[0]->str_value_);
           ObString from_host;
           ObString to_user(rename_info->children_[2]->str_len_, rename_info->children_[2]->str_value_);
@@ -53,18 +56,17 @@ int ObRenameUserResolver::resolve(const ParseNode& parse_tree)
           if (NULL == rename_info->children_[1]) {
             from_host.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
           } else {
-            from_host.assign_ptr(
-                rename_info->children_[1]->str_value_, static_cast<int32_t>(rename_info->children_[1]->str_len_));
+            from_host.assign_ptr(rename_info->children_[1]->str_value_,
+                                 static_cast<int32_t>(rename_info->children_[1]->str_len_));
           }
           if (NULL == rename_info->children_[3]) {
             to_host.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
           } else {
-            to_host.assign_ptr(
-                rename_info->children_[3]->str_value_, static_cast<int32_t>(rename_info->children_[3]->str_len_));
+            to_host.assign_ptr(rename_info->children_[3]->str_value_,
+                               static_cast<int32_t>(rename_info->children_[3]->str_len_));
           }
 
-          if ((0 == to_user.case_compare(OB_RESTORE_USER_NAME)) ||
-              (0 == from_user.case_compare(OB_RESTORE_USER_NAME))) {
+          if ((0 == to_user.case_compare(OB_RESTORE_USER_NAME)) || (0 == from_user.case_compare(OB_RESTORE_USER_NAME))) {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("__oceanbase_inner_restore_user is reserved", K(ret));
           } else if (from_user.length() > OB_MAX_USER_NAME_LENGTH) {
@@ -74,13 +76,13 @@ int ObRenameUserResolver::resolve(const ParseNode& parse_tree)
           } else if (OB_FAIL(rename_user_stmt->add_rename_info(from_user, from_host, to_user, to_host))) {
             LOG_WARN("Failed to add user to ObRenameUserStmt", K(ret));
           } else {
-            // do nothing
+            //do nothing
           }
         } else {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("sql_parser parse rename_info error", K(ret));
         }
-      }  // end for
+      } // end for
     }
   } else {
     ret = OB_INVALID_ARGUMENT;

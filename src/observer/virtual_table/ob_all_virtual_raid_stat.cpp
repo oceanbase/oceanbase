@@ -18,15 +18,44 @@ using namespace oceanbase;
 using namespace observer;
 using namespace blocksstable;
 
-ObAllVirtualRaidStat::ObAllVirtualRaidStat() : disk_stats_(), cur_idx_(-1), addr_()
+ObDiskStat::ObDiskStat()
+  : disk_idx_(-1),
+    install_seq_(-1),
+    create_ts_(-1),
+    finish_ts_(-1),
+    percent_(-1)
+{
+  alias_name_[0] = '\0';
+  status_ = "";
+}
+
+ObDiskStats::ObDiskStats()
+  : disk_stats_(),
+    data_num_(0),
+    parity_num_(0)
+{
+}
+
+void ObDiskStats::reset()
+{
+  disk_stats_.reset();
+  data_num_ = 0;
+  parity_num_ = 0;
+}
+
+ObAllVirtualRaidStat::ObAllVirtualRaidStat()
+  : disk_stats_(),
+    cur_idx_(-1),
+    addr_()
 {
   ip_buf_[0] = '\0';
 }
 
 ObAllVirtualRaidStat::~ObAllVirtualRaidStat()
-{}
+{
+}
 
-int ObAllVirtualRaidStat::init(const common::ObAddr& addr)
+int ObAllVirtualRaidStat::init(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
 
@@ -39,8 +68,6 @@ int ObAllVirtualRaidStat::init(const common::ObAddr& addr)
   } else if (!addr.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to set ip buf", K(ret));
-  } else if (OB_FAIL(OB_FILE_SYSTEM.get_disk_status(disk_stats_))) {
-    LOG_WARN("failed to get disk status", K(ret));
   } else {
     cur_idx_ = 0;
     addr_ = addr;
@@ -57,7 +84,7 @@ void ObAllVirtualRaidStat::reset()
   start_to_read_ = false;
 }
 
-int ObAllVirtualRaidStat::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualRaidStat::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
@@ -73,7 +100,7 @@ int ObAllVirtualRaidStat::inner_get_next_row(ObNewRow*& row)
   } else if (cur_idx_ >= disk_stats_.disk_stats_.count()) {
     ret = OB_ITER_END;
   } else {
-    const ObDiskStat& stat = disk_stats_.disk_stats_.at(cur_idx_);
+    const ObDiskStat &stat = disk_stats_.disk_stats_.at(cur_idx_);
     const int64_t col_count = output_column_ids_.count();
     ++cur_idx_;
 
@@ -128,3 +155,4 @@ int ObAllVirtualRaidStat::inner_get_next_row(ObNewRow*& row)
   }
   return ret;
 }
+

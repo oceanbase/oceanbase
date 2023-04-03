@@ -1,19 +1,18 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+/** 
+ * Copyright (c) 2021 OceanBase 
+ * OceanBase CE is licensed under Mulan PubL v2. 
+ * You can use this software according to the terms and conditions of the Mulan PubL v2. 
+ * You may obtain a copy of Mulan PubL v2 at: 
+ *          http://license.coscl.org.cn/MulanPubL-2.0 
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, 
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */
-
+ */ 
 /* unput() change the yyin but it doesn't change ParserResult->input_sql_.
 // use unput() function may have unexpected result while copy string.
 */
-%option noyywrap nounput noinput nodefault case-insensitive
+%option noyywrap nounput noinput case-insensitive
 %option noyyalloc noyyrealloc noyyfree
 %option reentrant bison-bridge bison-locations
 %option prefix="obsql_mysql_yy"
@@ -23,17 +22,21 @@
 #include "sql_parser_mysql_mode_tab.h"
 
 extern void obsql_mysql_yyerror(YYLTYPE *yylloc, ParseResult *p, char *s,...);
-extern void obsql_mysql_parser_fatal_error(yyconst char *msg, yyscan_t yyscanner);
+extern void obsql_mysql_parser_fatal_error(int32_t errcoyyde, yyscan_t yyscanner, yyconst char *msg, ...);
 #define yyerror obsql_mysql_yyerror
-#define YY_FATAL_ERROR(msg) obsql_mysql_parser_fatal_error(msg , yyscanner)
+#define YY_FATAL_ERROR(msg, args...) (obsql_mysql_parser_fatal_error(OB_PARSER_ERR_NO_MEMORY, yyscanner, msg, ##args))
+#define YY_UNEXPECTED_ERROR(msg, args...) (obsql_mysql_parser_fatal_error(OB_PARSER_ERR_UNEXPECTED, yyscanner, msg, ##args))
 %}
 
 %x hint
 %x in_c_comment
-%x log_level
 %x sq
+%x hint_sq
 %x dq
 %x bt
+%x hint_bt
+/* the adq is used to process dq in ANSI_QUOTES sql_mode*/
+%x adq
 
 U  [\x80-\xbf]
 U_2  [\xc2-\xdf]
@@ -53,14 +56,14 @@ delete_hint_begin       (delete{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/
 insert_hint_begin       (insert{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 replace_hint_begin      (replace{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 load_data_hint_begin    (load{space}+data{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
+create_hint_begin    (create{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 hint_hint_begin      (hint{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
 identifier        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})*)
-log_level_stmt   ([A-Za-z][A-Za-z0-9_,\.:\* ]*)
-system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)
+system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
 version_num      ([0-9]+\.+[0-9]*)
 int_num          [0-9]+
@@ -79,6 +82,7 @@ dqbegin       {dquote}
 dqend         {dquote}
 dqdouble      {dquote}{dquote}
 dqcontent     [^\\\n\r"]+
+adqcontent    [^"]+
 dqnewline     {dquote}{whitespace}{dquote}
 
 backtick      `
@@ -94,264 +98,12 @@ mysql_compatible_comment_end \*\/
 rowidPattern  (WITH{whitespace}ROWID)
 
 %%
-ACCESS                        { REPUT_TOKEN_NEG_SIGN(ACCESS); }
-ACCESSIBLE                    { REPUT_TOKEN_NEG_SIGN(ACCESSIBLE); }
-ADD                           { REPUT_TOKEN_NEG_SIGN(ADD); }
-AGAINST                       { REPUT_TOKEN_NEG_SIGN(AGAINST); }
-ALTER                         { REPUT_TOKEN_NEG_SIGN(ALTER); }
-ALWAYS                        { REPUT_TOKEN_NEG_SIGN(ALWAYS); }
-AND                           { REPUT_TOKEN_NEG_SIGN(AND); }
-ALL                           { REPUT_TOKEN_NEG_SIGN(ALL); }
-AS                            { REPUT_TOKEN_NEG_SIGN(AS); }
-ASENSITIVE                    { REPUT_TOKEN_NEG_SIGN(ASENSITIVE); }
-ASC                           { REPUT_TOKEN_NEG_SIGN(ASC); }
-BETWEEN                       { REPUT_TOKEN_NEG_SIGN(BETWEEN); }
-BEFORE                        { REPUT_TOKEN_NEG_SIGN(BEFORE); }
-BIGINT                        { REPUT_TOKEN_NEG_SIGN(BIGINT); }
-BINARY                        { REPUT_TOKEN_NEG_SIGN(BINARY); }
-BLOB                          { REPUT_TOKEN_NEG_SIGN(BLOB); }
-BOTH                          { REPUT_TOKEN_NEG_SIGN(BOTH); }
-BY                            { REPUT_TOKEN_NEG_SIGN(BY); }
-CALL                          { REPUT_TOKEN_NEG_SIGN(CALL); }
-CASCADE                       { REPUT_TOKEN_NEG_SIGN(CASCADE); }
-CASE                          { REPUT_TOKEN_NEG_SIGN(CASE); }
-CHANGE                        { REPUT_TOKEN_NEG_SIGN(CHANGE); }
-CHAR                          { REPUT_TOKEN_NEG_SIGN(CHARACTER); }
-CHARACTER                     { REPUT_TOKEN_NEG_SIGN(CHARACTER); }
-CHECK                         { REPUT_TOKEN_NEG_SIGN(CHECK); }
-CIPHER                        { REPUT_TOKEN_NEG_SIGN(CIPHER); }
-CONDITION                     { REPUT_TOKEN_NEG_SIGN(CONDITION); }
-CONSTRAINT                    { REPUT_TOKEN_NEG_SIGN(CONSTRAINT); }
-CONTINUE                      { REPUT_TOKEN_NEG_SIGN(CONTINUE); }
-CONVERT                       { REPUT_TOKEN_NEG_SIGN(CONVERT); }
-COLLATE                       { REPUT_TOKEN_NEG_SIGN(COLLATE); }
-COLUMN                        { REPUT_TOKEN_NEG_SIGN(COLUMN); }
-COLUMNS                       { REPUT_TOKEN_NEG_SIGN(COLUMNS); }
-CREATE                        { REPUT_TOKEN_NEG_SIGN(CREATE); }
-CROSS                         { REPUT_TOKEN_NEG_SIGN(CROSS); }
-CYCLE                         { REPUT_TOKEN_NEG_SIGN(CYCLE); }
-CURRENT_DATE                  { REPUT_TOKEN_NEG_SIGN(CURRENT_DATE); }
-CURRENT_TIME                  { REPUT_TOKEN_NEG_SIGN(CURRENT_TIME); }
-CURRENT_TIMESTAMP             { REPUT_TOKEN_NEG_SIGN(CURRENT_TIMESTAMP); }
-CURRENT_USER                  { REPUT_TOKEN_NEG_SIGN(CURRENT_USER); }
 {rowidPattern}                { REPUT_TOKEN_NEG_SIGN(WITH_ROWID); }
-CURSOR                        { REPUT_TOKEN_NEG_SIGN(CURSOR); }
-DAY_HOUR                      { REPUT_TOKEN_NEG_SIGN(DAY_HOUR); }
-DAY_MICROSECOND               { REPUT_TOKEN_NEG_SIGN(DAY_MICROSECOND); }
-DAY_MINUTE                    { REPUT_TOKEN_NEG_SIGN(DAY_MINUTE); }
-DAY_SECOND                    { REPUT_TOKEN_NEG_SIGN(DAY_SECOND); }
-DATABASE                      { REPUT_TOKEN_NEG_SIGN(DATABASE); }
-DATABASES                     { REPUT_TOKEN_NEG_SIGN(DATABASES); }
-DEC                           { REPUT_TOKEN_NEG_SIGN(NUMBER); }
-DECIMAL                       { REPUT_TOKEN_NEG_SIGN(DECIMAL); }
-DECLARE                       { REPUT_TOKEN_NEG_SIGN(DECLARE); }
-DEFAULT                       { REPUT_TOKEN_NEG_SIGN(DEFAULT); }
-DELAYED                       { REPUT_TOKEN_NEG_SIGN(DELAYED); }
-DELETE                        { REPUT_TOKEN_NEG_SIGN(DELETE); }
-DESC                          { REPUT_TOKEN_NEG_SIGN(DESC); }
-DESCRIBE                      { REPUT_TOKEN_NEG_SIGN(DESCRIBE); }
-DETERMINISTIC                 { REPUT_TOKEN_NEG_SIGN(DETERMINISTIC); }
-DIV                           { REPUT_TOKEN_NEG_SIGN(DIV); }
-DISTINCT                      { REPUT_TOKEN_NEG_SIGN(DISTINCT); }
-DISTINCTROW                   { REPUT_TOKEN_NEG_SIGN(DISTINCTROW); }
-DOUBLE                        { REPUT_TOKEN_NEG_SIGN(DOUBLE); }
-DROP                          { REPUT_TOKEN_NEG_SIGN(DROP); }
-DUAL                          { REPUT_TOKEN_NEG_SIGN(DUAL); }
-EACH                          { REPUT_TOKEN_NEG_SIGN(EACH); }
-ENCLOSED                      { REPUT_TOKEN_NEG_SIGN(ENCLOSED); }
-ELSE                          { REPUT_TOKEN_NEG_SIGN(ELSE); }
-ELSEIF                        { REPUT_TOKEN_NEG_SIGN(ELSEIF); }
-ESCAPED                       { REPUT_TOKEN_NEG_SIGN(ESCAPED); }
-EXISTS                        { REPUT_TOKEN_NEG_SIGN(EXISTS); }
-EXIT                          { REPUT_TOKEN_NEG_SIGN(EXIT); }
-EXPLAIN                       { REPUT_TOKEN_NEG_SIGN(EXPLAIN); }
-FETCH                         { REPUT_TOKEN_NEG_SIGN(FETCH); }
-FIELDS                        { REPUT_TOKEN_NEG_SIGN(FIELDS); }
-FOREIGN                       { REPUT_TOKEN_NEG_SIGN(FOREIGN); }
-FLOAT                         { REPUT_TOKEN_NEG_SIGN(FLOAT); }
-FLOAT4                        { REPUT_TOKEN_NEG_SIGN(FLOAT4); }
-FLOAT8                        { REPUT_TOKEN_NEG_SIGN(FLOAT8); }
-FOR                           { REPUT_TOKEN_NEG_SIGN(FOR); }
-FORCE                         { REPUT_TOKEN_NEG_SIGN(FORCE); }
-FROM                          { REPUT_TOKEN_NEG_SIGN(FROM); }
-FULL                          { REPUT_TOKEN_NEG_SIGN(FULL); }
-GET                           { REPUT_TOKEN_NEG_SIGN(GET); }
-GENERATED                     { REPUT_TOKEN_NEG_SIGN(GENERATED); }
-GRANT                         { REPUT_TOKEN_NEG_SIGN(GRANT); }
-GROUP                         { REPUT_TOKEN_NEG_SIGN(GROUP); }
-HAVING                        { REPUT_TOKEN_NEG_SIGN(HAVING); }
-HIGH_PRIORITY                 { REPUT_TOKEN_NEG_SIGN(HIGH_PRIORITY); }
-HOUR_MICROSECOND              { REPUT_TOKEN_NEG_SIGN(HOUR_MICROSECOND); }
-HOUR_MINUTE                   { REPUT_TOKEN_NEG_SIGN(HOUR_MINUTE); }
-HOUR_SECOND                   { REPUT_TOKEN_NEG_SIGN(HOUR_SECOND); }
-ID                            { REPUT_TOKEN_NEG_SIGN(ID); }
-IF                            { REPUT_TOKEN_NEG_SIGN(IF); }
-IN                            { REPUT_TOKEN_NEG_SIGN(IN); }
-INDEX                         { REPUT_TOKEN_NEG_SIGN(INDEX); }
-INNER                         { REPUT_TOKEN_NEG_SIGN(INNER); }
-INFILE                        { REPUT_TOKEN_NEG_SIGN(INFILE); }
-INOUT                         { REPUT_TOKEN_NEG_SIGN(INOUT); }
-INSENSITIVE                   { REPUT_TOKEN_NEG_SIGN(INSENSITIVE); }
-INT                           { REPUT_TOKEN_NEG_SIGN(INTEGER); }
-INT1                          { REPUT_TOKEN_NEG_SIGN(INT1); }
-INT2                          { REPUT_TOKEN_NEG_SIGN(INT2); }
-INT3                          { REPUT_TOKEN_NEG_SIGN(INT3); }
-INT4                          { REPUT_TOKEN_NEG_SIGN(INT4); }
-INT8                          { REPUT_TOKEN_NEG_SIGN(INT8); }
-INTEGER                       { REPUT_TOKEN_NEG_SIGN(INTEGER); }
 INTERVAL { 
   ParseResult *p = (ParseResult *)yyextra;
   REPUT_NEG_SIGN(p); 
   return INTERVAL; 
 }
-INSERT                        { REPUT_TOKEN_NEG_SIGN(INSERT); }
-INTO                          { REPUT_TOKEN_NEG_SIGN(INTO); }
-IO_AFTER_GTIDS                { REPUT_TOKEN_NEG_SIGN(IO_AFTER_GTIDS); }
-IO_BEFORE_GTIDS               { REPUT_TOKEN_NEG_SIGN(IO_BEFORE_GTIDS); }
-IS                            { REPUT_TOKEN_NEG_SIGN(IS); }
-ISSUER                        { REPUT_TOKEN_NEG_SIGN(ISSUER); }
-ITERATE                       { REPUT_TOKEN_NEG_SIGN(ITERATE); }
-JOIN                          { REPUT_TOKEN_NEG_SIGN(JOIN); }
-KEY                           { REPUT_TOKEN_NEG_SIGN(KEY); }
-KEYS                          { REPUT_TOKEN_NEG_SIGN(KEYS); }
-KILL                          { REPUT_TOKEN_NEG_SIGN(KILL); }
-LANGUAGE                      { REPUT_TOKEN_NEG_SIGN(LANGUAGE); }
-LEADING                       { REPUT_TOKEN_NEG_SIGN(LEADING); }
-LEAVE                         { REPUT_TOKEN_NEG_SIGN(LEAVE); }
-LEFT                          { REPUT_TOKEN_NEG_SIGN(LEFT); }
-LIMIT                         { REPUT_TOKEN_NEG_SIGN(LIMIT); }
-LIKE                          { REPUT_TOKEN_NEG_SIGN(LIKE); }
-LINEAR                        { REPUT_TOKEN_NEG_SIGN(LINEAR); }
-LINES                         { REPUT_TOKEN_NEG_SIGN(LINES); }
-LIST                          { REPUT_TOKEN_NEG_SIGN(BISON_LIST); }
-LOAD                          { REPUT_TOKEN_NEG_SIGN(LOAD); }
-LOCAL                         { REPUT_TOKEN_NEG_SIGN(LOCAL); }
-LOCALTIME                     { REPUT_TOKEN_NEG_SIGN(LOCALTIME); }
-LOCALTIMESTAMP                { REPUT_TOKEN_NEG_SIGN(LOCALTIMESTAMP); }
-LOCK                          { REPUT_TOKEN_NEG_SIGN(LOCK_); }
-LONG                          { REPUT_TOKEN_NEG_SIGN(LONG); }
-LONGBLOB                      { REPUT_TOKEN_NEG_SIGN(LONGBLOB); }
-LONGTEXT                      { REPUT_TOKEN_NEG_SIGN(LONGTEXT); }
-LOOP                          { REPUT_TOKEN_NEG_SIGN(LOOP); }
-LOW_PRIORITY                  { REPUT_TOKEN_NEG_SIGN(LOW_PRIORITY); }
-MASTER_BIND                   { REPUT_TOKEN_NEG_SIGN(MASTER_BIND); }
-MASTER_SSL_VERIFY_SERVER_CERT { REPUT_TOKEN_NEG_SIGN(MASTER_SSL_VERIFY_SERVER_CERT); }
-MATCH                         { REPUT_TOKEN_NEG_SIGN(MATCH); }
-MAXVALUE                      { REPUT_TOKEN_NEG_SIGN(MAXVALUE); }
-MEDIUMBLOB                    { REPUT_TOKEN_NEG_SIGN(MEDIUMBLOB); }
-MEDIUMINT                     { REPUT_TOKEN_NEG_SIGN(MEDIUMINT); }
-MERGE                         { REPUT_TOKEN_NEG_SIGN(MERGE); }
-MEDIUMTEXT                    { REPUT_TOKEN_NEG_SIGN(MEDIUMTEXT); }
-MIDDLEINT                     { REPUT_TOKEN_NEG_SIGN(MIDDLEINT); }
-MINUTE_MICROSECOND            { REPUT_TOKEN_NEG_SIGN(MINUTE_MICROSECOND); }
-MINUTE_SECOND                 { REPUT_TOKEN_NEG_SIGN(MINUTE_SECOND); }
-MOD                           { REPUT_TOKEN_NEG_SIGN(MOD); }
-MODE                          { REPUT_TOKEN_NEG_SIGN(MODE); }
-MODIFIES                      { REPUT_TOKEN_NEG_SIGN(MODIFIES); }
-NATURAL                       { REPUT_TOKEN_NEG_SIGN(NATURAL); }
-NO_WRITE_TO_BINLOG            { REPUT_TOKEN_NEG_SIGN(NO_WRITE_TO_BINLOG); }
-NUMERIC                       { REPUT_TOKEN_NEG_SIGN(NUMBER); }
-ON                            { REPUT_TOKEN_NEG_SIGN(ON); }
-OPTION                        { REPUT_TOKEN_NEG_SIGN(OPTION); }
-OPTIMIZE                      { REPUT_TOKEN_NEG_SIGN(OPTIMIZE); }
-OPTIONALLY                    { REPUT_TOKEN_NEG_SIGN(OPTIONALLY); }
-OR                            { REPUT_TOKEN_NEG_SIGN(OR); }
-ORDER                         { REPUT_TOKEN_NEG_SIGN(ORDER); }
-OUT                           { REPUT_TOKEN_NEG_SIGN(OUT); }
-OUTER                         { REPUT_TOKEN_NEG_SIGN(OUTER); }
-OUTFILE                       { REPUT_TOKEN_NEG_SIGN(OUTFILE); }
-PARSER                        { REPUT_TOKEN_NEG_SIGN(PARSER); }
-PROCEDURE                     { REPUT_TOKEN_NEG_SIGN(PROCEDURE); }
-PURGE                         { REPUT_TOKEN_NEG_SIGN(PURGE); }
-PARTITION                     { REPUT_TOKEN_NEG_SIGN(PARTITION); }
-PRECISION                     { REPUT_TOKEN_NEG_SIGN(PRECISION); }
-PRIMARY                       { REPUT_TOKEN_NEG_SIGN(PRIMARY); }
-PUBLIC                        { REPUT_TOKEN_NEG_SIGN(PUBLIC); }
-RANGE                         { REPUT_TOKEN_NEG_SIGN(RANGE); }
-READ                          { REPUT_TOKEN_NEG_SIGN(READ); }
-READ_WRITE                    { REPUT_TOKEN_NEG_SIGN(READ_WRITE); }
-READS                         { REPUT_TOKEN_NEG_SIGN(READS); }
-REAL                          { REPUT_TOKEN_NEG_SIGN(REAL); }
-RECURSIVE                     { REPUT_TOKEN_NEG_SIGN(RECURSIVE); }
-RELEASE                       { REPUT_TOKEN_NEG_SIGN(RELEASE); }
-REFERENCES                    { REPUT_TOKEN_NEG_SIGN(REFERENCES); }
-REGEXP                        { REPUT_TOKEN_NEG_SIGN(REGEXP); }
-RENAME                        { REPUT_TOKEN_NEG_SIGN(RENAME); }
-REPLACE                       { REPUT_TOKEN_NEG_SIGN(REPLACE); }
-REPEAT                        { REPUT_TOKEN_NEG_SIGN(REPEAT); }
-REQUIRE                       { REPUT_TOKEN_NEG_SIGN(REQUIRE); }
-RESIGNAL                      { REPUT_TOKEN_NEG_SIGN(RESIGNAL); }
-RESTRICT                      { REPUT_TOKEN_NEG_SIGN(RESTRICT); }
-RETURN                        { REPUT_TOKEN_NEG_SIGN(RETURN); }
-REVOKE                        { REPUT_TOKEN_NEG_SIGN(REVOKE); }
-RIGHT                         { REPUT_TOKEN_NEG_SIGN(RIGHT); }
-RLIKE                         { REPUT_TOKEN_NEG_SIGN(REGEXP); }
-ROWS                          { REPUT_TOKEN_NEG_SIGN(ROWS); }
-SECOND_MICROSECOND            { REPUT_TOKEN_NEG_SIGN(SECOND_MICROSECOND); }
-SELECT                        { REPUT_TOKEN_NEG_SIGN(SELECT); }
-SCHEMA                        { REPUT_TOKEN_NEG_SIGN(SCHEMA); }
-SCHEMAS                       { REPUT_TOKEN_NEG_SIGN(SCHEMAS); }
-SEPARATOR                     { REPUT_TOKEN_NEG_SIGN(SEPARATOR); }
-SET                           { REPUT_TOKEN_NEG_SIGN(SET); }
-SENSITIVE                     { REPUT_TOKEN_NEG_SIGN(SENSITIVE); }
-SHOW                          { REPUT_TOKEN_NEG_SIGN(SHOW); }
-SIGNAL                        { REPUT_TOKEN_NEG_SIGN(SIGNAL); }
-SMALLINT                      { REPUT_TOKEN_NEG_SIGN(SMALLINT); }
-SPATIAL                       { REPUT_TOKEN_NEG_SIGN(SPATIAL); }
-SPECIFIC                      { REPUT_TOKEN_NEG_SIGN(SPECIFIC); }
-SQL                           { REPUT_TOKEN_NEG_SIGN(SQL); }
-SQLEXCEPTION                  { REPUT_TOKEN_NEG_SIGN(SQLEXCEPTION); }
-SQLSTATE                      { REPUT_TOKEN_NEG_SIGN(SQLSTATE); }
-SQLWARNING                    { REPUT_TOKEN_NEG_SIGN(SQLWARNING); }
-SQL_BIG_RESULT                { REPUT_TOKEN_NEG_SIGN(SQL_BIG_RESULT); }
-SQL_CALC_FOUND_ROWS           { REPUT_TOKEN_NEG_SIGN(SQL_CALC_FOUND_ROWS); }
-SQL_SMALL_RESULT              { REPUT_TOKEN_NEG_SIGN(SQL_SMALL_RESULT); }
-SSL                           { REPUT_TOKEN_NEG_SIGN(SSL); }
-STARTING                      { REPUT_TOKEN_NEG_SIGN(STARTING); }
-STORED                        { REPUT_TOKEN_NEG_SIGN(STORED); }
-STRAIGHT_JOIN                 { REPUT_TOKEN_NEG_SIGN(STRAIGHT_JOIN); }
-SUBJECT                       { REPUT_TOKEN_NEG_SIGN(SUBJECT); }
-SYNONYM                       { REPUT_TOKEN_NEG_SIGN(SYNONYM); }
-SYSDATE                       { REPUT_TOKEN_NEG_SIGN(SYSDATE); }
-TERMINATED                    { REPUT_TOKEN_NEG_SIGN(TERMINATED); }
-TEXT                          { REPUT_TOKEN_NEG_SIGN(TEXT); }
-TINYBLOB                      { REPUT_TOKEN_NEG_SIGN(TINYBLOB); }
-TINYINT                       { REPUT_TOKEN_NEG_SIGN(TINYINT); }
-TINYTEXT                      { REPUT_TOKEN_NEG_SIGN(TINYTEXT); }
-TABLE                         { REPUT_TOKEN_NEG_SIGN(TABLE); }
-TABLEGROUP                    { REPUT_TOKEN_NEG_SIGN(TABLEGROUP); }
-THEN                          { REPUT_TOKEN_NEG_SIGN(THEN); }
-TO                            { REPUT_TOKEN_NEG_SIGN(TO); }
-TRAILING                      { REPUT_TOKEN_NEG_SIGN(TRAILING); }
-TRIGGER                       { REPUT_TOKEN_NEG_SIGN(TRIGGER); }
-UNDO                          { REPUT_TOKEN_NEG_SIGN(UNDO); }
-UNION                         { REPUT_TOKEN_NEG_SIGN(UNION); }
-UNIQUE                        { REPUT_TOKEN_NEG_SIGN(UNIQUE); }
-UNLOCK                        { REPUT_TOKEN_NEG_SIGN(UNLOCK); }
-UNSIGNED                      { REPUT_TOKEN_NEG_SIGN(UNSIGNED); }
-UPDATE                        { REPUT_TOKEN_NEG_SIGN(UPDATE); }
-USAGE                         { REPUT_TOKEN_NEG_SIGN(USAGE); }
-USE                           { REPUT_TOKEN_NEG_SIGN(USE); }
-USING                         { REPUT_TOKEN_NEG_SIGN(USING); }
-UTC_DATE                      { REPUT_TOKEN_NEG_SIGN(UTC_DATE); }
-UTC_TIME                      { REPUT_TOKEN_NEG_SIGN(UTC_TIME); }
-UTC_TIMESTAMP                 { REPUT_TOKEN_NEG_SIGN(UTC_TIMESTAMP); }
-VALUES                        { REPUT_TOKEN_NEG_SIGN(VALUES); }
-VARBINARY                     { REPUT_TOKEN_NEG_SIGN(VARBINARY); }
-VARCHAR                       { REPUT_TOKEN_NEG_SIGN(VARCHAR); }
-VARCHARACTER                  { REPUT_TOKEN_NEG_SIGN(VARCHAR); }
-VARYING                       { REPUT_TOKEN_NEG_SIGN(VARYING); }
-VIRTUAL                       { REPUT_TOKEN_NEG_SIGN(VIRTUAL); }
-WHERE                         { REPUT_TOKEN_NEG_SIGN(WHERE); }
-WHEN                          { REPUT_TOKEN_NEG_SIGN(WHEN); }
-WHILE                         { REPUT_TOKEN_NEG_SIGN(WHILE); }
-WINDOW                        { REPUT_TOKEN_NEG_SIGN(WINDOW); }
-WITH                          { REPUT_TOKEN_NEG_SIGN(WITH); }
-WRITE                         { REPUT_TOKEN_NEG_SIGN(WRITE); }
-XOR                           { REPUT_TOKEN_NEG_SIGN(XOR); }
-X509                          { REPUT_TOKEN_NEG_SIGN(X509); }
-YEAR_MONTH                    { REPUT_TOKEN_NEG_SIGN(YEAR_MONTH); }
-ZEROFILL                      { REPUT_TOKEN_NEG_SIGN(ZEROFILL); }
 @@global                      { REPUT_TOKEN_NEG_SIGN(GLOBAL_ALIAS); }
 @@session                     { REPUT_TOKEN_NEG_SIGN(SESSION_ALIAS); }
 @@local                       { REPUT_TOKEN_NEG_SIGN(SESSION_ALIAS); }
@@ -360,15 +112,9 @@ _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
+_LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
-STRONG                        { REPUT_TOKEN_NEG_SIGN(STRONG); }
-WEAK                          { REPUT_TOKEN_NEG_SIGN(WEAK); }
-FROZEN                        { REPUT_TOKEN_NEG_SIGN(FROZEN); }
-EXCEPT                        { REPUT_TOKEN_NEG_SIGN(EXCEPT); }
-MINUS                         { REPUT_TOKEN_NEG_SIGN(MINUS); }
-INTERSECT                     { REPUT_TOKEN_NEG_SIGN(INTERSECT); }
-ISNULL                        { REPUT_TOKEN_NEG_SIGN(ISNULL); }
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -433,7 +179,7 @@ NULL {
       check_value(yylval);
       yylval->node = node;
       node->str_value_ = parse_strdup(yytext, p->malloc_pool_, &(node->str_len_));
-      check_value(node->str_value_);
+      check_malloc(node->str_value_);
       int err_no = 0;
       node->value_ = ob_strntoll(node->str_value_, node->str_len_, 10, NULL, &err_no);
       if (ERANGE == err_no)
@@ -498,6 +244,16 @@ TRUE {
   }
 }
 
+<hint>TRUE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 1;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
+}
+
 FALSE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
@@ -512,6 +268,16 @@ FALSE {
   }
 }
 
+<hint>FALSE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 0;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
+}
+
 {sqbegin} {
   BEGIN(sq);
   ParseResult *p = (ParseResult *)yyextra;
@@ -519,7 +285,7 @@ FALSE {
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
   yylval->node->str_len_ = 0;
-  p->last_well_formed_len_ = 0;
+  p->last_escape_check_pos_ = 0;
   yylval->node->str_value_ = NULL;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
@@ -574,18 +340,22 @@ FALSE {
   COPY_STR_NODE_TO_TMP_LITERAL(yylval->node);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
   }
+  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
   }
 }
 
 <sq>{sqnewline} {
-  /*TODO fast parameterize*/
+  /*TODO shengle fast parameterize*/
   /*
      In case of two adjacent string literal, such as " 'a' 'b' ", the two string will be
      concatenate into 'ab'. However, the string 'a' will used as the column name if it appears
@@ -614,6 +384,7 @@ FALSE {
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
+    check_malloc((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -628,20 +399,41 @@ FALSE {
 }
 
 {dqbegin} {
-  BEGIN(dq);
   ParseResult *p = (ParseResult *)yyextra;
-  p->start_col_ = yylloc->first_column;
-  char **tmp_literal = &p->tmp_literal_;
-  if (*tmp_literal == NULL)
-  {
-    *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-    check_value(*tmp_literal);
-  }
-  malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
-  yylval->node->str_len_ = 0;
-  p->last_well_formed_len_ = 0;
-  if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
-    return OUTLINE_DEFAULT_TOKEN;
+  ObSQLMode mode = p->sql_mode_;
+  bool is_ansi_quotes = false;
+  IS_ANSI_QUOTES(mode, is_ansi_quotes);
+  if (is_ansi_quotes) {
+    BEGIN(adq); 
+    if (IS_FAST_PARAMETERIZE) {
+      COPY_WRITE();
+    } else {
+      check_value(yylval);
+      p->start_col_ = yylloc->first_column;
+      char **tmp_literal = &p->tmp_literal_;
+      if (*tmp_literal == NULL)
+      {
+        *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+        check_malloc(*tmp_literal);
+      }
+      malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+      yylval->node->str_len_ = 0;
+    }
+  } else {
+    BEGIN(dq);
+    p->start_col_ = yylloc->first_column;
+    char **tmp_literal = &p->tmp_literal_;
+    if (*tmp_literal == NULL)
+    {
+      *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+      check_malloc(*tmp_literal);
+    }
+    malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+    yylval->node->str_len_ = 0;
+    p->last_escape_check_pos_ = 0;
+    if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
+      return OUTLINE_DEFAULT_TOKEN;
+    }
   }
 }
 
@@ -653,8 +445,10 @@ FALSE {
   check_value(yylval);
   tmp_literal[yylval->node->str_len_] = '\0';
   yylval->node->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+  check_malloc(yylval->node->str_value_);
   yylval->node->text_len_ = yylloc->last_column - p->start_col_ + 1;
   yylval->node->raw_text_ = parse_strndup(p->input_sql_ + p->start_col_ - 1, yylval->node->text_len_, p->malloc_pool_);
+  check_malloc(yylval->node->raw_text_);
   if (IS_FAST_PARAMETERIZE) {
     STORE_PARAM_NODE();
   } else {
@@ -695,11 +489,16 @@ FALSE {
   check_value(yylval);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  //check sql_mode
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
   }
+  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     return OUTLINE_DEFAULT_TOKEN;
   }
@@ -725,6 +524,7 @@ FALSE {
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
+    check_malloc((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -735,6 +535,56 @@ FALSE {
 
 <dq><<EOF>>  {
   yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
+  return PARSER_SYNTAX_ERROR;
+}
+
+<adq>{dqdouble} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    ((ParseResult *)yyextra)->tmp_literal_[yylval->node->str_len_++] = '"';
+  }
+}
+
+<adq>{adqcontent} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
+    yylval->node->str_len_ += yyleng;
+  }
+}
+
+<adq>{dqend} {
+  BEGIN(INITIAL);
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    ParseResult *p = (ParseResult *)yyextra;
+    check_value(yylval);
+    yylloc->first_column = p->start_col_;
+    char *tmp_literal = p->tmp_literal_;
+    tmp_literal[yylval->node->str_len_] = '\0';
+
+    char *dup_value = NULL;
+    if (p->is_not_utf8_connection_) {
+      dup_value = parse_str_convert_utf8(p->charset_info_, tmp_literal, p->malloc_pool_, &(yylval->node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
+      //fprintf(stderr, "parse identifier result, str=%s, str_len=%ld\n", node->str_value_, node->str_len_);
+    } else {
+      dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+    }
+    check_malloc(dup_value);
+    yylval->node->str_value_ = dup_value;
+    setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
+    return NAME_OB;
+  }
+}
+
+<adq><<EOF>> {
+  yyerror(yylloc, yyextra, "unterminated backtick string\n");
   return PARSER_SYNTAX_ERROR;
 }
 
@@ -750,7 +600,7 @@ FALSE {
     if (NULL == *tmp_literal)
     {
       *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-      check_value(*tmp_literal);
+      check_malloc(*tmp_literal);
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
     yylval->node->str_len_ = 0;
@@ -785,6 +635,7 @@ FALSE {
     yylloc->first_column = p->start_col_;
     char *tmp_literal = p->tmp_literal_;
     tmp_literal[yylval->node->str_len_] = '\0';
+    CHECK_STR_LEN_MATCH(tmp_literal, yylval->node->str_len_);
 
     char *dup_value = NULL;
     if (p->is_not_utf8_connection_) {
@@ -794,7 +645,7 @@ FALSE {
     } else {
       dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
     }
-    check_value(dup_value);
+    check_malloc(dup_value);
     yylval->node->str_value_ = dup_value;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
     return NAME_OB;
@@ -809,8 +660,16 @@ FALSE {
 X'([0-9A-F])*'|0X([0-9A-F])+ {
   char *src = yytext + 2;
   size_t len = yyleng - 2;
+  // https://dev.mysql.com/doc/refman/5.7/en/hexadecimal-literals.html
+  // Values written using X'val' notation must contain an even number of digits or a syntax error occurs. To correct the problem, pad the value with a leading zero.
+  // Values written using 0xval notation that contain an odd number of digits are treated as having an extra leading 0. For example, 0xaaa is interpreted as 0x0aaa.
   if ('\'' == src[len - 1]) {
+    // Values written using X'val' notation
     --len;
+    if (0 != len % 2) {
+      yyerror(yylloc, yyextra, "hex string contain an even number of digits\n");
+      return PARSER_SYNTAX_ERROR;
+    }
   }
   ParseNode *node = NULL;
   ParseResult *p = (ParseResult *)yyextra;
@@ -819,7 +678,7 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
   if (len > 0) {
     int64_t dest_len = ob_parse_binary_len(len);
     char *dest = (char *)parse_malloc(dest_len, p->malloc_pool_);
-    check_value(dest);
+    check_malloc(dest);
     ob_parse_binary(src, len, dest);
     node->str_value_ = dest;
     node->str_len_ = dest_len;
@@ -855,7 +714,7 @@ B'([01])*'|0B([01])+ {
   {
     int64_t dest_len = ob_parse_bit_string_len(len);
     char *dest = (char*)parse_malloc(dest_len, p->malloc_pool_);
-    check_value(dest);
+    check_malloc(dest);
     ob_parse_bit_string(src, len, dest);
     node->str_value_ = dest;
     node->str_len_ = dest_len;
@@ -968,8 +827,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
     ParseNode *node = NULL;
     ParseResult *p = (ParseResult *)yyextra;
     malloc_new_node(node, p->malloc_pool_, T_HINT, 0);
-    dest = parse_strdup(yytext + 3, p->malloc_pool_, &out_len);
-    check_value(dest);
+    dest = parse_strdup(yytext + 7, p->malloc_pool_, &out_len);
+    check_malloc(dest);
     dest[out_len - 2] = '\0';
 
     node->str_value_ = dest;
@@ -1023,6 +882,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   p->is_ignore_token_ = p->is_ignore_hint_;
   return LOAD_DATA_HINT_BEGIN;
 }
+{create_hint_begin} {
+  BEGIN(hint);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->is_ignore_token_ = p->is_ignore_hint_;
+  return CREATE_HINT_BEGIN;
+}
 <hint>{c_cmt_end} {
   BEGIN(INITIAL);
   return HINT_END;
@@ -1034,10 +899,14 @@ Timestamp{whitespace}?\"[^\"]*\" {
   }
 }
 <hint>INDEX { return INDEX_HINT; }
+<hint>NO_INDEX { return NO_INDEX_HINT; }
+<hint>USE_DAS { return USE_DAS_HINT; }
+<hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
+<hint>INDEX_SS { return INDEX_SS_HINT; }
+<hint>INDEX_SS_ASC { return INDEX_SS_ASC_HINT; }
+<hint>INDEX_SS_DESC { return INDEX_SS_DESC_HINT; }
 <hint>USE_NL { return USE_NL; }
 <hint>NO_USE_NL { return NO_USE_NL; }
-<hint>USE_BNL { return USE_BNL; }
-<hint>NO_USE_BNL { return NO_USE_BNL; }
 <hint>USE_NL_MATERIALIZATION { return USE_NL_MATERIALIZATION; }
 <hint>NO_USE_NL_MATERIALIZATION { return NO_USE_NL_MATERIALIZATION; }
 <hint>FROZEN_VERSION { return FROZEN_VERSION; }
@@ -1052,6 +921,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
 <hint>PARALLEL { return PARALLEL; }
 <hint>NO_PARALLEL { return NO_PARALLEL; }
+<hint>MONITOR  { return MONITOR; }
 <hint>AUTO { return AUTO; }
 <hint>FORCE { return FORCE; }
 <hint>[(),.@]  {
@@ -1066,7 +936,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
     }
   }
 }
-<hint>HOTSPOT  { return HOTSPOT; }
+<hint>NO_GATHER_OPTIMIZER_STATISTICS  { return NO_GATHER_OPTIMIZER_STATISTICS; }
+<hint>GATHER_OPTIMIZER_STATISTICS  { return GATHER_OPTIMIZER_STATISTICS; }
+<hint>DBMS_STATS  { return DBMS_STATS; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
@@ -1077,41 +949,117 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>USE_HASH  { return USE_HASH; }
 <hint>NO_USE_HASH  { return NO_USE_HASH; }
 <hint>USE_PLAN_CACHE  { return USE_PLAN_CACHE; }
-<hint>USE_JIT { return USE_JIT; }
-<hint>NO_USE_JIT { return NO_USE_JIT; }
 <hint>USE_HASH_AGGREGATION  { return USE_HASH_AGGREGATION; }
 <hint>NO_USE_HASH_AGGREGATION  { return NO_USE_HASH_AGGREGATION; }
+<hint>PARTITION_SORT  { return PARTITION_SORT; }
+<hint>NO_PARTITION_SORT  { return NO_PARTITION_SORT; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }
-<hint>USE_PX { return USE_PX; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
+<hint>DIRECT { return DIRECT; }
+<hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }
+<hint>DOP { return DOP; }
 <hint>FORCE_REFRESH_LOCATION_CACHE { return FORCE_REFRESH_LOCATION_CACHE; }
 <hint>STAT { return STAT; }
-<hint>NO_USE_PX { return NO_USE_PX; }
 <hint>PX_JOIN_FILTER { return PX_JOIN_FILTER; }
 <hint>NO_PX_JOIN_FILTER { return NO_PX_JOIN_FILTER; }
+<hint>PX_PART_JOIN_FILTER { return PX_PART_JOIN_FILTER; }
+<hint>NO_PX_PART_JOIN_FILTER { return NO_PX_PART_JOIN_FILTER; }
 <hint>QB_NAME { return QB_NAME; }
+<hint>BEGIN_OUTLINE_DATA { return BEGIN_OUTLINE_DATA; }
+<hint>END_OUTLINE_DATA { return END_OUTLINE_DATA; }
+<hint>OPTIMIZER_FEATURES_ENABLE { return OPTIMIZER_FEATURES_ENABLE; }
+<hint>NO_QUERY_TRANSFORMATION { return NO_QUERY_TRANSFORMATION; }
+<hint>NO_COST_BASED_QUERY_TRANSFORMATION { return NO_COST_BASED_QUERY_TRANSFORMATION; }
 <hint>TRANS_PARAM { return TRANS_PARAM; }
 <hint>PQ_DISTRIBUTE { return PQ_DISTRIBUTE; }
+<hint>PQ_DISTRIBUTE_WINDOW { return PQ_DISTRIBUTE_WINDOW; }
 <hint>PQ_MAP { return PQ_MAP; }
-<hint>PRANDOM_LOCAL { return RANDOM_LOCAL; }
+<hint>PQ_SET { return PQ_SET; }
+<hint>RANDOM_LOCAL { return RANDOM_LOCAL; }
+<hint>RANDOM { return RANDOM; }
 <hint>BROADCAST { return BROADCAST; }
 <hint>PARTITION { return PARTITION; }
+<hint>ALL { return ALL; }
 <hint>HASH { return HASH; }
+<hint>LOCAL { return LOCAL; }
+<hint>BC2HOST { return BC2HOST; }
+<hint>RANGE { return RANGE; }
+<hint>LIST { return LIST; }
 <hint>[-] { return NEG_SIGN; }
 <hint>MERGE { return MERGE_HINT; }
 <hint>NO_MERGE { return NO_MERGE_HINT; }
+<hint>[>] { return COMP_GT; }
+<hint>[<] { return COMP_LT; }
 <hint>NO_EXPAND { return NO_EXPAND; }
 <hint>USE_CONCAT { return USE_CONCAT; }
 <hint>UNNEST { return UNNEST; }
 <hint>NO_UNNEST { return NO_UNNEST; }
 <hint>PLACE_GROUP_BY { return PLACE_GROUP_BY; }
 <hint>NO_PLACE_GROUP_BY { return NO_PLACE_GROUP_BY; }
+<hint>PRED_DEDUCE { return PRED_DEDUCE; }
 <hint>NO_PRED_DEDUCE { return NO_PRED_DEDUCE; }
+<hint>PUSH_PRED_CTE { return PUSH_PRED_CTE; }
+<hint>NO_PUSH_PRED_CTE { return NO_PUSH_PRED_CTE; }
+<hint>REPLACE_CONST { return REPLACE_CONST; }
+<hint>NO_REPLACE_CONST { return NO_REPLACE_CONST; }
 <hint>ENABLE_PARALLEL_DML  { return ENABLE_PARALLEL_DML; }
 <hint>DISABLE_PARALLEL_DML  { return DISABLE_PARALLEL_DML; }
+<hint>INLINE { return INLINE; }
+<hint>MATERIALIZE { return MATERIALIZE; }
+<hint>SEMI_TO_INNER { return SEMI_TO_INNER; }
+<hint>NO_SEMI_TO_INNER { return NO_SEMI_TO_INNER; }
+<hint>COALESCE_SQ  { return COALESCE_SQ; }
+<hint>NO_COALESCE_SQ  { return NO_COALESCE_SQ; }
+<hint>GBY_PUSHDOWN { return GBY_PUSHDOWN; }
+<hint>NO_GBY_PUSHDOWN { return NO_GBY_PUSHDOWN; }
+<hint>USE_HASH_DISTINCT { return USE_HASH_DISTINCT; }
+<hint>NO_USE_HASH_DISTINCT { return NO_USE_HASH_DISTINCT; }
+<hint>DISTINCT_PUSHDOWN { return DISTINCT_PUSHDOWN; }
+<hint>NO_DISTINCT_PUSHDOWN { return NO_DISTINCT_PUSHDOWN; }
+<hint>USE_HASH_SET { return USE_HASH_SET; }
+<hint>NO_USE_HASH_SET { return NO_USE_HASH_SET; }
+<hint>USE_DISTRIBUTED_DML { return USE_DISTRIBUTED_DML; }
+<hint>NO_USE_DISTRIBUTED_DML { return NO_USE_DISTRIBUTED_DML; }
+<hint>CURSOR_SHARING_EXACT {return CURSOR_SHARING_EXACT; }
+<hint>SIMPLIFY_ORDER_BY { return SIMPLIFY_ORDER_BY; }
+<hint>NO_SIMPLIFY_ORDER_BY { return NO_SIMPLIFY_ORDER_BY; }
+<hint>SIMPLIFY_GROUP_BY { return SIMPLIFY_GROUP_BY; }
+<hint>NO_SIMPLIFY_GROUP_BY { return NO_SIMPLIFY_GROUP_BY; }
+<hint>SIMPLIFY_DISTINCT { return SIMPLIFY_DISTINCT; }
+<hint>NO_SIMPLIFY_DISTINCT { return NO_SIMPLIFY_DISTINCT; }
+<hint>SIMPLIFY_WINFUNC { return SIMPLIFY_WINFUNC; }
+<hint>NO_SIMPLIFY_WINFUNC { return NO_SIMPLIFY_WINFUNC; }
+<hint>SIMPLIFY_EXPR { return SIMPLIFY_EXPR; }
+<hint>NO_SIMPLIFY_EXPR { return NO_SIMPLIFY_EXPR; }
+<hint>SIMPLIFY_LIMIT { return SIMPLIFY_LIMIT; }
+<hint>NO_SIMPLIFY_LIMIT { return NO_SIMPLIFY_LIMIT; }
+<hint>SIMPLIFY_SUBQUERY { return SIMPLIFY_SUBQUERY; }
+<hint>NO_SIMPLIFY_SUBQUERY { return NO_SIMPLIFY_SUBQUERY; }
+<hint>FAST_MINMAX { return FAST_MINMAX; }
+<hint>NO_FAST_MINMAX { return NO_FAST_MINMAX; }
+<hint>PROJECT_PRUNE { return PROJECT_PRUNE; }
+<hint>NO_PROJECT_PRUNE { return NO_PROJECT_PRUNE; }
+<hint>SIMPLIFY_SET { return SIMPLIFY_SET; }
+<hint>NO_SIMPLIFY_SET { return NO_SIMPLIFY_SET; }
+<hint>OUTER_TO_INNER { return OUTER_TO_INNER; }
+<hint>NO_OUTER_TO_INNER { return NO_OUTER_TO_INNER; }
+<hint>COUNT_TO_EXISTS { return COUNT_TO_EXISTS; }
+<hint>NO_COUNT_TO_EXISTS { return NO_COUNT_TO_EXISTS; }
+<hint>LEFT_TO_ANTI { return LEFT_TO_ANTI; }
+<hint>NO_LEFT_TO_ANTI { return NO_LEFT_TO_ANTI; }
+<hint>PUSH_LIMIT { return PUSH_LIMIT; }
+<hint>NO_PUSH_LIMIT { return NO_PUSH_LIMIT; }
+<hint>ELIMINATE_JOIN { return ELIMINATE_JOIN; }
+<hint>NO_ELIMINATE_JOIN { return NO_ELIMINATE_JOIN; }
+<hint>WIN_MAGIC { return WIN_MAGIC; }
+<hint>NO_WIN_MAGIC { return NO_WIN_MAGIC; }
+<hint>PULLUP_EXPR { return PULLUP_EXPR; }
+<hint>NO_PULLUP_EXPR { return NO_PULLUP_EXPR; }
+<hint>OPT_PARAM { return OPT_PARAM; }
+<hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);
@@ -1127,7 +1075,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
     } else {
       dup_value = parse_strdup(yytext, p->malloc_pool_, &out_len);
     }
-    check_value(dup_value);
+    check_malloc(dup_value);
     node->str_value_ = str_tolower(dup_value, strlen(dup_value));
     node->str_len_ = out_len;
     setup_token_pos_info(node, yylloc->first_column - 1, yylval->node->str_len_);
@@ -1135,16 +1083,119 @@ Timestamp{whitespace}?\"[^\"]*\" {
   return NAME_OB;
 }
 
-<hint>{quote}  {
+<hint>{sqbegin} {
   ParseResult *p = (ParseResult *)yyextra;
   if (!p->is_ignore_token_) {
-    BEGIN(log_level);
-    if (IS_FAST_PARAMETERIZE) {
-      COPY_WRITE();
-    } else {
-      return yytext[0];
-    }
+    BEGIN(hint_sq);
   }
+  p->start_col_ = yylloc->first_column;
+  check_value(yylval);
+  malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+  yylval->node->str_len_ = 0;
+  p->last_escape_check_pos_ = 0;
+  yylval->node->str_value_ = NULL;
+  if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE && !p->is_ignore_token_) {
+    COPY_WRITE();
+  }
+}
+
+<hint_sq>{sqend} {
+  ParseResult *p = (ParseResult *)yyextra;
+  check_value(yylval);
+  yylloc->first_column = p->start_col_;
+  BEGIN(hint);
+  FORMAT_STR_NODE(yylval->node);
+  yylval->node->text_len_ = yylloc->last_column - p->start_col_ + 1;
+  COPY_STRING(p->input_sql_ + p->start_col_ - 1, yylval->node->text_len_, yylval->node->raw_text_);
+  if (IS_FAST_PARAMETERIZE) {
+    STORE_PARAM_NODE();
+  } else {
+    setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->text_len_ - 2);
+    return STRING_VALUE;
+  }
+}
+
+<hint_sq>{sqcontent} {
+  check_value(yylval);
+  STORE_STR_CONTENT(yylval->node);
+  if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
+    COPY_WRITE();
+  }
+}
+
+<hint_sq><<EOF>>  {
+  yyerror(yylloc, yyextra, "unterminated quoted string in hint\n");
+  return PARSER_SYNTAX_ERROR;
+}
+
+<hint>{btbegin} {
+  BEGIN(hint_bt); /*fast parameterize don't handle connent in ``*/
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    ParseResult *p = (ParseResult *)yyextra;
+    p->start_col_ = yylloc->first_column;
+    char **tmp_literal = &p->tmp_literal_;
+    if (NULL == *tmp_literal)
+    {
+      *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+      check_malloc(*tmp_literal);
+    }
+    malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+    yylval->node->str_len_ = 0;
+  }
+}
+
+<hint_bt>{btend} {
+  BEGIN(hint);
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    ParseResult *p = (ParseResult *)yyextra;
+    check_value(yylval);
+    yylloc->first_column = p->start_col_;
+    char *tmp_literal = p->tmp_literal_;
+    tmp_literal[yylval->node->str_len_] = '\0';
+    CHECK_STR_LEN_MATCH(tmp_literal, yylval->node->str_len_);
+
+    char *dup_value = NULL;
+    if (p->is_not_utf8_connection_) {
+      dup_value = parse_str_convert_utf8(p->charset_info_, tmp_literal, p->malloc_pool_, &(yylval->node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
+      //fprintf(stderr, "parse identifier result, str=%s, str_len=%ld\n", node->str_value_, node->str_len_);
+    } else {
+      dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+    }
+    check_malloc(dup_value);
+    yylval->node->str_value_ = dup_value;
+    setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
+    return NAME_OB;
+  }
+}
+
+<hint_bt>{btdouble} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    ((ParseResult *)yyextra)->tmp_literal_[yylval->node->str_len_++] = '`';
+  }
+}
+
+<hint_bt>{btcontent} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
+    yylval->node->str_len_ += yyleng;
+  }
+}
+
+<hint_bt><<EOF>>  {
+  yyerror(yylloc, yyextra, "unterminated quoted string in hint\n");
+  return PARSER_SYNTAX_ERROR;
 }
 
 {mysql_compatible_comment_without_version} {
@@ -1152,7 +1203,11 @@ Timestamp{whitespace}?\"[^\"]*\" {
   // mysql_comment without version, processed as common sql str;
   // place before `c_cmt_begin` to avoid (the '/*!') being hidden by '/*')
   ParseResult *p = (ParseResult *)yyextra;
-  p->mysql_compatible_comment_ = true;
+  if (p->enable_compatible_comment_) {
+    p->mysql_compatible_comment_ = true;
+  } else {
+    BEGIN(in_c_comment);
+  }
 }
 
 {c_cmt_begin} {
@@ -1164,7 +1219,7 @@ BEGIN(in_c_comment);
     info.token_off_ = yylloc->first_column - 1;
     info.token_len_ = -1;
     if (OB_UNLIKELY(OB_PARSER_SUCCESS != add_comment_list(p, &info))) {
-      YY_FATAL_ERROR("add comment to comment list failed");
+      YY_UNEXPECTED_ERROR("add comment to comment list failed");
     }
   }
 #endif
@@ -1178,7 +1233,7 @@ BEGIN(in_c_comment);
   p->has_encount_comment_ = true;
   if (false == p->stop_add_comment_) {
     if (OB_UNLIKELY(0 >= p->comment_cnt_)) {
-      YY_FATAL_ERROR("comment_cnt_ cannot less than 0 in comment end");
+      YY_UNEXPECTED_ERROR("comment_cnt_ cannot less than 0 in comment end");
     } else {
       TokenPosInfo *info = &(p->comment_list_[p->comment_cnt_-1]);
       info->token_len_ = yylloc->last_column - info->token_off_;
@@ -1213,41 +1268,6 @@ BEGIN(in_c_comment);
 <in_c_comment>[\n] { yylineno++; }
 <in_c_comment>. {}
 
-<log_level>{log_level_stmt} {
-  if (IS_FAST_PARAMETERIZE) {
-    COPY_WRITE();
-  } else {
-    check_value(yylval);
-    ParseNode *node = NULL;
-    ParseResult *p = (ParseResult *)yyextra;
-    malloc_new_node(node, p->malloc_pool_, T_LOG_LEVEL, 0);
-    yylval->node = node;
-    char *dup_value = NULL;
-    int64_t out_len = 0;
-    dup_value = parse_strdup(yytext, p->malloc_pool_, &out_len);
-    check_value(dup_value);
-    node->str_value_ = str_tolower(dup_value, strlen(dup_value));
-    node->str_len_ = out_len;
-    return STRING_VALUE;
-  }
-}
-
-<log_level>{quote}  {
-  BEGIN(hint);
-  if (IS_FAST_PARAMETERIZE) {
-    COPY_WRITE();
-  } else {
-    return yytext[0];
-  }
-}
-
-<log_level><<EOF>>  {
-  yyerror(yylloc, yyextra, "unterminated log_level string\n");
-  return PARSER_SYNTAX_ERROR;
-}
-
-<log_level>. {}
-
 <hint><<EOF>>  {
   yyerror(yylloc, yyextra, "unterminated hint string\n");
   return PARSER_SYNTAX_ERROR;
@@ -1258,7 +1278,7 @@ BEGIN(in_c_comment);
   ((ParseResult *)yyextra)->has_encount_comment_ = true;
 /* ignore */ }
 
-[-+&~|^/%*(),.:!] {
+[-+&~|^/%*(),.:!{}] {
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
     // for 'select -   -1 from dual'
@@ -1282,11 +1302,12 @@ BEGIN(in_c_comment);
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
     if (p->is_batched_multi_enabled_split_) {
+      // 去除末尾空格
       RM_MULTI_STMT_END_P(p);
     } else {
       COPY_WRITE();
     }
-    return END_P;
+    return END_P; //遇到;时结束
   } else {
     return DELIMITER;
   }
@@ -1318,6 +1339,8 @@ BEGIN(in_c_comment);
 "!="|"<>" {return COMP_NE;}
 "<<"  {return SHIFT_LEFT;}
 ">>"  {return SHIFT_RIGHT;}
+"->"  {return JSON_EXTRACT;}
+"->>"  {return JSON_EXTRACT_UNQUOTED;}
 
 "?" {
   //use for outline now, means any value
@@ -1327,11 +1350,11 @@ BEGIN(in_c_comment);
   yylval->node->value_ = p->question_mark_ctx_.count_++;
   p->question_mark_ctx_.by_ordinal_ = true;
   if (OB_UNLIKELY(p->question_mark_ctx_.by_name_)) {
-    YY_FATAL_ERROR("Ordinal binding and Named binding cannot be combined\n");
+    YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
   }
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-    check_value(yylval->node->raw_text_);
+    check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
     return QUESTIONMARK;
@@ -1339,16 +1362,66 @@ BEGIN(in_c_comment);
 }
 
 ":"{int_num} {
+  /*
+   * use for PL and ps
+   * mysql模式prepare和第一次execute需要生成计划都会走到这里，这里的编号还是route_sql_的编号，即按入参的编号
+   * 所以需要调用get_question_mark进行重新编号
+   */
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
   yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-    check_value(yylval->node->raw_text_);
+    check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
     return QUESTIONMARK;
+  }
+}
+":"{identifier} {
+  ParseResult *p = (ParseResult *)yyextra;
+  check_value(yylval);
+  malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+  if (p->question_mark_ctx_.by_defined_name_) {
+    yylval->node->value_ = get_question_mark_by_defined_name(&p->question_mark_ctx_, yytext);
+    if (yylval->node->value_ < 0) {
+      YY_UNEXPECTED_ERROR("Invalid question mark idx\n");
+    }
+  } else {
+    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+  }
+  p->question_mark_ctx_.by_name_ = true;
+  if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
+    YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
+  }
+  if (IS_FAST_PARAMETERIZE) {
+    yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    check_malloc(yylval->node->raw_text_);
+    STORE_PARAM_NODE();
+  } else {
+    yylval->node->pos_ = yylloc->first_column - 1;
+    return QUESTIONMARK;
+  }
+}
+
+":"{identifier}"."{identifier} {
+  ParseResult *p = (ParseResult *)yyextra;
+  check_value(yylval);
+  char *header = str_toupper(yytext, 4);
+  bool is_for_trigger = (0 == strncmp(":NEW", header, 4)) || (0 == strncmp(":OLD", header, 4));
+  if (is_for_trigger) {
+    malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+    if (IS_FAST_PARAMETERIZE) {
+      yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+      check_malloc(yylval->node->raw_text_);
+      STORE_PARAM_NODE();
+    } else {
+      return QUESTIONMARK;
+    }
+  } else {
+    YY_UNEXPECTED_ERROR("Named binding is only for trigger\n");
   }
 }
 
@@ -1362,7 +1435,15 @@ BEGIN(in_c_comment);
     yylval->node = node;
     /* skip '@@' */
     node->str_value_ = parse_strdup(yytext + 2, p->malloc_pool_, &(node->str_len_));
-    check_value(node->str_value_);
+    if (NULL != node->str_value_
+    		&& *(yytext + 2) == *(yytext + 1 + node->str_len_)
+    		&& (*(yytext + 2) == '`')) {
+      // bugfix:
+      // support "select @@`xxx`;" as "select @@xxx;"
+			node->str_value_ += 1;
+			node->str_len_ -= 2;
+		}
+    check_malloc(node->str_value_);
     //node->value_ = 2;
     node->value_ = 0;
   } else {
@@ -1382,12 +1463,18 @@ BEGIN(in_c_comment);
     yylval->node = node;
     /* skip '@' and quotes like '/"/` */
     node->str_value_ = parse_strdup(yytext + 1, p->malloc_pool_, &(node->str_len_));
+    check_malloc(node->str_value_);
     if (NULL != node->str_value_
+        && node->str_len_ > 1
     		&& *(yytext + 1) == *(yytext + node->str_len_)
     		&& (*(yytext + 1) == '\'' || *(yytext + 1) == '\"' || *(yytext + 1) == '`')) {
 			node->str_value_ += 1;
 			node->str_len_ -= 2;
-		}
+    } else if (NULL != node->str_value_
+               && (*(yytext + 1) == '\'' || *(yytext + 1) == '\"' || *(yytext + 1) == '`')) {
+      yyerror(yylloc, yyextra, "unterminated user variable name\n");
+      return PARSER_SYNTAX_ERROR;
+    }
     check_value(node->str_value_);
   } else {
     ParseResult *p = (ParseResult *)yyextra;
@@ -1403,6 +1490,7 @@ BEGIN(in_c_comment);
     REPUT_NEG_SIGN(p);
     if (strcasecmp("nowait", yytext) == 0
         || strcasecmp("no_wait", yytext) == 0) {
+      //语法阶段for update nowait 会给默认值0，所以如果是fast parse也需要给0, 从而保证常量个数识别的一致性
       char num[2] = "0";
       STORE_UNIT_TYPE_NODE(num);
     } else {
@@ -1424,10 +1512,9 @@ BEGIN(in_c_comment);
       } else {
         node->str_value_ = parse_strdup(yytext, p->malloc_pool_, &(node->str_len_));
       }
-      check_value(node->str_value_);
+      check_malloc(node->str_value_);
       setup_token_pos_info(node, yylloc->first_column - 1, node->str_len_);
       ret = NAME_OB;
-      //CHECK_NODE_STRING_VALUE_ASCII(ret, node->str_value_, node->str_len_);
     } else {
       yylval->non_reserved_keyword = word;
       ret = word->keyword_type;
@@ -1442,7 +1529,11 @@ BEGIN(in_c_comment);
   // we do not add a start_condition, since some sql string need to be processed in INITIAL state.
   // instead of a new start_condition, we use a extra field (mysql_compatible_comment_) to mark the adaptive comment.
   ParseResult *p = (ParseResult *)yyextra;
-  p->mysql_compatible_comment_ = true;
+  if (p->enable_compatible_comment_) {
+    p->mysql_compatible_comment_ = true;
+  } else {
+    BEGIN(in_c_comment);
+  }
 }
 
 [\n] {
@@ -1498,4 +1589,20 @@ void yyfree(void *ptr, void *yyscanner)
   UNUSED(yyscanner);
   /* Do nothing -- we leave it to the garbage collector. */
   parse_free(ptr);
+}
+
+
+void obsql_mysql_parser_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...)
+{
+  ParseResult *p = obsql_mysql_yyget_extra(yyscanner);
+  if (p != NULL) {
+    p->extra_errno_ = errcode;
+    if (OB_LIKELY(NULL != msg)) {
+      va_list ap;
+      va_start(ap, msg);
+      vsnprintf(p->error_msg_, MAX_ERROR_MSG, msg, ap);
+      va_end(ap);
+    }
+  }
+  longjmp(*p->jmp_buf_, 1);//the secord param must be non-zero value
 }

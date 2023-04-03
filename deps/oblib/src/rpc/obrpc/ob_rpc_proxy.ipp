@@ -20,28 +20,14 @@
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/statistic_event/ob_stat_event.h"
+#include "lib/trace/ob_trace.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
 
-namespace oceanbase {
-namespace obrpc {
-
-template <class pcodeStruct>
-void ObRpcProxy::AsyncCB<pcodeStruct>::do_first()
+namespace oceanbase
 {
-  using namespace oceanbase::common;
-  rpc::RpcStatPiece piece;
-  piece.async_ = true;
-  piece.size_ = payload_;
-  piece.time_ = ObTimeUtility::current_time() - send_ts_;
-  if (NULL != req_) {
-    if (NULL == req_->ipacket) {
-      piece.is_timeout_ = true;
-      piece.failed_ = true;
-    }
-  }
-  RPC_STAT(pcodeStruct::PCODE, piece);
-}
+namespace obrpc
+{
 
 template <class pcodeStruct>
 bool SSHandle<pcodeStruct>::has_more() const
@@ -50,7 +36,7 @@ bool SSHandle<pcodeStruct>::has_more() const
 }
 
 template <class pcodeStruct>
-int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response& result)
+int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
 {
   using namespace oceanbase::common;
   using namespace rpc::frame;
@@ -59,21 +45,56 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response& result)
 
   int ret = OB_SUCCESS;
 
-  ObReqTransport::Request<ObRpcPacket> req;
-  ObReqTransport::Result<ObRpcPacket> r;
+  ObReqTransport::Request  req;
+  ObReqTransport::Result   r;
 
   if (OB_ISNULL(transport_)) {
-    ret = OB_NOT_INIT;
-    RPC_OBRPC_LOG(WARN, "transport_ is NULL", K(ret));
-  } else if (OB_FAIL(ObRpcProxy::create_request(pcode_,
-                 *transport_,
-                 req,
-                 dst_,
-                 PAYLOAD_SIZE,
-                 proxy_.timeout(),
-                 opts_.local_addr_,
-                 opts_.ssl_invited_nodes_,
-                 NULL))) {
+    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(sess_id), K(has_more_));
+    const int64_t start_ts = common::ObTimeUtility::current_time();
+    int64_t src_tenant_id = ob_get_tenant_id();
+    auto &set = obrpc::ObRpcPacketSet::instance();
+    const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
+    ObRpcMemPool pool(src_tenant_id, pcode_label);
+    ObSyncRespCallback cb(pool);
+    char* pnio_req = NULL;
+    int64_t pnio_req_sz = 0, resp_sz = 0;
+    const char* resp = NULL;
+    ObRpcPacket resp_pkt;
+    sockaddr_in sock_addr;
+    static unsigned int thread_id = 0;
+    thread_id ++;
+    if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
+      RPC_LOG(WARN, "rpc encode req fail", K(ret));
+    } else if(!dst_.is_valid()) {
+      ret = common::OB_INVALID_ARGUMENT;
+      RPC_LOG(WARN, "invalid addr", K(ret));
+    } else if (OB_FAIL(pn_send(
+        (1ULL<<32) + thread_id,
+        ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
+        pnio_req,
+        pnio_req_sz,
+        static_cast<int16_t>(set.idx_of_pcode(pcode_)),
+        start_ts + proxy_.timeout(),
+        ObSyncRespCallback::client_cb,
+        &cb))) {
+      RPC_LOG(WARN, "pnio post fail", K(ret));
+    } else if (OB_FAIL(cb.wait())) {
+      RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
+    } else if (NULL == (resp = cb.get_resp(resp_sz))) {
+      ret = common::OB_ERR_UNEXPECTED;
+      RPC_LOG(WARN, "stream rpc execute success but resp is null", K(ret), K(dst_));
+    } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, result, resp_pkt, rcode_))) {
+      RPC_LOG(WARN, "rpc decode response fail", KP(resp), K(resp_sz), K(ret));
+    } else if (rcode_.rcode_ != OB_SUCCESS) {
+      ret = rcode_.rcode_;
+      RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
+    } else {
+      has_more_ = resp_pkt.is_stream_next();
+    }
+
+  } else if (OB_FAIL(ObRpcProxy::create_request(pcode_, *transport_,
+      req, dst_, PAYLOAD_SIZE, proxy_.timeout(), opts_.local_addr_, do_ratelimit_,
+      is_bg_flow_, opts_.ssl_invited_nodes_, NULL))) {
     RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
   } else if (NULL == req.pkt() || NULL == req.buf()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -91,21 +112,22 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response& result)
       RPC_OBRPC_LOG(WARN, "cdata should not be NULL", K(ret));
     } else {
       UNIS_VERSION_GUARD(r.pkt()->get_unis_version());
-      const char* buf = r.pkt()->get_cdata();
+      const char   *buf = r.pkt()->get_cdata();
       int64_t len = r.pkt()->get_clen();
 
       // uncompress if necessary
-      const common::ObCompressorType& compressor_type = r.pkt()->get_compressor_type();
-      char* uncompressed_buf = NULL;
+      const common::ObCompressorType &compressor_type =  r.pkt()->get_compressor_type();
+      char *uncompressed_buf = NULL;
       if (common::INVALID_COMPRESSOR != compressor_type) {
         // uncompress
         const int32_t original_len = r.pkt()->get_original_len();
-        common::ObCompressor* compressor = NULL;
+        common::ObCompressor *compressor = NULL;
         int64_t dst_data_size = 0;
-        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
+        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+                                                                            compressor))) {
           RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
-        } else if (NULL ==
-                   (uncompressed_buf = static_cast<char*>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
+        } else if (NULL == (uncompressed_buf =
+                            static_cast<char *>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
           ret = common::OB_ALLOCATE_MEMORY_FAILED;
           RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
         } else if (OB_FAIL(compressor->decompress(buf, len, uncompressed_buf, original_len, dst_data_size))) {
@@ -154,21 +176,60 @@ int SSHandle<pcodeStruct>::abort()
 
   int ret = OB_SUCCESS;
 
-  ObReqTransport::Request<ObRpcPacket> req;
-  ObReqTransport::Result<ObRpcPacket> r;
+  ObReqTransport::Request  req;
+  ObReqTransport::Result   r;
 
   if (OB_ISNULL(transport_)) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_OBRPC_LOG(ERROR, "transport_ should not be NULL", K(ret));
-  } else if (OB_FAIL(ObRpcProxy::create_request(pcode_,
-                 *transport_,
-                 req,
-                 dst_,
-                 PAYLOAD_SIZE,
-                 proxy_.timeout(),
-                 opts_.local_addr_,
-                 opts_.ssl_invited_nodes_,
-                 NULL))) {
+    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(sess_id), K(has_more_));
+    const int64_t start_ts = common::ObTimeUtility::current_time();
+    int64_t src_tenant_id = ob_get_tenant_id();
+    auto &set = obrpc::ObRpcPacketSet::instance();
+    const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
+    ObRpcMemPool pool(src_tenant_id, pcode_label);
+    ObSyncRespCallback cb(pool);
+    char* pnio_req = NULL;
+    int64_t pnio_req_sz = 0, resp_sz = 0;
+    const char* resp = NULL;
+    ObRpcPacket resp_pkt;
+    sockaddr_in sock_addr;
+    static unsigned int thread_id = 0;
+    thread_id ++;
+    if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
+      RPC_LOG(WARN, "rpc encode req fail", K(ret));
+    } else if(!dst_.is_valid()) {
+      ret = common::OB_INVALID_ARGUMENT;
+      RPC_LOG(WARN, "invalid addr", K(ret));
+    } else if (OB_FAIL(pn_send(
+        (1ULL<<32) + thread_id,
+        ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
+        pnio_req,
+        pnio_req_sz,
+        static_cast<int16_t>(set.idx_of_pcode(pcode_)),
+        start_ts + proxy_.timeout(),
+        ObSyncRespCallback::client_cb,
+        &cb))) {
+      RPC_LOG(WARN, "pnio post fail", K(ret));
+    } else if (OB_FAIL(cb.wait())) {
+      RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
+    } else if (NULL == (resp = cb.get_resp(resp_sz))) {
+      ret = common::OB_ERR_UNEXPECTED;
+      RPC_LOG(WARN, "stream rpc execute success but resp is null", K(ret), K(dst_));
+    } else {
+      typename pcodeStruct::Response result;
+      if (OB_FAIL(rpc_decode_resp(resp, resp_sz, result, resp_pkt, rcode_))) {
+        RPC_LOG(WARN, "rpc decode response fail", KP(resp), K(resp_sz), K(ret));
+      } else if (rcode_.rcode_ != OB_SUCCESS) {
+        ret = rcode_.rcode_;
+        RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
+      } else {
+        //do nothing
+      }
+      has_more_ = false;
+    }
+
+  } else if (OB_FAIL(ObRpcProxy::create_request(pcode_, *transport_,
+      req, dst_, PAYLOAD_SIZE, proxy_.timeout(), opts_.local_addr_, do_ratelimit_,
+      is_bg_flow_, opts_.ssl_invited_nodes_, NULL))) {
     RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
   } else if (NULL == req.pkt() || NULL == req.buf()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -185,8 +246,8 @@ int SSHandle<pcodeStruct>::abort()
       ret = OB_ERR_UNEXPECTED;
       RPC_OBRPC_LOG(WARN, "cdata should not be NULL", K(ret));
     } else {
-      int64_t pos = 0;
-      const char* buf = r.pkt()->get_cdata();
+      int64_t       pos = 0;
+      const char   *buf = r.pkt()->get_cdata();
       const int64_t len = r.pkt()->get_clen();
 
       if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
@@ -195,7 +256,7 @@ int SSHandle<pcodeStruct>::abort()
         ret = rcode_.rcode_;
         RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret));
       } else {
-        // do nothing
+        //do nothing
       }
       has_more_ = false;
     }
@@ -205,17 +266,17 @@ int SSHandle<pcodeStruct>::abort()
 }
 
 template <class pcodeStruct>
-const ObRpcResultCode& SSHandle<pcodeStruct>::get_result_code() const
+const ObRpcResultCode &SSHandle<pcodeStruct>::get_result_code() const
 {
   return rcode_;
 }
 
 template <class pcodeStruct>
-int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void* pkt)
+int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void *pkt)
 {
   using namespace oceanbase::common;
   using namespace rpc::frame;
-  int ret = OB_SUCCESS;
+  int ret   = OB_SUCCESS;
 
   if (OB_ISNULL(pkt)) {
     ret = OB_INVALID_ARGUMENT;
@@ -223,10 +284,10 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void* pkt)
   }
 
   if (OB_SUCC(ret)) {
-    ObRpcPacket* rpkt = reinterpret_cast<ObRpcPacket*>(pkt);
-    const char* buf = rpkt->get_cdata();
-    const int64_t len = rpkt->get_clen();
-    int64_t pos = 0;
+    ObRpcPacket  *rpkt  = reinterpret_cast<ObRpcPacket*>(pkt);
+    const char   *buf   = rpkt->get_cdata();
+    const int64_t len   = rpkt->get_clen();
+    int64_t       pos   = 0;
     UNIS_VERSION_GUARD(rpkt->get_unis_version());
 
     if (OB_FAIL(rpkt->verify_checksum())) {
@@ -238,33 +299,35 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void* pkt)
     } else if (OB_FAIL(result_.deserialize(buf, len, pos))) {
       RPC_OBRPC_LOG(WARN, "decode packet fail", K(ret));
     } else {
-      // do nothing
+      //do nothing
     }
   }
 
   return ret;
 }
-
 template <class pcodeStruct>
 int ObRpcProxy::AsyncCB<pcodeStruct>::get_rcode()
 {
   return rcode_.rcode_;
 }
 
+/*
 template <class pcodeStruct>
 void ObRpcProxy::AsyncCB<pcodeStruct>::check_request_rt(const bool force_print)
 {
-  if (force_print || req_->client_send_time - req_->client_start_time > REQUEST_ITEM_COST_RT ||
-      req_->client_connect_time - req_->client_send_time > REQUEST_ITEM_COST_RT ||
-      req_->client_write_time - req_->client_connect_time > REQUEST_ITEM_COST_RT ||
-      req_->request_arrival_time - req_->client_write_time > REQUEST_ITEM_COST_RT ||
-      req_->arrival_push_diff > REQUEST_ITEM_COST_RT || req_->push_pop_diff > REQUEST_ITEM_COST_RT ||
-      req_->pop_process_start_diff > REQUEST_ITEM_COST_RT || req_->process_start_end_diff > REQUEST_ITEM_COST_RT ||
-      req_->process_end_response_diff > REQUEST_ITEM_COST_RT ||
-      (req_->client_read_time - req_->request_arrival_time - req_->arrival_push_diff - req_->push_pop_diff -
-          req_->pop_process_start_diff - req_->process_start_end_diff - req_->process_end_response_diff) >
-          REQUEST_ITEM_COST_RT ||
-      req_->client_end_time - req_->client_read_time > REQUEST_ITEM_COST_RT) {
+  if (force_print
+      || req_->client_send_time - req_->client_start_time > REQUEST_ITEM_COST_RT
+      || req_->client_connect_time - req_->client_send_time > REQUEST_ITEM_COST_RT
+      || req_->client_write_time - req_->client_connect_time > REQUEST_ITEM_COST_RT
+      || req_->request_arrival_time - req_->client_write_time > REQUEST_ITEM_COST_RT
+      || req_->arrival_push_diff > REQUEST_ITEM_COST_RT
+      || req_->push_pop_diff > REQUEST_ITEM_COST_RT
+      || req_->pop_process_start_diff > REQUEST_ITEM_COST_RT
+      || req_->process_start_end_diff > REQUEST_ITEM_COST_RT
+      || req_->process_end_response_diff > REQUEST_ITEM_COST_RT
+      || (req_->client_read_time - req_->request_arrival_time - req_->arrival_push_diff - req_->push_pop_diff
+        - req_->pop_process_start_diff - req_->process_start_end_diff - req_->process_end_response_diff) > REQUEST_ITEM_COST_RT
+      || req_->client_end_time - req_->client_read_time > REQUEST_ITEM_COST_RT) {
 
     if (TC_REACH_TIME_INTERVAL(100 * 1000)) {
       _RPC_OBRPC_LOG(INFO,
@@ -284,17 +347,20 @@ void ObRpcProxy::AsyncCB<pcodeStruct>::check_request_rt(const bool force_print)
           req_->pop_process_start_diff,
           req_->process_start_end_diff,
           req_->process_end_response_diff,
-          req_->client_read_time - req_->request_arrival_time - req_->arrival_push_diff - req_->push_pop_diff -
-              req_->pop_process_start_diff - req_->process_start_end_diff - req_->process_end_response_diff,
+          req_->client_read_time - req_->request_arrival_time - req_->arrival_push_diff - req_->push_pop_diff
+          - req_->pop_process_start_diff - req_->process_start_end_diff - req_->process_end_response_diff,
           req_->client_end_time - req_->client_read_time,
           req_->client_end_time);
     }
   }
 }
+*/
 
 template <typename Input, typename Out>
-int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Out& result, Handle* handle, const ObRpcOpts& opts)
+int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
+                         Out &result, Handle *handle, const ObRpcOpts &opts)
 {
+  POC_RPC_INTERCEPT(send, dst_, pcode, args, result, handle, opts);
   using namespace oceanbase::common;
   using namespace rpc::frame;
   int ret = OB_SUCCESS;
@@ -310,52 +376,56 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Out& result, 
     ret = OB_INACTIVE_RPC_PROXY;
     RPC_OBRPC_LOG(WARN, "Rpc proxy inactive", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
 
   int64_t pos = 0;
   const int64_t payload = calc_payload_size(common::serialization::encoded_length(args));
-  ObReqTransport::Request<ObRpcPacket> req;
+  ObReqTransport::Request req;
 
   if (OB_FAIL(ret)) {
   } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
     ret = OB_RPC_PACKET_TOO_LONG;
-    RPC_OBRPC_LOG(
-        WARN, "obrpc packet payload execced its limit", K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH, K(ret));
+    RPC_OBRPC_LOG(WARN, "obrpc packet payload execced its limit",
+            K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH,
+            K(ret));
   } else if (OB_ISNULL(transport_)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(WARN, "transport_ should not be NULL", K(ret));
-  } else if (OB_FAIL(ObRpcProxy::create_request(
-                 pcode, *transport_, req, dst_, payload, timeout_, opts.local_addr_, opts.ssl_invited_nodes_, NULL))) {
+  } else if (OB_FAIL(ObRpcProxy::create_request(pcode, *transport_,
+                     req, dst_, payload, timeout_, opts.local_addr_, do_ratelimit_,
+                     is_bg_flow_, opts.ssl_invited_nodes_, NULL))) {
     RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
   } else if (NULL == req.pkt() || NULL == req.buf()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     RPC_OBRPC_LOG(WARN, "request packet is NULL", K(req), K(ret));
-  } else if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
+  } else if (OB_FAIL(common::serialization::encode(
+                     req.buf(), payload, pos, args))) {
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload), K(ret));
   } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
     RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
   } else if (OB_FAIL(init_pkt(req.pkt(), pcode, opts, false))) {
     RPC_OBRPC_LOG(WARN, "Init packet error", K(ret));
   } else {
-    ObReqTransport::Result<ObRpcPacket> r;
+    ObReqTransport::Result r;
     if (OB_FAIL(send_request(req, r))) {
-      RPC_OBRPC_LOG(WARN, "send rpc request fail fail", K(pcode));
+      RPC_OBRPC_LOG(WARN, "send rpc request fail", K(pcode), K(ret));
     } else {
-      const char* buf = r.pkt()->get_cdata();
-      int64_t len = r.pkt()->get_clen();
+      const char *buf = r.pkt()->get_cdata();
+      int64_t     len = r.pkt()->get_clen();
 
-      const common::ObCompressorType& compressor_type = r.pkt()->get_compressor_type();
-      char* uncompressed_buf = NULL;
+      const common::ObCompressorType &compressor_type =  r.pkt()->get_compressor_type();
+      char *uncompressed_buf = NULL;
       if (common::INVALID_COMPRESSOR != compressor_type) {
         // uncompress
         const int32_t original_len = r.pkt()->get_original_len();
-        common::ObCompressor* compressor = NULL;
+        common::ObCompressor *compressor = NULL;
         int64_t dst_data_size = 0;
-        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
+        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+                                                                            compressor))) {
           RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
-        } else if (NULL ==
-                   (uncompressed_buf = static_cast<char*>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
+        } else if (NULL == (uncompressed_buf =
+                            static_cast<char *>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
           ret = common::OB_ALLOCATE_MEMORY_FAILED;
           RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
         } else if (OB_FAIL(compressor->decompress(buf, len, uncompressed_buf, original_len, dst_data_size))) {
@@ -388,13 +458,15 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Out& result, 
           }
 
           if (common::OB_SUCCESS == ret && NULL != handle) {
-            handle->has_more_ = r.pkt()->is_stream_next();
-            handle->dst_ = dst_;
-            handle->sessid_ = r.pkt()->get_session_id();
-            handle->opts_ = opts;
+            handle->has_more_  = r.pkt()->is_stream_next();
+            handle->dst_       = dst_;
+            handle->sessid_    = r.pkt()->get_session_id();
+            handle->opts_      = opts;
             handle->transport_ = transport_;
-            handle->proxy_ = *this;
-            handle->pcode_ = pcode;
+            handle->proxy_     = *this;
+            handle->pcode_     = pcode;
+            handle->do_ratelimit_ = do_ratelimit_;
+            handle->is_bg_flow_   = is_bg_flow_;
           }
           if (common::OB_SUCCESS != (wb_ret = log_user_error_and_warn(rcode_))) {
             RPC_OBRPC_LOG(WARN, "fail to log user error and warn", K(ret), K(wb_ret), K((rcode_)));
@@ -417,192 +489,16 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Out& result, 
       piece.is_timeout_ = true;
     }
   }
-  RPC_STAT(pcode, piece);
-
-  return ret;
-}
-
-template <typename Input>
-int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input& args, Handle* handle, const ObRpcOpts& opts)
-{
-  using namespace oceanbase::common;
-  using namespace rpc::frame;
-  int ret = OB_SUCCESS;
-  UNIS_VERSION_GUARD(opts.unis_version_);
-
-  const int64_t start_ts = ObTimeUtility::current_time();
-  rpc::RpcStatPiece piece;
-
-  if (!init_) {
-    ret = OB_NOT_INIT;
-  } else if (!active_) {
-    ret = OB_INACTIVE_RPC_PROXY;
-  }
-
-  int64_t pos = 0;
-  const int64_t payload = calc_payload_size(common::serialization::encoded_length(args));
-  ObReqTransport::Request<ObRpcPacket> req;
-
-  if (OB_FAIL(ret)) {
-  } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
-    ret = OB_RPC_PACKET_TOO_LONG;
-    RPC_OBRPC_LOG(
-        WARN, "obrpc packet payload execced its limit", K(ret), K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH);
-  } else if (OB_FAIL(ObRpcProxy::create_request(
-                 pcode, *transport_, req, dst_, payload, timeout_, opts.local_addr_, opts.ssl_invited_nodes_, NULL))) {
-    RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
-  } else if (NULL == req.pkt()) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    RPC_OBRPC_LOG(WARN, "request packet is NULL", K(ret));
-  } else if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
-    RPC_OBRPC_LOG(WARN, "serialize argument fail", K(ret));
-  } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
-    RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
-  } else if (OB_FAIL(init_pkt(req.pkt(), pcode, opts, false))) {
-    RPC_OBRPC_LOG(WARN, "Init packet error", K(ret));
-  } else {
-    ObReqTransport::Result<ObRpcPacket> r;
-    if (OB_FAIL(send_request(req, r))) {
-      RPC_OBRPC_LOG(WARN,
-          "send rpc request fail fail",
-          K(ret),
-          K(pcode),
-          K(req.pkt()->get_request_level()),
-          K(req.pkt()->get_group_id()));
-    } else {
-      const char* buf = r.pkt()->get_cdata();
-      int64_t len = r.pkt()->get_clen();
-      int64_t pos = 0;
-      UNIS_VERSION_GUARD(r.pkt()->get_unis_version());
-
-      if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
-        RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
-      } else {
-        int wb_ret = OB_SUCCESS;
-        ret = rcode_.rcode_;
-        if (common::OB_SUCCESS == ret && NULL != handle) {
-          handle->has_more_ = r.pkt()->is_stream_next();
-          handle->dst_ = dst_;
-          handle->sessid_ = r.pkt()->get_session_id();
-          handle->opts_ = opts;
-          handle->transport_ = transport_;
-          handle->proxy_ = *this;
-        }
-        if (common::OB_SUCCESS != (wb_ret = log_user_error_and_warn(rcode_))) {
-          RPC_OBRPC_LOG(WARN, "fail to log user error and warn", K(ret), K(wb_ret), K((rcode_)));
-        }
-      }
-    }
-  }
-
-  piece.size_ = payload;
-  piece.time_ = ObTimeUtility::current_time() - start_ts;
-  if (OB_FAIL(ret)) {
-    piece.failed_ = true;
-    if (OB_TIMEOUT == ret) {
-      piece.is_timeout_ = true;
-    }
-  }
-  RPC_STAT(pcode, piece);
-
-  return ret;
-}
-
-template <typename Output>
-int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Output& result, Handle* handle, const ObRpcOpts& opts)
-{
-  using namespace oceanbase::common;
-  using namespace rpc::frame;
-  static const int64_t PAYLOAD_SIZE = 0;
-  int ret = OB_SUCCESS;
-  UNIS_VERSION_GUARD(opts.unis_version_);
-
-  const int64_t start_ts = ObTimeUtility::current_time();
-  rpc::RpcStatPiece piece;
-
-  if (!init_) {
-    ret = OB_NOT_INIT;
-  } else if (!active_) {
-    ret = OB_INACTIVE_RPC_PROXY;
-  } else {
-    // do nothing
-  }
-
-  int64_t pos = 0;
-  const int64_t payload = calc_payload_size(PAYLOAD_SIZE);
-
-  ObReqTransport::Request<ObRpcPacket> req;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObRpcProxy::create_request(
-                 pcode, *transport_, req, dst_, payload, timeout_, opts.local_addr_, opts.ssl_invited_nodes_, NULL))) {
-    RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
-  } else if (NULL == req.pkt()) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    RPC_OBRPC_LOG(WARN, "request packet is NULL", K(ret));
-  } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
-    RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
-  } else if (OB_FAIL(init_pkt(req.pkt(), pcode, opts, false))) {
-    RPC_OBRPC_LOG(WARN, "Init packet error", K(ret));
-  } else {
-    ObReqTransport::Result<ObRpcPacket> r;
-    if (OB_FAIL(send_request(req, r))) {
-      RPC_OBRPC_LOG(WARN, "send rpc request fail fail", K(pcode));
-    } else {
-      rpc::RpcStatPiece piece;
-      piece.size_ = 0;
-      piece.time_ = ObTimeUtility::current_time() - req.pkt()->get_timestamp();
-      RPC_STAT(pcode, piece);
-
-      const char* buf = r.pkt()->get_cdata();
-      int64_t len = r.pkt()->get_clen();
-      int64_t pos = 0;
-      UNIS_VERSION_GUARD(r.pkt()->get_unis_version());
-
-      if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
-        RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
-      } else {
-        int wb_ret = OB_SUCCESS;
-        if (rcode_.rcode_ != OB_SUCCESS) {
-          ret = rcode_.rcode_;
-          RPC_OBRPC_LOG(WARN, "execute rpc fail", K(ret), K_(dst));
-        } else if (OB_FAIL(common::serialization::decode(buf, len, pos, result))) {
-          RPC_OBRPC_LOG(WARN, "deserialize result fail", K(ret));
-        } else {
-          ret = rcode_.rcode_;
-        }
-
-        if (OB_SUCC(ret) && NULL != handle) {
-          handle->has_more_ = r.pkt()->is_stream_next();
-          handle->dst_ = dst_;
-          handle->sessid_ = r.pkt()->get_session_id();
-          handle->opts_ = opts;
-          handle->transport_ = transport_;
-          handle->proxy_ = *this;
-          handle->pcode_ = pcode;
-        }
-        if (common::OB_SUCCESS != (wb_ret = log_user_error_and_warn(rcode_))) {
-          RPC_OBRPC_LOG(WARN, "fail to log user error and warn", K(ret), K(wb_ret), K((rcode_)));
-        }
-      }
-    }
-  }
-
-  piece.size_ = PAYLOAD_SIZE;
-  piece.time_ = ObTimeUtility::current_time() - start_ts;
-  if (OB_FAIL(ret)) {
-    piece.failed_ = true;
-    if (OB_TIMEOUT == ret) {
-      piece.is_timeout_ = true;
-    }
-  }
-  RPC_STAT(pcode, piece);
+  RPC_STAT(pcode, tenant_id_, piece);
 
   return ret;
 }
 
 template <class pcodeStruct>
-int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcodeStruct>* cb, const ObRpcOpts& opts)
+int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
+                         AsyncCB<pcodeStruct> *cb, const ObRpcOpts &opts)
 {
+  POC_RPC_INTERCEPT(post, dst_, pcodeStruct::PCODE, args, cb, opts);
   using namespace oceanbase::common;
   using namespace rpc::frame;
   int ret = OB_SUCCESS;
@@ -620,40 +516,53 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
     RPC_OBRPC_LOG(WARN, "rpc is inactive", K(ret));
   }
 
-  ObReqTransport::Request<ObRpcPacket> req;
+  ObReqTransport::Request req;
   int64_t pos = 0;
   const int64_t original_len = calc_payload_size(common::serialization::encoded_length(args));
   int64_t payload = original_len;
   int64_t max_overflow_size = 0;
 
   bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type_);
-  char* serialize_buf = NULL;
-  common::ObCompressor* compressor = NULL;
+  char *serialize_buf = NULL;
+  common::ObCompressor *compressor = NULL;
   bool use_context = false;
+  bool has_trace_info = false;
   if (OB_SUCC(ret) && need_compressed) {
     int64_t tmp_pos = 0;
-    if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type_, compressor))) {
+    if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type_,
+            compressor))) {
       RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type_));
     } else if (OB_FAIL(compressor->get_max_overflow_size(payload, max_overflow_size))) {
       RPC_OBRPC_LOG(WARN, "get_max_overflow_size failed", K(ret), K(payload), K(max_overflow_size));
-    } else if (NULL == (serialize_buf = static_cast<char*>(common::ob_malloc(payload, common::ObModIds::OB_RPC)))) {
+    } else if (NULL == (serialize_buf =
+          static_cast<char *>(common::ob_malloc(payload, common::ObModIds::OB_RPC)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       RPC_OBRPC_LOG(WARN, "ob_malloc failed", K(ret), K(payload));
-    } else if (OB_FAIL(common::serialization::encode(serialize_buf, payload, tmp_pos, args))) {
+    } else if (OB_FAIL(common::serialization::encode(serialize_buf, payload, tmp_pos,
+            args))) {
       RPC_OBRPC_LOG(WARN, "args serialize failed", K(ret));
     } else {
       if (!lib::g_runtime_enabled) {
-        if (OB_FAIL(common::serialization::encode(serialize_buf, payload, tmp_pos, ObIRpcExtraPayload::instance()))) {
+        if (OB_FAIL(common::serialization::encode(
+                        serialize_buf, payload, tmp_pos, ObIRpcExtraPayload::instance()))) {
           RPC_OBRPC_LOG(WARN, "serialize debug sync actions fail", K(ret), K(pos), K(payload));
         }
       } else {
-        lib::RuntimeContext* ctx = lib::get_runtime_context();
+        lib::ObRuntimeContext *ctx = &(lib::get_ob_runtime_context());
         if (ctx != nullptr) {
-          if (OB_FAIL(common::serialization::encode(serialize_buf, payload, tmp_pos, *ctx))) {
+          if (OB_FAIL(common::serialization::encode(
+                          serialize_buf, payload, tmp_pos, *ctx))) {
             RPC_OBRPC_LOG(WARN, "serialize context fail", K(ret), K(pos), K(payload));
           } else {
             use_context = true;
           }
+        }
+      }
+      if (OBTRACE->is_inited() && OB_SUCC(ret)) {
+        if (OB_FAIL(common::serialization::encode(serialize_buf, payload, tmp_pos, *OBTRACE))) {
+          RPC_OBRPC_LOG(WARN, "serialize failed", K(ret), K(tmp_pos), K(payload));
+        } else {
+          has_trace_info = true;
         }
       }
       // source data length plus max overflow size is the maximum
@@ -667,29 +576,26 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
   if (OB_FAIL(ret)) {
   } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
     ret = OB_RPC_PACKET_TOO_LONG;
-    RPC_OBRPC_LOG(
-        WARN, "obrpc packet payload execced its limit", K(ret), K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH);
+    RPC_OBRPC_LOG(WARN, "obrpc packet payload execced its limit",
+                  K(ret), K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH);
   } else if (OB_ISNULL(transport_)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(WARN, "transport_ should not be NULL", K(ret), KP_(transport));
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObRpcProxy::create_request(pcodeStruct::PCODE,
-            *transport_,
-            req,
-            dst_,
-            payload,
-            timeout_,
-            opts.local_addr_,
-            opts.ssl_invited_nodes_,
-            cb))) {
+    if (OB_FAIL(ObRpcProxy::create_request(pcodeStruct::PCODE, *transport_,
+                       req, dst_, payload, timeout_, opts.local_addr_, do_ratelimit_,
+                       is_bg_flow_, opts.ssl_invited_nodes_, cb))) {
       RPC_OBRPC_LOG(WARN, "create request fail", K(ret));
     } else if (NULL == req.pkt()) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       RPC_OBRPC_LOG(WARN, "request packet is NULL", K(ret));
     } else if (use_context) {
       req.pkt()->set_has_context();
+      req.pkt()->set_disable_debugsync();
+    } else if (has_trace_info) {
+      req.pkt()->set_has_trace_info();
     }
     timeguard.click();
   }
@@ -701,8 +607,8 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
       EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
       EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, original_len);
       int64_t dst_data_size = 0;
-      if (OB_SUCCESS !=
-          (tmp_ret = compressor->compress(serialize_buf, original_len, req.buf(), payload, dst_data_size))) {
+      if (OB_SUCCESS != (tmp_ret = compressor->compress(serialize_buf, original_len, req.buf(), payload,
+              dst_data_size))) {
         RPC_OBRPC_LOG(WARN, "compress failed", K(ret));
         need_compressed = false;
         EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
@@ -725,7 +631,13 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
       } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
         RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
       } else {
-        req.pkt_->set_content(req.buf(), payload);
+        /*
+         * When compress mode is enabled here, payload value is (original_len + max_overflow_size).
+         * If the data length after data compressed is not leass than original_len, we do not
+         * use compression for this RPC packet, and the packet size should be original_len.
+         * So we do set_content with pos, instead of payload.
+         */
+        req.pkt_->set_content(req.buf(), pos);
       }
     }
     timeguard.click();
@@ -737,7 +649,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
       req.pkt_->set_compressor_type(compressor_type_);
     }
 
-    auto* newcb = reinterpret_cast<AsyncCB<pcodeStruct>*>(req.cb());
+    auto *newcb = reinterpret_cast<AsyncCB<pcodeStruct>*>(req.cb());
     if (newcb) {
       newcb->set_args(args);
       newcb->set_dst(dst_);
@@ -755,10 +667,11 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(transport_->post(req))) {
-      RPC_OBRPC_LOG(WARN, "post packet fail", K(req), K(ret));
+      ObRpcPacketCode pcode = pcodeStruct::PCODE;
+      RPC_OBRPC_LOG(WARN, "post packet fail", K(pcode), K(ret));
       req.destroy();
     } else {
-      // do nothing
+      //do nothing
     }
     timeguard.click();
   }
@@ -769,21 +682,15 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcod
     serialize_buf = NULL;
   }
 
-  NG_TRACE_EXT(post_packet, Y(ret), Y(pcode), OB_ID(addr), dst_);
+  NG_TRACE_EXT(post_packet, OB_Y(ret), OB_Y(pcode), OB_ID(addr), dst_);
   return ret;
 }
 
-template <typename T>
-int ObRpcProxy::create_request(const obrpc::ObRpcPacketCode pcode, const rpc::frame::ObReqTransport& transport,
-    rpc::frame::ObReqTransport::Request<T>& req, const common::ObAddr& addr, int64_t size, int64_t timeout,
-    const common::ObAddr& local_addr, const common::ObString& ob_ssl_invited_nodes,
-    const rpc::frame::ObReqTransport::AsyncCB* cb)
-{
-  PCodeGuard pcode_guard(pcode);
-  return transport.create_request(req, addr, size, timeout, local_addr, ob_ssl_invited_nodes, cb);
-}
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_IPP_
+
+} // end of namespace rpc
+} // end of namespace oceanbase
+
+
+#endif //OCEANBASE_RPC_OBRPC_OB_RPC_PROXY_IPP_

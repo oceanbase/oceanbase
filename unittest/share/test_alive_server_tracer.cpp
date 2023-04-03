@@ -20,8 +20,10 @@
 
 using ::testing::_;
 using ::testing::Invoke;
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace host;
 using namespace obrpc;
@@ -78,9 +80,11 @@ TEST(TestAliveServerMap, all)
   ASSERT_GT(trace_time, t);
 }
 
-class ServerList {
+class ServerList
+{
 public:
-  int fetch_alive_server(const ObFetchAliveServerArg&, ObFetchAliveServerResult& res, const ObRpcOpts&)
+  int fetch_alive_server(const ObFetchAliveServerArg &, ObFetchAliveServerResult &res,
+      const ObRpcOpts &)
   {
     return res.server_list_.assign(server_list_);
   }
@@ -100,7 +104,8 @@ TEST(TestAliveServerTracer, all)
   ASSERT_EQ(OB_NOT_INIT, tracer.is_alive(A, alive, trace_time));
   ASSERT_EQ(OB_NOT_INIT, tracer.refresh());
 
-  ON_CALL(rpc_proxy, fetch_alive_server(_, _, _)).WillByDefault(Invoke(&server_list, &ServerList::fetch_alive_server));
+  ON_CALL(rpc_proxy, fetch_alive_server(_, _, _))
+      .WillByDefault(Invoke(&server_list, &ServerList::fetch_alive_server));
 
   ASSERT_EQ(OB_SUCCESS, tracer.init(timer, rpc_proxy));
   // empty server list, refresh fail
@@ -120,10 +125,10 @@ TEST(TestAliveServerTracer, all)
   ASSERT_FALSE(alive);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

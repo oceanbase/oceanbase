@@ -23,14 +23,13 @@
 
 inline uint64_t rand64(uint64_t h)
 {
-  if (0 == h)
-    return 1;
+  if (0 == h) return 1;
   h ^= h >> 33;
   h *= 0xff51afd7ed558ccd;
   h ^= h >> 33;
   h *= 0xc4ceb9fe1a85ec53;
   h ^= h >> 33;
-  // h &= ~(1ULL<<63);
+  //h &= ~(1ULL<<63);
   return h;
 }
 
@@ -41,66 +40,56 @@ int64_t get_us()
   return time_val.tv_sec * 1000000 + time_val.tv_usec;
 }
 
-#define profile(expr, n)                                                                     \
-  {                                                                                          \
-    int64_t start = get_usec();                                                              \
-    expr;                                                                                    \
-    int64_t end = get_usec();                                                                \
+#define profile(expr, n) { \
+    int64_t start = get_usec(); \
+    expr;\
+    int64_t end = get_usec();\
     printf("%s: 1000000*%ld/%ld=%ld\n", #expr, n, end - start, 1000000 * n / (end - start)); \
   }
 
-struct Callable {
-  Callable() : stop_(false)
-  {}
-  virtual ~Callable()
-  {}
+struct Callable
+{
+  Callable(): stop_(false) {}
+  virtual ~Callable() {}
   virtual int call(pthread_t thread, int64_t idx) = 0;
   volatile bool stop_;
 };
 
-typedef void* (*pthread_handler_t)(void*);
-class BaseWorker {
+typedef void *(*pthread_handler_t)(void *);
+class BaseWorker
+{
 public:
   static const int64_t MAX_N_THREAD = 16;
-  struct WorkContext {
-    WorkContext() : callable_(NULL), idx_(0)
-    {}
-    ~WorkContext()
-    {}
-    WorkContext& set(Callable* callable, int64_t idx)
+  struct WorkContext
+  {
+    WorkContext() : callable_(NULL), idx_(0) {}
+    ~WorkContext() {}
+    WorkContext &set(Callable *callable, int64_t idx)
     {
       callable_ = callable;
       idx_ = idx;
       return *this;
     }
-    Callable* callable_;
+    Callable *callable_;
     pthread_t thread_;
     int64_t idx_;
   };
-
 public:
-  BaseWorker() : n_thread_(0), thread_running_(false)
-  {}
+  BaseWorker(): n_thread_(0), thread_running_(false) {}
   ~BaseWorker()
   {
     wait();
   }
-
 public:
-  BaseWorker& set_thread_num(int64_t n)
-  {
-    n_thread_ = n;
-    return *this;
-  }
-  int start(Callable* callable, int64_t idx = -1)
+  BaseWorker &set_thread_num(int64_t n) { n_thread_ = n; return *this; }
+  int start(Callable *callable, int64_t idx = -1)
   {
     int err = 0;
     for (int64_t i = 0; i < n_thread_; i++) {
-      if (idx > 0 && idx != i) {
-        continue;
-      }
+      if (idx > 0 && idx != i) { continue; }
       fprintf(stderr, "worker[%ld] start.\n", i);
-      pthread_create(&ctx_[i].thread_, NULL, (pthread_handler_t)do_work, (void*)(&ctx_[i].set(callable, i)));
+      pthread_create(&ctx_[i].thread_, NULL, (pthread_handler_t)do_work, (void *)(&ctx_[i].set(callable,
+                                                                                               i)));
     }
     thread_running_ = true;
     return err;
@@ -111,10 +100,8 @@ public:
     int err = 0;
     int64_t ret = 0;
     for (int64_t i = 0; thread_running_ && i < n_thread_; i++) {
-      if (idx > 0 && idx != i) {
-        continue;
-      }
-      pthread_join(ctx_[i].thread_, (void**)&ret);
+      if (idx > 0 && idx != i) { continue; }
+      pthread_join(ctx_[i].thread_, (void **)&ret);
       if (ret != 0) {
         fprintf(stderr, "thread[%ld] => %ld\n", i, ret);
       } else {
@@ -125,7 +112,7 @@ public:
     return err;
   }
 
-  static int do_work(WorkContext* ctx)
+  static int do_work(WorkContext *ctx)
   {
     int err = 0;
     if (NULL == ctx || NULL == ctx->callable_) {
@@ -135,7 +122,7 @@ public:
     }
     return err;
   }
-  int par_do(Callable* callable, int64_t duration)
+  int par_do(Callable *callable, int64_t duration)
   {
     int err = 0;
     if (0 != (err = start(callable))) {
@@ -149,14 +136,13 @@ public:
     }
     return err;
   }
-
 protected:
   int64_t n_thread_;
   bool thread_running_;
   WorkContext ctx_[MAX_N_THREAD];
 };
 
-int PARDO(int64_t thread_num, Callable* call, int64_t duration)
+int PARDO(int64_t thread_num, Callable *call, int64_t duration)
 {
   BaseWorker worker;
   fprintf(stderr, "thread_num=%ld\n", thread_num);
@@ -201,31 +187,23 @@ int main(int argc, char **argv)
 }
 #endif
 
-class RWT : public Callable {
-  typedef void* (*pthread_handler_t)(void*);
-  struct Thread {
-    int set(RWT* self, int64_t idx)
-    {
-      self_ = self, idx_ = idx;
-      return 0;
-    }
+
+class RWT: public Callable
+{
+  typedef void *(*pthread_handler_t)(void *);
+  struct Thread
+  {
+    int set(RWT *self, int64_t idx) { self_ = self, idx_ = idx; return 0; }
     pthread_t thread_;
-    RWT* self_;
+    RWT *self_;
     int64_t idx_;
   };
-
 public:
-  RWT() : n_read_thread_(0), n_write_thread_(0), n_admin_thread_(0)
-  {}
-  virtual ~RWT()
-  {}
-
+  RWT(): n_read_thread_(0), n_write_thread_(0), n_admin_thread_(0) {}
+  virtual ~RWT() {}
 public:
-  int64_t get_thread_num()
-  {
-    return 1 + n_read_thread_ + n_write_thread_ + n_admin_thread_;
-  }
-  RWT& set(const int64_t n_read, const int64_t n_write, const int64_t n_admin = 0)
+  int64_t get_thread_num() { return 1 + n_read_thread_ + n_write_thread_ + n_admin_thread_; }
+  RWT &set(const int64_t n_read, const int64_t n_write, const int64_t n_admin = 0)
   {
     n_read_thread_ = n_read;
     n_write_thread_ = n_write;
@@ -284,37 +262,28 @@ public:
     fprintf(stderr, "rwt.start(idx=%ld)=>%d\n", idx_, err);
     return err;
   }
-  virtual int report()
-  {
-    return 0;
-  }
+  virtual int report() { return 0; }
   virtual int read(const int64_t idx) = 0;
   virtual int write(const int64_t idx) = 0;
-  virtual int admin(const int64_t idx)
-  {
-    (void)(idx);
-    return 0;
-  }
-
+  virtual int admin(const int64_t idx) { (void)(idx);  return 0; }
 protected:
   int64_t n_read_thread_;
   int64_t n_write_thread_;
   int64_t n_admin_thread_;
 };
 
-#define _cfg(k, v) getenv(k) ?: v
-#define _cfgi(k, v) atoll(getenv(k) ?: v)
+#define _cfg(k, v) getenv(k)?:v
+#define _cfgi(k, v) atoll(getenv(k)?:v)
 
 inline int64_t rand_range(int64_t s, int64_t e)
 {
   return s + random() % (e - s);
 }
 
-#define RWT_def(base)                                      \
-  TEST_F(base, Rand)                                       \
-  {                                                        \
-    ASSERT_EQ(0, PARDO(get_thread_num(), this, duration)); \
-    ASSERT_EQ(0, check_error());                           \
+#define RWT_def(base) \
+  TEST_F(base, Rand){ \
+    ASSERT_EQ(0, PARDO(get_thread_num(), this, duration));      \
+    ASSERT_EQ(0, check_error());                                \
   }
 
 #include "gtest/gtest.h"
@@ -325,26 +294,22 @@ inline int64_t rand_range(int64_t s, int64_t e)
 
 using namespace oceanbase::common;
 
-struct BufHolder {
-  BufHolder(int64_t limit)
-  {
-    buf_ = (char*)ob_malloc(limit, ObModIds::TEST);
-  }
-  ~BufHolder()
-  {
-    ob_free((void*)buf_);
-  }
-  char* buf_;
+struct BufHolder
+{
+  BufHolder(int64_t limit) { buf_ = (char *)ob_malloc(limit, ObModIds::TEST); }
+  ~BufHolder() { ob_free((void *)buf_); }
+  char *buf_;
 };
 
-struct BaseConfig {
+struct BaseConfig
+{
   static const int64_t buf_limit = 1 << 21;
   BufHolder buf_holder;
   ObDataBuffer buf;
   int64_t duration;
-  const char* schema;
+  const char *schema;
   int64_t table_id;
-  BaseConfig() : buf_holder(buf_limit)
+  BaseConfig(): buf_holder(buf_limit)
   {
     buf.set_data(buf_holder.buf_, buf_limit);
     duration = _cfgi("duration", "3000000");
@@ -353,21 +318,16 @@ struct BaseConfig {
   }
 };
 
-class FixedAllocator : public ObIAllocator {
+class FixedAllocator: public ObIAllocator
+{
 public:
-  FixedAllocator(char* buf, int64_t limit) : buf_(buf), limit_(limit), pos_(0)
-  {}
-  virtual ~FixedAllocator()
-  {}
-
+  FixedAllocator(char *buf, int64_t limit): buf_(buf), limit_(limit), pos_(0) {}
+  virtual ~FixedAllocator() {}
 public:
-  void reset()
+  void reset() { pos_ = 0; }
+  virtual void *alloc(const int64_t sz)
   {
-    pos_ = 0;
-  }
-  virtual void* alloc(const int64_t sz)
-  {
-    void* ptr = NULL;
+    void *ptr = NULL;
     int64_t pos = 0;
     if ((pos = __sync_add_and_fetch(&pos_, sz)) > limit_) {
       __sync_add_and_fetch(&pos_, -sz);
@@ -376,13 +336,9 @@ public:
     }
     return ptr;
   }
-  virtual void free(void* ptr)
-  {
-    UNUSED(ptr);
-  }
-
+  virtual void free(void *ptr) { UNUSED(ptr); }
 private:
-  char* buf_;
+  char *buf_;
   int64_t limit_;
   int64_t pos_;
 };

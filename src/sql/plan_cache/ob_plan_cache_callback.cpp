@@ -19,41 +19,56 @@ using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-void ObPlanCacheAtomicOp::operator()(PlanCacheKV& entry)
+void ObLibCacheAtomicOp::operator()(LibCacheKV &entry)
 {
   if (NULL != entry.second) {
     entry.second->inc_ref_count(ref_handle_);
-    pcv_set_ = entry.second;
-    SQL_PC_LOG(DEBUG, "succ to get pcv_set", "ref_count", pcv_set_->get_ref_count());
+    cache_node_ = entry.second;
+    SQL_PC_LOG(DEBUG, "succ to get cache_node", "ref_count", cache_node_->get_ref_count());
   } else {
-    // if no pcv set found, no need to do anything now
+    // if no cache node found, no need to do anything now
   }
 }
 
-// get pcvs and lock
-int ObPlanCacheAtomicOp::get_value(ObPCVSet*& pcvs)
+//get cache node and lock
+int ObLibCacheAtomicOp::get_value(ObILibCacheNode *&cache_node)
 {
   int ret = OB_SUCCESS;
-  pcvs = NULL;
-  if (OB_ISNULL(pcv_set_)) {
+  cache_node = NULL;
+  if (OB_ISNULL(cache_node_)) {
     ret = OB_NOT_INIT;
-    SQL_PC_LOG(WARN, "invalid argument", K(pcv_set_));
-  } else if (OB_SUCC(lock(*pcv_set_))) {
-    pcvs = pcv_set_;
+    SQL_PC_LOG(WARN, "invalid argument", K(cache_node_));
+  } else if (OB_SUCC(lock(*cache_node_))) {
+    cache_node = cache_node_;
   } else {
-    if (NULL != pcv_set_) {
-      pcv_set_->dec_ref_count(ref_handle_);
+    if (NULL != cache_node_) {
+      cache_node_->dec_ref_count(ref_handle_);
     }
-    SQL_PC_LOG(DEBUG, "failed to get read lock of plan cache value", K(ret));
+    SQL_PC_LOG(DEBUG, "failed to get read lock of lib cache value", K(ret));
   }
   return ret;
 }
 
-void ObCacheObjAtomicOp::operator()(ObjKV& entry)
+/*
+worker thread:                   |  evict thread
+                                 |  get all plan id array(contains plan id x)
+deleting .... remove plan id x   |
+from map                         |
+dec ref cnt => ref_cnt=0         |
+                                 | ref plan id x. inc_ref=1
+deleting plan x                  |
+                                 | acess plan x --> cause core!
+*/
+
+void ObCacheObjAtomicOp::operator()(ObjKV &entry)
 {
   if (NULL != entry.second) {
-    cache_obj_ = entry.second;
-    cache_obj_->inc_ref_count(ref_handle_);
+    if (0 == entry.second->get_ref_count()) {
+      // do nothing
+    } else {
+      cache_obj_ = entry.second;
+      cache_obj_->inc_ref_count(ref_handle_);
+    }
     SQL_PC_LOG(DEBUG, "succ to get plan", "ref_count", cache_obj_->get_ref_count());
   } else {
     // do nothing

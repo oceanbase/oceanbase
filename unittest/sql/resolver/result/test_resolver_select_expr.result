@@ -1732,10 +1732,10 @@ select 1 in (1, (1));
         },
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM",
-          "IS_EXEC_PARM"
+          "CNT_STATIC_PARAM",
+          "IS_DYNAMIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -4893,7 +4893,7 @@ select MAX(c1) c from t1 having (select c) > 0;
       },
       "expr_info": [
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_SUB_QUERY"
       ],
       "rel_id": [
@@ -4982,9 +4982,9 @@ select MAX(c1) c from t1 having (select c) > 0;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -6407,7 +6407,7 @@ select max(c1) b from t1 having b > 0;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_AGG"
       ],
       "rel_id": [
@@ -6529,9 +6529,9 @@ select max(c1) b from t1 having b > 0;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -7670,7 +7670,7 @@ select c1, c2 as c1 from t1 having t1.c1 > 2;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -7746,9 +7746,9 @@ select c1, c2 as c1 from t1 having t1.c1 > 2;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],

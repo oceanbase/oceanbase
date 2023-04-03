@@ -19,29 +19,27 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
-OB_SERIALIZE_MEMBER(ObPxPartitionInfo, partition_key_, logical_row_count_, physical_row_count_);
-OB_SERIALIZE_MEMBER(
-    ObPxTaskMonitorInfo, sched_exec_time_start_, sched_exec_time_end_, exec_time_start_, exec_time_end_, metrics_);
+OB_SERIALIZE_MEMBER(ObPxTabletInfo,
+                    tablet_id_,
+                    logical_row_count_,
+                    physical_row_count_);
+OB_SERIALIZE_MEMBER(ObPxTaskMonitorInfo, sched_exec_time_start_, sched_exec_time_end_, exec_time_start_, exec_time_end_, metrics_);
 OB_SERIALIZE_MEMBER((ObPxTaskChSet, dtl::ObDtlChSet), sqc_id_, task_id_);
 OB_SERIALIZE_MEMBER(ObPxPartChMapItem, first_, second_, third_);
-OB_SERIALIZE_MEMBER(ObPxReceiveDataChannelMsg, child_dfo_id_, ch_sets_, ch_map_opt_, ch_total_info_);
-OB_SERIALIZE_MEMBER(ObPxTransmitDataChannelMsg, ch_sets_, part_affinity_map_, ch_map_opt_, ch_total_info_);
+OB_SERIALIZE_MEMBER(ObPxReceiveDataChannelMsg, child_dfo_id_, ch_sets_, ch_total_info_, has_filled_channel_);
+OB_SERIALIZE_MEMBER(ObPxTransmitDataChannelMsg, ch_sets_, part_affinity_map_, ch_total_info_, has_filled_channel_);
 OB_SERIALIZE_MEMBER(ObPxInitSqcResultMsg, dfo_id_, sqc_id_, rc_, task_count_);
-OB_SERIALIZE_MEMBER(ObPxFinishSqcResultMsg, dfo_id_, sqc_id_, rc_, trans_result_, task_monitor_info_array_,
-    sqc_affected_rows_, dml_row_info_, temp_table_id_, interm_result_ids_);
+OB_SERIALIZE_MEMBER(ObPxFinishSqcResultMsg, dfo_id_, sqc_id_, rc_, trans_result_, task_monitor_info_array_, sqc_affected_rows_, dml_row_info_, temp_table_id_, interm_result_ids_);
 OB_SERIALIZE_MEMBER(ObPxFinishTaskResultMsg, dfo_id_, sqc_id_, task_id_, rc_);
+OB_SERIALIZE_MEMBER((ObPxBloomFilterChInfo, dtl::ObDtlChTotalInfo), filter_id_);
+OB_SERIALIZE_MEMBER((ObPxBloomFilterChSet, dtl::ObDtlChSet), filter_id_, sqc_id_);
+OB_SERIALIZE_MEMBER(ObPxCreateBloomFilterChannelMsg, sqc_count_, sqc_id_, ch_set_info_);
+OB_SERIALIZE_MEMBER(ObPxBloomFilterData, filter_, tenant_id_, filter_id_,
+                    server_id_, px_sequence_id_, bloom_filter_count_);
 OB_SERIALIZE_MEMBER(ObPxDmlRowInfo, row_match_count_, row_duplicated_count_, row_deleted_count_);
+OB_SERIALIZE_MEMBER(ObPxTabletRange, tablet_id_, range_cut_, range_weights_);
 
-int ObPxTaskMonitorInfo::add_op_metric(sql::ObOpMetric& metric)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(metrics_.push_back(metric))) {
-    LOG_WARN("failed to push back metric", K(ret));
-  }
-  return ret;
-}
-
-int ObPxTaskChSet::assign(const ObPxTaskChSet& other)
+int ObPxTaskChSet::assign(const ObPxTaskChSet &other)
 {
   int ret = OB_SUCCESS;
   sqc_id_ = other.sqc_id_;
@@ -53,9 +51,82 @@ int ObPxTaskChSet::assign(const ObPxTaskChSet& other)
   return ret;
 }
 
-void ObPxDmlRowInfo::set_px_dml_row_info(const ObPhysicalPlanCtx& plan_ctx)
+int ObPxBloomFilterChSet::assign(const ObPxBloomFilterChSet &other)
+{
+  int ret = OB_SUCCESS;
+  filter_id_ = other.filter_id_;
+  sqc_id_ = other.sqc_id_;
+  if (OB_FAIL(dtl::ObDtlChSet::assign(other))) {
+    LOG_WARN("fail assign ObPxBloomFilterChSet", K(other), K(ret));
+  }
+  return ret;
+}
+
+void ObPxDmlRowInfo::set_px_dml_row_info(const ObPhysicalPlanCtx &plan_ctx)
 {
   row_match_count_ = plan_ctx.get_row_matched_count();
   row_duplicated_count_ = plan_ctx.get_row_duplicated_count();
   row_deleted_count_ = plan_ctx.get_row_deleted_count();
 }
+
+ObPxTabletRange::ObPxTabletRange()
+  : tablet_id_(OB_INVALID_ID), range_weights_(0), range_cut_()
+{
+  range_weights_ = 1;
+}
+
+void ObPxTabletRange::reset()
+{
+  tablet_id_ = OB_INVALID_ID;
+  range_cut_.reset();
+  range_weights_ = 1;
+}
+
+bool ObPxTabletRange::is_valid() const
+{
+  return tablet_id_ >= 0 && range_cut_.count() >= 0;
+}
+
+int ObPxTabletRange::deep_copy_from(const ObPxTabletRange &other, common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  tablet_id_ = other.tablet_id_;
+  range_weights_ = other.range_weights_;
+  if (OB_FAIL(range_cut_.reserve(other.range_cut_.count()))) {
+    LOG_WARN("reserve end keys failed", K(ret), K(other.range_cut_.count()));
+  }
+  DatumKey copied_key;
+  RangeWeight range_weight;
+  ObDatum tmp_datum;
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.range_cut_.count(); ++i) {
+    const DatumKey &cur_key = other.range_cut_.at(i);
+    copied_key.reuse();
+    range_weight.reuse();
+    for (int64_t j = 0; OB_SUCC(ret) && j < cur_key.count(); ++j) {
+      if (OB_FAIL(tmp_datum.deep_copy(cur_key.at(j), allocator))) {
+        LOG_WARN("deep copy datum failed", K(ret), K(i), K(j), K(cur_key.at(j)));
+      } else if (OB_FAIL(copied_key.push_back(tmp_datum))) {
+        LOG_WARN("push back datum failed", K(ret), K(i), K(j), K(tmp_datum));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(range_cut_.push_back(copied_key))) {
+      LOG_WARN("push back rowkey failed", K(ret), K(copied_key), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObPxTabletRange::assign(const ObPxTabletRange &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(range_cut_.assign(other.range_cut_))) {
+    LOG_WARN("assign range cut failed", K(ret), K(other));
+  } else {
+    tablet_id_ = other.tablet_id_;
+    range_weights_ = other.range_weights_;
+  }
+  return ret;
+}
+

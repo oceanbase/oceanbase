@@ -14,16 +14,18 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-int ObAllVirtualDiagIndexScan::set_index_ids(const common::ObIArray<common::ObNewRange>& ranges)
+int ObAllVirtualDiagIndexScan::set_index_ids(const common::ObIArray<common::ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
   common::ObRowkey start_key;
   common::ObRowkey end_key;
-  const ObObj* start_key_obj_ptr = NULL;
-  const ObObj* end_key_obj_ptr = NULL;
+  const ObObj *start_key_obj_ptr = NULL;
+  const ObObj *end_key_obj_ptr = NULL;
   int64_t index_id = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     start_key = ranges.at(i).start_key_;
@@ -32,8 +34,8 @@ int ObAllVirtualDiagIndexScan::set_index_ids(const common::ObIArray<common::ObNe
       start_key_obj_ptr = start_key.get_obj_ptr();
       end_key_obj_ptr = end_key.get_obj_ptr();
       if (NULL != start_key_obj_ptr && NULL != end_key_obj_ptr) {
-        if ((!start_key_obj_ptr[0].is_min_value() || !end_key_obj_ptr[0].is_max_value()) &&
-            start_key_obj_ptr[0] != end_key_obj_ptr[0]) {
+        if ((!start_key_obj_ptr[0].is_min_value() || !end_key_obj_ptr[0].is_max_value())
+            && start_key_obj_ptr[0] != end_key_obj_ptr[0]) {
           ret = OB_NOT_IMPLEMENT;
           SERVER_LOG(ERROR, "index id should be exact value", K(ret));
         } else if (start_key_obj_ptr[0] == end_key_obj_ptr[0]) {

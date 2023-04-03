@@ -15,24 +15,26 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_schema_service.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 using namespace common;
 
-class TestFallbackSchemaMgr : public ::testing::Test {
+class TestFallbackSchemaMgr : public ::testing::Test
+{
 public:
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
 };
 
 TEST_F(TestFallbackSchemaMgr, fallback_schema_for_liboblog)
 {
   ObSchemaService::g_liboblog_mode_ = true;
   MockMultiVersionSchemaServiceForFallback schema_service;
-  const int64_t slot_for_cache = 12;
+  const int64_t slot_for_cache  = 12;
   const int64_t slot_for_liboblog = 4;
   int ret = schema_service.init(slot_for_cache, slot_for_liboblog);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -57,13 +59,13 @@ TEST_F(TestFallbackSchemaMgr, fallback_schema_for_liboblog)
 
 static int64_t global_version = 1;
 
-class Worker : public share::ObThreadPool {
+class Worker : public share::ObThreadPool
+{
 public:
   void run1()
   {
 
-    MockMultiVersionSchemaServiceForFallback* schema_service =
-        reinterpret_cast<MockMultiVersionSchemaServiceForFallback*>(arg);
+    MockMultiVersionSchemaServiceForFallback *schema_service = reinterpret_cast<MockMultiVersionSchemaServiceForFallback *>(arg);
     int ret = OB_SUCCESS;
     for (int i = 0; i < 20; ++i) {
       ObSchemaGetterGuard guard;
@@ -73,7 +75,7 @@ public:
         if (OB_FAIL(ret)) {
           SHARE_SCHEMA_LOG(WARN, "get schema guard of version", K(fetch_version));
           schema_service->dump_schema_mgr();
-          //          schema_service->dump_mem_mgr_for_liboblog();
+//          schema_service->dump_mem_mgr_for_liboblog();
         }
       } while (ret == OB_EAGAIN);
       ASSERT_EQ(ret, OB_SUCCESS);
@@ -85,7 +87,7 @@ TEST_F(TestFallbackSchemaMgr, concurrent_fallback)
 {
   ObSchemaService::g_liboblog_mode_ = true;
   MockMultiVersionSchemaServiceForFallback schema_service;
-  const int64_t slot_for_cache = 12;
+  const int64_t slot_for_cache  = 12;
   const int64_t slot_for_liboblog = 18;
   int ret = schema_service.init(slot_for_cache, slot_for_liboblog);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -99,7 +101,7 @@ TEST_F(TestFallbackSchemaMgr, concurrent_fallback)
 
   obsys::CThread worker_thread[worker_cnt];
   for (int i = 0; i < worker_cnt; ++i) {
-    worker_thread[i].start(&workers[i], (void*)(&schema_service));
+    worker_thread[i].start(&workers[i], (void *)(&schema_service));
   }
   for (int i = 0; i < worker_cnt; ++i) {
     worker_thread[i].join();
@@ -109,11 +111,15 @@ TEST_F(TestFallbackSchemaMgr, concurrent_fallback)
   schema_service.destory();
 };
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
 
-int main(int argc, char** argv)
+
+
+}
+}
+}
+
+
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   system("rm -rf test_fallback_schema_mgr.log");

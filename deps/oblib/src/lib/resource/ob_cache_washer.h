@@ -15,27 +15,32 @@
 
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 
-class ObICacheWasher {
+class ObICacheWasher
+{
 public:
-  struct ObCacheMemBlock {
-    ObCacheMemBlock() : next_(NULL)
-    {}
-    ObCacheMemBlock* next_;
+  struct ObCacheMemBlock
+  {
+    ObCacheMemBlock() : next_(NULL) {}
+    ObCacheMemBlock *next_;
   };
 
-  virtual int sync_wash_mbs(
-      const uint64_t tenant_id, const int64_t wash_size, bool wash_single_mb, ObCacheMemBlock*& wash_blocks) = 0;
+  virtual int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
+                            bool wash_single_mb, ObCacheMemBlock *&wash_blocks) = 0;
+  virtual int erase_cache(const uint64_t tenant_id) = 0;
 };
 
-class ObDefaultCacheWasher : public ObICacheWasher {
-  ObDefaultCacheWasher(){};
-  virtual ~ObDefaultCacheWasher(){};
+class ObDefaultCacheWasher : public ObICacheWasher
+{
+  ObDefaultCacheWasher() {};
+  virtual ~ObDefaultCacheWasher() {};
 
-  virtual int sync_wash_mbs(
-      const uint64_t tenant_id, const int64_t wash_size, bool wash_single_mb, ObCacheMemBlock*& wash_blocks)
+  virtual int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
+                            bool wash_single_mb, ObCacheMemBlock *&wash_blocks) override
   {
     UNUSED(tenant_id);
     UNUSED(wash_size);
@@ -43,9 +48,14 @@ class ObDefaultCacheWasher : public ObICacheWasher {
     UNUSED(wash_blocks);
     return common::OB_CACHE_FREE_BLOCK_NOT_ENOUGH;
   }
+  virtual int erase_cache(const uint64_t tenant_id) override
+  {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
 };
 
-}  // namespace lib
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_CACHE_OB_CACHE_WASHER_H_
+#endif //OCEANBASE_CACHE_OB_CACHE_WASHER_H_

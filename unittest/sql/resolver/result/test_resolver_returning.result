@@ -878,9 +878,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -910,9 +910,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -942,9 +942,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -974,9 +974,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1006,9 +1006,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1038,9 +1038,9 @@ insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1892,9 +1892,9 @@ insert into t1 values(3, 3, 3) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1924,9 +1924,9 @@ insert into t1 values(3, 3, 3) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1956,9 +1956,9 @@ insert into t1 values(3, 3, 3) returning c1, c2, c3;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2810,9 +2810,9 @@ replace into t1 values(3, 10, 11) returning c1 + 1, c2 + 1, c3 + 1;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2842,9 +2842,9 @@ replace into t1 values(3, 10, 11) returning c1 + 1, c2 + 1, c3 + 1;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2874,9 +2874,9 @@ replace into t1 values(3, 10, 11) returning c1 + 1, c2 + 1, c3 + 1;
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -3092,7 +3092,7 @@ delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
         "IS_OR",
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_OR"
       ],
       "rel_id": [
@@ -3125,7 +3125,7 @@ delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_SIMPLE_COND"
           ],
           "rel_id": [
@@ -3201,9 +3201,9 @@ delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3236,7 +3236,7 @@ delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "IS_SIMPLE_COND"
           ],
           "rel_id": [
@@ -3312,9 +3312,9 @@ delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3789,10 +3789,10 @@ update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -3830,7 +3830,7 @@ update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -3906,9 +3906,9 @@ update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -3991,7 +3991,7 @@ update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -4143,9 +4143,9 @@ update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],

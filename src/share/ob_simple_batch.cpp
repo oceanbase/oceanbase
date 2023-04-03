@@ -13,8 +13,21 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_simple_batch.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
+
+void ObSimpleBatch::destroy()
+{
+  if (T_SCAN == type_ && range_ != NULL) {
+    range_->~SQLScanRange();
+    range_ = NULL;
+  } else if (T_MULTI_SCAN == type_ && ranges_ != NULL) {
+    ranges_->~SQLScanRangeArray();
+    ranges_ = NULL;
+  }
+}
 
 int64_t ObSimpleBatch::get_serialize_size(void) const
 {
@@ -23,7 +36,7 @@ int64_t ObSimpleBatch::get_serialize_size(void) const
   if (T_NONE == type_) {
     /*do nothing*/
   } else if (OB_ISNULL(range_)) {
-    LOG_ERROR("NULL data on calc size", K(range_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "NULL data on calc size", K(range_));
   } else if (T_SCAN == type_) {
     len += range_->get_serialize_size();
   } else if (T_MULTI_SCAN == type_) {
@@ -33,7 +46,7 @@ int64_t ObSimpleBatch::get_serialize_size(void) const
   return len;
 }
 
-int ObSimpleBatch::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObSimpleBatch::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(type_);
@@ -57,25 +70,28 @@ int ObSimpleBatch::serialize(char* buf, const int64_t buf_len, int64_t& pos) con
   return ret;
 }
 
-#define ALLOC_VAR(type, x)                                     \
-  do {                                                         \
-    if (OB_ISNULL(x = (type*)allocator.alloc(sizeof(type)))) { \
-      ret = OB_ERR_UNEXPECTED;                                 \
-      LOG_WARN("NULL value", K(ret), K(x));                    \
-    } else {                                                   \
-      (x) = new ((x)) type;                                    \
-    }                                                          \
-  } while (0)
+#define ALLOC_VAR(type, x) \
+    do { \
+      if (OB_ISNULL(x = (type*)allocator.alloc(sizeof(type)))) {  \
+        ret = OB_ERR_UNEXPECTED;  \
+        LOG_WARN("NULL value", K(ret), K(x));  \
+      } else {  \
+        (x) = new((x)) type;  \
+      } \
+    } while(0)
 
-#define GET_DESERIALIZED_VAR(type, x)                                               \
-  do {                                                                              \
-    ALLOC_VAR(type, x);                                                             \
-    if (OB_SUCC(ret) && OB_FAIL((x)->deserialize(allocator, buf, data_len, pos))) { \
-      LOG_WARN("fail to serialize var", K(ret));                                    \
-    }                                                                               \
-  } while (0)
+#define GET_DESERIALIZED_VAR(type, x)  \
+    do {  \
+      ALLOC_VAR(type, x); \
+      if (OB_SUCC(ret) && OB_FAIL((x)->deserialize(allocator, buf, data_len, pos))) { \
+        LOG_WARN("fail to serialize var", K(ret));  \
+      } \
+    } while(0)
 
-int ObSimpleBatch::deserialize(common::ObIAllocator& allocator, const char* buf, const int64_t data_len, int64_t& pos)
+int ObSimpleBatch::deserialize(common::ObIAllocator &allocator,
+                         const char *buf,
+                         const int64_t data_len,
+                         int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::decode(buf, data_len, pos, type_))) {
@@ -83,16 +99,19 @@ int ObSimpleBatch::deserialize(common::ObIAllocator& allocator, const char* buf,
   } else if (T_NONE == type_) {
     /* send nothing */
   } else if (T_SCAN == type_) {
-    SQLScanRange* range = NULL;
+    SQLScanRange *range = NULL;
     GET_DESERIALIZED_VAR(SQLScanRange, range);
     if (OB_SUCC(ret)) {
       range_ = range;
     }
   } else if (T_MULTI_SCAN == type_) {
-    SQLScanRangeArray* ranges = NULL;
+    SQLScanRangeArray *ranges = NULL;
     int64_t M = 0;
     ALLOC_VAR(SQLScanRangeArray, ranges);
-    if (OB_SUCC(ret) && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, ((int64_t*)(&M))))) {
+    if (OB_SUCC(ret) && OB_FAIL(serialization::decode_vi64(buf,
+                                                           data_len,
+                                                           pos,
+                                                           ((int64_t *)(&M))))) {
       LOG_WARN("failed to deserialize count", K(ret));
     }
 
@@ -114,5 +133,5 @@ int ObSimpleBatch::deserialize(common::ObIAllocator& allocator, const char* buf,
 #undef ALLOC_VAR
 #undef GET_DESERIALIZED_VAR
 
-}  // namespace common
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase

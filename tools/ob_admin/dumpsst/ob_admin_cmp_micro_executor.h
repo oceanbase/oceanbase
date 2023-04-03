@@ -14,6 +14,7 @@
 #define OCEANBASE_TOOLS_OB_ADMIN_CMP_MICRO_EXECUTOR_H
 #include "../ob_admin_executor.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_micro_block_header.h"
 
 namespace oceanbase
 {

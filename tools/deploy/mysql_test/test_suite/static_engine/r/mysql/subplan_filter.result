@@ -1,0 +1,2528 @@
+result_format: 4
+
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+create table t2 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t1 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t2 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (3, 3, null, 'a');
+
+
+
+set @@ob_enable_plan_cache = 0;
+set ob_enable_transformation = off;
+select (1, 1) = (1, 0);
++-----------------+
+| (1, 1) = (1, 0) |
++-----------------+
+|               0 |
++-----------------+
+select (1, 1) = (1, 1);
++-----------------+
+| (1, 1) = (1, 1) |
++-----------------+
+|               1 |
++-----------------+
+
+select 1 <=> 1;
++---------+
+| 1 <=> 1 |
++---------+
+|       1 |
++---------+
+select 1 <=> 0;
++---------+
+| 1 <=> 0 |
++---------+
+|       0 |
++---------+
+select 1 <=> null;
++------------+
+| 1 <=> null |
++------------+
+|          0 |
++------------+
+select null <=> 1;
++------------+
+| null <=> 1 |
++------------+
+|          0 |
++------------+
+select null <=> null;
++---------------+
+| null <=> null |
++---------------+
+|             1 |
++---------------+
+
+select (1, 1) <=> (1, 1);
++-------------------+
+| (1, 1) <=> (1, 1) |
++-------------------+
+|                 1 |
++-------------------+
+select (1, null) <=> (1, 1);
++----------------------+
+| (1, null) <=> (1, 1) |
++----------------------+
+|                    0 |
++----------------------+
+select (1, null) <=> (1, null);
++-------------------------+
+| (1, null) <=> (1, null) |
++-------------------------+
+|                       1 |
++-------------------------+
+select (1, null) <=> (null, null);
++----------------------------+
+| (1, null) <=> (null, null) |
++----------------------------+
+|                          0 |
++----------------------------+
+select (null, null) <=> (null, null);
++-------------------------------+
+| (null, null) <=> (null, null) |
++-------------------------------+
+|                             1 |
++-------------------------------+
+
+select (select c1, c2 from t1 where c1 = 1) = (1, 1) from t2 where c1 = 1;
++-----------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (1, 1) |
++-----------------------------------------------+
+|                                             1 |
++-----------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) = (c2, c1) from t2 where c1 = 1;
++-------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (c2, c1) |
++-------------------------------------------------+
+|                                               1 |
++-------------------------------------------------+
+
+select (select c1 from t1 where c1 = 1) + 1 from t2 where c1 = 1;
++--------------------------------------+
+| (select c1 from t1 where c1 = 1) + 1 |
++--------------------------------------+
+|                                    2 |
++--------------------------------------+
+select (select c1 from t1 where 1 = 0) + 1 from t2 where c1 = 1;
++-------------------------------------+
+| (select c1 from t1 where 1 = 0) + 1 |
++-------------------------------------+
+|                                NULL |
++-------------------------------------+
+
+select c2 in (select c2 from t2) from t1;
++---------------------------+
+| c2 in (select c2 from t2) |
++---------------------------+
+|                         1 |
+|                         1 |
+|                         1 |
++---------------------------+
+select c2 = any(select c2 from t2) from t1;
++-----------------------------+
+| c2 = any(select c2 from t2) |
++-----------------------------+
+|                           1 |
+|                           1 |
+|                           1 |
++-----------------------------+
+select c2 != any(select c2 from t2) from t1;
++------------------------------+
+| c2 != any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 < any(select c2 from t2) from t1;
++-----------------------------+
+| c2 < any(select c2 from t2) |
++-----------------------------+
+|                           1 |
+|                           1 |
+|                           0 |
++-----------------------------+
+select c2 <= any(select c2 from t2) from t1;
++------------------------------+
+| c2 <= any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 > any(select c2 from t2) from t1;
++-----------------------------+
+| c2 > any(select c2 from t2) |
++-----------------------------+
+|                           0 |
+|                           1 |
+|                           1 |
++-----------------------------+
+select c2 >= any(select c2 from t2) from t1;
++------------------------------+
+| c2 >= any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 <=> any(select c2 from t2) from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '(select c2 from t2) from t1' at line 1
+select exists (select * from t2), not exists (select * from t2) from t1;
++---------------------------+-------------------------------+
+| exists (select * from t2) | not exists (select * from t2) |
++---------------------------+-------------------------------+
+|                         1 |                             0 |
+|                         1 |                             0 |
+|                         1 |                             0 |
++---------------------------+-------------------------------+
+select exists (select * from t2 where 1 = 0), not exists (select * from t2 where 1 = 0) from t1;
++---------------------------------------+-------------------------------------------+
+| exists (select * from t2 where 1 = 0) | not exists (select * from t2 where 1 = 0) |
++---------------------------------------+-------------------------------------------+
+|                                     0 |                                         1 |
+|                                     0 |                                         1 |
+|                                     0 |                                         1 |
++---------------------------------------+-------------------------------------------+
+
+select c2 = all (select c2 from t2) from t1;
++------------------------------+
+| c2 = all (select c2 from t2) |
++------------------------------+
+|                            0 |
+|                            0 |
+|                            0 |
++------------------------------+
+select c2 = any (select c2 from t2) from t1;
++------------------------------+
+| c2 = any (select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+
+select c2 = all (select c3 from t2) from t1;
++------------------------------+
+| c2 = all (select c3 from t2) |
++------------------------------+
+|                         NULL |
+|                            0 |
+|                            0 |
++------------------------------+
+select c2 = any (select c3 from t2) from t1;
++------------------------------+
+| c2 = any (select c3 from t2) |
++------------------------------+
+|                            1 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+
+select c3 = all (select c2 from t2) from t1;
++------------------------------+
+| c3 = all (select c2 from t2) |
++------------------------------+
+|                            0 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+select c3 = any (select c2 from t2) from t1;
++------------------------------+
+| c3 = any (select c2 from t2) |
++------------------------------+
+|                            1 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+
+select c3 <=> (select c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+
+select (c1, c3) = all (select c1, c2 from t2) from t1;
++----------------------------------------+
+| (c1, c3) = all (select c1, c2 from t2) |
++----------------------------------------+
+|                                      0 |
+|                                      0 |
+|                                      0 |
++----------------------------------------+
+select (c1, c3) = any (select c1, c2 from t2) from t1;
++----------------------------------------+
+| (c1, c3) = any (select c1, c2 from t2) |
++----------------------------------------+
+|                                      1 |
+|                                   NULL |
+|                                   NULL |
++----------------------------------------+
+select (c1, c3) <=> (select c1, c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+
+select exists (select 1);
++-------------------+
+| exists (select 1) |
++-------------------+
+|                 1 |
++-------------------+
+select not exists (select 1);
++-----------------------+
+| not exists (select 1) |
++-----------------------+
+|                     0 |
++-----------------------+
+select 1 from dual where exists (select c1 from t2);
++---+
+| 1 |
++---+
+| 1 |
++---+
+select 1 from dual where not exists (select c1 from t2);
++---+
+| 1 |
++---+
++---+
+select * from t1 where exists (select * from t2 where c1 < 0);
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
++----+------+------+------+
+select * from t1 where exists (select * from t2 where c1 > 0);
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
+|  2 |    2 | NULL | a    |
+|  3 |    3 | NULL | a    |
++----+------+------+------+
+
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1) |
++-----------------------------------------------------------------------------+
+|                                                                           1 |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1) |
++-------------------------------------------------------------------------------+
+|                                                                             1 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1) |
++-------------------------------------------------------------------------------+
+|                                                                             0 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0) |
++-------------------------------------------------------------------------------+
+|                                                                             0 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0) |
++-------------------------------------------------------------------------------+
+|                                                                             1 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 = 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+
+explain_protocol: 2
+EXPLAIN select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+|3 | TABLE SCAN   |t2  |3       |2           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0)) + :0], [t1.c2 = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_([2]), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c2]), filter(nil), rowset=256
+      access([t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[2 ; 2],
+      range_cond([t2.c1 = 2])
+  3 - output([cast(t2.c3, DECIMAL(11, 0))]), filter(nil), rowset=256
+      access([t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true
+select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
++---------------------------------------+---------------------------+
+| c1 + (select c2 from t2 where c1 = 2) | c2 in (select c3 from t2) |
++---------------------------------------+---------------------------+
+|                                     3 |                         1 |
+|                                     4 |                      NULL |
+|                                     5 |                      NULL |
++---------------------------------------+---------------------------+
+EXPLAIN select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |56          |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |18          |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0)) + subquery(1)]), filter(nil), rowset=256
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= :0]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])
+select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
++-----------------------------------------------------------+
+| c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) |
++-----------------------------------------------------------+
+|                                                         2 |
+|                                                      NULL |
+|                                                      NULL |
++-----------------------------------------------------------+
+EXPLAIN select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |1       |56          |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |18          |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([cast(t1.c1, DECIMAL(11, 0)) + subquery(1) < cast(10, DECIMAL(2, 0))]), rowset=256
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= :0]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])
+select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
++----+------+------+------+
+
+EXPLAIN select (select c1, c2 from t2 where c1 = 1) = (c2, c1) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |5           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1) = (t1.c2, cast(t1.c1, DECIMAL(11, 0)))]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (select c1, c2 from t2 where c1 = 1) = (c2, c1) from t1;
++-------------------------------------------------+
+| (select c1, c2 from t2 where c1 = 1) = (c2, c1) |
++-------------------------------------------------+
+|                                               1 |
+|                                               0 |
+|                                               0 |
++-------------------------------------------------+
+EXPLAIN select (select c1, c2 from t2 where c1 = 1) = (c1, c2) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |5           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1) = (t1.c1, t1.c2)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (select c1, c2 from t2 where c1 = 1) = (c1, c2) from t1;
++-------------------------------------------------+
+| (select c1, c2 from t2 where c1 = 1) = (c1, c2) |
++-------------------------------------------------+
+|                                               1 |
+|                                               0 |
+|                                               0 |
++-------------------------------------------------+
+EXPLAIN select (c2, c1) <= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |5           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(t1.c2, cast(t1.c1, DECIMAL(11, 0))) <= subquery(1)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (c2, c1) <= (select c1, c2 from t2 where c1 = 1) from t1;
++--------------------------------------------------+
+| (c2, c1) <= (select c1, c2 from t2 where c1 = 1) |
++--------------------------------------------------+
+|                                                1 |
+|                                                0 |
+|                                                0 |
++--------------------------------------------------+
+EXPLAIN select (c1, c2) <= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |5           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([(t1.c1, t1.c2) <= subquery(1)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), batch_das=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (c1, c2) <= (select c1, c2 from t2 where c1 = 1) from t1;
++--------------------------------------------------+
+| (c1, c2) <= (select c1, c2 from t2 where c1 = 1) |
++--------------------------------------------------+
+|                                                1 |
+|                                                0 |
+|                                                0 |
++--------------------------------------------------+
+EXPLAIN select (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+|3 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1) >= subquery(2)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1], [2]), batch_das=false
+  1 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c2], [cast(t2.c1, DECIMAL(11, 0))]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[2 ; 2],
+      range_cond([t2.c1 = 2])
+  3 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
++------------------------------------------------------------------------------+
+| (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) |
++------------------------------------------------------------------------------+
+|                                                                            1 |
+|                                                                            1 |
+|                                                                            1 |
++------------------------------------------------------------------------------+
+EXPLAIN select (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |3           |
+|3 | TABLE GET    |t2  |1       |3           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1) >= subquery(2)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1], [2]), batch_das=false
+  1 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [cast(t2.c1, DECIMAL(11, 0))]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[2 ; 2],
+      range_cond([t2.c1 = 2])
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range[1 ; 1],
+      range_cond([t2.c1 = 1])
+select (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
++------------------------------------------------------------------------------+
+| (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) |
++------------------------------------------------------------------------------+
+|                                                                            1 |
+|                                                                            1 |
+|                                                                            1 |
++------------------------------------------------------------------------------+
+
+EXPLAIN select c2 > (select c1 from t2 where c3 is not null) from t1;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |3       |4           |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE SCAN   |t2  |3       |2           |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c2 > cast(:0, DECIMAL(11, 0))]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c2]), filter(nil), rowset=256
+      access([t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c3 IS NOT NULL]), rowset=256
+      access([t2.c1], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.c1]), range(MIN ; MAX)always true
+select c2 > (select c1 from t2 where c3 is not null) from t1;
++-----------------------------------------------+
+| c2 > (select c1 from t2 where c3 is not null) |
++-----------------------------------------------+
+|                                             0 |
+|                                             1 |
+|                                             1 |
++-----------------------------------------------+
+EXPLAIN select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------
+|0 |SUBPLAN FILTER|    |1       |56          |
+|1 | TABLE SCAN   |t1  |3       |2           |
+|2 | TABLE GET    |t2  |1       |18          |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([t1.c2 + cast(subquery(1), DECIMAL(11, 0)) < cast(10, DECIMAL(2, 0))]), rowset=256
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])
+select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
+|  2 |    2 | NULL | a    |
+|  3 |    3 | NULL | a    |
++----+------+------+------+
+
+explain_protocol: 0
+drop table if exists t1;
+create table t1(c1 int ,c2 int, c3 int)partition by hash(c1) partitions 5;
+drop table if exists t2;
+create table t2(c1 int ,c2 int, c3 int)partition by hash(c1) partitions 5;
+drop table if exists t3;
+create table t3(c1 int ,c2 int, c3 int)partition by hash(c1) partitions 4;
+drop table if exists t4;
+create table t4(c1 int ,c2 int, c3 int)partition by hash(c1) partitions 4;
+
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+insert into t1 values(4, 4, 4);
+insert into t1 values(5, 5, 5);
+
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(3, 3, 3);
+insert into t2 values(4, 4, 4);
+insert into t2 values(5, 5, 5);
+
+insert into t3 values(1, 1, 1);
+insert into t3 values(2, 2, 2);
+insert into t3 values(3, 3, 3);
+insert into t3 values(4, 4, 4);
+insert into t3 values(5, 5, 5);
+
+insert into t4 values(1, 1, 1);
+insert into t4 values(2, 2, 2);
+insert into t4 values(3, 3, 3);
+insert into t4 values(4, 4, 4);
+insert into t4 values(5, 5, 5);
+explain_protocol: 2
+##PULL TO LOCAL
+EXPLAIN select /*+no_rewrite parallel(2)*/ (select count(*) from t1) as ref0 from t2 order by 1;
+Query Plan
+==========================================================
+|ID|OPERATOR              |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------
+|0 |SUBPLAN FILTER        |        |1       |10          |
+|1 | PX COORDINATOR       |        |1       |5           |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|1       |5           |
+|3 |   PX BLOCK ITERATOR  |        |1       |5           |
+|4 |    TABLE SCAN        |t2      |1       |5           |
+|5 | SCALAR GROUP BY      |        |1       |5           |
+|6 |  PX COORDINATOR      |        |2       |5           |
+|7 |   EXCHANGE OUT DISTR |:EX20000|2       |5           |
+|8 |    MERGE GROUP BY    |        |2       |5           |
+|9 |     PX BLOCK ITERATOR|        |1       |5           |
+|10|      TABLE SCAN      |t1      |1       |5           |
+==========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([:0]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil), batch_das=false
+  1 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=256
+      dop=2
+  3 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(*)))])
+  6 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+  7 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      dop=2
+  8 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  9 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+ 10 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ (select count(*) from t1) as ref0 from t2 order by 1;
++------+
+| ref0 |
++------+
+|    5 |
+|    5 |
+|    5 |
+|    5 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ (select c1 from t1 order by c2 limit 1) as ref0 from t2 order by 1;
+Query Plan
+================================================================
+|ID|OPERATOR                    |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SUBPLAN FILTER              |        |1       |9           |
+|1 | PX COORDINATOR             |        |1       |5           |
+|2 |  EXCHANGE OUT DISTR        |:EX10000|1       |5           |
+|3 |   PX BLOCK ITERATOR        |        |1       |5           |
+|4 |    TABLE SCAN              |t2      |1       |5           |
+|5 | LIMIT                      |        |1       |5           |
+|6 |  PX COORDINATOR MERGE SORT |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR       |:EX20000|1       |5           |
+|8 |    TOP-N SORT              |        |1       |5           |
+|9 |     PX BLOCK ITERATOR      |        |1       |5           |
+|10|      TABLE SCAN            |t1      |1       |5           |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([:0]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil), batch_das=false
+  1 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=256
+      dop=2
+  3 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1]), filter(nil), rowset=256
+      limit(1), offset(nil)
+  6 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC])
+  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  8 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC]), topn(1)
+  9 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+ 10 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ (select c1 from t1 order by c2 limit 1) as ref0 from t2 order by 1;
++------+
+| ref0 |
++------+
+|    1 |
+|    1 |
+|    1 |
+|    1 |
+|    1 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2) order by 1;
+Query Plan
+=========================================================
+|ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                 |        |1       |9           |
+|1 | SUBPLAN FILTER      |        |1       |9           |
+|2 |  PX COORDINATOR     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR|        |1       |5           |
+|5 |     TABLE SCAN      |t1      |1       |5           |
+|6 |  PX COORDINATOR     |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
+|8 |    PX BLOCK ITERATOR|        |1       |5           |
+|9 |     TABLE SCAN      |t2      |1       |5           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1]), filter(nil), startup_filter([:0]), rowset=256
+  3 - output([t1.c1]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2)
+                                                    and exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
+Query Plan
+=========================================================
+|ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                 |        |1       |412         |
+|1 | SUBPLAN FILTER      |        |1       |412         |
+|2 |  PX COORDINATOR     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR|        |1       |5           |
+|5 |     TABLE SCAN      |t1      |1       |5           |
+|6 |  PX COORDINATOR     |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
+|8 |    PX BLOCK ITERATOR|        |1       |5           |
+|9 |     TABLE SCAN      |t2      |1       |5           |
+|10|  PX COORDINATOR     |        |1       |5           |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |5           |
+|12|    PX BLOCK ITERATOR|        |1       |5           |
+|13|     TABLE SCAN      |t2      |1       |5           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c1]), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1]), filter(nil), startup_filter([:1]), rowset=256
+  3 - output([t1.c1]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([1]), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      dop=2
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2)
+                                                    and exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+##partition wise
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
+Query Plan
+==============================================================
+|ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |1       |9           |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1       |9           |
+|2 |  SORT                    |        |1       |9           |
+|3 |   PX PARTITION ITERATOR  |        |1       |9           |
+|4 |    SUBPLAN FILTER        |        |1       |9           |
+|5 |     TABLE SCAN           |t1      |1       |5           |
+|6 |     TABLE SCAN           |t2      |1       |5           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  3 - output([t1.c1]), filter(nil), rowset=256
+      partition wise, force partition granule
+  4 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
+Query Plan
+==============================================================
+|ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |1       |13          |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1       |13          |
+|2 |  SORT                    |        |1       |13          |
+|3 |   PX PARTITION ITERATOR  |        |1       |13          |
+|4 |    SUBPLAN FILTER        |        |1       |13          |
+|5 |     TABLE SCAN           |t1      |1       |5           |
+|6 |     TABLE SCAN           |t2      |1       |5           |
+|7 |     TABLE SCAN           |t2      |1       |5           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  3 - output([t1.c1]), filter(nil), rowset=256
+      partition wise, force partition granule
+  4 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([1]), filter([:1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c1 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t3 where t1.c1 = t3.c1) order by 1;
+Query Plan
+=========================================================
+|ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                 |        |1       |810         |
+|1 | SUBPLAN FILTER      |        |1       |810         |
+|2 |  PX COORDINATOR     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR|        |1       |5           |
+|5 |     TABLE SCAN      |t1      |1       |5           |
+|6 |  PX COORDINATOR     |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
+|8 |    PX BLOCK ITERATOR|        |1       |5           |
+|9 |     TABLE SCAN      |t2      |1       |5           |
+|10|  PX COORDINATOR     |        |1       |4           |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |4           |
+|12|    PX BLOCK ITERATOR|        |1       |4           |
+|13|     TABLE SCAN      |t3      |1       |4           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1]), filter(nil), rowset=256
+  3 - output([t1.c1]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([1]), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      dop=2
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter([:1 = t3.c1]), rowset=256
+      access([t3.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t3 where t1.c1 = t3.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+##repart
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1       |10          |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1       |10          |
+|2 |  SORT                        |        |1       |9           |
+|3 |   SUBPLAN FILTER             |        |1       |9           |
+|4 |    EXCHANGE IN DISTR         |        |1       |5           |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|6 |      PX BLOCK ITERATOR       |        |1       |5           |
+|7 |       TABLE SCAN             |t1      |1       |5           |
+|8 |    PX PARTITION ITERATOR     |        |1       |5           |
+|9 |     TABLE SCAN               |t2      |1       |5           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      (#keys=1, [t1.c2]), dop=2
+  6 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([1]), filter(nil), rowset=256
+      affinitize, partition wise
+  9 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
+Query Plan
+=========================================================================
+|ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |SORT                                 |        |1       |814         |
+|1 | SUBPLAN FILTER                      |        |1       |814         |
+|2 |  PX COORDINATOR                     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR                |        |1       |5           |
+|5 |     TABLE SCAN                      |t1      |1       |5           |
+|6 |  PX COORDINATOR                     |        |1       |8           |
+|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |8           |
+|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
+|9 |     PX BLOCK ITERATOR               |        |1       |5           |
+|10|      TABLE SCAN                     |t2      |1       |5           |
+|11|     MATERIAL                        |        |1       |4           |
+|12|      EXCHANGE IN DISTR              |        |1       |4           |
+|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
+|14|        PX BLOCK ITERATOR            |        |1       |4           |
+|15|         TABLE SCAN                  |t3      |1       |4           |
+|16|  PX COORDINATOR                     |        |1       |5           |
+|17|   EXCHANGE OUT DISTR                |:EX30000|1       |5           |
+|18|    PX BLOCK ITERATOR                |        |1       |5           |
+|19|     TABLE SCAN                      |t2      |1       |5           |
+=========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c1], [t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+  9 - output(nil), filter(nil), rowset=256
+ 10 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output(nil), filter(nil), rowset=256
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter(nil), rowset=256
+      dop=2
+ 14 - output(nil), filter(nil), rowset=256
+ 15 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+ 16 - output([1]), filter(nil), rowset=256
+ 17 - output(nil), filter(nil), rowset=256
+      dop=2
+ 18 - output(nil), filter(nil), rowset=256
+ 19 - output(nil), filter([:1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
+Query Plan
+=========================================================================
+|ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |SORT                                 |        |1       |1217        |
+|1 | SUBPLAN FILTER                      |        |1       |1217        |
+|2 |  PX COORDINATOR                     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR                |        |1       |5           |
+|5 |     TABLE SCAN                      |t1      |1       |5           |
+|6 |  PX COORDINATOR                     |        |1       |8           |
+|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |8           |
+|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
+|9 |     PX BLOCK ITERATOR               |        |1       |5           |
+|10|      TABLE SCAN                     |t2      |1       |5           |
+|11|     MATERIAL                        |        |1       |4           |
+|12|      EXCHANGE IN DISTR              |        |1       |4           |
+|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
+|14|        PX BLOCK ITERATOR            |        |1       |4           |
+|15|         TABLE SCAN                  |t3      |1       |4           |
+|16|  PX COORDINATOR                     |        |1       |5           |
+|17|   EXCHANGE OUT DISTR                |:EX30000|1       |5           |
+|18|    PX BLOCK ITERATOR                |        |1       |5           |
+|19|     TABLE SCAN                      |t2      |1       |5           |
+|20|  PX COORDINATOR                     |        |1       |5           |
+|21|   EXCHANGE OUT DISTR                |:EX40000|1       |5           |
+|22|    PX BLOCK ITERATOR                |        |1       |5           |
+|23|     TABLE SCAN                      |t2      |1       |5           |
+=========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))], [(T_OP_EXISTS, subquery(3))]), rowset=256
+      exec_params_([t1.c1], [t1.c2], [t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+  9 - output(nil), filter(nil), rowset=256
+ 10 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output(nil), filter(nil), rowset=256
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter(nil), rowset=256
+      dop=2
+ 14 - output(nil), filter(nil), rowset=256
+ 15 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+ 16 - output([1]), filter(nil), rowset=256
+ 17 - output(nil), filter(nil), rowset=256
+      dop=2
+ 18 - output(nil), filter(nil), rowset=256
+ 19 - output(nil), filter([:1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 20 - output([1]), filter(nil), rowset=256
+ 21 - output(nil), filter(nil), rowset=256
+      dop=2
+ 22 - output(nil), filter(nil), rowset=256
+ 23 - output(nil), filter([:2 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1)
+                                                    and exists(select 1 from t2 where t1.c2 = t2.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t3 where t1.c2 = t3.c1) order by 1;
+Query Plan
+=========================================================
+|ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                 |        |1       |810         |
+|1 | SUBPLAN FILTER      |        |1       |810         |
+|2 |  PX COORDINATOR     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR|        |1       |5           |
+|5 |     TABLE SCAN      |t1      |1       |5           |
+|6 |  PX COORDINATOR     |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
+|8 |    PX BLOCK ITERATOR|        |1       |5           |
+|9 |     TABLE SCAN      |t2      |1       |5           |
+|10|  PX COORDINATOR     |        |1       |4           |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |4           |
+|12|    PX BLOCK ITERATOR|        |1       |4           |
+|13|     TABLE SCAN      |t3      |1       |4           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c1], [t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([1]), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      dop=2
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter([:1 = t3.c1]), rowset=256
+      access([t3.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c1 = t2.c1)
+                                                    and exists(select 1 from t3 where t1.c2 = t3.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t4 where t1.c2 = t4.c1) and exists (select 1 from t3 where t1.c2 = t3.c1) order by 1;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1       |12          |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1       |12          |
+|2 |  SORT                        |        |1       |12          |
+|3 |   SUBPLAN FILTER             |        |1       |12          |
+|4 |    EXCHANGE IN DISTR         |        |1       |5           |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|6 |      PX BLOCK ITERATOR       |        |1       |5           |
+|7 |       TABLE SCAN             |t1      |1       |5           |
+|8 |    PX PARTITION ITERATOR     |        |1       |4           |
+|9 |     TABLE SCAN               |t4      |1       |4           |
+|10|    PX PARTITION ITERATOR     |        |1       |4           |
+|11|     TABLE SCAN               |t3      |1       |4           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [INTERNAL_FUNCTION(t1.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  3 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
+      exec_params_([t1.c2], [t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      (#keys=1, [t1.c2]), dop=2
+  6 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  7 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([1]), filter(nil), rowset=256
+      affinitize, partition wise
+  9 - output(nil), filter([:0 = t4.c1]), rowset=256
+      access([t4.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([1]), filter(nil), rowset=256
+      affinitize, partition wise
+ 11 - output(nil), filter([:1 = t3.c1]), rowset=256
+      access([t3.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t4 where t1.c2 = t4.c1) and exists (select 1 from t3 where t1.c2 = t3.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+##bc2host
+EXPLAIN select /*+no_rewrite parallel(2)*/ (select c1 from t1 where t1.c1 = t2.c1 order by c2 limit 1) as ref0 from t2 order by 1;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |1       |408         |
+|1 | SUBPLAN FILTER              |        |1       |408         |
+|2 |  PX COORDINATOR             |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR        |:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR        |        |1       |5           |
+|5 |     TABLE SCAN              |t2      |1       |5           |
+|6 |  LIMIT                      |        |1       |5           |
+|7 |   PX COORDINATOR MERGE SORT |        |1       |5           |
+|8 |    EXCHANGE OUT DISTR       |:EX20000|1       |5           |
+|9 |     TOP-N SORT              |        |1       |5           |
+|10|      PX BLOCK ITERATOR      |        |1       |5           |
+|11|       TABLE SCAN            |t1      |1       |5           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1)]), filter(nil), rowset=256
+      sort_keys([subquery(1), ASC])
+  1 - output([subquery(1)]), filter(nil), rowset=256
+      exec_params_([t2.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t2.c1]), filter(nil), rowset=256
+  3 - output([t2.c1]), filter(nil), rowset=256
+      dop=2
+  4 - output([t2.c1]), filter(nil), rowset=256
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t1.c1]), filter(nil), rowset=256
+      limit(1), offset(nil)
+  7 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC])
+  8 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  9 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC]), topn(1)
+ 10 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+ 11 - output([t1.c1], [t1.c2]), filter([t1.c1 = :0]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ (select c1 from t1 where t1.c1 = t2.c1 order by c2 limit 1) as ref0 from t2 order by 1;
++------+
+| ref0 |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c2) order by 1;
+Query Plan
+=========================================================
+|ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                 |        |1       |408         |
+|1 | SUBPLAN FILTER      |        |1       |408         |
+|2 |  PX COORDINATOR     |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR|        |1       |5           |
+|5 |     TABLE SCAN      |t1      |1       |5           |
+|6 |  PX COORDINATOR     |        |1       |5           |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
+|8 |    PX BLOCK ITERATOR|        |1       |5           |
+|9 |     TABLE SCAN      |t2      |1       |5           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      dop=2
+  8 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter([:0 = t2.c2]), rowset=256
+      access([t2.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2 where t1.c2 = t2.c2) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+EXPLAIN select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3, t4 where t1.c2 = t2.c2 group by t1.c1) order by 1;
+Query Plan
+============================================================================
+|ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                                    |        |1       |415         |
+|1 | SUBPLAN FILTER                         |        |1       |415         |
+|2 |  PX COORDINATOR                        |        |1       |5           |
+|3 |   EXCHANGE OUT DISTR                   |:EX10000|1       |5           |
+|4 |    PX BLOCK ITERATOR                   |        |1       |5           |
+|5 |     TABLE SCAN                         |t1      |1       |5           |
+|6 |  MERGE GROUP BY                        |        |1       |12          |
+|7 |   PX COORDINATOR                       |        |2       |12          |
+|8 |    EXCHANGE OUT DISTR                  |:EX20002|2       |12          |
+|9 |     MERGE GROUP BY                     |        |2       |12          |
+|10|      NESTED-LOOP JOIN CARTESIAN        |        |1       |11          |
+|11|       NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
+|12|        PX BLOCK ITERATOR               |        |1       |5           |
+|13|         TABLE SCAN                     |t2      |1       |5           |
+|14|        MATERIAL                        |        |1       |4           |
+|15|         EXCHANGE IN DISTR              |        |1       |4           |
+|16|          EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
+|17|           PX BLOCK ITERATOR            |        |1       |4           |
+|18|            TABLE SCAN                  |t3      |1       |4           |
+|19|       MATERIAL                         |        |1       |4           |
+|20|        EXCHANGE IN DISTR               |        |1       |4           |
+|21|         EXCHANGE OUT DISTR (BROADCAST) |:EX20001|1       |4           |
+|22|          PX BLOCK ITERATOR             |        |1       |4           |
+|23|           TABLE SCAN                   |t4      |1       |4           |
+============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c2], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      dop=2
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter(nil), rowset=256
+      group(nil), agg_func(nil)
+  7 - output(nil), filter(nil), rowset=256
+  8 - output(nil), filter(nil), rowset=256
+      dop=2
+  9 - output(nil), filter(nil), rowset=256
+      group(nil), agg_func(nil)
+ 10 - output(nil), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+ 11 - output(nil), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+ 12 - output(nil), filter(nil), rowset=256
+ 13 - output(nil), filter([:0 = t2.c2]), rowset=256
+      access([t2.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 14 - output(nil), filter(nil), rowset=256
+ 15 - output(nil), filter(nil), rowset=256
+ 16 - output(nil), filter(nil), rowset=256
+      dop=2
+ 17 - output(nil), filter(nil), rowset=256
+ 18 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+ 19 - output(nil), filter(nil), rowset=256
+ 20 - output(nil), filter(nil), rowset=256
+ 21 - output(nil), filter(nil), rowset=256
+      dop=2
+ 22 - output(nil), filter(nil), rowset=256
+ 23 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3, t4 where t1.c2 = t2.c2 group by t1.c1) order by 1;
++------+
+| c1   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+set ob_enable_transformation = on;
+explain_protocol: 0
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20)) partition by hash(c1) partitions 2;
+create table t2 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t1 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (12, 9, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (4, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (9, 10, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (7, 4, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (6, 7, null, 'a');
+
+insert into t1 (c1, c2, c3, c4) values (18, 1, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (19, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (20, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (21, 5, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (22, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (23, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (24, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (25, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (26, 9, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (28, 3, null, 'a');
+
+insert into t2 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t2 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (11, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (5, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (15, 13, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (17, 12, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (6, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (7, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (10, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (13, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (14, 17, null, 'a');
+
+insert into t2 (c1, c2, c3, c4) values (18, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (19, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (20, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (21, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (22, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (23, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (24, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (26, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (27, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (29, 12, null, 'a');
+
+explain_protocol: 3
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |23          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |22          |
+|2 |  SUBPLAN FILTER         |        |1       |22          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))]), filter(nil), rowset=256
+      exec_params_([t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
++----+---+
+| c1 | x |
++----+---+
+|  1 | 1 |
+|  2 | 1 |
+|  3 | 1 |
+|  4 | 0 |
+|  6 | 1 |
+|  7 | 1 |
+|  9 | 0 |
+| 12 | 0 |
+| 18 | 1 |
+| 19 | 1 |
+| 20 | 1 |
+| 21 | 1 |
+| 22 | 1 |
+| 23 | 1 |
+| 24 | 1 |
+| 25 | 0 |
+| 26 | 1 |
+| 28 | 0 |
++----+---+
+EXPLAIN EXTENDED_NOADDR select c1, (select c1 from t2 where t2.c1 >= t1.c1 and t2.c2 > t1.c3 limit 1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |23          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |23          |
+|2 |  SUBPLAN FILTER         |        |1       |22          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |1       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, subquery(1))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, subquery(1))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [subquery(1)]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c3]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter([t2.c2 > cast(:1, DECIMAL(11, 0))]), rowset=256
+      access([GROUP_ID], [t2.c1], [t2.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+select c1, (select c1 from t2 where t2.c1 >= t1.c1 and t2.c2 > t1.c3 limit 1) as x from t1;
++----+---+
+| c1 | x |
++----+---+
+|  1 | 2 |
+|  2 | NULL |
+|  3 | NULL |
+|  4 | NULL |
+|  6 | NULL |
+|  7 | NULL |
+|  9 | NULL |
+| 12 | NULL |
+| 18 | NULL |
+| 19 | NULL |
+| 20 | NULL |
+| 21 | NULL |
+| 22 | NULL |
+| 23 | NULL |
+| 24 | NULL |
+| 25 | NULL |
+| 26 | NULL |
+| 28 | NULL |
++----+---+
+EXPLAIN EXTENDED_NOADDR select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
+Query Plan
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |PX COORDINATOR          |        |1       |22          |
+|1 | EXCHANGE OUT DISTR     |:EX10000|1       |22          |
+|2 |  SUBPLAN FILTER        |        |1       |22          |
+|3 |   PX PARTITION ITERATOR|        |1       |4           |
+|4 |    TABLE SCAN          |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE GET|t2      |1       |18          |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 + subquery(1))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 + subquery(1))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [subquery(1)]), filter(nil), rowset=256
+      exec_params_([t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :0])
+select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
++----+----+
+| c1 | x  |
++----+----+
+|  1 |  2 |
+|  2 |  4 |
+|  3 |  6 |
+|  4 | NULL |
+|  6 | 12 |
+|  7 | 14 |
+|  9 | NULL |
+| 12 | NULL |
+| 18 | 36 |
+| 19 | 38 |
+| 20 | 40 |
+| 21 | 42 |
+| 22 | 44 |
+| 23 | 46 |
+| 24 | 48 |
+| 25 | NULL |
+| 26 | 52 |
+| 28 | NULL |
++----+----+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |41          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
+|2 |  SUBPLAN FILTER         |        |1       |40          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+  6 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :1])
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
++----+------+
+| c1 | x    |
++----+------+
+|  1 |    1 |
+|  2 |    1 |
+|  3 |    1 |
+|  4 |    0 |
+|  6 |    1 |
+|  7 |    0 |
+|  9 |    0 |
+| 12 |    0 |
+| 18 |    0 |
+| 19 |    0 |
+| 20 |    0 |
+| 21 |    0 |
+| 22 |    0 |
+| 23 |    0 |
+| 24 |    0 |
+| 25 |    0 |
+| 26 |    0 |
+| 28 |    0 |
++----+------+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |41          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
+|2 |  SUBPLAN FILTER         |        |1       |40          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+  6 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :1])
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
++----+------+
+| c1 | x    |
++----+------+
+|  1 |    1 |
+|  2 |    1 |
+|  3 |    1 |
+|  4 |    0 |
+|  6 |    1 |
+|  7 |    1 |
+|  9 |    0 |
+| 12 |    1 |
+| 18 |    1 |
+| 19 |    1 |
+| 20 |    1 |
+| 21 |    1 |
+| 22 |    1 |
+| 23 |    1 |
+| 24 |    1 |
+| 25 |    0 |
+| 26 |    1 |
+| 28 |    0 |
++----+------+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |41          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
+|2 |  SUBPLAN FILTER         |        |1       |40          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :0])
+  6 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
++----+------+
+| c1 | x    |
++----+------+
+|  1 |    1 |
+|  2 |    1 |
+|  3 |    1 |
+|  4 |    0 |
+|  6 |    0 |
+|  7 |    0 |
+|  9 |    0 |
+| 12 |    0 |
+| 18 |    0 |
+| 19 |    0 |
+| 20 |    0 |
+| 21 |    0 |
+| 22 |    0 |
+| 23 |    0 |
+| 24 |    0 |
+| 25 |    0 |
+| 26 |    0 |
+| 28 |    0 |
++----+------+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |41          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
+|2 |  SUBPLAN FILTER         |        |1       |40          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :0])
+  6 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
++----+------+
+| c1 | x    |
++----+------+
+|  1 |    1 |
+|  2 |    1 |
+|  3 |    1 |
+|  4 |    0 |
+|  6 |    1 |
+|  7 |    1 |
+|  9 |    0 |
+| 12 |    0 |
+| 18 |    1 |
+| 19 |    1 |
+| 20 |    1 |
+| 21 |    1 |
+| 22 |    1 |
+| 23 |    1 |
+| 24 |    1 |
+| 25 |    0 |
+| 26 |    1 |
+| 28 |    0 |
++----+------+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |59          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |59          |
+|2 |  SUBPLAN FILTER         |        |1       |58          |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil),
+rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil),
+rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))], [subquery(3)]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :0])
+  6 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :2])
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
++----+------+
+| c1 | x    |
++----+------+
+|  1 |    1 |
+|  2 |    1 |
+|  3 |    1 |
+|  4 | NULL |
+|  6 |    1 |
+|  7 |    1 |
+|  9 | NULL |
+| 12 | NULL |
+| 18 |    1 |
+| 19 |    1 |
+| 20 |    1 |
+| 21 |    1 |
+| 22 |    1 |
+| 23 |    1 |
+| 24 |    1 |
+| 25 | NULL |
+| 26 |    1 |
+| 28 | NULL |
++----+------+
+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |131         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
+|2 |  SUBPLAN FILTER         |        |1       |130         |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR
+cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil),
+rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR
+cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil),
+rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :0])
+  6 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :2])
+  8 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :3])
+  9 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :4])
+ 10 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:5 = t2.c1])
+ 11 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:6 >= t2.c1])
+select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
++----+------+------+------+
+| c1 | x    | y    | z    |
++----+------+------+------+
+|  1 |    1 |    1 |    0 |
+|  2 |    1 |    1 |    0 |
+|  3 |    1 |    1 |    0 |
+|  4 | NULL | NULL |    0 |
+|  6 |    1 |    1 |    0 |
+|  7 |    1 |    1 |    1 |
+|  9 | NULL | NULL |    0 |
+| 12 | NULL | NULL |    0 |
+| 18 |    1 |    1 |    1 |
+| 19 |    1 |    1 |    1 |
+| 20 |    1 |    1 |    1 |
+| 21 |    1 |    1 |    1 |
+| 22 |    1 |    1 |    1 |
+| 23 |    1 |    1 |    1 |
+| 24 |    1 |    1 |    1 |
+| 25 | NULL | NULL |    0 |
+| 26 |    1 |    1 |    1 |
+| 28 | NULL | NULL |    0 |
++----+------+------+------+
+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |131         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
+|2 |  SUBPLAN FILTER         |        |1       |131         |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
+DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
+DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+  6 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :2])
+  8 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :3])
+  9 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :4])
+ 10 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:5 = t2.c1])
+ 11 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:6 >= t2.c1])
+select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
++----+------+------+------+
+| c1 | x    | y    | z    |
++----+------+------+------+
+|  1 |    1 |    1 |    0 |
+|  2 |    1 |    1 |    0 |
+|  3 |    1 |    1 |    0 |
+|  4 | NULL | NULL |    0 |
+|  6 |    1 |    0 |    0 |
+|  7 |    1 |    0 |    1 |
+|  9 | NULL | NULL |    0 |
+| 12 | NULL | NULL |    0 |
+| 18 |    1 |    1 |    1 |
+| 19 |    1 |    1 |    1 |
+| 20 |    1 |    1 |    1 |
+| 21 |    1 |    1 |    1 |
+| 22 |    1 |    1 |    1 |
+| 23 |    1 |    1 |    1 |
+| 24 |    1 |    1 |    1 |
+| 25 | NULL | NULL |    0 |
+| 26 |    1 |    1 |    1 |
+| 28 | NULL | NULL |    0 |
++----+------+------+------+
+
+EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |131         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
+|2 |  SUBPLAN FILTER         |        |1       |131         |
+|3 |   PX PARTITION ITERATOR |        |1       |4           |
+|4 |    TABLE SCAN           |t1      |1       |4           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
+DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
+DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
+[subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 >= :0])
+  6 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :1])
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :2])
+  8 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 = :3])
+  9 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([t2.c1 <= :4])
+ 10 - output([t2.c2]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:5 = t2.c1])
+ 11 - output([t2.c1]), filter(nil), rowset=256
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:6 >= t2.c1])
+select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
++----+------+------+------+
+| c1 | x    | y    | z    |
++----+------+------+------+
+|  1 |    1 |    1 |    0 |
+|  2 |    1 |    1 |    0 |
+|  3 |    1 |    1 |    0 |
+|  4 | NULL | NULL |    0 |
+|  6 |    1 |    0 |    0 |
+|  7 |    1 |    0 |    1 |
+|  9 | NULL | NULL |    0 |
+| 12 | NULL | NULL |    0 |
+| 18 |    1 |    1 |    1 |
+| 19 |    1 |    1 |    1 |
+| 20 |    1 |    1 |    1 |
+| 21 |    1 |    1 |    1 |
+| 22 |    1 |    1 |    1 |
+| 23 |    1 |    1 |    1 |
+| 24 |    1 |    1 |    1 |
+| 25 | NULL | NULL |    0 |
+| 26 |    1 |    1 |    1 |
+| 28 | NULL | NULL |    0 |
++----+------+------+------+
+
+explain_protocol: 0
+drop table if exists t1;
+drop table if exists t3;
+
+create table t1 (c1 int primary key, c2 int, c3 int, c4 int) ;
+create table t3 (c1 int primary key, c2 int, c3 int, c4 int, index(c3)) ;
+
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 1);
+insert into t1 (c1, c2, c3, c4) values (2, 2, 2, 2);
+insert into t1 (c1, c2, c3, c4) values (12,9, 3, 3);
+insert into t1 (c1, c2, c3, c4) values (4, 3, 4, 4);
+insert into t1 (c1, c2, c3, c4) values (3, 3, 5, 5);
+insert into t1 (c1, c2, c3, c4) values (9, 10,6, 6);
+insert into t1 (c1, c2, c3, c4) values (7, 4, 7, 7);
+insert into t1 (c1, c2, c3, c4) values (6, 7, 8, 8);
+
+insert into t1 (c1, c2, c3, c4) values (18, 1,9, 9);
+insert into t1 (c1, c2, c3, c4) values (19, 2,10,10);
+insert into t1 (c1, c2, c3, c4) values (20, 3,11,11);
+insert into t1 (c1, c2, c3, c4) values (21, 5,12,12);
+insert into t1 (c1, c2, c3, c4) values (22, 7,13,13);
+insert into t1 (c1, c2, c3, c4) values (23, 7,14,14);
+insert into t1 (c1, c2, c3, c4) values (24, 7,15,15);
+insert into t1 (c1, c2, c3, c4) values (25, 7,16,16);
+insert into t1 (c1, c2, c3, c4) values (26, 9,17,17);
+insert into t1 (c1, c2, c3, c4) values (28, 3,18,18);
+
+insert into t3 (c1, c2, c3, c4) values (1, 1, 1, 1);
+insert into t3 (c1, c2, c3, c4) values (2, 2, 2, 2);
+insert into t3 (c1, c2, c3, c4) values (12,9, 3, 3);
+insert into t3 (c1, c2, c3, c4) values (4, 3, 4, 4);
+insert into t3 (c1, c2, c3, c4) values (3, 3, 5, 5);
+insert into t3 (c1, c2, c3, c4) values (9, 10,6, 6);
+insert into t3 (c1, c2, c3, c4) values (7, 4, 7, 7);
+insert into t3 (c1, c2, c3, c4) values (6, 7, 8, 8);
+
+insert into t3 (c1, c2, c3, c4) values (18, 1,9, 9);
+insert into t3 (c1, c2, c3, c4) values (19, 2,10,10);
+insert into t3 (c1, c2, c3, c4) values (20, 3,11,11);
+insert into t3 (c1, c2, c3, c4) values (21, 5,12,12);
+insert into t3 (c1, c2, c3, c4) values (22, 7,13,13);
+insert into t3 (c1, c2, c3, c4) values (23, 7,14,14);
+insert into t3 (c1, c2, c3, c4) values (24, 7,15,15);
+insert into t3 (c1, c2, c3, c4) values (25, 7,16,16);
+insert into t3 (c1, c2, c3, c4) values (26, 9,17,17);
+insert into t3 (c1, c2, c3, c4) values (28, 3,18,18);
+
+select /*+ no_rewrite*/ * from t1 where exists (select /*+no_unnest */ 1 from t3 where t1.c1 > t3.c3 and t3.c4 < 100 limit 1) ;
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  2 |    2 |    2 |    2 |
+|  3 |    3 |    5 |    5 |
+|  4 |    3 |    4 |    4 |
+|  6 |    7 |    8 |    8 |
+|  7 |    4 |    7 |    7 |
+|  9 |   10 |    6 |    6 |
+| 12 |    9 |    3 |    3 |
+| 18 |    1 |    9 |    9 |
+| 19 |    2 |   10 |   10 |
+| 20 |    3 |   11 |   11 |
+| 21 |    5 |   12 |   12 |
+| 22 |    7 |   13 |   13 |
+| 23 |    7 |   14 |   14 |
+| 24 |    7 |   15 |   15 |
+| 25 |    7 |   16 |   16 |
+| 26 |    9 |   17 |   17 |
+| 28 |    3 |   18 |   18 |
++----+------+------+------+

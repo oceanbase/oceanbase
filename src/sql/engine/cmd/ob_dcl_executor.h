@@ -15,47 +15,50 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 }
-namespace obrpc {
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
 
-namespace sql {
+namespace sql
+{
 class ObExecContext;
 class ObGrantStmt;
-class ObGrantExecutor {
+class ObGrantExecutor
+{
 public:
-  ObGrantExecutor()
-  {}
-  virtual ~ObGrantExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObGrantStmt& stmt);
-
+  ObGrantExecutor() {}
+  virtual ~ObGrantExecutor() {}
+  int execute(ObExecContext &ctx, ObGrantStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGrantExecutor);
 };
 
 class ObRevokeStmt;
-class ObRevokeExecutor {
+class ObRevokeExecutor
+{
 public:
-  ObRevokeExecutor()
-  {}
-  virtual ~ObRevokeExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObRevokeStmt& stmt);
-
+  ObRevokeExecutor() {}
+  virtual ~ObRevokeExecutor() {}
+  int execute(ObExecContext &ctx, ObRevokeStmt &stmt);
 private:
-  int revoke_user(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
-  int revoke_db(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
-  int revoke_table(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
-  int revoke_sys_priv(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
-
+  int revoke_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                  ObRevokeStmt &stmt);
+  int revoke_db(obrpc::ObCommonRpcProxy *rpc_proxy,
+                ObRevokeStmt &stmt);
+  int revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
+                   ObRevokeStmt &stmt);
+  int revoke_sys_priv(obrpc::ObCommonRpcProxy *rpc_proxy,
+                   ObRevokeStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeExecutor);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_CMD_OB_DCL_EXECUTOR_
+}
+}
+#endif //OCEANBASE_SQL_ENGINE_CMD_OB_DCL_EXECUTOR_

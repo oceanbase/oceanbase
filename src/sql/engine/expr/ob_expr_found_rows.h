@@ -14,21 +14,24 @@
 #define _OB_SQL_EXPR_FOUND_ROWS_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
-class ObExprFoundRows : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprFoundRows : public ObFuncExprOperator
+{
 public:
-  explicit ObExprFoundRows(common::ObIAllocator& alloc);
+explicit  ObExprFoundRows(common::ObIAllocator &alloc);
   virtual ~ObExprFoundRows();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int eval_found_rows(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  static int eval_found_rows(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFoundRows);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_FOUND_ROWS_H_ */

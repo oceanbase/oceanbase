@@ -16,8 +16,10 @@
 #include <gtest/gtest.h>
 #include "schema/db_initializer.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace share::schema;
 
@@ -30,23 +32,23 @@ TEST(ObDMLSqlSplicer, splice)
   ASSERT_EQ(OB_SUCCESS, splicer.add_column("col4", 4));
   ObSqlString sql;
 
-  const char* out = "INSERT INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
+  const char *out  = "INSERT INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
   int ret = splicer.splice_insert_sql("tname", sql);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_STREQ(out, sql.ptr());
 
-  out = "INSERT IGNORE INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
+  out  = "INSERT IGNORE INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
   ret = splicer.splice_insert_ignore_sql("tname", sql);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_STREQ(out, sql.ptr());
 
   out = "INSERT INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)"
-        " ON DUPLICATE KEY UPDATE col3 = 'str3', col4 = 4";
+      " ON DUPLICATE KEY UPDATE col3 = 'str3', col4 = 4";
   ret = splicer.splice_insert_update_sql("tname", sql);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_STREQ(out, sql.ptr());
 
-  out = "REPLACE INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
+  out  = "REPLACE INTO tname (col1, col2, col3, col4) VALUES (1, 2, 'str3', 4)";
   ret = splicer.splice_replace_sql("tname", sql);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_STREQ(out, sql.ptr());
@@ -94,7 +96,7 @@ TEST(ObDMLExecHelper, execute)
   ASSERT_EQ(OB_SUCCESS, splicer.add_column("info", "info"));
   ASSERT_EQ(OB_SUCCESS, splicer.add_gmt_modified());
 
-  const char* tname = "__all_zone";
+  const char *tname = "__all_zone";
   int64_t affected_rows = 0;
   ret = exec.exec_insert(tname, splicer, affected_rows);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -147,10 +149,10 @@ TEST(ObDMLExecHelper, execute)
   ASSERT_EQ(2, affected_rows);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

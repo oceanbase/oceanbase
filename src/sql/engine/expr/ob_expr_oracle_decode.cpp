@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_oracle_decode.h"
 #include "sql/engine/expr/ob_expr_case.h"
@@ -20,37 +20,47 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprOracleDecode::ObExprOracleDecode(ObIAllocator& alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_ORA_DECODE, N_ORA_DECODE, MORE_THAN_TWO, NOT_ROW_DIMENSION), param_flags_(0)
-{}
+ObExprOracleDecode::ObExprOracleDecode(ObIAllocator &alloc)
+    : ObExprOperator(alloc, T_FUN_SYS_ORA_DECODE, N_ORA_DECODE, MORE_THAN_TWO, NOT_ROW_DIMENSION),
+      param_flags_(0)
+{
+}
 
 ObExprOracleDecode::~ObExprOracleDecode()
-{}
+{
+}
 
-int ObExprOracleDecode::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types_stack, int64_t param_num, ObExprTypeCtx& type_ctx) const
+int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
+                                          ObExprResType *types_stack,
+                                          int64_t param_num,
+                                          ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   const int64_t LEAST_PARAM_NUMS = 3;
-  const int64_t RESULT_TYPE_INDEX = 2;  // In oracle, the result type will only depend on the third param.
-  const int64_t CALC_TYPE_INDEX = 1;    // In oracle, the calc type will only depend on the second param.
+  const int64_t RESULT_TYPE_INDEX = 2;//In oracle, the result type will only depend on the third param.
+  const int64_t CALC_TYPE_INDEX = 1;//In oracle, the calc type will only depend on the second param.
   ObCollationType collation_connection = type_ctx.get_coll_type();
   bool has_default = (param_num % 2 == 0);
   if (OB_ISNULL(types_stack)) {
     LOG_WARN("null type stack", K(types_stack));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_UNLIKELY(param_num < LEAST_PARAM_NUMS || CALC_TYPE_INDEX < 0 || CALC_TYPE_INDEX >= param_num ||
-                         RESULT_TYPE_INDEX >= param_num || RESULT_TYPE_INDEX < 0)) {
+  } else if (OB_UNLIKELY(param_num < LEAST_PARAM_NUMS
+                      || CALC_TYPE_INDEX < 0 || CALC_TYPE_INDEX >= param_num
+                      || RESULT_TYPE_INDEX >= param_num || RESULT_TYPE_INDEX < 0)) {
     LOG_WARN("invalid params", K(param_num), K(RESULT_TYPE_INDEX), K(LEAST_PARAM_NUMS), K(CALC_TYPE_INDEX));
     ret = OB_INVALID_ARGUMENT;
   } else {
+    //除了返回值， 其他参数不能为lob类型
     if (types_stack[0].is_lob()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", ob_obj_type_str(types_stack[0].get_type()));
+      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
+                  ob_obj_type_str(types_stack[0].get_type()));
       LOG_WARN("invalid type of parameter", K(ret), K(types_stack[0]));
     }
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i += 2) {
@@ -58,39 +68,37 @@ int ObExprOracleDecode::calc_result_typeN(
         // ignore default expr when calc calc_type
       } else if (types_stack[i].is_lob()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", ob_obj_type_str(types_stack[i].get_type()));
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
+                    ob_obj_type_str(types_stack[i].get_type()));
         LOG_WARN("invalid type of parameter", K(ret), K(types_stack[i]));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    // deduce result type
+    //deduce result type
     if (OB_UNLIKELY(types_stack[RESULT_TYPE_INDEX].is_null())) {
       type.set_varchar();
-      const ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
+      const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
       type.set_length_semantics(default_length_semantics);
       type.set_collation_level(CS_LEVEL_IMPLICIT);
       type.set_collation_type(collation_connection);
     } else if (ob_is_string_type(types_stack[RESULT_TYPE_INDEX].get_type())) {
-      const common::ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
-                                               : common::LS_BYTE);
+      const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
+              ? type_ctx.get_session()->get_actual_nls_length_semantics()
+              : common::LS_BYTE);
       if (lib::is_oracle_mode() && ObCharType == types_stack[RESULT_TYPE_INDEX].get_type()) {
+        // 兼容Oracle行为, 如果结果是Char类型, 需要转为Varchar
         type.set_varchar();
-        type.set_length_semantics(types_stack[RESULT_TYPE_INDEX].is_varchar_or_char()
-                                      ? types_stack[RESULT_TYPE_INDEX].get_length_semantics()
-                                      : default_length_semantics);
+        type.set_length_semantics(types_stack[RESULT_TYPE_INDEX].is_varchar_or_char() ?  types_stack[RESULT_TYPE_INDEX].get_length_semantics() : default_length_semantics);
       } else if (lib::is_oracle_mode() && ob_is_nchar(types_stack[RESULT_TYPE_INDEX].get_type())) {
         type.set_nvarchar2();
         type.set_length_semantics(LS_CHAR);
       } else {
+        // 保留原mysql下的行为
         type.set_type(types_stack[RESULT_TYPE_INDEX].get_type());
       }
       if (lib::is_oracle_mode() && types_stack[RESULT_TYPE_INDEX].is_varchar()) {
-        type.set_length_semantics(types_stack[RESULT_TYPE_INDEX].is_varchar_or_char()
-                                      ? types_stack[RESULT_TYPE_INDEX].get_length_semantics()
-                                      : default_length_semantics);
+        type.set_length_semantics(types_stack[RESULT_TYPE_INDEX].is_varchar_or_char() ?  types_stack[RESULT_TYPE_INDEX].get_length_semantics() : default_length_semantics);
       }
       type.set_collation_level(types_stack[RESULT_TYPE_INDEX].get_collation_level());
       type.set_collation_type(types_stack[RESULT_TYPE_INDEX].get_collation_type());
@@ -105,8 +113,8 @@ int ObExprOracleDecode::calc_result_typeN(
     } else {
       type.set_type(types_stack[RESULT_TYPE_INDEX].get_type());
     }
-    // deduce calc type
-    ObExprResType& calc_type = types_stack[CALC_TYPE_INDEX];
+    //deduce calc type
+    ObExprResType &calc_type = types_stack[CALC_TYPE_INDEX];
     if (OB_UNLIKELY(calc_type.is_null())) {
       type.set_calc_type(ObVarcharType);
       type.set_calc_collation_level(CS_LEVEL_IMPLICIT);
@@ -117,15 +125,18 @@ int ObExprOracleDecode::calc_result_typeN(
       type.set_calc_collation_type(calc_type.get_collation_type());
     } else {
       if (lib::is_oracle_mode() && ObCharType == calc_type.get_type()) {
+        // 兼容oracle, 入参如果是Char类型, 将统一转为varchar进行计算
         type.set_calc_type(ObVarcharType);
       } else if (lib::is_oracle_mode() && ob_is_nchar(calc_type.get_type())) {
         type.set_calc_type(ObNVarchar2Type);
       } else {
+        // 保留原mysql下的行为
         type.set_calc_type(calc_type.get_type());
       }
       type.set_calc_collation_level(calc_type.get_collation_level());
       type.set_calc_collation_type(calc_type.get_collation_type());
       if (ob_is_integer_type(type.get_calc_type())) {
+        //除非expr和search都是整型, 否则类型设置为numberic
         if (!ob_is_integer_type(types_stack[0].get_type())) {
           type.set_calc_type(ObNumberType);
         } else {
@@ -141,12 +152,13 @@ int ObExprOracleDecode::calc_result_typeN(
       }
     }
     /*If the first search-result pair are numeric, then Oracle compares all search-result
-     *expressions and the first expr to determine the argument with the highest numeric
-     *precedence, implicitly converts the remaining arguments to that datatype, and returns
-     *that datatype.*/
+    *expressions and the first expr to determine the argument with the highest numeric
+    *precedence, implicitly converts the remaining arguments to that datatype, and returns
+    *that datatype.*/
     if (lib::is_oracle_mode() && ob_is_oracle_numeric_type(type.get_calc_type())) {
-      for (int64_t i = 0;
-           OB_SUCC(ret) && ObOBinDoubleType != ob_obj_type_to_oracle_type(type.get_calc_type()) && i < param_num;
+      for (int64_t i = 0; OB_SUCC(ret)
+                          && ObOBinDoubleType != ob_obj_type_to_oracle_type(type.get_calc_type())
+                          && i < param_num;
            i += (i == 0 ? 1 : 2)) {
         if (has_default && i == param_num - 1) {
           // ignore default expr when calc calc_type
@@ -155,10 +167,11 @@ int ObExprOracleDecode::calc_result_typeN(
             type.set_calc_type(ObDoubleType);
           } else if (ObOBinFloatType == ob_obj_type_to_oracle_type(types_stack[i].get_type())) {
             type.set_calc_type(ObFloatType);
-          } else if (ObNumberType == types_stack[i].get_type() && !ob_is_float_type(type.get_calc_type())) {
+          } else if (ObNumberType == types_stack[i].get_type()
+                     && !ob_is_float_type(type.get_calc_type())) {
             type.set_calc_type(ObNumberType);
           } else {
-            // integer type is ignored
+            //integer type is ignored
           }
         }
       }
@@ -166,7 +179,7 @@ int ObExprOracleDecode::calc_result_typeN(
     if (lib::is_oracle_mode() && type.is_number()) {
       type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
     } else {
-      type.set_scale(SCALE_UNKNOWN_YET);  // the scale of res in decode should be calced dynamically during runtime
+      type.set_scale(SCALE_UNKNOWN_YET);//the scale of res in decode should be calced dynamically during runtime
     }
   }
   if (OB_SUCC(ret)) {
@@ -198,15 +211,17 @@ int ObExprOracleDecode::calc_result_typeN(
         types_stack[0].set_calc_type(ObVarcharType);
       }
       for (int64_t i = 1; i < param_num; i += 2 /*skip conditions */) {
-        // here to let enumset wrapper knows
+        //here to let enumset wrapper knows
         if (types_stack[i].is_enum_or_set()) {
           types_stack[i].set_calc_type(ObVarcharType);
         }
       }
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
-  bool all_literal = true;
+  // 兼容Oracle行为, 预判断隐式转换, 如果不能转, 提前报错
+  // decode的隐式转换除了enumset类型可能会通过框架转为string外，其他类型的隐式转换均发生在calc_resultN
+  // oracle下没有enumset类型, 因此这里不特别处理enumset
+  bool all_literal = true; // 记录下是否所有的入参都是literal
   if (lib::is_oracle_mode()) {
     ObObjType calc_type = type.get_calc_type();
     ObObjType result_type = type.get_type();
@@ -216,46 +231,55 @@ int ObExprOracleDecode::calc_result_typeN(
     for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
       all_literal = all_literal & types_stack[i].is_literal();
       ObObjOType o_type = ob_obj_type_to_oracle_type(types_stack[i].get_calc_type());
-      if (0 == i || ((i % 2) == 1 && i != param_num - 1)) {  // expr and search
-        dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_calc_type];
-      } else {  // result and default
-        dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_result_type];
-      }
-      if (ImplicitCastDirection::IC_NOT_SUPPORT == dir) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("invalid oracle type implict cast", K(ret), K(o_calc_type), K(o_result_type), K(o_type), K(i));
+      if (o_type >= ObOMaxType || o_result_type >= ObOMaxType || o_calc_type >= ObOMaxType) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid oracle obj type", K(o_type), K(o_result_type), K(o_calc_type));
+      } else {
+        if (0 == i || ((i % 2) == 1 && i != param_num - 1)) { // expr and search
+          // 通过隐式转换矩阵判断两个类型间是否可以进行转换
+          dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_calc_type];
+        } else { // result and default
+          dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_result_type];
+        }
+        if (ImplicitCastDirection::IC_NOT_SUPPORT == dir) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid oracle type implict cast",
+                   K(ret), K(o_calc_type), K(o_result_type), K(o_type), K(i));
+        }
       }
     }
   }
-  if (ob_is_otimestamp_type(types_stack[RESULT_TYPE_INDEX].get_type())) {
-    type.set_accuracy(types_stack[RESULT_TYPE_INDEX].get_accuracy());
-  }
-  // deduce string length
-  if (ob_is_string_type(type.get_type()) || ob_is_raw(type.get_type())) {
-    ObLength len = -1;
-    for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
-      if (types_stack[i].get_length() > len) {
-        len = types_stack[i].get_length();
+  if (OB_SUCC(ret)) {
+    if (ob_is_otimestamp_type(types_stack[RESULT_TYPE_INDEX].get_type())) {
+      type.set_accuracy(types_stack[RESULT_TYPE_INDEX].get_accuracy());
+    }
+    //deduce string length
+    if (ob_is_string_type(type.get_type()) || ob_is_raw(type.get_type())) {
+      ObLength len = -1;
+      for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
+        if (types_stack[i].get_length() > len) {
+          len = types_stack[i].get_length();
+        }
+      }
+      if (has_default) {
+        len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
+      }
+      if (all_literal && lib::is_oracle_mode()) {
+        if (OB_FAIL(calc_result_type_for_literal(type, types_stack, param_num, type_ctx))) {
+          LOG_WARN("failed to calc result for literal", K(ret));
+        }
+      } else {
+        type.set_length(len);
       }
     }
-    if (has_default) {
-      len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
-    }
-    if (all_literal && lib::is_oracle_mode()) {
-      if (OB_FAIL(calc_result_type_for_literal(type, types_stack, param_num, type_ctx))) {
-        LOG_WARN("failed to calc result for literal", K(ret));
-      }
-    } else {
-      type.set_length(len);
-    }
   }
-  const ObSQLSessionInfo* session = type_ctx.get_session();
-  CK(OB_NOT_NULL(session));
-  if (OB_SUCC(ret) && session->use_static_typing_engine()) {
+  if (OB_SUCC(ret)) {
     types_stack[0].set_calc_meta(type.get_calc_meta());
     types_stack[0].set_calc_accuracy(types_stack[0].get_accuracy());
     for (int64_t i = 1; i < param_num; i += 2) {
       types_stack[i].set_calc_meta(type.get_calc_meta());
+      // 参数的calc_acc不能使用type.get_calc_accuracy(),类型推导没有推导calc accuracy信息
+      // 参数的calc_acc保持原来的accuracy
       types_stack[i].set_calc_accuracy(types_stack[i].get_accuracy());
     }
     for (int64_t i = 2; i < param_num; i += 2) {
@@ -263,22 +287,24 @@ int ObExprOracleDecode::calc_result_typeN(
       types_stack[i].set_calc_accuracy(type.get_accuracy());
     }
     if (has_default) {
-      types_stack[param_num - 1].set_calc_meta(type.get_obj_meta());
-      types_stack[param_num - 1].set_calc_accuracy(type.get_accuracy());
+      types_stack[param_num-1].set_calc_meta(type.get_obj_meta());
+      types_stack[param_num-1].set_calc_accuracy(type.get_accuracy());
     }
   }
   return ret;
 }
 
-int ObExprOracleDecode::calc_result_type_for_literal(
-    ObExprResType& type, ObExprResType* types_stack, int64_t param_num, ObExprTypeCtx& type_ctx) const
+int ObExprOracleDecode::calc_result_type_for_literal(ObExprResType &type,
+                                                     ObExprResType *types_stack,
+                                                     int64_t param_num,
+                                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   ObObj result;
-  ObObj* obj_stack = NULL;
+  ObObj *obj_stack = NULL;
   ObArenaAllocator allocator;
-  const ObSQLSessionInfo* session = NULL;
-  const ObTimeZoneInfo* tz_info = NULL;
+  const ObSQLSessionInfo *session = NULL;
+  const ObTimeZoneInfo *tz_info = NULL;
   int64_t tz_offset = 0;
   ObExprCtx expr_ctx;
   if (OB_ISNULL(session = static_cast<const ObSQLSessionInfo*>(type_ctx.get_session()))) {
@@ -294,17 +320,19 @@ int ObExprOracleDecode::calc_result_type_for_literal(
   } else if (OB_ISNULL(obj_stack = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * param_num)))) {
     LOG_WARN("failed to alloc obj stack", K(ret));
   } else {
-    expr_ctx.my_session_ = const_cast<ObSQLSessionInfo*>(session);
+    expr_ctx.my_session_ = const_cast<ObSQLSessionInfo *>(session);
     expr_ctx.calc_buf_ = &allocator;
     expr_ctx.tz_offset_ = tz_offset;
     expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);
     EXPR_DEFINE_CMP_CTX(type.get_calc_meta(), true, expr_ctx);
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    for (int64_t i = 0; i < param_num; ++i) {
+    for (int64_t  i = 0; i < param_num; ++i) {
       obj_stack[i] = types_stack[i].get_param();
     }
-    if (OB_FAIL(ObExprArgCase::calc_with_cast(
-            result, obj_stack, param_num, cmp_ctx, cast_ctx, type, ObExprOracleDecode::get_cmp_type))) {
+    if (OB_FAIL(ObExprArgCase::calc_with_cast(result, obj_stack, param_num,
+                                              cmp_ctx, cast_ctx, type,
+                                              ObExprOracleDecode::get_cmp_type))) {
+      // 兼容ORACLE: 忽略掉calc_type阶段的计算错误, 在实际计算时再报
       ret = OB_SUCCESS;
     } else if (result.is_null()) {
       // do nothing ...
@@ -318,26 +346,9 @@ int ObExprOracleDecode::calc_result_type_for_literal(
   return ret;
 }
 
-int ObExprOracleDecode::calc_resultN(
-    ObObj& result, const ObObj* objs_stack, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (need_no_cast() && lib::is_mysql_mode()) {
-    ret = no_cast_calc(result, objs_stack, param_num);
-  } else {
-    expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);  // strong type safety in decode of oracle
-    EXPR_DEFINE_CMP_CTX(result_type_.get_calc_meta(), true, expr_ctx);
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    // null safe equal in decode of oracle
-    if (OB_FAIL(ObExprArgCase::calc_with_cast(
-            result, objs_stack, param_num, cmp_ctx, cast_ctx, result_type_, ObExprOracleDecode::get_cmp_type))) {
-      LOG_WARN("failed to calc with cast", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObExprOracleDecode::no_cast_calc(ObObj& result, const ObObj* objs_stack, int64_t param_num) const
+int ObExprOracleDecode::no_cast_calc(ObObj &result,
+                                     const ObObj *objs_stack,
+                                     int64_t param_num) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(objs_stack) || OB_UNLIKELY(param_num < 2)) {
@@ -354,7 +365,7 @@ int ObExprOracleDecode::no_cast_calc(ObObj& result, const ObObj* objs_stack, int
       if (i < param_num - 1) {
         result = objs_stack[i + 1];
       } else if (param_num % 2 == 0) {
-        result = objs_stack[param_num - 1];  // match else (default value).
+        result = objs_stack[param_num - 1]; // match else (default value).
       } else {
         result.set_null();  // no else (null).
       }
@@ -363,12 +374,14 @@ int ObExprOracleDecode::no_cast_calc(ObObj& result, const ObObj* objs_stack, int
   return ret;
 }
 
-inline int ObExprOracleDecode::get_cmp_type(
-    ObObjType& type, const ObObjType& type1, const ObObjType& type2, const ObObjType& type3)
+inline int ObExprOracleDecode::get_cmp_type(ObObjType &type,
+                                            const ObObjType &type1,
+                                            const ObObjType &type2,
+                                            const ObObjType &type3)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(type1 < ObNullType || type2 < ObNullType || type3 < ObNullType || type1 >= ObMaxType ||
-                  type2 >= ObMaxType || type3 >= ObMaxType)) {
+  if (OB_UNLIKELY(type1 < ObNullType || type2 < ObNullType || type3 < ObNullType
+               || type1 >= ObMaxType || type2 >= ObMaxType || type3 >= ObMaxType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error. wrong type", K(type1), K(type2), K(type3));
   } else {
@@ -380,14 +393,14 @@ inline int ObExprOracleDecode::get_cmp_type(
 // decode(expr0, search0, res0,
 //               search1, res1,
 //               def)
-int ObExprOracleDecode::eval_decode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprOracleDecode::eval_decode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
   const bool has_def = (expr.arg_cnt_ % 2 == 0) ? true : false;
   bool has_res = false;
-  ObDatum* e_0 = NULL;
-  ObDatum* search_i = NULL;
-  ObDatum* res_i = NULL;
+  ObDatum *e_0 = NULL;
+  ObDatum *search_i = NULL;
+  ObDatum *res_i = NULL;
   int64_t res_idx = OB_INVALID_ID;
   ObDatumCmpFuncType cmp_func = NULL;
   if (OB_UNLIKELY(1 != expr.inner_func_cnt_) || OB_ISNULL(expr.inner_functions_) ||
@@ -440,14 +453,15 @@ bool ObExprOracleDecode::can_compare_directly(ObObjType type1, ObObjType type2)
   return (tc1 == tc2 && !(ObDateTimeTC == tc1 && type1 != type2) && !ob_is_enumset_tc(type1));
 }
 
-int ObExprOracleDecode::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprOracleDecode::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(raw_expr);
   // check all type is ok
   bool has_def = (rt_expr.arg_cnt_ % 2 == 0);
-  const ObDatumMeta& cmp_meta = rt_expr.args_[0]->datum_meta_;
-  const ObDatumMeta& res_meta = rt_expr.datum_meta_;
+  const ObDatumMeta &cmp_meta = rt_expr.args_[0]->datum_meta_;
+  const ObDatumMeta &res_meta = rt_expr.datum_meta_;
   CK(3 <= rt_expr.arg_cnt_);
   for (int64_t i = 1; OB_SUCC(ret) && i < rt_expr.arg_cnt_ - 1; i += 2) {
     CK(cmp_meta.type_ == rt_expr.args_[i]->datum_meta_.type_);
@@ -458,22 +472,32 @@ int ObExprOracleDecode::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_e
     CK(res_meta.cs_type_ == rt_expr.args_[i]->datum_meta_.cs_type_);
   }
   if (OB_SUCC(ret) && has_def) {
-    CK(res_meta.type_ == rt_expr.args_[rt_expr.arg_cnt_ - 1]->datum_meta_.type_);
-    CK(res_meta.cs_type_ == rt_expr.args_[rt_expr.arg_cnt_ - 1]->datum_meta_.cs_type_);
+    CK(res_meta.type_ == rt_expr.args_[rt_expr.arg_cnt_-1]->datum_meta_.type_);
+    CK(res_meta.cs_type_ == rt_expr.args_[rt_expr.arg_cnt_-1]->datum_meta_.cs_type_);
   }
 
-  OV(OB_NOT_NULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(expr_cg_ctx.allocator_->alloc(sizeof(void*)))),
+  OV(OB_NOT_NULL(rt_expr.inner_functions_ =
+        reinterpret_cast<void**>(expr_cg_ctx.allocator_->alloc(sizeof(void*)))),
       OB_ALLOCATE_MEMORY_FAILED);
   if (OB_SUCC(ret)) {
     rt_expr.inner_func_cnt_ = 1;
     rt_expr.eval_func_ = ObExprOracleDecode::eval_decode;
-    rt_expr.inner_functions_[0] = reinterpret_cast<void*>(ObDatumFuncs::get_nullsafe_cmp_func(
-        cmp_meta.type_, cmp_meta.type_, default_null_pos(), cmp_meta.cs_type_, lib::is_oracle_mode()));
+    rt_expr.inner_functions_[0] = reinterpret_cast<void*>(
+        ObDatumFuncs::get_nullsafe_cmp_func(cmp_meta.type_, cmp_meta.type_,
+                                            default_null_pos(), cmp_meta.cs_type_,
+                                            cmp_meta.scale_, lib::is_oracle_mode(),
+                                            rt_expr.args_[0]->obj_meta_.has_lob_header()));
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExprOracleDecode, row_dimension_, real_param_num_, result_type_, input_types_, id_, param_flags_);
+OB_SERIALIZE_MEMBER(ObExprOracleDecode,
+                    row_dimension_,
+                    real_param_num_,
+                    result_type_,
+                    input_types_,
+                    id_,
+                    param_flags_);
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

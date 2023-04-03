@@ -11,48 +11,40 @@
  */
 
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_store_file_system.h"
 
 #ifndef OB_MACRO_BLOCK_STRUCT_H_
 #define OB_MACRO_BLOCK_STRUCT_H_
 
-namespace oceanbase {
-namespace blocksstable {
-struct ObMacroBlocksWriteCtx final {
-  static const int64_t DEFAULT_READ_BLOCK_NUM = 16;
+namespace oceanbase
+{
+namespace blocksstable
+{
+struct ObDataMacroBlockMeta;
+struct ObMacroBlocksWriteCtx final
+{
+public:
+  static const int64_t DEFAULT_READ_BLOCK_NUM = 8;
   ObMacroBlocksWriteCtx();
   ~ObMacroBlocksWriteCtx();
-  common::ObArenaAllocator allocator_;
-  blocksstable::ObStoreFileCtx file_ctx_;
-  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_READ_BLOCK_NUM> macro_block_list_;
-  common::ObSEArray<blocksstable::ObFullMacroBlockMeta, DEFAULT_READ_BLOCK_NUM> macro_block_meta_list_;
-  ObStorageFileHandle file_handle_;
-  ObStorageFile* file_;
-
-  bool is_valid() const;
   void reset();
   void clear();
-  int set(ObMacroBlocksWriteCtx& src);
-  int add_macro_block_id(const blocksstable::MacroBlockId& macro_block_id);
-  int add_macro_block_meta(const blocksstable::ObFullMacroBlockMeta& macro_block_meta);
-  int add_macro_block(
-      const blocksstable::MacroBlockId& macro_block_id, const blocksstable::ObFullMacroBlockMeta& macro_block_meta);
-  int64_t get_macro_block_count() const
-  {
-    return macro_block_list_.count();
-  }
-  bool is_empty() const
-  {
-    return macro_block_list_.empty();
-  }
-  common::ObIArray<blocksstable::MacroBlockId>& get_macro_block_list()
-  {
-    return macro_block_list_;
-  }
-  TO_STRING_KV(K_(file_ctx), K_(macro_block_list), K_(file_handle));
+  int set(ObMacroBlocksWriteCtx &src);
+  int deep_copy(ObMacroBlocksWriteCtx *&dst, ObIAllocator &allocator);
+  int get_macro_id_array(common::ObIArray<blocksstable::MacroBlockId> &block_ids);
+  int add_macro_block_id(const blocksstable::MacroBlockId &macro_block_id);
+  OB_INLINE void increment_old_block_count() { ++use_old_macro_block_count_; }
+  OB_INLINE int64_t get_macro_block_count() const { return macro_block_list_.count(); }
+  OB_INLINE bool is_empty() const { return macro_block_list_.empty(); }
+  OB_INLINE common::ObIArray<blocksstable::MacroBlockId> &get_macro_block_list() { return macro_block_list_; }
+  TO_STRING_KV(K(macro_block_list_.count()), K_(use_old_macro_block_count));
+public:
+  common::ObArenaAllocator allocator_;
+  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_READ_BLOCK_NUM> macro_block_list_;
+  int64_t use_old_macro_block_count_;
+  DISALLOW_COPY_AND_ASSIGN(ObMacroBlocksWriteCtx);
 };
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+} // end namespace blocksstable
+} // end namespace oceanbase
 
 #endif /* OB_MACRO_BLOCK_STRUCT_H_ */

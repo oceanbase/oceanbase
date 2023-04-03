@@ -20,39 +20,42 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace std;
 using namespace sql;
-namespace share {
-namespace schema {
-static const int64_t BUF_SIZE = 1024 * 10;
-
-void judge_outline_info_equal(const ObOutlineInfo& info_l, const ObOutlineInfo& info_r)
+namespace share
 {
-  EXPECT_EQ(info_l.get_name_str(), info_r.get_name_str());
-  EXPECT_EQ(info_l.get_signature_str(), info_r.get_signature_str());
-  EXPECT_EQ(info_l.get_outline_content_str(), info_r.get_outline_content_str());
-  EXPECT_EQ(info_l.get_sql_text_str(), info_r.get_sql_text_str());
-  EXPECT_EQ(info_l.get_owner_str(), info_r.get_owner_str());
-  EXPECT_EQ(info_l.get_version_str(), info_r.get_version_str());
-  EXPECT_EQ(info_l.get_tenant_id(), info_r.get_tenant_id());
-  EXPECT_EQ(info_l.get_database_id(), info_r.get_database_id());
-  EXPECT_EQ(info_l.get_outline_id(), info_r.get_outline_id());
-  EXPECT_EQ(info_l.get_schema_version(), info_r.get_schema_version());
+namespace schema
+{
+static const int64_t BUF_SIZE = 1024*10;
 
-  EXPECT_EQ(info_l.get_outline_params_wrapper().get_outline_params().count(),
-      info_r.get_outline_params_wrapper().get_outline_params().count());
-  for (int64_t i = 0; i < info_l.get_outline_params_wrapper().get_outline_params().count(); i++) {
-    const ObMaxConcurrentParam* param_l = info_l.get_outline_params_wrapper().get_outline_params().at(i);
-    const ObMaxConcurrentParam* param_r = info_r.get_outline_params_wrapper().get_outline_params().at(i);
-    bool is_same = false;
-    EXPECT_EQ(OB_SUCCESS, param_l->same_param_as(*param_r, is_same));
-    EXPECT_EQ(true, is_same);
-  }
+void judge_outline_info_equal(const ObOutlineInfo &info_l, const ObOutlineInfo &info_r)
+{
+   EXPECT_EQ(info_l.get_name_str() , info_r.get_name_str());
+   EXPECT_EQ(info_l.get_signature_str() , info_r.get_signature_str());
+   EXPECT_EQ(info_l.get_outline_content_str() , info_r.get_outline_content_str());
+   EXPECT_EQ(info_l.get_sql_text_str() , info_r.get_sql_text_str());
+   EXPECT_EQ(info_l.get_owner_str() , info_r.get_owner_str());
+   EXPECT_EQ(info_l.get_version_str() , info_r.get_version_str());
+   EXPECT_EQ(info_l.get_tenant_id() , info_r.get_tenant_id());
+   EXPECT_EQ(info_l.get_database_id() , info_r.get_database_id());
+   EXPECT_EQ(info_l.get_outline_id() , info_r.get_outline_id());
+   EXPECT_EQ(info_l.get_schema_version() , info_r.get_schema_version());
+
+   EXPECT_EQ(info_l.get_outline_params_wrapper().get_outline_params().count(),
+             info_r.get_outline_params_wrapper().get_outline_params().count());
+   for (int64_t i = 0; i < info_l.get_outline_params_wrapper().get_outline_params().count(); i++) {
+     const ObMaxConcurrentParam *param_l = info_l.get_outline_params_wrapper().get_outline_params().at(i);
+     const ObMaxConcurrentParam *param_r = info_r.get_outline_params_wrapper().get_outline_params().at(i);
+     bool is_same = false;
+     EXPECT_EQ(OB_SUCCESS, param_l->same_param_as(*param_r, is_same));
+     EXPECT_EQ(true, is_same);
+   }
 }
 
-void init_outline_info(ObOutlineInfo& outline_info)
+void init_outline_info(ObOutlineInfo &outline_info)
 {
   ObArenaAllocator allocator;
   outline_info.set_name("outline_name");
@@ -68,44 +71,44 @@ void init_outline_info(ObOutlineInfo& outline_info)
   outline_info.set_schema_version(1);
   EXPECT_EQ(true, outline_info.is_valid());
 
-  // add param
+  //add param
   ObFixedParam fixed_param;
   fixed_param.offset_ = 90;
   fixed_param.value_.set_int(80);
   ObMaxConcurrentParam param(&allocator);
-  param.concurrent_num_ = 100;
+  param.concurrent_num_= 100;
   EXPECT_EQ(OB_SUCCESS, param.fixed_param_store_.push_back(fixed_param));
-  EXPECT_EQ(OB_SUCCESS, outline_info.add_param(param));
+  EXPECT_EQ(OB_SUCCESS,  outline_info.add_param(param));
 }
 
 TEST(ObSchemaStructTest, test_deep_copy_outline_info)
 {
-  // create outline_info
+  //create outline_info
   ObOutlineInfo outline_info;
   init_outline_info(outline_info);
 
-  // copy outline_info
-  ObOutlineInfo* new_outline = NULL;
+  //copy outline_info
+  ObOutlineInfo *new_outline = NULL;
   const int64_t size = outline_info.get_convert_size();
-  char* buf = static_cast<char*>(ob_malloc(size));
+  char *buf = static_cast<char *>(ob_malloc(size));
   ObDataBuffer data_buf(buf + sizeof(ObOutlineInfo), size - sizeof(ObOutlineInfo));
-  ASSERT_NE(static_cast<char*>(NULL), buf);
+  ASSERT_NE(static_cast<char *>(NULL), buf);
   new_outline = new (buf) ObOutlineInfo(&data_buf);
-  ASSERT_NE(static_cast<ObOutlineInfo*>(NULL), new_outline);
+  ASSERT_NE(static_cast<ObOutlineInfo *>(NULL), new_outline);
   *new_outline = outline_info;
   EXPECT_EQ(true, new_outline->is_valid());
 
-  // judge equal
+  //judge equal
   judge_outline_info_equal(*new_outline, outline_info);
 }
 
 TEST(ObSchemaStructTest, test_serialize_outline_info)
 {
-  // create outline_info
+  //create outline_info
   ObOutlineInfo outline_info;
   init_outline_info(outline_info);
 
-  // serialize outline_info
+  //serialize outline_info
   ObOutlineInfo new_outline;
   const int64_t serialize_size = outline_info.get_serialize_size();
   char buf[serialize_size];
@@ -116,7 +119,7 @@ TEST(ObSchemaStructTest, test_serialize_outline_info)
   new_buf_len = pos;
   EXPECT_EQ(OB_SUCCESS, new_outline.deserialize(buf, new_buf_len, new_pos));
 
-  // judge equal
+  //judge equal
   judge_outline_info_equal(new_outline, outline_info);
 }
 
@@ -136,24 +139,37 @@ TEST(ObSchemaStructTest, test_gen_limit_sql)
   fixed_param2.value_.set_int(2);
   EXPECT_EQ(OB_SUCCESS, param.fixed_param_store_.push_back(fixed_param2));
 
-  // test
-  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature, &param, session, allocator, limit_sql));
+  //test
+  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature,
+                                                     &param,
+                                                     session,
+                                                     allocator,
+                                                     limit_sql));
   ObString result("select  '?' from t1 where c1 > 1 and c2 = 2 order by 1");
-  cout << result.ptr() << endl;
-  cout << limit_sql.ptr() << endl;
+  cout<<result.ptr()<<endl;
+  cout<<limit_sql.ptr()<<endl;
   EXPECT_EQ(0, strncmp(result.ptr(), limit_sql.ptr(), limit_sql.length()));
 
-  // test
-  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature, &param, session, allocator, limit_sql));
-  cout << result.ptr() << endl;
-  cout << limit_sql.ptr() << endl;
+  //test
+  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature,
+                                                     &param,
+                                                     session,
+                                                     allocator,
+                                                     limit_sql));
+  cout<<result.ptr()<<endl;
+  cout<<limit_sql.ptr()<<endl;
   EXPECT_EQ(0, strncmp(result.ptr(), limit_sql.ptr(), limit_sql.length()));
 
-  // test
-  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature, &param, session, allocator, limit_sql));
-  cout << result.ptr() << endl;
-  cout << limit_sql.ptr() << endl;
+  //test
+  EXPECT_EQ(OB_SUCCESS, ObOutlineInfo::gen_limit_sql(visible_signature,
+                                                     &param,
+                                                     session,
+                                                     allocator,
+                                                     limit_sql));
+  cout<<result.ptr()<<endl;
+  cout<<limit_sql.ptr()<<endl;
   EXPECT_EQ(0, strncmp(result.ptr(), limit_sql.ptr(), limit_sql.length()));
+
 }
 
 TEST(ObSchemaStructTest, test_question_makr_pos)
@@ -167,15 +183,15 @@ TEST(ObSchemaStructTest, test_question_makr_pos)
   EXPECT_EQ(3, parse_result.param_node_num_);
 }
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
+}//schema
+}//share
+}//oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -rf test_outline_info.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_file_name("test_outline_info.log", true);
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -263,7 +263,7 @@ select c1, sum(c2) from t1  order by sum(c2)
 select * from t1 having c1 > 0
 select * from t1 having sum(c1) > 0
 select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
-#select c1, c2 column2 from t1 having column2 > 1 @ TODO
+#select c1, c2 column2 from t1 having column2 > 1 @xiyu TODO
 
 ####having column must exist in select items or in group items
 select c1 from t1 group by c2 having c2 > 0
@@ -377,7 +377,7 @@ select c1 from t1 union select c1,c2 from t1;
 ### select into ###
 
 ### when just for test
-### select c1 from t1 when ROW_COUNT(update t2 set c1 = 1) @ TODO
+### select c1 from t1 when ROW_COUNT(update t2 set c1 = 1) @xiyu TODO
 select t1.c1, t2.c2, t2.c3 from t1,t2 where t1.c1 = t2.c1 order by t1.c2;
 
 ### sys fun
@@ -415,7 +415,7 @@ select X.c1 from t1 AS X group by X.c2 having (X.c1 = 1);
 select * from (select * from t1) t join t2 using(c1) join t4 using(c1)
 select * from (select * from t1) t join t2 using(c1) left  join t4 using(c1)
 select * from (select * from t1) t join t2 using(c1) right join t4 using(c1)
-# @TODO: table_id will be changed, coment out!
+# xiyu@TODO: table_id will be changed, coment out!
 #select * from __idx_1099511631103_idx1
 --error 5019
 select * from t_not_exist
@@ -424,7 +424,7 @@ select * from t_not_exist
 --error 5207
 select c1 a, C2 A from t1 order by a
 
-
+## bug
 select * from (t1);
 select * from (t1,t2);
 select * from (t1,(t2));
@@ -436,9 +436,11 @@ select * from ((t1 join t2) join (select * from t3) a);
 #select * from (t1,t2) join (t3,t4);
 #select * from (t1 join t2) join (t3,t4);
 
+#
 select * from t1 join t2 on t1.c1=t2.c1, t3 join t4 on t3.c3=t4.c3;
 select * from t1 join t2 using(c1), t3 join t4 using(c3);
 
+#
 select '';
 select '   ';
 select '\n';
@@ -455,6 +457,7 @@ select 'abc' '\n\t11111111111111111111111111111111111111111111111111111111111111
 select 'abc' as '\n\t11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22';
 select 'abc' as `  11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22`;
 
+#
 SELECT t1.c1 FROM t2 LEFT JOIN t1 ON t2.c2 = t1.c1 ORDER BY c1;
 select default(c1) from t2;
 select default(c3) from test2;
@@ -535,6 +538,7 @@ select c3 from t3 where c3>'1';
 #select max(connect_by_isleaf), emp_id from emp where connect_by_isleaf < 1 connect by prior emp_id = mgr_id;
 #
 #
+## 测试非层次查询语句中的使用 #
 #--error 5312
 #select level from emp;
 #--error 5312
@@ -561,6 +565,7 @@ select c3 from t3 where c3>'1';
 #select emp_id from emp where connect_by_iscycle > 1;
 #select `level` from emp1;
 #
+## 测试放到非法的位置 #
 #--error 5313
 #select emp_id from emp connect by level = 1;
 #--error 5313

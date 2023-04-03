@@ -15,8 +15,10 @@
 #include <gtest/gtest.h>
 #include "sql/engine/basic/ob_ra_row_store.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
 TEST(RARowStore, keep_projector)
@@ -49,7 +51,7 @@ TEST(RARowStore, keep_projector)
   r.projector_size_++;
   ASSERT_EQ(OB_SUCCESS, rs.add_row(r));
 
-  const ObNewRow* rr = NULL;
+  const ObNewRow *rr = NULL;
   ASSERT_EQ(OB_SUCCESS, rs.get_row(1, rr));
 
   ASSERT_TRUE(NULL != rr->projector_);
@@ -67,15 +69,11 @@ TEST(RARowStore, keep_projector)
   ASSERT_EQ(2, r.get_cell(1).get_int());
 }
 
-class ObEmptyAlloc : public ObIAllocator {
-  void* alloc(const int64_t) override
-  {
-    return NULL;
-  }
-  void* alloc(const int64_t, const ObMemAttr&) override
-  {
-    return NULL;
-  }
+class ObEmptyAlloc : public ObIAllocator
+{
+  void *alloc(const int64_t) override { return NULL; }
+  void *alloc(const int64_t, const ObMemAttr &) override { return NULL; }
+  void free(void *ptr) override { UNUSED(ptr); }
 };
 
 TEST(RARowStore, alloc_project_fail)
@@ -101,10 +99,10 @@ TEST(RARowStore, alloc_project_fail)
   ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, rs.add_row(r));
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

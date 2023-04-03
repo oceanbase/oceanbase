@@ -14,204 +14,56 @@
 #include "sql/optimizer/ob_log_distinct.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_sort.h"
-
+#include "sql/optimizer/ob_log_set.h"
+#include "sql/optimizer/ob_log_operator_factory.h"
+#include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "ob_opt_est_cost.h"
 #include "ob_select_log_plan.h"
 #include "ob_optimizer_util.h"
+#include "ob_opt_selectivity.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-const char* ObLogDistinct::get_name() const
+const char *ObLogDistinct::get_name() const
 {
   return MERGE_AGGREGATE == algo_ ? "MERGE DISTINCT" : "HASH DISTINCT";
 }
 
-int ObLogDistinct::copy_without_child(ObLogicalOperator*& out)
+int ObLogDistinct::get_plan_item_info(PlanText &plan_text,
+                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* op = NULL;
-  ObLogDistinct* distinct = NULL;
-  if (OB_FAIL(clone(op))) {
-    SQL_OPT_LOG(WARN, "failed to clone ObLogDistinct", K(ret));
-  } else if (OB_ISNULL(distinct = static_cast<ObLogDistinct*>(op))) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_OPT_LOG(WARN, "failed to cast ObLogicalOperator * to ObLogDistinct *", K(ret));
-  } else if (OB_FAIL(distinct->set_distinct_exprs(distinct_exprs_))) {
-    LOG_WARN("Failed to set distinct exprs", K(ret));
+  const ObIArray<ObRawExpr*> &distinct = distinct_exprs_;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get base plan item info", K(ret));
   } else {
-    distinct->set_algo_type(algo_);
-    out = distinct;
-  }
-  return ret;
-}
-
-int ObLogDistinct::push_down_distinct(
-    AllocExchContext* ctx, ObIArray<OrderItem>& sort_keys, ObLogicalOperator*& exchange_point)
-{
-  // distinct         distinct
-  //    |                 |
-  //  (sort)     =>     (sort)
-  //    |                 |
-  //   other         distinct(child)
-  //                      |
-  //                 (sort(child))
-  //                      |
-  //                    other
-  int ret = OB_SUCCESS;
-  bool need_sort = false;
-  bool can_push_distinct = false;
-  ObLogicalOperator* child = NULL;
-  ObLogicalOperator* child_sort = NULL;
-  ObLogicalOperator* child_distinct = NULL;
-  exchange_point = NULL;
-  if (OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(child), K(ctx));
-  } else if (MERGE_AGGREGATE == get_algo() && log_op_def::LOG_SORT == child->get_type()) {
-
-    need_sort = true;
-    exchange_point = child;
-  } else {
-    exchange_point = this;
-  }
-  // push down distinct
-  if (OB_FAIL(ret)) {
-    /*do nothing*/
-  } else if (OB_FAIL(check_fulfill_cut_ratio_condition(ctx->parallel_, get_card(), can_push_distinct))) {
-    LOG_WARN("failed to check fulfill cut ratio condition", K(ret));
-  } else if (!can_push_distinct) {
-    /*do nothing*/
-  } else if (need_sort && OB_FAIL(exchange_point->allocate_sort_below(0, sort_keys))) {
-    LOG_WARN("failed to allocate child sort", K(ret));
-  } else if (OB_FAIL(exchange_point->allocate_distinct_below(first_child, distinct_exprs_, get_algo()))) {
-    LOG_WARN("failed to allocate child distinct", K(ret));
-  } else if (OB_ISNULL(child_distinct = exchange_point->get_child(first_child)) ||
-             OB_ISNULL(child = child_distinct->get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(child_distinct), K(child), K(ret));
-  } else if (OB_FAIL(child_distinct->set_expected_ordering(get_expected_ordering()))) {
-    LOG_WARN("failed to set expected ordering", K(ret));
-  } else if (OB_FAIL(child_distinct->replace_generated_agg_expr(ctx->group_push_down_replaced_exprs_))) {
-    LOG_WARN("failed to replace agg expr", K(ret));
-  } else if (OB_FAIL(child_distinct->get_sharding_info().copy_with_part_keys(child->get_sharding_info()))) {
-    LOG_WARN("failed to copy sharding info", K(ret));
-  } else {
-    child_distinct->set_card(get_card());
-    child_distinct->set_op_cost(get_op_cost());
-    child_distinct->set_width(get_width());
-    if (need_sort || HASH_AGGREGATE == get_algo() || log_op_def::LOG_TABLE_SCAN != child->get_type()) {
-      /*do nothing*/
-    } else {
-      child_distinct->set_is_partition_wise(true);
-      child_distinct->set_is_block_gi_allowed(true);
+    BEGIN_BUF_PRINT;
+    EXPLAIN_PRINT_EXPRS(distinct, type);
+    if (OB_SUCC(ret) && is_block_mode_) {
+      ret = BUF_PRINTF(", block");
     }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
 
-int ObLogDistinct::allocate_exchange_post(AllocExchContext* ctx)
+
+int ObLogDistinct::inner_replace_op_exprs(
+      const ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs)
 {
   int ret = OB_SUCCESS;
-  bool is_basic = false;
-  bool sharding_compatible = false;
-  ObLogicalOperator* child = NULL;
-  ObLogicalOperator* exchange_point = NULL;
-  ObArray<OrderItem> order_keys;
-  ObSEArray<ObRawExpr*, 4> key_exprs;
-  if (OB_ISNULL(ctx) || OB_ISNULL(child = get_child(first_child)) || OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ctx), K(child), K(get_plan()), K(ret));
-  } else if (OB_FAIL(compute_basic_sharding_info(ctx, is_basic))) {
-    LOG_WARN("failed to compute basic sharding info", K(ret));
-  } else if (is_basic) {
-    LOG_TRACE("is basic sharding info", K(sharding_info_));
-  } else if (OB_FAIL(prune_weak_part_exprs(*ctx, get_distinct_exprs(), key_exprs))) {
-    LOG_WARN("failed to prune weak part exprs", K(ret));
-  } else if (OB_FAIL(check_sharding_compatible_with_reduce_expr(child->get_sharding_info(),
-                 key_exprs,
-                 child->get_sharding_output_equal_sets(),
-                 sharding_compatible))) {
-    LOG_WARN("Failed to check sharding compatible with reduce expr", K(ret), K(*child));
-  } else if (sharding_compatible) {
-    if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-      LOG_WARN("failed to copy sharding info", K(ret));
-    } else {
-      is_partition_wise_ = (NULL != sharding_info_.get_phy_table_location_info());
-    }
-  } else if (OB_FAIL(make_order_keys(get_distinct_exprs(), order_keys))) {
-    LOG_WARN("failed to make order items", K(ret));
-  } else if (OB_FAIL(push_down_distinct(ctx, order_keys, exchange_point))) {
-    LOG_WARN("failed to push down distinct", K(ret));
-  } else if (OB_ISNULL(exchange_point)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(exchange_point->allocate_grouping_style_exchange_below(ctx, distinct_exprs_))) {
-    LOG_WARN("failed to allocate grouping style exchange", K(ret));
-  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(exchange_point->get_sharding_info()))) {
-    LOG_WARN("failed to copy sharding info", K(ret));
-  } else { /*do nothing*/
-  }
-
-  return ret;
-}
-
-int ObLogDistinct::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else { /* Do nothing */
-  }
-  const ObIArray<ObRawExpr*>& distinct = distinct_exprs_;
-  EXPLAIN_PRINT_EXPRS(distinct, type);
-  if (OB_SUCC(ret) && is_block_mode_) {
-    ret = BUF_PRINTF(", block");
-  }
-  return ret;
-}
-
-int ObLogDistinct::inner_replace_generated_agg_expr(
-    const ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, distinct_exprs_))) {
+  if(OB_FAIL(replace_exprs_action(to_replace_exprs, distinct_exprs_))) {
     SQL_OPT_LOG(WARN, "failed to replace agg exprs in distinct op", K(ret));
-  }
-  return ret;
-}
-
-int ObLogDistinct::transmit_op_ordering()
-{
-  int ret = OB_SUCCESS;
-  bool need_sort = false;
-  reset_op_ordering();
-  reset_local_ordering();
-  if (HASH_AGGREGATE == get_algo()) {
-    /*do nothing*/
-  } else {
-    ObLogicalOperator* child = get_child(first_child);
-    bool need_sort = false;
-    if (OB_FAIL(check_need_sort_for_grouping_op(0, expected_ordering_, need_sort))) {
-      LOG_WARN("failed to check need sort", K(ret));
-    } else if (need_sort) {  // need alloc sort
-      if (OB_FAIL(allocate_sort_below(0, expected_ordering_))) {
-        LOG_WARN("failed to allocate implicit sort", K(ret));
-      } else if (OB_FAIL(set_op_ordering(expected_ordering_))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      }
-    } else if (OB_FAIL(set_op_ordering(child->get_op_ordering()))) {
-      LOG_WARN("failed to set op's ordering", K(ret));
-    } else { /*do nothing*/
-    }
   }
   return ret;
 }
@@ -219,74 +71,161 @@ int ObLogDistinct::transmit_op_ordering()
 int ObLogDistinct::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
+  ObLogicalOperator *child = NULL;
   if (algo_ == HASH_AGGREGATE) {
     // do nothing
-    reset_op_ordering();
-  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is null", K(ret));
-  } else if (OB_FAIL(set_op_ordering(child->get_op_ordering()))) {
-    LOG_WARN("failed to set op ordering", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
+    LOG_WARN("failed to compute op ordering", K(ret));
+  } else {
+    is_local_order_ = is_fully_paratition_wise() && !get_op_ordering().empty();
   }
+  return ret;
+}
+
+int ObLogDistinct::est_width()
+{
+  int ret = OB_SUCCESS;
+  double width = 0.0;
+  ObSEArray<ObRawExpr*, 16> output_exprs;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid plan", K(ret));
+  } else if (OB_FAIL(get_distinct_output_exprs(output_exprs))) {
+    LOG_WARN("failed to get distinct output exprs", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            output_exprs,
+                                                            width))) {
+    LOG_WARN("failed to estimate width for output distinct exprs", K(ret));
+  } else {
+    set_width(width);
+    LOG_TRACE("est width for distinct", K(output_exprs), K(width));
+  }
+  return ret;
+}
+
+int ObLogDistinct::get_distinct_output_exprs(ObIArray<ObRawExpr *> &output_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = NULL;
+  ObSEArray<ObRawExpr*, 16> candi_exprs;
+  ObSEArray<ObRawExpr*, 16> extracted_col_aggr_winfunc_exprs;
+  if (OB_ISNULL(plan = get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(candi_exprs, plan->get_select_item_exprs_for_width_est()))) {
+    LOG_WARN("failed to add into output exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(candi_exprs, plan->get_orderby_exprs_for_width_est()))) {
+    LOG_WARN("failed to add into output exprs", K(ret));  
+  } else if (OB_FAIL(ObRawExprUtils::extract_col_aggr_winfunc_exprs(candi_exprs,
+                                                                    extracted_col_aggr_winfunc_exprs))) {
+  } else if (OB_FAIL(append_array_no_dup(output_exprs, extracted_col_aggr_winfunc_exprs))) {
+    LOG_WARN("failed to add into output exprs", K(ret));
+  } else {/*do nothing*/}
   return ret;
 }
 
 int ObLogDistinct::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* first_child = get_child(ObLogicalOperator::first_child);
-  double distinct_card = 0.0;
   double distinct_cost = 0.0;
-  if (OB_ISNULL(first_child) || OB_ISNULL(get_est_sel_info())) {
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret));
-  } else if (OB_FAIL(ObOptEstSel::calculate_distinct(
-                 first_child->get_card(), *get_est_sel_info(), distinct_exprs_, distinct_card))) {
-    LOG_WARN("failed to calculate distinct", K(ret));
-  } else if (MERGE_AGGREGATE == algo_) {
-    distinct_cost = ObOptEstCost::cost_merge_distinct(first_child->get_card(), distinct_card, distinct_exprs_);
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else if (OB_UNLIKELY(total_ndv_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected total ndv", K(total_ndv_), K(ret));
+  } else if (OB_FAIL(inner_est_cost(child->get_card(), total_ndv_, distinct_cost))) {
+    LOG_WARN("failed to est distinct cost", K(ret));
   } else {
-    distinct_cost = ObOptEstCost::cost_hash_distinct(first_child->get_card(), distinct_card, distinct_exprs_);
-  }
-
-  if (OB_SUCC(ret)) {
-    set_card(distinct_card);
-    set_cost(first_child->get_cost() + distinct_cost);
     set_op_cost(distinct_cost);
-    set_width(first_child->get_width());
+    set_cost(child->get_cost() + distinct_cost);
+    set_card(total_ndv_);
   }
   return ret;
 }
 
-int ObLogDistinct::re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est)
+int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
 {
   int ret = OB_SUCCESS;
-  UNUSED(parent);
-  re_est = false;
-  ObLogicalOperator* child = NULL;
-  if (need_row_count >= get_card()) {
-    /* do nothing */
-  } else if (OB_ISNULL(child = get_child(first_child))) {
+  double distinct_cost = 0.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is NULL", K(ret), K(child));
-  } else if (OB_FAIL(child->re_est_cost(this, child->get_card() * need_row_count / get_card(), re_est))) {
-    LOG_WARN("re-estimate cost of child failed", K(ret));
+    LOG_WARN("unexpect null child", K(ret));
+  } else if (OB_UNLIKELY(total_ndv_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected total ndv", K(total_ndv_), K(ret));
   } else {
-    double distinct_cost = op_cost_;
-    if (MERGE_AGGREGATE == algo_) {
-      distinct_cost = ObOptEstCost::cost_merge_distinct(child->get_card(), need_row_count, distinct_exprs_);
-    } else if (HASH_AGGREGATE == algo_) {
-      distinct_cost = ObOptEstCost::cost_hash_distinct(child->get_card(), need_row_count, distinct_exprs_);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unrecognized algorithm detected which is unexpected", K(ret), K(algo_));
+    double child_card = child->get_card();
+    double child_cost = child->get_cost();
+    double child_ndv = total_ndv_;
+    if (param.need_row_count_ >= 0 && 
+        child_card > 0 &&
+        total_ndv_ > 0 &&
+        param.need_row_count_ < child_card &&
+        param.need_row_count_ < total_ndv_) {
+      child_ndv = param.need_row_count_;
+      param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
     }
-    if (OB_SUCC(ret)) {
-      card_ = need_row_count;
-      op_cost_ = distinct_cost;
-      cost_ = (child->get_cost() + distinct_cost);
-      re_est = true;
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+      LOG_WARN("failed to re est child cost", K(ret));
+    } else if (OB_FAIL(inner_est_cost(child_card, child_ndv, distinct_cost))) {
+      LOG_WARN("failed to est distinct cost", K(ret));
+    } else {
+      cost = child_cost + distinct_cost;
+      card = child_ndv;
+      if (param.override_) {
+        set_op_cost(distinct_cost);
+        set_cost(cost);
+        set_card(card);
+        total_ndv_ = child_ndv;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogDistinct::inner_est_cost(double child_card, double child_ndv, double &op_cost)
+{
+  int ret = OB_SUCCESS;
+  int64_t parallel = get_parallel();
+  double per_dop_card = 0.0;
+  double per_dop_ndv = 0.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else if (OB_UNLIKELY(parallel < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel", K(parallel), K(ret));
+  } else {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    per_dop_card = child_card / parallel;
+    if (parallel > 1) {
+      if (is_push_down()) {
+        per_dop_ndv = ObOptSelectivity::scale_distinct(per_dop_card, child_card, child_ndv);
+      } else {
+        per_dop_ndv = child_ndv / parallel;
+      }
+    } else {
+      per_dop_ndv = child_ndv;
+    }
+
+    if (MERGE_AGGREGATE == algo_) {
+      op_cost = ObOptEstCost::cost_merge_distinct(per_dop_card,
+                                                  per_dop_ndv,
+                                                  child->get_width(),
+                                                  distinct_exprs_,
+                                                  opt_ctx.get_cost_model_type());
+    } else {
+      op_cost = ObOptEstCost::cost_hash_distinct(per_dop_card,
+                                                per_dop_ndv,
+                                                child->get_width(),
+                                                distinct_exprs_,
+                                                opt_ctx.get_cost_model_type());
     }
   }
   return ret;
@@ -294,7 +233,6 @@ int ObLogDistinct::re_est_cost(const ObLogicalOperator* parent, double need_row_
 
 uint64_t ObLogDistinct::hash(uint64_t seed) const
 {
-  seed = ObOptimizerUtil::hash_exprs(seed, distinct_exprs_);
   seed = do_hash(algo_, seed);
   seed = ObLogicalOperator::hash(seed);
 
@@ -304,18 +242,21 @@ uint64_t ObLogDistinct::hash(uint64_t seed) const
 int ObLogDistinct::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;
-  const ObLogicalOperator* child = NULL;
-  ObFdItemSet* fd_item_set = NULL;
-  ObTableFdItem* fd_item = NULL;
-  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child)) || OB_ISNULL(my_plan_) || OB_ISNULL(get_stmt())) {
+  const ObLogicalOperator *child = NULL;
+  ObFdItemSet *fd_item_set = NULL;
+  ObTableFdItem *fd_item = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child)) ||
+      OB_ISNULL(my_plan_) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpect null", K(ret), K(child), K(my_plan_), K(get_stmt()));
   } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
     LOG_WARN("failed to create fd item set", K(ret));
   } else if (OB_FAIL(fd_item_set->assign(child->get_fd_item_set()))) {
     LOG_WARN("failed to assign fd item set", K(ret));
-  } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(
-                 fd_item, true, distinct_exprs_, get_stmt()->get_current_level(), get_table_set()))) {
+  } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
+                                                                          true,
+                                                                          distinct_exprs_,
+                                                                          get_table_set()))) {
     LOG_WARN("failed to create fd item", K(ret));
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
@@ -327,48 +268,107 @@ int ObLogDistinct::compute_fd_item_set()
   return ret;
 }
 
-int ObLogDistinct::allocate_granule_pre(AllocGIContext& ctx)
+int ObLogDistinct::allocate_granule_pre(AllocGIContext &ctx)
 {
-  return pw_allocate_granule_pre(ctx);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pw_allocate_granule_pre(ctx))) {
+    LOG_WARN("failed to allocate partition wise granule", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
 }
 
-int ObLogDistinct::allocate_granule_post(AllocGIContext& ctx)
+int ObLogDistinct::allocate_granule_post(AllocGIContext &ctx)
 {
   return pw_allocate_granule_post(ctx);
 }
 
-int ObLogDistinct::allocate_expr_pre(ObAllocExprContext& ctx)
+int ObLogDistinct::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  uint64_t producer_id = OB_INVALID_ID;
-  if (OB_FAIL(get_next_producer_id(get_child(first_child), producer_id))) {
-    LOG_WARN("failed to get next producer id", K(ret));
-  } else if (OB_FAIL(add_exprs_to_ctx(ctx, distinct_exprs_, producer_id))) {
+  if (OB_FAIL(append(all_exprs, distinct_exprs_))) {
     LOG_WARN("failed to add exprs to ctx", K(ret));
-  } else if (OB_FAIL(ObLogicalOperator::allocate_expr_pre(ctx))) {
-    LOG_WARN("failed to allocate parent expr pre", K(ret));
-  } else { /*do nothing*/
-  }
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else { /*do nothing*/ }
 
   return ret;
 }
 
-int ObLogDistinct::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
+int ObLogDistinct::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  ObLinkStmt* link_stmt = link_ctx.link_stmt_;
-  if (OB_ISNULL(link_stmt) || !link_stmt->is_inited()) {
-    // do nothing.
-  } else if (dblink_id_ != link_ctx.dblink_id_) {
-    link_ctx.dblink_id_ = OB_INVALID_ID;
-    link_ctx.link_stmt_ = NULL;
-  } else if (OB_FAIL(link_stmt->try_fill_select_strs(output_exprs_))) {
-    LOG_WARN("failed to fill link stmt select strs", K(ret), K(output_exprs_));
-  } else if (OB_FAIL(link_stmt->set_select_distinct())) {
-    LOG_WARN("failed to set link stmt select distinct", K(ret));
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  const ObDMLStmt *stmt = NULL;
+  ObString qb_name;
+  const ObLogicalOperator *child = NULL;
+  const ObLogicalOperator *op = NULL;
+  if (is_push_down()) {
+    /* print outline in top distinct */
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())
+      || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt), K(child));
+  } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_DISTINCT, op))) {
+    LOG_WARN("failed to get push down distinct", K(ret));
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+    LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+  } else if (NULL != op &&
+             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
+                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+                                ObHint::get_hint_name(T_DISTINCT_PUSHDOWN),
+                                qb_name.length(),
+                                qb_name.ptr()))) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else if (HASH_AGGREGATE == algo_ &&
+             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
+                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+                                ObHint::get_hint_name(T_USE_HASH_DISTINCT),
+                                qb_name.length(),
+                                qb_name.ptr()))) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObLogDistinct::print_used_hint(PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  if (is_push_down()) {
+    /* print outline in top distinct */
+  } else if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
+  } else {
+    const ObHint *use_hash = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_DISTINCT);
+    const ObHint *pushdown = get_plan()->get_log_plan_hint().get_normal_hint(T_DISTINCT_PUSHDOWN);
+    if (NULL != use_hash) {
+      bool match_hint = (HASH_AGGREGATE == algo_ && use_hash->is_enable_hint())
+                        || (MERGE_AGGREGATE == algo_ && use_hash->is_disable_hint());
+      if (match_hint && OB_FAIL(use_hash->print_hint(plan_text))) {
+        LOG_WARN("failed to print used hint for group by", K(ret), K(*use_hash));
+      }
+    }
+    if (OB_SUCC(ret) && NULL != pushdown) {
+      const ObLogicalOperator *child = NULL;
+      const ObLogicalOperator *op = NULL;
+      if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL", K(ret), K(child));
+      } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_DISTINCT, op))) {
+        LOG_WARN("failed to get push down distinct", K(ret));
+      } else {
+        bool match_hint = NULL == op ? pushdown->is_disable_hint()
+                                     : pushdown->is_enable_hint();
+        if (match_hint && OB_FAIL(pushdown->print_hint(plan_text))) {
+          LOG_WARN("failed to print used hint for group by", K(ret), K(*pushdown));
+        }
+      }
+    }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

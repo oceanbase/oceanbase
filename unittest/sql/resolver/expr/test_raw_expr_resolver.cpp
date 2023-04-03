@@ -18,52 +18,57 @@
 #include "sql/resolver/expr/ob_raw_expr_print_visitor.h"
 #include "sql/ob_sql_init.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "share/ob_cluster_version.h"
 #include <fstream>
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 using namespace oceanbase;
 
-class TestRawExprResolver : public ::testing::Test {
+class TestRawExprResolver: public ::testing::Test
+{
 public:
   TestRawExprResolver();
   virtual ~TestRawExprResolver();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprResolver);
-
 protected:
   // function members
-  void resolve(const char* expr, const char*& json_expr);
-
+  void resolve(const char* expr, const char *&json_expr);
 protected:
   // data members
 };
 
 TestRawExprResolver::TestRawExprResolver()
-{}
+{
+}
 
 TestRawExprResolver::~TestRawExprResolver()
-{}
+{
+}
 
 void TestRawExprResolver::SetUp()
-{}
+{
+  oceanbase::common::ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_1_0_0);
+}
 
 void TestRawExprResolver::TearDown()
-{}
+{
+}
 
-void TestRawExprResolver::resolve(const char* expr, const char*& json_expr)
+void TestRawExprResolver::resolve(const char* expr, const char *&json_expr)
 {
   ObArray<ObQualifiedName> columns;
   ObArray<ObVarInfo> sys_vars;
   ObArray<ObSubQueryInfo> sub_query_info;
   ObArray<ObAggFunRawExpr*> aggr_exprs;
   ObArray<ObWinFunRawExpr*> win_exprs;
-  const char* expr_str = expr;
-  ObIAllocator& allocator = CURRENT_CONTEXT->get_arena_allocator();
+  ObArray<ObUDFInfo> udf_info;
+  const char *expr_str = expr;
+  ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
   ObRawExprFactory expr_factory(allocator);
   ObTimeZoneInfo tz_info;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
@@ -72,16 +77,15 @@ void TestRawExprResolver::resolve(const char* expr, const char*& json_expr)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
-  session.set_use_static_typing_engine(false);
   ctx.session_info_ = &session;
-  ObRawExpr* raw_expr = NULL;
-  OK(ObRawExprUtils::make_raw_expr_from_str(
-      expr_str, strlen(expr_str), ctx, raw_expr, columns, sys_vars, &sub_query_info, aggr_exprs, win_exprs));
+  ObRawExpr *raw_expr = NULL;
+  OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
+                                            sys_vars, &sub_query_info, aggr_exprs , win_exprs, udf_info));
   _OB_LOG(DEBUG, "================================================================");
   _OB_LOG(DEBUG, "%s", expr);
   _OB_LOG(DEBUG, "%s", CSJ(raw_expr));
   OK(raw_expr->extract_info());
-  // OK(raw_expr->deduce_type());
+  //OK(raw_expr->deduce_type());
   json_expr = CSJ(raw_expr);
 }
 
@@ -116,18 +120,18 @@ TEST_F(TestRawExprResolver, all)
   std::remove(tmp_file);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int ret = 0;
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   system("rm -rf test_optimizer.log");
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_raw_expr_resolver.log", true);
   ContextParam param;
-  param.set_mem_attr(1001, 0, ObCtxIds::WORK_AREA).set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
+  param.set_mem_attr(1001, "RawExprResolver", ObCtxIds::WORK_AREA)
+    .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
   init_sql_factories();
-  CREATE_WITH_TEMP_CONTEXT(param)
-  {
+  CREATE_WITH_TEMP_CONTEXT(param) {
     ret = RUN_ALL_TESTS();
   }
   return ret;

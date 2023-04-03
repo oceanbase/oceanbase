@@ -17,25 +17,19 @@
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualDiagIndexScan {
-  typedef common::ObSEArray<int64_t, 16> ObIndexArray;
-
+class ObAllVirtualDiagIndexScan
+{
+typedef  common::ObSEArray<int64_t, 16> ObIndexArray;
 public:
-  ObAllVirtualDiagIndexScan() : index_ids_()
-  {}
-  virtual ~ObAllVirtualDiagIndexScan()
-  {
-    index_ids_.reset();
-  }
-  int set_index_ids(const common::ObIArray<common::ObNewRange>& ranges);
-  inline ObIndexArray& get_index_ids()
-  {
-    return index_ids_;
-  }
-
+  ObAllVirtualDiagIndexScan() : index_ids_() {}
+  virtual ~ObAllVirtualDiagIndexScan() { index_ids_.reset(); }
+  int set_index_ids(const common::ObIArray<common::ObNewRange> &ranges);
+  inline ObIndexArray &get_index_ids() { return index_ids_; }
 private:
   ObIndexArray index_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDiagIndexScan);

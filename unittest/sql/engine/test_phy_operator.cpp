@@ -31,51 +31,61 @@ using namespace oceanbase::share;
 
 int64_t row_size = 3;
 static ObArenaAllocator alloc_;
-class ObSingleChildOperatorFake : public ObSingleChildPhyOperator {
+class ObSingleChildOperatorFake : public ObSingleChildPhyOperator
+{
   friend class ObPhyOperatorTest;
-
 protected:
-  class ObSingleOpCtx : public ObPhyOperator::ObPhyOperatorCtx {
+  class ObSingleOpCtx : public ObPhyOperator::ObPhyOperatorCtx
+  {
   public:
-    ObSingleOpCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
-    {}
-    virtual void destroy()
-    {
-      return ObPhyOperatorCtx::destroy_base();
-    }
+    ObSingleOpCtx(ObExecContext &ctx)
+      : ObPhyOperatorCtx(ctx)
+  {
+  }
+    virtual void destroy() { return ObPhyOperatorCtx::destroy_base(); }
   };
-
 public:
-  ObSingleChildOperatorFake() : ObSingleChildPhyOperator(alloc_)
-  {}
+  ObSingleChildOperatorFake() : ObSingleChildPhyOperator(alloc_) {}
   ObPhyOperatorType get_type() const
   {
     return static_cast<ObPhyOperatorType>(0);
   }
 
-  int inner_open(ObExecContext& ctx) const
+  int inner_open(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
     if (OB_SUCCESS != (ret = init_op_ctx(ctx))) {
       _OB_LOG(WARN, "init operator context failed, ret=%d", ret);
-    }
+    }/* else {
+      ret = ObSingleChildPhyOperator::open(ctx);
+    }*/
     return ret;
   }
 
-  int inner_close(ObExecContext& ctx) const
+  int inner_close(ObExecContext &ctx) const
   {
     UNUSED(ctx);
     int ret = OB_SUCCESS;
+    //ret = ObSingleChildPhyOperator::close(ctx);
     return ret;
   }
 
-protected:
-  virtual int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+  /*
+   * int close(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
-    const ObNewRow* input_row = NULL;
-    ObPhyOperator* child_op = NULL;
-    ObSingleOpCtx* phy_op_ctx = NULL;
+    ret = ObSingleChildPhyOperator::close(ctx);
+    return ret;
+  }
+   */
+
+protected:
+  virtual int inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
+  {
+    int ret = OB_SUCCESS;
+    const ObNewRow *input_row = NULL;
+    ObPhyOperator *child_op = NULL;
+    ObSingleOpCtx *phy_op_ctx = NULL;
 
     if (NULL == (child_op = get_child(0))) {
       ret = OB_ERR_UNEXPECTED;
@@ -89,7 +99,7 @@ protected:
       _OB_LOG(WARN, "get physical operator context failed, ret=%d", ret);
     } else {
       _OB_LOG(DEBUG, "inner_get_next_row, row=%s", to_cstring(*input_row));
-      ObNewRow& cur_row = phy_op_ctx->get_cur_row();
+      ObNewRow &cur_row = phy_op_ctx->get_cur_row();
       OB_ASSERT(input_row->count_ <= cur_row.count_);
       for (int64_t i = 0; i < input_row->count_; ++i) {
         cur_row.cells_[i] = input_row->cells_[i];
@@ -99,10 +109,10 @@ protected:
     return ret;
   }
 
-  virtual int init_op_ctx(ObExecContext& ctx) const
+  virtual int init_op_ctx(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
-    ObPhyOperatorCtx* op_ctx = NULL;
+    ObPhyOperatorCtx *op_ctx = NULL;
 
     if (OB_SUCCESS != (ret = CREATE_PHY_OPERATOR_CTX(ObSingleOpCtx, ctx, get_id(), get_type(), op_ctx))) {
       _OB_LOG(WARN, "create physical operator context failed, ret=%d", ret);
@@ -112,27 +122,30 @@ protected:
     return ret;
   }
 };
-class ObTableScanFake : public ObNoChildrenPhyOperator {
+class ObTableScanFake : public ObNoChildrenPhyOperator
+{
 protected:
-  class ObTableScanFakeCtx : public ObPhyOperatorCtx {
+  class ObTableScanFakeCtx : public ObPhyOperatorCtx
+  {
   public:
-    ObTableScanFakeCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
-    {}
-    virtual void destroy()
+    ObTableScanFakeCtx(ObExecContext &ctx)
+        : ObPhyOperatorCtx(ctx)
     {
-      return ObPhyOperatorCtx::destroy_base();
     }
+    virtual void destroy() { return ObPhyOperatorCtx::destroy_base(); }
   };
 
 public:
-  ObTableScanFake() : ObNoChildrenPhyOperator(alloc_), row_store_(NULL), store_size_(0), cur_index_(0)
-  {}
+  ObTableScanFake() : ObNoChildrenPhyOperator(alloc_),
+      row_store_(NULL), store_size_(0), cur_index_(0)
+  {
+  }
   ObPhyOperatorType get_type() const
   {
     return static_cast<ObPhyOperatorType>(0);
   }
 
-  int inner_open(ObExecContext& ctx) const
+  int inner_open(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
     if (OB_SUCCESS != (ret = init_op_ctx(ctx))) {
@@ -141,24 +154,24 @@ public:
     return ret;
   }
 
-  int inner_close(ObExecContext& ctx) const
+  int inner_close(ObExecContext &ctx) const
   {
     UNUSED(ctx);
     return OB_SUCCESS;
   }
 
-  void load_data_row(ObExecContext& ctx, int64_t store_size)
+  void load_data_row(ObExecContext &ctx, int64_t store_size)
   {
     int64_t cell_val = -1;
-    void* ptr = NULL;
+    void *ptr = NULL;
 
     store_size_ = store_size;
     ASSERT_GT(store_size_, 0);
     ptr = ctx.get_allocator().alloc(store_size * sizeof(ObNewRow));
     ASSERT_FALSE(NULL == ptr);
-    row_store_ = static_cast<ObNewRow*>(ptr);
+    row_store_ = static_cast<ObNewRow *>(ptr);
     for (int64_t i = 0; i < store_size; ++i) {
-      void* cells = ctx.get_allocator().alloc(row_size * sizeof(ObObj));
+      void *cells = ctx.get_allocator().alloc(row_size * sizeof(ObObj));
       ASSERT_FALSE(NULL == cells);
       row_store_[i].cells_ = static_cast<ObObj*>(cells);
       row_store_[i].count_ = row_size;
@@ -167,9 +180,8 @@ public:
       }
     }
   }
-
 protected:
-  virtual int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+  virtual int inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
   {
     UNUSED(ctx);
     int ret = OB_SUCCESS;
@@ -181,29 +193,29 @@ protected:
     return ret;
   }
 
-  virtual int init_op_ctx(ObExecContext& ctx) const
+  virtual int init_op_ctx(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
-    ObPhyOperatorCtx* op_ctx = NULL;
+    ObPhyOperatorCtx *op_ctx = NULL;
     ret = CREATE_PHY_OPERATOR_CTX(ObTableScanFakeCtx, ctx, get_id(), get_type(), op_ctx);
     UNUSED(op_ctx);
     return ret;
   }
-
 private:
-  ObNewRow* row_store_;
+  ObNewRow *row_store_;
   int64_t store_size_;
   mutable int64_t cur_index_;
 };
 
-class ObPhyOperatorTest : public ::testing::Test {
+class ObPhyOperatorTest: public ::testing::Test
+{
 public:
   ObPhyOperatorTest();
   virtual ~ObPhyOperatorTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  int test_calculate_row(ObExecContext& ctx, ObSingleChildOperatorFake& phy_op)
+  int test_calculate_row(ObExecContext &ctx, ObSingleChildOperatorFake &phy_op)
   {
     int ret = OB_SUCCESS;
     ObExprCtx expr_ctx;
@@ -217,40 +229,44 @@ public:
     return ret;
   }
 
-  int test_wrap_expr_ctx(ObExecContext& exec_ctx, ObExprCtx& expr_ctx, ObSingleChildOperatorFake& phy_op)
+  int test_wrap_expr_ctx(ObExecContext &exec_ctx,
+                         ObExprCtx &expr_ctx,
+                         ObSingleChildOperatorFake &phy_op)
   {
     return phy_op.wrap_expr_ctx(exec_ctx, expr_ctx);
   }
-
 private:
   // disallow copy
-  ObPhyOperatorTest(const ObPhyOperatorTest& other);
-  ObPhyOperatorTest& operator=(const ObPhyOperatorTest& other);
-
+  ObPhyOperatorTest(const ObPhyOperatorTest &other);
+  ObPhyOperatorTest& operator=(const ObPhyOperatorTest &other);
 private:
   // data members
 };
 ObPhyOperatorTest::ObPhyOperatorTest()
-{}
+{
+}
 
 ObPhyOperatorTest::~ObPhyOperatorTest()
-{}
+{
+}
 
 void ObPhyOperatorTest::SetUp()
-{}
+{
+}
 
 void ObPhyOperatorTest::TearDown()
-{}
+{
+}
 
 /**
  * @brief test operator only get row
  */
 TEST_F(ObPhyOperatorTest, test_get_row)
 {
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
   ObTableScanFake table_scan;
   ObSingleChildOperatorFake root;
@@ -286,19 +302,21 @@ TEST_F(ObPhyOperatorTest, test_get_row)
 
 TEST_F(ObPhyOperatorTest, test_filter_and_calc_row)
 {
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ObExecContext ctx;
   ObTableScanFake table_scan;
   ObSingleChildOperatorFake root;
   ObPhysicalPlan physical_plan;
   int64_t op_size = 2;
   ObSQLSessionInfo my_session;
-  my_session.test_init(0, 0, 0, NULL);
+  my_session.test_init(0,0,0,NULL);
   ctx.set_my_session(&my_session);
 
   physical_plan.set_main_query(&root);
   ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(op_size));
   ASSERT_EQ(OB_SUCCESS, ctx.create_physical_plan_ctx());
+
+
 
   table_scan.load_data_row(ctx, 1);
   table_scan.set_id(0);
@@ -326,7 +344,7 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row)
 
 TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
 {
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ObExecContext ctx;
   ObTableScanFake table_scan;
   ObSingleChildOperatorFake root;
@@ -334,7 +352,7 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
   ObSQLSessionInfo my_session;
   int64_t op_size = 2;
 
-  my_session.test_init(0, 0, 0, NULL);
+  my_session.test_init(0,0,0,NULL);
   ctx.set_my_session(&my_session);
 
   physical_plan.set_main_query(&root);
@@ -346,14 +364,14 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
   table_scan.set_column_count(row_size);
   table_scan.set_phy_plan(&physical_plan);
 
-  ObExprOperator* expr_op = NULL;
+  ObExprOperator *expr_op = NULL;
   ObExprResType res_type;
   res_type.set_calc_type(ObIntType);
   res_type.set_type(ObIntType);
   /*
    * filter c3 - 1 = 1
    */
-  ObSqlExpression* filer_expr = NULL;
+  ObSqlExpression *filer_expr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan, filer_expr));
   ASSERT_FALSE(NULL == filer_expr);
   filer_expr->set_item_count(5);
@@ -378,7 +396,7 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
   /*
    * calculate c1 + 1
    */
-  ObColumnExpression* calc_expr = NULL;
+  ObColumnExpression *calc_expr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan, calc_expr));
   ASSERT_FALSE(NULL == calc_expr);
   calc_expr->set_item_count(3);
@@ -387,7 +405,7 @@ TEST_F(ObPhyOperatorTest, test_filter_and_calc_row_1)
   calc_item.set_int(1);
   calc_item.set_item_type(T_INT);
   ASSERT_EQ(OB_SUCCESS, calc_expr->add_expr_item(calc_item));
-  // column c1
+  //column c1
   calc_item.set_column(0);
   ASSERT_EQ(OB_SUCCESS, calc_expr->add_expr_item(calc_item));
   calc_item.set_op(physical_plan.get_allocator(), "+", 2);
@@ -439,15 +457,15 @@ TEST_F(ObPhyOperatorTest, test_invalid_argument)
   ObExprCtx expr_ctx;
   ObSingleChildOperatorFake root;
   ObPhysicalPlan physical_plan;
-  ObMergeGroupBy* groupby = NULL;
+  ObMergeGroupBy *groupby = NULL;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
 
   ASSERT_EQ(OB_SUCCESS, physical_plan.alloc_operator_by_type(PHY_MERGE_GROUP_BY, groupby));
 
-  // invalid argument calculate_row() function
-  ObColumnExpression* calc_expr = NULL;
+  //invalid argument calculate_row() function
+  ObColumnExpression *calc_expr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan, calc_expr));
   ASSERT_FALSE(NULL == calc_expr);
   calc_expr->set_item_count(3);
@@ -456,7 +474,7 @@ TEST_F(ObPhyOperatorTest, test_invalid_argument)
   calc_item.set_int(1);
   calc_item.set_item_type(T_INT);
   ASSERT_EQ(OB_SUCCESS, calc_expr->add_expr_item(calc_item));
-  // column c1
+  //column c1
   calc_item.set_column(0);
   ASSERT_EQ(OB_SUCCESS, calc_expr->add_expr_item(calc_item));
   calc_item.set_op(physical_plan.get_allocator(), "+", 2);
@@ -466,7 +484,7 @@ TEST_F(ObPhyOperatorTest, test_invalid_argument)
   ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(1));
   ASSERT_EQ(OB_INVALID_ARGUMENT, ObPhyOperatorTest::test_calculate_row(ctx, root));
 
-  // invalid argument wrap_expr_ctx()
+  //invalid argument wrap_expr_ctx()
   ObExecContext invalid_ctx;
   invalid_ctx.set_my_session(&my_session);
   root.reset();
@@ -475,7 +493,7 @@ TEST_F(ObPhyOperatorTest, test_invalid_argument)
   ASSERT_EQ(OB_SUCCESS, invalid_ctx.create_physical_plan_ctx());
   ASSERT_EQ(OB_ERR_UNEXPECTED, ObPhyOperatorTest::test_wrap_expr_ctx(invalid_ctx, expr_ctx, root));
 
-  // invalid argument for add filter
+  //invalid argument for add filter
   root.reset();
   ASSERT_EQ(OB_INVALID_ARGUMENT, root.add_filter(NULL));
   ASSERT_EQ(OB_INVALID_ARGUMENT, root.add_compute(NULL));
@@ -551,15 +569,16 @@ TEST_F(ObPhyOperatorTest, physical_plan_size)
 {
   typedef oceanbase::common::ObFixedArray<common::ObField, common::ObIAllocator> ParamsFieldArray;
   typedef oceanbase::common::ObFixedArray<common::ObField, common::ObIAllocator> ColumnsFieldArray;
-  struct MockPhysicalPlan {
+  struct MockPhysicalPlan
+  {
     common::ObArenaAllocator inner_alloc_;
-    common::ObArenaAllocator& allocator_;
+    common::ObArenaAllocator &allocator_;
     int64_t prepare_count_;
     volatile int64_t ref_count_;
     int64_t schema_version_;
     uint64_t plan_id_;
     int64_t hint_timeout_us_;
-    ObPhyOperator* main_query_;
+    ObPhyOperator *main_query_;
     int64_t param_count_;
     int64_t merged_version_;
     common::ObDList<ObSqlExpression> pre_calc_exprs_;
@@ -567,80 +586,78 @@ TEST_F(ObPhyOperatorTest, physical_plan_size)
     uint64_t signature_;
     ColumnsFieldArray field_columns_;
     ParamsFieldArray param_columns_;
-    common::ObFixedArray<share::AutoincParam, common::ObIAllocator> autoinc_params_;  // auto-incrment param
+    common::ObFixedArray<share::AutoincParam, common::ObIAllocator> autoinc_params_; //auto-incrment param
     share::schema::ObStmtNeedPrivs stmt_need_privs_;
     common::ObFixedArray<ObVarInfo, common::ObIAllocator> vars_;
     ObPhyOperatorFactory op_factory_;
     ObSqlExpressionFactory sql_expression_factory_;
     ObExprOperatorFactory expr_op_factory_;
     stmt::StmtType stmt_type_;
-    stmt::StmtType literal_stmt_type_;
+    stmt::StmtType literal_stmt_type_; // 含义参考ObBasicStmt中对应定义
     ObPhyPlanType plan_type_;
     common::ObConsistencyLevel hint_consistency_;
-    uint32_t next_phy_operator_id_;  // share val
+    uint32_t next_phy_operator_id_; //share val
     // for regexp expression's compilation
     int16_t regexp_op_count_;
     bool is_sfu_;
     bool fetch_cur_time_;
-    bool is_contain_virtual_table_;
+    bool is_contain_virtual_table_;//为虚拟表服务，如果判断出语句中涉及虚拟表
     bool is_require_sys_tenant_priv_;
-    // if the stmt  contains user variable assignment
-    // such as @a:=123
-    // we may need to serialize the map to remote server
+    //if the stmt  contains user variable assignment
+    //such as @a:=123
+    //we may need to serialize the map to remote server
     bool is_contains_assignment_;
-    bool affected_last_insert_id_;
-    bool is_affect_found_row_;  // not need serialize
+    bool affected_last_insert_id_; //不需要序列化远端，只在本地生成执行计划和open resultset的时候需要
+    bool is_affect_found_row_; //not need serialize
   };
 
-  printf("output mock physical plan = %ld, ModulePageAllocator=%ld\n",
-      sizeof(MockPhysicalPlan),
-      sizeof(ModulePageAllocator));
+  printf("output mock physical plan = %ld, ModulePageAllocator=%ld\n", sizeof(MockPhysicalPlan), sizeof(ModulePageAllocator));
   ObPhysicalPlan plan;
   printf("output plan size=%ld\n", sizeof(plan));
   common::ObConsistencyLevel hint_consistency;
   printf("output enum size = %ld\n", sizeof(hint_consistency));
   common::ObDList<ObSqlExpression> sql_expression;
   printf("output dlist size=%ld\n", sizeof(sql_expression));
-  // printf("output fixarray = %ld, IArray=%ld\n", sizeof(common::ObFixedArray), sizeof(common::ObIArray));
+  //printf("output fixarray = %ld, IArray=%ld\n", sizeof(common::ObFixedArray), sizeof(common::ObIArray));
   printf("output IArray=%ld\n", sizeof(common::ObIArray<int>));
   printf("output fixarray = %ld\n", sizeof(common::ObFixedArray<int, common::ObArenaAllocator>));
   printf("output physical plan size=%ld\n", sizeof(ObPhysicalPlan));
   printf("output factory=%ld, sql_expression=%ld\n", sizeof(ObPhyOperatorFactory), sizeof(ObSqlExpression));
   printf("output sql_factory=%ld, expr_op=%ld\n", sizeof(ObSqlExpressionFactory), sizeof(ObExprOperatorFactory));
   common::ObArenaAllocator alloc;
-  common::ObArenaAllocator& a = alloc;
-  common::ObArenaAllocator* p = &alloc;
-  printf(
-      "output referrence =%ld, Obiallocator=%ld\n", sizeof(common::ObArenaAllocator&), sizeof(common::ObIAllocator&));
+  common::ObArenaAllocator &a = alloc;
+  common::ObArenaAllocator *p = &alloc;
+  printf("output referrence =%ld, Obiallocator=%ld\n", sizeof(common::ObArenaAllocator &), sizeof(common::ObIAllocator &));
   printf("output alloc =%ld, refference=%ld, point=%ld\n", sizeof(alloc), sizeof(a), sizeof(p));
   printf("output pramInfo before=%ld\n", sizeof(ObParamInfo));
-  struct MockParamInfo {
+  struct MockParamInfo
+  {
     common::ObObjType type_;
     common::ObScale scale_;
     common::ParamFlag flag_;
   };
   printf("output MockParamInfo after=%ld\n", sizeof(MockParamInfo));
-  printf("output ObPostItem size before=%ld, obj=%ld\n", sizeof(ObPostExprItem), sizeof(common::ObObj));
-  class MockPostExprItem {
+  printf("output ObPostItem size before=%ld, obj=%ld\n", sizeof(ObPostExprItem),sizeof(common::ObObj));
+  class MockPostExprItem
+  {
     common::ObObj v1_;  // const
-    union {
+    union
+    {
       int64_t query_id_;
       int64_t cell_index_;  // column reference, aka cell index in ObRow
-      ObExprOperator* op_;  // expression operator
+      ObExprOperator *op_;  // expression operator
       ObSetVar::SetScopeType sys_var_scope_;
-    } v2_;
+    } v2_ __maybe_unused;
     common::ObAccuracy accuracy_;  // for const, column, questionmark
-    ObItemType item_type_;
+    ObItemType  item_type_ __maybe_unused;
   };
   printf("output MockPostItem size=%ld\n", sizeof(MockPostExprItem));
-  printf("output ObSqlExpression size=%ld, ObPostfixExpression=%ld\n",
-      sizeof(ObSqlExpression),
-      sizeof(ObPostfixExpression));
+  printf("output ObSqlExpression size=%ld, ObPostfixExpression=%ld\n", sizeof(ObSqlExpression), sizeof(ObPostfixExpression));
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_sql_factories();
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

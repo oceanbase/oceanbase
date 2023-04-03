@@ -11,22 +11,27 @@
  */
 
 #include <gtest/gtest.h>
-#include "share/redolog/ob_log_file_store.h"
+#include "share/redolog/ob_log_local_store.h"
 #include "share/redolog/ob_log_file_reader.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/file/ob_file.h"
 #include "lib/container/ob_se_array.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace share;
-namespace common {
+namespace common
+{
 
-class TestLogFileStore : public ::testing::Test {
+class TestLogFileStore: public ::testing::Test
+{
 public:
   TestLogFileStore()
-  {}
+  {
+  }
   virtual ~TestLogFileStore()
-  {}
+  {
+  }
   virtual void SetUp();
   virtual void TearDown();
 
@@ -70,20 +75,22 @@ TEST_F(TestLogFileStore, simple)
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf = nullptr;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, TestLogFileStore::DIO_WRITE_ALIGN_SIZE);
+  char *buf = nullptr;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE,
+      TestLogFileStore::DIO_WRITE_ALIGN_SIZE);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is simple test");
 
-  ret = file_store.write((void*)buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, 0);
+  ret = file_store.write((void *) buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
   free(buf);
 
@@ -102,22 +109,23 @@ TEST_F(TestLogFileStore, rd_wr)
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is rd_wr test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.close();
@@ -126,10 +134,10 @@ TEST_F(TestLogFileStore, rd_wr)
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
 
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -148,22 +156,23 @@ TEST_F(TestLogFileStore, read_nothing)
   int ret = OB_SUCCESS;
   int64_t read_size = 0;
   int64_t count = TestLogFileStore::DIO_WRITE_ALIGN_SIZE;
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is rd_wr test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.close();
@@ -172,10 +181,13 @@ TEST_F(TestLogFileStore, read_nothing)
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* rd_buf;
-  rd_buf = static_cast<char*>(ob_malloc_align(TestLogFileStore::DIO_WRITE_ALIGN_SIZE, TestLogFileStore::LOG_FILE_SIZE));
+  char *rd_buf;
+  rd_buf = static_cast<char *>(ob_malloc_align(
+                               TestLogFileStore::DIO_WRITE_ALIGN_SIZE,
+                               TestLogFileStore::LOG_FILE_SIZE,
+                               "TestFileStore"));
 
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -184,19 +196,19 @@ TEST_F(TestLogFileStore, read_nothing)
 
   // read nothing
   read_size = count;
-  ret = file_store.read((void*)rd_buf, count, TestLogFileStore::LOG_FILE_SIZE, read_size);
+  ret = file_store.read((void *) rd_buf, count, TestLogFileStore::LOG_FILE_SIZE, read_size);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, read_size);
 
   // read oversize
   read_size = count;
-  ret = file_store.read((void*)rd_buf, count, TestLogFileStore::LOG_FILE_SIZE + count, read_size);
+  ret = file_store.read((void *) rd_buf, count, TestLogFileStore::LOG_FILE_SIZE + count, read_size);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, read_size);
 
   // read tail part
   read_size = count;
-  ret = file_store.read((void*)rd_buf, count * 2, TestLogFileStore::LOG_FILE_SIZE - count, read_size);
+  ret = file_store.read((void *) rd_buf, count * 2, TestLogFileStore::LOG_FILE_SIZE - count, read_size);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
 
@@ -210,22 +222,24 @@ TEST_F(TestLogFileStore, file_read)
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, TestLogFileStore::DIO_WRITE_ALIGN_SIZE);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE,
+      TestLogFileStore::DIO_WRITE_ALIGN_SIZE);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is file_read test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, 0);
+  ret = file_store.write((void *) buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.close();
@@ -257,19 +271,20 @@ TEST_F(TestLogFileStore, write_file_fd_read)
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is rd_wr test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write_file(file_id, (void*)buf, count);
+  ret = file_store.write_file(file_id, (void *)buf, count);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   bool b_exist = false;
@@ -278,12 +293,12 @@ TEST_F(TestLogFileStore, write_file_fd_read)
   FileDirectoryUtils::is_exists("./log_file_test/disk2/1", b_exist);
   ASSERT_TRUE(b_exist);
 
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ObLogFileDescriptor log_fd;
   ret = ObLogFileReader::get_fd("./log_file_test", file_id, file_store.get_redo_log_type(), log_fd);
   ASSERT_EQ(OB_SUCCESS, ret);
-  read_size = ObLogFileReader::pread(log_fd, (void*)rd_buf, count, 0);
+  read_size = ObLogFileReader::pread(log_fd, (void *) rd_buf, count, 0);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(count), K(read_size));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -304,33 +319,34 @@ TEST_F(TestLogFileStore, log_file_reader2)
   int64_t count = TestLogFileStore::DIO_WRITE_ALIGN_SIZE;
   FileDirectoryUtils::create_full_path("./log_file_test/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   STRCPY(buf, "this is rd_wr test");
   size_t len = STRLEN(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write_file(file_id, (void*)buf, count);
+  ret = file_store.write_file(file_id, (void *)buf, count);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   bool b_exist = false;
   FileDirectoryUtils::is_exists("./log_file_test/1", b_exist);
   ASSERT_TRUE(b_exist);
 
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   for (int64_t i = 0; i < 10; ++i) {
     ObLogReadFdHandle log_fd;
     MEMSET(rd_buf, 0, TestLogFileStore::DIO_WRITE_ALIGN_SIZE);
     ret = OB_LOG_FILE_READER.get_fd("./log_file_test", file_id, log_fd);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ret = OB_LOG_FILE_READER.pread(log_fd, (void*)rd_buf, count, 0, read_size);
+    ret = OB_LOG_FILE_READER.pread(log_fd, (void *) rd_buf, count, 0, read_size);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(count, read_size);
     ASSERT_EQ(len, STRLEN(rd_buf));
@@ -357,8 +373,9 @@ TEST_F(TestLogFileStore, delete_file)
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -389,8 +406,9 @@ TEST_F(TestLogFileStore, slog_empty_file)
 {
   int ret = OB_SUCCESS;
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -409,8 +427,9 @@ TEST_F(TestLogFileStore, open_exist)
   int ret = OB_SUCCESS;
   bool is_exist = false;
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_FALSE(file_store.is_opened());
@@ -446,8 +465,9 @@ TEST_F(TestLogFileStore, truncate)
   const int64_t truncate_file_size = 2 * 1024 * 1024;
   int64_t file_size = 0;
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", original_file_size, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", original_file_size,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -475,8 +495,9 @@ TEST_F(TestLogFileStore, set_bad_disk)
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk3/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // make 2 disk bad
@@ -488,21 +509,21 @@ TEST_F(TestLogFileStore, set_bad_disk)
   ret = file_store.open(1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is rd_wr test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
 
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -522,8 +543,9 @@ TEST_F(TestLogFileStore, errsim_single_disk_failure)
   int64_t count = TestLogFileStore::DIO_WRITE_ALIGN_SIZE;
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -535,15 +557,15 @@ TEST_F(TestLogFileStore, errsim_single_disk_failure)
   usleep(100 * 1000);
 #endif
 
-  char* buf = nullptr;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf = nullptr;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is write_bad_disk test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
 
 #ifdef ERRSIM
   ASSERT_EQ(OB_IO_ERROR, ret);
@@ -563,8 +585,9 @@ TEST_F(TestLogFileStore, errsim_disk_full)
   int64_t count = TestLogFileStore::DIO_WRITE_ALIGN_SIZE;
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -572,23 +595,23 @@ TEST_F(TestLogFileStore, errsim_disk_full)
 
   // make write return disk full
 #ifdef ERRSIM
-  // OB_CS_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
+  // OB_SERVER_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
   TP_SET_EVENT(EventTable::EN_IO_GETEVENTS, OB_RESOURCE_OUT, 0, 1);
   usleep(100 * 1000);
 #endif
 
-  char* buf = nullptr;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf = nullptr;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is write_bad_disk test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
 
 #ifdef ERRSIM
-  ASSERT_EQ(OB_CS_OUTOF_DISK_SPACE, ret);
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, ret);
 #else
   ASSERT_EQ(OB_SUCCESS, ret);
 #endif
@@ -605,8 +628,9 @@ TEST_F(TestLogFileStore, errsim_aio_timeout)
   int64_t count = TestLogFileStore::DIO_WRITE_ALIGN_SIZE;
   FileDirectoryUtils::create_full_path("./log_file_test/disk1/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -617,15 +641,15 @@ TEST_F(TestLogFileStore, errsim_aio_timeout)
   usleep(100 * 1000);
 #endif
 
-  char* buf = nullptr;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf = nullptr;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is write_bad_disk test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
 
 #ifdef ERRSIM
   ASSERT_EQ(OB_TIMEOUT, ret);
@@ -648,8 +672,9 @@ TEST_F(TestLogFileStore, errsim_bad_disk)
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk3/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(1);
@@ -662,15 +687,15 @@ TEST_F(TestLogFileStore, errsim_bad_disk)
 #endif
 
   // write should still succeed since 2 disk are good
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is write_bad_disk test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
 #ifdef ERRSIM
@@ -679,9 +704,9 @@ TEST_F(TestLogFileStore, errsim_bad_disk)
 #endif
 
   // read buf and check
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -693,9 +718,9 @@ TEST_F(TestLogFileStore, errsim_bad_disk)
   len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -732,8 +757,9 @@ TEST_F(TestLogFileStore, errsim_partial_submit)
   FileDirectoryUtils::create_full_path("./log_file_test/disk3/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk4/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(file_id);
@@ -746,21 +772,21 @@ TEST_F(TestLogFileStore, errsim_partial_submit)
 #endif
 
   // write should still succeed because three disks write succeeded
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is write_bad_disk test");
   size_t len = strlen(buf);
   ASSERT_NE(0, len);
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // read buf and check
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(len));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
@@ -796,15 +822,16 @@ TEST_F(TestLogFileStore, errsim_partial_complete)
   FileDirectoryUtils::create_full_path("./log_file_test/disk2/");
   FileDirectoryUtils::create_full_path("./log_file_test/disk3/");
 
-  ObLogFileStore file_store;
-  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
+  ObLogLocalStore file_store;
+  file_store.init("./log_file_test/", TestLogFileStore::LOG_FILE_SIZE,
+      clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_store.open(file_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  char* buf;
-  ret = posix_memalign((void**)&buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  char *buf;
+  ret = posix_memalign((void **) &buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
   ASSERT_EQ(0, ret);
   ASSERT_TRUE(NULL != buf);
   strcpy(buf, "this is errsim_partial_complete test");
@@ -816,7 +843,7 @@ TEST_F(TestLogFileStore, errsim_partial_complete)
   usleep(100 * 1000);
 #endif
 
-  ret = file_store.write((void*)buf, count, 0);
+  ret = file_store.write((void *) buf, count, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
 
 #ifdef ERRSIM
@@ -825,16 +852,10 @@ TEST_F(TestLogFileStore, errsim_partial_complete)
 #endif
 
   // read buf and check
-  char* rd_buf;
-  ret = posix_memalign((void**)&rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
-  ret = file_store.read((void*)rd_buf, count, 0, read_size);
-  OB_LOG(INFO,
-      "buf value",
-      K(buf),
-      K(rd_buf),
-      K(buf + DIO_READ_ALIGN_SIZE),
-      K(rd_buf + DIO_READ_ALIGN_SIZE),
-      K(read_size));
+  char *rd_buf;
+  ret = posix_memalign((void **) &rd_buf, TestLogFileStore::DIO_WRITE_ALIGN_SIZE, count);
+  ret = file_store.read((void *) rd_buf, count, 0, read_size);
+  OB_LOG(INFO, "buf value", K(buf), K(rd_buf), K(buf + DIO_READ_ALIGN_SIZE), K(rd_buf + DIO_READ_ALIGN_SIZE), K(read_size));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
   ASSERT_EQ(0, strcmp(buf, rd_buf));
@@ -853,8 +874,8 @@ TEST_F(TestLogFileStore, errsim_partial_complete)
   ret = file_store.close();
   ASSERT_EQ(OB_SUCCESS, ret);
 }
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
 int main(int argc, char** argv)
 {

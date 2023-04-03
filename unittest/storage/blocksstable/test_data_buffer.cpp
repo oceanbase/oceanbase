@@ -15,39 +15,49 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "common/object/ob_object.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "share/redolog/ob_log_definition.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace blocksstable {
+namespace blocksstable
+{
 
-class TestDataBuffer : public ::testing::Test {
+class TestDataBuffer : public ::testing::Test
+{
 public:
   TestDataBuffer();
   virtual ~TestDataBuffer();
   virtual void SetUp();
   virtual void TearDown();
-
 protected:
-  char* buf_;
+  char *buf_;
   int64_t buf_size_;
+  static constexpr int64_t ALIGNED_SIZE = ObLogConstants::LOG_FILE_ALIGN_SIZE;
 };
 
-TestDataBuffer::TestDataBuffer() : buf_(NULL), buf_size_(0)
-{}
+TestDataBuffer::TestDataBuffer()
+  : buf_(NULL),
+    buf_size_(0)
+{
+
+}
 
 TestDataBuffer::~TestDataBuffer()
-{}
+{
+
+}
 
 void TestDataBuffer::SetUp()
 {
   buf_size_ = 2L * 1024 * 1024;
-  buf_ = static_cast<char*>(malloc(buf_size_));
+  buf_ = static_cast<char *>(malloc(buf_size_));
   ASSERT_FALSE(NULL == buf_);
 }
 
 void TestDataBuffer::TearDown()
 {
-  if (NULL != buf_) {
+  if(NULL != buf_){
     free(buf_);
   }
 }
@@ -55,10 +65,10 @@ void TestDataBuffer::TearDown()
 TEST_F(TestDataBuffer, test_ObSelfBufferWriter)
 {
   int ret = OB_SUCCESS;
-  int64_t big_size = 256L * 1024L * 1024L * 1024L * 1024L * 1024L;  // 256TB
-  ObSelfBufferWriter buf_align(1024, ObModIds::TEST, true);
+  int64_t big_size = 256L * 1024L * 1024L * 1024L * 1024L * 1024L;//256TB
+  ObSelfBufferWriter buf_align(4096, ObModIds::TEST, true);
   ObSelfBufferWriter buf_not_align(0, ObModIds::TEST, false);
-  ret = buf_align.ensure_space(1024);
+  ret = buf_align.ensure_space(ALIGNED_SIZE);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   ret = buf_align.ensure_space(4097);
@@ -85,7 +95,7 @@ TEST_F(TestDataBuffer, test_ObSelfBufferWriter)
 
 TEST_F(TestDataBuffer, test_ObBufferHolder)
 {
-  // rollback and advance test
+  //rollback and advance test
   ObBufferWriter buffer_writer(buf_, buf_size_);
   const int64_t tmp = 1234;
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, buffer_writer.rollback(tmp));
@@ -94,10 +104,10 @@ TEST_F(TestDataBuffer, test_ObBufferHolder)
   ASSERT_EQ(OB_SUCCESS, buffer_writer.rollback(tmp));
   ASSERT_EQ(OB_SUCCESS, buffer_writer.advance(sizeof(int64_t)));
   ASSERT_EQ(buffer_writer.length(), buf_size_);
-  // write_pod and read_pod get
+  //write_pod and read_pod get
   int64_t pod = INT64_MAX;
   int64_t read_pod = 0;
-  const int64_t* get_pod = NULL;
+  const int64_t *get_pod = NULL;
   buffer_writer.assign(buf_, buf_size_);
   ObBufferReader buffer_reader(buf_, buf_size_);
   memset(buf_, 0, buf_size_);
@@ -110,14 +120,14 @@ TEST_F(TestDataBuffer, test_ObBufferHolder)
   ASSERT_FALSE(NULL == get_pod);
   ASSERT_EQ(pod, *get_pod);
   ASSERT_EQ(buffer_writer.length(), buffer_reader.length());
-  // write and read buf test
+  //write and read buf test
   char write_buf[10] = "test";
   char read_buf[10];
   ASSERT_EQ(OB_SUCCESS, buffer_writer.write(write_buf, 10));
   ASSERT_EQ(OB_SUCCESS, buffer_reader.read(read_buf, 10));
   ASSERT_EQ(0, memcmp(write_buf, read_buf, 10));
   ASSERT_EQ(buffer_writer.length(), buffer_reader.length());
-  // write_serialize and read_serizlize
+  //write_serialize and read_serizlize
   ObObj write_key;
   ObObj read_key;
   write_key.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
@@ -133,8 +143,8 @@ TEST_F(TestDataBuffer, test_ObBufferHolder)
   ASSERT_EQ(OB_SUCCESS, buffer_reader.read(read_pod));
   ASSERT_EQ(pod, read_pod);
   ASSERT_EQ(buffer_writer.length(), buffer_reader.length());
-  // append_fmt
-  char* buf_read = NULL;
+  //append_fmt
+  char *buf_read = NULL;
   ASSERT_EQ(OB_SUCCESS, buffer_writer.append_fmt("%s", "oceanbase"));
   ASSERT_EQ(OB_SUCCESS, buffer_reader.read_cstr(buf_read));
   ASSERT_EQ(0, memcmp(buf_read, "oceanbase", sizeof("oceanbase")));
@@ -143,8 +153,8 @@ TEST_F(TestDataBuffer, test_ObBufferHolder)
 TEST_F(TestDataBuffer, test_data_buffer_append_fmt_need_size)
 {
   common::ObArenaAllocator allocator;
-  const char* str = "123";
-  char* buf = static_cast<char*>(allocator.alloc(4));
+  const char *str="123";
+  char *buf = static_cast<char *>(allocator.alloc(4));
   ObBufferWriter buffer_writer(buf, 4);
   ASSERT_NE(nullptr, buf);
   ASSERT_EQ(OB_SUCCESS, buffer_writer.append_fmt("%s", str));
@@ -153,19 +163,19 @@ TEST_F(TestDataBuffer, test_data_buffer_append_fmt_need_size)
 TEST_F(TestDataBuffer, test_data_buffer_reader_read_str)
 {
   common::ObArenaAllocator allocator;
-  const char* str = "123";
-  char* buf = static_cast<char*>(allocator.alloc(4));
+  const char *str="123";
+  char *buf = static_cast<char *>(allocator.alloc(4));
   MEMCPY(buf, "123", 4);
   ObBufferReader buffer_reader(buf, 4);
-  char* read_str = nullptr;
+  char *read_str = nullptr;
   ASSERT_EQ(OB_SUCCESS, buffer_reader.read_cstr(read_str));
   ASSERT_EQ(4, buffer_reader.pos());
 }
 
 TEST_F(TestDataBuffer, test_ObBufferReader)
 {
-  int64_t buf_len = 1024 * 1024;
-  char* buf = (char*)malloc(buf_len);
+  int64_t buf_len = 1024*1024;
+  char *buf = (char*)malloc(buf_len);
   int64_t pos = 0;
 
   ObBufferReader buffer_reader(buf_, 16384, 16384);
@@ -176,14 +186,19 @@ TEST_F(TestDataBuffer, test_ObBufferReader)
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, buffer_reader2.deserialize(buf, buf_len, pos));
   COMMON_LOG(INFO, "dump", K(buffer_reader), K(pos), K(buffer_reader2));
+
+
 }
-}  // namespace blocksstable
-}  // namespace oceanbase
+}//blocksstable
+}//oceanbase
 int main(int argc, char** argv)
 {
+  system("rm -f test_data_buffer.log");
+  OB_LOGGER.set_file_name("test_data_buffer.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   oceanbase::lib::set_memory_limit(40UL << 30);
   signal(49, SIG_IGN);
   return RUN_ALL_TESTS();
 }
+

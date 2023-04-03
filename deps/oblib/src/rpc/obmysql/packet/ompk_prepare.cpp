@@ -15,32 +15,34 @@
 #include "lib/oblog/ob_log_module.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace obmysql {
+namespace obmysql
+{
 
 int OMPKPrepare::serialize(char* buffer, int64_t length, int64_t& pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buffer) || OB_UNLIKELY(length - pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(buffer), K(length), K(pos), K(ret));
+    LOG_WARN("invalid argument", KP(buffer), K(length), K(pos), K(ret));
   } else if (OB_UNLIKELY(length - pos < static_cast<int64_t>(get_serialize_size()))) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size is overflow", K(length), K(pos), "need_size", get_serialize_size(), K(ret));
+    LOG_WARN("size is overflow",  K(length), K(pos), "need_size", get_serialize_size(), K(ret));
   } else {
     if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, status_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(status), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(status), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int4(buffer, length, statement_id_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(statement_id), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(statement_id), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, length, column_num_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(column_num), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(column_num), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, length, param_num_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(param_num), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(param_num), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, reserved_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(reserved), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(reserved), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, length, warning_count_, pos))) {
-      LOG_WARN("store failed", K(buffer), K(length), K_(warning_count), K(pos));
+      LOG_WARN("store failed", KP(buffer), K(length), K_(warning_count), K(pos));
     }
   }
   return ret;
@@ -49,14 +51,17 @@ int OMPKPrepare::serialize(char* buffer, int64_t length, int64_t& pos) const
 int64_t OMPKPrepare::get_serialize_size() const
 {
   int64_t len = 0;
-  len += 1;  // status
-  len += 4;  // statement id
-  len += 2;  // column num
-  len += 2;  // param num
-  len += 1;  // reserved
-  len += 2;  // warning count
+  len += 1;                 // status
+  len += 4;                 // statement id
+  len += 2;                 // column num
+  len += 2;                 // param num
+  len += 1;                 // reserved
+  len += 2;                 // warning count
   return len;
 }
 
-}  // namespace obmysql
-}  // namespace oceanbase
+
+
+
+} //end of obmysql
+} //end of oceanbase

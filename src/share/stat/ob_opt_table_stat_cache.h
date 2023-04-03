@@ -21,21 +21,25 @@ namespace common {
 
 struct ObOptTableStatHandle;
 
-class ObOptTableStatCache : public common::ObKVCache<ObOptTableStat::Key, ObOptTableStat> {
+class ObOptTableStatCache : public common::ObKVCache<ObOptTableStat::Key, ObOptTableStat>
+{
 public:
-  int get_value(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle);
-  int put_value(const ObOptTableStat::Key& key, const ObOptTableStat& value);
-  int put_and_fetch_value(const ObOptTableStat::Key& key, const ObOptTableStat& value, ObOptTableStatHandle& handle);
+  int get_value(const ObOptTableStat::Key &key, ObOptTableStatHandle &handle);
+  int put_value(const ObOptTableStat::Key &key, const ObOptTableStat &value);
+  int put_and_fetch_value(const ObOptTableStat::Key &key,
+                          const ObOptTableStat &value,
+                          ObOptTableStatHandle &handle);
 };
 
-struct ObOptTableStatHandle {
-  const ObOptTableStat* stat_;
-  ObOptTableStatCache* cache_;
+struct ObOptTableStatHandle
+{
+  const ObOptTableStat *stat_;
+  ObOptTableStatCache *cache_;
   ObKVCacheHandle handle_;
 
-  ObOptTableStatHandle() : stat_(nullptr), cache_(nullptr), handle_()
-  {}
-  ObOptTableStatHandle(const ObOptTableStatHandle& other)
+  ObOptTableStatHandle()
+    : stat_(nullptr), cache_(nullptr), handle_() {}
+  ObOptTableStatHandle(const ObOptTableStatHandle &other)
   {
     if (this != &other) {
       *this = other;
@@ -52,9 +56,12 @@ struct ObOptTableStatHandle {
     cache_ = nullptr;
     handle_.reset();
   }
+  TO_STRING_KV(K(stat_));
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+
+
 
 #endif /* _OB_OPT_TABLE_STAT_CACHE_H_ */

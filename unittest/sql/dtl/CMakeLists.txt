@@ -1,1 +1,1 @@
-ob_unittest(test_dtl_rpc_channel)
+sql_unittest(test_dtl_rpc_channel)

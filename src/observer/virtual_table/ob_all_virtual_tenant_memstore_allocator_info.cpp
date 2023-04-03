@@ -16,30 +16,31 @@
 #include "share/allocator/ob_memstore_allocator_mgr.h"
 #include "storage/memtable/ob_memtable.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 
-namespace observer {
-class MemstoreInfoFill {
+namespace observer
+{
+class MemstoreInfoFill
+{
 public:
   typedef ObMemstoreAllocatorInfo Item;
   typedef ObArray<Item> ItemArray;
   typedef ObGMemstoreAllocator::AllocHandle Handle;
-  MemstoreInfoFill(ItemArray& array) : array_(array)
-  {}
-  ~MemstoreInfoFill()
-  {}
-  int operator()(ObDLink* link)
-  {
+  MemstoreInfoFill(ItemArray& array): array_(array) {}
+  ~MemstoreInfoFill() {}
+  int operator()(ObDLink* link) {
     Item item;
     Handle* handle = CONTAINER_OF(link, Handle, total_list_);
     memtable::ObMemtable& mt = handle->mt_;
+    ObLSID ls_id;
     item.protection_clock_ = handle->get_protection_clock();
-    item.is_frozen_ = mt.is_frozen_memtable();
-    item.pkey_ = mt.get_partition_key();
-    item.trans_version_range_ = mt.get_version_range();
-    item.version_ = mt.get_version();
+    item.is_active_ = mt.is_active_memtable();
+    item.ls_id_ = (OB_SUCCESS == mt.get_ls_id(ls_id)) ? ls_id.id() : ObLSID::INVALID_LS_ID;
+    item.tablet_id_ = mt.get_key().tablet_id_.id();
+    item.scn_range_ = mt.get_scn_range();
     return array_.push_back(item);
   }
   ItemArray& array_;
@@ -54,7 +55,8 @@ ObAllVirtualTenantMemstoreAllocatorInfo::ObAllVirtualTenantMemstoreAllocatorInfo
       tenant_ids_idx_(0),
       col_count_(0),
       retire_clock_(INT64_MAX)
-{}
+{
+}
 
 ObAllVirtualTenantMemstoreAllocatorInfo::~ObAllVirtualTenantMemstoreAllocatorInfo()
 {
@@ -112,7 +114,7 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::fill_tenant_ids()
 int ObAllVirtualTenantMemstoreAllocatorInfo::fill_memstore_infos(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObGMemstoreAllocator* ta = NULL;
+  ObGMemstoreAllocator *ta = NULL;
   memstore_infos_.reset();
   if (tenant_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -134,7 +136,7 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::fill_memstore_infos(const uint64_t 
   return ret;
 }
 
-int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == allocator_)) {
@@ -146,19 +148,18 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow*& row)
         ret = OB_ITER_END;
       } else if (OB_FAIL(fill_memstore_infos(tenant_ids_.at(++tenant_ids_idx_)))) {
         SERVER_LOG(WARN, "fail to fill_memstore_infos", K(ret));
-      } else { /*do nothing*/
-      }
+      } else {/*do nothing*/}
     }
 
     if (OB_SUCC(ret)) {
-      ObObj* cells = cur_row_.cells_;
+      ObObj *cells = cur_row_.cells_;
       const uint64_t tenant_id = tenant_ids_.at(tenant_ids_idx_);
       if (OB_ISNULL(cells)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
       } else {
         ObString ipstr;
-        MemstoreInfo& info = memstore_infos_.at(memstore_infos_idx_);
+        MemstoreInfo &info = memstore_infos_.at(memstore_infos_idx_);
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
           const uint64_t col_id = output_column_ids_.at(i);
           switch (col_id) {
@@ -180,32 +181,33 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow*& row)
               cells[i].set_int(static_cast<int64_t>(tenant_id));
               break;
             }
-            case TABLE_ID: {
-              cells[i].set_int(info.pkey_.get_table_id());
+            case LS_ID: {
+              cells[i].set_int(info.ls_id_);
               break;
             }
-            case PARTITION_ID: {
-              cells[i].set_int(info.pkey_.get_partition_id());
+            case TABLET_ID: {
+              cells[i].set_int(info.tablet_id_);
               break;
             }
-            case MT_BASE_VERSION: {
-              cells[i].set_int(info.trans_version_range_.base_version_);
+            case START_TS: {
+              //TODO:SCN
+              cells[i].set_uint64(info.scn_range_.start_scn_.get_val_for_inner_table_field());
+              break;
+            }
+            case END_TS: {
+              cells[i].set_uint64(info.scn_range_.end_scn_.get_val_for_inner_table_field());
+              break;
+            }
+            case IS_ACTIVE: {
+              cur_row_.cells_[i].set_varchar(info.is_active_ ? "YES" : "NO");
               break;
             }
             case RETIRE_CLOCK: {
               cells[i].set_int(retire_clock_);
               break;
             }
-            case MT_IS_FROZEN: {
-              cells[i].set_int(info.is_frozen_);
-              break;
-            }
-            case MT_PROTECTION_CLOCK: {
+            case PROTECTION_CLOCK: {
               cells[i].set_int(info.protection_clock_);
-              break;
-            }
-            case MT_SNAPSHOT_VERSION: {
-              cells[i].set_int(info.trans_version_range_.snapshot_version_);
               break;
             }
             default: {
@@ -225,5 +227,5 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

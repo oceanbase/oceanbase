@@ -12,9 +12,11 @@
 
 #include "storage/ob_col_map.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace storage {
+namespace storage
+{
 void ObColMap::destroy()
 {
   reset();
@@ -23,14 +25,14 @@ void ObColMap::destroy()
 int ObColMap::init(const int64_t col_count)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   const uint64_t count = static_cast<uint64_t>(col_count);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObColMap init twice", K(ret));
   } else if (count <= FINAL_LEVEL_MAX_COL_NUM) {
     if (OB_UNLIKELY(count > FIRST_LEVEL_MAX_COL_NUM)) {
-      if (NULL == (ptr = ob_malloc(sizeof(ColMapFinal)))) {
+      if (NULL == (ptr = ob_malloc(sizeof(ColMapFinal), ObModIds::OB_COL_MAP))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(ERROR, "fail to allocate memory for column_ids map", K(ret));
       } else {
@@ -67,7 +69,7 @@ int ObColMap::set_refactored(const uint64_t col_id, const int64_t col_idx)
   return ret;
 }
 
-int ObColMap::get_refactored(const uint64_t col_id, int64_t& col_idx) const
+int ObColMap::get_refactored(const uint64_t col_id, int64_t &col_idx) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -84,10 +86,10 @@ int ObColMap::get_refactored(const uint64_t col_id, int64_t& col_idx) const
   return ret;
 }
 
-const int64_t* ObColMap::get(const uint64_t col_id) const
+const int64_t *ObColMap::get(const uint64_t col_id) const
 {
   int ret = OB_SUCCESS;
-  const int64_t* col_idx = NULL;
+  const int64_t *col_idx = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ColMap is not initialized", K(ret));
@@ -102,10 +104,10 @@ const int64_t* ObColMap::get(const uint64_t col_id) const
   return col_idx;
 }
 
-int64_t* ObColMap::get(const uint64_t col_id)
+int64_t *ObColMap::get(const uint64_t col_id)
 {
   int ret = OB_SUCCESS;
-  int64_t* col_idx = NULL;
+  int64_t *col_idx = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ColMap is not initialized", K(ret));
@@ -144,5 +146,5 @@ int64_t ObColMap::count() const
   return count;
 }
 
-}  // namespace storage
-}  // namespace oceanbase
+} // namespace storage
+} // namespace oceanbase

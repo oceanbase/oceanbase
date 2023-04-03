@@ -26,23 +26,22 @@ public:
                                 ObExprResType &input2,
                                 ObExprResType &input3,
                                 common::ObExprTypeCtx &type_ctx)const;
-  virtual int calc_result3(common::ObObj &result,
-                           const common::ObObj &input1,
-                           const common::ObObj &input2,
-                           const common::ObObj &input3,
-                           common::ObExprCtx &expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &expr) const override;
   static int eval_convert_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int find_time_zone_pos(const ObString &tz_name,
                                         const ObTimeZoneInfo &tz_info,
-                                        ObTimeZoneInfoPos *&tz_info_pos);
-  static int calc_convert_tz(int64_t &timestamp_data, const ObString &tz_str_s,//source time zone (input2)
+                                        ObTimeZoneInfoPos &tz_info_pos);
+  template <typename T>
+  static int calc_convert_tz(int64_t timestamp_data, const ObString &tz_str_s,//source time zone (input2)
                         const ObString &tz_str_d,//destination time zone (input3)
-                        ObSQLSessionInfo *session);
-  static int calc(int64_t &timestamp_data, const ObTimeZoneInfoPos &tz_info_pos, int32_t &offset_sec);
-  static int parse_string(int64_t &timestamp_data, const ObString &tz_str, ObSQLSessionInfo *session, int32_t &offset);
-                  
+                        ObSQLSessionInfo *session,
+                        T &result);
+  static int calc(int64_t &timestamp_data, const ObTimeZoneInfoPos &tz_info_pos,
+                 const bool input_utc_time);
+  static int parse_string(int64_t &timestamp_data, const ObString &tz_str,
+                          ObSQLSessionInfo *session, const bool input_utc_time);
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConvertTZ);

@@ -13,15 +13,18 @@
 #ifndef OCEANBASE_MULTI_FIXED_QUEUE_THREAD_H__
 #define OCEANBASE_MULTI_FIXED_QUEUE_THREAD_H__
 
-#include "lib/ob_define.h"                   // RETRY_FUNC
-#include "lib/queue/ob_multi_fixed_queue.h"  // ObMultiFixedQueue
+#include "lib/ob_define.h"                     // RETRY_FUNC
+#include "lib/queue/ob_multi_fixed_queue.h"   // ObMultiFixedQueue
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-// ModuleClass: Identify the target module that uses the thread pool
+// ModuleClass: 标识使用该线程池的目标模块
 template <int MAX_THREAD_NUM = 32, typename ModuleClass = void>
-class ObMQThread {
+class ObMQThread
+{
   enum { DATA_OP_TIMEOUT = 1 * 1000 * 1000 };
 
   typedef ObMultiFixedQueue<MAX_THREAD_NUM> MQueue;
@@ -31,7 +34,7 @@ public:
   virtual ~ObMQThread();
 
 public:
-  virtual int handle(void* data, const int64_t thread_index, volatile bool& stop_flag) = 0;
+  virtual int handle(void *data, const int64_t thread_index, volatile bool &stop_flag) = 0;
 
 public:
   virtual int thread_begin();
@@ -43,50 +46,45 @@ public:
   int start();
   void stop();
   void run();
-  void mark_stop_flag()
-  {
-    stop_flag_ = true;
-  }
+  void mark_stop_flag() { stop_flag_ = true; }
 
-  bool is_stoped() const
-  {
-    return ATOMIC_LOAD(&stop_flag_);
-  }
+  bool is_stoped() const { return ATOMIC_LOAD(&stop_flag_); }
 
-  int push(void* data, const uint64_t hash_value, const int64_t timeout);
+  int push(void *data, const uint64_t hash_value, const int64_t timeout);
 
-  int64_t get_thread_num() const
-  {
-    return thread_num_;
-  }
+  int64_t get_thread_num() const { return thread_num_; }
 
-  // Get the total number of tasks in all queues
-  int get_total_task_num(int64_t& task_count);
+  // 获取所有队列总任务个数
+  int get_total_task_num(int64_t &task_count);
 
-  // Get number of tasks in the queue corresponding to thread with thread_idx
-  int get_task_num(const int64_t thread_idx, int64_t& task_count);
+  // 获取第thread_idx个线程对应queue待处理任务个数
+  int get_task_num(const int64_t thread_idx, int64_t &task_count);
 
 private:
-  static void* thread_func_(void* arg);
-  int next_task_(int64_t queue_index, void*& task);
+  static void *thread_func_(void *arg);
+  int next_task_(int64_t queue_index, void *&task);
 
 private:
-  bool inited_;
-  int64_t thread_num_;
-  int64_t thread_counter_;
+  bool          inited_;
+  int64_t       thread_num_;
+  int64_t       thread_counter_;
 
   volatile bool stop_flag_ CACHE_ALIGNED;
 
-  pthread_t tids_[MAX_THREAD_NUM];
-  MQueue queue_;
+  pthread_t     tids_[MAX_THREAD_NUM];
+  MQueue        queue_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMQThread);
 };
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-ObMQThread<MAX_THREAD_NUM, ModuleClass>::ObMQThread()
-    : inited_(false), thread_num_(0), thread_counter_(0), stop_flag_(true), queue_()
+ObMQThread<MAX_THREAD_NUM, ModuleClass>::ObMQThread() :
+    inited_(false),
+    thread_num_(0),
+    thread_counter_(0),
+    stop_flag_(true),
+    queue_()
 {
   (void)memset(tids_, 0, sizeof(tids_));
 }
@@ -104,7 +102,9 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::init(const int64_t thread_num, cons
   if (OB_UNLIKELY(inited_)) {
     LIB_LOG(ERROR, "MQThread has been initialized");
     ret = OB_INIT_TWICE;
-  } else if (OB_UNLIKELY(thread_num <= 0) || OB_UNLIKELY(thread_num > MAX_THREAD_NUM) || OB_UNLIKELY(queue_size <= 0)) {
+  } else if (OB_UNLIKELY(thread_num <= 0)
+      || OB_UNLIKELY(thread_num > MAX_THREAD_NUM)
+      || OB_UNLIKELY(queue_size <= 0)) {
     LIB_LOG(ERROR, "invalid arguments", K(thread_num), K(MAX_THREAD_NUM), K(queue_size));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(queue_.init(queue_size, thread_num))) {
@@ -141,7 +141,7 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::start()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "MQThread has not been initialized");
     ret = OB_NOT_INIT;
   } else if (stop_flag_) {
@@ -151,7 +151,8 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::start()
       int pthread_ret = 0;
 
       if (0 != (pthread_ret = pthread_create(tids_ + index, NULL, thread_func_, this))) {
-        LIB_LOG(ERROR, "pthread_create fail", K(pthread_ret), KERRNOMSG(pthread_ret), K(index));
+        LIB_LOG(ERROR, "pthread_create fail", K(pthread_ret),
+                KERRNOMSG(pthread_ret), K(index));
         ret = OB_ERR_UNEXPECTED;
       }
     }
@@ -171,7 +172,7 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::stop()
         int pthread_ret = pthread_join(tids_[index], NULL);
 
         if (0 != pthread_ret) {
-          LIB_LOG(ERROR, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
+          LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
         } else {
           // do nothing
         }
@@ -183,10 +184,10 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::stop()
 }
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-void* ObMQThread<MAX_THREAD_NUM, ModuleClass>::thread_func_(void* arg)
+void *ObMQThread<MAX_THREAD_NUM, ModuleClass>::thread_func_(void *arg)
 {
   if (NULL != arg) {
-    ObMQThread<MAX_THREAD_NUM, ModuleClass>* td = static_cast<ObMQThread<MAX_THREAD_NUM, ModuleClass>*>(arg);
+    ObMQThread<MAX_THREAD_NUM, ModuleClass> *td = static_cast<ObMQThread<MAX_THREAD_NUM, ModuleClass> *>(arg);
     td->run();
   }
 
@@ -201,7 +202,8 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::thread_begin()
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
 void ObMQThread<MAX_THREAD_NUM, ModuleClass>::thread_end()
-{}
+{
+}
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
 void ObMQThread<MAX_THREAD_NUM, ModuleClass>::run()
@@ -209,13 +211,13 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::run()
   int ret = OB_SUCCESS;
   int64_t thread_index = ATOMIC_FAA(&thread_counter_, 1);
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "ObMQThread not initialized", K(thread_index));
   } else if (OB_FAIL(thread_begin())) {
     LIB_LOG(ERROR, "thread_begin fail", K(ret));
   } else {
-    while (!stop_flag_ && OB_SUCCESS == ret) {
-      void* task = NULL;
+    while (! stop_flag_ && OB_SUCCESS == ret) {
+      void *task = NULL;
 
       if (OB_FAIL(next_task_(thread_index, task))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -231,19 +233,19 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::run()
     }
   }
 
-  // Call thread_end() every time when exit
+  // 退出都调用thread_end()
   thread_end();
 
-  // NOTE: One thread exits, other threads exit at the same time
+  // NOTE: 一个线程退出，其他线程同时退出
   stop_flag_ = true;
 }
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-int ObMQThread<MAX_THREAD_NUM, ModuleClass>::next_task_(int64_t queue_index, void*& task)
+int ObMQThread<MAX_THREAD_NUM, ModuleClass>::next_task_(int64_t queue_index, void *&task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "ObMQThread not initialized");
     ret = OB_NOT_INIT;
   } else {
@@ -254,11 +256,11 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::next_task_(int64_t queue_index, voi
 }
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-int ObMQThread<MAX_THREAD_NUM, ModuleClass>::push(void* data, const uint64_t hash_value, const int64_t timeout)
+int ObMQThread<MAX_THREAD_NUM, ModuleClass>::push(void *data, const uint64_t hash_value, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "ObMQThread not initialized");
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(data)) {
@@ -278,12 +280,12 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::push(void* data, const uint64_t has
 }
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_total_task_num(int64_t& task_count)
+int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_total_task_num(int64_t &task_count)
 {
   int ret = OB_SUCCESS;
   task_count = 0;
 
-  for (int64_t idx = 0; idx < thread_num_ && OB_SUCC(ret); ++idx) {
+  for (int64_t idx= 0; idx < thread_num_ && OB_SUCC(ret); ++idx) {
     int64_t thread_task_count = 0;
     if (OB_FAIL(get_task_num(idx, thread_task_count))) {
       LIB_LOG(ERROR, "get_task_num fail", K(idx), K(thread_task_count));
@@ -296,7 +298,7 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_total_task_num(int64_t& task_co
 }
 
 template <int MAX_THREAD_NUM, typename ModuleClass>
-int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_task_num(const int64_t thread_idx, int64_t& task_count)
+int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_task_num(const int64_t thread_idx, int64_t &task_count)
 {
   int ret = OB_SUCCESS;
   task_count = 0;
@@ -312,6 +314,6 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::get_task_num(const int64_t thread_i
 
   return ret;
 }
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 #endif /* OCEANBASE_MULTI_FIXED_QUEUE_THREAD_H__ */

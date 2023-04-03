@@ -16,64 +16,129 @@
 #include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObBarrierWholeMsg;
 class ObBarrierPieceMsg;
 class ObWinbufWholeMsg;
 class ObWinbufPieceMsg;
-class ObIPxCoordMsgProc {
+class ObRollupKeyWholeMsg;
+class ObRollupKeyPieceMsg;
+class ObDynamicSamplePieceMsg;
+class ObDynamicSampleWholeMsg;
+class ObRDWFPieceMsg;
+class ObRDWFWholeMsg;
+class ObInitChannelPieceMsg;
+class ObInitChannelWholeMsg;
+class ObReportingWFPieceMsg;
+class ObReportingWFWholeMsg;
+class ObOptStatsGatherPieceMsg;
+class ObOptStatsGatherWholeMsg;
+// 抽象出本接口类的目的是为了 MsgProc 和 ObPxCoord 解耦
+class ObIPxCoordMsgProc
+{
 public:
   // msg processor callback
-  virtual int on_sqc_init_msg(ObExecContext& ctx, const ObPxInitSqcResultMsg& pkt) = 0;
-  virtual int on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinishSqcResultMsg& pkt) = 0;
-  virtual int on_eof_row(ObExecContext& ctx) = 0;
-  virtual int on_sqc_init_fail(ObDfo& dfo, ObPxSqcMeta& sqc) = 0;
-  virtual int on_interrupted(ObExecContext& ctx, const ObInterruptCode& ic) = 0;
-  virtual int on_piece_msg(ObExecContext& ctx, const ObBarrierPieceMsg& pkt) = 0;
-  virtual int on_piece_msg(ObExecContext& ctx, const ObWinbufPieceMsg& pkt) = 0;
+  virtual int on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcResultMsg &pkt) = 0;
+  virtual int on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinishSqcResultMsg &pkt) = 0;
+  virtual int on_eof_row(ObExecContext &ctx) = 0;
+  virtual int on_sqc_init_fail(ObDfo &dfo, ObPxSqcMeta &sqc) = 0;
+  virtual int on_interrupted(ObExecContext &ctx, const ObInterruptCode &ic) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObBarrierPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObWinbufPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) = 0;
 };
 
-class ObIPxSubCoordMsgProc {
+class ObIPxSubCoordMsgProc
+{
 public:
-  virtual int on_transmit_data_ch_msg(const ObPxTransmitDataChannelMsg& pkt) const = 0;
-  virtual int on_receive_data_ch_msg(const ObPxReceiveDataChannelMsg& pkt) const = 0;
-  virtual int on_whole_msg(const ObBarrierWholeMsg& pkt) const = 0;
-  virtual int on_whole_msg(const ObWinbufWholeMsg& pkt) const = 0;
-  virtual int on_interrupted(const ObInterruptCode& ic) const = 0;
+  // 收到 TransmitDataChannel 消息，通知 ObPxTransmit 可以发送数据了
+  virtual int on_transmit_data_ch_msg(
+      const ObPxTransmitDataChannelMsg &pkt) const = 0;
+  // 收到 ReceiveDataChannel 消息，通知 ObPxReceive 可以接收数据了
+  virtual int on_receive_data_ch_msg(
+      const ObPxReceiveDataChannelMsg &pkt) const = 0;
+  virtual int on_create_filter_ch_msg(
+      const ObPxCreateBloomFilterChannelMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObBarrierWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObWinbufWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObDynamicSampleWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObRollupKeyWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObRDWFWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObInitChannelWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObReportingWFWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObOptStatsGatherWholeMsg &pkt) const = 0;
+  // SQC 被中断
+  virtual int on_interrupted(const ObInterruptCode &ic) const = 0;
 };
 
 class ObPxRpcInitSqcArgs;
 class ObSqcCtx;
-class ObPxSubCoordMsgProc : public ObIPxSubCoordMsgProc {
+class ObPxSubCoordMsgProc : public ObIPxSubCoordMsgProc
+{
 public:
-  ObPxSubCoordMsgProc(ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx) : sqc_arg_(sqc_arg), sqc_ctx_(sqc_ctx)
-  {}
+  ObPxSubCoordMsgProc(ObPxRpcInitSqcArgs &sqc_arg, ObSqcCtx &sqc_ctx)
+      : sqc_ctx_(sqc_ctx) { UNUSED(sqc_arg); }
   ~ObPxSubCoordMsgProc() = default;
-  virtual int on_transmit_data_ch_msg(const ObPxTransmitDataChannelMsg& pkt) const;
-  virtual int on_receive_data_ch_msg(const ObPxReceiveDataChannelMsg& pkt) const;
-  virtual int on_interrupted(const common::ObInterruptCode& pkt) const;
-  virtual int on_whole_msg(const ObBarrierWholeMsg& pkt) const;
-  virtual int on_whole_msg(const ObWinbufWholeMsg& pkt) const;
-
+  virtual int on_transmit_data_ch_msg(
+      const ObPxTransmitDataChannelMsg &pkt) const;
+  virtual int on_receive_data_ch_msg(
+      const ObPxReceiveDataChannelMsg &pkt) const;
+  virtual int on_create_filter_ch_msg(
+      const ObPxCreateBloomFilterChannelMsg &pkt) const;
+  virtual int on_interrupted(
+      const common::ObInterruptCode &pkt) const;
+  virtual int on_whole_msg(
+      const ObBarrierWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObWinbufWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObDynamicSampleWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObRollupKeyWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObRDWFWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObInitChannelWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObReportingWFWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObOptStatsGatherWholeMsg &pkt) const;
 private:
-  ObPxRpcInitSqcArgs& sqc_arg_;
-  ObSqcCtx& sqc_ctx_;
+  ObSqcCtx &sqc_ctx_;
 };
 
-// update the error code if it is OB_HASH_NOT_EXIST or OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER
-OB_INLINE void update_error_code(int& current_error_code, const int new_error_code)
+
+//update the error code if it is OB_HASH_NOT_EXIST or OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER
+OB_INLINE void update_error_code(int &current_error_code, const int new_error_code)
 {
   if (new_error_code != ObPxTask::TASK_DEFAULT_RET_VALUE) {
-    if ((OB_SUCCESS == current_error_code) || ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == current_error_code ||
-                                                   OB_GOT_SIGNAL_ABORTING == current_error_code) &&
-                                                  OB_SUCCESS != new_error_code)) {
+    if ((OB_SUCCESS == current_error_code) ||
+        ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == current_error_code ||
+            OB_GOT_SIGNAL_ABORTING == current_error_code) &&
+            OB_SUCCESS != new_error_code)) {
       current_error_code = new_error_code;
     }
   }
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
 
 #endif

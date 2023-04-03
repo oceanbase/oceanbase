@@ -18,32 +18,42 @@
 #else
 #include "sql/parser/parse_node.h"
 #endif
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObIAllocator;
 }  // namespace common
 
-namespace sql {
-class ObSQLParser {
+namespace sql
+{
+class ObSQLParser
+{
 public:
-  ObSQLParser(common::ObIAllocator& allocator, ObSQLMode mode) : allocator_(allocator), sql_mode_(mode)
+  ObSQLParser(common::ObIAllocator &allocator, ObSQLMode mode)
+    : allocator_(allocator),
+      sql_mode_(mode)
   {}
 
-  int parse(const char* str_ptr, const int64_t str_len, ParseResult& result);
+  int parse(const char *str_ptr, const int64_t str_len, ParseResult &result);
 
   // only for obproxy fast parser
   // do not use the this function in observer kernel
-  int parse_and_gen_sqlid(
-      void* malloc_pool, const char* str_ptr, const int64_t str_len, const int64_t len, char* sql_id);
+  int parse_and_gen_sqlid(void *malloc_pool,
+                          const char *str_ptr, const int64_t str_len,
+                          const int64_t len,
+                          char *sql_id);
+private:
+  int gen_sqlid(const char* paramed_sql, const int64_t sql_len,
+                const int64_t len, char *sql_id);
 
 private:
-  int gen_sqlid(const char* paramed_sql, const int64_t sql_len, const int64_t len, char* sql_id);
-
-private:
-  common::ObIAllocator& allocator_;
-  ObSQLMode sql_mode_;
+  common::ObIAllocator &allocator_ __attribute__((unused));
+  ObSQLMode sql_mode_ __attribute__((unused));
 };
-}  // namespace sql
+}  // namespace pl
 }  // namespace oceanbase
+
+
 
 #endif /* OCEANBASE_SRC_SQL_PARSER_OB_SQL_PARSER_H_ */

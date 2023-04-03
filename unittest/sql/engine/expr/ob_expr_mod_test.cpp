@@ -16,33 +16,36 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-class ObExprModTest : public ::testing::Test {
-public:
-  ObExprModTest();
-  virtual ~ObExprModTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprModTest(const ObExprModTest& other);
-  ObExprModTest& operator=(const ObExprModTest& other);
-
-protected:
-  // data members
+class ObExprModTest: public ::testing::Test
+{
+  public:
+    ObExprModTest();
+    virtual ~ObExprModTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprModTest(const ObExprModTest &other);
+    ObExprModTest& operator=(const ObExprModTest &other);
+  protected:
+    // data members
 };
 
 ObExprModTest::ObExprModTest()
-{}
+{
+}
 
 ObExprModTest::~ObExprModTest()
-{}
+{
+}
 
 void ObExprModTest::SetUp()
-{}
+{
+}
 
 void ObExprModTest::TearDown()
-{}
+{
+}
 
 /*
 #define R(t1, v1, t2, v2, res) ARITH_EXPECT(ObExprMod, &buf, calc_result2, t1, v1, t2, v2, res)
@@ -54,7 +57,7 @@ void ObExprModTest::TearDown()
 
 TEST_F(ObExprModTest, int_int_test)
 {
-  ObMalloc buf;
+	ObMalloc buf;
   R(int, 5, int, 12, int, 5);
   R(int, 12, int, 5, int, 2);
   R(int, -5, int, 12, int, -5);
@@ -78,7 +81,7 @@ TEST_F(ObExprModTest, uint_uint_test)
 
 TEST_F(ObExprModTest, int_uint_test)
 {
-  ObMalloc buf;
+	ObMalloc buf;
   R(int, 5, uint64, 12, int, 5);
   R(uint64, 12, int, 5, int, 2);
   R(int, -5, uint64, 12, int, -5);
@@ -104,7 +107,7 @@ TEST_F(ObExprModTest, float_test)
 
 TEST_F(ObExprModTest, float_double)
 {
-  ObMalloc buf;
+	ObMalloc buf;
   R(float, 1.0, int, 2, double, 1.0);
   R(float, 2.0, float, 3.0, double, 2.0);
   R(float, 3.0, double, 4.0, double, 3.0);
@@ -116,18 +119,19 @@ TEST_F(ObExprModTest, float_double)
 
 TEST_F(ObExprModTest, varchar)
 {
-  ObMalloc buf;
+	ObMalloc buf;
 
-  R(varchar, "1", int, 2, double, 1.0);
-  R(varchar, "4.2", float, 3.0, double, 1.2);
-  R(varchar, "-2.12345", float, 3.0, double, -2.12345);
-  R(varchar, "30.5", double, 4.5, double, 3.5);
-  R(varchar, "9.12345", double, 4.0, double, 1.12345);
+	R(varchar, "1", int, 2, double, 1.0);
+	R(varchar, "4.2", float, 3.0, double, 1.2);
+	R(varchar, "-2.12345", float, 3.0, double, -2.12345);
+	R(varchar, "30.5", double, 4.5, double, 3.5);
+	R(varchar, "9.12345", double, 4.0, double, 1.12345);
 }
 
 TEST_F(ObExprModTest, mod_zero_test)
 {
-  ObMalloc buf;
+	ObMalloc buf;
+
 }
 
 /*
@@ -376,8 +380,9 @@ TEST_F(ObExprModTest, result_test)
 }
 */
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

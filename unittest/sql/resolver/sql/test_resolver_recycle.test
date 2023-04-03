@@ -1,4 +1,15 @@
 
+flashback table t1 to before drop;
+flashback table t1 to before drop rename to t2;
+
+flashback database db1 to before drop;
+flashback database db1 to before drop rename to db2;
+flashback schema db1 to before drop;
+flashback schema db1 to before drop rename to db2;
+
+flashback tenant tenant1 to before drop;
+flashback tenant tenant1 to before drop rename to tenant2;
+
 purge table t1;
 
 purge database db1;

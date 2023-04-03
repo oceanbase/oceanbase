@@ -18,104 +18,79 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/utility.h"
 
-#define IS_MINUS(str, is_minus)                             \
-  if (OB_SUCC(ret)) {                                       \
-    const char* ptr = str.ptr();                            \
-    const char* end_ptr = str.ptr() + str.length();         \
-    while ((ptr < end_ptr) && (*ptr < '0' || *ptr > '9')) { \
-      if ('-' == *ptr) {                                    \
-        is_minus = true;                                    \
-      }                                                     \
-      ptr++;                                                \
-    }                                                       \
+#define IS_MINUS(str, is_minus) \
+  if (OB_SUCC(ret)) \
+  { \
+    const char *ptr = str.ptr(); \
+    const char *end_ptr = str.ptr() + str.length(); \
+    while ((ptr < end_ptr) && (*ptr < '0' || *ptr > '9')) \
+    { \
+      if ('-' == *ptr) \
+      { \
+        is_minus = true; \
+      } \
+      ptr++; \
+    } \
   }
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
-const char* ObTimeUtility2::mday_name_[31] = {"1st",
-    "2nd",
-    "3rd",
-    "4th",
-    "5th",
-    "6th",
-    "7th",
-    "8th",
-    "9th",
-    "10th",
-    "11th",
-    "12th",
-    "13th",
-    "14th",
-    "15th",
-    "16th",
-    "17th",
-    "18th",
-    "19th",
-    "20th",
-    "21st",
-    "22nd",
-    "23rd",
-    "24th",
-    "25th",
-    "26th",
-    "27th",
-    "28th",
-    "29th",
-    "30th",
-    "31st"};
+namespace share
+{
+const char *ObTimeUtility2::mday_name_[31] =
+{
+  "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+  "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
+  "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th",
+  "31st"
+};
 
-const char* ObTimeUtility2::weekday_name_[7] = {
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+const char *ObTimeUtility2::weekday_name_[7] =
+{
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+};
 
-const char* ObTimeUtility2::weekday_abbr_name_[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+const char *ObTimeUtility2::weekday_abbr_name_[7] =
+{
+  "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+};
 
-const char* ObTimeUtility2::month_abbr_name_[12] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+const char *ObTimeUtility2::month_abbr_name_[12] =
+{
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
 
-const char* ObTimeUtility2::month_name_[12] = {"January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December"};
+const char *ObTimeUtility2::month_name_[12] =
+{
+  "January", "February", "March", "April", "May", "June", "July", "August", "September",
+  "October", "November", "December"
+};
 
-const char* ObTimeUtility2::STD_TS_FORMAT_WITH_USEC = "%Y-%m-%d %H:%i:%s.%f";
+const char *ObTimeUtility2::STD_TS_FORMAT_WITH_USEC = "%Y-%m-%d %H:%i:%s.%f";
 
-const char* ObTimeUtility2::STD_TS_FORMAT_WITHOUT_USEC = "%Y-%m-%d %H:%i:%s";
+const char *ObTimeUtility2::STD_TS_FORMAT_WITHOUT_USEC = "%Y-%m-%d %H:%i:%s";
 
-int ObTimeUtility2::make_second(struct tm& t, time_t& second)
+int ObTimeUtility2::make_second(struct tm &t, time_t &second)
 {
   int ret = OB_SUCCESS;
   time_t s = 0;
 
-  t.tm_isdst = -1;  // let system to determine whether DST is effect
+  t.tm_isdst = -1; //let system to determine whether DST is effect
   if (-1 == (s = mktime(&t))) {
     struct tm tm_cmp;
     time_t t_cmp = -1;
 
-    if ((NULL != localtime_r(&t_cmp, &tm_cmp)) &&
-        (t.tm_sec == tm_cmp.tm_sec && t.tm_min == tm_cmp.tm_min && t.tm_hour == tm_cmp.tm_hour &&
-            t.tm_mday == tm_cmp.tm_mday && t.tm_mon == tm_cmp.tm_mon && t.tm_year == tm_cmp.tm_year)) {
-      // 1970-01-01 07:59:59 in +08:00 timezone
+    if ((NULL != localtime_r(&t_cmp, &tm_cmp))
+        && (t.tm_sec == tm_cmp.tm_sec && t.tm_min == tm_cmp.tm_min
+            && t.tm_hour == tm_cmp.tm_hour && t.tm_mday == tm_cmp.tm_mday
+            && t.tm_mon == tm_cmp.tm_mon && t.tm_year == tm_cmp.tm_year)) {
+      //1970-01-01 07:59:59 in +08:00 timezone
       ret = OB_SUCCESS;
     } else {
       ret = OB_ERR_SYS;
-      LOG_ERROR("make time failed",
-          K(errno),
-          KERRMSG,
-          K(t.tm_sec),
-          K(t.tm_min),
-          K(t.tm_hour),
-          K(t.tm_mday),
-          K(t.tm_mon),
-          K(t.tm_year));
+      LOG_ERROR("make time failed", K(errno), KERRMSG,
+                K(t.tm_sec), K(t.tm_min), K(t.tm_hour), K(t.tm_mday), K(t.tm_mon), K(t.tm_year));
     }
   }
   if (OB_SUCC(ret)) {
@@ -124,7 +99,7 @@ int ObTimeUtility2::make_second(struct tm& t, time_t& second)
   return ret;
 }
 
-int ObTimeUtility2::timestamp_to_usec(struct tm& base_tm, int64_t base_usec, int64_t& result_usec)
+int ObTimeUtility2::timestamp_to_usec(struct tm &base_tm, int64_t base_usec, int64_t &result_usec)
 {
   int ret = OB_SUCCESS;
   int64_t second = 0;
@@ -136,12 +111,14 @@ int ObTimeUtility2::timestamp_to_usec(struct tm& base_tm, int64_t base_usec, int
   return ret;
 }
 
+
 time_t ObTimeUtility2::extract_second(int64_t usec)
 {
   return usec >= 0 ? static_cast<time_t>(usec / 1000000L) : static_cast<time_t>(usec / 1000000L - 1);
 }
 
-int ObTimeUtility2::usec_format_to_str(int64_t usec, const ObString& format, char* buf, int64_t buf_len, int64_t& pos)
+int ObTimeUtility2::usec_format_to_str(int64_t usec, const ObString &format, char *buf,
+                                      int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   struct tm t;
@@ -165,9 +142,9 @@ int ObTimeUtility2::usec_format_to_str(int64_t usec, const ObString& format, cha
   return ret;
 }
 
-int ObTimeUtility2::usec_to_str(int64_t usec, char* buf, int64_t buf_len, int64_t& pos)
+int ObTimeUtility2::usec_to_str(int64_t usec, char *buf, int64_t buf_len, int64_t &pos)
 {
-  const char* format = NULL;
+  const char *format = NULL;
   if (usec % 1000000 != 0) {
     format = STD_TS_FORMAT_WITH_USEC;
   } else {
@@ -176,32 +153,26 @@ int ObTimeUtility2::usec_to_str(int64_t usec, char* buf, int64_t buf_len, int64_
   return usec_format_to_str(usec, ObString(format), buf, buf_len, pos);
 }
 
-int ObTimeUtility2::timestamp_format_to_str(
-    const struct tm& t, int64_t usec, const ObString& format, char* buf, int64_t buf_len, int64_t& pos)
+int ObTimeUtility2::timestamp_format_to_str(const struct tm &t, int64_t usec, const ObString &format,
+                                           char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(format.ptr()) || OB_UNLIKELY(format.length() <= 0) || OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0) ||
-      OB_UNLIKELY(!is_valid_date(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday)) ||
-      OB_UNLIKELY(!is_valid_time(t.tm_hour, t.tm_min, t.tm_sec, static_cast<int>(usec)))) {
+  if (OB_ISNULL(format.ptr())
+      || OB_UNLIKELY(format.length() <= 0)
+      || OB_ISNULL(buf)
+      || OB_UNLIKELY(buf_len <= 0)
+      || OB_UNLIKELY(!is_valid_date(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday))
+      || OB_UNLIKELY(!is_valid_time(t.tm_hour, t.tm_min, t.tm_sec, static_cast<int>(usec)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",
-        K(format),
-        K(buf),
-        K(buf_len),
-        K(t.tm_year),
-        K(t.tm_mon),
-        K(t.tm_mday),
-        K(t.tm_hour),
-        K(t.tm_min),
-        K(t.tm_sec),
-        K(usec));
+    LOG_WARN("invalid argument", K(format), K(buf), K(buf_len), K(t.tm_year), K(t.tm_mon),
+             K(t.tm_mday), K(t.tm_hour), K(t.tm_min), K(t.tm_sec), K(usec));
   } else if (pos >= buf_len) {
     ret = OB_SIZE_OVERFLOW;
-    // size overflow isn't an error, so don't print warnings
+    //size overflow isn't an error, so don't print warnings
   } else {
-    const char* format_ptr = format.ptr();
-    const char* end_ptr = format.ptr() + format.length();
+    const char *format_ptr = format.ptr();
+    const char *end_ptr = format.ptr() + format.length();
     while (format_ptr < end_ptr && OB_SUCC(ret)) {
       if ('%' == *format_ptr) {
         ++format_ptr;
@@ -211,43 +182,43 @@ int ObTimeUtility2::timestamp_format_to_str(
           break;
         }
         switch (*format_ptr) {
-          case 'a': {  // Abbreviated weekday name (Sun..Sat)
+          case 'a': { //Abbreviated weekday name (Sun..Sat)
             ret = databuff_printf(buf, buf_len, pos, "%s", weekday_abbr_name_[t.tm_wday]);
             break;
           }
-          case 'b': {  // Abbreviated month name (Jan..Dec)
+          case 'b': { //Abbreviated month name (Jan..Dec)
             ret = databuff_printf(buf, buf_len, pos, "%s", month_abbr_name_[t.tm_mon]);
             break;
           }
-          case 'c': {  // Month, numeric (0..12)
+          case 'c': { //Month, numeric (0..12)
             ret = databuff_printf(buf, buf_len, pos, "%d", t.tm_mon + 1);
             break;
           }
-          case 'D': {  // Day of the month with English suffix (0th, 1st, 2nd, 3rd, ...)
+          case 'D': { //Day of the month with English suffix (0th, 1st, 2nd, 3rd, ��)
             ret = databuff_printf(buf, buf_len, pos, "%s", mday_name_[t.tm_mday - 1]);
             break;
           }
-          case 'd': {  // Day of the month, numeric (00..31)
+          case 'd': { //Day of the month, numeric (00..31)
             ret = databuff_printf(buf, buf_len, pos, "%02d", t.tm_mday);
             break;
           }
-          case 'e': {  // Day of the month, numeric (0..31)
+          case 'e': { //Day of the month, numeric (0..31)
             ret = databuff_printf(buf, buf_len, pos, "%d", t.tm_mday);
             break;
           }
-          case 'f': {  // Microseconds (000000..999999)
+          case 'f': { //Microseconds (000000..999999)
             ret = databuff_printf(buf, buf_len, pos, "%06ld", usec);
             break;
           }
-          case 'H': {  // Hour (00..23)
+          case 'H': { //Hour (00..23)
             ret = databuff_printf(buf, buf_len, pos, "%02d", t.tm_hour);
             break;
           }
-          case 'h':    // Hour (01..12)
-          case 'I': {  // Hour (01..12)
+          case 'h': //Hour (01..12)
+          case 'I': { //Hour (01..12)
             int hour = 0;
             if (0 == t.tm_hour) {
-              hour = 12;  // AM 12 clock
+              hour = 12; //AM 12 clock
             } else if (t.tm_hour > 12) {
               hour = t.tm_hour - 12;
             } else {
@@ -256,121 +227,119 @@ int ObTimeUtility2::timestamp_format_to_str(
             ret = databuff_printf(buf, buf_len, pos, "%02d", hour);
             break;
           }
-          case 'i': {  // Minutes, numeric (00..59)
+          case 'i': { //Minutes, numeric (00..59)
             ret = databuff_printf(buf, buf_len, pos, "%02d", t.tm_min);
             break;
           }
-          case 'j': {  // Day of year (001..366)
+          case 'j': { //Day of year (001..366)
             ret = databuff_printf(buf, buf_len, pos, "%03d", t.tm_yday + 1);
             break;
           }
-          case 'k': {  // Hour (0..23)
+          case 'k': { //Hour (0..23)
             ret = databuff_printf(buf, buf_len, pos, "%d", t.tm_hour);
             break;
           }
-          case 'l': {  // Hour (1..12)
+          case 'l': { //Hour (1..12)
             int hour = 0;
             if (t.tm_hour == 0) {
-              hour = 12;  // AM 12 clock
+              hour = 12; //AM 12 clock
             } else if (t.tm_hour > 12) {
-              hour = t.tm_hour - 12;  // PM
+              hour = t.tm_hour - 12; //PM
             } else {
               hour = t.tm_hour;
             }
             ret = databuff_printf(buf, buf_len, pos, "%d", hour);
             break;
           }
-          case 'M': {  // Month name (January..December)
+          case 'M': { //Month name (January..December)
             ret = databuff_printf(buf, buf_len, pos, "%s", month_name_[t.tm_mon]);
             break;
           }
-          case 'm': {  // Month, numeric (00..12)
+          case 'm': { //Month, numeric (00..12)
             ret = databuff_printf(buf, buf_len, pos, "%02d", t.tm_mon + 1);
             break;
           }
-          case 'p': {  // AM or PM
-            const char* ptr = t.tm_hour >= 12 ? "PM" : "AM";
+          case 'p': { //AM or PM
+            const char *ptr = t.tm_hour >= 12 ? "PM" : "AM";
             if (t.tm_hour >= 0 && t.tm_hour < 12) {
-              ptr = "AM";  // AM 12 clock - 11 clock
+              ptr = "AM"; //AM 12 clock - 11 clock
             } else {
               ptr = "PM";
             }
             ret = databuff_printf(buf, buf_len, pos, "%s", ptr);
             break;
           }
-          case 'r': {  // Time, 12-hour (hh:mm:ss followed by AM or PM)
+          case 'r': { //Time, 12-hour (hh:mm:ss followed by AM or PM)
             int hour = t.tm_hour % 12;
-            const char* ptr = t.tm_hour >= 12 ? "PM" : "AM";
+            const char *ptr = t.tm_hour >= 12 ? "PM" : "AM";
             ret = databuff_printf(buf, buf_len, pos, "%02d:%02d:%02d %s", hour, t.tm_min, t.tm_sec, ptr);
             break;
           }
-          case 'S':    // Seconds (00..60)
-          case 's': {  // Seconds (00..60) (1 leap second)
+          case 'S': //Seconds (00..60)
+          case 's': { //Seconds (00..60) (1 leap second)
             ret = databuff_printf(buf, buf_len, pos, "%02d", t.tm_sec);
             break;
           }
-          case 'T': {  // Time, 24-hour (hh:mm:ss)
+          case 'T': { //Time, 24-hour (hh:mm:ss)
             ret = databuff_printf(buf, buf_len, pos, "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
             break;
           }
-          case 'U': {  // Week (00..53), where Sunday is the first day of the week
+          case 'U': { //Week (00..53), where Sunday is the first day of the week
             struct tm tmp = t;
             uint8_t flag_mask = START_WITH_SUNDAY | WEEK_FIRST_WEEKDAY;
             ret = databuff_printf(buf, buf_len, pos, "%02d", get_weeks_of_year(tmp, flag_mask));
             break;
           }
-          case 'u': {  // Week (00..53), where Monday is the first day of the week
+          case 'u': { //Week (00..53), where Monday is the first day of the week
             struct tm tmp = t;
             uint8_t flag_mask = 0;
             ret = databuff_printf(buf, buf_len, pos, "%02d", get_weeks_of_year(tmp, flag_mask));
             break;
           }
-          case 'V': {  // Week (01..53), where Sunday is the first day of the week; used with %X
+          case 'V': { //Week (01..53), where Sunday is the first day of the week; used with %X
             struct tm tmp = t;
             uint8_t flag_mask = START_WITH_SUNDAY | WEEK_FIRST_WEEKDAY | INCLUDE_CRITICAL_WEEK;
             ret = databuff_printf(buf, buf_len, pos, "%02d", get_weeks_of_year(tmp, flag_mask));
             break;
           }
-          case 'v': {  // Week (01..53), where Monday is the first day of the week; used with %x
+          case 'v': { //Week (01..53), where Monday is the first day of the week; used with %x
             struct tm tmp = t;
             uint8_t flag_mask = INCLUDE_CRITICAL_WEEK;
             ret = databuff_printf(buf, buf_len, pos, "%02d", get_weeks_of_year(tmp, flag_mask));
             break;
           }
-          case 'W': {  // Weekday name (Sunday..Saturday)
+          case 'W': { //Weekday name (Sunday..Saturday)
             ret = databuff_printf(buf, buf_len, pos, "%s", weekday_name_[t.tm_wday]);
             break;
           }
-          case 'w': {  // Day of the week (0=Sunday..6=Saturday)
+          case 'w': { //Day of the week (0=Sunday..6=Saturday)
             ret = databuff_printf(buf, buf_len, pos, "%d", t.tm_wday);
             break;
           }
-          case 'X': {  // Year for the week where Sunday is the first day of the week, numeric, four digits; used with
-                       // %V
+          case 'X': { //Year for the week where Sunday is the first day of the week, numeric, four digits; used with %V
             struct tm tmp = t;
             uint8_t flag_mask = START_WITH_SUNDAY | WEEK_FIRST_WEEKDAY | INCLUDE_CRITICAL_WEEK;
             get_weeks_of_year(tmp, flag_mask);
             ret = databuff_printf(buf, buf_len, pos, "%04d", tmp.tm_year + 1900);
             break;
           }
-          case 'x': {  // Year for the week, where Monday is the first day of the week, numeric, four digits; used with
-                       // %v
+          case 'x': { //Year for the week, where Monday is the first day of the week, numeric, four digits; used with %v
             struct tm tmp = t;
             uint8_t flag_mask = INCLUDE_CRITICAL_WEEK;
             get_weeks_of_year(tmp, flag_mask);
             ret = databuff_printf(buf, buf_len, pos, "%04d", tmp.tm_year + 1900);
             break;
           }
-          case 'Y': {  // Year, numeric, four digits
+          case 'Y': { //Year, numeric, four digits
             ret = databuff_printf(buf, buf_len, pos, "%04d", t.tm_year + 1900);
             break;
           }
-          case 'y': {  // Year, numeric (two digits)
+          case 'y': { //Year, numeric (two digits)
             int year = (t.tm_year + 1900) % 100;
             ret = databuff_printf(buf, buf_len, pos, "%02d", year);
             break;
           }
-          case '%': {  // A literal "%" character
+          case '%': { //A literal "%" character
             if (pos >= buf_len) {
               ret = OB_SIZE_OVERFLOW;
               break;
@@ -406,7 +375,7 @@ int ObTimeUtility2::get_start_weekday(int year_day, int week_day, bool week_firs
     start_weekday += 7;
   }
 
-  // if use ISO 8601:1988 protocol, need to calculate the critical week belong to which year
+  //if use ISO 8601:1988 protocol, need to calculate the critical week belong to which year
   if (!week_first_weekday) {
     if (start_weekday >= 5 && start_weekday <= 7) {
       start_weekday = start_weekday - 7;
@@ -431,7 +400,7 @@ bool ObTimeUtility2::check_in_next_critical_week(int yday, int wday, int year, u
   return bret;
 }
 
-int ObTimeUtility2::get_weeks_of_year(struct tm& t, uint8_t flag_mask)
+int ObTimeUtility2::get_weeks_of_year(struct tm &t, uint8_t flag_mask)
 {
   bool start_with_sunday = false;
   bool week_first_weekday = false;
@@ -446,12 +415,12 @@ int ObTimeUtility2::get_weeks_of_year(struct tm& t, uint8_t flag_mask)
   include_critical_week = flag_mask & INCLUDE_CRITICAL_WEEK;
 
   today = t.tm_yday + 1;
-  // calculate the specified date in which day of the week
+  //calculate the specified date in which day of the week
   if (start_with_sunday) {
     wday = t.tm_wday + 1;
   } else {
     if (0 == t.tm_wday) {
-      // t.tm_wday means sunday, if the week doesn't start with sunday, sunday is the last day
+      //t.tm_wday means sunday, if the week doesn't start with sunday, sunday is the last day
       wday = 7;
     } else {
       wday = t.tm_wday;
@@ -476,22 +445,22 @@ int ObTimeUtility2::get_weeks_of_year(struct tm& t, uint8_t flag_mask)
   return week_count;
 }
 
-int ObTimeUtility2::extract_usec(const ObString& str, int64_t& pos, int64_t& usec, DecimalDigts num_flag)
+int ObTimeUtility2::extract_usec(const ObString &str, int64_t &pos, int64_t &usec, DecimalDigts num_flag)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0) || OB_UNLIKELY(pos < 0) ||
-      OB_UNLIKELY(pos >= str.length())) {
+  if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)
+      || OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos >= str.length())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(str), K(pos));
   } else {
-    const char* cur_ptr = str.ptr() + pos;
-    const char* end_ptr = str.ptr() + str.length();
+    const char *cur_ptr = str.ptr() + pos;
+    const char *end_ptr = str.ptr() + str.length();
     int scanned = 0;
     int64_t result = 0;
     int64_t cur_value = 0;
 
-    // skip non-numeric character
+    //skip non-numeric character
     while (cur_ptr < end_ptr && (*cur_ptr > '9' || *cur_ptr < '0')) {
       ++cur_ptr;
     }
@@ -506,11 +475,11 @@ int ObTimeUtility2::extract_usec(const ObString& str, int64_t& pos, int64_t& use
         ++cur_ptr;
       }
       if (num_flag == DIGTS_SENSITIVE && 6 == scanned && cur_ptr < end_ptr) {
-
-        ret = OB_INVALID_ARGUMENT;
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "extract usec from string");
+         
+ret = OB_INVALID_ARGUMENT;
+         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "extract usec from string");
       } else if (scanned < 6) {
-        for (int i = scanned; i < 6; i++) {
+        for (int i = scanned; i < 6; i ++) {
           result *= 10L;
         }
       }
@@ -521,12 +490,12 @@ int ObTimeUtility2::extract_usec(const ObString& str, int64_t& pos, int64_t& use
   return ret;
 }
 
-int ObTimeUtility2::extract_date(const ObString& str, int n, int64_t& pos, int64_t& value)
+int ObTimeUtility2::extract_date(const ObString &str, int n, int64_t &pos, int64_t &value)
 {
   return extract_int(str, n, pos, value);
 }
 
-int ObTimeUtility2::str_to_time(const ObString& date, int64_t& usec, DecimalDigts num_flag)
+int ObTimeUtility2::str_to_time(const ObString &date, int64_t &usec, DecimalDigts num_flag)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -539,13 +508,13 @@ int ObTimeUtility2::str_to_time(const ObString& date, int64_t& usec, DecimalDigt
     LOG_WARN("date string is invalid", K(date), K(pos));
   } else {
     usec = sec * 1000000L;
-    const char* ptr = date.ptr();
-    // search for '.'
+    const char *ptr = date.ptr();
+    //search for '.'
     while (pos < date.length() && ptr[pos] != '.') {
       ++pos;
     }
     if (pos < date.length()) {
-      ++pos;  // skip '.'
+      ++pos; //skip '.'
       if (OB_FAIL(extract_usec(date, pos, tmp_usec, num_flag))) {
         LOG_WARN("extract usec part failed", K(ret));
       } else {
@@ -556,7 +525,7 @@ int ObTimeUtility2::str_to_time(const ObString& date, int64_t& usec, DecimalDigt
   return ret;
 }
 
-int ObTimeUtility2::str_to_timestamp(const ObString& date, struct tm& t, int64_t& usec)
+int ObTimeUtility2::str_to_timestamp(const ObString &date, struct tm &t, int64_t &usec)
 {
   int64_t dates[7] = {0};
   int matched = 0;
@@ -565,10 +534,10 @@ int ObTimeUtility2::str_to_timestamp(const ObString& date, struct tm& t, int64_t
   int ret = OB_SUCCESS;
 
   usec = 0;
-  // matching relaxed date format and strict date format
-  // such as 'ww 2013 ***11%%%^^^09>>>08:45&&03?678'
-  // and '2013-11-09 08:45:03.678'
-  // match year value
+  //matching relaxed date format and strict date format
+  //such as 'ww 2013 ***11%%%^^^09>>>08:45&&03?678'
+  //and '2013-11-09 08:45:03.678'
+  //match year value
   if (OB_ISNULL(date.ptr()) || OB_UNLIKELY(date.length() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("date string is invalid", K(date));
@@ -576,7 +545,7 @@ int ObTimeUtility2::str_to_timestamp(const ObString& date, struct tm& t, int64_t
   IS_MINUS(date, is_minus);
   for (int i = 0; OB_SUCC(ret) && i < 7; i++) {
     if (OB_UNLIKELY(6 == matched)) {
-      // to match usec
+      //to match usec
       if (OB_FAIL(ObTimeUtility2::extract_usec(date, pos, dates[i], DIGTS_INSENSITIVE))) {
         LOG_WARN("extract usec with digts insensitive failed", K(ret));
       }
@@ -596,16 +565,16 @@ int ObTimeUtility2::str_to_timestamp(const ObString& date, struct tm& t, int64_t
       ret = OB_INVALID_DATE_FORMAT;
       LOG_WARN("year, month, day is necessary in date format", K(date));
     }
-    // check the date value whether valid
-    else if (!is_valid_date(static_cast<int>(dates[0]), static_cast<int>(dates[1]), static_cast<int>(dates[2])) ||
-             !is_valid_time(static_cast<int>(dates[3]),
-                 static_cast<int>(dates[4]),
-                 static_cast<int>(dates[5]),
-                 static_cast<int>(dates[6]))) {
+    //check the date value whether valid
+    else if (!is_valid_date(static_cast<int>(dates[0]), static_cast<int>(dates[1]),
+                            static_cast<int>(dates[2]))
+             || !is_valid_time(static_cast<int>(dates[3]), static_cast<int>(dates[4]),
+                               static_cast<int>(dates[5]),
+                               static_cast<int>(dates[6]))) {
       ret = OB_INVALID_DATE_FORMAT;
       LOG_WARN("the date format is invalid");
     } else {
-      // not use fuzzy year rule making by MySQL
+      //not use fuzzy year rule making by MySQL
       /*
       //if year value is fuzzy, we use this rule:
       //[00, 69] treat as [2000, 2069]
@@ -630,7 +599,7 @@ int ObTimeUtility2::str_to_timestamp(const ObString& date, struct tm& t, int64_t
   return ret;
 }
 
-int ObTimeUtility2::str_to_usec(const ObString& date, int64_t& usec)
+int ObTimeUtility2::str_to_usec(const ObString &date, int64_t &usec)
 {
   int ret = OB_SUCCESS;
   struct tm t;
@@ -649,13 +618,14 @@ int ObTimeUtility2::str_to_usec(const ObString& date, int64_t& usec)
   return ret;
 }
 
+//TODO:: not support Julian day now. @yanhua
 bool ObTimeUtility2::is_valid_year(int year)
 {
   //(0, 9999]
   bool ret = true;
   if (year <= 0 || year > 9999) {
     ret = false;
-    // let user catch the error
+    //let user catch the error
     LOG_USER_ERROR(OB_INVALID_DATE_FORMAT, "year", year, 1, 9999);
   }
   return ret;
@@ -793,18 +763,24 @@ bool ObTimeUtility2::is_valid_date(int year, int month, int mday)
 
 bool ObTimeUtility2::is_valid_time(int hour, int minute, int second, int usec)
 {
-  return is_valid_hour(hour) && is_valid_minute(minute) && is_valid_second(second) && is_valid_usec(usec);
+  return is_valid_hour(hour) && is_valid_minute(minute) && is_valid_second(second) &&
+         is_valid_usec(usec);
 }
 
 bool ObTimeUtility2::is_valid_oracle_time(int hour, int minute, int second, int nsec)
 {
-  return (is_valid_hour(hour) && is_valid_minute(minute) && is_valid_second(second) && is_valid_nsec(nsec));
+  return (is_valid_hour(hour)
+          && is_valid_minute(minute)
+          && is_valid_second(second)
+          && is_valid_nsec(nsec));
 }
 
 bool ObTimeUtility2::is_valid_time_offset(int offset_hour, int offset_minute)
 {
-  return (is_valid_hour_offset(offset_hour) && is_valid_minute(offset_minute));
+  return (is_valid_hour_offset(offset_hour)
+          && is_valid_minute(offset_minute));
 }
+
 
 }  // namespace share
 }  // namespace oceanbase

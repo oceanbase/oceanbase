@@ -17,17 +17,18 @@
 #include "common/ob_member_list.h"
 #include "share/ob_gts_name.h"
 
-namespace oceanbase {
-namespace common {
-class ObGtsInfo {
+namespace oceanbase
+{
+namespace common
+{
+class ObGtsInfo
+{
 public:
   ObGtsInfo();
-  ~ObGtsInfo()
-  {}
+  ~ObGtsInfo() {}
   void reset();
   bool is_valid() const;
-  int assign(const ObGtsInfo& that);
-
+  int assign(const ObGtsInfo &that);
 public:
   uint64_t gts_id_;
   common::ObGtsName gts_name_;
@@ -37,17 +38,17 @@ public:
   common::ObAddr standby_;
   int64_t heartbeat_ts_;
 
-  TO_STRING_KV(K(gts_id_), K(gts_name_), K(region_), K(epoch_id_), K(member_list_), K(standby_), K(heartbeat_ts_));
+  TO_STRING_KV(K(gts_id_), K(gts_name_), K(region_), K(epoch_id_),
+               K(member_list_), K(standby_), K(heartbeat_ts_));
 };
 
-class ObGtsTenantInfo {
+class ObGtsTenantInfo
+{
 public:
   ObGtsTenantInfo();
-  ~ObGtsTenantInfo()
-  {}
+  ~ObGtsTenantInfo() {}
   void reset();
   bool is_valid() const;
-
 public:
   uint64_t gts_id_;
   uint64_t tenant_id_;
@@ -55,7 +56,7 @@ public:
 
   TO_STRING_KV(K(gts_id_), K(tenant_id_), K(member_list_));
 };
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_GTS_INFO_H_
+#endif // OCEANBASE_COMMON_OB_GTS_INFO_H_

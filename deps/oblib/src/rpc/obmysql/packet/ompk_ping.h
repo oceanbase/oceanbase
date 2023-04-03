@@ -15,12 +15,17 @@
 
 #include "rpc/obmysql/ob_mysql_packet.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
-class OMPKPing : public ObMySQLRawPacket {};  // end of class OMPKPing
+class OMPKPing
+    : public ObMySQLRawPacket
+{
+}; // end of class OMPKPing
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OMPK_PING_H_ */

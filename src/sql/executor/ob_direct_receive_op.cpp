@@ -22,11 +22,15 @@
 #include "sql/monitor/ob_exec_stat_collector.h"
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 OB_SERIALIZE_MEMBER((ObDirectReceiveSpec, ObOpSpec));
 
-ObDirectReceiveOp::ObDirectReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
+ObDirectReceiveOp::ObDirectReceiveOp(ObExecContext &exec_ctx,
+                                     const ObOpSpec &spec,
+                                     ObOpInput *input)
     : ObReceiveOp(exec_ctx, spec, input),
       scanner_(NULL),
       scanner_iter_(),
@@ -34,38 +38,39 @@ ObDirectReceiveOp::ObDirectReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& sp
       cur_data_empty_(true),
       first_request_received_(false),
       found_rows_(0)
-{}
+{
+}
 
 int ObDirectReceiveOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  all_data_empty_ = false;         /* Whether all the scanner data has been read */
-  cur_data_empty_ = true;          /* Whether the current scanner data has been read */
-  first_request_received_ = false; /* Whether the plan has been sent to the remote server */
-  // Receive the first scanner. For DML such as insert and update, need to get affected_rows etc.
+  all_data_empty_ = false; /* 是否所有scanner数据都已经读完 */
+  cur_data_empty_ = true;/* 当前scanner数据是否已经读完 */
+  first_request_received_ = false; /* 是否已经将plan发送到远端 */
+  // 接收第一个scanner，对于insert, update等DML，需要在此时获取affected_rows等
   if (OB_FAIL(setup_next_scanner())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to setup first scanner", K(ret));
     } else {
-      all_data_empty_ = true; /* no more scanner */
+      all_data_empty_ = true; /* 没有更多scanner了 */
     }
   } else {
-    cur_data_empty_ = false; /* scanner is filled up again, can continue reading */
+    cur_data_empty_ = false; /* scanner再次被填满，可以接着读 */
   }
   return ret;
 }
 /*
- * state:cur_data_empty_, all_data_empty_
+ * 状态机：cur_data_empty_, all_data_empty_
  */
 int ObDirectReceiveOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   bool has_got_a_row = false;
-  RemoteExecuteStreamHandle* resp_handler = NULL;
-  // Sometimes we need send user variables to remote end to complete query successfully
-  // And, of course, we will get the new value for user variable.
-  // Scanner contains the updated values.
-  // so we update the user variables in terms of scanners here.
+  RemoteExecuteStreamHandle *resp_handler = NULL;
+  //Sometimes we need send user variables to remote end to complete query successfully
+  //And, of course, we will get the new value for user variable.
+  //Scanner contains the updated values.
+  //so we update the user variables in terms of scanners here.
   if (OB_FAIL(ObTaskExecutorCtxUtil::get_stream_handler(ctx_, resp_handler))) {
     LOG_WARN("fail get task response handler", K(ret));
   } else if (OB_ISNULL(resp_handler)) {
@@ -74,43 +79,43 @@ int ObDirectReceiveOp::inner_get_next_row()
   } else if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check physical plan status failed", K(ret));
   } else if (OB_ERR_TASK_SKIPPED == resp_handler->get_result_code()) {
-    // skip
+    // 跳过
     ret = OB_ITER_END;
     LOG_WARN("this remote task is skipped", K(ret));
   }
 
-  /* It will be easier to understand the following code with state machine thinking */
+  /* 用状态机思维理解下面的代码会比较容易 */
   while (OB_SUCC(ret) && false == has_got_a_row) {
-    if (all_data_empty_) { /* All data has been read */
+    if (all_data_empty_) { /* 所有数据均读取完毕 */
       ret = OB_ITER_END;
-    } else if (cur_data_empty_) { /* The current scanner has been read over */
-      /* send RPC req and remote server response Scanner */
+    } else if (cur_data_empty_) { /* 当前scanner读取完毕 */
+      /* 发送RPC请求远程返回一个Scanner */
       if (OB_FAIL(setup_next_scanner())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to setup next scanner", K(ret));
         } else {
-          all_data_empty_ = true; /* no more scanner */
+          all_data_empty_ = true; /* 没有更多scanner了 */
         }
       } else {
-        cur_data_empty_ = false; /* scanner is filled up again, can continue reading */
+        cur_data_empty_ = false; /* scanner再次被填满，可以接着读 */
       }
-    } else { /* current scanner is readable */
+    } else { /* 当前scanner可读 */
       if (OB_FAIL(get_next_row_from_cur_scanner())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row from cur scanner", K(ret));
         } else {
-          // curr scanner read over
+          // 当前scanner已经读完了
           cur_data_empty_ = true;
-          ret = OB_SUCCESS;  // set ret be OB_SUCCESS for loop
+          ret = OB_SUCCESS; // 将ret设为OB_SUCCESS以便继续循环
         }
       } else {
-        // get one row then break loop
+        // 拿到了一行数据, 退出循环
         has_got_a_row = true;
       }
     }
   }
   if (OB_ITER_END == ret) {
-    ObPhysicalPlanCtx* plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     plan_ctx->set_found_rows(found_rows_);
   }
   return ret;
@@ -119,7 +124,7 @@ int ObDirectReceiveOp::inner_get_next_row()
 int ObDirectReceiveOp::inner_close()
 {
   int ret = OB_SUCCESS;
-  RemoteExecuteStreamHandle* resp_handler = NULL;
+  RemoteExecuteStreamHandle *resp_handler = NULL;
   if (OB_FAIL(ObTaskExecutorCtxUtil::get_stream_handler(ctx_, resp_handler))) {
     LOG_WARN("fail get task response handler", K(ret));
   } else if (OB_ISNULL(resp_handler)) {
@@ -130,9 +135,9 @@ int ObDirectReceiveOp::inner_close()
       if (OB_FAIL(resp_handler->abort())) {
         LOG_WARN("fail to abort", K(ret));
       } else {
-        ObSQLSessionInfo* session = ctx_.get_my_session();
-        ObPhysicalPlanCtx* plan_ctx = ctx_.get_physical_plan_ctx();
-        ObExecutorRpcImpl* rpc = NULL;
+        ObSQLSessionInfo *session = ctx_.get_my_session();
+        ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+        ObExecutorRpcImpl *rpc = NULL;
         if (OB_FAIL(ObTaskExecutorCtxUtil::get_task_executor_rpc(ctx_, rpc))) {
           LOG_WARN("get task executor rpc failed", K(ret));
         } else if (OB_ISNULL(session) || OB_ISNULL(plan_ctx) || OB_ISNULL(rpc)) {
@@ -148,12 +153,12 @@ int ObDirectReceiveOp::inner_close()
               plan_ctx->is_plain_select_stmt());
           int tmp_ret = rpc->task_kill(rpc_ctx, resp_handler->get_task_id(), resp_handler->get_dst_addr());
           if (OB_SUCCESS != tmp_ret) {
-            LOG_WARN("kill task failed", K(tmp_ret), K(resp_handler->get_task_id()), K(resp_handler->get_dst_addr()));
+            LOG_WARN("kill task failed", K(tmp_ret),
+                K(resp_handler->get_task_id()), K(resp_handler->get_dst_addr()));
           }
         }
       }
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
@@ -161,9 +166,9 @@ int ObDirectReceiveOp::inner_close()
 int ObDirectReceiveOp::setup_next_scanner()
 {
   int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx* plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  RemoteExecuteStreamHandle* resp_handler = NULL;
-  ObSQLSessionInfo* my_session = GET_MY_SESSION(ctx_);
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  RemoteExecuteStreamHandle *resp_handler = NULL;
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
   if (OB_FAIL(ObTaskExecutorCtxUtil::get_stream_handler(ctx_, resp_handler))) {
     LOG_WARN("fail get task response handler", K(ret));
   } else if (OB_ISNULL(resp_handler)) {
@@ -172,9 +177,9 @@ int ObDirectReceiveOp::setup_next_scanner()
   }
 
   if (OB_SUCC(ret)) {
-    // Read the data the first time, and the result has been obtained when task_submit() is called by the Scheduler
+    /* 首次读取数据，结果已经在Scheduler中调用task_submit()时获取 */
     if (!first_request_received_) {
-      ObScanner* scanner = resp_handler->get_result();
+      ObScanner *scanner = resp_handler->get_result();
       if (OB_ISNULL(scanner)) {
         ret = OB_ERR_UNEXPECTED;
       } else {
@@ -183,58 +188,59 @@ int ObDirectReceiveOp::setup_next_scanner()
         plan_ctx->set_last_insert_id_session(scanner->get_last_insert_id_session());
         plan_ctx->set_last_insert_id_changed(scanner->get_last_insert_id_changed());
         int tmp_ret = OB_SUCCESS;
-        ObExecStatCollector& collector = ctx_.get_exec_stat_collector();
+        ObExecStatCollector &collector = ctx_.get_exec_stat_collector();
         if (OB_SUCCESS != (tmp_ret = collector.add_raw_stat(scanner->get_extend_info()))) {
           LOG_WARN("fail to collected raw extend info in scanner", K(tmp_ret));
         }
         if (OB_FAIL(scanner->get_err_code())) {
           int add_ret = OB_SUCCESS;
           const char* err_msg = scanner->get_err_msg();
-          // after FORWARD_USER_ERROR(ret, err_msg),if err_msg length > 0,
-          // then return err_msg
-          // Otherwise, the err_msg returned is the default error message corresponding to ret.
-          // use FORWARD_USER_ERROR(ret, err_msg) can qualify.
+          // FORWARD_USER_ERROR(ret, err_msg)之后，如果err_msg的长度大于0，
+          // 则给用户返回的错误信息为err_msg，否则给用户返回的错误信息就是ret对应的默认错误信息。
+          // 这里要做到err_msg不为空的时候才给用户返回err_msg，否则就给用户返回ret默认的错误信息，
+          // 因此直接写FORWARD_USER_ERROR(ret, err_msg)就可以了。
           FORWARD_USER_ERROR(ret, err_msg);
           LOG_WARN("while fetching first scanner, the remote rcode is not OB_SUCCESS",
-              K(ret),
-              K(err_msg),
-              "dst_addr",
-              to_cstring(resp_handler->get_dst_addr()));
+                   K(ret), K(err_msg),
+                   "dst_addr", to_cstring(resp_handler->get_dst_addr()));
           if (is_data_not_readable_err(ret)) {
-            ObQueryRetryInfo& retry_info = my_session->get_retry_info_for_update();
-            if (OB_UNLIKELY(OB_SUCCESS !=
-                            (add_ret = retry_info.add_invalid_server_distinctly(resp_handler->get_dst_addr(), true)))) {
-              LOG_WARN("fail to add remote addr to invalid servers distinctly",
-                  K(ret),
-                  K(add_ret),
-                  K(resp_handler->get_dst_addr()),
-                  K(retry_info));
+            // 读到落后太多的备机或者正在回放日志的副本了，
+            // 将远端的这个observer加进retry info的invalid servers中
+            ObQueryRetryInfo &retry_info = my_session->get_retry_info_for_update();
+            if (OB_UNLIKELY(OB_SUCCESS != (
+                        add_ret = retry_info.add_invalid_server_distinctly(
+                            resp_handler->get_dst_addr(), true)))) {
+              LOG_WARN("fail to add remote addr to invalid servers distinctly", K(ret), K(add_ret),
+                       K(resp_handler->get_dst_addr()), K(retry_info));
             }
           }
         } else {
           scanner_ = scanner;
           first_request_received_ = true;
-          // INSERT,UPDATE,DELETE,The Scanner returned for the first time contains the affected row
+          // 对于INSERT、UPDATE、DELETE，首次返回的Scanner中包含affected row
           plan_ctx->set_affected_rows(scanner->get_affected_rows());
           found_rows_ += scanner->get_found_rows();
           if (OB_FAIL(scanner->get_datum_store().begin(scanner_iter_))) {
             LOG_WARN("fail to init datum store iter", K(ret));
           } else if (OB_FAIL(plan_ctx->set_row_matched_count(scanner->get_row_matched_count()))) {
             LOG_WARN("fail to set row matched count", K(ret), K(scanner->get_row_matched_count()));
-          } else if (OB_FAIL(plan_ctx->set_row_duplicated_count(scanner->get_row_duplicated_count()))) {
-            LOG_WARN("fail to set row duplicate count", K(ret), K(scanner->get_row_duplicated_count()));
+          } else if (OB_FAIL(plan_ctx->set_row_duplicated_count(
+                      scanner->get_row_duplicated_count()))) {
+            LOG_WARN("fail to set row duplicate count",
+                     K(ret), K(scanner->get_row_duplicated_count()));
             /**
              * ObRemoteTaskExecutor::execute() has called merge_result() before here, that is a
              * better place to call merge_result(), especially when any operation failed between
              * there and here.
+             * see
              */
           } else if (OB_FAIL(plan_ctx->merge_implicit_cursors(scanner->get_implicit_cursors()))) {
             LOG_WARN("merge implicit cursors failed", K(ret), K(scanner->get_implicit_cursors()));
           }
         }
       }
-    } else { /* Subsequent request, send SESSION_NEXT to the remote end through Handle */
-      ObScanner* result_scanner = NULL;
+    } else { /* 后继请求，通过Handle发送SESSION_NEXT到远端 */
+      ObScanner *result_scanner = NULL;
       if (resp_handler->has_more()) {
         if (OB_FAIL(resp_handler->reset_and_init_result())) {
           LOG_WARN("fail reset and init result", K(ret));
@@ -242,26 +248,24 @@ int ObDirectReceiveOp::setup_next_scanner()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
         } else if (OB_FAIL(resp_handler->get_more(*result_scanner))) {
-          LOG_WARN("fail wait response", K(ret), "dst_addr", to_cstring(resp_handler->get_dst_addr()));
+          LOG_WARN("fail wait response",
+                   K(ret), "dst_addr", to_cstring(resp_handler->get_dst_addr()));
         } else if (OB_FAIL(result_scanner->get_err_code())) {
           int add_ret = OB_SUCCESS;
           const char* err_msg = result_scanner->get_err_msg();
           FORWARD_USER_ERROR(ret, err_msg);
           LOG_WARN("while getting more scanner, the remote rcode is not OB_SUCCESS",
-              K(ret),
-              K(err_msg),
-              "dst_addr",
-              to_cstring(resp_handler->get_dst_addr()));
+                   K(ret), K(err_msg),
+                   "dst_addr", to_cstring(resp_handler->get_dst_addr()));
           if (is_data_not_readable_err(ret)) {
-            // Add the remote observer to the invalid servers of retry info
-            ObQueryRetryInfo& retry_info = my_session->get_retry_info_for_update();
-            if (OB_UNLIKELY(OB_SUCCESS !=
-                            (add_ret = retry_info.add_invalid_server_distinctly(resp_handler->get_dst_addr(), true)))) {
-              LOG_WARN("fail to add remote addr to invalid servers distinctly",
-                  K(ret),
-                  K(add_ret),
-                  K(resp_handler->get_dst_addr()),
-                  K(retry_info));
+            // 读到落后太多的备机或者正在回放日志的副本了，
+            // 将远端的这个observer加进retry info的invalid servers中
+            ObQueryRetryInfo &retry_info = my_session->get_retry_info_for_update();
+            if (OB_UNLIKELY(OB_SUCCESS != (
+                        add_ret = retry_info.add_invalid_server_distinctly(
+                            resp_handler->get_dst_addr(), true)))) {
+              LOG_WARN("fail to add remote addr to invalid servers distinctly", K(ret), K(add_ret),
+                       K(resp_handler->get_dst_addr()), K(retry_info));
             }
           }
         } else {
@@ -279,20 +283,22 @@ int ObDirectReceiveOp::setup_next_scanner()
         plan_ctx->set_last_insert_id_session(scanner_->get_last_insert_id_session());
         plan_ctx->set_last_insert_id_changed(scanner_->get_last_insert_id_changed());
         int tmp_ret = OB_SUCCESS;
-        ObExecStatCollector& collector = ctx_.get_exec_stat_collector();
+        ObExecStatCollector &collector = ctx_.get_exec_stat_collector();
         if (OB_SUCCESS != (tmp_ret = collector.add_raw_stat(scanner_->get_extend_info()))) {
           LOG_WARN("fail to collected raw extend info in scanner", K(tmp_ret));
         }
-        if (OB_SUCCESS != (tmp_ret = plan_ctx->get_table_row_count_list().assign(scanner_->get_table_row_counts()))) {
-          LOG_WARN("fail to set table row count", K(ret), K(scanner_->get_table_row_counts()));
+        if (OB_SUCCESS != (tmp_ret = plan_ctx->get_table_row_count_list()
+                                             .assign(scanner_->get_table_row_counts()))) {
+          LOG_WARN("fail to set table row count", K(ret),
+                    K(scanner_->get_table_row_counts()));
         }
-        LOG_DEBUG(
-            "remote table row counts", K(scanner_->get_table_row_counts()), K(plan_ctx->get_table_row_count_list()));
+        LOG_DEBUG("remote table row counts", K(scanner_->get_table_row_counts()),
+                                             K(plan_ctx->get_table_row_count_list()));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(my_session->replace_user_variables(scanner_->get_session_var_map()))) {
+    if (OB_FAIL(my_session->replace_user_variables(ctx_, scanner_->get_session_var_map()))) {
       LOG_WARN("replace user variables failed", K(ret));
     }
   }
@@ -306,21 +312,20 @@ int ObDirectReceiveOp::get_next_row_from_cur_scanner()
   if (OB_FAIL(scanner_iter_.get_next_row(MY_SPEC.output_, eval_ctx_))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail get next row", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     LOG_DEBUG("direct receive next row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.output_));
   }
   return ret;
 }
 
-int ObDirectReceiveOp::rescan()
+int ObDirectReceiveOp::inner_rescan()
 {
-  // not support the rescan operation of the remote operator
+  //不支持对远程的operator进行rescan操作
   int ret = OB_NOT_SUPPORTED;
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Distributed rescan");
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

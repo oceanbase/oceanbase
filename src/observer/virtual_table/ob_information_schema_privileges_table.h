@@ -16,17 +16,23 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/schema/ob_priv_type.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObDBPriv;
 }
-}  // namespace share
-namespace observer {
-class ObInfoSchemaSchemaPrivilegesTable : public common::ObVirtualTableScannerIterator {
+}
+namespace observer
+{
+class ObInfoSchemaSchemaPrivilegesTable : public common::ObVirtualTableScannerIterator
+{
 public:
   class StaticInit {
   public:
@@ -38,19 +44,14 @@ public:
   virtual ~ObInfoSchemaSchemaPrivilegesTable();
 
   virtual void reset();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 
-  inline void set_tenant_id(uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-  inline void set_user_id(uint64_t user_id)
-  {
-    user_id_ = user_id;
-  }
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_user_id(uint64_t user_id) { user_id_ = user_id; }
 
 private:
-  enum TABLE_PRIVS_COLUMN {
+  enum TABLE_PRIVS_COLUMN
+  {
     GRANTEE = 16,
     TABLE_CATALOG,
     TABLE_SCHEMA,
@@ -60,21 +61,23 @@ private:
   };
   enum {
     MAX_COL_COUNT = 6,
-    USERNAME_AUX_LEN = 6  // "''@''" + '\0'
+    USERNAME_AUX_LEN = 6// "''@''" + '\0'
   };
 
-  int get_db_privs(
-      const uint64_t tenant_id, const uint64_t user_id, common::ObArray<const share::schema::ObDBPriv*>& db_privs);
-  int get_user_name_from_db_priv(
-      const share::schema::ObDBPriv* db_priv, common::ObString& user_name, common::ObString& host_name);
-  int fill_row_with_db_priv(const share::schema::ObDBPriv* db_priv);
+  int get_db_privs(const uint64_t tenant_id,
+                   const uint64_t user_id,
+                   common::ObArray<const share::schema::ObDBPriv *> &db_privs);
+  int get_user_name_from_db_priv(const share::schema::ObDBPriv *db_priv,
+                                 common::ObString &user_name,
+                                 common::ObString &host_name);
+  int fill_row_with_db_priv(const share::schema::ObDBPriv *db_priv);
 
-  static const char* priv_type_strs[OB_PRIV_MAX_SHIFT + 1];
+  static const char *priv_type_strs[OB_PRIV_MAX_SHIFT + 1];
   uint64_t tenant_id_;
   uint64_t user_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaSchemaPrivilegesTable);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_SCHEMA_PRIVILEGES_ */

@@ -19,51 +19,50 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
-namespace oceanbase {
-namespace lib {
-uint64_t current_tenant_id()
+namespace oceanbase
 {
-  return CURRENT_ENTITY(TENANT_SPACE)->get_tenant_id();
-}
+namespace lib
+{
 uint64_t current_resource_owner_id()
 {
   return CURRENT_ENTITY(RESOURCE_OWNER)->get_owner_id();
 }
-}  // end of namespace lib
+} // end of namespace lib
 
-namespace share {
+namespace share
+{
 
 uint64_t ObTenantSpace::get_tenant_id() const
 {
   return tenant_->id();
 }
 
-int ObTenantSpace::guard_init_cb(const ObTenantSpace& tenant_space, char* buf, bool& is_inited)
+int ObTenantSpace::guard_init_cb(const ObTenantSpace &tenant_space, char *buf, bool &is_inited)
 {
   int ret = OB_SUCCESS;
   is_inited = false;
   if (&tenant_space == &ObTenantSpace::root()) {
     // do-nothing
   } else {
-    ObWorker::CompatMode mode = THIS_WORKER.get_compatibility_mode();
-    *reinterpret_cast<ObWorker::CompatMode*>(buf) = mode;
-    mode = tenant_space.get_tenant()->get<ObWorker::CompatMode>();
+    lib::Worker::CompatMode mode = THIS_WORKER.get_compatibility_mode();
+    *reinterpret_cast<lib::Worker::CompatMode*>(buf) = mode;
+    mode = tenant_space.get_tenant()->get<lib::Worker::CompatMode>();
     THIS_WORKER.set_compatibility_mode(mode);
     is_inited = true;
   }
   return ret;
 }
 
-void ObTenantSpace::guard_deinit_cb(const ObTenantSpace& tenant_space, char* buf)
+void ObTenantSpace::guard_deinit_cb(const ObTenantSpace &tenant_space, char *buf)
 {
   UNUSEDx(tenant_space);
-  ObWorker::CompatMode mode = *reinterpret_cast<ObWorker::CompatMode*>(buf);
+  lib::Worker::CompatMode mode = *reinterpret_cast<lib::Worker::CompatMode*>(buf);
   THIS_WORKER.set_compatibility_mode(mode);
 }
 
-ObTenantSpace& ObTenantSpace::root()
+ObTenantSpace &ObTenantSpace::root()
 {
-  static ObTenantSpace* root = nullptr;
+  static ObTenantSpace *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
     static lib::ObMutex mutex;
     lib::ObMutexGuard guard(mutex);
@@ -77,9 +76,9 @@ ObTenantSpace& ObTenantSpace::root()
   return *root;
 }
 
-ObResourceOwner& ObResourceOwner::root()
+ObResourceOwner &ObResourceOwner::root()
 {
-  static ObResourceOwner* root = nullptr;
+  static ObResourceOwner *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
     static lib::ObMutex mutex;
     lib::ObMutexGuard guard(mutex);
@@ -93,84 +92,12 @@ ObResourceOwner& ObResourceOwner::root()
   return *root;
 }
 
-int ObTableSpace::init()
+ObTenantSpaceFetcher::ObTenantSpaceFetcher(const uint64_t tenant_id)
+  : ret_(OB_SUCCESS),
+    entity_(nullptr)
 {
   int ret = common::OB_SUCCESS;
-  ObTenantSpace* entity = nullptr;
-  ObLDHandle handle;
-  if (common::is_sys_table(table_id_)) {
-    compat_mode_ = ObWorker::CompatMode::MYSQL;
-  } else if (OB_FAIL(get_tenant_ctx_with_tenant_lock(common::extract_tenant_id(table_id_), handle, entity))) {
-  } else {
-    compat_mode_ = entity->get_tenant()->get<ObWorker::CompatMode>();
-    entity->get_tenant()->unlock(handle);
-  }
-  return ret;
-}
-
-int ObTableSpace::guard_init_cb(const ObTableSpace& table_space, char* buf, bool& is_inited)
-{
-  int ret = OB_SUCCESS;
-  is_inited = false;
-  if (&table_space == &ObTableSpace::root()) {
-    // do-nothing
-  } else {
-    ObWorker::CompatMode mode = THIS_WORKER.get_compatibility_mode();
-    *reinterpret_cast<ObWorker::CompatMode*>(buf) = mode;
-    mode = table_space.get_compat_mode();
-    THIS_WORKER.set_compatibility_mode(mode);
-    is_inited = true;
-  }
-  return ret;
-}
-
-void ObTableSpace::guard_deinit_cb(const ObTableSpace& table_space, char* buf)
-{
-  UNUSEDx(table_space);
-  THIS_WORKER.set_compatibility_mode(*reinterpret_cast<ObWorker::CompatMode*>(buf));
-}
-
-ObTableSpace& ObTableSpace::root()
-{
-  static ObTableSpace* root = nullptr;
-  if (OB_UNLIKELY(nullptr == root)) {
-    static lib::ObMutex mutex;
-    lib::ObMutexGuard guard(mutex);
-    if (nullptr == root) {
-      static ObTableSpace tmp(common::combine_id(common::OB_SYS_TENANT_ID, 1));
-      int ret = tmp.init();
-      abort_unless(OB_SUCCESS == ret);
-      root = &tmp;
-    }
-  }
-  return *root;
-}
-
-int get_compat_mode_with_table_id(const uint64_t table_id, ObWorker::CompatMode& compat_mode)
-{
-  int ret = OB_SUCCESS;
-  CREATE_WITH_TEMP_ENTITY(TABLE_SPACE, table_id)
-  {
-    compat_mode = THIS_WORKER.get_compatibility_mode();
-    if (ObWorker::CompatMode::INVALID == compat_mode) {
-      ret = OB_ERR_UNEXPECTED;
-      SHARE_LOG(WARN, "compat mode can not be invalid", K(ret), K(table_id));
-    }
-  }
-  else
-  {
-    if (OB_TENANT_NOT_IN_SERVER == ret) {
-      ret = OB_EAGAIN;
-    }
-    SHARE_LOG(WARN, "failed to swith table context", K(ret), K(table_id));
-  }
-  return ret;
-}
-
-ObTenantSpaceFetcher::ObTenantSpaceFetcher(const uint64_t tenant_id) : ret_(OB_SUCCESS), entity_(nullptr)
-{
-  int ret = common::OB_SUCCESS;
-  ObTenantSpace* tmp = nullptr;
+  ObTenantSpace *tmp = nullptr;
   if (OB_FAIL(get_tenant_ctx_with_tenant_lock(tenant_id, handle_, tmp))) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       SHARE_LOG(WARN, "get tenant ctx failed", K(ret), K(tenant_id));
@@ -180,6 +107,9 @@ ObTenantSpaceFetcher::ObTenantSpaceFetcher(const uint64_t tenant_id) : ret_(OB_S
     SHARE_LOG(WARN, "null ptr", K(ret), K(tenant_id));
   } else {
     entity_ = tmp;
+  }
+  if (OB_FAIL(ret) && ret == OB_IN_STOP_STATE) {
+    ret = OB_TENANT_NOT_IN_SERVER;
   }
   ret_ = ret;
 }
@@ -192,5 +122,6 @@ ObTenantSpaceFetcher::~ObTenantSpaceFetcher()
   }
 }
 
-}  // end of namespace share
-}  // end of namespace oceanbase
+
+} // end of namespace share
+} // end of namespace oceanbase

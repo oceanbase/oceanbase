@@ -17,43 +17,17 @@
 #include "sql/engine/expr/ob_expr_less_equal.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
-
-ObExprLessThan::ObExprLessThan(ObIAllocator& alloc) : ObRelationalExprOperator(alloc, T_OP_LT, N_LESS_THAN, 2)
-{}
-
-int ObExprLessThan::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
+namespace sql
 {
-  return ObRelationalExprOperator::calc_result2(result, obj1, obj2, expr_ctx, false, CO_LT);
+
+ObExprLessThan::ObExprLessThan(ObIAllocator &alloc)
+    : ObRelationalExprOperator(alloc, T_OP_LT, N_LESS_THAN, 2)
+{
 }
 
-int ObExprLessThan::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  return ObRelationalExprOperator::calc_resultN(result, objs_array, param_num, expr_ctx, false, CO_LT);
 }
-
-int ObExprLessThan::calc(
-    ObObj& result, const ObObj& obj1, const ObObj& obj2, const ObCompareCtx& cmp_ctx, ObCastCtx& cast_ctx)
-{
-  return ObRelationalExprOperator::compare(result, obj1, obj2, cmp_ctx, cast_ctx, CO_LT);
 }
-
-int ObExprLessThan::calc_nocast(ObObj& result, const ObObj& obj1, const ObObj& obj2, const ObCompareCtx& cmp_ctx)
-{
-  int ret = OB_SUCCESS;
-  bool need_cast = false;
-  ret = ObRelationalExprOperator::compare_nocast(result, obj1, obj2, cmp_ctx, CO_LT, need_cast);
-  if (OB_FAIL(ret)) {
-    LOG_WARN("compare objs failed", K(ret), K(obj1), K(obj2), K(cmp_ctx.cmp_type_));
-  } else if (OB_UNLIKELY(need_cast)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("compare objs failed", K(ret), K(obj1), K(obj2), K(cmp_ctx.cmp_type_));
-  }
-  return ret;
-}
-
-}  // namespace sql
-}  // namespace oceanbase

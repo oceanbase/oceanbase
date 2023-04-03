@@ -14,9 +14,12 @@
 #define private public
 #include "lib/atomic/ob_atomic_reference.h"
 #include "lib/ob_define.h"
+#include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 TEST(ObAtomicReference, normal)
 {
@@ -24,7 +27,7 @@ TEST(ObAtomicReference, normal)
   uint32_t ref_cnt = 0;
   ObAtomicReference atomic_ref;
 
-  // test overflow
+  //test overflow
   atomic_ref.atomic_num_.ref = UINT32_MAX;
   ret = atomic_ref.inc_ref_cnt();
   ASSERT_NE(OB_SUCCESS, ret);
@@ -33,7 +36,7 @@ TEST(ObAtomicReference, normal)
   ret = atomic_ref.check_and_inc_ref_cnt();
   ASSERT_NE(OB_SUCCESS, ret);
 
-  // test 0
+  //test 0
   atomic_ref.reset();
   ret = atomic_ref.dec_ref_cnt_and_inc_seq_num(ref_cnt);
   ASSERT_NE(OB_SUCCESS, ret);
@@ -42,7 +45,7 @@ TEST(ObAtomicReference, normal)
   ret = atomic_ref.check_seq_num_and_inc_ref_cnt(1);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  // test normal
+  //test normal
   ret = atomic_ref.inc_ref_cnt();
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = atomic_ref.check_and_inc_ref_cnt();
@@ -57,8 +60,9 @@ TEST(ObAtomicReference, normal)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1U, atomic_ref.get_seq_num());
 }
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+
 
 int main(int argc, char** argv)
 {

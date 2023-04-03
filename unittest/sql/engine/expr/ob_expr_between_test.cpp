@@ -16,33 +16,36 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprBetweenTest : public ::testing::Test {
-public:
-  ObExprBetweenTest();
-  virtual ~ObExprBetweenTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprBetweenTest(const ObExprBetweenTest& other);
-  ObExprBetweenTest& operator=(const ObExprBetweenTest& other);
-
-protected:
-  // data members
+class ObExprBetweenTest: public ::testing::Test
+{
+  public:
+    ObExprBetweenTest();
+    virtual ~ObExprBetweenTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprBetweenTest(const ObExprBetweenTest &other);
+    ObExprBetweenTest& operator=(const ObExprBetweenTest &other);
+  protected:
+    // data members
 };
 
 ObExprBetweenTest::ObExprBetweenTest()
-{}
+{
+}
 
 ObExprBetweenTest::~ObExprBetweenTest()
-{}
+{
+}
 
 void ObExprBetweenTest::SetUp()
-{}
+{
+}
 
 void ObExprBetweenTest::TearDown()
-{}
+{
+}
 
 #define T(t1, v1, t2, v2, t3, v3, res) COMPARE3_EXPECT(ObExprBetween, &buf, calc_result3, t1, v1, t2, v2, t3, v3, res)
 TEST_F(ObExprBetweenTest, basic_test)
@@ -102,15 +105,15 @@ TEST_F(ObExprBetweenTest, basic_test)
   T(max, 0, int, 0, max, 0, MY_TRUE);
 
   // int vs varchar
-  T(int, -1, varchar, "0", int, 2, MY_FALSE);
+  T(int, -1,varchar, "0", int, 2, MY_FALSE);
   T(int, 0, varchar, "0", int, 2, MY_TRUE);
   T(int, 1, varchar, "0", int, 2, MY_TRUE);
   T(int, 2, varchar, "0", int, 2, MY_TRUE);
   T(int, 3, varchar, "0", int, 2, MY_FALSE);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

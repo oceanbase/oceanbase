@@ -12,11 +12,12 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "lib/coro/co.h"
 #include "common/ob_timeout_ctx.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObTimeoutCtx::ObTimeoutCtx() : abs_timeout_us_(-1), trx_timeout_us_(-1), next_(NULL)
 {
@@ -45,24 +46,24 @@ ObTimeoutCtx::~ObTimeoutCtx()
 {
   if (NULL != header()) {
     if (this != header()) {
-      LOG_ERROR("destruct timeout context should be header");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "destruct timeout context should be header");
     } else {
       header() = next_;
     }
   }
 }
 
-ObTimeoutCtx*& ObTimeoutCtx::header()
+ObTimeoutCtx *&ObTimeoutCtx::header()
 {
-  static RLOCAL(ObTimeoutCtx*, head_ptr);
+  RLOCAL(ObTimeoutCtx *, head_ptr);
   return head_ptr;
 }
 
-const ObTimeoutCtx& ObTimeoutCtx::get_ctx()
+const ObTimeoutCtx &ObTimeoutCtx::get_ctx()
 {
   const static bool link_self = false;
   static ObTimeoutCtx def(link_self);
-  const ObTimeoutCtx* res = &def;
+  const ObTimeoutCtx *res = &def;
   if (NULL != header()) {
     res = header();
   }
@@ -126,8 +127,8 @@ int ObTimeoutCtx::set_trx_timeout_us(int64_t trx_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (trx_timeout_us <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(trx_timeout_us));
+   ret = OB_INVALID_ARGUMENT;
+   LOG_WARN("invalid argument", K(ret), K(trx_timeout_us));
   } else {
     trx_timeout_us_ = trx_timeout_us;
   }
@@ -147,5 +148,5 @@ int64_t ObTimeoutCtx::get_trx_timeout_us() const
   }
   return timeout;
 }
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

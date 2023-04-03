@@ -17,29 +17,29 @@
 #include "mock_mysql_proxy.h"
 #include "share/config/ob_server_config.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
-using testing::_;
 using ::testing::Return;
+using testing::_;
 
-class TestInnerConfigRootAddr : public ::testing::Test {
+class TestInnerConfigRootAddr : public ::testing::Test
+{
 public:
   TestInnerConfigRootAddr();
   ~TestInnerConfigRootAddr();
   virtual void SetUp();
-  virtual void TearDown()
-  {}
+  virtual void TearDown() {}
 
 protected:
-  ObServerConfig& config_;
+  ObServerConfig &config_;
   MockMySQLProxy sql_proxy_;
   ObInnerConfigRootAddr ic_;
 };
-TestInnerConfigRootAddr::TestInnerConfigRootAddr() : config_(ObServerConfig::get_instance())
-{}
-TestInnerConfigRootAddr::~TestInnerConfigRootAddr()
-{}
+TestInnerConfigRootAddr::TestInnerConfigRootAddr() : config_(ObServerConfig::get_instance()) {}
+TestInnerConfigRootAddr::~TestInnerConfigRootAddr() {}
 
 void TestInnerConfigRootAddr::SetUp()
 {
@@ -89,20 +89,23 @@ TEST_F(TestInnerConfigRootAddr, store)
   int ret = ic_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+
   config_.rootservice_list.set_value("127.0.0.2:555:555;127.0.0.1:555:555");
   ret = ic_.store(rs_list, readonly_rs_list, true);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  EXPECT_CALL(sql_proxy_, write(_, _, _)).WillOnce(Return(OB_SUCCESS));
+
+  EXPECT_CALL(sql_proxy_, write(_, _, _))
+      .WillOnce(Return(OB_SUCCESS));
   config_.rootservice_list.set_value("127.0.0.3:555:555;127.0.0.1:555:555");
   ret = ic_.store(rs_list, readonly_rs_list, true);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

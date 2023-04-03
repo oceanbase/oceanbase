@@ -15,23 +15,20 @@
 
 #include "observer/mysql/obmp_base.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObMPError : public ObMPBase {
+class ObMPError : public ObMPBase
+{
 public:
-  explicit ObMPError(const int ret) : ObMPBase(GCTX), ret_(ret), need_disconnect_(false)
+  explicit ObMPError(const int ret)
+      : ObMPBase(GCTX), ret_(ret), need_disconnect_(false)
   {}
-  virtual ~ObMPError()
-  {}
-  inline bool is_need_disconnect() const
-  {
-    return need_disconnect_;
-  }
-  inline void set_need_disconnect(bool value)
-  {
-    need_disconnect_ = value;
-  }
+  virtual ~ObMPError() {}
+  inline bool is_need_disconnect() const {return need_disconnect_;}
+  inline void set_need_disconnect(bool value) {need_disconnect_ = value;}
 
 protected:
   int deserialize()
@@ -44,7 +41,7 @@ private:
   int ret_;
   int need_disconnect_;
   DISALLOW_COPY_AND_ASSIGN(ObMPError);
-};  // end of class ObmpError
+}; // end of class ObmpError
 
 int ObMPError::process()
 {
@@ -58,13 +55,13 @@ int ObMPError::process()
     }
     // connect request reaching this means that no prio memory left
     if (need_disconnect_) {
-      disconnect();
+      force_disconnect();
     }
   }
   return ret;
 }
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_MYSQL_OBMP_ERROR_H_
+#endif // OCEANBASE_OBSERVER_MYSQL_OBMP_ERROR_H_

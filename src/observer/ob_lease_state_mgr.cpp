@@ -14,23 +14,32 @@
 
 #include "observer/ob_lease_state_mgr.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/ob_global_merge_table_operator.h"
+#include "share/ob_zone_merge_table_operator.h"
+#include "share/ob_zone_merge_info.h"
+#include "share/rc/ob_tenant_base.h"
 #include "observer/ob_server.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace obrpc;
 using namespace share;
-namespace observer {
+namespace observer
+{
 ObRefreshSchemaStatusTimerTask::ObRefreshSchemaStatusTimerTask()
 {}
 
 void ObRefreshSchemaStatusTimerTask::destroy()
-{}
+{
+}
 
 void ObRefreshSchemaStatusTimerTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
+  ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
   if (OB_ISNULL(schema_status_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid schema status proxy", KR(ret));
@@ -44,21 +53,12 @@ void ObRefreshSchemaStatusTimerTask::runTimerTask()
 //////////////////////////////////////
 
 ObLeaseStateMgr::ObLeaseStateMgr()
-    : inited_(false),
-      stopped_(false),
-      lease_response_(),
-      lease_expire_time_(0),
-      timer_(),
-      rs_mgr_(NULL),
-      rpc_proxy_(NULL),
-      heartbeat_process_(NULL),
-      hb_(),
-      renew_timeout_(RENEW_TIMEOUT),
-      ob_service_(NULL),
-      avg_calculator_(),
-      baseline_schema_version_(0),
-      heartbeat_expire_time_(0)
-{}
+  : inited_(false), stopped_(false), lease_response_(), lease_expire_time_(0),
+    hb_timer_(), cluster_info_timer_(), merge_timer_(), rs_mgr_(NULL), rpc_proxy_(NULL), heartbeat_process_(NULL),
+    hb_(), renew_timeout_(RENEW_TIMEOUT), ob_service_(NULL), avg_calculator_(),
+    baseline_schema_version_(0), heartbeat_expire_time_(0)
+{
+}
 
 ObLeaseStateMgr::~ObLeaseStateMgr()
 {
@@ -69,7 +69,9 @@ void ObLeaseStateMgr::destroy()
 {
   if (inited_) {
     stopped_ = false;
-    timer_.destroy();
+    hb_timer_.destroy();
+    cluster_info_timer_.destroy();
+    merge_timer_.destroy();
     rs_mgr_ = NULL;
     rpc_proxy_ = NULL;
     heartbeat_process_ = NULL;
@@ -78,22 +80,30 @@ void ObLeaseStateMgr::destroy()
 }
 
 // ObRsMgr should be inited by local config before call ObLeaseStateMgr.init
-int ObLeaseStateMgr::init(ObCommonRpcProxy* rpc_proxy, ObRsMgr* rs_mgr, IHeartBeatProcess* heartbeat_process,
-    ObService& service,
-    const int64_t renew_timeout)  // default RENEW_TIMEOUT = 2s
+int ObLeaseStateMgr::init(
+    ObCommonRpcProxy *rpc_proxy, ObRsMgr *rs_mgr,
+    IHeartBeatProcess *heartbeat_process,
+    ObService &service,
+    const int64_t renew_timeout) //default RENEW_TIMEOUT = 2s
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (NULL == rpc_proxy || NULL == rs_mgr || NULL == heartbeat_process || renew_timeout < 0) {
+  } else if (NULL == rpc_proxy || NULL == rs_mgr
+      || NULL == heartbeat_process || renew_timeout < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KP(rpc_proxy), KP(rs_mgr), KP(heartbeat_process), K(renew_timeout), K(ret));
+    LOG_WARN("invalid argument", KP(rpc_proxy), KP(rs_mgr),
+        KP(heartbeat_process), K(renew_timeout), K(ret));
   } else if (!rs_mgr->is_inited()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_mgr not inited", "rs_mgr inited", rs_mgr->is_inited(), K(ret));
-  } else if (OB_FAIL(timer_.init("LeaseHB"))) {
-    LOG_WARN("timer_ init failed", K(ret));
+  } else if (OB_FAIL(hb_timer_.init("LeaseHB"))) {
+    LOG_WARN("hb_timer_ init failed", KR(ret));
+  } else if (OB_FAIL(cluster_info_timer_.init("ClusterTimer"))) {
+    LOG_WARN("cluster_info_timer_ init failed", KR(ret));
+  } else if (OB_FAIL(merge_timer_.init("MergeTimer"))) {
+    LOG_WARN("merge_timer_ init failed", KR(ret));
   } else if (OB_FAIL(avg_calculator_.init(STORE_RTT_NUM))) {
     LOG_WARN("avg calculator init fail", K(ret));
   } else {
@@ -136,40 +146,33 @@ int ObLeaseStateMgr::register_self_busy_wait()
 {
   int ret = OB_SUCCESS;
 
+  ObCurTraceId::init(GCONF.self_addr_);
   LOG_INFO("begin register_self_busy_wait");
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
     while (!stopped_) {
-      if (OB_FAIL(try_report_all_core_table_partition())) {
-        LOG_WARN("fail to try report all core table partition");
+      if (OB_FAIL(try_report_sys_ls())) {
+        LOG_WARN("fail to try report sys log stream");
+      } else if (OB_FAIL(do_renew_lease())) {
+        LOG_WARN("fail to do_renew_lease", KR(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+        LOG_WARN("register failed, will try again", KR(ret),
+            "retry latency", REGISTER_TIME_SLEEP / 1000000);
+        ob_usleep(static_cast<useconds_t>(REGISTER_TIME_SLEEP));
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = rs_mgr_->renew_master_rootserver())) {
           LOG_WARN("renew_master_rootserver failed", K(tmp_ret));
-          if (OB_SUCCESS != (tmp_ret = ob_service_->refresh_core_partition())) {
-            LOG_WARN("fail to refresh core partition", K(tmp_ret));
-          }
-        }
-      } else if (OB_FAIL(do_renew_lease())) {
-        LOG_WARN("register failed, will try again", K(ret), "retry latency", REGISTER_TIME_SLEEP / 1000000);
-        usleep(static_cast<useconds_t>(REGISTER_TIME_SLEEP));
-        // ignore ret overwrite
-        if (OB_FAIL(rs_mgr_->renew_master_rootserver())) {
-          LOG_WARN("renew_master_rootserver failed", K(ret));
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = ob_service_->refresh_core_partition())) {
+          if (OB_SUCCESS != (tmp_ret = ob_service_->refresh_sys_tenant_ls())) {
             LOG_WARN("fail to refresh core partition", K(tmp_ret));
           }
         } else {
           LOG_INFO("renew_master_rootserver successfully, try register again");
-          if (OB_FAIL(do_renew_lease())) {
-            LOG_WARN("register failed", K(ret));
-          }
         }
-      }
-
-      if (OB_SUCC(ret)) {
+      } else {
         LOG_INFO("register self successfully!");
         if (OB_FAIL(start_heartbeat())) {
           LOG_ERROR("start_heartbeat failed", K(ret));
@@ -186,34 +189,66 @@ int ObLeaseStateMgr::register_self_busy_wait()
   return ret;
 }
 
-int ObLeaseStateMgr::try_report_all_core_table_partition()
+int ObLeaseStateMgr::try_report_sys_ls()
 {
   int ret = OB_SUCCESS;
-  common::ObPartitionKey core_pkey;
-  storage::ObPartitionService* partition_service = GCTX.par_ser_;
-  share::ObPartitionTableOperator* pt_operator = GCTX.pt_operator_;
-  if (OB_UNLIKELY(nullptr == partition_service || nullptr == pt_operator || nullptr == ob_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition service or pt operator ptr is null", K(ret));
-  } else if (OB_FAIL(core_pkey.init(combine_id(OB_SYS_TENANT_ID, OB_ALL_CORE_TABLE_TID),
-                 ObIPartitionTable::ALL_CORE_TABLE_PARTITION_ID,
-                 ObIPartitionTable::ALL_CORE_TABLE_PARTITION_NUM))) {
-    LOG_WARN("fail to init core pkey", K(ret));
-  } else if (partition_service->is_partition_exist(core_pkey)) {
-    share::ObPartitionReplica core_replica;
-    if (OB_FAIL(ob_service_->fill_partition_replica(core_pkey, core_replica))) {
-      LOG_WARN("fail to fill partition replica", K(ret), K(core_pkey));
-    } else if (OB_FAIL(pt_operator->update(core_replica))) {
-      LOG_WARN("fail to update core replica", K(ret));
-    }
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(stopped_)) {
+    ret = OB_SERVER_IS_STOPPING;
+    LOG_WARN("lease manager is stopped", KR(ret));
   } else {
-  }  // core table not exist, no need to report
+    const uint64_t tenant_id = OB_SYS_TENANT_ID;
+    const ObLSID ls_id = SYS_LS;
+    MTL_SWITCH(tenant_id) {
+      bool ls_exist = false;
+      ObLSService *ls_svr = NULL;
+      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant storage ptr is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ls_svr->check_ls_exist(ls_id, ls_exist))) {
+        LOG_WARN("fail to check log stream exist", KR(ret), K(ls_id));
+      } else if (!ls_exist) {
+        // core log stream not exist
+      } else {
+        share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
+        share::ObLSReplica ls_replica;
+        if (OB_ISNULL(ob_service_) || OB_ISNULL(lst_operator)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ob_service or lst_operator ptr is null",
+                   KR(ret), KP(ob_service_), KP(lst_operator));
+        } else if (OB_FAIL(ob_service_->fill_ls_replica(
+                   tenant_id, ls_id, ls_replica))) {
+          LOG_WARN("fail to fill log stream replica", KR(ret),
+                   K(tenant_id), K(ls_replica));
+        } else if (OB_FAIL(lst_operator->update(ls_replica, false/*inner_table_only*/))) {
+          LOG_WARN("fail to report sys log stream", KR(ret), K(ls_replica));
+        } else if (OB_FAIL(ob_service_->submit_ls_update_task(tenant_id, ls_id))) {
+          LOG_WARN("fail to add async update task", KR(ret), K(tenant_id), K(ls_id));
+        } else {
+          LOG_INFO("try report sys log stream succeed");
+        }
+      }
+    } else {
+      if (OB_TENANT_NOT_IN_SERVER == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      }
+    }
+  }
   return ret;
 }
 
 int ObLeaseStateMgr::renew_lease()
 {
   int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(THE_TRACE)) {
+    THE_TRACE->reset();
+  }
+  NG_TRACE(renew_lease_begin);
+  const int64_t start = ObTimeUtility::fast_current_time();
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -223,28 +258,35 @@ int ObLeaseStateMgr::renew_lease()
   } else {
     if (OB_FAIL(do_renew_lease())) {
       LOG_WARN("do_renew_lease failed", K(ret));
+      NG_TRACE(renew_master_rs_begin);
       if (OB_FAIL(rs_mgr_->renew_master_rootserver())) {
         LOG_WARN("renew_master_rootserver failed", K(ret));
         int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = ob_service_->refresh_core_partition())) {
+        if (OB_SUCCESS != (tmp_ret = ob_service_->refresh_sys_tenant_ls())) {
           LOG_WARN("fail to refresh core partition", K(tmp_ret));
         }
       } else {
+        NG_TRACE(renew_lease_end);
         LOG_INFO("renew_master_rootserver successfully, try renew lease again");
-        if (OB_FAIL(try_report_all_core_table_partition())) {
+        if (OB_FAIL(try_report_sys_ls())) {
           LOG_WARN("fail to try report all core table partition");
         } else if (OB_FAIL(do_renew_lease())) {
           LOG_WARN("try do_renew_lease again failed, will do it no next heartbeat", K(ret));
         }
       }
-    }
+   }
 
     if (OB_SUCC(ret)) {
       LOG_DEBUG("renew_lease successfully!");
     }
-
+    NG_TRACE_EXT(renew_lease_end, OB_ID(ret), ret);
+    const int64_t cost = ObTimeUtility::fast_current_time() - start;
+    if (OB_UNLIKELY(cost > DELAY_TIME || OB_FAIL(ret))
+        && OB_NOT_NULL(THE_TRACE)) {
+      FORCE_PRINT_TRACE(THE_TRACE, "[slow heartbeat]");
+    }
     const bool repeat = false;
-    if (OB_FAIL(timer_.schedule(hb_, DELAY_TIME, repeat))) {
+    if (OB_FAIL(hb_timer_.schedule(hb_, DELAY_TIME, repeat))) {
       LOG_WARN("schedule failed", LITERAL_K(DELAY_TIME), K(repeat), K(ret));
     }
   }
@@ -259,12 +301,13 @@ int ObLeaseStateMgr::start_heartbeat()
     LOG_WARN("not init", K(ret));
   } else {
     const bool repeat = false;
-    if (OB_FAIL(timer_.schedule(hb_, DELAY_TIME, repeat))) {
+    if (OB_FAIL(hb_timer_.schedule(hb_, DELAY_TIME, repeat))) {
       LOG_WARN("schedule failed", LITERAL_K(DELAY_TIME), K(repeat), K(ret));
     }
   }
   return ret;
 }
+
 
 int ObLeaseStateMgr::do_renew_lease()
 {
@@ -273,6 +316,7 @@ int ObLeaseStateMgr::do_renew_lease()
   ObLeaseResponse lease_response;
   double avg_round_trip_time = 0;
   ObAddr rs_addr;
+  NG_TRACE(do_renew_lease_begin);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -283,30 +327,32 @@ int ObLeaseStateMgr::do_renew_lease()
   } else if (OB_FAIL(avg_calculator_.get_avg(avg_round_trip_time))) {
     LOG_WARN("get avg round_trip_time fail", K(ret));
   } else {
+    NG_TRACE(send_heartbeat_begin);
     lease_request.round_trip_time_ = static_cast<int64_t>(avg_round_trip_time);
     const int64_t begin = ObTimeUtility::current_time();
     lease_request.current_server_time_ = begin;
-    ret = rpc_proxy_->to(rs_addr).timeout(renew_timeout_).renew_lease(lease_request, lease_response);
+    ret = rpc_proxy_->to(rs_addr).timeout(renew_timeout_)
+        .renew_lease(lease_request, lease_response);
     const int64_t end = ObTimeUtility::current_time();
     if (lease_response.lease_expire_time_ > 0) {
       // for compatible with old version
       lease_response.heartbeat_expire_time_ = lease_response.lease_expire_time_;
     }
+    NG_TRACE_EXT(send_heartbeat_end, OB_ID(ret), ret);
     if (OB_SUCC(ret)) {
-      OBSERVER.get_gctx().par_ser_->set_global_max_decided_trans_version(
-          lease_response.global_max_decided_trans_version_);
       int tmp_ret = OB_SUCCESS;
+      if (OB_UNLIKELY(!lease_response.is_valid())) {
+        tmp_ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(tmp_ret), K(lease_response));
+      }
+
       if (baseline_schema_version_ < lease_response.baseline_schema_version_) {
-        if (OB_SUCCESS !=
-            (tmp_ret = GCTX.schema_service_->update_baseline_schema_version(lease_response.baseline_schema_version_))) {
+        if (OB_SUCCESS != (tmp_ret = GCTX.schema_service_->update_baseline_schema_version(
+            OB_SYS_TENANT_ID, lease_response.baseline_schema_version_))) {
           LOG_WARN("fail to update baseline schema version", KR(ret), KR(tmp_ret), K(lease_response));
         } else {
-          LOG_INFO("update baseline schema version",
-              KR(ret),
-              "old_version",
-              baseline_schema_version_,
-              "new_version",
-              lease_response.baseline_schema_version_);
+          LOG_INFO("update baseline schema version", KR(ret), "old_version", baseline_schema_version_,
+                   "new_version", lease_response.baseline_schema_version_);
           baseline_schema_version_ = lease_response.baseline_schema_version_;
         }
       }
@@ -320,21 +366,26 @@ int ObLeaseStateMgr::do_renew_lease()
         } else if (OB_FAIL(heartbeat_process_->do_heartbeat_event(lease_response_))) {
           LOG_WARN("fail to process new lease info", K_(lease_response), K(ret));
         }
+        NG_TRACE_EXT(do_heartbeat_event, OB_ID(ret), ret);
       }
     } else {
       LOG_WARN("can't get lease from rs", K(rs_addr), K(ret));
     }
   }
+  NG_TRACE_EXT(do_renew_lease_end, OB_ID(ret), ret);
   return ret;
 }
 
-ObLeaseStateMgr::HeartBeat::HeartBeat() : inited_(false), lease_state_mgr_(NULL)
-{}
+ObLeaseStateMgr::HeartBeat::HeartBeat()
+  : inited_(false), lease_state_mgr_(NULL)
+{
+}
 
 ObLeaseStateMgr::HeartBeat::~HeartBeat()
-{}
+{
+}
 
-int ObLeaseStateMgr::HeartBeat::init(ObLeaseStateMgr* lease_state_mgr)
+int ObLeaseStateMgr::HeartBeat::init(ObLeaseStateMgr *lease_state_mgr)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -361,8 +412,11 @@ void ObLeaseStateMgr::HeartBeat::runTimerTask()
   }
 }
 
-ObLeaseStateMgr::AvgCalculator::AvgCalculator() : calc_buffer_(), inited_(false), limit_num_(0), head_(0), avg_(0)
-{}
+ObLeaseStateMgr::AvgCalculator::AvgCalculator()
+  : calc_buffer_(), inited_(false),
+    limit_num_(0), head_(0), avg_(0)
+{
+}
 
 ObLeaseStateMgr::AvgCalculator::~AvgCalculator()
 {
@@ -384,7 +438,7 @@ int ObLeaseStateMgr::AvgCalculator::init(int64_t limit_num)
   return ret;
 }
 
-int ObLeaseStateMgr::AvgCalculator::get_avg(double& avg)
+int ObLeaseStateMgr::AvgCalculator::get_avg(double &avg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -424,5 +478,5 @@ int ObLeaseStateMgr::AvgCalculator::calc_avg(int64_t new_value)
   return ret;
 }
 
-}  // end namespace observer
-}  // end namespace oceanbase
+}//end namespace observer
+}//end namespace oceanbase

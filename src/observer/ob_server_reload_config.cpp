@@ -15,21 +15,22 @@
 #include "ob_server_reload_config.h"
 #include "lib/alloc/alloc_func.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "share/scheduler/ob_dag_scheduler.h"
-#include "lib/io/ob_io_benchmark.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_task_define.h"
+#include "share/ob_resource_limit.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ob_partition_service.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "storage/ob_partition_scheduler.h"
-#include "storage/ob_partition_migrator.h"
+#include "observer/ob_server_utils.h"
 #include "observer/ob_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -37,17 +38,57 @@ using namespace oceanbase::observer;
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
 
-ObServerReloadConfig::ObServerReloadConfig(ObServerConfig& config, ObGlobalContext& gctx)
-    : ObReloadConfig(&config), gctx_(gctx)
-{}
+namespace oceanbase
+{
+namespace observer
+{
+
+int set_cluster_name_hash(const ObString &cluster_name)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cluster_name_hash = obrpc::ObRpcPacket::INVALID_CLUSTER_NAME_HASH;
+
+  if (OB_FAIL(calc_cluster_name_hash(cluster_name, cluster_name_hash))) {
+    LOG_WARN("failed to calc_cluster_name_hash", KR(ret), K(cluster_name));
+  } else {
+    obrpc::ObRpcNetHandler::CLUSTER_NAME_HASH = cluster_name_hash;
+  }
+  return ret;
+}
+
+int calc_cluster_name_hash(const ObString &cluster_name, uint64_t &cluster_name_hash)
+{
+  int ret = OB_SUCCESS;
+  cluster_name_hash = obrpc::ObRpcPacket::INVALID_CLUSTER_NAME_HASH;
+
+  if (0 == cluster_name.length()) {
+    cluster_name_hash = obrpc::ObRpcPacket::INVALID_CLUSTER_NAME_HASH;
+    LOG_INFO("set cluster_name_hash to invalid", K(cluster_name));
+  } else {
+    cluster_name_hash = common::murmurhash(cluster_name.ptr(), cluster_name.length(), 0);
+    LOG_INFO("calc cluster_name_hash for rpc", K(cluster_name), K(cluster_name_hash));
+  }
+
+  return ret;
+}
+}
+}
+ObServerReloadConfig::ObServerReloadConfig(ObServerConfig &config, ObGlobalContext &gctx)
+  : ObReloadConfig(&config),
+    gctx_(gctx)
+{
+}
 
 ObServerReloadConfig::~ObServerReloadConfig()
-{}
+{
+
+}
 
 int ObServerReloadConfig::operator()()
 {
   int ret = OB_SUCCESS;
   int real_ret = ret;
+
   if (!gctx_.is_inited()) {
     real_ret = ret = OB_INNER_STAT_ERROR;
     LOG_WARN("gctx not init", "gctx inited", gctx_.is_inited(), K(ret));
@@ -60,17 +101,13 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("root_service_ reload_config failed", K(ret));
     }
-    if (OB_FAIL(gctx_.location_cache_->reload_config())) {
+    if (OB_FAIL(gctx_.location_service_->reload_config())) {
       real_ret = ret;
-      LOG_WARN("location cache reload config failed", K(ret));
+      LOG_WARN("location service reload config failed", KR(ret));
     }
     if (OB_FAIL(ObClusterVersion::get_instance().reload_config())) {
       real_ret = ret;
       LOG_WARN("cluster version reload config failed", K(ret));
-    }
-    if (OB_FAIL(gctx_.par_ser_->reload_config())) {
-      real_ret = ret;
-      LOG_WARN("reload configuration for partition service fail", K(ret));
     }
 
     if (OB_FAIL(OBSERVER.reload_config())) {
@@ -85,9 +122,24 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("reload ssl config for net frame fail", K(ret));
     }
+    if (OB_FAIL(OBSERVER.get_rl_mgr().reload_config())) {
+      real_ret = ret;
+      LOG_WARN("reload config for ratelimit manager fail", K(ret));
+    }
+    if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
+      real_ret = ret;
+      LOG_WARN("reload config for tde encrypt engine fail", K(ret));
+    }
   }
   {
-    const int64_t limit_memory = GCONF.get_server_memory_limit();
+    GMEMCONF.reload_config(GCONF);
+    const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
+    OB_LOGGER.set_info_as_wdiag(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0);
+    // reload log config again after get MIN_CLUSTER_VERSION
+    if (OB_FAIL(ObReloadConfig::operator()())) {
+      real_ret = ret;
+      LOG_WARN("ObReloadConfig operator() failed", K(ret));
+    }
     const int64_t reserved_memory = GCONF.cache_wash_threshold;
     const int64_t reserved_urgent_memory = GCONF.memory_reserved;
     LOG_INFO("set limit memory", K(limit_memory));
@@ -96,19 +148,19 @@ int ObServerReloadConfig::operator()()
     ob_set_reserved_memory(reserved_memory);
     LOG_INFO("set urgent memory", K(reserved_urgent_memory));
     ob_set_urgent_memory(reserved_urgent_memory);
-
+#ifdef OB_USE_ASAN
+    __MemoryContext__::set_enable_asan_allocator(GCONF.enable_asan_for_memory_context);
+#endif
+#if defined(__x86_64__)
+    ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
+                                     GCONF._min_malloc_sample_interval);
+#endif
     ObIOConfig io_config;
     int64_t cpu_cnt = GCONF.cpu_count;
     if (cpu_cnt <= 0) {
       cpu_cnt = common::get_cpu_num();
     }
-    io_config.sys_io_low_percent_ = GCONF.sys_bkgd_io_low_percentage;
-    io_config.sys_io_high_percent_ = GCONF.sys_bkgd_io_high_percentage;
-    io_config.user_iort_up_percent_ = GCONF.user_iort_up_percentage;
-    io_config.cpu_high_water_level_ = GCONF.sys_cpu_limit_trigger * cpu_cnt;
     io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
-    io_config.callback_thread_count_ = GCONF._io_callback_thread_count;
-    io_config.large_query_io_percent_ = GCONF._large_query_io_percentage;
     // In the 2.x version, reuse the sys_bkgd_io_timeout configuration item to indicate the data disk io timeout time
     // After version 3.1, use the data_storage_io_timeout configuration item.
     io_config.data_storage_io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -118,198 +170,82 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("reload io manager config fail, ", K(ret));
     }
-    if (OB_FAIL(ObIOBenchmark::get_instance().reload_io_bench_res())) {
-      // DO NOT overwtie real_ret, allow reaload fail
-      LOG_WARN("reload io bench result fail, ", K(ret));
-    }
 
     (void)reload_diagnose_info_config(GCONF.enable_perf_event);
-    (void)reload_trace_log_config(GCONF.enable_sql_audit);
+    (void)reload_trace_log_config(GCONF.enable_record_trace_log);
 
-    ObTenantManager::get_instance().reload_config();
+    reload_tenant_freezer_config_();
+    reload_tenant_scheduler_config_();
   }
   {
-    ObMallocAllocator* malloc_allocator = ObMallocAllocator::get_instance();
+    ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
     const bool reserve = true;
-    malloc_allocator->set_tenant_ctx_idle(OB_SERVER_TENANT_ID,
-        ObCtxIds::LIBEASY,
+    malloc_allocator->set_tenant_ctx_idle(OB_SERVER_TENANT_ID, ObCtxIds::LIBEASY,
         (GCONF.__easy_memory_limit * GCONF.__easy_memory_reserved_percentage) / 100,
         reserve);
   }
-  if (OB_FAIL(ObPartitionScheduler::get_instance().reload_config())) {
-    real_ret = ret;
-    LOG_WARN("reload configuration for ObPartitionSchedule fail", K(ret));
-  }
 
-  {
-    const int64_t merge_thread_cnt = common::ObServerConfig::get_instance().merge_thread_count;
-    if (merge_thread_cnt < 0 || merge_thread_cnt > INT32_MAX) {
-      real_ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid merge thread cnt", K(real_ret));
-    } else if (OB_FAIL(ObDagScheduler::get_instance().set_major_merge_concurrency(
-                   static_cast<int32_t>(merge_thread_cnt)))) {
-      real_ret = ret;
-      LOG_WARN("set scheduler work thread num failed", K(ret), K(merge_thread_cnt));
-    }
-  }
-  {
-    const int64_t minor_merge_concurrency = common::ObServerConfig::get_instance().minor_merge_concurrency;
-    if (OB_FAIL(ObDagScheduler::get_instance().set_minor_merge_concurrency(
-            static_cast<int32_t>(minor_merge_concurrency)))) {
-      real_ret = ret;
-      LOG_WARN("set scheduler minor_merge_concurrency failed", K(ret), K(minor_merge_concurrency));
-    }
-  }
-  {
-    const int64_t mini_merge_concurrency = common::ObServerConfig::get_instance()._mini_merge_concurrency;
-    if (OB_FAIL(
-            ObDagScheduler::get_instance().set_mini_merge_concurrency(static_cast<int32_t>(mini_merge_concurrency)))) {
-      real_ret = ret;
-      LOG_WARN("set scheduler mini_merge_concurrency failed", K(ret), K(mini_merge_concurrency));
-    }
-  }
 
-  {
-    const int64_t restore_concurrency = common::ObServerConfig::get_instance().restore_concurrency;
-    if (OB_FAIL(ObPartitionMigrator::get_instance().get_task_pool().set_task_thread_num(restore_concurrency))) {
-      real_ret = ret;
-      LOG_WARN("set scheduler restore_concurrency failed", K(ret), K(restore_concurrency));
-    }
-  }
-
-  {
-    const int64_t migrate_concurrency = common::ObServerConfig::get_instance().migrate_concurrency;
-    if (OB_FAIL(ObDagScheduler::get_instance().set_migrate_concurrency(static_cast<int32_t>(migrate_concurrency)))) {
-      LOG_WARN("set migrate concurrency failed", K(ret), K(migrate_concurrency));
-    }
-  }
-
-  {
-    const int64_t group_migrate_concurrency = common::ObServerConfig::get_instance().server_data_copy_in_concurrency;
-    if (OB_FAIL(ObDagScheduler::get_instance().set_group_migrate_concurrency(
-            static_cast<int32_t>(group_migrate_concurrency)))) {
-      LOG_WARN("set group migrate concurrency failed", K(ret), K(group_migrate_concurrency));
-    }
-  }
-
-  {
-    const int64_t backup_concurrency = common::ObServerConfig::get_instance().backup_concurrency;
-    if (OB_FAIL(ObDagScheduler::get_instance().set_backup_concurrency(static_cast<int32_t>(backup_concurrency)))) {
-      LOG_WARN("set backup concurrency failed", K(ret), K(backup_concurrency));
-    }
-  }
-
-  {
-    // backup zone and region support
-    if (OB_FAIL(ObServer::get_instance().get_partition_service().enable_backup_white_list())) {
-      ObString backup_zone_str = GCONF.backup_zone.get_value_string();
-      ObString backup_region_str = GCONF.backup_region.get_value_string();
-      LOG_WARN("failed to enable backup white list", K(ret), K(backup_region_str), K(backup_zone_str));
-    }
-  }
-
-  // backup zone and region support
-  {
-    ObString backup_zone_str = GCONF.backup_zone.get_value_string();
-    ObString backup_region_str = GCONF.backup_region.get_value_string();
-
-    bool prev_io_stat = ObStorageGlobalIns::get_instance().is_io_prohibited();
-    bool prohibited = true;
-    LOG_INFO("backup zone and region", K(backup_zone_str), K(backup_region_str));
-
-    if (backup_zone_str.empty() && backup_region_str.empty()) {
-      // Both backup region and zone are not set, IO operation is allowed.
-      prohibited = false;
-    } else if (!backup_zone_str.empty() && !backup_region_str.empty()) {
-      // Both backup region and zone exist, not allowed, something wrong unexpected.
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup region and zone both are set, which are unexpected.", K(ret), K(backup_zone_str), K(backup_region_str));
-    } else if (!backup_zone_str.empty()) {
-      // Backup zone is set.
-      ObArray<ObBackupZone> backup_zone;
-      if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, MAX_ZONE_LENGTH, backup_zone))) {
-        LOG_WARN("failed to parse backup zone format", K(ret), K(backup_zone_str));
-      } else if (backup_zone.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("backup zone is empty", K(ret), K(backup_zone_str));
-      } else {
-        const ObZone zone = GCONF.zone.str();
-        LOG_INFO("set backup zone", K(zone), K(backup_zone_str), K(backup_zone));
-        for (int64_t i = 0; i < backup_zone.count(); i++) {
-          // I am in black list, IO operations are allowed.
-          if (zone == backup_zone[i].zone_) {
-            prohibited = false;
-            break;
-          }
-        }
-      }
-    } else {
-      // Backup region is set.
-      ObArray<ObBackupRegion> backup_region;
-      ObRegion region;
-      if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_region_str, MAX_REGION_LENGTH, backup_region))) {
-        LOG_WARN("failed to parse backup region format", K(ret), K(backup_region_str));
-      } else if (backup_region.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("backup region is empty", K(ret), K(backup_region_str));
-      } else if (OB_FAIL(ObServer::get_instance().get_partition_service().get_locality_manager()->load_region())) {
-        LOG_WARN("get local region failed", K(ret), K(backup_region_str));
-      } else if (OB_FAIL(ObServer::get_instance().get_partition_service().get_locality_manager()->get_local_region(region))) {
-        LOG_WARN("get local region failed", K(ret), K(backup_region_str));
-      } else {
-        LOG_INFO("set backup region", K(region), K(backup_region_str), K(backup_region));
-        for (int64_t i = 0; i < backup_region.count(); i++) {
-          // I am in black list, IO operations are allowed.
-          if (region == backup_region[i].region_) {
-            prohibited = false;
-            break;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && prev_io_stat != prohibited) {
-      ObStorageGlobalIns::get_instance().set_io_prohibited(prohibited);
-      if (prev_io_stat != prohibited) {
-        FLOG_WARN("backup set_io_prohibited", K(ret), K(prohibited), K(prev_io_stat));
-      }
-    }
-  }
 
   const int64_t cache_size = GCONF.memory_chunk_cache_size;
-  const int cache_cnt = cache_size > 0 ? cache_size / INTACT_ACHUNK_SIZE : INT32_MAX;
+  const int cache_cnt = (cache_size > 0 ? cache_size : GMEMCONF.get_server_memory_limit()) / INTACT_ACHUNK_SIZE;
   lib::AChunkMgr::instance().set_max_chunk_cache_cnt(cache_cnt);
-  if (NULL != gctx_.omt_) {
-    gctx_.omt_->set_quota2token(GCONF.cpu_quota_concurrency);
-  }
   if (GCONF.cluster_id.get_value() >= 0) {
     obrpc::ObRpcNetHandler::CLUSTER_ID = GCONF.cluster_id.get_value();
     LOG_INFO("set CLUSTER_ID for rpc", "cluster_id", GCONF.cluster_id.get_value());
+  }
+
+  if (FAILEDx(set_cluster_name_hash(GCONF.cluster.str()))) {
+    LOG_WARN("failed to set_cluster_name_hash", KR(ret), "cluster_name", GCONF.cluster.str(),
+                                              "cluster_name_len", strlen(GCONF.cluster.str()));
   }
 
   // reset mem leak
   {
     static common::ObMemLeakChecker::TCharArray last_value;
     static bool do_once __attribute__((unused)) = [&]() {
-      STRNCPY(&last_value[0], GCONF.leak_mod_to_check.str(), sizeof(last_value));
-      return false;
-    }();
+                            STRNCPY(&last_value[0], GCONF.leak_mod_to_check.str(), sizeof(last_value));
+                            return false;
+                          }();
     if (0 == STRNCMP(last_value, GCONF.leak_mod_to_check.str(), sizeof(last_value))) {
-      // At the end of the observer startup, the config will be reloaded once. If the status is not judged, the trace
-      // caught during the startup process will be flushed. do-nothing
+      // At the end of the observer startup, the config will be reloaded once. If the status is not judged, the trace caught during the startup process will be flushed.
+      // do-nothing
     } else {
       reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
+      ObKVGlobalCache::get_instance().set_checker_cache_name(GCONF.leak_mod_to_check.str());  // TODO : @lvling add system variable to set cache handle diagnose filter
 
       STRNCPY(last_value, GCONF.leak_mod_to_check.str(), sizeof(last_value));
       last_value[sizeof(last_value) - 1] = '\0';
     }
+  }
+#ifndef ENABLE_SANITY
+#else
+  {
+    sanity_set_whitelist(GCONF.sanity_whitelist.str());
+    ObMallocAllocator::get_instance()->enable_tenant_leak_memory_protection_ =
+      GCONF._enable_tenant_leak_memory_protection;
+  }
+#endif
+  {
+    ObResourceLimit rl;
+    int tmp_ret = rl.load_config(GCONF._resource_limit_spec.str());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("load _resource_limit_spec failed", K(tmp_ret), K(GCONF._resource_limit_spec.str()));
+    } else {
+      LOG_INFO("load _resource_limit_spec succeed", "origin", RL_CONF, "current", rl,
+               K(GCONF._resource_limit_spec.str()));
+      RL_CONF.assign(rl);
+    }
+    ObResourceLimit::IS_ENABLED = GCONF._enable_resource_limit_spec;
   }
 
   {
     auto new_level = obrpc::get_rpc_checksum_check_level_from_string(GCONF._rpc_checksum.str());
     auto orig_level = obrpc::get_rpc_checksum_check_level();
     if (new_level != orig_level) {
-      LOG_INFO("rpc_checksum_check_level changed", "orig", orig_level, "new", new_level);
+      LOG_INFO("rpc_checksum_check_level changed",
+               "orig", orig_level,
+               "new", new_level);
     }
     obrpc::set_rpc_checksum_check_level(new_level);
   }
@@ -324,28 +260,67 @@ int ObServerReloadConfig::operator()()
   }
 
   // syslog bandwidth limitation
-  share::ObTaskController::get().set_log_rate_limit(GCONF.syslog_io_bandwidth_limit.get_value());
+  share::ObTaskController::get().set_log_rate_limit(
+      GCONF.syslog_io_bandwidth_limit.get_value());
+  share::ObTaskController::get().set_diag_per_error_limit(
+      GCONF.diag_syslog_per_error_limit.get_value());
 
-  if (nullptr != GCTX.omt_) {
-    GCTX.omt_->set_workers_per_cpu(GCONF.workers_per_cpu_quota.get_value());
-  }
+  lib::g_runtime_enabled = true;
 
-  get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2100) {
-    lib::g_runtime_enabled = true;
-  }
   common::ObKVGlobalCache::get_instance().reload_wash_interval();
-  ObPartitionScheduler::get_instance().reload_minor_merge_schedule_interval();
   {
-    OB_STORE_FILE.resize_file(GCONF.datafile_size, GCONF.datafile_disk_percentage);
-  }
-  {
-    const int64_t location_thread_cnt = GCONF.location_refresh_thread_count;
-    if (OB_NOT_NULL(GCTX.ob_service_) &&
-        OB_FAIL(GCTX.ob_service_->get_partition_location_updater().set_thread_cnt(location_thread_cnt))) {
-      real_ret = ret;
-      LOG_WARN("fail to set location updater's thread cnt", KR(ret), K(location_thread_cnt));
+    int tmp_ret = OB_SUCCESS;
+    int64_t data_disk_size = 0;
+    int64_t data_disk_percentage = 0;
+    int64_t reserved_size = 0;
+    if (OB_TMP_FAIL(ObServerUtils::get_data_disk_info_in_config(data_disk_size,
+                                                                data_disk_percentage))) {
+      LOG_ERROR("cal_all_part_disk_size failed", KR(tmp_ret));
+    } else if (OB_TMP_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+      LOG_WARN("fail to get reserved size", KR(tmp_ret), K(reserved_size));
+    } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.resize_file(data_disk_size,
+                                                           data_disk_percentage,
+                                                           reserved_size))) {
+      LOG_WARN("fail to resize file", KR(tmp_ret),
+          K(data_disk_size), K(data_disk_percentage), K(reserved_size));
     }
   }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
+  }
   return real_ret;
+}
+
+void ObServerReloadConfig::reload_tenant_scheduler_config_()
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt should not be null", K(ret));
+  } else {
+    auto f = [] () {
+      (void)MTL(ObTenantDagScheduler *)->reload_config();
+      (void)MTL(ObTenantTabletScheduler *)->reload_tenant_config();
+      return OB_SUCCESS;
+    };
+    omt->operate_in_each_tenant(f);
+  }
+}
+
+void ObServerReloadConfig::reload_tenant_freezer_config_()
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt should not be null", K(ret));
+  } else {
+    auto f = [] () {
+      MTL(ObTenantFreezer *)->reload_config();
+      return OB_SUCCESS;
+    };
+    omt->operate_in_each_tenant(f);
+  }
 }

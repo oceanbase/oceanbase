@@ -13,89 +13,56 @@
 #ifndef __BLOCK_SSTABLE_DATA_STRUCTURE_H__
 #define __BLOCK_SSTABLE_DATA_STRUCTURE_H__
 
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/io/ob_io_benchmark.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/hash/ob_pointer_hashmap.h"
 #include "common/log/ob_log_cursor.h"
 #include "common/ob_store_format.h"
-#include "share/schema/ob_table_schema.h"
+#include "lib/allocator/ob_mod_define.h"
+#include "lib/compress/ob_compress_util.h"
+#include "lib/container/ob_iarray.h"
+#include "lib/container/ob_se_array.h"
+#include "lib/hash/ob_pointer_hashmap.h"
 #include "share/ob_encryption_util.h"
+#include "share/schema/ob_table_schema.h"
+#include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "storage/blocksstable/ob_log_file_spec.h"
+#include "storage/blocksstable/ob_macro_block_common_header.h"
+#include "storage/blocksstable/ob_sstable_macro_block_header.h"
+#include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ob_i_store.h"
-#include "ob_macro_block_common_header.h"
-#include "ob_macro_block_id.h"
+#include "storage/ob_i_table.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/scn.h"
 
-namespace oceanbase {
-namespace storage {
-class ObSSTable;
-}
-namespace blocksstable {
+namespace oceanbase
+{
+namespace blocksstable
+{
 
-struct ObSuperBlockV2;
-class ObStorageFile;
+class ObEncodingHashTable;
+class ObMultiPrefixTree;
 
-extern const char* BLOCK_SSTBALE_DIR_NAME;
-extern const char* BLOCK_SSTBALE_FILE_NAME;
+extern const char *BLOCK_SSTBALE_DIR_NAME;
+extern const char *BLOCK_SSTBALE_FILE_NAME;
 
-// block sstable header magic number;
-const int64_t SUPER_BLOCK_MAGIC = 1000;
-// const int64_t MACRO_BLOCK_COMMON_HEADER_MAGIC = 1001; // defined in ob_macro_block_common_header.h
-const int64_t PARTITION_META_HEADER_MAGIC = 1002;
-const int64_t SCHEMA_DATA_HEADER_MAGIC = 1003;
-const int64_t COMPRESSOR_HEADER_MAGIC = 1004;
+//block sstable header magic number;
 const int64_t MICRO_BLOCK_HEADER_MAGIC = 1005;
-const int64_t MACRO_META_HEADER_MAGIC = 1006;
-const int64_t SSTABLE_DATA_HEADER_MAGIC = 1007;
-const int64_t MACRO_BLOCK_SECOND_INDEX_MAGIC = 1008;
-const int64_t LOB_MACRO_BLOCK_HEADER_MAGIC = 1009;
-const int64_t LOB_MICRO_BLOCK_HEADER_MAGIC = 1010;
-const int64_t TABLE_MGR_META_HEADER_MAGIC = 1011;
-const int64_t SUPER_BLOCK_MAGIC_V2 = 1012;
-const int64_t TENANT_UNIT_META_HEADER_MAGIC = 1013;
 const int64_t BF_MACRO_BLOCK_HEADER_MAGIC = 1014;
 const int64_t BF_MICRO_BLOCK_HEADER_MAGIC = 1015;
-const int64_t RAID_STRIP_HEADER_MAGIC = 1016;
-const int64_t PG_ROOT_MAGIC = 1017;
 const int64_t SERVER_SUPER_BLOCK_MAGIC = 1018;
 const int64_t LINKED_MACRO_BLOCK_HEADER_MAGIC = 1019;
 
-const int64_t MACRO_BLOCK_WITH_ENCODING_VERSION = 2;
-const int64_t SSTABLE_MACRO_BLOCK_HEADER_VERSION_v1 = 1;
-const int64_t SSTABLE_MACRO_BLOCK_HEADER_VERSION_v2 = 2;
-const int64_t SSTABLE_MACRO_BLOCK_HEADER_VERSION_v3 = 3;  // add column order info to header
-const int64_t MICRO_BLOCK_HEADER_VERSION = 1;
-const int64_t MICRO_BLOCK_HEADERV2_VERSION = 1;
+const int64_t MICRO_BLOCK_HEADER_VERSION_1 = 1;
+const int64_t MICRO_BLOCK_HEADER_VERSION_2 = 2;
+const int64_t MICRO_BLOCK_HEADER_VERSION = MICRO_BLOCK_HEADER_VERSION_2;
 const int64_t LINKED_MACRO_BLOCK_HEADER_VERSION = 1;
-const int64_t LOB_MACRO_BLOCK_HEADER_VERSION_V1 = 1;
-const int64_t LOB_MACRO_BLOCK_HEADER_VERSION_V2 = 2;  // add column order info to header
-const int64_t LOB_MICRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MICRO_BLOCK_HEADER_VERSION = 1;
-const int64_t DISK_STRING_DEFAULT_LEN = 512;
-const int64_t EXPIRE_VERSION_DELAY_TIME = 15L * 60L * 1000L * 1000L;  // 15 minutes
-const int64_t PG_SUPER_BLOCK_HEADER_VERSION = 1;
-const int64_t SERVER_SUPER_BLOCK_HEADER_VERSION = 1;
 
-enum ObStoreFileSystemType { STORE_FILE_SYSTEM_LOCAL = 0, STORE_FILE_SYSTEM_RAID = 2, STORE_FILE_SYSTEM_MAX };
-
-enum ObStoreFileType {
-  STORE_FILE_SUPER_BLOCK = 0,
-  STORE_FILE_META_BLOCK = 1,
-  STORE_FILE_MACRO_BLOCK = 2,
-  STORE_FILE_TYPE_MAX,
-};
-
-struct ObPosition {
+struct ObPosition
+{
   int32_t offset_;
   int32_t length_;
-  ObPosition() : offset_(0), length_(0)
-  {}
-  void reset()
-  {
-    offset_ = 0;
-    length_ = 0;
-  }
+  ObPosition() : offset_(0), length_(0) {}
+  void reset() { offset_ = 0; length_ = 0; }
   bool is_valid() const
   {
     return offset_ >= 0 && length_ >= 0;
@@ -103,70 +70,56 @@ struct ObPosition {
   TO_STRING_KV(K_(offset), K_(length));
 };
 
-struct ObMacroDataSeq {
+struct ObMacroDataSeq
+{
   static const int64_t BIT_DATA_SEQ = 32;
   static const int64_t BIT_PARALLEL_IDX = 11;
-  static const int64_t BIT_SPLIT_FLAG = 1;
-  static const int64_t BIT_BLOCK_TYPE = 2;
+  static const int64_t BIT_BLOCK_TYPE = 3;
   static const int64_t BIT_MERGE_TYPE = 2;
-  static const int64_t BIT_RESERVED = 15;
+  static const int64_t BIT_SSTABLE_SEQ = 10;
+  static const int64_t BIT_RESERVED = 5;
   static const int64_t BIT_SIGN = 1;
   static const int64_t MAX_PARALLEL_IDX = (0x1UL << BIT_PARALLEL_IDX) - 1;
+  static const int64_t MAX_SSTABLE_SEQ = (0x1UL << BIT_SSTABLE_SEQ) - 1;
   enum BlockType {
     DATA_BLOCK = 0,
-    LOB_BLOCK = 1,
+    INDEX_BLOCK = 1,
+    META_BLOCK = 2,
   };
   enum MergeType {
     MAJOR_MERGE = 0,
     MINOR_MERGE = 1,
   };
-  enum SplitStatus {
-    NO_SPLIT = 0,
-    IN_SPLIT = 1,
-  };
-  ObMacroDataSeq() : macro_data_seq_(0)
-  {}
-  ObMacroDataSeq(const int64_t data_seq) : macro_data_seq_(data_seq)
-  {}
+
+  ObMacroDataSeq() : macro_data_seq_(0) {}
+  ObMacroDataSeq(const int64_t data_seq) : macro_data_seq_(data_seq) {}
   virtual ~ObMacroDataSeq() = default;
-  ObMacroDataSeq& operator=(const ObMacroDataSeq& other)
+  ObMacroDataSeq &operator=(const ObMacroDataSeq &other)
   {
     if (this != &other) {
       macro_data_seq_ = other.macro_data_seq_;
     }
     return *this;
   }
-  bool operator==(const ObMacroDataSeq& other) const
+  bool operator ==(const ObMacroDataSeq &other) const { return macro_data_seq_ == other.macro_data_seq_; }
+  bool operator !=(const ObMacroDataSeq &other) const { return macro_data_seq_ != other.macro_data_seq_; }
+  OB_INLINE void reset() { macro_data_seq_ = 0; }
+  OB_INLINE int64_t get_data_seq() const { return macro_data_seq_; }
+  OB_INLINE bool is_valid() const { return macro_data_seq_ >= 0; }
+  OB_INLINE bool is_data_block() const { return block_type_ == DATA_BLOCK; }
+  OB_INLINE bool is_index_block() const { return block_type_ == INDEX_BLOCK; }
+  OB_INLINE bool is_meta_block() const { return block_type_ == META_BLOCK; }
+  OB_INLINE bool is_major_merge() const { return merge_type_ == MAJOR_MERGE; }
+  OB_INLINE int set_sstable_seq(const int16_t sstable_logic_seq)
   {
-    return macro_data_seq_ == other.macro_data_seq_;
-  }
-  bool operator!=(const ObMacroDataSeq& other) const
-  {
-    return macro_data_seq_ != other.macro_data_seq_;
-  }
-  OB_INLINE void reset()
-  {
-    macro_data_seq_ = 0;
-  }
-  OB_INLINE int64_t get_data_seq() const
-  {
-    return macro_data_seq_;
-  }
-  OB_INLINE bool is_valid() const
-  {
-    return macro_data_seq_ >= 0;
-  }
-  OB_INLINE bool is_lob_block() const
-  {
-    return block_type_ == LOB_BLOCK;
-  }
-  OB_INLINE bool is_in_split() const
-  {
-    return split_flag_ == IN_SPLIT;
-  }
-  OB_INLINE bool is_major_merge() const
-  {
-    return merge_type_ == MAJOR_MERGE;
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(sstable_logic_seq >= MAX_SSTABLE_SEQ || sstable_logic_seq < 0)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid sstable seq", K(ret), K(sstable_logic_seq));
+    } else {
+      sstable_logic_seq_ = sstable_logic_seq;
+    }
+    return ret;
   }
   OB_INLINE int set_parallel_degree(const int64_t parallel_idx)
   {
@@ -179,33 +132,31 @@ struct ObMacroDataSeq {
     }
     return ret;
   }
-  OB_INLINE void set_lob_block()
+  OB_INLINE void set_data_block() { block_type_ = DATA_BLOCK; }
+  OB_INLINE void set_index_block() { block_type_ = INDEX_BLOCK; }
+  OB_INLINE void set_macro_meta_block() { block_type_ = META_BLOCK; }
+  OB_INLINE void set_index_merge_block() { block_type_ = INDEX_BLOCK; parallel_idx_ = MAX_PARALLEL_IDX; }
+  TO_STRING_KV(K_(data_seq), K_(parallel_idx), K_(block_type), K_(merge_type), K_(reserved), K_(sign), K_(macro_data_seq));
+  union
   {
-    block_type_ = LOB_BLOCK;
-  }
-  OB_INLINE void set_split_status()
-  {
-    split_flag_ = IN_SPLIT;
-  }
-  TO_STRING_KV(K_(data_seq), K_(parallel_idx), K_(split_flag), K_(block_type), K_(merge_type), K_(reserved), K_(sign),
-      K_(macro_data_seq));
-  union {
     int64_t macro_data_seq_;
-    struct {
+    struct
+    {
       uint64_t data_seq_ : BIT_DATA_SEQ;
       uint64_t parallel_idx_ : BIT_PARALLEL_IDX;
-      uint64_t split_flag_ : BIT_SPLIT_FLAG;
       uint64_t block_type_ : BIT_BLOCK_TYPE;
       uint64_t merge_type_ : BIT_MERGE_TYPE;
+      uint64_t sstable_logic_seq_ : BIT_SSTABLE_SEQ;
       uint64_t reserved_ : BIT_RESERVED;
       uint64_t sign_ : BIT_SIGN;
     };
   };
 };
 
-struct ObCommitLogSpec {
-  const char* log_dir_;
-  int64_t max_log_size_;
+struct ObCommitLogSpec
+{
+  const char *log_dir_;
+  int64_t max_log_file_size_;
   int64_t log_sync_type_;
   ObCommitLogSpec()
   {
@@ -213,275 +164,109 @@ struct ObCommitLogSpec {
   }
   bool is_valid() const
   {
-    return NULL != log_dir_ && max_log_size_ > 0 && (log_sync_type_ == 0 || log_sync_type_ == 1);
+    return NULL != log_dir_
+        && max_log_file_size_ > 0
+        && (log_sync_type_ == 0 || log_sync_type_ == 1);
   }
-  TO_STRING_KV(K_(log_dir), K_(max_log_size), K_(log_sync_type));
+  TO_STRING_KV(K_(log_dir), K_(max_log_file_size), K_(log_sync_type));
 };
 
-struct ObStorageEnv {
-  enum REDUNDANCY_LEVEL { EXTERNAL_REDUNDANCY = 0, NORMAL_REDUNDANCY = 1, HIGH_REDUNDANCY = 2, MAX_REDUNDANCY };
+struct ObStorageEnv
+{
+  enum REDUNDANCY_LEVEL
+  {
+    EXTERNAL_REDUNDANCY = 0,
+    NORMAL_REDUNDANCY = 1,
+    HIGH_REDUNDANCY = 2,
+    MAX_REDUNDANCY
+  };
   // for disk manager
-  const char* data_dir_;
-  const char* sstable_dir_;
+  const char *data_dir_;
+  const char *sstable_dir_;
   int64_t default_block_size_;
-  int64_t disk_avail_space_;
-  int64_t datafile_disk_percentage_;
+  int64_t data_disk_size_;
+  int64_t data_disk_percentage_;
+  int64_t log_disk_size_;
+  int64_t log_disk_percentage_;
   REDUNDANCY_LEVEL redundancy_level_;
 
   // for sstable log writer
   ObCommitLogSpec log_spec_;
 
+  // for clog/slog file handler
+  ObLogFileSpec clog_file_spec_;
+  ObLogFileSpec slog_file_spec_;
+
   // for clog writer
-  const char* clog_dir_;
-  const char* ilog_dir_;
-  const char* clog_shm_path_;
-  const char* ilog_shm_path_;
+  const char *clog_dir_;
 
   // for cache
-  int64_t index_cache_priority_;
+  int64_t tablet_ls_cache_priority_;
+  int64_t index_block_cache_priority_;
   int64_t user_block_cache_priority_;
   int64_t user_row_cache_priority_;
   int64_t fuse_row_cache_priority_;
   int64_t bf_cache_priority_;
-  int64_t clog_cache_priority_;
-  int64_t index_clog_cache_priority_;
   int64_t bf_cache_miss_count_threshold_;
 
   int64_t ethernet_speed_;
-  common::ObDiskType disk_type_;
 
   ObStorageEnv()
   {
     memset(this, 0, sizeof(*this));
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(data_dir), K_(default_block_size), K_(disk_avail_space), K_(datafile_disk_percentage),
-      K_(redundancy_level), K_(log_spec), K_(clog_dir), K_(ilog_dir), K_(clog_shm_path), K_(ilog_shm_path),
-      K_(index_cache_priority), K_(user_block_cache_priority), K_(user_row_cache_priority), K_(fuse_row_cache_priority),
-      K_(bf_cache_priority), K_(clog_cache_priority), K_(index_clog_cache_priority), K_(bf_cache_miss_count_threshold),
-      K_(ethernet_speed));
+  TO_STRING_KV(K_(data_dir),
+               K_(default_block_size),
+               K_(data_disk_size),
+               K_(data_disk_percentage),
+               K_(log_disk_size),
+               K_(log_disk_percentage),
+               K_(redundancy_level),
+               K_(log_spec),
+               K_(clog_dir),
+               K_(tablet_ls_cache_priority),
+               K_(index_block_cache_priority),
+               K_(user_block_cache_priority),
+               K_(user_row_cache_priority),
+               K_(fuse_row_cache_priority),
+               K_(bf_cache_priority),
+               K_(bf_cache_miss_count_threshold),
+               K_(ethernet_speed));
 };
 
-// all structures blow includes two kinds of data:
-// 1. Header : dump memory data to data file directly.
-// 2. Meta: serialize & deserialize to data file.
-enum ObSuperBlockVersion {
-  OB_SUPER_BLOCK_V1 = 1,
-  OB_SUPER_BLOCK_V2 = 2,
-  OB_SUPER_BLOCK_V3 = 3,
-  OB_SUPER_BLOCK_VERSION_MAX
-};
-
-struct ObSuperBlockHeader {
-  static const int64_t OB_MAX_SUPER_BLOCK_SIZE = 64 * 1024;
-  int32_t super_block_size_;  // not used any more
-  int32_t version_;
-  int32_t magic_;  // magic number
-  int32_t attr_;   // reserved, set 0
-
-  ObSuperBlockHeader();
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(super_block_size), K_(version), K_(magic), K_(attr));
-  NEED_SERIALIZE_AND_DESERIALIZE;
-};
-
-struct ObSuperBlockHeaderV2 final {
-public:
-  ObSuperBlockHeaderV2();
-  ~ObSuperBlockHeaderV2() = default;
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(version), K_(magic));
-  NEED_SERIALIZE_AND_DESERIALIZE;
-  static const int32_t HEADER_VERSION = 3;
-
-public:
-  int32_t version_;
-  int32_t magic_;  // magic number
-};
-
-struct ObSuperBlockV1 {
-  ObSuperBlockV1();
-  static const int64_t MAX_BACKUP_META_COUNT = 2;
-  static const int64_t SUPER_BLOCK_RESERVED_COUNT = 7;
-  static const int64_t MAX_SUPER_BLOCK_SIZE = 1 << 12;
-
-  ObSuperBlockHeader header_;  // checksum_ is 0 for v1
-  int64_t create_timestamp_;   // create timestamp
-  int64_t modify_timestamp_;   // last modified timestamp
-  int64_t macro_block_size_;
-  int64_t total_macro_block_count_;
-  int64_t reserved_block_count_;
-  int64_t free_macro_block_count_;
-  int64_t first_macro_block_;
-  int64_t first_free_block_index_;
-  int64_t total_file_size_;
-
-  int64_t backup_meta_count_;
-  int64_t backup_meta_blocks_[MAX_BACKUP_META_COUNT];
-
-  // entry of macro block meta blocks,
-  int64_t macro_block_meta_entry_block_index_;
-  int64_t partition_meta_entry_block_index_;  // entry of partition meta blocks.
-  common::ObLogCursor replay_start_point_;
-  int64_t table_mgr_meta_entry_block_index_;  // entry of table mgr macro block meta blocks.
-  int64_t partition_meta_log_seq_;            // log seq of partition meta in checkpoint
-  int64_t table_mgr_meta_log_seq_;            // log seq of table mgr meta in checkpoint
-  int64_t reserved_[SUPER_BLOCK_RESERVED_COUNT];
-
-  bool is_valid() const;
-  int read_super_block_buf(char* buf, const int64_t buf_size, int64_t& pos);
-  int write_super_block_buf(char* buf, const int64_t buf_size, int64_t& pos) const;
-  int set_super_block(const ObSuperBlockV2& other);
-  TO_STRING_KV(K_(header), K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),
-      K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count), K_(first_macro_block),
-      K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count), "backup_meta_blocks_",
-      common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_), K_(macro_block_meta_entry_block_index),
-      K_(partition_meta_entry_block_index), K_(table_mgr_meta_entry_block_index), K_(partition_meta_log_seq),
-      K_(table_mgr_meta_log_seq), K_(replay_start_point));
-
-  NEED_SERIALIZE_AND_DESERIALIZE;
-};
-
-// must guarantee operator == always success
-struct ObSuperBlockV2 {
-  struct MetaEntry {
-    static const int64_t META_ENTRY_VERSION = 1;
-    int64_t block_index_;  // first entry meta macro block id
-    int64_t log_seq_;      // replay log seq
-    int64_t file_id_;      // ofs file id
-    int64_t file_size_;    // ofs file size
-    MetaEntry();
-    bool is_valid() const;
-    void reset();
-    TO_STRING_KV(K_(block_index), K_(log_seq), K_(file_id), K_(file_size));
-    OB_UNIS_VERSION(META_ENTRY_VERSION);
-  };
-
-  struct SuperBlockContent {
-    static const int64_t SUPER_BLOCK_CONTENT_VERSION = 2;
-
-    int64_t create_timestamp_;  // create timestamp
-    int64_t modify_timestamp_;  // last modified timestamp
-    int64_t macro_block_size_;
-    int64_t total_macro_block_count_;
-    int64_t free_macro_block_count_;
-    int64_t total_file_size_;
-
-    // entry of macro block meta blocks,
-    common::ObLogCursor replay_start_point_;
-    MetaEntry macro_block_meta_;
-    MetaEntry partition_meta_;
-    MetaEntry table_mgr_meta_;
-    MetaEntry tenant_config_meta_;
-
-    SuperBlockContent();
-    bool is_valid() const;
-    void reset();
-    TO_STRING_KV(K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size), K_(total_macro_block_count),
-        K_(free_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(macro_block_meta),
-        K_(partition_meta), K_(table_mgr_meta), K_(tenant_config_meta));
-    OB_UNIS_VERSION(SUPER_BLOCK_CONTENT_VERSION);
-  };
-
-  ObSuperBlockV2();
-  ObSuperBlockHeader header_;
-  SuperBlockContent content_;
-
-  bool is_valid() const;
-  void super_block();
-  int serialize(char* buf, const int64_t buf_size, int64_t& pos) const;
-  int deserialize(const char* buf, const int64_t buf_size, int64_t& pos);
-  int set_super_block(const ObSuperBlockV1& other);
-  void reset();
-  OB_INLINE int64_t get_macro_block_size() const
-  {
-    return content_.macro_block_size_;
-  }
-  OB_INLINE int64_t get_total_macro_block_count() const
-  {
-    return content_.total_macro_block_count_;
-  }
-  OB_INLINE int64_t get_free_macro_block_count() const
-  {
-    return content_.free_macro_block_count_;
-  }
-  OB_INLINE int64_t get_used_macro_block_count() const
-  {
-    return content_.total_macro_block_count_ - content_.free_macro_block_count_;
-  }
-  OB_INLINE int64_t get_serialize_size() const
-  {
-    return header_.get_serialize_size() + content_.get_serialize_size();
-  }
-  int fill_super_block_size();
-  TO_STRING_KV(K_(header), K_(content));
-};
-
-struct ObMicroBlockHeader {
-  int32_t header_size_;
-  int32_t version_;
-  int32_t magic_;
-  int32_t attr_;
-  int32_t column_count_;
-  int32_t row_index_offset_;
-  int32_t row_count_;
-  ObMicroBlockHeader()
-  {
-    memset(this, 0, sizeof(*this));
-  }
-  bool is_valid() const;
-  TO_STRING_KV(
-      K_(header_size), K_(version), K_(magic), K_(attr), K_(column_count), K_(row_index_offset), K_(row_count));
-};
-
-struct ObMicroBlockHeaderV2 {
-  int16_t header_size_;
-  int16_t version_;
-  int16_t row_count_;
-  int16_t var_column_count_;
-  int32_t row_data_offset_;
-  union {
-    struct {
-      uint16_t row_index_byte_ : 3;
-      uint16_t extend_value_bit_ : 3;
-      uint16_t store_row_header_ : 1;
-    };
-    uint16_t opt_;
-  };
-  int16_t reserved_;
-
-  ObMicroBlockHeaderV2();
-  OB_INLINE bool is_valid() const;
-  void reset()
-  {
-    new (this) ObMicroBlockHeaderV2();
-  }
-
-  TO_STRING_KV(K_(header_size), K_(version), K_(row_count), K_(var_column_count), K_(row_data_offset),
-      K_(row_index_byte), K_(extend_value_bit), K_(store_row_header));
-} __attribute__((packed));
-
-OB_INLINE bool ObMicroBlockHeaderV2::is_valid() const
+struct ObMicroBlockId
 {
-  return header_size_ >= sizeof(*this) && version_ >= MICRO_BLOCK_HEADERV2_VERSION && row_count_ > 0 &&
-         row_index_byte_ >= 0 && extend_value_bit_ >= 0 && row_data_offset_ >= 0;
-}
+  ObMicroBlockId(const MacroBlockId &block_id, const int64_t offset, const int64_t size);
+  ObMicroBlockId();
+  OB_INLINE void reset()
+  {
+    macro_id_.reset();
+    offset_ = 0;
+    size_ = 0;
+  }
+  OB_INLINE bool is_valid() const { return macro_id_.is_valid() && offset_ > 0 && size_ > 0; }
+  OB_INLINE bool operator == (const ObMicroBlockId &other) const
+  {
+    return macro_id_ == other.macro_id_ && offset_ == other.offset_ && size_ == other.size_;
+  }
+  TO_STRING_KV(K_(macro_id), K_(offset), K_(size));
+  MacroBlockId macro_id_;
+  int32_t offset_;
+  int32_t size_;
+};
 
-struct ObBloomFilterMicroBlockHeader {
-  ObBloomFilterMicroBlockHeader()
-  {
-    reset();
-  }
-  void reset()
-  {
-    MEMSET(this, 0, sizeof(ObBloomFilterMicroBlockHeader));
-  }
+struct ObBloomFilterMicroBlockHeader
+{
+  ObBloomFilterMicroBlockHeader() { reset();}
+  void reset() { MEMSET(this, 0, sizeof(ObBloomFilterMicroBlockHeader));}
   OB_INLINE bool is_valid() const
   {
-    return header_size_ == sizeof(ObBloomFilterMicroBlockHeader) && version_ >= BF_MICRO_BLOCK_HEADER_VERSION &&
-           BF_MICRO_BLOCK_HEADER_MAGIC == magic_ && rowkey_column_count_ > 0 && row_count_ > 0;
+    return header_size_ == sizeof(ObBloomFilterMicroBlockHeader)
+      && version_ >= BF_MICRO_BLOCK_HEADER_VERSION
+      && BF_MICRO_BLOCK_HEADER_MAGIC == magic_
+      && rowkey_column_count_ > 0
+      && row_count_ > 0;
   }
   TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(rowkey_column_count), K_(row_count));
 
@@ -493,1054 +278,825 @@ struct ObBloomFilterMicroBlockHeader {
   int32_t reserved_;
 };
 
-struct ObLinkedMacroBlockHeader {
-  int32_t header_size_;
-  int32_t version_;
-  int32_t magic_;
-  int32_t attr_;
-  int64_t meta_data_offset_;      // data offset base on current header
-  int64_t meta_data_count_;       // current item count in current block
-  int64_t previous_block_index_;  // last link block
-  int64_t total_previous_count_;  // total item count in all previous blocks
-  int64_t user_data1_;
-  int64_t user_data2_;
-
-  ObLinkedMacroBlockHeader()
+struct ObColumnHeader
+{
+  enum Type
   {
-    memset(this, 0, sizeof(*this));
+    RAW,
+    DICT,
+    RLE,
+    CONST,
+    INTEGER_BASE_DIFF,
+    STRING_DIFF,
+    HEX_PACKING,
+    STRING_PREFIX,
+    COLUMN_EQUAL,
+    COLUMN_SUBSTR,
+    MAX_TYPE
+  };
+
+  enum Attribute
+  {
+    FIX_LENGTH = 0x1,
+    HAS_EXTEND_VALUE = 0x2,
+    BIT_PACKING = 0x4,
+    LAST_VAR_FIELD = 0x8,
+    MAX_ATTRIBUTE,
+  };
+  static constexpr int8_t OB_COLUMN_HEADER_V1 = 0;
+
+  int8_t version_;
+  int8_t type_;
+  int8_t attr_;
+  uint8_t obj_type_;
+  union {
+    uint32_t extend_value_offset_; // for var column null-bitmap stored continuously
+    uint32_t extend_value_index_;
+  };
+  uint32_t offset_;
+  uint32_t length_;
+
+  static_assert(UINT8_MAX >= ObObjType::ObMaxType, "ObObjType is stored in ObColumnHeader with 1 byte");
+  ObColumnHeader() { reuse(); }
+  void reuse() { memset(this, 0, sizeof(*this)); }
+  bool is_valid() const
+  {
+    return version_ == OB_COLUMN_HEADER_V1
+        && type_ >= 0
+        && type_ < MAX_TYPE
+        && obj_type_ < ObObjType::ObMaxType;
   }
-  bool is_valid() const;
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(meta_data_offset), K_(meta_data_count),
-      K_(previous_block_index), K_(total_previous_count), K_(user_data1), K_(user_data2));
+
+  inline bool is_fix_length() const { return attr_ & FIX_LENGTH; }
+  inline bool has_extend_value() const { return attr_ & HAS_EXTEND_VALUE; }
+  inline bool is_bit_packing() const { return attr_ & BIT_PACKING; }
+  inline bool is_last_var_field() const { return attr_ & LAST_VAR_FIELD; }
+  inline bool is_span_column() const
+  {
+    return COLUMN_EQUAL == type_ || COLUMN_SUBSTR == type_;
+  }
+  inline static bool is_inter_column_encoder(const Type type)
+  {
+    return COLUMN_EQUAL == type || COLUMN_SUBSTR == type;
+  }
+  inline ObObjType get_store_obj_type() const { return static_cast<ObObjType>(obj_type_); }
+
+  inline void set_fix_lenght_attr() { attr_ |= FIX_LENGTH; }
+  inline void set_has_extend_value_attr() { attr_ |= HAS_EXTEND_VALUE; }
+  inline void set_bit_packing_attr() { attr_ |= BIT_PACKING; }
+  inline void set_last_var_field_attr() { attr_ |= LAST_VAR_FIELD; }
+
+  TO_STRING_KV(K_(version), K_(type), K_(attr), K_(obj_type),
+      K_(extend_value_offset), K_(offset), K_(length));
+} __attribute__((packed));
+
+
+struct ObMicroBlockEncoderOpt
+{
+  static const bool ENCODINGS_DEFAULT[ObColumnHeader::MAX_TYPE];
+  static const bool ENCODINGS_NONE[ObColumnHeader::MAX_TYPE];
+  static const bool ENCODINGS_FOR_PERFORMANCE[ObColumnHeader::MAX_TYPE];
+
+  // disable bitpacking and store sorted var-length numbers dictionary in dict encoding under
+  // SELECTIVE_ROW_STORE mode, vice versa
+  bool enable_bit_packing_;
+  bool store_sorted_var_len_numbers_dict_;
+  const bool *encodings_;
+
+  bool &enable(const int64_t type)
+  {
+    return const_cast<bool &>(static_cast<const ObMicroBlockEncoderOpt *>(this)->enable(type));
+  }
+
+  const bool &enable(const int64_t type) const
+  {
+    static bool dummy = false;
+    return type < 0 || type >= ObColumnHeader::MAX_TYPE ? dummy : encodings_[type];
+  }
+
+  template <typename T>
+  const bool &enable() const { return enable(T::type_); }
+  template <typename T>
+  const bool &enable() { return enable(T::type_); }
+
+  bool &enable_raw() { return enable(ObColumnHeader::RAW); }
+  bool &enable_dict() { return enable(ObColumnHeader::DICT); }
+  bool &enable_int_diff() { return enable(ObColumnHeader::INTEGER_BASE_DIFF); }
+  bool &enable_str_diff() { return enable(ObColumnHeader::STRING_DIFF); }
+  bool &enable_hex_pack() { return enable(ObColumnHeader::HEX_PACKING); }
+  bool &enable_rle() { return enable(ObColumnHeader::RLE); }
+  bool &enable_const() { return enable(ObColumnHeader::CONST); }
+  bool &enable_str_prefix() { return enable(ObColumnHeader::STRING_PREFIX); }
+
+  const bool &enable_raw() const { return enable(ObColumnHeader::RAW); }
+  const bool &enable_dict() const { return enable(ObColumnHeader::DICT); }
+  const bool &enable_int_diff() const { return enable(ObColumnHeader::INTEGER_BASE_DIFF); }
+  const bool &enable_str_diff() const { return enable(ObColumnHeader::STRING_DIFF); }
+  const bool &enable_hex_pack() const { return enable(ObColumnHeader::HEX_PACKING); }
+  const bool &enable_rle() const { return enable(ObColumnHeader::RLE); }
+  const bool &enable_const() const { return enable(ObColumnHeader::CONST); }
+  const bool &enable_str_prefix() const { return enable(ObColumnHeader::STRING_PREFIX); }
+
+  ObMicroBlockEncoderOpt() { set_store_type(ENCODING_ROW_STORE); }
+
+  OB_INLINE bool is_valid() const { return enable_raw(); }
+  OB_INLINE void reset() { set_store_type(FLAT_ROW_STORE); }
+  OB_INLINE void set_store_type(common::ObRowStoreType store_type) {
+    switch (store_type) {
+      case SELECTIVE_ENCODING_ROW_STORE:
+        enable_bit_packing_ = false;
+        store_sorted_var_len_numbers_dict_ = true;
+        encodings_ = ENCODINGS_FOR_PERFORMANCE;
+        break;
+      case ENCODING_ROW_STORE:
+        enable_bit_packing_ = true;
+        store_sorted_var_len_numbers_dict_ = false;
+        encodings_ = ENCODINGS_DEFAULT;
+        break;
+      default:
+        enable_bit_packing_ = false;
+        store_sorted_var_len_numbers_dict_ = false;
+        encodings_ = ENCODINGS_NONE;
+        break;
+    }
+  }
+
+#define KF(f) #f, f()
+  TO_STRING_KV(K_(enable_bit_packing), K_(store_sorted_var_len_numbers_dict),
+      KF(enable_raw), KF(enable_dict), KF(enable_int_diff), KF(enable_str_diff),
+      KF(enable_hex_pack), KF(enable_rle),KF(enable_const));
+#undef KF
 };
 
-struct ObLinkedMacroBlockHeaderV2 final {
-public:
-  ObLinkedMacroBlockHeaderV2()
-  {
-    reset();
-  }
-  ~ObLinkedMacroBlockHeaderV2() = default;
-  bool is_valid() const;
-  const MacroBlockId get_previous_block_id() const;
-  void set_previous_block_id(const MacroBlockId& block_id);
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
-  int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-  int64_t get_serialize_size() const;
-  void reset()
-  {
-    header_size_ = sizeof(ObLinkedMacroBlockHeaderV2);
-    version_ = (int32_t)LINKED_MACRO_BLOCK_HEADER_VERSION;
-    magic_ = (int32_t)LINKED_MACRO_BLOCK_HEADER_MAGIC;
-    attr_ = 0;
-    item_count_ = 0;
-    fragment_offset_ = 0;
-    previous_block_first_id_ = 0;
-    previous_block_second_id_ = 0;
-    previous_block_third_id_ = 0;
-    previous_block_fourth_id_ = 0;
-  }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(item_count), K_(fragment_offset),
-      K_(previous_block_first_id), K_(previous_block_second_id), K_(previous_block_third_id),
-      K_(previous_block_fourth_id));
+struct ObPreviousEncoding
+{
+  ObColumnHeader::Type type_;
+  int64_t ref_col_idx_; // referenced column index for rules between columns.
+  int64_t last_prefix_length_;
 
-public:
-  int32_t header_size_;
-  int32_t version_;
-  int32_t magic_;
-  int32_t attr_;
-  int32_t item_count_;
-  int32_t fragment_offset_;
-  // record previous macro block's MacroBlockId
-  int64_t previous_block_first_id_;
-  int64_t previous_block_second_id_;
-  int64_t previous_block_third_id_;
-  int64_t previous_block_fourth_id_;
+  ObPreviousEncoding() { MEMSET(this, 0, sizeof(*this)); }
+  ObPreviousEncoding(const ObColumnHeader::Type type, const int64_t ref_col_idx)
+      : type_(type), ref_col_idx_(ref_col_idx), last_prefix_length_(0) {}
+
+  bool operator ==(const ObPreviousEncoding &other) const
+  {
+    return type_ == other.type_ && ref_col_idx_ == other.ref_col_idx_ && last_prefix_length_ == other.last_prefix_length_;
+  }
+
+  bool operator !=(const ObPreviousEncoding &other) const
+  {
+    return type_ != other.type_ || ref_col_idx_ != other.ref_col_idx_ || last_prefix_length_ != other.last_prefix_length_;
+  }
+
+  TO_STRING_KV(K_(type), K_(ref_col_idx), K_(last_prefix_length));
 };
 
-struct ObSSTableMacroBlockHeader {
+template<int64_t max_size>
+struct ObPreviousEncodingArray
+{
+  ObPreviousEncoding prev_encodings_[max_size];
+  int64_t last_pos_;
+  int64_t size_;
+
+  ObPreviousEncodingArray() : last_pos_(0), size_(0) {}
+
+  int put(const ObPreviousEncoding &prev);
+  int64_t contain(const ObPreviousEncoding &prev);
+  void reuse() { size_ = 0; }
+
+  TO_STRING_KV(K_(prev_encodings), K_(last_pos), K_(size));
+};
+
+template<>
+struct ObPreviousEncodingArray<2>
+{
+  ObPreviousEncoding prev_encodings_[2];
+  int64_t last_pos_;
+  int64_t size_;
+
+  ObPreviousEncodingArray() : last_pos_(0), size_(0) {}
+
+  OB_INLINE int put(const ObPreviousEncoding &prev)
+  {
+    int ret = common::OB_SUCCESS;
+    if (0 == size_ || prev != prev_encodings_[last_pos_]) {
+      if (2 == size_) {
+        last_pos_ = (last_pos_ == 1) ? 0 : last_pos_ + 1;
+        prev_encodings_[last_pos_] = prev;
+      } else if (2 > size_) {
+        last_pos_ = size_;
+        prev_encodings_[last_pos_] = prev;
+        ++size_;
+      } else {
+        ret = common::OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected size", K_(size));
+      }
+    }
+    return ret;
+  }
+  void reuse() { size_ = 0; }
+
+  TO_STRING_KV(K_(last_pos), K_(size), "prev_encoding0", prev_encodings_[0],
+      "prev_encoding1", prev_encodings_[1]);
+};
+
+template<>
+struct ObPreviousEncodingArray<1>
+{
+  ObPreviousEncoding prev_encodings_[1];
+  int64_t last_pos_;
+  int64_t size_;
+
+  ObPreviousEncodingArray() : last_pos_(0), size_(0) {}
+
+  OB_INLINE int put(const ObPreviousEncoding &prev)
+  {
+    int ret = common::OB_SUCCESS;
+    prev_encodings_[0] = prev;
+    return ret;
+  }
+
+  TO_STRING_KV(K_(prev_encodings));
+};
+
+struct ObMicroBlockEncodingCtx
+{
+  static const int64_t MAX_PREV_ENCODING_COUNT = 2;
+  int64_t macro_block_size_;
+  int64_t micro_block_size_;
+  int64_t rowkey_column_cnt_;
+  int64_t column_cnt_;
+  common::ObIArray<share::schema::ObColDesc> *col_descs_;
+  ObMicroBlockEncoderOpt encoder_opt_;
+
+  mutable int64_t estimate_block_size_;
+  mutable int64_t real_block_size_;
+  mutable int64_t micro_block_cnt_; // build micro block count
+  mutable common::ObArray<ObPreviousEncodingArray<MAX_PREV_ENCODING_COUNT> > previous_encodings_;
+
+  int64_t *column_encodings_;
+  int64_t major_working_cluster_version_;
+  common::ObRowStoreType row_store_type_;
+  bool need_calc_column_chksum_;
+
+  ObMicroBlockEncodingCtx() : macro_block_size_(0), micro_block_size_(0),
+    rowkey_column_cnt_(0), column_cnt_(0), col_descs_(nullptr),
+    encoder_opt_(), estimate_block_size_(0), real_block_size_(0), micro_block_cnt_(0),
+    column_encodings_(nullptr), major_working_cluster_version_(0),
+    row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false)
+  {
+  }
+  bool is_valid() const;
+  TO_STRING_KV(K_(macro_block_size), K_(micro_block_size), K_(rowkey_column_cnt),
+      K_(column_cnt), KP_(col_descs), K_(estimate_block_size), K_(real_block_size),
+      K_(micro_block_cnt), K_(encoder_opt), K_(previous_encodings), KP_(column_encodings),
+      K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum));
+};
+
+template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>
+class ObPodFix2dArray;
+
+struct ObColumnEncodingCtx
+{
+  int64_t null_cnt_;
+  int64_t nope_cnt_;
+  uint64_t max_integer_;
+  int64_t var_data_size_;
+  int64_t dict_var_data_size_;
+  int64_t fix_data_size_;
+  int64_t max_string_size_;
+  int64_t extend_value_bit_;
+  const ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> *col_datums_;
+  ObEncodingHashTable *ht_;
+  ObMultiPrefixTree *prefix_tree_;
+  const ObMicroBlockEncodingCtx *encoding_ctx_;
+  bool detected_encoders_[ObColumnHeader::MAX_TYPE];
+  mutable int64_t last_prefix_length_;
+  bool only_raw_encoding_;
+  bool is_refed_;
+  bool need_sort_;
+
+  ObColumnEncodingCtx() { reset(); }
+  void reset() { memset(this, 0, sizeof(*this)); }
+  void try_set_need_sort(const ObColumnHeader::Type type, const int64_t column_index)
+  {
+    ObObjTypeClass col_tc = encoding_ctx_->col_descs_->at(column_index).col_type_.get_type_class();
+    ObObjTypeStoreClass col_sc = get_store_class_map()[col_tc];
+    const bool encoding_type_need_sort = type == ObColumnHeader::DICT;
+    need_sort_ = encoding_type_need_sort && !store_class_might_contain_lob_locator(col_sc);
+  }
+
+  TO_STRING_KV(K_(null_cnt), K_(nope_cnt), K_(max_integer), K_(var_data_size),
+      K_(dict_var_data_size), K_(fix_data_size),
+      K_(extend_value_bit), KP_(col_datums), KP_(ht), KP_(prefix_tree),
+      K_(*encoding_ctx), K_(detected_encoders),
+      K_(last_prefix_length), K_(max_string_size), K_(only_raw_encoding),
+      K_(is_refed), K_(need_sort));
+};
+
+struct ObBloomFilterMacroBlockHeader
+{
+  ObBloomFilterMacroBlockHeader() { reset(); }
+  void reset() { MEMSET(this, 0, sizeof(ObBloomFilterMacroBlockHeader)); }
+  OB_INLINE bool is_valid() const{
+    return header_size_ > 0
+      && version_ >= BF_MACRO_BLOCK_HEADER_VERSION
+      && BF_MACRO_BLOCK_HEADER_MAGIC == magic_
+      && common::ObTabletID::INVALID_TABLET_ID != tablet_id_
+      && snapshot_version_ >= 0
+      && rowkey_column_count_ > 0
+      && row_count_ > 0
+      && occupy_size_ > 0
+      && micro_block_count_ > 0
+      && micro_block_data_offset_ > 0
+      && micro_block_data_size_ > 0
+      && data_checksum_ >= 0
+      && ObMacroBlockCommonHeader::BloomFilterData == attr_;
+  }
+  TO_STRING_KV(K_(header_size),
+      K_(version),
+      K_(magic),
+      K_(attr),
+      K_(tablet_id),
+      K_(snapshot_version),
+      K_(rowkey_column_count),
+      K_(row_count),
+      K_(occupy_size),
+      K_(micro_block_count),
+      K_(micro_block_data_offset),
+      K_(micro_block_data_size),
+      K_(data_checksum),
+      K_(compressor_type)
+  );
+
   int32_t header_size_;
   int32_t version_;
-  int32_t magic_;  // magic number;
+  int32_t magic_;                    // magic number;
   int32_t attr_;
-  uint64_t table_id_;
-  int64_t data_version_;
-  int32_t column_count_;
+  uint64_t tablet_id_;
+  int64_t snapshot_version_;
   int32_t rowkey_column_count_;
-  int32_t column_index_scale_;  // index store scale
-  int32_t row_store_type_;      // 0 flat
   int32_t row_count_;
-  int32_t occupy_size_;        // occupy size of the whole macro block, include common header
-  int32_t micro_block_count_;  // block count
-  int32_t micro_block_size_;
-  int32_t micro_block_data_offset_;
-  int32_t micro_block_data_size_;
-  int32_t micro_block_index_offset_;
-  int32_t micro_block_index_size_;
-  int32_t micro_block_endkey_offset_;
-  int32_t micro_block_endkey_size_;
-  int64_t data_checksum_;  // ?? no need ??
-  char compressor_name_[common::OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH];
-
-  int64_t encrypt_id_;
-  int64_t master_key_id_;
-  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  // end encrypt
-  int64_t data_seq_;
-  int64_t partition_id_;  // added since 2.-
-  ObSSTableMacroBlockHeader()
-  {
-    reset();
-  }
-  bool is_valid() const;
-  void reset()
-  {
-    memset(this, 0, sizeof(ObSSTableMacroBlockHeader));
-  }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(data_version), K_(column_count),
-      K_(rowkey_column_count), K_(column_index_scale), K_(row_store_type), K_(row_count), K_(occupy_size),
-      K_(micro_block_count), K_(micro_block_size), K_(micro_block_data_offset), K_(micro_block_data_size),
-      K_(micro_block_index_offset), K_(micro_block_index_size), K_(micro_block_endkey_offset),
-      K_(micro_block_endkey_size), K_(data_checksum), K_(compressor_name), K_(encrypt_id), K_(master_key_id),
-      K_(encrypt_key), K_(data_seq), K_(partition_id));
-};
-
-struct ObBloomFilterMacroBlockHeader {
-  ObBloomFilterMacroBlockHeader()
-  {
-    reset();
-  }
-  void reset()
-  {
-    MEMSET(this, 0, sizeof(ObBloomFilterMacroBlockHeader));
-  }
-  OB_INLINE bool is_valid() const
-  {
-    return header_size_ > 0 && version_ >= BF_MACRO_BLOCK_HEADER_VERSION && BF_MACRO_BLOCK_HEADER_MAGIC == magic_ &&
-           common::OB_INVALID_ID != table_id_ && data_version_ >= 0 && rowkey_column_count_ > 0 && row_count_ > 0 &&
-           occupy_size_ > 0 && micro_block_count_ > 0 && micro_block_data_offset_ > 0 && micro_block_data_size_ > 0 &&
-           data_checksum_ >= 0 && partition_id_ >= -1 && ObMacroBlockCommonHeader::BloomFilterData == attr_;
-  }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(partition_id), K_(data_version),
-      K_(rowkey_column_count), K_(row_count), K_(occupy_size), K_(micro_block_count), K_(micro_block_data_offset),
-      K_(micro_block_data_size), K_(data_checksum), K_(compressor_name));
-
-  int32_t header_size_;
-  int32_t version_;
-  int32_t magic_;  // magic number;
-  int32_t attr_;
-  uint64_t table_id_;
-  int64_t partition_id_;  // added since 2.-
-  int64_t data_version_;
-  int32_t rowkey_column_count_;
-  int32_t row_count_;
-  int32_t occupy_size_;        // occupy size of the whole macro block, include common header
-  int32_t micro_block_count_;  // block count
+  int32_t occupy_size_;              // occupy size of the whole macro block, include common header
+  int32_t micro_block_count_;        // block count
   int32_t micro_block_data_offset_;
   int32_t micro_block_data_size_;
   int64_t data_checksum_;
-  char compressor_name_[common::OB_MAX_COMPRESSOR_NAME_LENGTH];
+  ObCompressorType compressor_type_;
 };
 
 class ObBufferReader;
 class ObBufferWriter;
 
-struct ObMacroBlockSchemaInfo final {
+struct ObMacroBlockSchemaInfo final
+{
 public:
   static const int64_t MACRO_BLOCK_SCHEMA_INFO_HEADER_VERSION = 1;
   ObMacroBlockSchemaInfo();
   ~ObMacroBlockSchemaInfo() = default;
   NEED_SERIALIZE_AND_DESERIALIZE;
-  int deep_copy(ObMacroBlockSchemaInfo*& new_schema_info, common::ObIAllocator& allocator) const;
+  int deep_copy(ObMacroBlockSchemaInfo *&new_schema_info, common::ObIAllocator &allocator) const;
   int64_t get_deep_copy_size() const;
-  int64_t to_string(char* buffer, const int64_t length) const;
-  bool is_valid() const
-  {
-    return (0 == column_number_ || (nullptr != compressor_ && nullptr != column_id_array_ &&
-                                       nullptr != column_type_array_ && nullptr != column_order_array_));
-  }
-  bool operator==(const ObMacroBlockSchemaInfo& other) const;
+  int64_t to_string(char *buffer, const int64_t length) const;
+  bool is_valid() const { return (0 == column_number_ || (nullptr != compressor_ && nullptr != column_id_array_ && nullptr != column_type_array_ && nullptr != column_order_array_)); }
+  bool operator==(const ObMacroBlockSchemaInfo &other) const;
   int16_t column_number_;
   int16_t rowkey_column_number_;
   int64_t schema_version_;
   int16_t schema_rowkey_col_cnt_;
-  char* compressor_;
-  uint16_t* column_id_array_;
-  common::ObObjMeta* column_type_array_;
-  common::ObOrderType* column_order_array_;
+  char *compressor_;
+  uint16_t *column_id_array_;
+  common::ObObjMeta *column_type_array_;
+  common::ObOrderType *column_order_array_;
 };
 
-struct ObMacroBlockMeta {
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-
-  // The following variables need to be serialized
-  int16_t attr_;
-  union {
-    uint64_t data_version_;
-    int64_t previous_block_index_;  // nonsstable: previous_block_index_ link.
-  };
-  int16_t column_number_;              // column count of this table (size of column_checksum_)
-  int16_t rowkey_column_number_;       // rowkey column count of this table
-  int16_t column_index_scale_;         // store column index scale percent of column count;
-  int16_t row_store_type_;             // {flat / sparse}
-  int32_t row_count_;                  // row count of macro block;
-  int32_t occupy_size_;                // data size of macro block;
-  int64_t data_checksum_;              // data checksum of macro block
-  int32_t micro_block_count_;          // micro block info in ObSSTableMacroBlockHeader
-  int32_t micro_block_data_offset_;    // data offset base on macro block header.
-  int32_t micro_block_index_offset_;   // data_size = index_offset - data_offset
-  int32_t micro_block_endkey_offset_;  // index_size = endkey_offset - index_offset,
-                                       // endkey_size = micro_block_mark_deletion_offset_ - endkey_offset
-  char* compressor_;
-  uint16_t* column_id_array_;
-  common::ObObjMeta* column_type_array_;
-  int64_t* column_checksum_;
-  common::ObObj* endkey_;
-  uint64_t table_id_;
-  int64_t data_seq_;  // sequence in partition meta.
-  int64_t schema_version_;
-  int64_t snapshot_version_;
-
-  int16_t schema_rowkey_col_cnt_;
-  common::ObOrderType* column_order_array_;
-  // only valid for multi-version minor sstable, row count delta relative to the base data
-  // default 0
-  int32_t row_count_delta_;
-
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
-                                              // micro_block_mark_deletion_offset_
-  bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
-  int64_t partition_id_;              // added since 2.0
-  int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
-  int64_t progressive_merge_round_;
-  // The following variables do not need to be serialized
-  int32_t write_seq_;  // increment 1 every reuse pass.
-  uint32_t bf_flag_;   // mark if rowkey_prefix bloomfilter in cache, bit=0: in, 0:not in
-  int64_t create_timestamp_;
-  int64_t retire_timestamp_;
-  common::ObObj* collation_free_endkey_;
-  int64_t encrypt_id_;
-  int64_t master_key_id_;
-  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  ObMacroBlockMeta();
-  bool operator==(const ObMacroBlockMeta& other) const;
-  bool operator!=(const ObMacroBlockMeta& other) const;
-  bool is_valid() const;
-  int get_deep_copy_size(common::ObRowkey& collation_free_endkey, common::ObIAllocator& allocator, int64_t& size) const;
-  int deep_copy(ObMacroBlockMeta*& meta_ptr, common::ObIAllocator& allocator) const;
-  int check_collation_free_valid(bool& is_collation_free_valid) const;
-  int extract_columns(common::ObIArray<share::schema::ObColDesc>& columns) const;
-  int64_t to_string(char* buffer, const int64_t length) const;
-  inline int32_t get_index_size() const
-  {
-    return micro_block_endkey_offset_ - micro_block_index_offset_;
-  }
-  inline int32_t get_block_index_size() const
-  {
-    return occupy_size_ - micro_block_index_offset_;
-  }
-  inline int32_t get_endkey_size() const
-  {
-    return 0 == micro_block_mark_deletion_offset_ ? occupy_size_ - micro_block_endkey_offset_
-                                                  : micro_block_mark_deletion_offset_ - micro_block_endkey_offset_;
-  }
-  inline int32_t get_micro_block_mark_deletion_size() const
-  {
-    return 0 == micro_block_mark_deletion_offset_ ? 0 : micro_block_delta_offset_ - micro_block_mark_deletion_offset_;
-  }
-  inline int32_t get_micro_block_delta_size() const
-  {
-    return 0 == micro_block_delta_offset_ ? 0 : occupy_size_ - micro_block_delta_offset_;
-  }
-  NEED_SERIALIZE_AND_DESERIALIZE;
-  OB_INLINE bool is_data_block() const
-  {
-    return is_sstable_data_block() || is_lob_data_block() || is_bloom_filter_data_block();
-  }
-  OB_INLINE bool is_normal_data_block() const
-  {
-    return is_sstable_data_block() || is_lob_data_block();
-  }
-  OB_INLINE bool is_sstable_data_block() const
-  {
-    return ObMacroBlockCommonHeader::SSTableData == attr_;
-  }
-  OB_INLINE bool is_lob_data_block() const
-  {
-    return ObMacroBlockCommonHeader::LobData == attr_ || ObMacroBlockCommonHeader::LobIndex == attr_;
-  }
-  OB_INLINE bool is_bloom_filter_data_block() const
-  {
-    return ObMacroBlockCommonHeader::BloomFilterData == attr_;
-  }
-  OB_INLINE bool is_sparse_format() const
-  {
-    return common::ObRowStoreType::SPARSE_ROW_STORE == row_store_type_;
-  }
-  OB_INLINE bool is_encrypted() const
-  {
-    return encrypt_id_ > static_cast<int64_t>(share::ObAesOpMode::ob_invalid_mode);
-  }
-
-private:
-  int64_t get_meta_content_serialize_size() const;
-};
-
-enum ObStorageMetaStatus {
-  NOT_INITED = 0,
-  INITED,
-  LOADED,
-  WRITED,
-};
-
-struct ObSSTableColumnMeta {
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
+struct ObSSTableColumnMeta
+{
+  //For compatibility, the variables in this struct MUST NOT be deleted or moved.
+  //You should ONLY add variables at the end.
+  //Note that if you use complex structure as variables, the complex structure should also keep compatibility.
   static const int64_t SSTABLE_COLUMN_META_VERSION = 1;
   int64_t column_id_;
   int64_t column_default_checksum_;
   int64_t column_checksum_;
   ObSSTableColumnMeta();
   virtual ~ObSSTableColumnMeta();
-  bool operator==(const ObSSTableColumnMeta& other) const;
-  bool operator!=(const ObSSTableColumnMeta& other) const;
+  bool operator==(const ObSSTableColumnMeta &other) const;
+  bool operator!=(const ObSSTableColumnMeta &other) const;
   void reset();
   bool is_valid() const
   {
-    return column_id_ >= 0 && column_default_checksum_ >= 0 && column_checksum_ >= 0;
+    return column_id_ >= 0
+        && column_default_checksum_ >= 0
+        && column_checksum_ >= 0;
   }
   TO_STRING_KV(K_(column_id), K_(column_default_checksum), K_(column_checksum));
   OB_UNIS_VERSION_V(SSTABLE_COLUMN_META_VERSION);
 };
 
-struct ObStoreFileInfo {
-  static const int64_t STORE_FILE_INFO_VERSION = 1;
-  int64_t file_id_;
-  int64_t file_size_;
-  TO_STRING_KV(K_(file_id), K_(file_size));
-  bool operator==(const ObStoreFileInfo& other) const;
-  OB_UNIS_VERSION_V(STORE_FILE_INFO_VERSION);
-};
-
-struct ObStoreFileCtx final {
-  static const int64_t STORE_FILE_CTX_VERSION = 1;
-  static const int64_t DEFAULT_FILE_NUM = 16;
-  static const int64_t MAX_VALID_BLOCK_COUNT_PER_FILE = INT32_MAX;
-
-  ObStoreFileSystemType file_system_type_;
-  ObStoreFileType file_type_;
-  int64_t block_count_per_file_;  // only used for STORE_FILE_MACRO_BLOCK type
-  common::ObFixedArray<ObStoreFileInfo, common::ObIAllocator> file_list_;
-
-  TO_STRING_KV(K_(file_system_type), K_(file_type), K_(block_count_per_file), K_(file_list));
-  explicit ObStoreFileCtx(common::ObIAllocator& allocator);
-  virtual ~ObStoreFileCtx();
-  int init(const ObStoreFileSystemType& file_system_type, const ObStoreFileType& file_type,
-      const int64_t block_count_per_file);
-  bool is_valid() const;
-  void reset();
-  bool need_file_id_list() const
-  {
-    return false;
-  }
-  int assign(const ObStoreFileCtx& src);
-  bool equals(const ObStoreFileCtx& other) const;
-  OB_UNIS_VERSION_V(STORE_FILE_CTX_VERSION);
-  DISALLOW_COPY_AND_ASSIGN(ObStoreFileCtx);
-};
-
-struct ObSSTableMacroBlockId {
-  blocksstable::MacroBlockId macro_block_id_;
-  int64_t macro_block_id_in_files_;
-
-  OB_INLINE bool is_valid() const;
-  OB_INLINE void reset();
-  TO_STRING_KV(K_(macro_block_id), K_(macro_block_id_in_files));
-};
-
-struct ObMacroBlockCtx final {
-  ObMacroBlockCtx() : file_ctx_(NULL), sstable_block_id_(), sstable_(nullptr)
-  {}
-  const blocksstable::ObStoreFileCtx* file_ctx_;
-  blocksstable::ObSSTableMacroBlockId sstable_block_id_;
-  storage::ObSSTable* sstable_;
-
-  OB_INLINE bool is_valid() const;
-  OB_INLINE void reset();
-
-  OB_INLINE const blocksstable::MacroBlockId& get_macro_block_id() const;
-  TO_STRING_KV(K_(sstable_block_id), KP_(file_ctx));
-};
-
-enum ObColumnChecksumMethod { CCM_UNKOWN = 0, CCM_TYPE_AND_VALUE = 1, CCM_VALUE_ONLY = 2, CCM_IGNORE = 3, CCM_MAX };
-
-// store basic info of sstable meta, for migrate partition.
-struct ObSSTableBaseMeta {
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-  static const int64_t SSTABLE_BASE_META_VERSION = 1;
-  static const int64_t DEFAULT_COLUMN_IN_SSTABLE = 64;
-  static const int64_t SSTABLE_FORMAT_VERSION_1 = 1;
-  static const int64_t SSTABLE_FORMAT_VERSION_2 = 2;  // since 2.0
-  static const int64_t SSTABLE_FORMAT_VERSION_3 = 3;  // since 2.1
-  static const int64_t SSTABLE_FORMAT_VERSION_4 = 4;  // since 2.2
-  static const int64_t SSTABLE_FORMAT_VERSION_5 = 5;  // since 2.2.3
-  /*
-   * Add SSTABLE_FORMAT_VERSION_6 for SqlSequence
-   * Version<6 : (Rowkey | TransVersion) Cells
-   * Version>=6 : (Rowkey | TransVersion | SqlSequence) Cells
-   * */
-  static const int64_t SSTABLE_FORMAT_VERSION_6 = 6;  // since 3.0
-
-  int64_t index_id_;  // index_id_ == ObPartitionMeta::table_id_ means data table, or local index id.
-  int64_t row_count_;
-  int64_t occupy_size_;
-  int64_t data_checksum_;
-  int64_t row_checksum_;
-  int64_t data_version_;
-  int64_t rowkey_column_count_;
-  int64_t table_type_;  // no usage
-  int64_t index_type_;
-  int64_t available_version_;  // no usage
-  int64_t macro_block_count_;
-  int64_t use_old_macro_block_count_;
-  int64_t column_cnt_;
-  common::ModulePageAllocator inner_alloc_;
-  common::ObFixedArray<ObSSTableColumnMeta, common::ObIAllocator> column_metas_;
-  int64_t macro_block_second_index_;
-  int64_t total_sstable_count_;  // no usage
-  // from 1470
-  int64_t lob_macro_block_count_;
-  int64_t lob_use_old_macro_block_count_;
-
-  // added since 2.0
-  int64_t sstable_format_version_;
-  int64_t max_logic_block_index_;      // not used any more
-  bool build_on_snapshot_;             // true if builds on snapshot version, false if builds on major version
-  int64_t create_index_base_version_;  // if sstable is create index minor dump ssstable, the version is not null
-  // for multi-version minor sstable
-  int64_t schema_version_;
-  int64_t progressive_merge_start_version_;
-  int64_t progressive_merge_end_version_;
-  int64_t create_snapshot_version_;
-  int64_t checksum_method_;
-  common::ObFixedArray<ObSSTableColumnMeta, common::ObIAllocator> new_column_metas_;
-  int64_t progressive_merge_round_;
-  int64_t progressive_merge_step_;
-  share::schema::ObTableMode table_mode_;
-  int64_t logical_data_version_;
-  bool has_compact_row_;
-  common::ObPGKey pg_key_;
-  int8_t multi_version_rowkey_type_;
-  bool contain_uncommitted_row_;
-  int64_t upper_trans_version_;
-  int64_t max_merged_trans_version_;
-  uint64_t end_log_id_;
-
-  ObSSTableBaseMeta();
-  explicit ObSSTableBaseMeta(common::ObIAllocator& alloc);
-  virtual ~ObSSTableBaseMeta()
-  {}
-  void set_allocator(common::ObIAllocator& alloc);
-  bool operator==(const ObSSTableBaseMeta& other) const;
-  bool operator!=(const ObSSTableBaseMeta& other) const;
-  bool is_valid() const;
-  virtual void reset();
-  virtual int64_t get_total_macro_block_count() const
-  {
-    return macro_block_count_ + lob_macro_block_count_;
-  }
-  virtual int64_t get_data_macro_block_count() const
-  {
-    return macro_block_count_;
-  }
-  virtual int64_t get_lob_macro_block_count() const
-  {
-    return lob_macro_block_count_;
-  }
-  virtual int64_t get_total_use_old_macro_block_count() const
-  {
-    return use_old_macro_block_count_ + lob_use_old_macro_block_count_;
-  }
-  virtual int assign(const ObSSTableBaseMeta& meta);
-  int set_upper_trans_version(const int64_t upper_trans_version);
-  int64_t get_upper_trans_version() const
-  {
-    return ATOMIC_LOAD(&upper_trans_version_);
-  }
-  int64_t get_max_merged_trans_version() const
-  {
-    return ATOMIC_LOAD(&max_merged_trans_version_);
-  }
-  int check_data(const ObSSTableBaseMeta& other_meta);
-  uint64_t get_end_log_id() const
-  {
-    return ATOMIC_LOAD(&end_log_id_);
-  }
-  VIRTUAL_TO_STRING_KV(K_(index_id), K_(row_count), K_(occupy_size), K_(data_checksum),
-      //      K_(row_checksum),
-      K_(data_version), K_(rowkey_column_count), K_(table_type), K_(index_type),
-      //      K_(available_version),
-      K_(macro_block_count), K_(use_old_macro_block_count), K_(column_cnt), K_(column_metas),
-      //      K_(macro_block_second_index),
-      //      K_(total_sstable_count),
-      K_(lob_macro_block_count), K_(lob_use_old_macro_block_count),
-      //      K_(max_logic_block_index),
-      K_(build_on_snapshot), K_(create_index_base_version), K_(schema_version), K_(progressive_merge_start_version),
-      K_(progressive_merge_end_version), K_(create_snapshot_version), K_(checksum_method), K_(progressive_merge_round),
-      K_(progressive_merge_step), K_(table_mode), K_(pg_key),
-      //      K_(new_column_metas),
-      K_(logical_data_version), K_(multi_version_rowkey_type), K_(contain_uncommitted_row), K_(upper_trans_version),
-      K_(max_merged_trans_version), K_(end_log_id), K_(sstable_format_version), K_(has_compact_row));
-  OB_UNIS_VERSION_V(SSTABLE_BASE_META_VERSION);
-  DISALLOW_COPY_AND_ASSIGN(ObSSTableBaseMeta);
-};
-
-struct ObSSTableMeta : public ObSSTableBaseMeta {
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-  static const int64_t SSTABLE_META_VERSION = 1;
-  static const int64_t DEFAULT_MACRO_BLOCK_NUM = 4;
-  static const int64_t DEFAULT_MACRO_BLOCK_ARRAY_PAGE_SIZE =
-      DEFAULT_MACRO_BLOCK_NUM * sizeof(blocksstable::MacroBlockId);
-  static const int64_t DEFAULT_MACRO_BLOCK_ARRAY_IDX_PAGE_SIZE = DEFAULT_MACRO_BLOCK_NUM * sizeof(int64_t);
-  typedef common::ObSEArray<MacroBlockId, DEFAULT_MACRO_BLOCK_NUM> MacroBlockArray;
-  typedef common::ObSEArray<int64_t, DEFAULT_MACRO_BLOCK_NUM> MacroBlockIdxArray;
-  MacroBlockArray macro_block_array_;
-  // from 1470
-  MacroBlockArray lob_macro_block_array_;
-
-  MacroBlockIdxArray macro_block_idx_array_;
-  MacroBlockIdxArray lob_macro_block_idx_array_;
-  ObStoreFileCtx file_ctx_;
-  ObStoreFileCtx lob_file_ctx_;
-  // from 2.2
-  MacroBlockId bloom_filter_block_id_;
-  int64_t bloom_filter_block_id_in_files_;
-  ObStoreFileCtx bloom_filter_file_ctx_;
-
-  explicit ObSSTableMeta(common::ObIAllocator& alloc);
-  virtual ~ObSSTableMeta()
-  {}
-  bool operator==(const ObSSTableMeta& other) const;
-  bool operator!=(const ObSSTableMeta& other) const;
-  bool is_valid() const;
-  bool with_heap_table_flag() const;
-  virtual void reset();
-  INHERIT_TO_STRING_KV("ObSSTableBaseMeta", ObSSTableBaseMeta, K_(file_ctx), K_(lob_file_ctx),
-      K_(macro_block_idx_array), K_(lob_macro_block_idx_array), K_(bloom_filter_block_id),
-      K_(bloom_filter_block_id_in_files), K_(bloom_filter_file_ctx));
-  OB_UNIS_VERSION_V(SSTABLE_META_VERSION);
-};
-
-struct ObPartitionMeta {
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-  static const int64_t PARTITION_META_VERSION = 1;
-  int64_t table_id_;
-  int64_t partition_id_;
-  int64_t partition_cnt_;
-  int64_t data_version_;
-  int16_t table_type_;         // sys, normal, index,
-  int16_t migrate_status_;     // deprecated
-  int16_t replica_status_;     // deprecated
-  int64_t migrate_timestamp_;  // deprecated
-  int64_t step_merge_start_version_;
-  int64_t step_merge_end_version_;
-  int64_t index_table_count_;  // local index table count, includes data table itself.
-  common::ObString log_info_;
-  storage::ObStoreType store_type_;
-  int16_t is_restore_;
-  int64_t partition_checksum_;
-  int64_t create_timestamp_;
-
-  ObPartitionMeta();
-  virtual ~ObPartitionMeta();
-  ObPartitionMeta& operator=(const ObPartitionMeta& meta);
-  bool operator==(const ObPartitionMeta& meta) const;
-  bool operator!=(const ObPartitionMeta& meta) const;
-  bool is_valid() const;
-  void reset();
-  uint64_t get_tenant_id() const
-  {
-    return common::extract_tenant_id(table_id_);
-  }
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(data_version), K_(table_type), K_(migrate_status),
-      K_(replica_status), K_(migrate_timestamp), K_(step_merge_start_version), K_(step_merge_end_version),
-      K_(index_table_count), K(log_info_.length()), K_(store_type), K_(is_restore), K_(partition_checksum));
-  // use allocator allocate memory for log_info_;
-  int deserialize(const char* buf, const int64_t buf_len, int64_t& pos, common::ObIAllocator& allocator);
-  OB_UNIS_VERSION_V(PARTITION_META_VERSION);
-};
-
-class ObRowHeader {
+class ObColClusterInfoMask
+{
 public:
-  ObRowHeader()
+  enum BYTES_LEN
   {
-    memset(this, 0, sizeof(*this));
+    BYTES_ZERO = 0,
+    BYTES_UINT8 = 1,
+    BYTES_UINT16 = 2,
+    BYTES_UINT32 = 3,
+    BYTES_MAX = 4,
+  };
+  static constexpr uint8_t BYTES_TYPE_TO_LEN[] =
+  {
+      0,
+      1,
+      2,
+      4,
+      UINT8_MAX,
+  };
+  OB_INLINE static uint8_t get_bytes_type_len(const BYTES_LEN type)
+  {
+    STATIC_ASSERT(static_cast<int64_t>(BYTES_MAX + 1) == ARRAYSIZEOF(BYTES_TYPE_TO_LEN), "type len array is mismatch");
+    uint8_t ret_val = UINT8_MAX;
+    if (OB_LIKELY(type >= BYTES_ZERO && type < BYTES_MAX)) {
+      ret_val = BYTES_TYPE_TO_LEN[type];
+    }
+    return ret_val;
   }
-  bool is_valid() const
+public:
+  ObColClusterInfoMask()
+  : column_cnt_(0),
+    info_mask_(0)
   {
-    return row_flag_ >= 0 && column_index_bytes_ >= 0;
   }
-  int8_t get_row_flag() const
+  static int get_serialized_size() { return sizeof(ObColClusterInfoMask); }
+  static bool is_valid_col_idx_type(const BYTES_LEN col_idx_type)
   {
-    return row_flag_;
+    return col_idx_type >= BYTES_ZERO && col_idx_type <= BYTES_UINT8;
   }
-  int8_t get_row_dml() const
+  static bool is_valid_offset_type(const BYTES_LEN column_offset_type)
   {
-    return row_dml_;
+    return column_offset_type >= BYTES_ZERO && column_offset_type <= BYTES_UINT32;
   }
-  int8_t get_version() const
+  OB_INLINE void reset() { column_cnt_ = 0; info_mask_ = 0; }
+  OB_INLINE bool is_valid() const
   {
-    return version_;
+    return is_valid_offset_type(get_offset_type())
+        && (!is_sparse_row_ || (is_valid_col_idx_type(get_column_idx_type()) && sparse_column_cnt_ >= 0))
+        && column_cnt_ > 0;
   }
-  int8_t get_column_index_bytes() const
+  OB_INLINE int64_t get_special_value_array_size(const int64_t serialize_column_cnt) const
   {
-    return column_index_bytes_;
+    return (sizeof(uint8_t) * serialize_column_cnt + 1) >> 1;
   }
-  int8_t get_row_type_flag() const
+  OB_INLINE int64_t get_total_array_size(const int64_t serialize_column_cnt) const
   {
-    return row_type_flag_;
+    // offset_array + special_val_array + column_idx_array[SPARSE]
+    return  (get_offset_type_len() + (is_sparse_row_ ? get_column_idx_type_len() : 0)) * serialize_column_cnt
+                + (get_special_value_array_size(serialize_column_cnt));
   }
-  storage::ObMultiVersionRowFlag get_row_multi_version_flag() const
+  OB_INLINE int set_offset_type(const BYTES_LEN column_offset_type)
   {
-    return storage::ObMultiVersionRowFlag(row_type_flag_);
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!is_valid_offset_type(column_offset_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid column ofset bytes", K(column_offset_type));
+    } else {
+      offset_type_ = column_offset_type;
+    }
+    return ret;
   }
-  int16_t get_column_count() const
+  OB_INLINE int set_column_idx_type(const BYTES_LEN column_idx_type)
   {
-    return column_count_;
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!is_valid_col_idx_type(column_idx_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid column idx bytes", K(column_idx_type));
+    } else {
+      column_idx_type_ = column_idx_type;
+    }
+    return ret;
+  }
+  OB_INLINE BYTES_LEN get_offset_type() const { return (BYTES_LEN)offset_type_; }
+  OB_INLINE uint8_t get_offset_type_len() const { return get_bytes_type_len(get_offset_type()); }
+  OB_INLINE BYTES_LEN get_column_idx_type() const { return (BYTES_LEN)column_idx_type_; }
+  OB_INLINE uint8_t get_column_idx_type_len() const { return get_bytes_type_len(get_column_idx_type()); }
+  OB_INLINE void set_sparse_row_flag(const bool is_sparse_row) { is_sparse_row_ = is_sparse_row; }
+  OB_INLINE bool is_sparse_row() const { return is_sparse_row_; }
+  OB_INLINE void set_column_count(const uint8_t column_count) { column_cnt_ = column_count; }
+  OB_INLINE uint8_t get_column_count() const { return column_cnt_; }
+  OB_INLINE void set_sparse_column_count(const uint8_t sparse_column_count) { sparse_column_cnt_ = sparse_column_count; }
+  OB_INLINE uint8_t get_sparse_column_count() const { return sparse_column_cnt_; }
+  TO_STRING_KV(K_(column_cnt), K_(offset_type), K_(is_sparse_row), K_(column_idx_type), K_(sparse_column_cnt));
+
+  static const int64_t SPARSE_COL_CNT_BYTES = 2;
+  static const int64_t MAX_SPARSE_COL_CNT = (0x1 << SPARSE_COL_CNT_BYTES) - 1; // 3
+private:
+
+  uint8_t column_cnt_; // if row is single cluster, column_cnt= UINT8_MAX
+  union
+  {
+    uint8_t info_mask_;
+    struct
+    {
+      uint8_t offset_type_         :   2;
+      uint8_t is_sparse_row_       :   1; // is sparse row
+      uint8_t column_idx_type_     :   1; // means col_idx array bytes when is_sparse_row_ = true
+      uint8_t sparse_column_cnt_   :   SPARSE_COL_CNT_BYTES; // 2 | means sparse column count when is_sparse_row_ = true
+      uint8_t reserved_            :   2;
+    };
+  };
+};
+
+class ObRowHeader
+{
+public:
+  ObRowHeader() { memset(this, 0, sizeof(*this)); }
+  static int get_serialized_size() { return sizeof(ObRowHeader); }
+
+  OB_INLINE bool is_valid() const
+  {
+    return column_cnt_ > 0 && rowkey_cnt_ > 0;
   }
 
-  void set_row_flag(const int8_t row_flag)
+  static const int64_t ROW_HEADER_VERSION_1 = 0;
+
+  OB_INLINE uint8_t get_version() const { return version_; }
+  OB_INLINE void set_version(const uint8_t version) { version_ = version; }
+  OB_INLINE ObDmlRowFlag get_row_flag() const
   {
-    row_flag_ = row_flag;
+    return ObDmlRowFlag(row_flag_);
   }
-  void set_column_index_bytes(const int8_t column_index_bytes)
+  OB_INLINE void set_row_flag(const uint8_t row_flag) { row_flag_ = row_flag; }
+
+  OB_INLINE uint8_t get_mvcc_row_flag() const { return multi_version_flag_; }
+  OB_INLINE ObMultiVersionRowFlag get_row_multi_version_flag() const
   {
-    column_index_bytes_ = column_index_bytes;
+    return ObMultiVersionRowFlag(multi_version_flag_);
   }
-  void set_row_dml(const int8_t row_dml)
+  OB_INLINE void set_row_mvcc_flag(const uint8_t row_type_flag) { multi_version_flag_ = row_type_flag; }
+
+  OB_INLINE uint16_t get_column_count() const { return column_cnt_; }
+  OB_INLINE void set_column_count(const uint16_t column_count) { column_cnt_ = column_count; }
+
+  OB_INLINE void clear_reserved_bits() { reserved8_ = 0; reserved_ = 0;}
+
+  OB_INLINE void set_rowkey_count(const uint8_t rowkey_cnt) { rowkey_cnt_ = rowkey_cnt; }
+  OB_INLINE uint8_t get_rowkey_count() const { return rowkey_cnt_; }
+
+  OB_INLINE int64_t get_trans_id() const { return trans_id_; }
+  OB_INLINE void set_trans_id(const int64_t trans_id) { trans_id_ = trans_id; }
+
+  OB_INLINE bool is_single_cluster() const { return single_cluster_; }
+  OB_INLINE void set_single_cluster(bool sigle_cluster) { single_cluster_ = sigle_cluster; }
+
+  OB_INLINE int set_offset_type(const ObColClusterInfoMask::BYTES_LEN column_offset_type)
   {
-    row_dml_ = row_dml;
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ObColClusterInfoMask::is_valid_offset_type(column_offset_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid column offset bytes", K(column_offset_type));
+    } else {
+      offset_type_ = column_offset_type;
+    }
+    return ret;
   }
-  void set_version(const int8_t version)
+  OB_INLINE ObColClusterInfoMask::BYTES_LEN get_offset_type() const { return (ObColClusterInfoMask::BYTES_LEN)offset_type_; }
+  OB_INLINE uint8_t get_offset_type_len() const { return ObColClusterInfoMask::get_bytes_type_len(get_offset_type()); }
+
+  OB_INLINE bool has_rowkey_independent_cluster() const
   {
-    version_ = version;
+    return need_rowkey_independent_cluster(rowkey_cnt_);
   }
-  void set_reserved8(const int8_t reserved8)
+  OB_INLINE int64_t get_cluster_cnt() const
   {
-    reserved8_ = reserved8;
+    int64_t cluster_cnt = 0;
+    if (single_cluster_) {
+      cluster_cnt = 1;
+    } else {
+      cluster_cnt = calc_cluster_cnt(rowkey_cnt_, column_cnt_);
+    }
+    return cluster_cnt;
   }
-  void set_column_count(const int16_t column_count)
+  static int64_t calc_cluster_cnt(const int64_t rowkey_cnt, const int64_t column_cnt)
   {
-    column_count_ = column_count;
+    return need_rowkey_independent_cluster(rowkey_cnt) ?
+              1 + calc_cluster_cnt_by_row_col_count(column_cnt - rowkey_cnt) :
+              calc_cluster_cnt_by_row_col_count(column_cnt);
   }
-  void set_row_type_flag(const int8_t row_type_flag)
+
+  ObRowHeader &operator=(const ObRowHeader &src)
   {
-    row_type_flag_ = row_type_flag;
-  }
-  static int get_serialized_size()
-  {
-    return sizeof(ObRowHeader);
-  }
-  ObRowHeader& operator=(const ObRowHeader& src)
-  {
-    row_flag_ = src.row_flag_;
-    column_index_bytes_ = src.column_index_bytes_;
-    row_dml_ = src.row_dml_;
-    version_ = src.version_;
-    reserved8_ = src.reserved8_;
-    column_count_ = src.column_count_;
-    row_type_flag_ = src.row_type_flag_;
+    MEMCPY(this, &src, sizeof(ObRowHeader));
     return *this;
   }
 
-  enum ObRowHeaderVersion {
-    RHV_NO_TRANS_ID = 0,
-    RHV_WITH_TRANS_ID = 1,
+  TO_STRING_KV(K_(version),
+      K_(row_flag),
+      K_(multi_version_flag),
+      K_(column_cnt),
+      K_(rowkey_cnt),
+      K_(trans_id));
+
+  static const int64_t CLUSTER_COLUMN_BYTES = 5;
+  static const int64_t CLUSTER_COLUMN_CNT = 0x1 << CLUSTER_COLUMN_BYTES; // 32
+  static const int64_t MAX_CLUSTER_COLUMN_CNT = 256;
+  static const int64_t CLUSTER_COLUMN_CNT_MASK = CLUSTER_COLUMN_CNT - 1;
+  static const int64_t USE_CLUSTER_COLUMN_COUNT = CLUSTER_COLUMN_CNT * 1.5; // 48
+  static bool need_rowkey_independent_cluster(const int64_t rowkey_count)
+  {
+    return rowkey_count >= CLUSTER_COLUMN_CNT && rowkey_count <= USE_CLUSTER_COLUMN_COUNT;
+  }
+  static int64_t calc_cluster_cnt_by_row_col_count(const int64_t col_count)
+  {
+    return (col_count >> CLUSTER_COLUMN_BYTES) + ((col_count & CLUSTER_COLUMN_CNT_MASK) != 0);
+  }
+  static int64_t calc_cluster_idx(const int64_t column_idx)
+  {
+    return column_idx >> CLUSTER_COLUMN_BYTES;
+  }
+  static int64_t calc_column_cnt(const int64_t cluster_idx)
+  {
+    return cluster_idx << CLUSTER_COLUMN_BYTES;
+  }
+  static int64_t calc_column_idx_in_cluster(const int64_t column_count)
+  {
+    return column_count & CLUSTER_COLUMN_CNT_MASK;
+  }
+  enum SPECIAL_VAL {
+    VAL_NORMAL = 0,
+    VAL_OUTROW = 1,
+    VAL_NOP = 2,
+    VAL_NULL = 3,
+    VAL_ENCODING_NORMAL = 4,
+    VAL_MAX
   };
 
-  TO_STRING_KV(K_(row_flag), K_(column_index_bytes), K_(row_dml), K_(version), K_(row_type_flag), K_(reserved8),
-      K_(column_count));
-
 private:
-  int8_t row_flag_;
-  int8_t column_index_bytes_;
-  int8_t row_dml_;
-  int8_t version_;
-  int8_t row_type_flag_;
-  int8_t reserved8_;
-  int16_t column_count_;
+  uint8_t version_;
+  uint8_t row_flag_;
+  uint8_t multi_version_flag_;
+  uint8_t rowkey_cnt_;
+  uint16_t column_cnt_;
+  union
+  {
+    uint8_t header_info_mask_;
+    struct
+    {
+      uint8_t offset_type_       :   2; // cluster offset
+      uint8_t single_cluster_    :   1;
+      uint8_t reserved_          :   5;
+    };
+  };
+  uint8_t reserved8_;
+  int64_t trans_id_;
 };
 
-struct ObSSTableTriple {
-  blocksstable::MacroBlockId block_id_;
+struct ObSSTablePair
+{
   int64_t data_version_;
   int64_t data_seq_;
-  ObSSTableTriple() : block_id_(), data_version_(0), data_seq_(0)
-  {}
-  ObSSTableTriple(const blocksstable::MacroBlockId id, const int64_t dv, const int64_t seq)
-      : block_id_(id), data_version_(dv), data_seq_(seq)
-  {}
-  TO_STRING_KV(K_(block_id), K_(data_version), K_(data_seq));
-};
+  ObSSTablePair() : data_version_(0), data_seq_(0) {}
+  ObSSTablePair(const int64_t dv, const int64_t seq)
+      : data_version_(dv), data_seq_(seq)
+  {
+  }
 
-struct ObSSTablePair {
-  int64_t data_version_;
-  int64_t data_seq_;
-  ObSSTablePair() : data_version_(0), data_seq_(0)
-  {}
-  ObSSTablePair(const int64_t dv, const int64_t seq) : data_version_(dv), data_seq_(seq)
-  {}
-
-  bool operator==(const ObSSTablePair& other) const
+  bool operator==(const ObSSTablePair &other) const
   {
     return data_version_ == other.data_version_ && data_seq_ == other.data_seq_;
   }
 
-  bool operator!=(const ObSSTablePair& other) const
+  bool operator!=(const ObSSTablePair &other) const
   {
     return !(*this == other);
   }
   uint64_t hash() const
   {
-    return common::combine_id(data_version_, data_seq_);
+    return common::combine_two_ids(data_version_, data_seq_);
   }
   TO_STRING_KV(K_(data_version), K_(data_seq));
   OB_UNIS_VERSION(1);
 };
 
-struct ObLogicBlockIndex {
-public:
-  static const int64_t INVALID_LOGIC_BLOCK_INDEX = -1;
-
-  ObLogicBlockIndex() : logic_block_index_(INVALID_LOGIC_BLOCK_INDEX)
-  {}
-  explicit ObLogicBlockIndex(const int64_t idx) : logic_block_index_(idx)
-  {}
-  ~ObLogicBlockIndex()
-  {}
-  ObLogicBlockIndex(const ObLogicBlockIndex& logic_idx) : logic_block_index_(logic_idx.logic_block_index_)
-  {}
-
-  bool operator==(const ObLogicBlockIndex& other) const
-  {
-    return logic_block_index_ == other.logic_block_index_;
-  }
-  bool operator!=(const ObLogicBlockIndex& other) const
-  {
-    return logic_block_index_ != other.logic_block_index_;
-  }
-  ObLogicBlockIndex& operator=(const ObLogicBlockIndex& other)
-  {
-    if (&other != this) {
-      logic_block_index_ = other.logic_block_index_;
-    }
-    return *this;
-  }
-
-  bool is_valid() const
-  {
-    return logic_block_index_ >= INVALID_LOGIC_BLOCK_INDEX;
-  }
-  TO_STRING_KV(K_(logic_block_index));
-  OB_UNIS_VERSION(1);
-
-public:
-  int64_t logic_block_index_;
-};
-
-struct ObMacroBlockItem {
-public:
-  ObMacroBlockItem() : macro_block_id_(), logic_block_index_()
-  {}
-  ~ObMacroBlockItem()
-  {}
-  ObMacroBlockItem(const MacroBlockId& id) : macro_block_id_(id), logic_block_index_()
-  {}
-  ObMacroBlockItem(const MacroBlockId& id, const int64_t idx) : macro_block_id_(id), logic_block_index_(idx)
-  {}
-  ObMacroBlockItem(const int64_t id, const int64_t idx) : macro_block_id_(id), logic_block_index_(idx)
-  {}
-  ObMacroBlockItem(const ObMacroBlockItem& item)
-      : macro_block_id_(item.macro_block_id_), logic_block_index_(item.logic_block_index_)
-  {}
-
-  bool operator==(const ObMacroBlockItem& other) const
-  {
-    return macro_block_id_ == other.macro_block_id_ && logic_block_index_ == other.logic_block_index_;
-  }
-
-  bool operator!=(const ObMacroBlockItem& other) const
-  {
-    return !(*this == other);
-  }
-
-  ObMacroBlockItem& operator=(const ObMacroBlockItem& other)
-  {
-    if (&other != this) {
-      macro_block_id_ = other.macro_block_id_;
-      logic_block_index_ = other.logic_block_index_;
-    }
-    return *this;
-  }
-  TO_STRING_KV(K_(macro_block_id), K_(logic_block_index));
-
-  // for compatibility, MacroBlockItem is regarded as valid when logic_block_index == INVALID_LOGIC_BLOCK_INDEX
-  bool is_valid() const
-  {
-    return macro_block_id_.is_valid() && logic_block_index_.is_valid();
-  }
-
-public:
-  MacroBlockId macro_block_id_;
-  ObLogicBlockIndex logic_block_index_;
-};
-
-template <class K, class V>
-struct ObGetBlockItemKey {
-  void operator()(const K& k, const V& v)
-  {
-    UNUSED(k);
-    UNUSED(v);
-  }
-};
-
-template <>
-struct ObGetBlockItemKey<MacroBlockId, ObMacroBlockItem*> {
-  MacroBlockId operator()(const ObMacroBlockItem* macro_block_item) const
-  {
-    MacroBlockId block_id;
-    if (OB_ISNULL(macro_block_item)) {
-      STORAGE_LOG(ERROR, "invalid args", K(macro_block_item));
-    } else {
-      block_id = macro_block_item->macro_block_id_;
-    }
-    return block_id;
-  }
-};
-
-template <>
-struct ObGetBlockItemKey<ObLogicBlockIndex, ObMacroBlockItem*> {
-  ObLogicBlockIndex operator()(const ObMacroBlockItem* macro_block_item) const
-  {
-    ObLogicBlockIndex logic_idx;
-    if (OB_ISNULL(macro_block_item)) {
-      STORAGE_LOG(ERROR, "invalid args", K(macro_block_item));
-    } else {
-      logic_idx = macro_block_item->logic_block_index_;
-    }
-    return logic_idx;
-  }
-};
-
-typedef common::hash::ObPointerHashArray<MacroBlockId, ObMacroBlockItem*, ObGetBlockItemKey> BlockIdHashArray;
-typedef common::hash::ObPointerHashArray<ObLogicBlockIndex, ObMacroBlockItem*, ObGetBlockItemKey> LogicIndexHashArray;
-
 //=========================oceanbase::blocksstable==================================
-int write_compact_rowkey(ObBufferWriter& writer, const common::ObObj* endkey, const int64_t count,
+int write_compact_rowkey(
+    ObBufferWriter &writer,
+    const common::ObObj *endkey,
+    const int64_t count,
     const common::ObRowStoreType row_store_type);
-int read_compact_rowkey(ObBufferReader& reader, const common::ObObjMeta* column_type_array, common::ObObj* endkey,
-    const int64_t count, const common::ObRowStoreType row_store_type);
+int read_compact_rowkey(
+    ObBufferReader &reader,
+    const common::ObObjMeta *column_type_array,
+    common::ObObj *endkey,
+    const int64_t count,
+    const common::ObRowStoreType row_store_type);
 
-struct ObSimpleMacroBlockMetaInfo {
-  int64_t block_index_;
-  int16_t attr_;
-  uint64_t table_id_;
-  uint64_t data_version_;
-  int64_t data_seq_;
-  int32_t write_seq_;
-  int64_t create_timestamp_;
+class ObSimpleMacroBlockInfo final
+{
+public:
+  ObSimpleMacroBlockInfo();
+  ~ObSimpleMacroBlockInfo() = default;
+  void reset();
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    if (!macro_id_.is_valid()) {
+      J_NAME("nothing");
+    } else {
+      J_OBJ_START();
+      J_KV(K_(macro_id), K_(last_access_time), K_(mem_ref_cnt), K_(disk_ref_cnt));
+      J_OBJ_END();
+    }
+    return pos;
+  }
+public:
+  MacroBlockId macro_id_;
+  int64_t last_access_time_;
+  int32_t mem_ref_cnt_;
+  int32_t disk_ref_cnt_;
+};
 
-  ObSimpleMacroBlockMetaInfo();
+class ObMacroBlockMarkerStatus final
+{
+public:
+  ObMacroBlockMarkerStatus();
+  ~ObMacroBlockMarkerStatus() = default;
   void reuse();
   void reset();
-  TO_STRING_KV(
-      K_(block_index), K_(attr), K_(table_id), K_(data_version), K_(data_seq), K_(write_seq), K_(create_timestamp));
-};
-
-struct ObMacroBlockMarkerStatus {
-  static const int64_t HOLD_ALERT_TIME = 12 * 1024 * 1024 * 3600LL;  // 12h
+  void fill_comment(char *buf, const int32_t buf_len) const;
+  TO_STRING_KV(K_(total_block_count),
+               K_(reserved_block_count),
+               K_(linked_block_count),
+               K_(tmp_file_count),
+               K_(data_block_count),
+               K_(index_block_count),
+               K_(ids_block_count),
+               K_(disk_block_count),
+               K_(bloomfiter_count),
+               K_(hold_count),
+               K_(pending_free_count),
+               K_(free_count),
+               K_(mark_cost_time),
+               K_(sweep_cost_time),
+               KTIME_(start_time),
+               KTIME_(last_end_time),
+               K_(hold_info));
+public:
   int64_t total_block_count_;
   int64_t reserved_block_count_;
-  int64_t macro_meta_block_count_;
-  int64_t partition_meta_block_count_;
+  int64_t linked_block_count_;
+  int64_t tmp_file_count_;
   int64_t data_block_count_;
-  int64_t lob_data_block_count_;
-  int64_t second_index_count_;
-  int64_t lob_second_index_count_;
-  int64_t bloomfilter_count_;
+  int64_t index_block_count_;
+  int64_t ids_block_count_;
+  int64_t disk_block_count_;
+  int64_t bloomfiter_count_;
   int64_t hold_count_;
   int64_t pending_free_count_;
   int64_t free_count_;
   int64_t mark_cost_time_;
   int64_t sweep_cost_time_;
-  int64_t hold_alert_time_;
-  ObSimpleMacroBlockMetaInfo hold_info_;
-
-  ObMacroBlockMarkerStatus();
-
-  void reuse();
-  void reset();
-  inline void record_hold_meta(const int64_t now, const int64_t block_index, const ObMacroBlockMeta& meta);
-  void fill_comment(char* buf, const int32_t buf_len) const;
-
-  TO_STRING_KV(K_(total_block_count), K_(reserved_block_count), K_(macro_meta_block_count),
-      K_(partition_meta_block_count), K_(data_block_count), K_(lob_data_block_count), K_(second_index_count),
-      K_(lob_second_index_count), K_(bloomfilter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
-      K_(mark_cost_time), K_(sweep_cost_time), K_(hold_alert_time), K_(hold_info));
-};
-
-class ObMacroBlockMarkerBitMap {
-public:
-  ObMacroBlockMarkerBitMap();
-  virtual ~ObMacroBlockMarkerBitMap();
-  int init(const int64_t macro_block_count);
-  void reuse();
-  void reset();
-  int set_block(const int64_t block_index);
-  int test_block(const int64_t block_index, bool& bool_ret) const;
-
-private:
-  typedef uint64_t size_type;
-  static const size_type BYTES_PER_BLOCK = sizeof(size_type);
-  static const size_type BITS_PER_BLOCK = BYTES_PER_BLOCK * 8;
-
-  static size_type mem_index(size_type pos)
-  {
-    return pos / BITS_PER_BLOCK;
-  }
-  static size_type bit_index(size_type pos)
-  {
-    return (pos % BITS_PER_BLOCK);
-  }
-  static size_type bit_mask(size_type pos)
-  {
-    return (1ULL << bit_index(pos));
-  }
-
-private:
-  bool is_inited_;
-  char* block_bitmap_;
-  int64_t byte_size_;
-  int64_t total_macro_block_count_;
-};
-
-class ObMacroBlockMarkerHelper {
-public:
-  ObMacroBlockMarkerHelper();
-  virtual ~ObMacroBlockMarkerHelper();
-  int init(const int64_t macro_block_count);
-  void reuse();
-  void reset();
-  ObMacroBlockMarkerStatus& get_status()
-  {
-    return status_;
-  }
-  int set_block(const ObMacroBlockCommonHeader::MacroBlockType& type, const int64_t block_index);
-  int set_block(const ObMacroBlockCommonHeader::MacroBlockType& type, const common::ObIArray<int64_t>& block_array);
-  int set_block(
-      const ObMacroBlockCommonHeader::MacroBlockType& type, const common::ObIArray<MacroBlockId>& block_array);
-  int test_block(const int64_t block_index, bool& bool_ret) const;
-
-private:
-  bool is_inited_;
-  ObMacroBlockMarkerStatus status_;
-  ObMacroBlockMarkerBitMap bit_map_;
+  int64_t start_time_;
+  int64_t last_end_time_;
+  ObSimpleMacroBlockInfo hold_info_;
 };
 
 /****************************** following codes are inline functions ****************************/
-inline void ObMacroBlockMarkerStatus::record_hold_meta(
-    const int64_t now, const int64_t block_index, const ObMacroBlockMeta& meta)
+enum ObRecordHeaderVersion
 {
-  if (now > meta.create_timestamp_ + hold_alert_time_) {
-    if (0 == hold_info_.create_timestamp_ || meta.create_timestamp_ < hold_info_.create_timestamp_) {
-      hold_info_.block_index_ = block_index;
-      hold_info_.attr_ = meta.attr_;
-      hold_info_.table_id_ = meta.table_id_;
-      hold_info_.data_version_ = meta.data_version_;
-      hold_info_.data_seq_ = meta.data_seq_;
-      hold_info_.write_seq_ = meta.write_seq_;
-      hold_info_.create_timestamp_ = meta.create_timestamp_;
-    }
-  }
-}
+  RECORD_HEADER_VERSION_V2 = 2,
+  RECORD_HEADER_VERSION_V3 = 3
+};
 
-OB_INLINE bool ObSSTableMacroBlockId::is_valid() const
+struct ObRecordHeaderV3
 {
-  return macro_block_id_.is_valid();  // TODO(): check macro_block_id_in_files_ later
-}
-
-OB_INLINE void ObSSTableMacroBlockId::reset()
-{
-  macro_block_id_.reset();
-  macro_block_id_in_files_ = -1;
-}
-
-OB_INLINE bool ObMacroBlockCtx::is_valid() const
-{
-  return sstable_block_id_.is_valid() && nullptr != sstable_;  // file_ctx_ not checked
-}
-
-OB_INLINE void ObMacroBlockCtx::reset()
-{
-  file_ctx_ = NULL;
-  sstable_block_id_.reset();
-  sstable_ = nullptr;
-}
-
-OB_INLINE const blocksstable::MacroBlockId& ObMacroBlockCtx::get_macro_block_id() const
-{
-  return sstable_block_id_.macro_block_id_;
-}
-
-enum ObRecordHeaderVersion { RECORD_HEADER_VERSION_V2 = 2, RECORD_HEADER_VERSION_V3 = 3 };
-
-struct ObRecordHeaderV3 {
 public:
   ObRecordHeaderV3();
   ~ObRecordHeaderV3() = default;
-  static int deserialize_and_check_record(
-      const char* ptr, const int64_t size, const int16_t magic, const char*& payload_ptr, int64_t& payload_size);
-  static int deserialize_and_check_record(const char* ptr, const int64_t size, const int16_t magic);
-  int check_and_get_record(
-      const char* ptr, const int64_t size, const int16_t magic, const char*& payload_ptr, int64_t& payload_size) const;
-  int check_record(const char* ptr, const int64_t size, const int16_t magic) const;
-  static int64_t get_serialize_size(const int64_t header_version, const int64_t column_cnt)
-  {
-    return RECORD_HEADER_VERSION_V2 == header_version
-               ? sizeof(ObRecordCommonHeader)
-               : sizeof(ObRecordCommonHeader) + sizeof(data_encoding_length_) + sizeof(row_count_) +
-                     sizeof(column_cnt_) + column_cnt * sizeof(column_checksums_[0]);
+  static int deserialize_and_check_record(const char *ptr, const int64_t size,
+      const int16_t magic, const char *&payload_ptr, int64_t &payload_size);
+  static int deserialize_and_check_record(const char *ptr, const int64_t size, const int16_t magic);
+  int check_and_get_record(const char *ptr, const int64_t size, const int16_t magic, const char *&payload_ptr, int64_t &payload_size) const;
+  int check_record(const char *ptr, const int64_t size, const int16_t magic) const;
+  static int64_t get_serialize_size(const int64_t header_version, const int64_t column_cnt) {
+    return RECORD_HEADER_VERSION_V2 == header_version ? sizeof(ObRecordCommonHeader)
+        : sizeof(ObRecordCommonHeader) + column_cnt * sizeof(column_checksums_[0]);
   }
   void set_header_checksum();
   int check_header_checksum() const;
-  inline bool is_compressed_data() const
-  {
-    return data_length_ != data_zlength_;
-  }
+  inline bool is_compressed_data() const { return data_length_ != data_zlength_; }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
-  int check_payload_checksum(const char* buf, const int64_t len) const;
+  int check_payload_checksum(const char *buf, const int64_t len) const;
 
 public:
-  struct ObRecordCommonHeader {
+  struct ObRecordCommonHeader
+  {
   public:
     ObRecordCommonHeader() = default;
     ~ObRecordCommonHeader() = default;
-    inline bool is_compressed() const
-    {
-      return data_length_ != data_zlength_;
-    }
+    inline bool is_compressed() const { return data_length_ != data_zlength_; }
     int16_t magic_;
     int8_t header_length_;
     int8_t version_;
@@ -1549,9 +1105,12 @@ public:
     int64_t data_length_;
     int64_t data_zlength_;
     int64_t data_checksum_;
+    int32_t data_encoding_length_;
+    uint16_t row_count_;
+    uint16_t column_cnt_;
   };
   int16_t magic_;
-  int8_t header_length_;
+  int8_t header_length_; ///  column_checksum is not contained is header_length_
   int8_t version_;
   int16_t header_checksum_;
   int16_t reserved16_;
@@ -1560,298 +1119,62 @@ public:
   int64_t data_checksum_;
   // add since 2.2
   int32_t data_encoding_length_;
-  int32_t row_count_;
+  uint16_t row_count_;
   uint16_t column_cnt_;
-  int64_t* column_checksums_;
+  int64_t *column_checksums_;
 
-  TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(reserved16), K_(data_length),
-      K_(data_zlength), K_(data_checksum), K_(data_encoding_length), K_(row_count), K_(column_cnt),
-      KP(column_checksums_));
+  TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum),
+      K_(reserved16), K_(data_length), K_(data_zlength), K_(data_checksum),
+      K_(data_encoding_length), K_(row_count), K_(column_cnt), KP(column_checksums_));
 };
 
-// ObStorageFile's superblock should inherit from this basic one
-class ObISuperBlock {
+struct ObMicroBlockDesMeta
+{
 public:
-  ObISuperBlock() = default;
-  virtual ~ObISuperBlock() = default;
-  virtual void reset() = 0;
-
-  PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
-  DECLARE_PURE_VIRTUAL_TO_STRING;
-  virtual int64_t get_timestamp() const = 0;
-  virtual bool is_valid() const = 0;
-};
-
-struct ObSuperBlockMetaEntry {
+  ObMicroBlockDesMeta()
+    : compressor_type_(common::INVALID_COMPRESSOR), encrypt_id_(0),
+      master_key_id_(0), encrypt_key_(nullptr) {}
+  ObMicroBlockDesMeta(const common::ObCompressorType compressor_type, const int64_t encrypt_id,
+      const int64_t master_key_id, const char *encrypt_key)
+    : compressor_type_(compressor_type), encrypt_id_(encrypt_id),
+      master_key_id_(master_key_id), encrypt_key_(encrypt_key) {}
+  TO_STRING_KV(K_(compressor_type), K_(encrypt_id), K_(master_key_id),
+      KPHEX_(encrypt_key, nullptr == encrypt_key_ ? 0 : share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH));
+  OB_INLINE bool is_valid() const
+  {
+    return common::ObCompressorType::INVALID_COMPRESSOR < compressor_type_
+        && compressor_type_ < common::ObCompressorType::MAX_COMPRESSOR;
+  }
 public:
-  static const int64_t META_ENTRY_VERSION = 1;
-  ObSuperBlockMetaEntry() : macro_block_id_(-1)
-  {}
-  bool is_valid() const
-  {
-    return macro_block_id_.is_valid();
-  }
-  void reset()
-  {
-    macro_block_id_.reset();
-    macro_block_id_.set_second_id(-1);
-  }
-  TO_STRING_KV(K_(macro_block_id));
-  OB_UNIS_VERSION(META_ENTRY_VERSION);
-
-public:
-  blocksstable::MacroBlockId macro_block_id_;  // first entry meta macro block id
-};
-
-struct ObServerSuperBlock : public blocksstable::ObISuperBlock {
-  struct ServerSuperBlockContent {
-    static const int64_t SUPER_BLOCK_CONTENT_VERSION = 1;
-
-    int64_t create_timestamp_;  // create timestamp
-    int64_t modify_timestamp_;  // last modified timestamp
-    int64_t macro_block_size_;
-    int64_t total_macro_block_count_;
-    int64_t total_file_size_;
-
-    common::ObLogCursor replay_start_point_;
-    ObSuperBlockMetaEntry super_block_meta_;
-    ObSuperBlockMetaEntry tenant_config_meta_;
-
-    ServerSuperBlockContent();
-    bool is_valid() const;
-    void reset();
-    TO_STRING_KV("Type", "ObServerSuperBlock", K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),
-        K_(total_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(super_block_meta),
-        K_(tenant_config_meta));
-    OB_UNIS_VERSION(SUPER_BLOCK_CONTENT_VERSION);
-  };
-
-  ObServerSuperBlock();
-
-  virtual int64_t get_timestamp() const override
-  {
-    return content_.modify_timestamp_;
-  }
-  virtual bool is_valid() const override;
-  virtual void reset() override;
-  VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
-  VIRTUAL_TO_STRING_KV(K_(header), K_(content));
-
-  OB_INLINE int64_t get_macro_block_size() const
-  {
-    return content_.macro_block_size_;
-  }
-  OB_INLINE int64_t get_total_macro_block_count() const
-  {
-    return content_.total_macro_block_count_;
-  }
-  OB_INLINE int64_t get_super_block_size() const
-  {
-    return header_.get_serialize_size() + content_.get_serialize_size();
-  }
-  int format_startup_super_block(const int64_t macro_block_size, const int64_t data_file_size);
-
-  ObSuperBlockHeaderV2 header_;
-  ServerSuperBlockContent content_;
-};
-
-struct ObMacroBlockMetaV2 final {
-public:
-  static const int64_t MACRO_BLOCK_META_VERSION_V1 = 1;
-  static const int64_t MACRO_BLOCK_META_VERSION_V2 = 2;  // upgrade in version 3.1, new meta format
-  ObMacroBlockMetaV2();
-  ~ObMacroBlockMetaV2() = default;
-  bool operator==(const ObMacroBlockMetaV2& other) const;
-  bool operator!=(const ObMacroBlockMetaV2& other) const;
-  bool is_valid() const;
-  int get_deep_copy_size(common::ObRowkey& collation_free_endkey, common::ObIAllocator& allocator, int64_t& size) const;
-  int deep_copy(ObMacroBlockMetaV2*& meta_ptr, common::ObIAllocator& allocator) const;
-  int check_collation_free_valid(bool& is_collation_free_valid) const;
-  int64_t to_string(char* buffer, const int64_t length) const;
-  inline int32_t get_index_size() const
-  {
-    return micro_block_endkey_offset_ - micro_block_index_offset_;
-  }
-  inline int32_t get_block_index_size() const
-  {
-    return occupy_size_ - micro_block_index_offset_;
-  }
-  inline int32_t get_endkey_size() const
-  {
-    return 0 == micro_block_mark_deletion_offset_ ? occupy_size_ - micro_block_endkey_offset_
-                                                  : micro_block_mark_deletion_offset_ - micro_block_endkey_offset_;
-  }
-  inline int32_t get_micro_block_mark_deletion_size() const
-  {
-    return 0 == micro_block_mark_deletion_offset_ ? 0 : micro_block_delta_offset_ - micro_block_mark_deletion_offset_;
-  }
-  inline int32_t get_micro_block_delta_size() const
-  {
-    return 0 == micro_block_delta_offset_ ? 0 : occupy_size_ - micro_block_delta_offset_;
-  }
-  NEED_SERIALIZE_AND_DESERIALIZE;
-  OB_INLINE bool is_data_block() const
-  {
-    return is_sstable_data_block() || is_lob_data_block() || is_bloom_filter_data_block();
-  }
-  OB_INLINE bool is_normal_data_block() const
-  {
-    return is_sstable_data_block() || is_lob_data_block();
-  }
-  OB_INLINE bool is_sstable_data_block() const
-  {
-    return ObMacroBlockCommonHeader::SSTableData == attr_;
-  }
-  OB_INLINE bool is_lob_data_block() const
-  {
-    return ObMacroBlockCommonHeader::LobData == attr_ || ObMacroBlockCommonHeader::LobIndex == attr_;
-  }
-  OB_INLINE bool is_bloom_filter_data_block() const
-  {
-    return ObMacroBlockCommonHeader::BloomFilterData == attr_;
-  }
-  OB_INLINE bool is_sparse_format() const
-  {
-    return common::ObRowStoreType::SPARSE_ROW_STORE == row_store_type_;
-  }
-  OB_INLINE bool is_encrypted() const
-  {
-    return encrypt_id_ > static_cast<int64_t>(share::ObAesOpMode::ob_invalid_mode);
-  }
-
-private:
-  int64_t get_meta_content_serialize_size() const;
-
-public:
-  // For compatibility, the variables in this struct MUST NOT be deleted or moved.
-  // You should ONLY add variables at the end.
-  // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-
-  // The following variables need to be serialized
-  int16_t attr_;
-  union {
-    uint64_t data_version_;
-    int64_t previous_block_index_;  // nonsstable: previous_block_index_ link.
-  };
-  int16_t column_number_;              // column count of this table (size of column_checksum_)
-  int16_t rowkey_column_number_;       // rowkey column count of this table
-  int16_t column_index_scale_;         // store column index scale percent of column count;
-  int16_t row_store_type_;             // reserve
-  int32_t row_count_;                  // row count of macro block;
-  int32_t occupy_size_;                // data size of macro block;
-  int64_t data_checksum_;              // data checksum of macro block
-  int32_t micro_block_count_;          // micro block info in ObSSTableMacroBlockHeader
-  int32_t micro_block_data_offset_;    // data offset base on macro block header.
-  int32_t micro_block_index_offset_;   // data_size = index_offset - data_offset
-  int32_t micro_block_endkey_offset_;  // index_size = endkey_offset - index_offset,
-                                       // endkey_size = micro_block_mark_deletion_offset_ - endkey_offset
-  int64_t* column_checksum_;
-  common::ObObj* endkey_;
-  uint64_t table_id_;
-  int64_t data_seq_;  // sequence in partition meta.
-  int64_t schema_version_;
-  int64_t snapshot_version_;
-
-  int16_t schema_rowkey_col_cnt_;
-  // only valid for multi-version minor sstable, row count delta relative to the base data
-  // default 0
-  int32_t row_count_delta_;
-
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
-                                              // micro_block_mark_deletion_offset_
-  bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
-  int64_t partition_id_;              // added since 2.0
-  int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
-  int64_t progressive_merge_round_;
-  // The following variables do not need to be serialized
-  int32_t write_seq_;  // increment 1 every reuse pass.
-  uint32_t bf_flag_;   // mark if rowkey_prefix bloomfilter in cache, bit=0: in, 0:not in
-  int64_t create_timestamp_;
-  int64_t retire_timestamp_;
-  common::ObObj* collation_free_endkey_;
+  common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
-  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  bool contain_uncommitted_row_;
-  int64_t max_merged_trans_version_;
+  const char *encrypt_key_;
 };
 
-struct ObFullMacroBlockMeta final {
-public:
-  ObFullMacroBlockMeta();
-  ObFullMacroBlockMeta(const ObMacroBlockSchemaInfo* schema, const ObMacroBlockMetaV2* meta);
-  ~ObFullMacroBlockMeta() = default;
-  static int convert_macro_meta(const ObMacroBlockMeta& src_meta, ObMacroBlockMetaV2& dest_meta,
-      ObMacroBlockSchemaInfo& dest_schema, common::ObIAllocator* allocator = nullptr);
-  int assign(const ObFullMacroBlockMeta& other);
-  int deep_copy(ObFullMacroBlockMeta& dst, common::ObIAllocator& allocator);
-  int convert_from_old_macro_meta(const ObMacroBlockMeta& meta, common::ObIAllocator& allocator);
-  bool is_valid() const
-  {
-    return nullptr != schema_ && nullptr != meta_;
-  }
-  void reset();
-  TO_STRING_KV(K_(schema), K_(meta));
-  const ObMacroBlockSchemaInfo* schema_;
-  const ObMacroBlockMetaV2* meta_;
-};
-
-struct ObMacroBlockInfoPair final {
-public:
-  ObMacroBlockInfoPair() : block_id_(), meta_()
-  {}
-  ObMacroBlockInfoPair(const blocksstable::MacroBlockId& block_id, const ObFullMacroBlockMeta& meta)
-      : block_id_(block_id), meta_(meta)
-  {}
-  ~ObMacroBlockInfoPair() = default;
-  bool is_valid() const
-  {
-    return block_id_.is_valid() && meta_.is_valid();
-  }
-  void reset()
-  {
-    block_id_.reset();
-    meta_.reset();
-  }
-  TO_STRING_KV(K_(block_id), K_(meta));
-  blocksstable::MacroBlockId block_id_;
-  ObFullMacroBlockMeta meta_;
-};
-
-struct ObFullMacroBlockMetaEntry final {
-public:
-  ObFullMacroBlockMetaEntry(ObMacroBlockMetaV2& meta_, ObMacroBlockSchemaInfo& schema);
-  ~ObFullMacroBlockMetaEntry() = default;
-  NEED_SERIALIZE_AND_DESERIALIZE;
-  ObMacroBlockMetaV2& meta_;
-  ObMacroBlockSchemaInfo& schema_;
-};
-
-class ObIMacroIdIterator {
-public:
-  ObIMacroIdIterator()
-  {}
-  virtual ~ObIMacroIdIterator()
-  {}
-  virtual int get_next_macro_id(MacroBlockId& block_id) = 0;
-};
-
-struct ObMajorMacroBlockKey
+enum ObDDLMacroBlockType
 {
-  ObMajorMacroBlockKey() { reset(); }
-  bool is_valid() const { return table_id_ > 0 && partition_id_ >= 0 && data_version_ > 0 && data_seq_ >= 0; }
-  uint64_t hash() const;
-  void reset();
-  bool operator ==(const ObMajorMacroBlockKey &key) const;
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(data_version), K_(data_seq));
-
-  uint64_t table_id_;
-  int64_t partition_id_;
-  int64_t data_version_;
-  int64_t data_seq_;
+  DDL_MB_INVALID_TYPE = 0,
+  DDL_MB_DATA_TYPE = 1,
+  DDL_MB_INDEX_TYPE = 2,
 };
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+struct ObDDLMacroBlockRedoInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLMacroBlockRedoInfo();
+  ~ObDDLMacroBlockRedoInfo() = default;
+  bool is_valid() const;
+  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_scn));
+public:
+  storage::ObITable::TableKey table_key_;
+  ObString data_buffer_;
+  ObDDLMacroBlockType block_type_;
+  ObLogicMacroBlockId logic_id_;
+  share::SCN start_scn_;
+};
+
+}//end namespace blocksstable
+}//end namespace oceanbase
 #endif

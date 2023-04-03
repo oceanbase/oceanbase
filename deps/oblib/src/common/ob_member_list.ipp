@@ -14,15 +14,20 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <int64_t MAX_MEMBER_NUM>
-ObMemberListBase<MAX_MEMBER_NUM>::ObMemberListBase() : member_number_(0)
-{}
+ObMemberListBase<MAX_MEMBER_NUM>::ObMemberListBase()
+    : member_number_(0)
+{
+}
 
 template <int64_t MAX_MEMBER_NUM>
 ObMemberListBase<MAX_MEMBER_NUM>::~ObMemberListBase()
-{}
+{
+}
 
 template <int64_t MAX_MEMBER_NUM>
 void ObMemberListBase<MAX_MEMBER_NUM>::reset()
@@ -40,7 +45,7 @@ bool ObMemberListBase<MAX_MEMBER_NUM>::is_valid() const
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::add_member(const ObMember& member)
+int ObMemberListBase<MAX_MEMBER_NUM>::add_member(const ObMember &member)
 {
   int ret = OB_SUCCESS;
   int64_t dst_idx = member_number_;
@@ -53,7 +58,8 @@ int ObMemberListBase<MAX_MEMBER_NUM>::add_member(const ObMember& member)
     for (int64_t i = 0; OB_SUCC(ret) && i < member_number_; ++i) {
       if (member_[i].get_server() == member.get_server()) {
         ret = OB_ENTRY_EXIST;
-      } else if (member_number_ == dst_idx && member < member_[i]) {
+      } else if (member_number_ == dst_idx
+                 && member < member_[i]) {
         dst_idx = i;
       } else {
         // do nothing
@@ -61,7 +67,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::add_member(const ObMember& member)
     }
     if (OB_SUCC(ret) && dst_idx < member_number_) {
       for (int64_t i = member_number_; OB_SUCC(ret) && i > dst_idx; --i) {
-        member_[i] = member_[i - 1];
+        member_[i] = member_[i-1];
       }
     }
   }
@@ -73,13 +79,13 @@ int ObMemberListBase<MAX_MEMBER_NUM>::add_member(const ObMember& member)
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::add_server(const ObAddr& server)
+int ObMemberListBase<MAX_MEMBER_NUM>::add_server(const ObAddr &server)
 {
   return add_member(ObMember(server, OB_INVALID_TIMESTAMP));
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::remove_member(const ObMember& member)
+int ObMemberListBase<MAX_MEMBER_NUM>::remove_member(const ObMember &member)
 {
   int ret = OB_SUCCESS;
   int64_t index = OB_INVALID_INDEX;
@@ -94,13 +100,8 @@ int ObMemberListBase<MAX_MEMBER_NUM>::remove_member(const ObMember& member)
         index = i;
       } else if (member_[i].get_server() == member.get_server()) {
         ret = OB_ITEM_NOT_MATCH;
-        COMMON_LOG(WARN,
-            "ObMemberListBase<MAX_MEMBER_NUM>::remove_member member not match",
-            K(ret),
-            "Member in list",
-            member_[i],
-            "Argument member",
-            member);
+        COMMON_LOG(WARN, "ObMemberListBase<MAX_MEMBER_NUM>::remove_member member not match", K(ret), "Member in list",
+                   member_[i], "Argument member", member);
       }
     }
     if (OB_SUCCESS == ret && index == OB_INVALID_INDEX) {
@@ -118,7 +119,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::remove_member(const ObMember& member)
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::remove_server(const ObAddr& server)
+int ObMemberListBase<MAX_MEMBER_NUM>::remove_server(const ObAddr &server)
 {
   int ret = OB_SUCCESS;
   int64_t index = OB_INVALID_INDEX;
@@ -164,7 +165,7 @@ uint64_t ObMemberListBase<MAX_MEMBER_NUM>::hash() const
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::get_server_by_index(const int64_t index, common::ObAddr& server) const
+int ObMemberListBase<MAX_MEMBER_NUM>::get_server_by_index(const int64_t index, common::ObAddr &server) const
 {
   int ret = OB_SUCCESS;
   if (index < 0 || index >= member_number_) {
@@ -177,7 +178,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::get_server_by_index(const int64_t index, c
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_index(const int64_t index, common::ObMember& member) const
+int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_index(const int64_t index, common::ObMember &member) const
 {
   int ret = OB_SUCCESS;
   if (index < 0 || index >= member_number_) {
@@ -190,7 +191,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_index(const int64_t index, c
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_addr(const common::ObAddr& server, common::ObMember& member) const
+int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_addr(const common::ObAddr &server, common::ObMember &member) const
 {
   int ret = OB_SUCCESS;
   int64_t i = 0;
@@ -212,7 +213,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::get_member_by_addr(const common::ObAddr& s
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::get_addr_array(ObIArray<common::ObAddr>& addr_array) const
+int ObMemberListBase<MAX_MEMBER_NUM>::get_addr_array(ObIArray<common::ObAddr> &addr_array) const
 {
   int ret = OB_SUCCESS;
   addr_array.reset();
@@ -225,7 +226,7 @@ int ObMemberListBase<MAX_MEMBER_NUM>::get_addr_array(ObIArray<common::ObAddr>& a
 }
 
 template <int64_t MAX_MEMBER_NUM>
-bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObAddr& server) const
+bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObAddr &server) const
 {
   int bool_ret = false;
   for (int64_t i = 0; i < member_number_; ++i) {
@@ -238,7 +239,7 @@ bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObAddr& server) co
 }
 
 template <int64_t MAX_MEMBER_NUM>
-bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObMember& member) const
+bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObMember &member) const
 {
   int bool_ret = false;
   for (int64_t i = 0; i < member_number_; ++i) {
@@ -251,7 +252,7 @@ bool ObMemberListBase<MAX_MEMBER_NUM>::contains(const common::ObMember& member) 
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int ObMemberListBase<MAX_MEMBER_NUM>::deep_copy(const ObMemberListBase<MAX_MEMBER_NUM>& member_list)
+int ObMemberListBase<MAX_MEMBER_NUM>::deep_copy(const ObMemberListBase<MAX_MEMBER_NUM> &member_list)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -264,20 +265,19 @@ int ObMemberListBase<MAX_MEMBER_NUM>::deep_copy(const ObMemberListBase<MAX_MEMBE
 }
 
 template <int64_t MAX_MEMBER_NUM>
-ObMemberListBase<MAX_MEMBER_NUM>& ObMemberListBase<MAX_MEMBER_NUM>::operator=(
-    const ObMemberListBase<MAX_MEMBER_NUM>& member_list)
+ObMemberListBase<MAX_MEMBER_NUM> &ObMemberListBase<MAX_MEMBER_NUM>::operator=(const ObMemberListBase<MAX_MEMBER_NUM> &member_list)
 {
   if (this != &member_list) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = deep_copy(member_list))) {
-      COMMON_LOG(WARN, "deep_copy failed", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "deep_copy failed", K(tmp_ret));
     }
   }
   return *this;
 }
 
 template <int64_t MAX_MEMBER_NUM>
-bool ObMemberListBase<MAX_MEMBER_NUM>::member_addr_equal(const ObMemberListBase<MAX_MEMBER_NUM>& member_list) const
+bool ObMemberListBase<MAX_MEMBER_NUM>::member_addr_equal(const ObMemberListBase<MAX_MEMBER_NUM> &member_list) const
 {
   bool bool_ret = true;
   if (member_number_ != member_list.get_member_number()) {
@@ -287,22 +287,21 @@ bool ObMemberListBase<MAX_MEMBER_NUM>::member_addr_equal(const ObMemberListBase<
     for (int64_t i = 0; true == bool_ret && i < member_number_; ++i) {
       if (!member_list.contains(member_[i].get_server())) {
         bool_ret = false;
-      } else {
-      }
+      } else {}
     }
   }
   return bool_ret;
 }
 
 template <int64_t MAX_MEMBER_NUM>
-int64_t ObMemberListBase<MAX_MEMBER_NUM>::to_string(char* buf, const int64_t buf_len) const
+int64_t ObMemberListBase<MAX_MEMBER_NUM>::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   int tmp_ret = OB_SUCCESS;
-  databuff_printf(buf, buf_len, pos, "%ld", member_number_);
+  databuff_printf(buf, buf_len , pos, "%ld", member_number_);
   for (int64_t i = 0; i < member_number_; ++i) {
     if (OB_SUCCESS != (tmp_ret = databuff_print_obj(buf, buf_len, pos, member_[i]))) {
-      COMMON_LOG(WARN, "databuff_print_obj failed", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "databuff_print_objfailed", K(tmp_ret));
     }
   }
   return pos;
@@ -331,7 +330,8 @@ int ObMemberListBase<MAX_MEMBER_NUM>::truncate(const int64_t count)
 // OB_MAX_MEMBER_NUMBER = 7. It is ugly but it works.
 
 OB_SERIALIZE_MEMBER_TEMP(template <int64_t MAX_MEMBER_NUM>, ObMemberListBase<MAX_MEMBER_NUM>, member_number_,
-    member_[0], member_[1], member_[2], member_[3], member_[4], member_[5], member_[6]);
+                    member_[0], member_[1], member_[2], member_[3], member_[4],
+                    member_[5], member_[6]);
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

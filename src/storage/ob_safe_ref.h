@@ -15,98 +15,80 @@
 #include "lib/objectpool/ob_concurrency_objpool.h"
 #include "lib/queue/ob_link_queue.h"
 
-namespace oceanbase {
-namespace storage {
-struct SafeRef : public common::ObLink {
-  SafeRef() : ref_(0), seq_(0), ptr_(NULL)
-  {}
-  ~SafeRef()
-  {}
-  void xref(int64_t x)
-  {
-    ATOMIC_AAF(&ref_, x);
-  }
-  int64_t ref()
-  {
-    return ATOMIC_LOAD(&ref_);
-  }
-  int64_t seq()
-  {
-    return ATOMIC_LOAD(&seq_);
-  }
-  void inc_seq()
-  {
-    ATOMIC_AAF(&seq_, 1);
-  }
+namespace oceanbase
+{
+namespace storage
+{
+struct SafeRef: public common::ObLink
+{
+  SafeRef(): ref_(0), seq_(0), ptr_(NULL) {}
+  ~SafeRef() {}
+  void xref(int64_t x) { ATOMIC_AAF(&ref_, x); }
+  int64_t ref() { return ATOMIC_LOAD(&ref_); }
+  int64_t seq() { return ATOMIC_LOAD(&seq_); }
+  void inc_seq() { ATOMIC_AAF(&seq_, 1); }
   int64_t ref_;
   int64_t seq_;
   void* ptr_;
 };
 
-struct SafeRef2 {
-  SafeRef2() : sref_(NULL), seq_(0)
-  {}
-  ~SafeRef2()
-  {}
+struct SafeRef2
+{
+  SafeRef2(): sref_(NULL), seq_(0) {}
+  ~SafeRef2() {}
   SafeRef* sref_;
   int64_t seq_;
 };
 
-class SafeRefAlloc {
+class SafeRefAlloc
+{
 public:
   typedef common::ObLinkQueue FreeList;
-  SafeRef* alloc()
-  {
+  SafeRef* alloc() {
     int ret = common::OB_SUCCESS;
     SafeRef* p = NULL;
-    while (NULL == p) {
+    while(NULL == p) {
       if (OB_FAIL(free_list_.pop((common::ObLink*&)p))) {
-        p = op_alloc(SafeRef);
+        p = OB_NEW(SafeRef, "SafeRef");
       }
       if (NULL == p) {
-        usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       }
     }
     return p;
   }
-  void free(SafeRef* p)
-  {
+  void free(SafeRef* p) {
     (void)free_list_.push(p);
   }
-
 private:
   FreeList free_list_;
 };
 
-class ObSafeRefKeeper {
+class ObSafeRefKeeper
+{
 public:
   typedef SafeRefAlloc Alloc;
-  ObSafeRefKeeper()
-  {}
-  ~ObSafeRefKeeper()
-  {}
-  void reg(SafeRef2& ref, void* ptr)
-  {
+  ObSafeRefKeeper() {}
+  ~ObSafeRefKeeper() {}
+  void reg(SafeRef2& ref, void* ptr) {
     SafeRef* p = alloc_.alloc();
     p->ptr_ = ptr;
     ref.sref_ = p;
     ref.seq_ = p->seq_;
   }
-  void unreg(SafeRef2& ref)
-  {
+  void unreg(SafeRef2& ref) {
     SafeRef* p = (SafeRef*)ref.sref_;
     if (NULL != p) {
       p->inc_seq();
       ATOMIC_STORE(&ref.sref_, NULL);
-      while (p->ref() > 0) {
+      while(p->ref() > 0) {
         PAUSE();
       }
       ATOMIC_STORE(&p->ptr_, NULL);
       alloc_.free(p);
     }
   }
-  void* lock(SafeRef2& ref)
-  {
+  void* lock(SafeRef2& ref) {
     void* ret = NULL;
     SafeRef* p = (SafeRef*)ref.sref_;
     if (NULL != p) {
@@ -122,14 +104,12 @@ public:
     }
     return ret;
   }
-  void unlock(SafeRef2& ref)
-  {
+  void unlock(SafeRef2& ref) {
     SafeRef* p = (SafeRef*)ref.sref_;
     if (NULL != p) {
       p->xref(-1);
     }
   }
-
 private:
   Alloc alloc_;
 };
@@ -140,7 +120,9 @@ inline ObSafeRefKeeper& get_safe_ref_keeper()
   return ref_keeper;
 }
 #define REF_KEEPER get_safe_ref_keeper()
-};  // namespace storage
-};  // end namespace oceanbase
+}; // end namespace memtable
+}; // end namespace oceanbase
+
 
 #endif /* OCEANBASE_MEMTABLE_OB_SAFE_REF_H_ */
+

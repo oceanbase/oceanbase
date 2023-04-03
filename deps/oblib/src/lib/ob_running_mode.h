@@ -14,19 +14,22 @@
 #define OB_RUNNING_MODE_H_
 
 #include "lib/ob_define.h"
-namespace oceanbase {
-namespace lib {
-struct ObRunningModeConfig {
+namespace oceanbase
+{
+namespace lib
+{
+struct ObRunningModeConfig
+{
   static const int64_t MINI_MEM_LOWER;
   static const int64_t MINI_MEM_UPPER;
   bool mini_mode_ = false;
-  static ObRunningModeConfig& instance();
-
+  int64_t memory_limit_ = 0;
+  static ObRunningModeConfig &instance();
 private:
   ObRunningModeConfig() = default;
 };
 
-inline ObRunningModeConfig& ObRunningModeConfig::instance()
+inline ObRunningModeConfig &ObRunningModeConfig::instance()
 {
   static ObRunningModeConfig instance;
   return instance;
@@ -37,11 +40,12 @@ inline bool is_mini_mode()
   return ObRunningModeConfig::instance().mini_mode_;
 }
 
-inline void set_mini_mode(bool mini_mode)
+inline void update_mini_mode(int64_t memory_limit)
 {
-  ObRunningModeConfig::instance().mini_mode_ = mini_mode;
+  ObRunningModeConfig::instance().memory_limit_ = memory_limit;
+  ObRunningModeConfig::instance().mini_mode_ = (memory_limit < lib::ObRunningModeConfig::MINI_MEM_UPPER);
 }
 
-}  // namespace lib
-}  // namespace oceanbase
-#endif  // OB_RUNNING_MODE_H_
+} //lib
+} //oceanbase
+#endif // OB_RUNNING_MODE_H_

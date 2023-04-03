@@ -14,119 +14,108 @@
 #define OCEANBASE_SQL_ENGINE_DML_OB_TABLE_INSERET_OP_
 
 #include "sql/engine/dml/ob_table_modify_op.h"
+#include "sql/engine/dml/ob_err_log_service.h"
 
-namespace oceanbase {
-namespace sql {
-class ObTableInsertSpec : public ObTableModifySpec {
+namespace oceanbase
+{
+namespace sql
+{
+class ObTableInsertSpec : public ObTableModifySpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTableInsertSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableModifySpec(alloc, type)
-  {}
+  typedef common::ObArrayWrap<ObInsCtDef*> InsCtDefArray;
+  typedef common::ObArrayWrap<InsCtDefArray> InsCtDef2DArray;
+  ObTableInsertSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObTableModifySpec(alloc, type),
+      ins_ctdefs_(),
+      alloc_(alloc)
+  { }
 
+  //This interface is only allowed to be used in a single-table DML operator,
+  //it is invalid when multiple tables are modified in one DML operator
+  virtual int get_single_dml_ctdef(const ObDMLBaseCtDef *&dml_ctdef) const override
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(ins_ctdefs_.count() != 1)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "table ctdef is invalid", K(ret), K(ins_ctdefs_.count()));
+    } else if (OB_UNLIKELY(ins_ctdefs_.at(0).count() != 1)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "table ctdef is invalid", K(ret), K(ins_ctdefs_.at(0).count()));
+    } else {
+      dml_ctdef = ins_ctdefs_.at(0).at(0);
+    }
+    return ret;
+  }
+
+  INHERIT_TO_STRING_KV("ObTableModifySpec", ObTableModifySpec,
+                       K_(ins_ctdefs));
+
+  //common::ObFixedArray<ObInsCtDef*, common::ObIAllocator> ins_ctdefs_;
+  //ins_ctdef is a 2D array：
+  //the first layer represents the information of table
+  //the secondary layer represents the global index information in a table
+  InsCtDef2DArray ins_ctdefs_;
+protected:
+  common::ObIAllocator &alloc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertSpec);
 };
 
-class ObTableInsertOp : public ObTableModifyOp {
+class ObTableInsertOp : public ObTableModifyOp
+{
 public:
-  ObTableInsertOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObTableModifyOp(ctx, spec, input), curr_row_num_(0), part_row_cnt_(0), is_end_(false)
-  {}
-  virtual ~ObTableInsertOp(){};
-
-  virtual int switch_iterator(ObExecContext& ctx);
-  virtual void destroy() override
+  typedef common::ObArrayWrap<ObInsRtDef> InsRtDefArray;
+  typedef common::ObArrayWrap<InsRtDefArray> InsRtDef2DArray;
+  ObTableInsertOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInput *input)
+      : ObTableModifyOp(ctx, spec, input),
+        ins_rtdefs_(),
+        err_log_service_(get_eval_ctx())
   {
-    dml_param_.~ObDMLBaseParam();
-    part_infos_.reset();
-    ObTableModifyOp::destroy();
   }
-
+  virtual ~ObTableInsertOp() {};
 protected:
   virtual int inner_open() override;
-  virtual int inner_get_next_row() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_close() override;
-  virtual int prepare_next_storage_row(const ObExprPtrIArray*& output) override;
-  int process_row();
-  OB_INLINE int insert_rows(
-      storage::ObDMLBaseParam& dml_param, const common::ObIArray<DMLPartInfo>& part_infos, int64_t& affected_rows);
-  int do_table_insert();
+protected:
+  int inner_open_with_das();
+  int insert_row_to_das();
+  virtual int write_row_to_das_buffer() override;
+  virtual int write_rows_post_proc(int last_errno) override;
+  int calc_tablet_loc(const ObInsCtDef &ins_ctdef,
+                      ObInsRtDef &ins_rtdef,
+                      ObDASTabletLoc *&tablet_loc);
+  int open_table_for_each();
+  int close_table_for_each();
 
-public:
-  int64_t curr_row_num_;
-  int64_t part_row_cnt_;
-  storage::ObDMLBaseParam dml_param_;
-  common::ObSEArray<DMLPartInfo, 4> part_infos_;
-  // insert op will call inner_get_next_row() in inner_open(), and swallow error codes OB_ITER_END
-  // we set this flag  = true to avoid call child_->get_next_row() after OB_ITER_END
-  bool is_end_;
-
+  int check_insert_affected_row();
+  virtual void record_err_for_load_data(int err_ret, int row_num) override;
+  virtual int check_need_exec_single_row() override;
+protected:
+  InsRtDef2DArray ins_rtdefs_; //see the comment of InsCtDef2DArray
+private:
+  ObErrLogService err_log_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertOp);
 };
 
-class ObTableInsertOpInput : public ObTableModifyOpInput {
+class ObTableInsertOpInput : public ObTableModifyOpInput
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTableInsertOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
+  ObTableInsertOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObTableModifyOpInput(ctx, spec)
   {}
-  int init(ObTaskInfo& task_info) override
+  int init(ObTaskInfo &task_info) override
   {
     return ObTableModifyOpInput::init(task_info);
   }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertOpInput);
 };
 
-class ObSeInsertRowIterator : public ObTableModifyOp::DMLRowIterator {
-public:
-  ObSeInsertRowIterator(ObExecContext& ctx, ObTableInsertOp& op)
-      : DMLRowIterator(ctx, op),
-        batch_rows_(NULL),
-        first_bulk_(true),
-        estimate_rows_(0),
-        row_count_(0),
-        index_(0),
-        row_copy_mem_(NULL)
-  {}
-  ~ObSeInsertRowIterator()
-  {
-    destroy_row_copy_mem();
-  }
-
-  int get_next_rows(common::ObNewRow*& row, int64_t& row_count) override;
-  virtual void reset() override;
-
-  // create or reset %row_copy_mem_
-  int setup_row_copy_mem();
-  void destroy_row_copy_mem()
-  {
-    if (NULL != row_copy_mem_) {
-      DESTROY_CONTEXT(row_copy_mem_);
-      row_copy_mem_ = NULL;
-    }
-  }
-
-  // for batch insert
-private:
-  static const int64_t BULK_COUNT = 500;  // get 500 rows when get_next_rows is called
-  int create_cur_rows(int64_t total_cnt, int64_t col_cnt, common::ObNewRow*& row, int64_t& row_cnt);
-  int alloc_rows_cells(const int64_t col_cnt, const int64_t row_cnt, common::ObNewRow* rows);
-  int copy_cur_rows(const ObNewRow& src_row);
-
-private:
-  ObNewRow* batch_rows_;
-  bool first_bulk_;
-  int64_t estimate_rows_;
-  int64_t row_count_;
-  int64_t index_;
-  lib::MemoryContext row_copy_mem_;
-};
-
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 #endif

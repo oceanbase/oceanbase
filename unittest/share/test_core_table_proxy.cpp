@@ -18,21 +18,23 @@
 #include <gtest/gtest.h>
 #include "schema/db_initializer.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace share::schema;
 
-class TestCoreTableProxy : public ::testing::Test {
+class TestCoreTableProxy : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
+  virtual void TearDown() {}
 
 protected:
-  int insert_data(const char* table, int64_t cnt);
+  int insert_data(const char *table, int64_t cnt);
 
-  void verify_data(ObCoreTableProxy& kv);
+  void verify_data(ObCoreTableProxy &kv);
 
 protected:
   schema::DBInitializer initer_;
@@ -51,7 +53,7 @@ void TestCoreTableProxy::SetUp()
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-int TestCoreTableProxy::insert_data(const char* table, int64_t cnt)
+int TestCoreTableProxy::insert_data(const char *table, int64_t cnt)
 {
   ObCoreTableProxy kv(table, initer_.get_sql_proxy());
   ObArray<ObCoreTableProxy::UpdateCell> cells;
@@ -63,9 +65,12 @@ int TestCoreTableProxy::insert_data(const char* table, int64_t cnt)
   for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
     ObDMLSqlSplicer dml(ObDMLSqlSplicer::NAKED_VALUE_MODE);
     ObArray<ObCoreTableProxy::UpdateCell> cells;
-    if (OB_FAIL(dml.add_pk_column("k1", i)) || OB_FAIL(dml.add_pk_column("k2", "aa")) ||
-        OB_FAIL(dml.add_column("c1", (i + 1) * 100)) || OB_FAIL(dml.add_column("c2", "zj")) ||
-        OB_FAIL(dml.splice_core_cells(kv, cells))) {}
+    if (OB_FAIL(dml.add_pk_column("k1", i))
+        || OB_FAIL(dml.add_pk_column("k2", "aa"))
+        || OB_FAIL(dml.add_column("c1", (i + 1) *100))
+        || OB_FAIL(dml.add_column("c2", "zj"))
+        || OB_FAIL(dml.splice_core_cells(kv, cells))) {
+    }
     int64_t affected_rows = 0;
     if (OB_FAIL(ret)) {
       LOG_WARN("splice core kv cells failed", K(ret));
@@ -76,7 +81,7 @@ int TestCoreTableProxy::insert_data(const char* table, int64_t cnt)
   return ret;
 }
 
-void TestCoreTableProxy::verify_data(ObCoreTableProxy& kv)
+void TestCoreTableProxy::verify_data(ObCoreTableProxy &kv)
 {
   ObCoreTableProxy kv2("abc", initer_.get_sql_proxy());
   int ret = kv2.load();
@@ -84,10 +89,9 @@ void TestCoreTableProxy::verify_data(ObCoreTableProxy& kv)
 
   ASSERT_EQ(kv.row_count(), kv2.row_count());
   for (int64_t i = 0; i < kv.row_count(); ++i) {
-    const ObCoreTableProxy::Row& lr = kv.get_all_row().at(i);
-    const ObCoreTableProxy::Row* rr = NULL;
-    FOREACH_CNT_X(row, kv2.get_all_row(), NULL == rr)
-    {
+    const ObCoreTableProxy::Row &lr = kv.get_all_row().at(i);
+    const ObCoreTableProxy::Row *rr = NULL;
+    FOREACH_CNT_X(row, kv2.get_all_row(), NULL == rr) {
       if (lr.get_row_id() == row->get_row_id()) {
         rr = &(*row);
       }
@@ -95,15 +99,15 @@ void TestCoreTableProxy::verify_data(ObCoreTableProxy& kv)
     ASSERT_TRUE(NULL != rr);
 
     ASSERT_EQ(lr.get_row_id(), rr->get_row_id());
-    const char* cols[] = {"k1", "k2", "c1", "c2"};
+    const char *cols[] = {"k1", "k2", "c1", "c2"};
     for (int64_t k = 0; k < ARRAYSIZEOF(cols); ++k) {
-      const char* c = cols[k];
-      ObCoreTableProxy::Cell* l = NULL;
+      const char *c = cols[k];
+      ObCoreTableProxy::Cell *l = NULL;
       ret = lr.get_cell(c, l);
       if (OB_ENTRY_NOT_EXIST == ret) {
         l = NULL;
       }
-      ObCoreTableProxy::Cell* r = NULL;
+      ObCoreTableProxy::Cell *r = NULL;
       ret = rr->get_cell(c, r);
       if (OB_ENTRY_NOT_EXIST == ret) {
         r = NULL;
@@ -130,7 +134,7 @@ TEST_F(TestCoreTableProxy, load)
   for (int64_t i = 0; i < 5; ++i) {
     ret = kv.next();
     ASSERT_EQ(OB_SUCCESS, ret);
-    const ObCoreTableProxy::Row* row = NULL;
+    const ObCoreTableProxy::Row *row = NULL;
     ASSERT_EQ(OB_SUCCESS, kv.get_cur_row(row));
     ASSERT_EQ(i, row->get_row_id());
   }
@@ -235,8 +239,7 @@ TEST_F(TestCoreTableProxy, update_or_insert)
   ret = kv.update_row(cells, affected_rows);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(5, affected_rows);
-  FOREACH_CNT(r, kv.get_all_row())
-  {
+  FOREACH_CNT(r, kv.get_all_row()) {
     int64_t int_val = 0;
     ret = r->get_int("k2", int_val);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -261,9 +264,11 @@ TEST_F(TestCoreTableProxy, update_or_insert)
   ASSERT_EQ(6, kv.row_count());
   ASSERT_EQ(5, kv.get_all_row().at(5).get_row_id());
 
+
   // after all the operations, verify db record with memory rows
   verify_data(kv);
 }
+
 
 TEST_F(TestCoreTableProxy, delete_row)
 {
@@ -322,10 +327,10 @@ TEST_F(TestCoreTableProxy, delete_row)
   verify_data(kv);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

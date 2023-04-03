@@ -14,16 +14,21 @@
 #include "sql/resolver/cmd/ob_kill_resolver.h"
 #include "sql/resolver/cmd/ob_kill_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace oceanbase::common;
-namespace sql {
-int ObKillResolver::resolve(const ParseNode& parse_tree)
+namespace sql
+{
+int ObKillResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObKillStmt* kill_stmt = NULL;
-  ObRawExpr* tmp_expr = NULL;
-  if (OB_UNLIKELY(parse_tree.type_ != T_KILL || parse_tree.num_child_ != 2 || NULL == parse_tree.children_[0] ||
-                  parse_tree.children_[0]->type_ != T_BOOL || NULL == parse_tree.children_[1])) {
+  ObKillStmt *kill_stmt = NULL;
+  ObRawExpr *tmp_expr = NULL;
+  if (OB_UNLIKELY(parse_tree.type_ != T_KILL
+                  || parse_tree.num_child_ != 2
+                  || NULL == parse_tree.children_[0]
+                  || parse_tree.children_[0]->type_ != T_BOOL
+                  || NULL == parse_tree.children_[1])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree", K(ret), K(parse_tree.type_), K(parse_tree.num_child_));
   } else if (OB_UNLIKELY(NULL == (kill_stmt = create_stmt<ObKillStmt>()))) {
@@ -37,5 +42,5 @@ int ObKillResolver::resolve(const ParseNode& parse_tree)
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // oceanbase

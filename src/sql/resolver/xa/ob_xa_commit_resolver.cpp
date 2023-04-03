@@ -16,20 +16,25 @@
 #include "sql/resolver/xa/ob_xa_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObXaCommitResolver::ObXaCommitResolver(ObResolverParams& params) : ObStmtResolver(params)
-{}
+ObXaCommitResolver::ObXaCommitResolver(ObResolverParams &params) 
+  : ObStmtResolver(params)
+{
+}
 
 ObXaCommitResolver::~ObXaCommitResolver()
-{}
+{
+}
 
-int ObXaCommitResolver::resolve(const ParseNode& parse_node)
+int ObXaCommitResolver::resolve(const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
-  ObXaCommitStmt* xa_commit_stmt = NULL;
+  ObXaCommitStmt *xa_commit_stmt = NULL;
   if (OB_UNLIKELY(T_XA_COMMIT != parse_node.type_ || 1 != parse_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse node", K(parse_node.type_), K(parse_node.num_child_));
@@ -48,5 +53,5 @@ int ObXaCommitResolver::resolve(const ParseNode& parse_node)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end namesapce sql
+} // end namesapce oceanbase

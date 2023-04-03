@@ -16,25 +16,25 @@
 #include "lib/ob_name_def.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprSubQueryLessEqual : public ObSubQueryRelationalExpr {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprSubQueryLessEqual : public ObSubQueryRelationalExpr
+{
 public:
-  explicit ObExprSubQueryLessEqual(common::ObIAllocator& alloc);
+  explicit  ObExprSubQueryLessEqual(common::ObIAllocator &alloc);
   virtual ~ObExprSubQueryLessEqual();
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override
   {
     return ObSubQueryRelationalExpr::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
-
-private:
-  virtual int compare_single_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row,
-      common::ObExprCtx& expr_ctx, common::ObObj& result) const override;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryLessEqual);
 };
 }  // namespace sql
 }  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_SUBQUERY_LESS_EQUAL_H_
+#endif //OCEANBASE_SQL_OB_EXPR_SUBQUERY_LESS_EQUAL_H_

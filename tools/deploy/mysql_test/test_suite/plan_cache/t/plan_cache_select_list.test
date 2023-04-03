@@ -1,0 +1,177 @@
+#owner: guoyun.lgy
+#owner group: sql1
+##
+## Test Name: plan_cache_plan_num_limit
+##
+## Date: 2019-03-21
+##
+
+--result_format 4
+
+--echo // >>>>>>>>>>>>>>>>>>>> TEST Paramed Const In Select <<<<<<<<<<<<<<<<<<<<
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+
+--disable_query_log
+--disable_result_log
+alter system flush plan cache global;
+alter system set large_query_threshold = '1s';
+--sleep 3
+
+connection default;
+set ob_trx_timeout = 1000000000;
+
+--disable_warnings
+--disable_query_log
+drop table if exists proxy_mock_table_for_pc;
+create table proxy_mock_table_for_pc(a int);
+--enable_query_log
+--enable_warnings
+
+--echo // >>>>>>>>>> Test#1 Basic Cases
+--enable_query_log
+--enable_result_log
+
+begin;
+--source mysql_test/include/proxy_route_to_c.inc
+select 1, 2, 3, 'hello' from dual;
+select 3, 4, 5, 'hi' from dual;
+
+--echo // expect hit_count = 1
+--disable_warnings
+#select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select ?, ?, ?, ? from dual';
+
+--echo
+select substr('hello', 2), cast(2 as char(20)), concat('h', '2'), 1 is NULL, abs(-1), floor(1.23) from dual;
+select substr('hey', 2), cast(3 as char(20)), concat('', 'h2'), 1 is NULL, abs(-2), floor(2.23) from dual;
+
+--echo // expect hit_count = 1
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select substr(?, 2), cast(? as char(20)), concat(?, ?), ? is NULL, abs(?), floor(?) from dual';
+--enable_warnings
+commit;
+
+--disable_warnings
+drop table if exists test_t;
+--enable_warnings
+
+--disable_query_log
+--disable_result_log
+create table test_t (a int, b int);
+begin;
+--source mysql_test/include/proxy_route_to_c.inc
+insert into test_t values (1, 1), (2, 2), (3, 3);
+
+--enable_query_log
+--enable_result_log
+--echo
+select a, a as test_a, b + 1 as test_b, a + 1, b + 1 from test_t;
+select a, a as test_a, b + 3 as test_b, a + 2, b + 3 from test_t;
+
+--echo // expect hit_count = 1
+--disable_warnings
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select a, a as test_a, b + ? as test_b, a + ?, b + ? from test_t';
+
+
+--echo // >>>>>>>>>> Test#2 Subquery
+select * from (select 1, 2, 3 from dual);
+select * from (select 2, 3, 4 from dual);
+
+--echo // expect hit_count = 1
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select * from (select ?, ?, ? from dual)';
+
+--echo // expect error
+--error 1060
+select * from (select 1, 2, 2 from dual);
+
+select * from (select 1 as c1, a, b + 1 from test_t);
+select * from (select 2 as c1, a, b + 2 from test_t);
+
+--echo // expect hit_count = 1
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select * from (select ? as c1, a, b + ? from test_t)';
+--enable_warnings
+commit;
+
+--echo // >>>>>>>>>> Test#3 Column is Const String
+
+begin;
+--source mysql_test/include/proxy_route_to_c.inc
+select 'hello' from dual;
+select "hello hey" from dual;
+select '\'hello' from dual;
+select '\0hello' from dual;
+select '\\hello' from dual;
+select '\"hello' from dual;
+select '\nhello\n' from dual;
+select '\rhello\r' from dual;
+select '\thello\t' from dual;
+
+--echo // >>>>>>>>>> Test#4 Negetive Const
+select -1, -2, -1-2, 1-3 from dual;
+select -2, -3, -2-1, 1-3 from dual;
+
+--echo // expect hit_count = 1
+--disable_warnings
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select ?, ?, ?-?, ?-? from dual';
+--enable_warnings
+commit;
+
+--echo // >>>>>>>>>> Test#4 Select From View
+
+--disable_warnings
+drop view if exists test_view;
+--enable_warnings
+
+create view test_view as select 1, 2, 3 from dual;
+
+select * from test_view;
+
+--echo // >>>>>>>>>> Test#5 Const Value with Prefix
+begin;
+--source mysql_test/include/proxy_route_to_c.inc
+#select X'AA0E' from dual;
+#select X'AA0F' from dual;
+select B'0011' from dual;
+select B'1010' from dual;
+select Date'2012-12-12' from dual;
+select Date'2013-12-12' from dual;
+select Time'12:00:00' from dual;
+select Time'12:01:01' from dual;
+select Timestamp'2012-12-12 12:12:12' from dual;
+select Timestamp'2012-12-12 12:13:13' from dual;
+
+--echo // >>>>>>>>>> Test#6 Union
+
+select 1 from dual union select 2 from dual;
+select 2 from dual union select 3 from dual;
+
+--echo // expect hit_count = 1
+--disable_warnings
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select ? from dual union select ? from dual';
+
+select * from (select 1, 2 + 3, 4 as c0, a, b + 1 from test_t union select 1, 2, 3, 4, 6 from dual);
+select * from (select 2, 3 + 4, 5 as c0, a, b + 2 from test_t union select 2, 3, 4, 5, 6 from dual);
+
+--echo // expect hit_count = 1
+#select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select * from (select ?, ? + ?, ? as c0, a, b + ? from test_t union select ?, ?, ?, ?, ? from dual)';
+
+--echo // >>>>>>>>>> Test#7 `select str as str` and `select str str`
+select 'abc' as 'a' from dual;
+select 'abd' as 'a' from dual;
+--echo // expect hit_count = 1
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like "select ? as 'a' from dual";
+
+select   'abc' 'a' from dual;
+select   'adb' 'b' from dual;
+
+--echo // expect hit_count = 1
+select hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like 'select   ? from dual';
+--enable_warnings
+commit;
+
+--disable_warnings
+drop table if exists test_t;
+drop view if exists test_view;
+--enable_warnings
+
+connection obsys;
+alter system set large_query_threshold = '100ms';

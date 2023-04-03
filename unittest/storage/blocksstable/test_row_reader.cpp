@@ -11,132 +11,178 @@
  */
 
 #include <gtest/gtest.h>
-#include "storage/blocksstable/ob_row_writer.h"
-#include "storage/blocksstable/ob_row_reader.h"
+#define protected public
+#define private public
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "lib/number/ob_number_v2.h"
 #include "ob_row_generate.h"
 #include "share/object/ob_obj_cast.h"
-#include "storage/blocksstable/ob_column_map.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
-#define protected public
-#define private public
+
+#include "storage/blocksstable/ob_macro_block_writer.h"
+#include "storage/blocksstable/ob_row_writer.h"
+#include "storage/blocksstable/ob_row_reader.h"
+#include "ob_data_file_prepare.h"
+#include "storage/memtable/ob_nop_bitmap.h"
 
 #ifndef INT24_MIN
-#define INT24_MIN (-8388607 - 1)
+#define INT24_MIN     (-8388607 - 1)
 #endif
 #ifndef INT24_MAX
-#define INT24_MAX (8388607)
+#define INT24_MAX     (8388607)
 #endif
 #ifndef UINT24_MAX
-#define UINT24_MAX (16777215U)
+#define UINT24_MAX    (16777215U)
 #endif
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace blocksstable;
 using namespace storage;
 using namespace common::number;
 using namespace share::schema;
+static ObSimpleMemLimitGetter getter;
 
-namespace unittest {
-class TestRowReader : public ::testing::Test {
+namespace unittest
+{
+class TestNewRowReader : public TestDataFilePrepare
+{
 public:
   static const int64_t rowkey_column_count = 1;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
   // Skip ObNullType and ObExtendType because for external usage, a column type
   // can't be NULL or NOP.
-  ObObjType not_test_type[8] = {ObNullType,
-      ObExtendType,
-      ObUnknownType,
-      ObEnumInnerType,
-      ObSetInnerType,
-      ObNumberFloatType,
-      ObURowIDType,
-      ObLobType};
+  ObObjType not_test_type[8] = {
+      ObNullType, ObExtendType, ObUnknownType, ObEnumInnerType, ObSetInnerType,
+      ObNumberFloatType, ObURowIDType, ObLobType};
   static const int64_t column_num = ObMaxType - sizeof(not_test_type) / sizeof(ObObjType);
-
 public:
+  TestNewRowReader()
+      : TestDataFilePrepare(&getter, "TestNewRowReader", 2 * 1024 * 1024),
+      read_info_()
+  {}
+  virtual ~TestNewRowReader() {}
   virtual void SetUp();
   virtual void TearDown();
-  char* get_serialize_buf()
-  {
-    return serialize_buf_;
-  }
-
+  char *get_serialize_buf() { return serialize_buf_; }
+  int64_t get_serialize_size() { return 2 * 1024 * 1024; }
+  void append_col(ObDatumRow &row, int64_t col_cnt = INT64_MAX);
 private:
-  int build_column_map(const int64_t* columns, const int64_t count);
-  int init_column_map(const ObStoreRow& writer_row, ObArray<ObColDesc>& columns);
-  char* serialize_buf_;
-
+  int init_read_columns(const ObDatumRow &writer_row, common::ObIArray<int32_t> &projector, common::ObIArray<ObColDesc> &cols_desc);
+  int init_read_columns(const ObDatumRow &writer_row, common::ObIArray<ObColDesc> &cols_desc);
+  void check_reader_row(const char* buf, const int64_t buf_len, const int64_t rowkey_cnt, const ObDatumRow &writer_row);
+  void check_read_datums(const char* buf, const int64_t buf_len, const int64_t rowkey_cnt, const ObDatumRow &writer_row);
+  void check_read_datum_row(const char* buf, const int64_t buf_len, const ObDatumRow &writer_row, const int64_t rowkey_len = 0, const ObIArray<int64_t> *update_idx = nullptr);
+  void check_write_with_update_idx(const ObDatumRow &writer_row);
+  void build_column_read_info(const int64_t rowkey_column_count, const ObStoreRow &writer_row);
+  void build_column_read_info(const int64_t rowkey_column_count, const ObDatumRow &writer_row);
+  char *serialize_buf_;
 protected:
   ObRowGenerate row_generate_;
-  ObColumnMap column_map_;
+  ObTableReadInfo read_info_;
   ObTableSchema table_schema_;
   ObArenaAllocator allocator_;
+  common::ObArray<ObColDesc> full_schema_cols_;
 };
 
-int TestRowReader::init_column_map(const ObStoreRow& writer_row, ObArray<ObColDesc>& columns)
+int TestNewRowReader::init_read_columns(
+    const ObDatumRow &writer_row,
+    common::ObIArray<int32_t> &projector,
+    common::ObIArray<ObColDesc> &cols_desc)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObNCharType == obj_type || ObNVarchar2Type == obj_type ||
-        ObTinyTextType == obj_type || ObTextType == obj_type || ObMediumTextType == obj_type ||
-        ObLongTextType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    } else if (ObRawType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_BINARY);
-    }
-    columns[i].col_type_ = obj_meta;
+  read_info_.reset();
+  read_info_.cols_desc_.set_allocator(&allocator_);
+  read_info_.cols_index_.set_allocator(&allocator_);
+  read_info_.cols_param_.set_allocator(&allocator_);
+  cols_desc.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < projector.count(); ++i) {
+    ObColDesc col_desc;
+    //ObObjType obj_type = writer_row.row_val_.cells_[projector.at(i)].get_type();
+    //ObObjMeta obj_meta;
+    //obj_meta.set_type(obj_type);
+    //if (ObVarcharType == obj_type
+        //|| ObCharType == obj_type
+        //|| ObNCharType == obj_type
+        //|| ObNVarchar2Type == obj_type
+        //|| ObTinyTextType == obj_type
+        //|| ObTextType == obj_type
+        //|| ObMediumTextType == obj_type
+        //|| ObLongTextType == obj_type) {
+      //obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      //obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+    //} else if (ObRawType == obj_type) {
+      //obj_meta.set_collation_type(CS_TYPE_BINARY);
+    //}
+    //col_desc.col_type_ = obj_meta;
+    col_desc.col_id_ = projector.at(i) + 30;
+    ret = cols_desc.push_back(col_desc);
   }
-  if (OB_FAIL(column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
+  if (OB_FAIL(read_info_.init(
+          allocator_,
+          16000,
           row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          columns))) {
+          lib::is_oracle_mode(),
+          cols_desc,
+          true,
+          &projector))) {
     STORAGE_LOG(WARN, "failed to init column map");
   }
+  read_info_.schema_column_count_ = 10000;
+  read_info_.schema_rowkey_cnt_ = row_generate_.get_schema().get_rowkey_column_num();
+  read_info_.seq_read_column_count_ = read_info_.schema_rowkey_cnt_;
+  read_info_.cols_desc_.assign(cols_desc);
+  read_info_.cols_index_.assign(projector);
+  read_info_.rowkey_cnt_ = read_info_.schema_rowkey_cnt_;
+  read_info_.datum_utils_.init(cols_desc, read_info_.rowkey_cnt_, lib::is_oracle_mode(), allocator_);
   return ret;
 }
 
-int TestRowReader::build_column_map(const int64_t* columns, const int64_t count)
+int TestNewRowReader::init_read_columns(
+    const ObDatumRow &writer_row,
+    common::ObIArray<ObColDesc> &cols_desc)
 {
   int ret = OB_SUCCESS;
-  column_map_.reset();
-  ObArray<ObColDesc> out_cols;
-  ObArray<int32_t> projector;
-  for (int64_t i = 0; i < count; ++i) {
-    int64_t request_id = columns[i];
-    const ObColumnSchemaV2* column = table_schema_.get_column_schema(request_id);
-    int64_t store_index = table_schema_.get_column_idx(request_id, true);
-    if (NULL == column)
-      return OB_ERROR;
+  read_info_.reset();
+  cols_desc.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < writer_row.count_; ++i) {
     ObColDesc col_desc;
-    col_desc.col_id_ = request_id;
-    col_desc.col_type_ = column->get_meta_type();
-    out_cols.push_back(col_desc);
-    projector.push_back(static_cast<int32_t>(store_index));
+    //ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
+    //ObObjMeta obj_meta;
+    //obj_meta.set_type(obj_type);
+    //if (ObVarcharType == obj_type
+        //|| ObCharType == obj_type
+        //|| ObNCharType == obj_type
+        //|| ObNVarchar2Type == obj_type
+        //|| ObTinyTextType == obj_type
+        //|| ObTextType == obj_type
+        //|| ObMediumTextType == obj_type
+        //|| ObLongTextType == obj_type) {
+      //obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      //obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+    //} else if (ObRawType == obj_type) {
+      //obj_meta.set_collation_type(CS_TYPE_BINARY);
+    //}
+    //col_desc.col_type_ = obj_meta;
+    col_desc.col_id_ = i + 30;
+    ret = cols_desc.push_back(col_desc);
   }
-  ret = column_map_.init(allocator_,
-      table_schema_.get_schema_version(),
-      table_schema_.get_rowkey_column_num(),
-      column_num,
-      out_cols,
-      nullptr,
-      &projector);
-  if (!column_map_.is_valid())
-    return OB_NOT_INIT;
+  if (OB_FAIL(read_info_.init(allocator_, 16000,
+          row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(),
+          cols_desc))) {
+    STORAGE_LOG(WARN, "failed to init column map");
+  }
+  read_info_.rowkey_cnt_ = read_info_.schema_rowkey_cnt_;
   return ret;
 }
 
-void TestRowReader::SetUp()
+void TestNewRowReader::SetUp()
 {
-  const int64_t serialize_buf_size_ = 10 * 1024 * 1024;  // 2M
+  TestDataFilePrepare::SetUp();
+  const int64_t serialize_buf_size_ = get_serialize_size();
   serialize_buf_ = reinterpret_cast<char*>(ob_malloc(serialize_buf_size_, ObModIds::TEST));
   ASSERT_TRUE(NULL != serialize_buf_);
 
@@ -144,7 +190,7 @@ void TestRowReader::SetUp()
 
   oceanbase::common::ObClusterVersion::get_instance().refresh_cluster_version("1.4.70");
   ObColumnSchemaV2 column;
-  // init table schema
+  //init table schema
   table_schema_.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema_.set_table_name("test_row_writer"));
   table_schema_.set_tenant_id(1);
@@ -153,12 +199,13 @@ void TestRowReader::SetUp()
   table_schema_.set_table_id(table_id);
   table_schema_.set_rowkey_column_num(rowkey_column_count);
   table_schema_.set_max_used_column_id(column_num);
-  // init column
+  table_schema_.set_schema_version(100);
+  //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
 
   int not_test_index = 0;
-  for (int64_t i = 0; i < ObMaxType; ++i) {
+  for(int64_t i = 0; i < ObMaxType; ++i){
     ObObjType obj_type = static_cast<ObObjType>(i);
     if (not_test_type[not_test_index] == obj_type) {
       not_test_index++;
@@ -171,1990 +218,1433 @@ void TestRowReader::SetUp()
     ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
     column.set_data_type(obj_type);
     column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    if (obj_type == common::ObIntType) {
+    if(obj_type == common::ObIntType){
       column.set_rowkey_position(1);
     } else {
       column.set_rowkey_position(0);
     }
     ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
   }
-  // init ObRowGenerate
+  //init ObRowGenerate
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_));
 }
 
-void TestRowReader::TearDown()
+void TestNewRowReader::TearDown()
 {
   ob_free(serialize_buf_);
+  TestDataFilePrepare::TearDown();
 }
 
-void append_col(ObStoreRow& row)
+void TestNewRowReader::check_reader_row(const char* buf, const int64_t buf_len, const int64_t rowkey_cnt, const ObDatumRow &writer_row)
 {
-  int index = row.row_val_.count_;
+  check_read_datums(buf, buf_len, rowkey_cnt, writer_row);
+  //check_read_datum_row(buf, buf_len, writer_row);
+  // check write row with update_idx & read
+  // check_write_with_update_idx(writer_row);
+}
+
+void TestNewRowReader::build_column_read_info(const int64_t rowkey_column_count, const ObStoreRow &writer_row)
+{
+  full_schema_cols_.reset();
+  read_info_.reset();
+  // read with ObTableReadInfo
+  ObColDesc col_desc;
+  // col desc is no use in flat reader
+  for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    full_schema_cols_.push_back(col_desc);
+  }
+  read_info_.init(allocator_, 16000, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_, true);
+  read_info_.rowkey_cnt_ = rowkey_column_count;
+  read_info_.memtable_cols_index_.reuse();
+  read_info_.memtable_cols_index_.assign(read_info_.cols_index_);
+}
+
+void TestNewRowReader::build_column_read_info(const int64_t rowkey_column_count, const ObDatumRow &writer_row)
+{
+  full_schema_cols_.reset();
+  read_info_.reset();
+  // read with ObColumnReadInfo
+  ObColDesc col_desc;
+  // col desc is no use in flat reader
+  for (int i = 0; i < writer_row.count_; ++i) {
+    full_schema_cols_.push_back(col_desc);
+  }
+  read_info_.init(allocator_, 16000, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_, true);
+  read_info_.rowkey_cnt_ = rowkey_column_count;
+  read_info_.memtable_cols_index_.reuse();
+  read_info_.memtable_cols_index_.assign(read_info_.cols_index_);
+}
+
+void TestNewRowReader::check_read_datum_row(
+    const char* buf,
+    const int64_t buf_len,
+    const ObDatumRow &writer_row,
+    const int64_t rowkey_len,
+    const ObIArray<int64_t> *update_idx)
+{
+  int ret = OB_SUCCESS;
+  const int64_t test_column_cnt = 300;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, test_column_cnt));
+  reader_row.count_ = writer_row.count_;
+
+  ObRowReader row_reader;
+  ret = row_reader.read_row(buf, buf_len, &read_info_, reader_row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(reader_row.count_, writer_row.count_);
+  int64_t update_array_idx = 0;
+  for (int j = 0; j < reader_row.count_; ++j) {
+    bool check_obj_flag = false;
+    if (nullptr != update_idx) {
+      if (j < rowkey_len) {
+        check_obj_flag = true;
+      } else if (update_array_idx < update_idx->count() && j == update_idx->at(update_array_idx)) {
+        ++update_array_idx;
+        check_obj_flag = true;
+      }
+    } else {
+      check_obj_flag = true;
+    }
+    //STORAGE_LOG(INFO, "read datum", K(j), K(reader_row.storage_datums_[j]), K(writer_row.row_val_.cells_[j]));
+    if (check_obj_flag) {
+      ASSERT_TRUE(reader_row.storage_datums_[j] == writer_row.storage_datums_[j]);
+    } else {
+      ASSERT_TRUE(reader_row.storage_datums_[j].is_nop());
+    }
+  }
+  row_reader.reset();
+  memtable::ObNopBitMap nop_bitmap;
+  ret = nop_bitmap.init(writer_row.count_, rowkey_len);
+  ObDatumRow reader_row2;
+  ASSERT_EQ(OB_SUCCESS, reader_row2.init(allocator_, writer_row.count_));
+  for (int i = 0; i < writer_row.count_; ++i) {
+    reader_row2.storage_datums_[i].set_nop();
+  }
+  reader_row2.count_ = writer_row.count_;
+
+  bool read_finished = false;
+  update_array_idx = 0;
+  row_reader.read_memtable_row(buf, buf_len, read_info_, reader_row2, nop_bitmap, read_finished);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int j = 0; j < reader_row2.count_; ++j) {
+    bool check_obj_flag = false;
+    if (nullptr != update_idx) {
+      if (j < rowkey_len) {
+        check_obj_flag = true;
+      } else if (update_array_idx < update_idx->count() && j == update_idx->at(update_array_idx)) {
+        ++update_array_idx;
+        check_obj_flag = true;
+      }
+    } else {
+      check_obj_flag = true;
+    }
+    ObObj obj;
+    reader_row2.storage_datums_[j].to_obj(obj, full_schema_cols_.at(j).col_type_);
+    //STORAGE_LOG(INFO, "to_obj", K(obj), "is_nop", reader_row2.storage_datums_[j].is_nop(), K(writer_row.row_val_.cells_[j]));
+    if (check_obj_flag) {
+      ASSERT_TRUE(reader_row2.storage_datums_[j] == writer_row.storage_datums_[j]);
+    } else {
+      ASSERT_TRUE(reader_row2.storage_datums_[j].is_nop());
+    }
+  }
+}
+
+void TestNewRowReader::check_read_datums(const char* buf, const int64_t buf_len, const int64_t rowkey_cnt, const ObDatumRow &writer_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t test_column_cnt = 300;
+  ObDatumRow datum_row;
+  ASSERT_EQ(OB_SUCCESS, datum_row.init(test_column_cnt));
+  const ObRowHeader *row_header = nullptr;
+
+  ObRowReader row_reader;
+  ret = row_reader.read_row_header(buf, buf_len, row_header); // current datums is compressed for int
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(row_header->get_column_count(), writer_row.count_);
+  ret = row_reader.read_row(buf, buf_len, nullptr, datum_row); // current datums is compressed for int
+  ASSERT_EQ(OB_SUCCESS, ret);
+  STORAGE_LOG(INFO, "check_read_datums, read datums");
+  // need write datums and read out with ObTableReadInfo
+  char * extra_buf = 0;
+  int64_t len = 0;
+  ObRowWriter row_writer;
+  ret = row_writer.write(rowkey_cnt, datum_row, extra_buf, len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  STORAGE_LOG(INFO, "check_read_datums, write datums");
+
+  // read with ObTableReadInfo
+  ObRowReader row_reader2;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, test_column_cnt));
+  reader_row.count_ = writer_row.count_;
+  ret = row_reader2.read_row(extra_buf, len, &read_info_, reader_row);
+  ASSERT_TRUE(ret == OB_SUCCESS);
+
+  for (int j = 0; j < writer_row.count_; ++j) {
+    ASSERT_TRUE(reader_row.storage_datums_[j] == writer_row.storage_datums_[j]);
+  }
+}
+/*
+void TestNewRowReader::check_write_with_update_idx(const ObDatumRow &writer_row)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> update_idx;
+  int rowkey_cnt[] = {1, 5, 19, 35};
+
+  for (int j = 0; j < ARRAYSIZEOF(rowkey_cnt) && rowkey_cnt[j] < writer_row.count_; ++j){
+    int i = rowkey_cnt[j];
+    update_idx.reset();
+    while (i < writer_row.count_) {
+      if (!writer_row.storage_datums_[i].is_nop()) {
+        update_idx.push_back(i);
+        i += 2;
+      } else {
+        i++;
+      }
+    }
+
+    ObRowWriter row_writer;
+    char *buf = nullptr;
+    int64_t len = 0;
+    ret = row_writer.write(rowkey_cnt[j], writer_row, &update_idx, buf, len);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ObDatumRow datum_row;
+    ASSERT_EQ(OB_SUCCESS, datum_row.init(allocator_, writer_row.count_));
+    check_read_datum_row(buf, len, datum_row, rowkey_cnt[j], &update_idx);
+
+    allocator_.free(buf);
+    buf = nullptr;
+  }
+}
+*/
+
+void TestNewRowReader::append_col(ObDatumRow &row, int64_t col_cnt)
+{
+  int index = row.count_;
   ObScale scale;
   scale = ObLobScale::STORE_IN_ROW;
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index].set_scale(scale);
-  row.row_val_.cells_[index++].set_string(ObTinyTextType, "xxxxxx");
 
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index].set_scale(scale);
-  row.row_val_.cells_[index++].set_string(ObTextType, "xxxxxx");
+  row.storage_datums_[index++].set_string(ObString(6, "xxxxxx"));
+  row.storage_datums_[index++].set_string(ObString(6, "xxxxxx"));
+  row.storage_datums_[index++].set_string(ObString(6, "xxxxxx"));
+  row.storage_datums_[index++].set_string(ObString(6, "xxxxxx"));
+  // row.storage_datums_[index++].set_lob_outrow();
+  row.storage_datums_[index++].set_bit(999);
+  row.storage_datums_[index++].set_enum(88);
+  row.storage_datums_[index++].set_set(1849);
+ // row.row_val_.cells_[index++].set_enum_inner(ObString("jakgja"));
+ // row.row_val_.cells_[index++].set_set_inner(ObString("jfao"));
 
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index].set_scale(scale);
-  row.row_val_.cells_[index++].set_string(ObMediumTextType, "xxxxxx");
+  ObOTimestampData time_data;
+  time_data.time_ctx_.tz_desc_ = 0;
+  time_data.time_ctx_.time_desc_= 12;
+  time_data.time_us_ = 888;
+  row.storage_datums_[index++].set_otimestamp_tz(time_data);
+  row.storage_datums_[index++].set_otimestamp_tiny(time_data);
+  row.storage_datums_[index++].set_otimestamp_tiny(time_data);
+  row.storage_datums_[index++].set_string(ObString(7, "agjaljg"));
+  row.storage_datums_[index++].set_interval_ym(11);
+  row.storage_datums_[index++].set_interval_ds(ObIntervalDSValue(11, 14));
+  number::ObNumber test_number;
+  test_number.from("-123456789987654321.12345678987654321", allocator_);
+  row.storage_datums_[index++].set_number(test_number);
+  row.storage_datums_[index++].set_int32(-9274819);
+  row.count_ = index;
 
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index].set_scale(scale);
-  row.row_val_.cells_[index++].set_string(ObLongTextType, "xxxxxx");
-
-  row.row_val_.cells_[index++].set_bit(999);
-  row.row_val_.cells_[index++].set_enum(88);
-  row.row_val_.cells_[index++].set_set(1849);
-  // row.row_val_.cells_[index++].set_enum_inner(ObString("jakgja"));
-  // row.row_val_.cells_[index++].set_set_inner(ObString("jfao"));
-
-  uint16_t sec = 12;
-  row.row_val_.cells_[index++].set_otimestamp_value(ObTimestampTZType, 888, sec);
-  row.row_val_.cells_[index++].set_otimestamp_value(ObTimestampLTZType, 888, sec);
-  row.row_val_.cells_[index++].set_otimestamp_value(ObTimestampNanoType, 888, sec);
-  row.row_val_.cells_[index++].set_raw(ObString("agjaljg"));
-  row.row_val_.cells_[index++].set_interval_ym(ObIntervalYMValue(11));
-  row.row_val_.cells_[index++].set_interval_ds(ObIntervalDSValue(11, 14));
-  uint32_t digits = 8;
-  row.row_val_.cells_[index++].set_number_float(ObNumber(3, &digits));
-
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index++].set_nvarchar2(ObString("ahgiqh"));
-
-  row.row_val_.cells_[index].meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  row.row_val_.cells_[index].meta_.set_collation_level(CS_LEVEL_IMPLICIT);
-  row.row_val_.cells_[index++].set_nchar(ObString("ahkqh"));
-
-  for (int i = 0; i < index; ++i) {
-    row.column_ids_[i] = 100 + i;
+  if (INT64_MAX != col_cnt) {
+    for (int i = row.count_; i < col_cnt; ++i) {
+      row.storage_datums_[i] = row.storage_datums_[i - row.count_];
+    }
+    row.count_ = col_cnt;
   }
-  row.row_val_.count_ = index;
 }
 
-TEST_F(TestRowReader, test_number_float)
+TEST_F(TestNewRowReader, test_obj_read)
 {
-  ObObj write_obj;
-  uint32_t digits = 8;
-  write_obj.set_number_float(ObNumber(3, &digits));
-
-  char* buf = get_serialize_buf();
-  int64_t buf_size = 2 * 1024 * 1024;
+  int ret = OB_SUCCESS;
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  build_column_read_info(rowkey_column_count, writer_row);
   int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  //STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
 
-  int ret = OB_SUCCESS;
-  ret = write_obj.get_unumber().encode(buf, buf_size, pos);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  COMMON_LOG(INFO, "write number float", K(ret), K(write_obj), K(write_obj.get_unumber()));
-
-  ObObj read_obj;
-  number::ObNumber value;
-  int64_t read_pos = 0;
-  if (OB_FAIL(value.decode(buf, pos, read_pos))) {
-    COMMON_LOG(WARN, "decode number failed", K(ret));
-  } else {
-    read_obj.set_number_float(value);
-    COMMON_LOG(INFO, "read number float", K(ret), K(read_obj), K(value));
-  }
-  ASSERT_TRUE(read_obj == write_obj);
-  /*
-    // try in rowWriter
-    int num = 50;
-    ObRowWriter row_writer;
-    oceanbase::common::ObObj objs[num];
-    uint16_t column_ids[num];
-    ObStoreRow writer_row;
-    writer_row.row_val_.cells_ = objs;
-    writer_row.row_val_.count_ = column_num;
-    writer_row.column_ids_ = column_ids;
-    writer_row.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-    writer_row.dml_ = T_DML_INSERT;
-
-    digits = 0;
-    common::ObObjMeta column_type_array[column_num];
-    ObObjMeta obj_meta;
-    obj_meta.set_type(ObNumberFloatType);
-    for(int i = 0; i < column_num; ++i) {
-      digits = i;
-      writer_row.row_val_.cells_[i].set_number_float(ObNumber(i, &digits));
-      column_type_array[i] = obj_meta;
-    }
-
-    int64_t rowkey_start_pos = 0;
-    int64_t rowkey_length = 0;
-    pos = 0;
-    ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024,
-        pos, rowkey_start_pos, rowkey_length);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    STORAGE_LOG(INFO, "write_row", K(writer_row));
-
-    ObFlatRowReader row_reader;
-    ObStoreRow reader_row;
-    oceanbase::common::ObObj read_objs[num];
-    uint16_t read_column_ids[num];
-    reader_row.row_val_.cells_ = read_objs;
-    reader_row.row_val_.count_ = column_num;
-    reader_row.capacity_ = num;
-    reader_row.column_ids_ = read_column_ids;
-
-    ret = row_reader.read_full_row(buf, pos, read_pos, column_type_array, allocator_, reader_row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    STORAGE_LOG(INFO, "reader_row", K(reader_row));
-
-    for (int i = 0; i < column_num; ++i) {
-      ASSERT_EQ(writer_row.row_val_.cells_[i], reader_row.row_val_.cells_[i]);
-    }
-    */
+  check_reader_row(buf, pos, 1, writer_row);
 }
 
-TEST_F(TestRowReader, test_cell_reader)
+TEST_F(TestNewRowReader, test_no_cluster)
 {
   int ret = OB_SUCCESS;
-  int num = 50;
+
+  const int64_t num = 1000;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row, ObRowHeader::USE_CLUSTER_COLUMN_COUNT);
+  build_column_read_info(rowkey_column_count, writer_row);
+  int64_t pos = 0;
   ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  pos = 0;
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_long_varchar)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  const int64_t long_char_len = 50000;
+  char long_char[long_char_len];
+  MEMSET(long_char, 'a', sizeof(long_char));
+  writer_row.storage_datums_[writer_row.count_++].set_string(ObString(long_char_len, long_char));
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  build_column_read_info(rowkey_column_count, writer_row);
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_row_with_nop)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  build_column_read_info(rowkey_column_count, writer_row);
+  const int64_t cnt = 4;
+  int nop_idx[cnt] = {1, 5, 8, 21};
+  int null_idx[cnt] = {3, 17, 18, 22};
+  for (int i = 0; i < cnt; ++i) {
+    writer_row.storage_datums_[nop_idx[i]].set_nop();
+    writer_row.storage_datums_[null_idx[i]].set_null();
+  }
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_sparse_row)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  build_column_read_info(rowkey_column_count, writer_row);
+
+  for (int i = 10; i < 26; ++i) {
+    writer_row.storage_datums_[i].set_nop();
+  }
+  writer_row.storage_datums_[3].set_null();
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_delete_row)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  build_column_read_info(rowkey_column_count, writer_row);
+  for (int i = 1; i < writer_row.count_ - 1; ++i) {
+    writer_row.storage_datums_[i].set_nop();
+  }
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_sparse_row_without_cluster)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  writer_row.count_ = ObRowHeader::USE_CLUSTER_COLUMN_COUNT - 1;
+  build_column_read_info(rowkey_column_count, writer_row);
+  for (int i = 0; i < writer_row.count_ - 1; ++i) {
+    writer_row.storage_datums_[i].set_nop();
+  }
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, 1, writer_row);
+}
+/*
+TEST_F(TestNewRowReader, test_diff_format)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 3000;
   oceanbase::common::ObObj objs[num];
-  uint16_t column_ids[num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
   writer_row.row_val_.count_ = column_num;
-  writer_row.column_ids_ = column_ids;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
 
-  ObSparseRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj read_objs[num];
-  uint16_t read_column_ids[num];
-  reader_row.row_val_.cells_ = read_objs;
-  reader_row.row_val_.count_ = num;
-  reader_row.capacity_ = num;
-  reader_row.column_ids_ = read_column_ids;
+  int64_t with_val_col_id[5] = {6, 18, 82, 189, 812};
+  int64_t idx = 0;
+  for (int i = writer_row.row_val_.count_; i < 3000; ++i) {
+    writer_row.row_val_.cells_[i] = writer_row.row_val_.cells_[i - writer_row.row_val_.count_];
+    //writer_row.row_val_.cells_[i].set_nop_value();
+  }
 
-  // init ObRowGenerate
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-  for (int i = 0; i < 10; ++i) {
-    writer_row.row_val_.count_ = column_num;
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-    writer_row.is_sparse_row_ = true;
-    STORAGE_LOG(INFO, "write_row", K(writer_row));
-    pos = 0;
-    rowkey_start_pos = 0;
-    rowkey_length = 0;
-    char* buf = get_serialize_buf();
-    ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  for (int i = writer_row.row_val_.count_; i < 3000; ++i) {
+    if (i == with_val_col_id[idx]) {
+      idx++;
+    } else {
+      writer_row.row_val_.cells_[i].set_nop_value();
+    }
+  }
+
+  const int64_t long_char_len = 50000;
+  char long_char[long_char_len];
+  MEMSET(long_char, 'a', sizeof(long_char));
+  writer_row.row_val_.cells_[6].set_varchar(long_char);
+  writer_row.row_val_.cells_[6].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+
+  int64_t col_count[6] = {10,30,100,300,1000,3000};
+  int64_t read_time_old = 0;
+  int64_t write_time_old = 0;
+  int64_t len_old = 0;
+  int64_t read_time_new = 0;
+  int64_t write_time_new = 0;
+  int64_t len_new = 0;
+  char *buf = get_serialize_buf();
+  for (int k = 0; k < 6; ++k) {
+    writer_row.row_val_.count_ = col_count[k];
+    int64_t pos = 0;
+    ObRowWriterV2 row_writer;
+
+    MEMSET(buf, '\0', get_serialize_size());
+
+    int64_t start_time = ObTimeUtility::current_time();
+    for (int i = 0; i < 1 * 10000; ++i) {
+      pos = 0;
+      ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+    }
+    int64_t finish_time = ObTimeUtility::current_time();
+    write_time_new = finish_time - start_time;
+    len_new = pos;
+
+    oceanbase::common::ObObj read_objs[num];
+    ObStoreRow reader_row;
+    reader_row.row_val_.cells_ = read_objs;
+    reader_row.row_val_.count_ = writer_row.row_val_.count_;
+    common::ObObjMeta column_type_array[num];
+    for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+      column_type_array[i] = writer_row.row_val_.cells_[i].get_meta();
+    }
+
+    int64_t column_idx_array[] = {5, 2, 1, 0, 3, 4, 9, 7, 6, 8,
+        10, 11, 20, 17, 12, 13, 14, 15, 16, 21,
+        89, 19, 92, 29, 96, 22, 99, 20, 88, 86,
+        112, 127, 291, 210, 100, 105};
+    ObArray<int32_t> projector;
+    for (int j = 0; j < MIN(ARRAYSIZEOF(column_idx_array), (k + 1) * 10 - 1); ++j) {
+      projector.push_back(column_idx_array[j]);
+    }
+    //init ObTableReadInfo
+    ret = init_column_map(writer_row, projector);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    read_pos = 0;
-    ret = row_reader.read_full_row(buf, pos, read_pos, nullptr, allocator_, reader_row);
+    int64_t read_pos = 0;
+    ObRowReader row_reader;
+
+    start_time = ObTimeUtility::current_time();
+    for (int i = 0; i < 1 * 10000; ++i) {
+      row_reader.reset();
+      read_pos = 0;
+      //ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
+      ret = row_reader.read_full_row(buf, pos, read_pos, column_type_array, allocator_, reader_row);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    finish_time = ObTimeUtility::current_time();
+    read_time_new = finish_time - start_time;
+
     ASSERT_EQ(OB_SUCCESS, ret);
-    STORAGE_LOG(INFO, "read_full_row", K(reader_row));
-    ASSERT_EQ(reader_row.row_val_.count_, writer_row.row_val_.count_);
-    ASSERT_EQ(reader_row.is_sparse_row_, writer_row.is_sparse_row_);
     for (int j = 0; j < reader_row.row_val_.count_; ++j) {
-      STORAGE_LOG(INFO, "obj", K(reader_row.row_val_.cells_[j]), K(writer_row.row_val_.cells_[j]));
       if (ObNumberFloatType != reader_row.row_val_.cells_[j].get_type()) {
         ASSERT_TRUE(reader_row.row_val_.cells_[j] == writer_row.row_val_.cells_[j]);
-        ASSERT_TRUE(reader_row.column_ids_[j] == writer_row.column_ids_[j]);
+        //ASSERT_TRUE(reader_row.row_val_.cells_[j] == writer_row.row_val_.cells_[column_idx_array[j]]);
       }
     }
-  }
-}
-
-TEST_F(TestRowReader, init_fail)
-{
-  int ret = OB_SUCCESS;
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj objs[column_num];
-  reader_row.row_val_.cells_ = objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-  char* buf = get_serialize_buf();
-
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  read_pos = 0;
-  // invalid column map
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  // invalid buf
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjMeta obj_meta;
-    ObObjType obj_type = static_cast<ObObjType>(i);
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+    ObRowWriter old_row_writer;
+    start_time = ObTimeUtility::current_time();
+    for (int i = 0; i < 1 * 10000; ++i) {
+      pos = 0;
+      ret = old_row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
     }
-    columns[i].col_type_ = obj_meta;
+    finish_time = ObTimeUtility::current_time();
+    write_time_old = finish_time - start_time;
+    len_old = pos;
+
+    ObFlatRowReader old_row_reader;
+
+    start_time = ObTimeUtility::current_time();
+    for (int i = 0; i < 1 * 10000; ++i) {
+      read_pos = 0;
+      row_reader.reset();
+      //ret = old_row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
+      ret = old_row_reader.read_full_row(buf, pos, read_pos, column_type_array, allocator_, reader_row);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    finish_time = ObTimeUtility::current_time();
+    read_time_old = finish_time - start_time;
+
+    ASSERT_EQ(OB_SUCCESS, ret);
+    //STORAGE_LOG(INFO, "read_full_row", K(reader_row));
+    for (int j = 0; j < reader_row.row_val_.count_; ++j) {
+      if (ObNumberFloatType != reader_row.row_val_.cells_[j].get_type()) {
+        ASSERT_TRUE(reader_row.row_val_.cells_[j] == writer_row.row_val_.cells_[j]);
+        //ASSERT_TRUE(reader_row.row_val_.cells_[j] == writer_row.row_val_.cells_[column_idx_array[j]]);
+      }
+    }
+    int len_ratio = (int)(((len_new - len_old) + 0.0) / len_old * 100);
+    int write_time_ratio = (int)(((write_time_new - write_time_old) + 0.0) / write_time_old * 100);
+    int read_time_ratio = (int)(((read_time_new - read_time_old) + 0.0) / read_time_old * 100);
+    STORAGE_LOG(INFO, "finish", "col_count", col_count[k],
+        K(len_new), K(len_old), "len_diff", len_new - len_old, K(len_ratio),
+        K(write_time_new), K(write_time_old), K(write_time_ratio),
+        K(read_time_new), K(read_time_old), K(read_time_ratio));
   }
-  share::schema::ColumnMap col_id_map(allocator_);
-  ret = col_id_map.init(columns);
+}
+*/
+/*
+TEST_F(TestNewRowReader, test_macro_block)
+{
+  int ret = OB_SUCCESS;
+  ObStoreRow row;
+  const int64_t num = 3000;
+  ObObj cells[num];
+  row.row_val_.cells_ = cells;
+  row.row_val_.count_ = num;
+  ObMacroBlockWriter writer;
+  ObMacroDataSeq start_seq(0);
+  ObDataStoreDesc desc;
+  int64_t data_version = 1;
+
+  ret = desc.init(table_schema_, data_version, 1, MINOR_MERGE, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.open(desc, start_seq);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          columns));
+  ret = row_generate_.get_next_row(row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.append_row(row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.build_micro_block(false);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = row_reader.read_row(NULL, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  // invalid  pos
-  pos = 10;
-  read_pos = 100;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  pos = 100;
-  read_pos = -1;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  ret = row_generate_.get_next_row(row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.append_row(row);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.build_micro_block(false);
+  ret = writer.close();
 
-  (void)rowkey_start_pos;
-  (void)rowkey_length;
+  const ObMacroBlockMeta *meta = NULL;
+  ObFullMacroBlockMeta full_meta;
+
+  full_meta = writer.get_macro_block_write_ctx().macro_block_meta_list_.at(0);
+  ASSERT_TRUE(full_meta.is_valid());
+  STORAGE_LOG(INFO, "write finish", K(full_meta), K(writer.get_macro_block_write_ctx()));
 }
-
-TEST_F(TestRowReader, read_flat_row_from_flat_storage)
+*/
+TEST_F(TestNewRowReader, test_read_row)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, column_num));
 
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
+  ObRowReader row_reader;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, column_num));
 
   int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
 
-  char* buf = get_serialize_buf();
-  // write success
+  char *buf = get_serialize_buf();
+  //write success
   pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  STORAGE_LOG(INFO, "read row", K(reader_row));
-
-  bool exist = false;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.check_one_row(reader_row, exist));
-  ASSERT_TRUE(column_num == reader_row.row_val_.count_);
-  // every obj should equal
-  for (int64_t i = 0; i < column_num; ++i) {
-    STORAGE_LOG(INFO, "compare", K(i), K(writer_row.row_val_.cells_[i]), K(reader_row.row_val_.cells_[i]));
-    ASSERT_EQ(writer_row.row_val_.cells_[i], reader_row.row_val_.cells_[i]);
-  }
-  // new row write success
-  ObNewRow new_reader_row;
-  new_reader_row.count_ = column_num;
-  new_reader_row.cells_ = reader_objs;
-
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(writer_row.row_val_, buf, 2 * 1024 * 1024, FLAT_ROW_STORE, pos);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init column type array
-  ObObjMeta column_types[common::OB_ROW_MAX_COLUMNS_COUNT];
-  for (int64_t i = 0; i < column_num; ++i) {
-    column_types[i] = writer_row.row_val_.cells_[i].get_meta();
-  }
-  // new row read success
-  read_pos = 0;
-  ret =
-      row_reader.read_compact_rowkey(column_types, column_map_.get_request_count(), buf, pos, read_pos, new_reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // every obj should equal
-  for (int64_t i = 0; i < column_num; ++i) {
-    ASSERT_TRUE(writer_row.row_val_.cells_[i] == new_reader_row.cells_[i])
-        << "\n i: " << i << "\n writer:  " << to_cstring(writer_row.row_val_.cells_[i])
-        << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
-  }
-}
-
-TEST_F(TestRowReader, read_flat_row_from_flat_storage2)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
 
   // write 100 rows
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ASSERT_TRUE(column_num == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (!writer_row.row_val_.cells_[i].is_nop_value()) {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[index]);
-      ASSERT_TRUE(columns[i].col_id_ == reader_row.column_ids_[index]);
-      index++;
-    }
-  }
-}
-
-TEST_F(TestRowReader, read_overflow)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read_header_overflow
-  read_pos = 0;
-  ret = row_reader.read_row(buf, 3, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
-  // read_column_index_overflow
-  read_pos = 0;
-  ret = row_reader.read_row(buf, sizeof(ObRowHeader), read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
-  // step == 1, read_columns overflow
-  read_pos = 0;
-  ret = row_reader.read_row(buf, 200, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
-
-  // read_sequence_columns overflow
-  ObNewRow new_writer_row;
-  new_writer_row.count_ = column_num;
-  new_writer_row.cells_ = objs;
-  ObNewRow new_reader_row;
-  new_reader_row.count_ = 0;
-  new_reader_row.cells_ = reader_objs;
-
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(new_writer_row, buf, 2 * 1024 * 1024, FLAT_ROW_STORE, pos);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init column type array
-  ObObjMeta column_types[common::OB_ROW_MAX_COLUMNS_COUNT];
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = new_writer_row.cells_[i].get_type();
-    ObObjMeta& obj_meta = column_types[i];
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-  }
-  // new row read success
-  read_pos = 0;
-  ret =
-      row_reader.read_compact_rowkey(column_types, column_map_.get_request_count(), buf, 200, read_pos, new_reader_row);
-  ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
-}
-
-TEST_F(TestRowReader, read_sparse_row_from_flat_storage)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  // set nop value
-  int nop_cell_cnt = 5;
-  int nop_indexs[] = {5, 9, 12, 18, 21};
-  for (int i = 0; i < nop_cell_cnt; ++i) {
-    writer_row.row_val_.cells_[nop_indexs[i]].set_nop_value();
-  }
-
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ASSERT_TRUE(column_num - nop_cell_cnt == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (!writer_row.row_val_.cells_[i].is_nop_value()) {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[index]);
-      ASSERT_TRUE(columns[i].col_id_ == reader_row.column_ids_[index]);
-      index++;
-    }
-  }
-}
-
-TEST_F(TestRowReader, flat_row_test)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  // set nop value
-  int nop_cell_cnt = 5;
-  int nop_indexs[] = {5, 9, 12, 18, 21};
-  for (int i = 0; i < nop_cell_cnt; ++i) {
-    writer_row.row_val_.cells_[nop_indexs[i]].set_nop_value();
-  }
-  // write 100 rows
-  int row_cnt = 100;
-  for (int i = 0; i < row_cnt; ++i) {
-    ret = row_writer.write_flat_row(
-        rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  read_pos = 0;
-  for (int j = 0; j < row_cnt; ++j) {
-    ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-    ASSERT_EQ(OB_SUCCESS, ret);
-
-    ASSERT_TRUE(column_num - nop_cell_cnt == reader_row.row_val_.count_);
-    // every obj should equal
-    int index = 0;
-    for (int64_t i = 0; i < column_num; ++i) {
-      if (!writer_row.row_val_.cells_[i].is_nop_value()) {
-        ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[index]);
-        ASSERT_TRUE(columns[i].col_id_ == reader_row.column_ids_[index]);
-        index++;
-      }
-    }
-  }
-}
-
-TEST_F(TestRowReader, flat_row_test_about_trans_id_flag_change)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  int idx = 0;
-  writer_row.row_val_.cells_[idx++].set_int32(1);
-  writer_row.row_val_.cells_[idx++].set_int(-INT64_MAX);
-  writer_row.row_val_.cells_[idx++].set_int(-36202);
-  writer_row.row_val_.cells_[idx++].set_int32(1);
-  transaction::ObTransID trans_id(ObAddr(ObAddr::IPV4, "11.158.41.173", 16046));
-  writer_row.row_type_flag_.flag_ = 10;
-  writer_row.trans_id_ptr_ = &trans_id;
-  writer_row.row_val_.count_ = 4;
-
-  // write 100 rows
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-
-  // read success
-  read_pos = 0;
-  transaction::ObTransID read_trans_id;
-  ret = row_reader.setup_row(buf, pos, read_pos, 4, &read_trans_id);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  STORAGE_LOG(INFO, "read row", K(read_trans_id));
-}
-
-TEST_F(TestRowReader, read_flat_row_from_sparse_storage)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader sparse_row_reader;
-  ObFlatRowReader flat_row_reader;
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  uint16_t sparse_col_id_array[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  sparse_row.column_ids_ = sparse_col_id_array;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  // set nop value
-  int nop_cell_cnt = 5;
-  int nop_indexs[] = {5, 9, 12, 18, 21};
-  for (int i = 0; i < nop_cell_cnt; ++i) {
-    writer_row.row_val_.cells_[nop_indexs[i]].set_nop_value();
-  }
-
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  read_pos = 0;
-  ret = flat_row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, sparse_row, SPARSE_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ASSERT_TRUE(column_num - nop_cell_cnt == sparse_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (!writer_row.row_val_.cells_[i].is_nop_value()) {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == sparse_row.row_val_.cells_[index]);
-      ASSERT_TRUE(columns[i].col_id_ == sparse_row.column_ids_[index]);
-      index++;
-    }
-  }
-
-  int sparse_buf_size = 10 * 1024;
-  char sparse_buf[sparse_buf_size];
-  MEMSET(sparse_buf, 0, sparse_buf_size);
-
-  // write sparse row
-  pos = 0;
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, sparse_buf, sparse_buf_size, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-  uint16_t col_id_array[column_num];
-  reader_row.column_ids_ = col_id_array;
-
-  // read success
-  read_pos = 0;
-  ret = sparse_row_reader.read_row(sparse_buf, pos, read_pos, column_map_, allocator_, reader_row, FLAT_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(false, reader_row.is_sparse_row_);
-  ASSERT_TRUE(column_num == reader_row.row_val_.count_);
-  // every obj should equal
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (!writer_row.row_val_.cells_[i].is_nop_value()) {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
-    } else {
-      ASSERT_EQ(true, reader_row.row_val_.cells_[i].is_nop_value());
-    }
-  }
-}
-
-TEST_F(TestRowReader, read_sparse_row_from_sparse_storage)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader row_reader;
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t sparse_column_id[column_num];
-  sparse_row.column_ids_ = sparse_column_id;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  ObObjMeta meta_type_array[column_num];
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // set nop value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21, INT_MAX};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
-    meta_type_array[i] = columns[sparse_indexs[i]].col_type_;
-  }
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
-
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  ObStoreRow reader_flat_row;
-  oceanbase::common::ObObj reader_flat_objs[column_num];
-  reader_flat_row.row_val_.cells_ = reader_flat_objs;
-  reader_flat_row.row_val_.count_ = column_num;
-  reader_flat_row.capacity_ = column_num;
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_full_row(buf, pos, read_pos, meta_type_array, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, reader_row.is_sparse_row_);
-  ASSERT_TRUE(sparse_cell_cnt == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-    ASSERT_TRUE(sparse_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
-    ASSERT_TRUE(sparse_row.column_ids_[i] == reader_row.column_ids_[i]);
-  }
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_flat_row, FLAT_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(false, reader_flat_row.is_sparse_row_);
-  ASSERT_TRUE(column_num == reader_flat_row.row_val_.count_);
-  // every obj should equal
-  index = 0;
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (i == sparse_indexs[index]) {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_flat_row.row_val_.cells_[i]);
-      index++;
-    } else {
-      ASSERT_EQ(true, reader_flat_row.row_val_.cells_[i].is_nop_value());
-    }
-  }
-}
-
-TEST_F(TestRowReader, sparse_row_test)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader row_reader;
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t column_ids[column_num];
-  sparse_row.column_ids_ = column_ids;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // set nop value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21, INT_MAX};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
-  }
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
-
-  int row_cnt = 100;
-  for (int i = 0; i < row_cnt; ++i) {
-    ret = row_writer.write_sparse_row(
-        rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
-
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  read_pos = 0;
-  for (int j = 0; j < row_cnt; ++j) {
-    // read success
-    ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_EQ(true, reader_row.is_sparse_row_);
-    ASSERT_TRUE(sparse_cell_cnt == reader_row.row_val_.count_);
-    // every obj should equal
-    int index = 0;
-    for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-      ASSERT_TRUE(sparse_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
-      ASSERT_TRUE(sparse_row.column_ids_[i] == reader_row.column_ids_[i]);
-    }
-  }
-
-  ObStoreRow reader_flat_row;
-  oceanbase::common::ObObj reader_flat_objs[column_num];
-  reader_flat_row.row_val_.cells_ = reader_flat_objs;
-  reader_flat_row.row_val_.count_ = column_num;
-  reader_flat_row.capacity_ = column_num;
-
-  // read success
-  read_pos = 0;
-  reader_row.row_val_.count_ = column_num;
-  for (int j = 0; j < row_cnt; ++j) {
-    ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_flat_row, FLAT_ROW_STORE);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_EQ(false, reader_flat_row.is_sparse_row_);
-    ASSERT_TRUE(column_num == reader_flat_row.row_val_.count_);
-    // every obj should equal
-    int index = 0;
-    for (int64_t i = 0; i < column_num; ++i) {
-      if (i == sparse_indexs[index]) {
-        ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_flat_row.row_val_.cells_[i]);
-        index++;
-      } else {
-        ASSERT_EQ(true, reader_flat_row.row_val_.cells_[i].is_nop_value());
-        // STORAGE_LOG(WARN, "~~~", K(i), K(index));
-      }
-    }
-  }
-}
-
-TEST_F(TestRowReader, sparse_row_with_trans_id)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader row_reader;
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t sparse_column_id[column_num];
-  sparse_row.column_ids_ = sparse_column_id;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // set nop value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21, INT_MAX};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
-  }
-  transaction::ObTransID trans_id(common::ObAddr(2, 3333));
-  transaction::ObTransID* trans_id_ptr = &trans_id;
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
-  sparse_row.trans_id_ptr_ = trans_id_ptr;
-  sparse_row.row_type_flag_.set_uncommitted_row(true);
-
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length, false);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  ObStoreRow reader_flat_row;
-  oceanbase::common::ObObj reader_flat_objs[column_num];
-  reader_flat_row.row_val_.cells_ = reader_flat_objs;
-  reader_flat_row.row_val_.count_ = column_num;
-  reader_flat_row.capacity_ = column_num;
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, reader_row.is_sparse_row_);
-  ASSERT_TRUE(sparse_cell_cnt == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-    ASSERT_TRUE(sparse_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
-    ASSERT_TRUE(sparse_row.column_ids_[i] == reader_row.column_ids_[i]);
-  }
-  ASSERT_TRUE(*sparse_row.trans_id_ptr_ == trans_id);
-}
-
-TEST_F(TestRowReader, read_index_column_in_flat_storage)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    columns[i].col_type_ = obj_meta;
-  }
-
-  ret = row_reader.setup_row(buf, pos, 0, column_num);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  int column_index_cnt = 5;
-  int column_indexs[] = {12, 5, 21, 18, 9};
-
-  for (int64_t i = 0; i < column_index_cnt; ++i) {
-    row_reader.read_column(
-        columns[column_indexs[i]].col_type_, allocator_, column_indexs[i], reader_row.row_val_.cells_[i]);
-    ASSERT_TRUE(writer_row.row_val_.cells_[column_indexs[i]] == reader_row.row_val_.cells_[i]);
-  }
-}
-
-TEST_F(TestRowReader, flat_row_with_trans_id)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  transaction::ObTransID trans_id(common::ObAddr(2, 3333));
-  transaction::ObTransID* trans_id_ptr = &trans_id;
-  writer_row.row_type_flag_.set_uncommitted_row(true);
-  writer_row.trans_id_ptr_ = trans_id_ptr;
   ret = row_writer.write(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length, false);
-
+      rowkey_column_count,
+      writer_row,
+      buf,
+      2 * 1024 * 1024,
+      pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  //init ObTableReadInfo
+  common::ObArray<ObColDesc> cols_desc;
+  ret = init_read_columns(writer_row, cols_desc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  build_column_read_info(rowkey_column_count, writer_row);
+  //read success
+  ret = row_reader.read_row(
+      buf,
+      pos,
+      &read_info_,
+      reader_row);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  transaction::ObTransID read_trans_id;
-  transaction::ObTransID* read_trans_id_ptr = &read_trans_id;
-  // read success
-  read_pos = 0;
-  reader_row.trans_id_ptr_ = read_trans_id_ptr;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, FLAT_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(false, reader_row.is_sparse_row_);
-  ASSERT_TRUE(column_num == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-    ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
+  ASSERT_TRUE(column_num == reader_row.count_);
+  //every obj should equal
+  for (int64_t i = 0; i < column_num; ++i) {
+    if (!writer_row.storage_datums_[i].is_nop()) {
+      ASSERT_TRUE(reader_row.storage_datums_[i] == writer_row.storage_datums_[i]);
+    }
   }
-  ASSERT_TRUE(read_trans_id == trans_id);
 }
 
-TEST_F(TestRowReader, read_full_sparse_row)
+TEST_F(TestNewRowReader, test_read_column)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, column_num));
 
-  ObSparseRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t column_ids[column_num];
-  sparse_row.column_ids_ = column_ids;
-  sparse_row.capacity_ = column_num;
+  ObRowReader row_reader;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, column_num));
 
   int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
 
-  char* buf = get_serialize_buf();
-  // write success
+  char *buf = get_serialize_buf();
+  //write success
   pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  // set sparse cell value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21, INT_MAX};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
-  }
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
 
-  int row_cnt = 100;
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  // write 100 rows
+  ret = row_writer.write(
+      rowkey_column_count,
+      writer_row,
+      buf,
+      2 * 1024 * 1024,
+      pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    columns[i].col_type_ = obj_meta;
-  }
-  ret = row_reader.read_full_row(buf, pos, 0, nullptr, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-    ASSERT_TRUE(writer_row.row_val_.cells_[sparse_indexs[i]] == reader_row.row_val_.cells_[i]);
-  }
-}
-
-TEST_F(TestRowReader, read_index_column_in_sparse_storage)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t column_ids[column_num];
-  sparse_row.column_ids_ = column_ids;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-  // set sparse cell value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21, INT_MAX};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
-  }
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
-
-  int row_cnt = 100;
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    columns[i].col_type_ = obj_meta;
-  }
-  ret = row_reader.setup_row(buf, pos, 0);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  for (int64_t i = 0; i < sparse_cell_cnt; ++i) {
-    row_reader.read_column(columns[sparse_indexs[i]].col_type_, allocator_, i, reader_row.row_val_.cells_[i]);
-    ASSERT_TRUE(writer_row.row_val_.cells_[sparse_indexs[i]] == reader_row.row_val_.cells_[i]);
-  }
-}
-
-TEST_F(TestRowReader, test_skip_column)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  ObArray<ObColDesc> column_desc_array;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(column_desc_array));
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    if (obj_type == ObMediumIntType) {
-      objs[i].set_mediumint(1000000);
-    } else if (obj_type == ObIntType) {
-      objs[i].set_int(1000000000000000000);
-    }
-  }
-  ret = row_writer.write_flat_row(
-      rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-
-  ObArray<ObColDesc> out_cols;
-  ObArray<int32_t> projector;
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObNCharType == obj_type || ObNVarchar2Type == obj_type ||
-        ObTinyTextType == obj_type || ObTextType == obj_type || ObMediumTextType == obj_type ||
-        ObLongTextType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    } else if (ObHexStringType == obj_type) {
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    } else if (ObRawType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_BINARY);
-    }
-    ObColDesc col_desc = column_desc_array[i];
-    col_desc.col_type_ = obj_meta;
-    ASSERT_EQ(OB_SUCCESS, out_cols.push_back(col_desc));
-    ASSERT_EQ(OB_SUCCESS, projector.push_back(static_cast<int32_t>(i)));
-  }
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          out_cols,
-          nullptr,
-          &projector));
-
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // skip column error
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ObObjMeta obj_meta;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // skip rowkey column error
-  column_map_.reset();
-  out_cols.reset();
-  projector.reset();
-  ObColDesc col_desc;
-
-  ObObjType obj_type = writer_row.row_val_.cells_[0].get_type();
-  obj_meta.set_type(obj_type);
-  col_desc = column_desc_array[0];
-  col_desc.col_type_ = obj_meta;
-  ASSERT_EQ(OB_SUCCESS, out_cols.push_back(col_desc));
-  ASSERT_EQ(OB_SUCCESS, projector.push_back(-1));
-
-  obj_type = writer_row.row_val_.cells_[1].get_type();
-  obj_meta.set_type(obj_type);
-  col_desc = column_desc_array[1];
-  col_desc.col_type_ = obj_meta;
-  ASSERT_EQ(OB_SUCCESS, out_cols.push_back(col_desc));
-  ASSERT_EQ(OB_SUCCESS, projector.push_back(1));
-
-  obj_type = writer_row.row_val_.cells_[2].get_type();
-  obj_meta.set_type(obj_type);
-  col_desc = column_desc_array[2];
-  col_desc.col_type_ = obj_meta;
-  ASSERT_EQ(OB_SUCCESS, out_cols.push_back(col_desc));
-  ASSERT_EQ(OB_SUCCESS, projector.push_back(2));
-
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          out_cols,
-          nullptr,
-          &projector));
-
-  read_pos = 0;
-  ret = row_reader.read_row(buf, 8 + 4 + 2, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
-}
-
-TEST_F(TestRowReader, read_multi)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t sum_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  // pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret =
-      row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, sum_pos, rowkey_start_pos, rowkey_length);
-  pos = sum_pos;
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init ObColumnMap
-  column_map_.reset();
+  //init ObTableReadInfo
+  build_column_read_info(rowkey_column_count, writer_row);
   ObArray<ObColDesc> columns;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
 
-  ret = init_column_map(writer_row, columns);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // read success
-  ret = row_reader.read_row(buf, pos, 0, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // every reader obj should equal
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(0, writer_row));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i])
-        << "\n i: " << i << "\n writer:  " << to_cstring(writer_row.row_val_.cells_[i])
-        << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
-  }
-  // read success
-  ret = row_reader.read_row(buf, pos, 0, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // every reader obj should equal
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(0, writer_row));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i])
-        << "\n i: " << i << "\n writer:  " << to_cstring(writer_row.row_val_.cells_[i])
-        << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
+  int64_t column_idx_array[] = {20, 17, 5, 2, 1, 0, 10, 11, 12};
+  ObStorageDatum datum;
+  for (int i = 0; i < ARRAYSIZEOF(column_idx_array); ++i) {
+    //read success
+     ret = row_reader.read_column(
+         buf,
+         pos,
+         column_idx_array[i],
+         datum);
+     ASSERT_EQ(OB_SUCCESS, ret);
+     ASSERT_TRUE(writer_row.storage_datums_[column_idx_array[i]] == datum);
   }
 }
 
-TEST_F(TestRowReader, read_flat_rowkey)
+TEST_F(TestNewRowReader, test_read_row_in_random_order)
 {
   int ret = OB_SUCCESS;
+  const int64_t num = 100;
   ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
 
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = 0;
-  reader_row.capacity_ = column_num;
+  ObRowReader row_reader;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, num));
 
   int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
 
-  char* buf = get_serialize_buf();
-  ObArray<ObColDesc> column_desc_array;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(column_desc_array));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    column_desc_array[i].col_type_ = obj_meta;
-  }
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          column_desc_array));
-  {
-    ObNewRow new_writer_row;
-    new_writer_row.count_ = column_num;
-    new_writer_row.cells_ = objs;
-    ObNewRow new_reader_row;
-    new_reader_row.count_ = 0;
-    new_reader_row.cells_ = reader_objs;
+  char *buf = get_serialize_buf();
+  //write success
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
 
+  int64_t col_cnt[] = { writer_row.count_, ObRowHeader::USE_CLUSTER_COLUMN_COUNT - 1 };
+  build_column_read_info(rowkey_column_count, writer_row);
+  for (int i = 0; i < ARRAYSIZEOF(col_cnt); ++i) {
+    writer_row.count_ = col_cnt[i];
     pos = 0;
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-    ret = row_writer.write(new_writer_row, buf, 2 * 1024 * 1024, FLAT_ROW_STORE, pos);
+    ret = row_writer.write(
+        rowkey_column_count,
+        writer_row,
+        buf,
+        2 * 1024 * 1024,
+        pos);
+    STORAGE_LOG(INFO, "row col count", K(writer_row));
     ASSERT_EQ(OB_SUCCESS, ret);
-    // init column type array
-    ObObjMeta column_types[common::OB_ROW_MAX_COLUMNS_COUNT];
-    for (int64_t i = 0; i < column_num; ++i) {
-      ObObjType obj_type = new_writer_row.cells_[i].get_type();
-      ObObjMeta& obj_meta = column_types[i];
-      obj_meta.set_type(obj_type);
-      if (ObVarcharType == obj_type || ObCharType == obj_type) {
-        obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-        obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-      }
+
+    int64_t column_idx_array[] = {0, 1, 20, 17, 5, 2, 10, 11, 12};
+    ObArray<int32_t> projector;
+    for (int j = 0; j < ARRAYSIZEOF(column_idx_array); ++j) {
+      projector.push_back(column_idx_array[j]);
     }
-    // buf is NULL
-    read_pos = 0;
-    ret = row_reader.read_compact_rowkey(NULL, 0, NULL, pos, read_pos, new_reader_row);
-    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-    // read_sequence_columns overflow
-    ret = row_reader.read_compact_rowkey(
-        column_types, column_map_.get_rowkey_store_count(), buf, 1, read_pos, new_reader_row);
-    // FIXEME: we don't check this overflow type
+    ObArray<ObColDesc> cols_desc;
+    //init ObTableReadInfo
+    ret = init_read_columns(writer_row, projector, cols_desc);
     ASSERT_EQ(OB_SUCCESS, ret);
-    // new row read success
-    read_pos = 0;
-    ret = row_reader.read_compact_rowkey(
-        column_types, column_map_.get_rowkey_store_count(), buf, pos, read_pos, new_reader_row);
+
+    //read success
+    row_reader.reset();
+    ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
     ASSERT_EQ(OB_SUCCESS, ret);
-    // every reader obj should equal
-    for (int64_t i = 0; i < rowkey_column_count; ++i) {
-      ASSERT_TRUE(new_writer_row.cells_[i] == new_reader_row.cells_[i])
-          << "\n i: " << i << "\n writer:  " << to_cstring(new_writer_row.cells_[i])
-          << "\n reader:  " << to_cstring(new_reader_row.cells_[i]);
+
+    for (int j = 0; j < reader_row.count_; ++j) {
+      ASSERT_TRUE(writer_row.storage_datums_[column_idx_array[j]] == reader_row.storage_datums_[j]);
+    }
+
+    STORAGE_LOG(INFO, "projector2");
+
+    int64_t column_idx_array2[] = {0, 1, 2, 20, 17, 5, 10, 11, 12, 30, 29};
+    projector.reuse();
+    for (int i = 0; i < ARRAYSIZEOF(column_idx_array2); ++i) {
+      projector.push_back(column_idx_array2[i]);
+    }
+    //init ObTableReadInfo
+    ret = init_read_columns(writer_row, projector, cols_desc);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //read success
+    row_reader.reset();
+    reader_row.count_ = num;
+    ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    for (int i = 0; i < reader_row.count_; ++i) {
+      STORAGE_LOG(INFO, "projector2", K(i), K(column_idx_array2[i]), K(reader_row.storage_datums_[i]));
+      ObStorageDatum datum;
+      ASSERT_TRUE(writer_row.storage_datums_[column_idx_array2[i]] == reader_row.storage_datums_[i]);
     }
   }
 }
 
-TEST_F(TestRowReader, read_sparse_rowkey)
+TEST_F(TestNewRowReader, test_read_sparse_row_in_random_order)
 {
   int ret = OB_SUCCESS;
+  const int64_t num = 1000;
   ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
 
-  ObSparseRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = 0;
-  reader_row.capacity_ = column_num;
+  ObRowReader row_reader;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, num));
 
   int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
 
-  char* buf = get_serialize_buf();
-  ObArray<ObColDesc> column_desc_array;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(column_desc_array));
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    column_desc_array[i].col_type_ = obj_meta;
+  char *buf = get_serialize_buf();
+  //write success
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+  build_column_read_info(rowkey_column_count, writer_row);
+
+  for (int i = 10; i < 35; ++i) {
+    writer_row.storage_datums_[i].set_nop();
   }
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          column_desc_array));
-  {
-    ObNewRow new_writer_row;
-    new_writer_row.count_ = column_num;
-    new_writer_row.cells_ = objs;
-    ObNewRow new_reader_row;
-    new_reader_row.count_ = 0;
-    new_reader_row.cells_ = reader_objs;
+  writer_row.storage_datums_[3].set_null();
 
+  int64_t col_cnt[] = { writer_row.count_, ObRowHeader::USE_CLUSTER_COLUMN_COUNT - 1 };
+
+  for (int i = 0; i < ARRAYSIZEOF(col_cnt); ++i) {
+    writer_row.count_ = col_cnt[i];
     pos = 0;
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-    ret = row_writer.write(new_writer_row, buf, 2 * 1024 * 1024, SPARSE_ROW_STORE, pos);
+    ret = row_writer.write(
+        rowkey_column_count,
+        writer_row,
+        buf,
+        2 * 1024 * 1024,
+        pos);
+    STORAGE_LOG(INFO, "row col count", K(writer_row));
     ASSERT_EQ(OB_SUCCESS, ret);
-    // init column type array
-    ObObjMeta column_types[common::OB_ROW_MAX_COLUMNS_COUNT];
-    for (int64_t i = 0; i < column_num; ++i) {
-      ObObjType obj_type = new_writer_row.cells_[i].get_type();
-      ObObjMeta& obj_meta = column_types[i];
-      obj_meta.set_type(obj_type);
-      if (ObVarcharType == obj_type || ObCharType == obj_type) {
-        obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-        obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+
+    int64_t column_idx_array[] = {0, 1, 20, 17, 5, 2, 10, 11, 12};
+    ObArray<int32_t> projector;
+    for (int i = 0; i < ARRAYSIZEOF(column_idx_array); ++i) {
+      projector.push_back(column_idx_array[i]);
+    }
+    ObArray<ObColDesc> cols_desc;
+    //init ObTableReadInfo
+    ret = init_read_columns(writer_row, projector, cols_desc);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //read success
+    row_reader.reset();
+    ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    STORAGE_LOG(INFO, "chaser debug datum", K(writer_row), K(reader_row));
+    for (int i = 0; i < reader_row.count_; ++i) {
+      ASSERT_TRUE(writer_row.storage_datums_[column_idx_array[i]] == reader_row.storage_datums_[i]);
+    }
+
+    STORAGE_LOG(INFO, "projector2");
+
+    int64_t column_idx_array2[] = {0, 1, 2, 3, 20, 17, 5, 10, 11, 12, 30, 29};
+    projector.reuse();
+    for (int i = 0; i < ARRAYSIZEOF(column_idx_array2); ++i) {
+      projector.push_back(column_idx_array2[i]);
+    }
+    //init ObTableReadInfo
+    ret = init_read_columns(writer_row, projector, cols_desc);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    //read success
+    reader_row.count_ = num;
+    row_reader.reset();
+    ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    for (int i = 0; i < reader_row.count_; ++i) {
+      ASSERT_TRUE(writer_row.storage_datums_[column_idx_array2[i]] == reader_row.storage_datums_[i]);
+    }
+  }
+}
+
+TEST_F(TestNewRowReader, test_write_border_int_val)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  int64_t idx = 0;
+  writer_row.storage_datums_[idx++].set_int(127);
+  writer_row.storage_datums_[idx++].set_int(-128);
+  writer_row.storage_datums_[idx++].set_int(128);
+  writer_row.storage_datums_[idx++].set_int(141);
+  writer_row.storage_datums_[idx++].set_int32(0x7FFF);
+
+  writer_row.storage_datums_[idx++].set_uint32(0xFFFF);
+  writer_row.storage_datums_[idx++].set_uint(0xFFFF);
+  writer_row.storage_datums_[idx++].set_uint(0xFFFFFFFF);
+  writer_row.storage_datums_[idx++].set_int(0x7FFFFFFF);
+
+  writer_row.count_ = idx;
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  ret = row_writer.write(1, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+  build_column_read_info(rowkey_column_count, writer_row);
+  check_reader_row(buf, pos, rowkey_column_count, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_rowkey_and_col_independent_cluster)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  const int64_t rowkey_cnt = 40;
+  build_column_read_info(rowkey_cnt, writer_row);
+  ret = row_writer.write(rowkey_cnt, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, rowkey_cnt, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_rowkey_independent_cluster)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 300;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row, num);
+
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  const int64_t rowkey_cnt = 40;
+  build_column_read_info(rowkey_cnt, writer_row);
+  ret = row_writer.write(rowkey_cnt, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, rowkey_cnt, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_rowkey_independent_cluster_2)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t column_cnt = 103;
+  const int64_t rowkey_cnt = 59;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, column_cnt));
+  writer_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+
+  for (int i = 0; i < column_cnt; ++i) {
+    writer_row.storage_datums_[i].set_int(i);
+  }
+
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+
+  build_column_read_info(rowkey_cnt, writer_row);
+  ret = row_writer.write(rowkey_cnt, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  ObRowReader row_reader;
+  ObStorageDatum read_datum;
+
+  ASSERT_EQ(OB_SUCCESS, row_reader.read_column(buf, pos, 57, read_datum));
+  ASSERT_EQ(read_datum.get_int(), 57);
+
+  check_reader_row(buf, pos, rowkey_cnt, writer_row);
+
+}
+
+TEST_F(TestNewRowReader, test_rowkey_independent_cluster_sparse)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 300;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row);
+
+  int i = writer_row.count_;
+  const int64_t rowkey_cnt = 40;
+  writer_row.count_ = num;
+  build_column_read_info(rowkey_cnt, writer_row);
+  for ( ; i < num; ++i) {
+    writer_row.storage_datums_[i].set_nop();
+  }
+
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+
+
+  ret = row_writer.write(rowkey_cnt, writer_row, buf, 2 * 1024 * 1024, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+
+  check_reader_row(buf, pos, rowkey_cnt, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_rowkey_independent_cluster_read_column)
+{
+  int ret = OB_SUCCESS;
+  ObRowWriter row_writer;
+  int num = 300;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ObRowReader row_reader;
+
+  int64_t pos = 0;
+  char *buf = get_serialize_buf();
+  //write success
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row, num);
+
+  int64_t rowkey_cnt = 40;
+  // write 100 rows
+  ret = row_writer.write(
+      rowkey_cnt,
+      writer_row,
+      buf,
+      2 * 1024 * 1024,
+      pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  int64_t column_idx_array[] = {20, 17, 5, 2, 1, 0, 10, 11, 12, 80, 99, 192, 129};
+  ObStorageDatum datum;
+  ObStorageDatum other_datum;
+  for (int i = 0; i < ARRAYSIZEOF(column_idx_array); ++i) {
+    //read success
+     ret = row_reader.read_column(
+         buf,
+         pos,
+         column_idx_array[i],
+         datum);
+     ASSERT_EQ(OB_SUCCESS, ret);
+     STORAGE_LOG(INFO, "chaser debug get datum", K(column_idx_array[i]), K(datum), K(writer_row.storage_datums_[column_idx_array[i]]));
+     ASSERT_TRUE(datum == writer_row.storage_datums_[column_idx_array[i]]);
+  }
+}
+
+TEST_F(TestNewRowReader, test_only_rowkey)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t num = 200;
+  const int64_t write_col_cnt = 80;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row, write_col_cnt);
+  build_column_read_info(rowkey_column_count, writer_row);
+
+  for (int i = 5; i < write_col_cnt; ++i) {
+    writer_row.storage_datums_[i].set_nop();
+  }
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+  int64_t pos = 0;
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  const int64_t row_count = 10;
+  int64_t row_end_pos[row_count] = {0};
+  for (int i = 0; i < row_count; ++i) {
+    writer_row.storage_datums_[4].set_int(100 + i);
+    ret = row_writer.write(5, writer_row, buf, 2 * 1024 * 1024, pos);
+    row_end_pos[i] = pos;
+    STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
+  }
+
+
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, num));
+  reader_row.count_ = writer_row.count_;
+
+  ObRowReader row_reader;
+  for (int i = 0; i < row_count; ++i) {
+    ret = row_reader.read_row(
+        buf + (i == 0 ? 0 : row_end_pos[i - 1]),
+        row_end_pos[i] - (i == 0 ? 0 : row_end_pos[i - 1]), &read_info_, reader_row);
+    STORAGE_LOG(INFO, "reader_row", K(reader_row), K(i), K(pos), K(row_end_pos[i]));
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(reader_row.count_, writer_row.count_);
+    for (int j = 0; j < reader_row.count_; ++j) {
+      if (4 == j) {
+        ASSERT_TRUE(100 + i == reader_row.storage_datums_[j].get_int());
+      } else {
+        ObObj obj;
+        ASSERT_EQ(OB_SUCCESS, reader_row.storage_datums_[j].to_obj_enhance(obj, full_schema_cols_.at(j).col_type_));
+        ASSERT_TRUE(reader_row.storage_datums_[j] == writer_row.storage_datums_[j]);
       }
     }
-    // buf is NULL
-    read_pos = 0;
-    ret = row_reader.read_compact_rowkey(NULL, 0, NULL, pos, read_pos, new_reader_row);
-    ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-    // read_sequence_columns overflow
-    ret = row_reader.read_compact_rowkey(
-        column_types, column_map_.get_rowkey_store_count(), buf, 1, read_pos, new_reader_row);
-    ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
-    // new row read success
-    read_pos = 0;
-    ret = row_reader.read_compact_rowkey(
-        column_types, column_map_.get_rowkey_store_count(), buf, pos, read_pos, new_reader_row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    // every reader obj should equal
-    for (int64_t i = 0; i < rowkey_column_count; ++i) {
-      ASSERT_TRUE(new_writer_row.cells_[i] == new_reader_row.cells_[i]);
-    }
   }
 }
 
-TEST_F(TestRowReader, read_not_exist_column)
+TEST_F(TestNewRowReader, test_write_rowkey)
 {
+  // write a rowkey and read
   int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
+
+  const int64_t num = 300;
+  oceanbase::common::ObObj objs[num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
   writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
 
   int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
+  ObRowWriter row_writer;
+  char *buf = nullptr;
+  ObArenaAllocator allocator;
+  const int64_t rowkey_cnt = 30;
+  ObStoreRowkey rowkey;
+  rowkey.assign(writer_row.row_val_.cells_, rowkey_cnt);
+  ret = row_writer.write_rowkey(rowkey, buf, pos);
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(pos));
 
-  char* buf = get_serialize_buf();
-  ObArray<ObColDesc> column_desc_array;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(column_desc_array));
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, num));
+  reader_row.count_ = writer_row.row_val_.count_;
+  build_column_read_info(rowkey_cnt, writer_row);
+
+  ObRowReader row_reader;
+  ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
+  STORAGE_LOG(INFO, "reader_row", K(reader_row), K(pos));
   ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<int32_t> projector;
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObNCharType == obj_type || ObNVarchar2Type == obj_type ||
-        ObTinyTextType == obj_type || ObTextType == obj_type || ObMediumTextType == obj_type ||
-        ObLongTextType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+  for (int j = 0; j < rowkey_cnt; ++j) {
+    STORAGE_LOG(INFO, "obj xxxxx", K(j), K(reader_row.storage_datums_[j]), K(writer_row.row_val_.cells_[j]));
+    if (ObNumberFloatType != writer_row.row_val_.cells_[j].get_type()) {
+      ASSERT_TRUE(reader_row.storage_datums_[j] == writer_row.row_val_.cells_[j]) << j;
     }
-    column_desc_array[i].col_type_ = obj_meta;
-    if (i % 2 == 0 && i > rowkey_column_count) {
-      ASSERT_EQ(OB_SUCCESS, projector.push_back(static_cast<int32_t>(-1)));
+  }
+
+  // test read_row_header
+  const ObRowHeader *row_header = nullptr;
+  ret = row_reader.read_row_header(buf, pos, row_header);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(row_header->get_column_count(), rowkey_cnt);
+  ASSERT_EQ(row_header->get_row_flag().get_serialize_flag(), 0);
+  ASSERT_EQ(row_header->get_mvcc_row_flag(), 0);
+  ASSERT_EQ(row_header->get_trans_id(), 0);
+}
+
+TEST_F(TestNewRowReader, test_write_update_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t num = 200;
+  const int64_t write_col_cnt = 80;
+    const int64_t rowkey_cnt = 5;
+  oceanbase::common::ObObj objs[num];
+  ObStoreRow writer_row;
+  writer_row.row_val_.cells_ = objs;
+  writer_row.row_val_.count_ = column_num;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+
+  for (int i = writer_row.row_val_.count_; i < write_col_cnt; ++i) {
+     writer_row.row_val_.cells_[i] = writer_row.row_val_.cells_[i - writer_row.row_val_.count_];
+  }
+  writer_row.row_val_.count_ = write_col_cnt;
+
+  memtable::ObNopBitMap nop_bitmap;
+  bool read_finished = false;
+  ret = nop_bitmap.init(writer_row.row_val_.count_, rowkey_cnt);
+
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, writer_row.row_val_.count_));
+  for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    reader_row.storage_datums_[i].set_nop();
+  }
+
+  int64_t array[] = {5, 18, 29, 45, 75, 78};
+  writer_row.row_val_.cells_[array[2]].set_int(0);
+  writer_row.row_val_.cells_[array[4]].set_int(0);
+  build_column_read_info(rowkey_cnt, writer_row);
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+
+  ObArray<int64_t> update_idx;
+  for (int i = 0; i < ARRAYSIZEOF(array); ++i) {
+    update_idx.push_back(array[i]);
+  }
+  ObRowWriter row_writer[5];
+  for (int i = 0; i < 5; ++i) {
+    int64_t len = 0;
+    char *buf = nullptr;
+
+    writer_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
+    writer_row.row_val_.cells_[array[2]].set_int(100 * i);
+    writer_row.row_val_.cells_[array[4]].set_int(100 * i);
+    if (i == 4) {
+      writer_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
+      ret = row_writer[i].write(rowkey_cnt, writer_row, nullptr, buf, len);
     } else {
-      ASSERT_EQ(OB_SUCCESS, projector.push_back(static_cast<int32_t>(i)));
+      ret = row_writer[i].write(rowkey_cnt, writer_row, &update_idx, buf, len);
     }
-  }
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          column_desc_array,
-          nullptr,
-          &projector));
-  // read success
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // every reader obj should equal
-  for (int64_t i = 0; i < column_num; ++i) {
-    if (i % 2 == 0 && i > rowkey_column_count) {
-      ASSERT_TRUE(reader_row.row_val_.cells_[i].is_nop_value());
+
+    ObRowReader row_reader;
+    ret = row_reader.read_memtable_row(buf, len, read_info_, reader_row, nop_bitmap, read_finished);
+    STORAGE_LOG(INFO, "chaser check read_row row", K(reader_row));
+    ASSERT_EQ(ret, OB_SUCCESS);
+
+    if (i == 4) {
+      ASSERT_TRUE(read_finished);
     } else {
-      ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
+      ASSERT_FALSE(read_finished);
     }
   }
-}
 
-TEST_F(TestRowReader, unknown_type)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObColumnMap
-  column_map_.reset();
-  ObArray<ObColDesc> column_desc_array;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(column_desc_array));
-  ObArray<ObColDesc> out_cols;
-  ObArray<int32_t> projector;
-  for (int64_t i = 0; i < column_num;) {
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    ObObjMeta obj_meta;
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObNCharType == obj_type || ObNVarchar2Type == obj_type ||
-        ObTinyTextType == obj_type || ObTextType == obj_type || ObMediumTextType == obj_type ||
-        ObLongTextType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+  STORAGE_LOG(INFO, "chaser check writer row", K(read_info_));
+  int update_pos = 0;
+  for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    bool check_cell_flag = false;
+    if (i < rowkey_cnt) {
+      check_cell_flag = true;
+    } else if (update_pos < ARRAYSIZEOF(array) && i == array[update_pos]) {
+      check_cell_flag = true;
+      ++update_pos;
     }
-    if (2 == i) {
-      obj_meta.set_type(static_cast<ObObjType>(ObUnknownType));
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
-    ObColDesc col_desc = column_desc_array[i];
-    col_desc.col_type_ = obj_meta;
-    ASSERT_EQ(OB_SUCCESS, out_cols.push_back(col_desc));
-    ASSERT_EQ(OB_SUCCESS, projector.push_back(static_cast<int32_t>(i)));
-    i += 2;
-  }
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          out_cols,
-          nullptr,
-          &projector));
-  read_pos = 0;
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-  ASSERT_EQ(OB_NOT_SUPPORTED, ret);
-}
-
-TEST_F(TestRowReader, obj_cast_write_read_different)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
-  ObStoreRow writer_row;
-  writer_row.row_val_.cells_ = objs;
-  writer_row.row_val_.count_ = column_num;
-
-  ObFlatRowReader row_reader;
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  // write success
-  char* buf = get_serialize_buf();
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // every type cast to others
-  for (int64_t i = 0; i < column_num; ++i) {
-    // not support cast
-    for (int64_t j = 0; j < column_num; ++j) {
-      if (!cast_supported(
-              objs[j].get_type(), objs[j].get_collation_type(), objs[i].get_type(), objs[i].get_collation_type())) {
-        ret = OB_NOT_SUPPORTED;
+    if (check_cell_flag) {
+      STORAGE_LOG(INFO, "check", K(i), K(update_pos), K(reader_row.storage_datums_[i]));
+      if (ObNumberFloatType != writer_row.row_val_.cells_[i].get_type()) {
+        if (i == array[2] || i == array[4]) {
+          ASSERT_TRUE(reader_row.storage_datums_[i].get_int() == 0);
+        } else {
+          ASSERT_TRUE(reader_row.storage_datums_[i] == writer_row.row_val_.cells_[i]);
+        }
       }
-    }
-    // init ObColumnMap
-    column_map_.reset();
-    ObArray<ObColDesc> columns;
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-    ret = init_column_map(writer_row, columns);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    // read success
-    read_pos = 0;
-    ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-    if (OB_SUCCESS != ret && OB_NOT_SUPPORTED != ret && OB_DATA_OUT_OF_RANGE != ret && OB_INVALID_DATE_VALUE != ret) {
-      ASSERT_TRUE(false);
+    } else {
+      ASSERT_TRUE(!reader_row.storage_datums_[i].is_nop());
     }
   }
 }
 
-TEST_F(TestRowReader, sparse_row_about_lob)
+TEST_F(TestNewRowReader, test_write_write_nop_val)
 {
   int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-  oceanbase::common::ObObj objs[column_num];
+  const int64_t num = 400;
+  const int64_t write_col_cnt = 302;
+  const int64_t rowkey_cnt = 3;
+  oceanbase::common::ObObj objs[num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
   writer_row.row_val_.count_ = column_num;
-
-  ObSparseRowReader row_reader;
-  ObStoreRow sparse_row;
-  oceanbase::common::ObObj sparse_row_objs[column_num];
-  sparse_row.row_val_.cells_ = sparse_row_objs;
-  sparse_row.row_val_.count_ = column_num;
-  uint16_t column_ids[column_num];
-  sparse_row.column_ids_ = column_ids;
-  sparse_row.capacity_ = column_num;
-
-  int64_t pos = 0;
-  int64_t rowkey_start_pos = 0;
-  int64_t rowkey_length = 0;
-  int64_t read_pos = 0;
-
-  char* buf = get_serialize_buf();
-  // write success
-  pos = 0;
-  rowkey_start_pos = 0;
-  rowkey_length = 0;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
 
-  ObArray<ObColDesc> columns;
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-
-  // set nop value
-  int sparse_cell_cnt = 5;
-  int sparse_indexs[] = {5, 9, 12, 18, 21};
-  for (int i = 0; i < sparse_cell_cnt; ++i) {
-    sparse_row.row_val_.cells_[i] = writer_row.row_val_.cells_[sparse_indexs[i]];
-    sparse_row.column_ids_[i] = columns[sparse_indexs[i]].col_id_;
+  int64_t idx = 0;
+  writer_row.row_val_.cells_[idx++].set_int(14);
+  writer_row.row_val_.cells_[idx++].set_int(-1658240586131896801);
+  writer_row.row_val_.cells_[idx++].set_int(-INT64_MAX);
+  for (int i = idx; i < write_col_cnt; ++i) {
+     writer_row.row_val_.cells_[i].set_nop_value();
   }
+  writer_row.row_val_.count_ = write_col_cnt;
 
-  int64_t lob_buf_size = 1 * 1024 * 1024;
-  char lob_buf[lob_buf_size];
-  MEMSET(lob_buf, 'a', lob_buf_size);
-  ObString str(lob_buf);
-  ObScale scale;
-  scale = ObLobScale::STORE_IN_ROW;
+  memtable::ObNopBitMap nop_bitmap;
+  bool read_finished = false;
+  ret = nop_bitmap.init(writer_row.row_val_.count_, rowkey_cnt);
 
-  uint64_t lob_column_id = 39;
-  uint64_t lob_column_idx = 20;
-  sparse_row.row_val_.cells_[sparse_cell_cnt].set_string(ObLongTextType, str);
-  sparse_row.row_val_.cells_[sparse_cell_cnt].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  sparse_row.row_val_.cells_[sparse_cell_cnt].set_scale(scale);
-  sparse_row.column_ids_[sparse_cell_cnt] = lob_column_id;
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, num));
+  reader_row.count_ = writer_row.row_val_.count_;
+  build_column_read_info(rowkey_cnt, writer_row);
 
-  for (int64_t i = 0; i < column_num; ++i) {
-    ObObjMeta obj_meta;
-    ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-    obj_meta.set_type(obj_type);
-    if (ObVarcharType == obj_type || ObCharType == obj_type || ObLongTextType == obj_type) {
-      obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+  int64_t len = 0;
+  char *buf = nullptr;
+  ObRowWriter row_writer;
+  ret = row_writer.write(rowkey_cnt, writer_row, nullptr, buf, len);
+
+  ObRowReader row_reader;
+  ret = row_reader.read_row(buf, len, &read_info_, reader_row);
+
+  STORAGE_LOG(INFO, "chaser check writer row", K(read_info_), K(reader_row));
+  for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    STORAGE_LOG(INFO, "check", K(i), K(reader_row.storage_datums_[i]));
+    if (ObNumberFloatType != writer_row.row_val_.cells_[i].get_type()) {
+      ASSERT_TRUE(reader_row.storage_datums_[i] == writer_row.row_val_.cells_[i]);
     }
-    columns[i].col_type_ = obj_meta;
   }
-
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          columns));
-
-  sparse_cell_cnt++;
-  sparse_row.row_val_.count_ = sparse_cell_cnt;
-  sparse_row.is_sparse_row_ = true;
-  sparse_row.flag_ = writer_row.flag_;
-  sparse_row.dml_ = writer_row.dml_;
-
-  ret = row_writer.write_sparse_row(
-      rowkey_column_count, sparse_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObStoreRow reader_row;
-  oceanbase::common::ObObj reader_objs[column_num];
-  reader_row.row_val_.cells_ = reader_objs;
-  reader_row.row_val_.count_ = column_num;
-  reader_row.capacity_ = column_num;
-
-  read_pos = 0;
-  // read success
-  ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row, SPARSE_ROW_STORE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, reader_row.is_sparse_row_);
-  ASSERT_TRUE(sparse_cell_cnt == reader_row.row_val_.count_);
-  // every obj should equal
-  int index = 0;
-  for (int64_t i = 0; i < reader_row.row_val_.count_; ++i) {
-    STORAGE_LOG(INFO, "compare column", K(i), K(sparse_row.row_val_.cells_[i]), K(reader_row.row_val_.cells_[i]));
-    ASSERT_TRUE(sparse_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i]);
-    ASSERT_TRUE(sparse_row.column_ids_[i] == reader_row.column_ids_[i]);
-  }
-  STORAGE_LOG(INFO, "success to read sparse row", K(reader_row));
 }
 
-}  // end namespace unittest
-}  // end namespace oceanbase
-
-int main(int argc, char** argv)
+TEST_F(TestNewRowReader, test_read_sparse_datums)
 {
-  system("rm -f test_row_reader.log*");
-  oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
-  OB_LOGGER.set_file_name("test_row_reader.log");
-  OB_LOGGER.set_log_level("INFO");
+  int ret = OB_SUCCESS;
+  const int64_t num = 200;
+  const int64_t write_col_cnt = 80;
+  const int64_t rowkey_cnt = 3;
+  ObDatumRow writer_row;
+  ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+  append_col(writer_row, write_col_cnt);
+
+  memtable::ObNopBitMap nop_bitmap;
+  bool read_finished = false;
+  ret = nop_bitmap.init(writer_row.count_, rowkey_cnt);
+
+  ObDatumRow reader_row;
+  ASSERT_EQ(OB_SUCCESS, reader_row.init(allocator_, writer_row.count_));
+
+
+  int64_t array[] = {0, 1, 2, 5, 18, 29, 45, 75, 78};
+  build_column_read_info(rowkey_cnt, writer_row);
+
+  int64_t array_idx = 0;
+  for (int i = 0; i < writer_row.count_; ++i) {
+    if (i != array[array_idx]) {
+      writer_row.storage_datums_[i].set_nop();
+    } else {
+      ++array_idx;
+    }
+  }
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row));
+
+  ObRowWriter row_writer;
+  char *buf = get_serialize_buf();
+  int64_t pos = 0;
+  ret = row_writer.write(rowkey_cnt, writer_row, buf, 2 * 1024 * 1024, pos);
+  check_reader_row(buf, pos, rowkey_cnt, writer_row);
+}
+
+TEST_F(TestNewRowReader, test_update_idx_with_rowkey)
+{
+  int ret = OB_SUCCESS;
+  const int64_t num = 200;
+  const int64_t write_col_cnt = 80;
+  const int64_t rowkey_cnt = 3;
+
+  oceanbase::common::ObObj objs[num];
+  ObStoreRow writer_row;
+  writer_row.row_val_.cells_ = objs;
+  writer_row.row_val_.count_ = column_num;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
+
+  int64_t update_array[] = {0, 1, 2, 5, 18};
+  ObArray<int64_t> update_idx;
+  build_column_read_info(rowkey_cnt, writer_row);
+
+  int64_t array_idx = 0;
+  for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    if (i != update_array[array_idx]) {
+      writer_row.row_val_.cells_[i].set_nop_value();
+    } else {
+      update_idx.push_back(update_array[array_idx]);
+      ++array_idx;
+    }
+  }
+
+  STORAGE_LOG(INFO, "write_row", K(writer_row), K(update_idx));
+
+  ObRowWriter row_writer;
+  char *buf = nullptr;
+  int64_t pos = 0;
+  ret = row_writer.write(rowkey_cnt, writer_row, &update_idx, buf, pos);
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+}
+
+enum IDX_ARRAY_TYPE
+{
+  NOP_ARRAY = 0,
+  VAL_ARRAY = 1,
+};
+
+class TestLoopCells: public TestNewRowReader
+{
+public:
+  TestLoopCells() {}
+  ~TestLoopCells() {}
+  void run(const int64_t rowkey_cnt,
+      int64_t column_cnt,
+      int64_t idx_array[],
+      const int index_array_cnt,
+      IDX_ARRAY_TYPE array_type,
+      const int64_t cluster_cnt,
+      bool sparse_array[],
+      const int sparse_array_cnt)
+  {
+    ObDatumRow writer_row;
+    ASSERT_EQ(OB_SUCCESS, writer_row.init(allocator_, column_cnt * 2));
+    writer_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+
+    for (int i = 0; i < rowkey_cnt; ++i) {
+      writer_row.storage_datums_[i].set_int(0);
+    }
+    writer_row.count_ = rowkey_cnt;
+
+    if (NOP_ARRAY == array_type) {
+      TestNewRowReader::append_col(writer_row, column_cnt);
+      for (int i = 0; i < index_array_cnt; ++i) {
+        writer_row.storage_datums_[idx_array[i]].set_nop();
+      }
+    } else if (VAL_ARRAY == array_type) {
+      for (int i = 0; i < column_cnt; ++i) {
+        writer_row.storage_datums_[i].set_nop();
+      }
+      for (int i = 0; i < index_array_cnt; ++i) {
+        writer_row.storage_datums_[idx_array[i]].set_int(0);
+      }
+      writer_row.count_ = column_cnt;
+    }
+
+
+    ObRowWriter row_writer;
+    row_writer.rowkey_column_cnt_ = rowkey_cnt;
+    row_writer.loop_cells(writer_row.storage_datums_, column_cnt, row_writer.cluster_cnt_, row_writer.use_sparse_row_);
+
+    STORAGE_LOG(INFO, "after loop cell", K(row_writer.cluster_cnt_), K(rowkey_cnt), K(writer_row));
+    ASSERT_TRUE(cluster_cnt == row_writer.cluster_cnt_);
+    for (int i = 0; i < sparse_array_cnt; ++i) {
+      STORAGE_LOG(INFO, "cluster sparse", K(i), K(row_writer.use_sparse_row_[i]), K(sparse_array[i]));
+      ASSERT_TRUE(row_writer.use_sparse_row_[i] == sparse_array[i]);
+    }
+  }
+};
+
+TEST_F(TestLoopCells, test_loop_cells)
+{
+  int64_t idx_array[] = {};
+  int64_t idx_array_cnt = 0;
+  bool sparse_row[] = {false};
+  //run(rowkey_cnt, column_cnt, idx_array, NOP_ARRAY, has_cluster, sparse_row);
+  run(5, 48, idx_array, idx_array_cnt, NOP_ARRAY, 1, sparse_row, 1);
+  run(32, 33, idx_array, idx_array_cnt, NOP_ARRAY, 1, sparse_row, 1);
+  run(40, 45, idx_array, idx_array_cnt, NOP_ARRAY, 1, sparse_row, 1);
+  run(40, 48, idx_array, idx_array_cnt, NOP_ARRAY, 1, sparse_row, 1);
+
+  bool sparse_row_1[] = {false, false};
+  run(40, 49, idx_array, idx_array_cnt, NOP_ARRAY, 2, sparse_row_1, 2);
+  run(10, 49, idx_array, idx_array_cnt, NOP_ARRAY, 2, sparse_row_1, 2);
+
+  bool sparse_row_2[] = {false, false, false, false};
+  run(70, 103, idx_array, idx_array_cnt, NOP_ARRAY, 4, sparse_row_2, 4);
+
+  bool sparse_row_3[] = {false, false, false, false, false};
+  run(128, 128 + ObRowHeader::CLUSTER_COLUMN_CNT, idx_array, idx_array_cnt, NOP_ARRAY, 5, sparse_row_3, 5);
+  run(2, 32 * 5, idx_array, idx_array_cnt, NOP_ARRAY, 5, sparse_row_3, 5);
+  run(31, 32 * 5, idx_array, idx_array_cnt, NOP_ARRAY, 5, sparse_row_3, 5);
+  run(39, 32 * 5, idx_array, idx_array_cnt, NOP_ARRAY, 5, sparse_row_3, 5);
+
+  bool sparse_row_4[] = {true, true, true, true, true};
+  int64_t idx_array_2[] = {20, 30, 40, 60, 70, 80, 100};
+  run(2, 32 * 5, idx_array_2, 7, VAL_ARRAY, 5, sparse_row_4, 5);
+
+  bool sparse_row_5[] = {true};
+  int64_t idx_array_3[] = {100};
+  run(2, 32 * 5, idx_array_3, 1, VAL_ARRAY, 1, sparse_row_5, 1);
+}
+
+}//end namespace unittest
+}//end namespace oceanbase
+
+int main(int argc, char **argv)
+{
+  system("rm -rf test_row_reader.log");
+  OB_LOGGER.set_file_name("test_row_reader.log", true, true);
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

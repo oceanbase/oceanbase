@@ -1,0 +1,41 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (rootcon, $OBMYSQL_MS0,root@$TENANT,,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select sys_privilege_check('table_acc', effective_tenant_id(), 'oceanbase', '__all_user');
+select sys_privilege_check('db_acc', effective_tenant_id(), 'oceanbase_', '__all_user_');
+
+--disable_warnings
+drop database if exists espcndb;
+--enable_warnings
+create database espcndb;
+
+connection rootcon;
+create user espcnouser;
+grant all on test.* to espcnouser;
+
+sleep 2;
+connect (con1, $OBMYSQL_MS0,espcnouser@$TENANT,,test,$OBMYSQL_PORT);
+
+connection con1;
+select sys_privilege_check('db_acc', effective_tenant_id(), 'test', 't');
+select sys_privilege_check('db_acc', effective_tenant_id(), 'espcndb', 't');
+
+connection default;
+drop user espcnouser;
+drop database espcnouser;
+
+connection syscon;
+--sleep 2

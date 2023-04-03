@@ -16,10 +16,14 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "ob_micro_block_cache.h"
 
-namespace oceanbase {
-namespace blocksstable {
-class ObBlockCacheWorkingSet : public common::ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue>,
-                               public ObIMicroBlockCache {
+namespace oceanbase
+{
+namespace blocksstable
+{
+class ObBlockCacheWorkingSet :
+    public common::ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue>,
+    public ObIMicroBlockCache
+{
 public:
   typedef ObMicroBlockCacheKey Key;
   typedef ObMicroBlockCacheValue Value;
@@ -28,37 +32,32 @@ public:
   virtual ~ObBlockCacheWorkingSet();
 
   int init(const uint64_t tenant_id);
-  inline bool inited() const
-  {
-    return inited_;
-  }
+  inline bool inited() const { return inited_; }
   void reset();
 
-  virtual int add_put_size(const int64_t put_size) override;
-  virtual int get_cache(BaseBlockCache*& cache) override;
-  virtual int get_allocator(common::ObIAllocator*& allocator) override;
-
-  virtual int put(const Key& key, const Value& value, bool overwrite = true) override;
-  virtual int put_and_fetch(const Key& key, const Value& value, const Value*& pvalue, common::ObKVCacheHandle& handle,
-      bool overwrite = true) override;
-  virtual int get(const Key& key, const Value*& pvalue, common::ObKVCacheHandle& handle) override;
-  virtual int erase(const Key& key) override;
-  virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
-      ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle) override;
-
+  virtual int add_put_size(const int64_t put_size);
+  virtual int get_cache(BaseBlockCache *&cache) override;
+  virtual int get_allocator(common::ObIAllocator *&allocator) override;
+  virtual int put(const Key &key, const Value &value, bool overwrite = true);
+  virtual int put_and_fetch(const Key &key, const Value &value, const Value *&pvalue,
+      common::ObKVCacheHandle &handle, bool overwrite = true);
+  virtual int get(const Key &key, const Value *&pvalue, common::ObKVCacheHandle &handle);
+  virtual int erase(const Key &key);
+  virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size,
+      ObKVCachePair *&kvpair, ObKVCacheHandle &handle, ObKVCacheInstHandle &inst_handle) override;
 private:
   int create_working_set_if_need();
-  static const int64_t USE_WORKING_SET_THRESHOLD = 1024 * 1024 * 1024 * 1024LL;  // disable working set
+  static const int64_t USE_WORKING_SET_THRESHOLD = 1024 * 1024 * 1024 * 1024LL; // disable working set
   bool inited_;
   uint64_t tenant_id_;
-  ObMicroBlockCache* block_cache_;
+  ObDataMicroBlockCache *block_cache_;
   int64_t put_size_;
   bool use_working_set_;
   common::ObCacheWorkingSet<ObMicroBlockCacheKey, ObMicroBlockCacheValue> working_set_;
   common::ObSpinLock lock_;
 };
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+}//end namespace blocksstable
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_BLOCKSSTABLE_OB_BLOCK_CACHE_WORKING_SET_H_
+#endif //OCEANBASE_BLOCKSSTABLE_OB_BLOCK_CACHE_WORKING_SET_H_

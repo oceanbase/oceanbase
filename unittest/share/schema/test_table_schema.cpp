@@ -16,34 +16,33 @@
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_table_schema.h"
 #include "ob_schema_test_utils.cpp"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
-namespace schema {
-static const int64_t BUF_SIZE = 1024 * 10;
+namespace share
+{
+namespace schema
+{
+static const int64_t BUF_SIZE = 1024*10;
 
 //-------test for funcs-------//
 TEST(ObTableSchemaTest, convert_column_type_to_str_test)
 {
-  ASSERT_EQ(0,
-      memcmp(
-          STR_COLUMN_TYPE_INT, ObColumnSchemaV2::convert_column_type_to_str(ObIntType), strlen(STR_COLUMN_TYPE_INT)));
-  ASSERT_EQ(0,
-      memcmp(STR_COLUMN_TYPE_VCHAR,
-          ObColumnSchemaV2::convert_column_type_to_str(ObVarcharType),
-          strlen(STR_COLUMN_TYPE_VCHAR)));
-  ASSERT_EQ(0,
-      memcmp(STR_COLUMN_TYPE_DATETIME,
-          ObColumnSchemaV2::convert_column_type_to_str(ObDateTimeType),
-          strlen(STR_COLUMN_TYPE_DATETIME)));
-  ASSERT_EQ(0,
-      memcmp(STR_COLUMN_TYPE_NUMBER,
-          ObColumnSchemaV2::convert_column_type_to_str(ObNumberType),
-          strlen(STR_COLUMN_TYPE_NUMBER)));
-  ASSERT_EQ(0,
-      memcmp(STR_COLUMN_TYPE_UNKNOWN,
-          ObColumnSchemaV2::convert_column_type_to_str(ObUnknownType),
-          strlen(STR_COLUMN_TYPE_UNKNOWN)));
+  ASSERT_EQ(0, memcmp(STR_COLUMN_TYPE_INT,
+                      ObColumnSchemaV2::convert_column_type_to_str(ObIntType),
+                      strlen(STR_COLUMN_TYPE_INT)));
+  ASSERT_EQ(0, memcmp(STR_COLUMN_TYPE_VCHAR,
+                      ObColumnSchemaV2::convert_column_type_to_str(ObVarcharType),
+                      strlen(STR_COLUMN_TYPE_VCHAR)));
+  ASSERT_EQ(0, memcmp(STR_COLUMN_TYPE_DATETIME,
+                      ObColumnSchemaV2::convert_column_type_to_str(ObDateTimeType),
+                      strlen(STR_COLUMN_TYPE_DATETIME)));
+  ASSERT_EQ(0, memcmp(STR_COLUMN_TYPE_NUMBER,
+                      ObColumnSchemaV2::convert_column_type_to_str(ObNumberType),
+                      strlen(STR_COLUMN_TYPE_NUMBER)));
+  ASSERT_EQ(0, memcmp(STR_COLUMN_TYPE_UNKNOWN,
+                      ObColumnSchemaV2::convert_column_type_to_str(ObUnknownType),
+                      strlen(STR_COLUMN_TYPE_UNKNOWN)));
 }
 TEST(ObTableSchemaTest, convert_str_to_column_type_test)
 {
@@ -54,8 +53,9 @@ TEST(ObTableSchemaTest, convert_str_to_column_type_test)
   ASSERT_EQ(ObUnknownType, ObColumnSchemaV2::convert_str_to_column_type(STR_COLUMN_TYPE_UNKNOWN));
 }
 
-void fill_column_schema(ObColumnSchemaV2& column, uint64_t id, const char* name, uint64_t rowkey_pos = 1,
-    uint64_t index_key_pos = 1, uint64_t part_key_pos = 1, ObOrderType rowkey_order = ObOrderType::ASC)
+void fill_column_schema(ObColumnSchemaV2 &column, uint64_t id, const char *name,
+                        uint64_t rowkey_pos = 1, uint64_t index_key_pos = 1,
+                        uint64_t part_key_pos = 1, ObOrderType rowkey_order = ObOrderType::ASC)
 {
   ObObj value;
   column.set_column_id(id);
@@ -78,7 +78,7 @@ void fill_column_schema(ObColumnSchemaV2& column, uint64_t id, const char* name,
   column.set_comment("black gives me black eyes");
 }
 
-void fill_table_schema(ObTableSchema& table)
+void fill_table_schema(ObTableSchema &table)
 {
   ObArray<ObString> zone;
   zone.push_back(ObString::make_string("zone1"));
@@ -115,10 +115,10 @@ void fill_table_schema(ObTableSchema& table)
   table.set_zone_list(zone);
   table.set_primary_zone(ObString::make_string("zone1"));
   table.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);
-  table.get_part_option().set_part_expr(ObString::make_string("rand() mod 111"));
+  table.get_part_option().set_part_expr (ObString::make_string("rand() mod 111"));
   table.get_part_option().set_part_num(100);
   table.get_sub_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);
-  table.get_sub_part_option().set_part_expr(ObString::make_string("rand() mod 111"));
+  table.get_sub_part_option().set_part_expr (ObString::make_string("rand() mod 111"));
   table.get_sub_part_option().set_part_num(666);
 }
 
@@ -175,7 +175,7 @@ void test_ob_table_schema_get_methods(void)
   ASSERT_FALSE(table.is_view_table());
   ASSERT_FALSE(table.is_tmp_table());
   ASSERT_FALSE(table.is_index_table());
-  // ASSERT_FALSE(table.is_local_index_table());
+  //ASSERT_FALSE(table.is_local_index_table());
   ASSERT_FALSE(table.is_normal_index());
   ASSERT_FALSE(table.is_unique_index());
   ASSERT_TRUE(table.can_read_index());
@@ -237,7 +237,7 @@ void test_ob_table_column_operations(void)
   ASSERT_EQ(2, table.get_rowkey_column_num());
   ASSERT_EQ(3, table.get_partition_key_column_num());
 
-  // test delete column
+  //test delete column
   ret = table.delete_column(columns[0].get_column_name_str());
   ASSERT_NE(OB_SUCCESS, ret);
   ASSERT_EQ(6, table.get_column_count());
@@ -281,14 +281,14 @@ void test_ob_table_column_operations(void)
   ret = table.delete_column(columns[5].get_column_name_str());
   ASSERT_NE(OB_SUCCESS, ret);
 
-  ObColumnSchemaV2* table_column1 = table.get_column_schema(columns[0].get_column_id());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), table_column1);
+  ObColumnSchemaV2 *table_column1 = table.get_column_schema(columns[0].get_column_id());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), table_column1);
   ObSchemaTestUtils::expect_column_eq(&columns[0], table_column1);
-  ObColumnSchemaV2* table_column2 = table.get_column_schema(columns[1].get_column_id());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), table_column2);
+  ObColumnSchemaV2 *table_column2 = table.get_column_schema(columns[1].get_column_id());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), table_column2);
   ObSchemaTestUtils::expect_column_eq(&columns[1], table_column2);
 
-  // test alter column
+  //test alter column
   ret = table.alter_column(columns[0]);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = table.alter_column(columns[4]);
@@ -316,8 +316,8 @@ void test_ob_table_column_operations(void)
   ret = table.alter_column(columns[2]);
   ASSERT_NE(OB_SUCCESS, ret);
   columns[2].set_data_type(ObIntType);
-  ObColumnSchemaV2* table_column3 = table.get_column_schema(columns[2].get_column_id());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), table_column3);
+  ObColumnSchemaV2 *table_column3 = table.get_column_schema(columns[2].get_column_id());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), table_column3);
   ObSchemaTestUtils::expect_column_eq(&columns[2], table_column3);
 
   fill_column_schema(columns[4], 9, "c9", 0, 1, 0);
@@ -327,8 +327,8 @@ void test_ob_table_column_operations(void)
   ret = table.alter_column(columns[4]);
   ASSERT_NE(OB_SUCCESS, ret);
   columns[4].set_data_type(ObIntType);
-  ObColumnSchemaV2* table_column4 = table.get_column_schema(columns[4].get_column_id());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), table_column4);
+  ObColumnSchemaV2 *table_column4 = table.get_column_schema(columns[4].get_column_id());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), table_column4);
   ObSchemaTestUtils::expect_column_eq(&columns[4], table_column4);
 
   fill_column_schema(columns[5], 10, "c10", 0, 1, 0);
@@ -341,36 +341,36 @@ void test_ob_table_column_operations(void)
   columns[5].set_data_length(columns[5].get_data_length() + 20);
   ret = table.alter_column(columns[5]);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObColumnSchemaV2* table_column5 = table.get_column_schema(columns[5].get_column_id());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), table_column5);
+  ObColumnSchemaV2 *table_column5 = table.get_column_schema(columns[5].get_column_id());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), table_column5);
   ObSchemaTestUtils::expect_column_eq(&columns[5], table_column5);
 
-  // sys_table.init_as_sys_table();
-  // uint64_t table_id_ = common::OB_INVALID_ID;
-  // ObTableType table_type_ = SYSTEM_TABLE;
-  // ObIndexType index_type_ = INDEX_TYPE_IS_NOT;
-  // ObIndexUsingType index_using_type_ = USING_BTREE;
-  // ObTableLoadType load_type_ = TABLE_LOAD_TYPE_IN_DISK;
-  // ObTableDefType def_type_ = TABLE_DEF_TYPE_INTERNAL;
-  // int64_t replica_num_ = common::OB_SAFE_COPY_COUNT;
-  // int64_t create_mem_version_ = 1;
-  // int64_t block_size_ = common::OB_DEFAULT_SSTABLE_BLOCK_SIZE;
-  // common::ObCharsetType charset_type_ = ObCharset::get_default_charset();
-  // common::ObCollationType collation_type_ = ObCharset::get_default_collation(ObCharset::get_default_charset());
-  // bool is_use_bloomfilter_ = false;
-  // int64_t rowkey_split_pos_ = 0;
-  // bool index_on_create_table_ = false;
-  // int64_t progressive_merge_num_ = 0;
-  // uint64_t autoinc_column_id_ = 0;
-  // uint64_t auto_increment_ = 1;
-  // deep_copy_str(common::OB_DEFAULT_COMPRESS_FUNC_NAME, compress_func_name_);
+ // sys_table.init_as_sys_table();
+  //uint64_t table_id_ = common::OB_INVALID_ID;
+  //ObTableType table_type_ = SYSTEM_TABLE;
+  //ObIndexType index_type_ = INDEX_TYPE_IS_NOT;
+  //ObIndexUsingType index_using_type_ = USING_BTREE;
+  //ObTableLoadType load_type_ = TABLE_LOAD_TYPE_IN_DISK;
+  //ObTableDefType def_type_ = TABLE_DEF_TYPE_INTERNAL;
+  //int64_t replica_num_ = common::OB_SAFE_COPY_COUNT;
+  //int64_t create_mem_version_ = 1;
+  //int64_t block_size_ = common::OB_DEFAULT_SSTABLE_BLOCK_SIZE;
+  //common::ObCharsetType charset_type_ = ObCharset::get_default_charset();
+  //common::ObCollationType collation_type_ = ObCharset::get_default_collation(ObCharset::get_default_charset());
+  //bool is_use_bloomfilter_ = false;
+  //int64_t rowkey_split_pos_ = 0;
+  //bool index_on_create_table_ = false;
+  //int64_t progressive_merge_num_ = 0;
+  //uint64_t autoinc_column_id_ = 0;
+  //uint64_t auto_increment_ = 1;
+  //deep_copy_str(common::OB_DEFAULT_COMPRESS_FUNC_NAME, compress_func_name_);
 
-  // ASSERT_FALSE(sys_table.is_valid());
-  // ret = sys_table.add_column(columns[0]);
-  // ASSERT_EQ(OB_SUCCESS, ret);
-  // columns[0].set_column_name("c9");
-  // ret = sys_table.alter_column(columns[0]);
-  // ASSERT_EQ(OB_SUCCESS, ret);
+  //ASSERT_FALSE(sys_table.is_valid());
+  //ret = sys_table.add_column(columns[0]);
+  //ASSERT_EQ(OB_SUCCESS, ret);
+  //columns[0].set_column_name("c9");
+  //ret = sys_table.alter_column(columns[0]);
+  //ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableSchema view_table;
   view_table.set_table_type(USER_VIEW);
@@ -388,7 +388,7 @@ void test_ob_table_column_operations(void)
   ret = tmp_table.alter_column(columns[0]);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  // test only one autoincrement constraint
+  //test only one autoincrement constraint
   ObTableSchema auto_table;
   fill_table_schema(auto_table);
   fill_column_schema(columns[0], 5, "c1", 0, 0, 0);
@@ -473,7 +473,7 @@ void test_ob_table_schema_get_column(void)
   int ret = OB_SUCCESS;
   ObTableSchema table;
   ObColumnSchemaV2 columns[2];
-  ObColumnSchemaV2* column1 = NULL;
+  ObColumnSchemaV2 *column1 = NULL;
   ObArray<ObColDesc> column_ids;
   fill_table_schema(table);
   fill_column_schema(columns[0], 1, "c1", 1, 1, 1, ObOrderType::ASC);
@@ -485,18 +485,18 @@ void test_ob_table_schema_get_column(void)
   ret = table.fill_column_collation_info();
   ASSERT_EQ(OB_SUCCESS, ret);
   column1 = table.get_column_schema(columns[0].get_column_name());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), column1);
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), column1);
   ObSchemaTestUtils::expect_column_eq(&columns[0], column1);
-  const ObColumnSchemaV2* column2 = table.get_column_schema(columns[1].get_column_name());
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), column2);
+  const ObColumnSchemaV2 *column2 = table.get_column_schema(columns[1].get_column_name());
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), column2);
   ObSchemaTestUtils::expect_column_eq(&columns[1], column2);
   column1 = table.get_column_schema_by_idx(22);
-  ASSERT_EQ(static_cast<ObColumnSchemaV2*>(NULL), column1);
+  ASSERT_EQ(static_cast<ObColumnSchemaV2 *>(NULL), column1);
   column1 = table.get_column_schema_by_idx(0);
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), column1);
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), column1);
   ObSchemaTestUtils::expect_column_eq(column1, &columns[0]);
   column2 = table.get_column_schema_by_idx(1);
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), column2);
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), column2);
   ObSchemaTestUtils::expect_column_eq(column2, &columns[1]);
   ret = table.get_column_ids(column_ids);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -506,17 +506,17 @@ void test_ob_table_schema_get_column(void)
   ASSERT_EQ(ObOrderType::DESC, column_ids.at(1).col_order_);
 }
 
-#define FILL_COLUMN_SCHEMA(idx, column, base_column_id, is_hidden)                               \
-  do {                                                                                           \
-    char column_name[128] = {0};                                                                 \
-    snprintf(column_name, sizeof(column_name), "c%ld", idx);                                     \
-    uint64_t column_id = idx + base_column_id;                                                   \
-    uint64_t rowkey_pos = idx > 63 ? 0 : idx + 1;                                                \
-    uint64_t index_key_pos = idx > 63 ? 0 : idx + 1;                                             \
-    uint64_t part_key_pos = idx > 63 ? 0 : idx + 1;                                              \
-    column.set_is_hidden(is_hidden);                                                             \
-    fill_column_schema(column, column_id, column_name, rowkey_pos, index_key_pos, part_key_pos); \
-  } while (0)
+#define FILL_COLUMN_SCHEMA(idx, column, base_column_id, is_hidden) \
+    do { \
+      char column_name[128] = {0}; \
+      snprintf(column_name, sizeof(column_name), "c%ld", idx); \
+      uint64_t column_id = idx + base_column_id; \
+      uint64_t rowkey_pos = idx > 63 ? 0 : idx + 1; \
+      uint64_t index_key_pos = idx > 63 ? 0 : idx + 1; \
+      uint64_t part_key_pos = idx > 63 ? 0 : idx + 1; \
+      column.set_is_hidden(is_hidden); \
+      fill_column_schema(column, column_id, column_name, rowkey_pos, index_key_pos, part_key_pos); \
+    } while (0)
 
 void test_ob_table_schema_get_column_idx(void)
 {
@@ -530,7 +530,7 @@ void test_ob_table_schema_get_column_idx(void)
 
   // set Column
   for (int64_t idx = 0; idx < MAX_COLUMN_COUNT; idx++) {
-    ObColumnSchemaV2& column = column_array[idx];
+    ObColumnSchemaV2 &column = column_array[idx];
 
     // partial colums are hidden
     bool is_hidden = (0 == (idx % hidden_column_mod));
@@ -538,7 +538,7 @@ void test_ob_table_schema_get_column_idx(void)
     ASSERT_EQ(OB_SUCCESS, table.add_column(column));
   }
 
-  ObColumnSchemaV2* iter = column_array;
+  ObColumnSchemaV2 *iter = column_array;
   int64_t ignore_hidden_column_idx = 0;
 
   // check get_column_idx
@@ -546,7 +546,7 @@ void test_ob_table_schema_get_column_idx(void)
     EXPECT_EQ(idx, table.get_column_idx(idx + base_column_id));
 
     // idx of non-hidden column is independent
-    if (!iter->is_hidden()) {
+    if (! iter->is_hidden()) {
       EXPECT_EQ(ignore_hidden_column_idx, table.get_column_idx(idx + base_column_id, true));
       ignore_hidden_column_idx++;
     }
@@ -576,39 +576,39 @@ void test_ob_table_schema_construct_and_assign(void)
   ret = table1.add_column(columns[1]);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  const ObColumnSchemaV2* column1 = table1.get_column_schema("c1");
-  // bool is_key = false;
+  const ObColumnSchemaV2 *column1 = table1.get_column_schema("c1");
+  //bool is_key = false;
   int64_t key_pos = 0;
-  ASSERT_NE(static_cast<ObColumnSchemaV2*>(NULL), column1);
-  // ret = table1.check_column_is_partition_key(20, is_key);
-  // ASSERT_EQ(OB_ERR_BAD_FIELD_ERROR, ret);
+  ASSERT_NE(static_cast<ObColumnSchemaV2 *>(NULL), column1);
+  //ret = table1.check_column_is_partition_key(20, is_key);
+  //ASSERT_EQ(OB_ERR_BAD_FIELD_ERROR, ret);
   key_pos = column1->get_tbl_part_key_pos();
   ASSERT_EQ(static_cast<int64_t>(1), key_pos);
-  // ret = table1.check_column_is_partition_key(3, is_key);
-  // ASSERT_TRUE(is_key);
+  //ret = table1.check_column_is_partition_key(3, is_key);
+  //ASSERT_TRUE(is_key);
   ret = table1.add_partition_key(ObString::make_string("c1"));
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS ,ret);
   ret = table1.add_partition_key(ObString::make_string("c1"));
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS ,ret);
   ret = table1.add_partition_key(ObString::make_string("c2"));
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS,ret);
   ret = table1.add_partition_key(ObString::make_string("c3"));
-  ASSERT_EQ(OB_ERR_BAD_FIELD_ERROR, ret);
+  ASSERT_EQ(OB_ERR_BAD_FIELD_ERROR ,ret);
 
   ret = table1.add_zone("zone3");
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // test construct
+  //test construct
   const int64_t size = table1.get_convert_size();
-  char* buf = static_cast<char*>(ob_malloc(size));
-  ASSERT_NE(static_cast<char*>(NULL), buf);
+  char *buf = static_cast<char *>(ob_malloc(size));
+  ASSERT_NE(static_cast<char *>(NULL), buf);
   ObDataBuffer data_buf(buf + sizeof(ObTableSchema), size - sizeof(ObTableSchema));
-  ObTableSchema* new_schema = new (buf) ObTableSchema(&data_buf);
-  ASSERT_NE(static_cast<ObTableSchema*>(NULL), new_schema);
+  ObTableSchema *new_schema = new(buf)ObTableSchema(&data_buf);
+  ASSERT_NE(static_cast<ObTableSchema *>(NULL), new_schema);
 
-  // test assign
+  //test assign
   ret = (*new_schema).assign(table1);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS ,ret);
   ObSchemaTestUtils::expect_table_eq(new_schema, &table1);
   ob_free(buf);
   buf = NULL;
@@ -682,13 +682,13 @@ void test_ob_shadow_rowkey_info(void)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = table.add_column(columns[3]);
   ASSERT_EQ(OB_SUCCESS, ret);
-  const ObRowkeyInfo& shadow_rowkey_info = table.get_shadow_rowkey_info();
+  const ObRowkeyInfo &shadow_rowkey_info = table.get_shadow_rowkey_info();
   ASSERT_EQ(2, table.get_shadow_rowkey_column_num());
   ASSERT_EQ(2, shadow_rowkey_info.get_size());
-  for (int64_t i = 0; i < shadow_rowkey_info.get_size(); ++i) {
-    const ObRowkeyColumn* column = shadow_rowkey_info.get_column(i);
+  for (int64_t i =0; i < shadow_rowkey_info.get_size(); ++i) {
+    const ObRowkeyColumn *column = shadow_rowkey_info.get_column(i);
     ASSERT_NE(static_cast<ObRowkeyColumn*>(NULL), column);
-    ASSERT_EQ(columns[2 + i].get_column_id(), column->column_id_);
+    ASSERT_EQ(columns[2+i].get_column_id(), column->column_id_);
   }
 }
 
@@ -714,7 +714,8 @@ TEST(ObTableSchemaTest, index_name)
   ObString index_name = ObString::make_string("haijing_index");
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
   ObString index_table_name;
-  ret = ObTableSchema::build_index_table_name(allocator, data_table_id, index_name, index_table_name);
+  ret = ObTableSchema::build_index_table_name(allocator, data_table_id,
+      index_name, index_table_name);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(index_table_name, ObString::make_string("__idx_3003_haijing_index"));
   ASSERT_EQ(OB_SUCCESS, table_schema.set_table_name(index_table_name));
@@ -774,14 +775,14 @@ TEST(ObTableSchemaTest, ob_col_desc_seri)
   ASSERT_EQ(new_col_desc.col_type_, col_desc.col_type_);
 }
 
-}  // end of namespace schema
-}  // end of namespace share
-}  // end of namespace oceanbase
+}//end of namespace schema
+}//end of namespace share
+}//end of namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

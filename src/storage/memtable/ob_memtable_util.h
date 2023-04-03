@@ -17,21 +17,24 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace lib;
 using namespace common;
-namespace memtable {
+namespace memtable
+{
 
 template <typename T>
-const char* strarray(const common::ObIArray<T>& array)
+const char *strarray(const common::ObIArray<T> &array)
 {
   static const int64_t BUFFER_NUM = 4;
   static const int64_t BUFFER_SIZE = 4096;
-  char* cl_buf = GET_TSI(lib::ByteBuf<BUFFER_NUM * BUFFER_SIZE>);
-  static RLOCAL(uint64_t, i);
-  char* buffer = NULL;
+  char *cl_buf = reinterpret_cast<char *>(GET_TSI(char[BUFFER_NUM*BUFFER_SIZE]));
+  RLOCAL(uint64_t, i);
+  char *buffer = NULL;
   if (OB_LIKELY(cl_buf != nullptr)) {
-    char(&BUFFERS)[BUFFER_NUM][BUFFER_SIZE] = *reinterpret_cast<char(*)[BUFFER_NUM][BUFFER_SIZE]>(cl_buf);
+    char (&BUFFERS)[BUFFER_NUM][BUFFER_SIZE]
+        = *reinterpret_cast<char (*)[BUFFER_NUM][BUFFER_SIZE]>(cl_buf);
 
     int ret = OB_SUCCESS;
     int64_t pos = 0;
@@ -39,47 +42,43 @@ const char* strarray(const common::ObIArray<T>& array)
     // if (NULL == &array) {
     //   snprintf(buffer, BUFFER_SIZE, "NULL");
     // } else {
-    if (OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, "["))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
-        if (OB_FAIL(common::databuff_print_obj(buffer, BUFFER_SIZE, pos, array.at(i)))) {
-        } else if (OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, ","))) {
+      if (OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, "["))) {
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
+          if (OB_FAIL(common::databuff_print_obj(buffer, BUFFER_SIZE, pos, array.at(i)))) {
+          } else if (OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, ","))) {
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, "]"))) {
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(common::databuff_printf(buffer, BUFFER_SIZE, pos, "]"))) {}
-    }
     //  }
-    // no way to spit out err code, so no log in this func
+    //no way to spit out err code, so no log in this func
     (void)ret;
   }
   return buffer;
 }
 
-class ObFakeStoreRowKey {
+class ObFakeStoreRowKey
+{
 public:
-  ObFakeStoreRowKey(const char* str, const int64_t size)
+  ObFakeStoreRowKey(const char *str, const int64_t size)
   {
-    for (int64_t i = 0; i < OBJ_CNT; i++) {
+    for(int64_t i = 0; i < OBJ_CNT; i++) {
       obj_array_[i].set_char_value(str, size);
     }
     rowkey_.assign(obj_array_, OBJ_CNT);
   }
-  ~ObFakeStoreRowKey()
-  {}
-  const common::ObStoreRowkey& get_rowkey() const
-  {
-    return rowkey_;
-  }
-
+  ~ObFakeStoreRowKey() {}
+  const common::ObStoreRowkey &get_rowkey() const { return rowkey_; }
 private:
   static const int64_t OBJ_CNT = 1;
-
 private:
   common::ObStoreRowkey rowkey_;
   ObObj obj_array_[OBJ_CNT];
 };
 
-}  // namespace memtable
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_MEMTABLE_OB_MEMTABLE_UTIL_
+#endif //OCEANBASE_MEMTABLE_OB_MEMTABLE_UTIL_

@@ -15,29 +15,39 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprInt2ip : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprInt2ip : public ObStringExprOperator
+{
 public:
-  explicit ObExprInt2ip(common::ObIAllocator& alloc);
+  explicit  ObExprInt2ip(common::ObIAllocator &alloc);
   virtual ~ObExprInt2ip();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
-  static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprStringBuf& string_buf);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int int2ip_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int calc(common::ObObj &result,
+                  const common::ObObj &text,
+                  common::ObExprStringBuf &string_buf);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int int2ip_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // helper func
-  static int int2ip(common::ObObj& result, const int64_t text, common::ObExprStringBuf& string_buf);
-  static int int2ip(common::ObDatum& result, const int64_t text);
-
+  static int int2ip(common::ObObj &result,
+                    const int64_t text,
+                    common::ObExprStringBuf &string_buf);
+  static int int2ip(common::ObDatum &result,
+                    const int64_t text);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInt2ip);
 };
 
-inline int ObExprInt2ip::calc_result_type1(
-    ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprInt2ip::calc_result_type1(ObExprResType &type,
+                                           ObExprResType &text,
+                                           common::ObExprTypeCtx &type_ctx) const
 {
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   text.set_calc_type(common::ObIntType);

@@ -16,79 +16,83 @@
 #include <typeinfo>
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/container/ob_array.h"
-#include "lib/allocator/page_arena.h"  // for ModulePageAllocator
+#include "lib/allocator/page_arena.h"         // for ModulePageAllocator
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/utility/ob_template_utils.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 static const int64_t DEFAULT_LOCAL_ARRAY_SIZE = 8;
 static const int64_t DEFAULT_ARRAY_ARRAY_SIZE = 8;
-template <typename T, int64_t LOCAL_ARRAY_SIZE = DEFAULT_LOCAL_ARRAY_SIZE,
-    int64_t ARRAY_ARRAY_SIZE = DEFAULT_ARRAY_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator>
-class ObArrayArray {
+template <typename T,
+          int64_t LOCAL_ARRAY_SIZE = DEFAULT_LOCAL_ARRAY_SIZE,
+          int64_t ARRAY_ARRAY_SIZE = DEFAULT_ARRAY_ARRAY_SIZE,
+          typename BlockAllocatorT = ModulePageAllocator>
+class ObArrayArray
+{
 public:
-  typedef ObSEArray<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, false> LocalArrayT;
+  typedef ObSEArray<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, false> LocalArrayT ;
   explicit ObArrayArray(const int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
-      const BlockAllocatorT& alloc = BlockAllocatorT("ObArrayArray"));
-  explicit ObArrayArray(const lib::ObLabel& label, const int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE);
+                        const BlockAllocatorT &alloc = BlockAllocatorT("ObArrayArray"));
+  explicit ObArrayArray(const lib::ObLabel &label,
+                        const int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE);
   virtual ~ObArrayArray();
   void reset();
   void reuse();
   int reserve(const int64_t size);
-  int at(const int64_t array_idx, ObIArray<T>& array);
-  int at(const int64_t array_idx, const int64_t idx, T& obj);
-  OB_INLINE T& at(const int64_t array_idx, const int64_t idx)
+  int at(const int64_t array_idx, ObIArray<T> &array);
+  int at(const int64_t array_idx, const int64_t idx, T &obj);
+  OB_INLINE T &at(const int64_t array_idx, const int64_t idx)
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+              KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
     return array_ptrs_[array_idx]->at(idx);
   }
-  OB_INLINE ObIArray<T>& at(const int64_t array_idx)
+  OB_INLINE ObIArray<T> &at(const int64_t array_idx)
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+              KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
     return *array_ptrs_[array_idx];
   }
-  int push_back(const ObIArray<T>& obj_array);
-  int push_back(const int64_t array_idx, const T& obj);
-  OB_INLINE int64_t count() const
-  {
-    return count_;
-  }
+  int push_back(const ObIArray<T> &obj_array);
+  int push_back(const int64_t array_idx, const T &obj);
+  OB_INLINE int64_t count() const { return count_; }
   OB_INLINE int64_t count(const int64_t array_idx) const
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+              KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
     return array_ptrs_[array_idx]->count();
   }
-  int64_t to_string(char* buffer, int64_t length) const;
-
+  int64_t to_string(char *buffer, int64_t length) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObArrayArray);
-
 private:
-  LocalArrayT* local_array_buf_[ARRAY_ARRAY_SIZE];
-  LocalArrayT** array_ptrs_;
+  LocalArrayT *local_array_buf_[ARRAY_ARRAY_SIZE];
+  LocalArrayT **array_ptrs_;
   int64_t count_;
   int64_t capacity_;
   int64_t ptr_capacity_;
@@ -96,47 +100,47 @@ private:
   BlockAllocatorT alloc_;
 };
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::ObArrayArray(
-    const int64_t block_size, const BlockAllocatorT& alloc)
-    : local_array_buf_(),
-      array_ptrs_(local_array_buf_),
-      count_(0),
-      capacity_(0),
-      ptr_capacity_(ARRAY_ARRAY_SIZE),
-      block_size_(block_size),
-      alloc_(alloc)
+    const int64_t block_size, const BlockAllocatorT &alloc)
+  : local_array_buf_(),
+    array_ptrs_(local_array_buf_),
+    count_(0),
+    capacity_(0),
+    ptr_capacity_(ARRAY_ARRAY_SIZE),
+    block_size_(block_size),
+    alloc_(alloc)
 {
-  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT*) * ARRAY_ARRAY_SIZE);
+  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT *) * ARRAY_ARRAY_SIZE);
   block_size_ = MAX(static_cast<int64_t>(sizeof(T)), block_size);
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::ObArrayArray(
-    const lib::ObLabel& label, const int64_t block_size)
-    : local_array_buf_(),
-      array_ptrs_(local_array_buf_),
-      count_(0),
-      capacity_(0),
-      ptr_capacity_(ARRAY_ARRAY_SIZE),
-      block_size_(block_size),
-      alloc_(label)
+    const lib::ObLabel &label, const int64_t block_size)
+  : local_array_buf_(),
+    array_ptrs_(local_array_buf_),
+    count_(0),
+    capacity_(0),
+    ptr_capacity_(ARRAY_ARRAY_SIZE),
+    block_size_(block_size),
+    alloc_(label)
 {
-  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT*) * ARRAY_ARRAY_SIZE);
+  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT *) * ARRAY_ARRAY_SIZE);
   block_size_ = MAX(static_cast<int64_t>(sizeof(T)), block_size);
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::~ObArrayArray()
 {
   reset();
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reset()
 {
   if (OB_ISNULL(array_ptrs_)) {
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
     array_ptrs_ = local_array_buf_;
     capacity_ = ARRAY_ARRAY_SIZE;
   }
@@ -147,24 +151,24 @@ void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reset
       alloc_.free(array_ptrs_[i]);
       array_ptrs_[i] = nullptr;
     } else {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
     }
   }
   if (array_ptrs_ != local_array_buf_) {
     alloc_.free(array_ptrs_);
     array_ptrs_ = local_array_buf_;
   }
-  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT*) * ARRAY_ARRAY_SIZE);
+  MEMSET(local_array_buf_, 0, sizeof(LocalArrayT *) * ARRAY_ARRAY_SIZE);
   count_ = 0;
   capacity_ = 0;
   ptr_capacity_ = ARRAY_ARRAY_SIZE;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reuse()
 {
   if (OB_ISNULL(array_ptrs_)) {
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
     reset();
   }
 
@@ -172,14 +176,15 @@ void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reuse
     if (OB_NOT_NULL(array_ptrs_[i])) {
       array_ptrs_[i]->reuse();
     } else {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
     }
   }
   count_ = 0;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
-int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserve(const int64_t capacity)
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserve(
+    const int64_t capacity)
 {
   int ret = OB_SUCCESS;
 
@@ -187,33 +192,29 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserv
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument to reserve array array", K(ret), K(capacity));
   } else if (capacity <= capacity_) {
-  } else {
-    LocalArrayT** new_array_ptrs = array_ptrs_;
+  } else  {
+    LocalArrayT **new_array_ptrs = array_ptrs_;
     int64_t new_ptr_capacity = ptr_capacity_;
     if (capacity > ptr_capacity_) {
       // need expand ptr array
       new_ptr_capacity = MAX(ptr_capacity_ * 2, capacity);
-      if (OB_ISNULL(new_array_ptrs =
-                        reinterpret_cast<LocalArrayT**>(alloc_.alloc(sizeof(LocalArrayT*) * new_ptr_capacity)))) {
+      if (OB_ISNULL(new_array_ptrs = reinterpret_cast<LocalArrayT **>
+                                     (alloc_.alloc(sizeof(LocalArrayT *) * new_ptr_capacity)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LIB_LOG(ERROR, "Failed to alloc memory for obarrayarray", K(new_ptr_capacity), K_(count), K_(capacity));
+        LIB_LOG(ERROR, "Failed to alloc memory for obarrayarray", K(new_ptr_capacity), K_(count),
+                K_(capacity));
       } else {
-        MEMSET(new_array_ptrs, 0, sizeof(LocalArrayT*) * new_ptr_capacity);
-        MEMCPY(new_array_ptrs, array_ptrs_, sizeof(LocalArrayT*) * capacity_);
+        MEMSET(new_array_ptrs, 0, sizeof(LocalArrayT *) * new_ptr_capacity);
+        MEMCPY(new_array_ptrs, array_ptrs_, sizeof(LocalArrayT *) * capacity_);
       }
     }
     if (OB_SUCC(ret)) {
-      void* ptr = nullptr;
+      void *ptr = nullptr;
       for (int64_t i = count_; OB_SUCC(ret) && i < capacity; i++) {
         if (OB_NOT_NULL(new_array_ptrs[i])) {
           ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(ERROR,
-              "Unexpecte not null array array ptr",
-              K(i),
-              K_(count),
-              K_(capacity),
-              K(capacity),
-              KP(new_array_ptrs[i]));
+          LIB_LOG(ERROR, "Unexpecte not null array array ptr", K(i), K_(count), K_(capacity), K(capacity),
+                  KP(new_array_ptrs[i]));
         } else if (OB_ISNULL(ptr = alloc_.alloc(sizeof(LocalArrayT)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LIB_LOG(ERROR, "Failed to alloc memory for obarrayarray", K(ret), K(i), K_(capacity));
@@ -227,12 +228,12 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserv
       } else if (array_ptrs_ != local_array_buf_) {
         alloc_.free(array_ptrs_);
       } else {
-        MEMSET(local_array_buf_, 0, sizeof(LocalArrayT*) * ARRAY_ARRAY_SIZE);
+        MEMSET(local_array_buf_, 0, sizeof(LocalArrayT *) * ARRAY_ARRAY_SIZE);
       }
       array_ptrs_ = new_array_ptrs;
       capacity_ = capacity;
       ptr_capacity_ = new_ptr_capacity;
-    } else if (OB_NOT_NULL(new_array_ptrs)) {
+    } else if (OB_NOT_NULL(new_array_ptrs) && new_array_ptrs != array_ptrs_) {
       alloc_.free(new_array_ptrs);
       new_array_ptrs = nullptr;
     }
@@ -240,8 +241,9 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserv
   return ret;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
-int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::push_back(const ObIArray<T>& other_array)
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::push_back(
+    const ObIArray<T> &other_array)
 {
   int ret = OB_SUCCESS;
 
@@ -259,9 +261,9 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::push_b
   return ret;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::push_back(
-    const int64_t array_idx, const T& obj)
+    const int64_t array_idx, const T &obj)
 {
   int ret = OB_SUCCESS;
 
@@ -270,17 +272,19 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::push_b
     LIB_LOG(WARN, "Invalid array index", K(ret), K_(count), K_(capacity), K(array_idx));
   } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
     ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx),
+            KP_(array_ptrs));
   } else if (OB_FAIL(array_ptrs_[array_idx]->push_back(obj))) {
     LIB_LOG(WARN, "Failed to assign other array", K(ret), K(obj), K(array_idx));
   }
 
   return ret;
+
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::at(
-    const int64_t array_idx, ObIArray<T>& array)
+    const int64_t array_idx, ObIArray<T> &array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
@@ -288,16 +292,17 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::at(
     LIB_LOG(WARN, "Invalid array index", K(ret), K_(count), K_(capacity), K(array_idx));
   } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
     ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx),
+            KP_(array_ptrs));
   } else {
     array = *array_ptrs_[array_idx];
   }
   return ret;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::at(
-    const int64_t array_idx, const int64_t idx, T& obj)
+    const int64_t array_idx, const int64_t idx, T &obj)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
@@ -305,16 +310,17 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::at(
     LIB_LOG(WARN, "Invalid array index", K(ret), K_(count), K_(capacity), K(array_idx));
   } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
     ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx), KP_(array_ptrs));
+    LIB_LOG(ERROR, "Unexpected null array array ptr", K(ret), K_(count), K_(capacity), K(array_idx),
+            KP_(array_ptrs));
   } else {
     ret = array_ptrs_[array_idx]->at(idx, obj);
   }
   return ret;
 }
 
-template <typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
 int64_t ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::to_string(
-    char* buf, int64_t buf_len) const
+    char *buf, int64_t buf_len) const
 {
   int64_t pos = 0;
   J_KV(K_(count), K_(capacity), K_(ptr_capacity), K_(block_size));
@@ -328,6 +334,9 @@ int64_t ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::to
   return pos;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+
+
+
+} // common
+} // oceanbase
 #endif

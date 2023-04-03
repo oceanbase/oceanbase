@@ -1,0 +1,16 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : nijia.nj
+#owner group : sql2
+#description : test information_schema.global_status
+
+use information_schema;
+
+#basic
+select count(*) from global_status;
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table global_status;
+desc global_status;

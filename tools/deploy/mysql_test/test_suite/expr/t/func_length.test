@@ -1,0 +1,72 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: jiangxiu.wt
+#owner group: sql1
+
+--disable_abort_on_error
+--disable_warnings
+
+select length('ab');
+select length('ab ');
+select length('ab\t');
+select length('ab\0');
+#特殊处理
+select length('\_');
+select length('\%');
+#转义字符
+select length('\\');
+select length('\z');
+select length('\n\t\r\b\0\_\%\\');
+#直接忽略'\'
+select length('\a');
+select length('\m');
+#数字转换
+select length(12.466);
+select length(4334);
+select length(0.00);
+#根据collation判断
+select length('好');
+
+#作为列名
+select length(13bd);
+select length(db24);
+
+###带小数点且以0结尾
+select length(00.000);
+select length(00.000);
+select length(1.00000);
+select length(10000.10);
+
+
+create database if not exists db1;
+use db1;
+--disable_warnings
+drop table if exists utf,tx,gbk;
+--enable_warnings
+
+create table utf(c1 int primary key, c2 char(10)) collate 'utf8mb4_bin';
+insert into utf values(1, '好');
+select length(c2) from utf;
+
+create table tx(s int(255) zerofill);
+insert into tx values (2);
+select * from tx;
+select * from tx;
+select * from tx;
+select length(s) from tx;
+
+drop table tx;
+create table tx(s int(121) zerofill);
+insert into tx values (1234);
+select * from tx;
+select * from tx;
+select * from tx;
+select length(s) from tx;
+
+drop table tx;
+
+#create table gbk(c1 int primary key, c2 char(10)) collate 'gbk_bin';
+#insert into gbk values (1, '好');
+#select length(c2) from gbk;
+drop database db1;

@@ -15,15 +15,18 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
-#include "lib/regex/ob_regex.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_string_buf.h"
 
-namespace oceanbase {
-namespace common {
+
+namespace oceanbase
+{
+namespace common
+{
 class ObStoreRange;
 
-class ObBorderFlag {
+class ObBorderFlag
+{
 public:
   static const int8_t INCLUSIVE_START = 0x1;
   static const int8_t INCLUSIVE_END = 0x2;
@@ -31,103 +34,69 @@ public:
   static const int8_t MAX_VALUE = 0x8;
 
 public:
-  ObBorderFlag() : data_(0)
-  {}
-  virtual ~ObBorderFlag()
-  {}
+  ObBorderFlag() : data_(0) {}
+  ~ObBorderFlag() {}
 
-  inline void set_inclusive_start()
-  {
-    data_ |= INCLUSIVE_START;
-  }
+  inline void set_inclusive_start() { data_ |= INCLUSIVE_START; }
 
-  inline void unset_inclusive_start()
-  {
-    data_ &= (~INCLUSIVE_START);
-  }
+  inline void unset_inclusive_start() { data_ &= (~INCLUSIVE_START); }
 
-  inline bool inclusive_start() const
-  {
-    return (data_ & INCLUSIVE_START) == INCLUSIVE_START;
-  }
+  inline bool inclusive_start() const { return (data_ & INCLUSIVE_START) == INCLUSIVE_START; }
 
-  inline void set_inclusive_end()
-  {
-    data_ |= INCLUSIVE_END;
-  }
+  inline void set_inclusive_end() { data_ |= INCLUSIVE_END; }
 
-  inline void unset_inclusive_end()
-  {
-    data_ &= (~INCLUSIVE_END);
-  }
+  inline void unset_inclusive_end() { data_ &= (~INCLUSIVE_END); }
 
-  inline bool inclusive_end() const
-  {
-    return (data_ & INCLUSIVE_END) == INCLUSIVE_END;
-  }
+  inline bool inclusive_end() const { return (data_ & INCLUSIVE_END) == INCLUSIVE_END; }
 
-  inline void set_min_value()
-  {
-    data_ |= MIN_VALUE;
-  }
-  inline void unset_min_value()
-  {
-    data_ &= (~MIN_VALUE);
-  }
-  inline bool is_min_value() const
-  {
-    return (data_ & MIN_VALUE) == MIN_VALUE;
-  }
+  inline void set_min_value() { data_ |= MIN_VALUE; }
+  inline void unset_min_value() { data_ &= (~MIN_VALUE); }
+  inline bool is_min_value() const { return (data_ & MIN_VALUE) == MIN_VALUE; }
 
-  inline void set_max_value()
-  {
-    data_ |= MAX_VALUE;
-  }
-  inline void unset_max_value()
-  {
-    data_ &= (~MAX_VALUE);
-  }
-  inline bool is_max_value() const
-  {
-    return (data_ & MAX_VALUE) == MAX_VALUE;
-  }
+  inline void set_max_value() { data_ |= MAX_VALUE; }
+  inline void unset_max_value() { data_ &= (~MAX_VALUE); }
+  inline bool is_max_value() const { return (data_ & MAX_VALUE) == MAX_VALUE; }
 
-  inline void set_data(const int8_t data)
+  inline void set_data(const int8_t data) { data_ = data; }
+  inline void set_all_open() { set_data(0); }
+  inline void set_all_close() { data_ = INCLUSIVE_START | INCLUSIVE_END; }
+  inline int8_t get_data() const { return data_; }
+  inline void set_inclusive(const int8_t data)
   {
-    data_ = data;
-  }
-  inline int8_t get_data() const
-  {
-    return data_;
+    data_ &= MIN_VALUE + MAX_VALUE;
+    data_ += data & (INCLUSIVE_START + INCLUSIVE_END);
   }
 
   TO_STRING_KV(N_FLAG, data_);
-
 private:
   int8_t data_;
 };
 
-struct ObVersion {
+struct ObVersion
+{
   const static int16_t START_MINOR_VERSION = 1;
   const static int16_t MAX_MINOR_VERSION = INT16_MAX;
   const static int32_t START_MAJOR_VERSION = 2;
   const static int32_t MAX_MAJOR_VERSION = INT32_MAX;
   const static int32_t DEFAULT_MAJOR_VERSION = 1;
 
-  ObVersion() : version_(0)
-  {}
-  explicit ObVersion(int64_t version) : version_(version)
-  {}
+  ObVersion() : version_(0) {}
+  explicit ObVersion(int64_t version) : version_(version) {}
   ObVersion(const int64_t major, const int64_t minor)
-      : major_(static_cast<int32_t>(major)), minor_(static_cast<int16_t>(minor)), is_final_minor_(0)
-  {}
+      : major_(static_cast<int32_t>(major)),
+        minor_(static_cast<int16_t>(minor)),
+        is_final_minor_(0)
+  {
+  }
 
-  union {
+  union
+  {
     int64_t version_;
-    struct {
-      int32_t major_ : 32;
-      int16_t minor_ : 16;
-      int16_t is_final_minor_ : 16;
+    struct
+    {
+      int32_t major_           : 32;
+      int16_t minor_           : 16;
+      int16_t is_final_minor_  : 16;
     };
   };
   static ObVersion MIN_VERSION;
@@ -159,8 +128,8 @@ struct ObVersion {
   static int64_t get_version(int64_t major, int64_t minor, bool is_final_minor)
   {
     ObVersion v;
-    v.major_ = static_cast<int32_t>(major);
-    v.minor_ = static_cast<int16_t>(minor);
+    v.major_          = static_cast<int32_t>(major);
+    v.minor_          = static_cast<int16_t>(minor);
     v.is_final_minor_ = is_final_minor ? 1 : 0;
     return v.version_;
   }
@@ -207,10 +176,11 @@ struct ObVersion {
     ObVersion lv(l);
     ObVersion rv(r);
 
-    // ignore is_final_minor
+    //ignore is_final_minor
     if ((lv.major_ == rv.major_) && (lv.minor_ == rv.minor_)) {
       ret = 0;
-    } else if ((lv.major_ < rv.major_) || ((lv.major_ == rv.major_) && lv.minor_ < rv.minor_)) {
+    } else if ((lv.major_ < rv.major_) ||
+               ((lv.major_ == rv.major_) && lv.minor_ < rv.minor_)) {
       ret = -1;
     } else {
       ret = 1;
@@ -218,14 +188,15 @@ struct ObVersion {
     return ret;
   }
 
-  inline int compare(const ObVersion& rhs) const
+  inline int compare(const ObVersion &rhs) const
   {
     int ret = 0;
 
-    // ignore is_final_minor
+    //ignore is_final_minor
     if ((major_ == rhs.major_) && (minor_ == rhs.minor_)) {
       ret = 0;
-    } else if ((major_ < rhs.major_) || ((major_ == rhs.major_) && minor_ < rhs.minor_)) {
+    } else if ((major_ < rhs.major_) ||
+               ((major_ == rhs.major_) && minor_ < rhs.minor_)) {
       ret = -1;
     } else {
       ret = 1;
@@ -234,48 +205,50 @@ struct ObVersion {
     return ret;
   }
 
-  inline bool operator<(const ObVersion& rhs) const
+  inline bool operator<(const ObVersion &rhs) const
   {
     return compare(rhs) < 0;
   }
 
-  inline bool operator<=(const ObVersion& rhs) const
+  inline bool operator<=(const ObVersion &rhs) const
   {
     return compare(rhs) <= 0;
   }
 
-  inline bool operator>(const ObVersion& rhs) const
+  inline bool operator>(const ObVersion &rhs) const
   {
     return compare(rhs) > 0;
   }
 
-  inline bool operator>=(const ObVersion& rhs) const
+  inline bool operator>=(const ObVersion &rhs) const
   {
     return compare(rhs) >= 0;
   }
 
-  inline bool operator==(const ObVersion& rhs) const
+  inline bool operator==(const ObVersion &rhs) const
   {
     return compare(rhs) == 0;
   }
 
-  inline bool operator!=(const ObVersion& rhs) const
+  inline bool operator!=(const ObVersion &rhs) const
   {
     return compare(rhs) != 0;
   }
 
-  int64_t to_string(char* buf, const int64_t buf_len) const
+  int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
-    databuff_printf(buf, buf_len, pos, "\"%d-%hd-%hd\"", major_, minor_, is_final_minor_);
+    databuff_printf(buf, buf_len, pos, "\"%d-%hd-%hd\"",
+                    major_, minor_, is_final_minor_);
     return pos;
   }
 
-  int version_to_string(char* buf, const int64_t buf_len) const
+  int version_to_string(char *buf, const int64_t buf_len) const
   {
     int ret = OB_SUCCESS;
     if (NULL != buf && buf_len > 0) {
-      if (0 > snprintf(buf, buf_len, "%d-%d-%d", major_, minor_, is_final_minor_)) {
+      if (0 > snprintf(buf, buf_len, "%d-%d-%d",
+                       major_, minor_, is_final_minor_)) {
         ret = OB_ERR_UNEXPECTED;
       }
     } else {
@@ -283,17 +256,17 @@ struct ObVersion {
     }
     return ret;
   }
-  int fixed_length_encode(char* buf, const int64_t buf_len, int64_t& pos) const;
-  int fixed_length_decode(const char* buf, const int64_t data_len, int64_t& pos);
+  int fixed_length_encode(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int fixed_length_decode(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_fixed_length_encoded_size() const;
-  TO_YSON_KV(Y_(version));
+  TO_YSON_KV(OB_Y_(version));
   OB_UNIS_VERSION(1);
 };
 
-class ObVersionProvider {
+class ObVersionProvider
+{
 public:
-  virtual ~ObVersionProvider()
-  {}
+  virtual ~ObVersionProvider() {}
   virtual const ObVersion get_frozen_version() const = 0;
   virtual const ObVersion get_merged_version() const = 0;
 };
@@ -307,25 +280,21 @@ public:
 //  2. for multi version sstable query:
 //    - rows in range (MIN_VERSION, base_store_version_] will not be iterated (i.e. skipped);
 //    - rows in range (base_store_version_, read_snapshot_] will be fused and outputted;
-struct ObVersionRange {
+struct ObVersionRange
+{
   OB_UNIS_VERSION(1);
-
 public:
   static const int64_t MIN_VERSION = 0;
-  static const int64_t MAX_VERSION = INT64_MAX;
 
   ObVersionRange();
   OB_INLINE void reset();
   OB_INLINE bool is_valid() const;
   int64_t hash() const;
-  OB_INLINE bool operator==(const ObVersionRange& range) const;
-  OB_INLINE bool operator!=(const ObVersionRange& range) const
-  {
-    return !this->operator==(range);
-  }
+  OB_INLINE bool operator ==(const ObVersionRange &range) const;
+  OB_INLINE bool operator !=(const ObVersionRange &range) const { return !this->operator ==(range); }
   OB_INLINE bool contain(const int64_t snaptshot_version) const;
-  bool contain(const ObVersionRange& range) const;
-  void union_version_range(const ObVersionRange& range);
+  bool contain(const ObVersionRange &range) const;
+  void union_version_range(const ObVersionRange &range);
 
   int64_t multi_version_start_;
   int64_t base_version_;
@@ -334,60 +303,42 @@ public:
   TO_STRING_KV(K_(multi_version_start), K_(base_version), K_(snapshot_version));
 };
 
-struct ObLogTsRange {
+struct ObNewVersionRange
+{
   OB_UNIS_VERSION(1);
-
 public:
-  static const int64_t MIN_TS = 0;
-  static const int64_t MAX_TS = INT64_MAX;
+  static const int64_t MIN_VERSION = 0;
 
-  ObLogTsRange();
+  ObNewVersionRange();
   OB_INLINE void reset();
-  OB_INLINE bool is_valid() const
-  {
-    return end_log_ts_ >= start_log_ts_ && max_log_ts_ >= end_log_ts_;
-  }
-  OB_INLINE bool is_empty() const
-  {
-    return end_log_ts_ == start_log_ts_;
-  }
+  OB_INLINE bool is_valid() const;
   int64_t hash() const;
-  OB_INLINE bool operator==(const ObLogTsRange& range) const
-  {
-    return start_log_ts_ == range.start_log_ts_ && end_log_ts_ == range.end_log_ts_ && max_log_ts_ == range.max_log_ts_;
-  }
-  OB_INLINE bool operator!=(const ObLogTsRange& range) const
-  {
-    return !this->operator==(range);
-  }
-  OB_INLINE bool contain(const int64_t log_ts) const
-  {
-    return is_valid() && start_log_ts_ < log_ts && end_log_ts_ >= log_ts;
-  }
-  OB_INLINE ObLogTsRange& operator=(const ObLogTsRange& other)
-  {
-    if (this != &other) {
-      start_log_ts_ = other.start_log_ts_;
-      end_log_ts_ = other.end_log_ts_;
-      max_log_ts_ = other.max_log_ts_;
-    }
-    return *this;
-  }
+  OB_INLINE bool operator ==(const ObNewVersionRange &range) const;
+  OB_INLINE bool operator !=(const ObNewVersionRange &range) const { return !this->operator ==(range); }
 
-  int64_t start_log_ts_;
-  int64_t end_log_ts_;
-  int64_t max_log_ts_;
+  int64_t base_version_;
+  int64_t snapshot_version_;
 
-  TO_STRING_KV(K_(start_log_ts), K_(end_log_ts), K_(max_log_ts));
+  TO_STRING_KV(K_(base_version), K_(snapshot_version));
 };
 
-class ObNewRange {
+class ObNewRange
+{
 
 public:
   uint64_t table_id_;
   ObBorderFlag border_flag_;
   ObRowkey start_key_;
   ObRowkey end_key_;
+  union {
+    int64_t flag_;
+    struct {
+      int64_t group_idx_: 32;
+      int64_t is_physical_rowid_range_: 1;
+      int64_t reserved_: 31;
+    };
+  };
+
 
   ObNewRange()
   {
@@ -405,31 +356,31 @@ public:
     border_flag_.set_data(0);
     start_key_.assign(NULL, 0);
     end_key_.assign(NULL, 0);
+    flag_ = 0;
   }
 
-  // TODO column order is fake now, need to enable by someone in some day
-  // ObObjs in start_key/end_key are only shallow-copied
-  // So the converted storage_range should not outlive its source range
-  // is_whole_range() result is NOT preserved after the conversion.
-  int to_store_range(
-      const ObIArray<ObOrderType>& column_orders, ObStoreRange& store_range, ObIAllocator& allocator) const;
-
-  inline const ObRowkey& get_start_key()
+  inline const ObRowkey &get_start_key()
   {
     return start_key_;
   }
-  inline const ObRowkey& get_start_key() const
+  inline const ObRowkey &get_start_key() const
   {
     return start_key_;
   }
 
-  inline const ObRowkey& get_end_key()
+
+  inline const ObRowkey &get_end_key()
   {
     return end_key_;
   }
-  inline const ObRowkey& get_end_key() const
+  inline const ObRowkey &get_end_key() const
   {
     return end_key_;
+  }
+
+  inline int32_t get_group_idx() const
+  {
+    return group_idx_;
   }
 
   int build_range(uint64_t table_id, ObRowkey rowkey)
@@ -444,12 +395,13 @@ public:
       end_key_ = rowkey;
       border_flag_.set_inclusive_start();
       border_flag_.set_inclusive_end();
+      flag_ = 0;
     }
     return ret;
   }
 
   // new compare func for tablet.range and scan_param.range
-  inline int compare_with_endkey2(const ObNewRange& r) const
+  inline int compare_with_endkey2(const ObNewRange &r) const
   {
     int cmp = 0;
     if (end_key_.is_max_row()) {
@@ -471,7 +423,7 @@ public:
     return cmp;
   }
 
-  inline int compare_with_startkey2(const ObNewRange& r) const
+  inline int compare_with_startkey2(const ObNewRange &r) const
   {
     int cmp = 0;
     if (start_key_.is_min_row()) {
@@ -493,10 +445,7 @@ public:
     return cmp;
   }
 
-  inline bool is_valid() const
-  {
-    return !empty();
-  }
+  inline bool is_valid() const { return !empty(); }
 
   inline bool empty() const
   {
@@ -505,7 +454,10 @@ public:
       ret = false;
     } else {
       const int32_t result = end_key_.compare(start_key_);
-      ret = result < 0 || ((0 == result) && !((border_flag_.inclusive_end()) && border_flag_.inclusive_start()));
+      ret  = result < 0
+             || ((0 == result)
+                 && !((border_flag_.inclusive_end())
+                      && border_flag_.inclusive_start()));
     }
     return ret;
   }
@@ -519,16 +471,18 @@ public:
     border_flag_.unset_inclusive_end();
   }
 
+  inline void set_false_range()
+  {
+    start_key_.set_max_row();
+    end_key_.set_min_row();
+    border_flag_.unset_inclusive_start();
+    border_flag_.unset_inclusive_end();
+  }
+
   // from MIN to MAX, complete set.
   inline bool is_whole_range() const
   {
     return (start_key_.is_min_row()) && (end_key_.is_max_row());
-  }
-
-  // from MAX to MIN, means no suitable range.
-  inline bool is_false_range() const
-  {
-    return (start_key_.is_max_row()) && (end_key_.is_min_row());
   }
 
   /*
@@ -552,62 +506,70 @@ public:
   inline bool is_single_rowkey() const
   {
     int ret = false;
-    if (start_key_.is_min_row() || start_key_.is_max_row() || end_key_.is_min_row() || end_key_.is_max_row()) {
+    if (start_key_.is_min_row() || start_key_.is_max_row()
+        || end_key_.is_min_row() || end_key_.is_max_row()) {
       ret = false;
-    } else if (start_key_ == end_key_ && border_flag_.inclusive_start() && border_flag_.inclusive_end()) {
+    } else if (start_key_ == end_key_ && border_flag_.inclusive_start()
+               && border_flag_.inclusive_end()) {
       ret = true;
     }
     return ret;
   }
 
-  inline bool equal(const ObNewRange& r) const
+  inline bool equal(const ObNewRange &r) const
   {
     return equal2(r);
   }
 
-  inline bool equal2(const ObNewRange& r) const
+  inline bool equal2(const ObNewRange &r) const
   {
-    return (table_id_ == r.table_id_) && (compare_with_startkey2(r) == 0) && (compare_with_endkey2(r) == 0);
+    return (table_id_ == r.table_id_) && (compare_with_startkey2(r) == 0) &&
+           (compare_with_endkey2(r) == 0);
   }
 
-  inline bool include(const ObNewRange& r) const
+  inline bool include(const ObNewRange &r) const
   {
-    return (table_id_ == r.table_id_) && (compare_with_startkey2(r) <= 0) && (compare_with_endkey2(r) >= 0);
+    return (table_id_ == r.table_id_)
+        && (compare_with_startkey2(r) <= 0)
+        && (compare_with_endkey2(r) >= 0);
   }
 
-  inline bool operator==(const ObNewRange& other) const
+  inline bool operator == (const ObNewRange &other) const
   {
     return equal(other);
   };
 
   TO_YSON_KV(OB_ID(range), to_cstring(*this));
-  int64_t to_string(char* buffer, const int64_t length) const;
-  int64_t to_simple_string(char* buffer, const int64_t length) const;
-  int64_t to_plain_string(char* buffer, const int64_t length) const;
+  int64_t to_string(char *buffer, const int64_t length) const;
+  int64_t to_simple_string(char *buffer, const int64_t length) const;
+  int64_t to_plain_string(char *buffer, const int64_t length) const;
   uint64_t hash() const;
 
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
-  int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size(void) const;
 
   template <typename Allocator>
-  int deserialize(Allocator& allocator, const char* buf, const int64_t data_len, int64_t& pos);
+     int deserialize(Allocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
 
-  inline int get_common_rowkey(ObRowkey& rowkey) const
+  inline int get_common_rowkey(ObRowkey &rowkey) const
   {
     int ret = OB_SUCCESS;
     int64_t prefix_len = 0;
     if (OB_FAIL(ObRowkey::get_common_prefix_length(start_key_, end_key_, prefix_len))) {
       STORAGE_LOG(WARN, "fail to get common prefix length", K(ret));
     } else {
-      rowkey.assign(const_cast<ObObj*>(start_key_.get_obj_ptr()), prefix_len);
+      rowkey.assign(const_cast<ObObj *>(start_key_.get_obj_ptr()), prefix_len);
     }
     return ret;
   }
+
 };
 
 template <typename Allocator>
-int ObNewRange::deserialize(Allocator& allocator, const char* buf, const int64_t data_len, int64_t& pos)
+int ObNewRange::deserialize(Allocator &allocator, const char *buf, const int64_t data_len,
+                            int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObObj array[OB_MAX_ROWKEY_COLUMN_NUMBER * 2];
@@ -615,16 +577,18 @@ int ObNewRange::deserialize(Allocator& allocator, const char* buf, const int64_t
   copy_range.start_key_.assign(array, OB_MAX_ROWKEY_COLUMN_NUMBER);
   copy_range.end_key_.assign(array + OB_MAX_ROWKEY_COLUMN_NUMBER, OB_MAX_ROWKEY_COLUMN_NUMBER);
   if (OB_FAIL(copy_range.deserialize(buf, data_len, pos))) {
-    COMMON_LOG(WARN, "deserialize range to shallow copy object failed.", KP(buf), K(data_len), K(pos), K(ret));
+    COMMON_LOG(WARN, "deserialize range to shallow copy object failed.",
+               KP(buf), K(data_len), K(pos), K(ret));
   } else if (OB_FAIL(deep_copy_range(allocator, copy_range, *this))) {
-    COMMON_LOG(WARN, "deep_copy_range failed.", KP(buf), K(data_len), K(pos), K(copy_range), K(ret));
+    COMMON_LOG(WARN, "deep_copy_range failed.",
+               KP(buf), K(data_len), K(pos), K(copy_range), K(ret));
   }
 
   return ret;
 }
 
 template <typename Allocator>
-inline int deep_copy_range(Allocator& allocator, const ObNewRange& src, ObNewRange& dst)
+inline int deep_copy_range(Allocator &allocator, const ObNewRange &src, ObNewRange &dst)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(src.start_key_.deep_copy(dst.start_key_, allocator))) {
@@ -634,20 +598,21 @@ inline int deep_copy_range(Allocator& allocator, const ObNewRange& src, ObNewRan
   } else {
     dst.table_id_ = src.table_id_;
     dst.border_flag_ = src.border_flag_;
+    dst.flag_ = src.flag_;
   }
   return ret;
 }
 
 template <typename Allocator>
-inline int deep_copy_range(Allocator& allocator, const ObNewRange& src, ObNewRange*& dst)
+inline int deep_copy_range(Allocator &allocator, const ObNewRange &src, ObNewRange *&dst)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (NULL == (ptr = allocator.alloc(sizeof(ObNewRange)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(ERROR, "allocate new range failed", K(ret));
   } else {
-    dst = new (ptr) ObNewRange();
+    dst = new(ptr) ObNewRange();
     if (OB_FAIL(src.start_key_.deep_copy(dst->start_key_, allocator))) {
       COMMON_LOG(WARN, "deep copy start key failed.", K(src.start_key_), K(ret));
     } else if (OB_FAIL(src.end_key_.deep_copy(dst->end_key_, allocator))) {
@@ -655,6 +620,7 @@ inline int deep_copy_range(Allocator& allocator, const ObNewRange& src, ObNewRan
     } else {
       dst->table_id_ = src.table_id_;
       dst->border_flag_ = src.border_flag_;
+      dst->flag_= src.flag_;
     }
     if (OB_FAIL(ret) && NULL != ptr) {
       allocator.free(ptr);
@@ -674,16 +640,18 @@ void ObVersionRange::reset()
 
 bool ObVersionRange::is_valid() const
 {
-  // TODO: remove 0 == multi_version_start_
-  return (0 == multi_version_start_ || multi_version_start_ >= base_version_) &&
-         multi_version_start_ <= snapshot_version_ && base_version_ >= MIN_VERSION &&
-         base_version_ <= snapshot_version_;
+  // TODO(weixue): remove 0 == multi_version_start_
+  return (0 == multi_version_start_ || multi_version_start_ >= base_version_)
+      && multi_version_start_ <= snapshot_version_
+      && base_version_ >= MIN_VERSION
+      && base_version_ <= snapshot_version_;
 }
 
-bool ObVersionRange::operator==(const ObVersionRange& range) const
+bool ObVersionRange::operator ==(const ObVersionRange &range) const
 {
-  return multi_version_start_ == range.multi_version_start_ && base_version_ == range.base_version_ &&
-         snapshot_version_ == range.snapshot_version_;
+  return multi_version_start_ == range.multi_version_start_
+      && base_version_ == range.base_version_
+      && snapshot_version_ == range.snapshot_version_;
 }
 
 bool ObVersionRange::contain(const int64_t snaptshot_version) const
@@ -703,14 +671,25 @@ bool ObVersionRange::contain(const int64_t snaptshot_version) const
   return is_contain;
 }
 
-void ObLogTsRange::reset()
+void ObNewVersionRange::reset()
 {
-  start_log_ts_ = ObLogTsRange::MIN_TS;
-  end_log_ts_ = ObLogTsRange::MIN_TS;
-  max_log_ts_ = ObLogTsRange::MIN_TS;
+  base_version_ = -1;
+  snapshot_version_ = -1;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+bool ObNewVersionRange::is_valid() const
+{
+  return snapshot_version_ >= MIN_VERSION;
+}
 
-#endif  // OCEANBASE_COMMON_OB_RANGE_H_
+bool ObNewVersionRange::operator ==(const ObNewVersionRange &range) const
+{
+  return base_version_ == range.base_version_
+      && snapshot_version_ == range.snapshot_version_;
+}
+
+
+} // end namespace common
+} // end namespace oceanbase
+
+#endif //OCEANBASE_COMMON_OB_RANGE_H_

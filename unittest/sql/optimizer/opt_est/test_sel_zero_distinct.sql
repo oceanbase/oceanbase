@@ -16,6 +16,7 @@ select 0;
 select c1 from t1 where null;
 # distinct(1000), min(500), max(10000), nullnum(100)
 #equal a = 1
+#等值条件现都视为1/distinct
 select 1/500*0.99;
 select c1 from t1 where c1 = 999;
 select 1/500*0.99;
@@ -51,6 +52,7 @@ select 1.0/3.0 as not calc
 select c1 from t1 where c1 + 1 > 5;
 select 0;
 select c1 from t1 where c1 > 2000;
+#不考虑=值的影响
 select 0;
 select c1 from t1 where c1 >= 2000;
 select 0;
@@ -61,6 +63,7 @@ select 0;
 select c1 from t1 where c1 <= 500;
 select 0;
 select c1 from t1 where c1 >= 10000;
+#T_OP_NE 未做处理
 select 0;
 select c1 from t1 where c1 != 500;
 select 0;
@@ -71,6 +74,8 @@ select 0;
 select c1 from t1 where c1 * 2 != 50;
 select 0.5
 select c1 from t1 where c1 / 2 != 50;
+# and && or 混合 A and B: A*B, A OR B : A + B - A*B
+#以上为所需单个条件的选择率
 select 0
 select c1 from t1 where c1 > 2000 and c1 < 3000;
 select 0
@@ -116,6 +121,7 @@ select * from t1 where not (c1 > 2000 and c1 < 3000);
 select 0;
 select * from t1 where not c1 in (2000, 3000);
 #T_OP_IN
+#T_OP_NOT_IN 无法精确计算null_sel,所以这里忽略null_sel.
 select 0;
 select c1 from t1 where c1 in (500, 8000, 10000);
 select 0;
@@ -156,6 +162,7 @@ select 0;
 select c1 from t1 where 1000 between c1 and 1000;
 select 0;
 select c1 from t1 where 1000 not between c1 and 1000;
+#btw的最小选择率暂时未设置，这里会直接为0
 select 0;
 select c1 from t1 where 1000 between 10000 and c1;
 select 0;

@@ -16,56 +16,67 @@
 #include "lib/thread/thread_mgr.h"
 #include "share/ob_thread_pool.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 namespace lib {
 namespace TGDefIDs {
-enum OBTGDefIDEnum {
+enum OBTGDefIDEnum
+{
   OB_START = TGDefIDs::LIB_END - 1,
 #define TG_DEF(id, ...) id,
 #include "share/ob_thread_define.h"
 #undef TG_DEF
   OB_END,
 };
-}  // namespace TGDefIDs
-}  // end of namespace lib
+}
+} // end of namespace lib
 
-namespace share {
-using lib::ITG;
+namespace share
+{
 using lib::TGType;
-template <enum TGType type>
+using lib::ITG;
+template<enum TGType type>
 class ObTG;
 
-class MyObThreadPool : public share::ObThreadPool {
+class MyObThreadPool : public share::ObThreadPool
+{
 public:
   void run1() override
   {
     runnable_->set_thread_idx(get_thread_idx());
     runnable_->run1();
   }
-  lib::TGRunnable* runnable_ = nullptr;
+  lib::TGRunnable *runnable_ = nullptr;
 };
 
-template <>
-class ObTG<TGType::OB_THREAD_POOL> : public ITG {
+template<>
+class ObTG<TGType::OB_THREAD_POOL> : public ITG
+{
 public:
-  ObTG(lib::ThreadCountPair pair) : thread_cnt_(pair.get_thread_cnt())
+  ObTG(lib::ThreadCountPair pair)
+    : thread_cnt_(pair.get_thread_cnt())
   {}
-  ~ObTG()
+  ~ObTG() { destroy(); }
+  int thread_cnt() override { return (int)thread_cnt_; }
+  int set_thread_cnt(int64_t thread_cnt) override
   {
-    destroy();
+    int ret = common::OB_SUCCESS;
+    if (th_ == nullptr) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      thread_cnt_ = thread_cnt;
+      th_->set_thread_count(thread_cnt_);
+    }
+    return ret;
   }
-  int64_t thread_cnt() override
-  {
-    return thread_cnt_;
-  }
-  int set_runnable(lib::TGRunnable& runnable) override
+  int set_runnable(lib::TGRunnable &runnable)
   {
     int ret = common::OB_SUCCESS;
     if (th_ != nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
       th_ = new (buf_) MyObThreadPool();
-      th_->runnable_ = &runnable;
+      th_->runnable_= &runnable;
     }
     return ret;
   }
@@ -74,11 +85,12 @@ public:
     int ret = common::OB_SUCCESS;
     if (nullptr == th_) {
       ret = common::OB_ERR_UNEXPECTED;
-    } else if (nullptr == th_->runnable_) {
+    } else if(nullptr == th_->runnable_) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
       th_->runnable_->set_stop(false);
       th_->set_thread_count(thread_cnt_);
+      th_->set_run_wrapper(tg_helper_, tg_cgroup_);
       ret = th_->start();
     }
     return ret;
@@ -105,17 +117,16 @@ public:
       th_ = nullptr;
     }
   }
-
 private:
   char buf_[sizeof(MyObThreadPool)];
-  MyObThreadPool* th_ = nullptr;
-  int thread_cnt_;
+  MyObThreadPool *th_ = nullptr;
+  int64_t thread_cnt_;
 };
 
-}  // end of namespace share
+} // end of namespace share
 
 BIND_TG_CLS(lib::TGType::OB_THREAD_POOL, share::ObTG<lib::TGType::OB_THREAD_POOL>);
 
-}  // end of namespace oceanbase
+} // end of namespace oceanbase
 
-#endif  // OB_THREAD_MGR_H_
+#endif // OB_THREAD_MGR_H_

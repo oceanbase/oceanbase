@@ -1,0 +1,44 @@
+#owner: xiaochu.yh
+#owner group: SQL3
+# tags: optimizer
+--result_format 4
+
+# test aggregation
+
+--disable_result_log
+
+--source mysql_test/test_suite/px/include/exam_data.inc
+--disable_result_log
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+alter system set enable_sql_audit = true;
+alter system flush sql audit global;
+
+disconnect obsys;
+connection default;
+
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(2) */ * from teacher;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(3) */ * from teacher;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(4) */ * from teacher;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(2) */ subject, avg(score), max(score), min(score) from score group by subject;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(2) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(2) */ count(*) from score join stu using (sid) inner join teacher where score.subject = teacher.subject;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(3) */ subject, avg(score), max(score), min(score) from score group by subject;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(3) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+--sorted_result
+select /*+ TEST_SQL_AUDIT USE_PX parallel(3) */ count(*) from score join stu using (sid) inner join teacher where score.subject = teacher.subject;
+
+--enable_result_log
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+
+--sorted_result
+eval select query_sql, EXPECTED_WORKER_COUNT, USED_WORKER_COUNT from oceanbase.GV\$OB_SQL_AUDIT where EXPECTED_WORKER_COUNT > 0 AND query_sql like '%TEST_SQL_AUDIT%' order by request_time desc limit 10;

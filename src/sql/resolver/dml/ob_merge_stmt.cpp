@@ -18,166 +18,242 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
-namespace oceanbase {
-using namespace common;
-namespace sql {
-ObMergeStmt::ObMergeStmt()
-    : ObInsertStmt(),
-      source_table_id_(OB_INVALID_ID),
-      target_table_id_(OB_INVALID_ID),
-      match_condition_exprs_(),
-      insert_condition_exprs_(),
-      update_condition_exprs_(),
-      delete_condition_exprs_(),
-      rowkey_exprs_(),
-      has_insert_clause_(false),
-      has_update_clause_(false)
+namespace oceanbase
 {
-  stmt_type_ = stmt::T_MERGE;
+using namespace common;
+namespace sql
+{
+
+ObMergeStmt::ObMergeStmt()
+    : ObDelUpdStmt(stmt::T_MERGE),
+      table_info_()
+{
 }
 
 ObMergeStmt::~ObMergeStmt()
-{}
+{
+}
 
-int ObMergeStmt::deep_copy_stmt_struct(
-    ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObDMLStmt& input)
+int ObMergeStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
+                                       ObRawExprCopier &expr_copier,
+                                       const ObDMLStmt &input)
 {
   int ret = OB_SUCCESS;
-  const ObMergeStmt& other = static_cast<const ObMergeStmt&>(input);
+  const ObMergeStmt &other = static_cast<const ObMergeStmt &>(input);
   if (OB_UNLIKELY(input.get_stmt_type() != get_stmt_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt type does not match", K(ret));
-  } else if (OB_FAIL(ObInsertStmt::deep_copy_stmt_struct(stmt_factory, expr_factory, input))) {
+  } else if (OB_FAIL(ObDelUpdStmt::deep_copy_stmt_struct(allocator,
+                                                         expr_copier,
+                                                         input))) {
     LOG_WARN("failed to deep copy stmt struct", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                 expr_factory, other.match_condition_exprs_, match_condition_exprs_, COPY_REF_DEFAULT))) {
-    LOG_WARN("failed to copy exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                 expr_factory, other.insert_condition_exprs_, insert_condition_exprs_, COPY_REF_DEFAULT))) {
-    LOG_WARN("failed to copy exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                 expr_factory, other.update_condition_exprs_, update_condition_exprs_, COPY_REF_DEFAULT))) {
-    LOG_WARN("failed to copy exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                 expr_factory, other.delete_condition_exprs_, delete_condition_exprs_, COPY_REF_DEFAULT))) {
-    LOG_WARN("failed to copy exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(expr_factory, other.rowkey_exprs_, rowkey_exprs_, COPY_REF_DEFAULT))) {
-    LOG_WARN("failed to copy rowkey exprs", K(ret));
-  } else {
-    source_table_id_ = other.source_table_id_;
-    target_table_id_ = other.target_table_id_;
-    has_insert_clause_ = other.has_insert_clause_;
-    has_update_clause_ = other.has_update_clause_;
-  }
+  } else if (OB_FAIL(table_info_.deep_copy(expr_copier, other.table_info_))) {
+    LOG_WARN("failed to deep copy table info", K(ret));
+  } else { /*do nothing*/ }
+
   return ret;
 }
 
-int ObMergeStmt::assign(const ObMergeStmt& other)
+int ObMergeStmt::assign(const ObMergeStmt &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertStmt::assign(other))) {
+  if (OB_FAIL(ObDelUpdStmt::assign(other))) {
     LOG_WARN("failed to copy stmt", K(ret));
-  } else if (OB_FAIL(match_condition_exprs_.assign(other.match_condition_exprs_))) {
-    LOG_WARN("failed to assign match condition exprs", K(ret));
-  } else if (OB_FAIL(insert_condition_exprs_.assign(other.insert_condition_exprs_))) {
-    LOG_WARN("failed to assign insert condition exprs", K(ret));
-  } else if (OB_FAIL(update_condition_exprs_.assign(other.update_condition_exprs_))) {
-    LOG_WARN("failed to assign update condition exprs", K(ret));
-  } else if (OB_FAIL(delete_condition_exprs_.assign(other.delete_condition_exprs_))) {
-    LOG_WARN("failed to assign delete condition exprs", K(ret));
-  } else if (OB_FAIL(rowkey_exprs_.assign(other.rowkey_exprs_))) {
-    LOG_WARN("failed to assign rowkey exprs", K(ret));
-  } else {
-    source_table_id_ = other.source_table_id_;
-    target_table_id_ = other.target_table_id_;
-    has_insert_clause_ = other.has_insert_clause_;
-    has_update_clause_ = other.has_update_clause_;
-  }
+  } else if (OB_FAIL(table_info_.assign(other.table_info_))) {
+    LOG_WARN("failed to assign table info", K(ret));
+  } else { /*do nothing*/ }
+
   return ret;
 }
 
-int64_t ObMergeStmt::to_string(char* buf, const int64_t buf_len) const
+int ObMergeStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
+{
+  is_modified = (table_info_.ref_table_id_ == ref_table_id);
+  return OB_SUCCESS;
+}
+
+int64_t ObMergeStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(N_STMT_TYPE,
-      ((int)stmt_type_),
-      N_TABLE,
-      table_items_,
-      "match condition",
-      match_condition_exprs_,
-      "update condition",
-      update_condition_exprs_,
-      "insert condition",
-      insert_condition_exprs_,
-      "delete condition",
-      delete_condition_exprs_,
-      "row key",
-      rowkey_exprs_,
-      N_VALUE,
-      value_vectors_,
-      N_COLUMN_CONV_FUNCTION,
-      column_conv_functions_,
-      N_ASSIGN,
-      table_assignments_,
-      K_(source_table_id),
-      K_(target_table_id),
-      N_PARTITION_EXPR,
-      part_expr_items_,
-      K_(all_table_columns),
-      N_QUERY_CTX,
-      stmt_hint_);
+  J_KV(N_STMT_TYPE, ((int)stmt_type_),
+       N_TABLE, table_items_,
+       N_PARTITION_EXPR, part_expr_items_,
+       K_(table_info),
+       N_QUERY_CTX, stmt_hint_);
   J_OBJ_END();
   return pos;
 }
 
-int ObMergeStmt::inner_get_relation_exprs(RelExprCheckerBase& expr_checker)
+int ObMergeStmt::get_assignments_exprs(ObIArray<ObRawExpr*> &exprs) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_checker.add_exprs(match_condition_exprs_))) {
-    LOG_WARN("failed to add exprs to expr checker", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(update_condition_exprs_))) {
-    LOG_WARN("failed to add exprs to expr checker", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(insert_condition_exprs_))) {
-    LOG_WARN("failed to add exprs to expr checker", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(delete_condition_exprs_))) {
-    LOG_WARN("failed to add exprs to expr checker", K(ret));
-  } else if (OB_FAIL(ObInsertStmt::inner_get_relation_exprs(expr_checker))) {
-    LOG_WARN("get insert stmt relation exprs failed", K(ret));
-  } else { /*do nothing*/
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.assignments_.count(); ++i) {
+    if (OB_FAIL(exprs.push_back(table_info_.assignments_.at(i).expr_))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMergeStmt::get_dml_table_infos(ObIArray<ObDmlTableInfo*>& dml_table_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dml_table_info.push_back(&table_info_))) {
+    LOG_WARN("failed to push back table info", K(ret));
+  }
+  return ret;
+}
+
+int ObMergeStmt::get_dml_table_infos(ObIArray<const ObDmlTableInfo*>& dml_table_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dml_table_info.push_back(&table_info_))) {
+    LOG_WARN("failed to push back table info", K(ret));
+  }
+  return ret;
+}
+
+int ObMergeStmt::get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(view_check_exprs, table_info_.view_check_exprs_))) {
+    LOG_WARN("failed to append view check exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObMergeStmt::get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table_info_.column_conv_exprs_.count() != 0 &&
+                  table_info_.column_exprs_.count() != table_info_.column_conv_exprs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected column count", K(table_info_), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.column_conv_exprs_.count(); ++i) {
+    ObRawExpr *param = NULL;
+    ObRawExpr *column_expr = table_info_.column_exprs_.at(i);
+    ObRawExpr *column_conv_expr = table_info_.column_conv_exprs_.at(i);
+    if (OB_ISNULL(column_expr) || OB_ISNULL(column_conv_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (column_conv_expr->get_expr_type() != T_FUN_COLUMN_CONV) {
+      param = column_conv_expr;
+    } else {
+      param = column_conv_expr->get_param_expr(4);
+      if (OB_ISNULL(param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if (ObRawExprUtils::need_column_conv(column_expr->get_result_type(), *param)) {
+        param = column_conv_expr;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if (OB_FAIL(value_exprs.push_back(param))) {
+        LOG_WARN("failed to push back param expr", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObMergeStmt::part_key_is_updated(bool &is_updated) const
+{
+  int ret = OB_SUCCESS;
+  is_updated = false;
+  if (!table_info_.is_link_table_ &&
+      OB_FAIL(check_part_key_is_updated(table_info_.assignments_, is_updated))) {
+    LOG_WARN("failed to check part key is updated", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObMergeStmt::part_key_has_rand_value(bool &has) const
+{
+  int ret = OB_SUCCESS;
+  has = false;
+  //添加insert values中的分区键对应的value expr
+  int64_t value_desc_cnt = table_info_.values_desc_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && !has && i < value_desc_cnt; ++i) {
+    ObColumnRefRawExpr *col_expr = table_info_.values_desc_.at(i);
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column expr is null", K(ret));
+    } else if (IS_SHADOW_COLUMN(col_expr->get_column_id())) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_base_column(this, col_expr))) {
+      LOG_WARN("failed to get base column", K(ret));
+    } else if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (col_expr->is_table_part_key_column()
+              || col_expr->is_table_part_key_org_column()) {
+      for (int64_t j = i; OB_SUCC(ret) && !has && j < table_info_.values_vector_.count(); j += value_desc_cnt) {
+        if (table_info_.values_vector_.at(j)->has_flag(CNT_RAND_FUNC)
+            || table_info_.values_vector_.at(j)->has_flag(CNT_STATE_FUNC)) {
+          has = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMergeStmt::part_key_has_auto_inc(bool &has) const
+{
+  int ret = OB_SUCCESS;
+  has = false;
+  for (int64_t i = 0; OB_SUCCESS == ret && i < table_info_.column_exprs_.count(); ++i) {
+    ObColumnRefRawExpr *col_expr = table_info_.column_exprs_.at(i);
+    if (IS_SHADOW_COLUMN(col_expr->get_column_id())) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_base_column(this, col_expr))) {
+      LOG_WARN("failed to get base column", K(ret));
+    } else if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if ((col_expr->is_table_part_key_column() || col_expr->is_table_part_key_org_column()) &&
+               col_expr->is_auto_increment()) {
+      has = true;
+      break;
+    }
   }
 
   return ret;
 }
 
-int ObMergeStmt::replace_inner_stmt_expr(
-    const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs)
+int ObMergeStmt::part_key_has_subquery(bool &has) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, match_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, update_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, insert_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, delete_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, rowkey_exprs_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
+  has = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has && i < table_info_.values_desc_.count(); i++) {
+    ObColumnRefRawExpr *column_expr = NULL;
+    if (OB_ISNULL(column_expr = table_info_.values_desc_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (IS_SHADOW_COLUMN(column_expr->get_column_id())) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_base_column(this, column_expr))) {
+      LOG_WARN("failed to get base column", K(ret));
+    } else if (OB_ISNULL(column_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (column_expr->is_table_part_key_column() || column_expr->is_table_part_key_org_column()) {
+      for (int64_t j = i; OB_SUCC(ret) && !has && j < table_info_.values_vector_.count();
+           j += table_info_.values_desc_.count()) {
+        if (table_info_.values_vector_.at(j)->has_flag(CNT_SUB_QUERY)
+            || table_info_.values_vector_.at(j)->has_flag(CNT_DYNAMIC_PARAM)) {
+          has = true;
+        }
+      }
+    }
   }
   return ret;
 }
 
-int ObMergeStmt::add_rowkey_column_expr(ObColumnRefRawExpr* column_expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(rowkey_exprs_.push_back(column_expr))) {
-    LOG_WARN("fail to push column expr", KPC(column_expr), K(ret));
-  }
-  return ret;
-}
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//common

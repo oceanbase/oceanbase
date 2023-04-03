@@ -11,42 +11,48 @@
  */
 
 #include <gtest/gtest.h>
+#define private public
+#define protected public
 #include "sql/ob_sql_init.h"
 #include "sql/engine/aggregate/ob_merge_groupby.h"
 #include "sql/engine/aggregate/ob_aggregate_test_utils.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::blocksstable;
+static ObSimpleMemLimitGetter getter;
 
-class ObMergeGroupbyTest : public TestDataFilePrepare {
+class ObMergeGroupbyTest: public TestDataFilePrepare
+{
 public:
   ObMergeGroupbyTest();
   virtual ~ObMergeGroupbyTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObMergeGroupbyTest(const ObMergeGroupbyTest& other);
-  ObMergeGroupbyTest& operator=(const ObMergeGroupbyTest& other);
-
+  ObMergeGroupbyTest(const ObMergeGroupbyTest &other);
+  ObMergeGroupbyTest& operator=(const ObMergeGroupbyTest &other);
 private:
   // data members
 };
 
-ObMergeGroupbyTest::ObMergeGroupbyTest() : TestDataFilePrepare("TestDisk_mergegroupby", 2 << 20, 5000)
-{}
+ObMergeGroupbyTest::ObMergeGroupbyTest() : TestDataFilePrepare(&getter,
+                                                               "TestDisk_mergegroupby", 2<<20, 5000)
+{
+}
 
 ObMergeGroupbyTest::~ObMergeGroupbyTest()
-{}
+{
+}
 
 void ObMergeGroupbyTest::SetUp()
 {
   TestDataFilePrepare::SetUp();
   int ret = ObTmpFileManager::get_instance().init();
-  ASSERT_EQ(OB_SUCCESS, ret);
+	ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 void ObMergeGroupbyTest::TearDown()
@@ -54,20 +60,19 @@ void ObMergeGroupbyTest::TearDown()
   ObTmpFileManager::get_instance().destroy();
   TestDataFilePrepare::TearDown();
 }
-class TestMergeGroupBy : public ObMergeGroupBy {
+class TestMergeGroupBy : public ObMergeGroupBy
+{
 public:
-  TestMergeGroupBy() : ObMergeGroupBy(alloc_)
-  {}
-  ~TestMergeGroupBy()
-  {}
+  TestMergeGroupBy() : ObMergeGroupBy(alloc_) {}
+  ~TestMergeGroupBy() {}
 };
 
 TEST_F(ObMergeGroupbyTest, test_utf8mb4_bin_agg)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   bool is_distinct = false;
   bool is_number = false;
@@ -76,7 +81,7 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_bin_agg)
   ObCollationType group_cs_type = CS_TYPE_INVALID;
 
   TestAggregateFactory::init(ctx, merge_groupby, col_count, is_distinct, is_number, agg_cs_type, group_cs_type);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL("r"), COL(1));
   ADD_ROW(fake_table, COL(2), COL("s"), COL(1));
   ADD_ROW(fake_table, COL(3), COL("t"), COL(1));
@@ -89,7 +94,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_bin_agg)
   ADD_ROW(result_table, COL(0), COL(0), COL(0), COL(4), COL("ß"), COL("r"));
 
   TestAggregateFactory::open_operator(ctx, merge_groupby);
-  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby, col_count, merge_groupby.get_column_count(), agg_cs_type);
+  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby,
+                col_count, merge_groupby.get_column_count(), agg_cs_type);
   TestAggregateFactory::close_operator(ctx, merge_groupby);
 }
 
@@ -97,8 +103,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   bool is_distinct = false;
   bool is_number = false;
@@ -107,7 +113,7 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg)
   ObCollationType group_cs_type = CS_TYPE_INVALID;
 
   TestAggregateFactory::init(ctx, merge_groupby, col_count, is_distinct, is_number, agg_cs_type, group_cs_type);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL("r"), COL(1));
   ADD_ROW(fake_table, COL(2), COL("s"), COL(1));
   ADD_ROW(fake_table, COL(3), COL("t"), COL(1));
@@ -120,7 +126,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg)
   ADD_ROW(result_table, COL(0), COL(0), COL(0), COL(4), COL("t"), COL("r"));
 
   TestAggregateFactory::open_operator(ctx, merge_groupby);
-  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby, col_count, merge_groupby.get_column_count(), agg_cs_type);
+  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby,
+                col_count, merge_groupby.get_column_count(), agg_cs_type);
   TestAggregateFactory::close_operator(ctx, merge_groupby);
 }
 
@@ -128,8 +135,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_group)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   bool is_distinct = false;
   bool is_number = true;
@@ -138,7 +145,7 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_group)
   ObCollationType group_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
 
   TestAggregateFactory::init(ctx, merge_groupby, col_count, is_distinct, is_number, agg_cs_type, group_cs_type);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL(2), COL("ß"));
   ADD_ROW(fake_table, COL(2), COL(4), COL("s"));
   ADD_ROW(fake_table, COL(3), COL(6), COL("ß"));
@@ -146,7 +153,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_group)
   ADD_ROW(result_table, COL(0), COL(0), COL(0), COL(4), COL(8), COL(2), COL(20.0), COL(5.0));
 
   TestAggregateFactory::open_operator(ctx, merge_groupby);
-  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby, col_count, merge_groupby.get_column_count(), agg_cs_type);
+  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby,
+                col_count, merge_groupby.get_column_count(), agg_cs_type);
   TestAggregateFactory::close_operator(ctx, merge_groupby);
 }
 
@@ -154,8 +162,8 @@ TEST_F(ObMergeGroupbyTest, test_gutf8mb4_bin_agg_distinct)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   bool is_distinct = true;
   bool is_number = false;
@@ -164,7 +172,7 @@ TEST_F(ObMergeGroupbyTest, test_gutf8mb4_bin_agg_distinct)
   ObCollationType group_cs_type = CS_TYPE_INVALID;
 
   TestAggregateFactory::init(ctx, merge_groupby, col_count, is_distinct, is_number, agg_cs_type, group_cs_type);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL("r"), COL(1));
   ADD_ROW(fake_table, COL(2), COL("s"), COL(1));
   ADD_ROW(fake_table, COL(3), COL("t"), COL(1));
@@ -177,7 +185,8 @@ TEST_F(ObMergeGroupbyTest, test_gutf8mb4_bin_agg_distinct)
   ADD_ROW(result_table, COL(0), COL(0), COL(0), COL(4), COL("ß"), COL("r"), COL(4));
 
   TestAggregateFactory::open_operator(ctx, merge_groupby);
-  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby, col_count, merge_groupby.get_column_count(), agg_cs_type);
+  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby,
+                col_count, merge_groupby.get_column_count(), agg_cs_type);
   TestAggregateFactory::close_operator(ctx, merge_groupby);
 }
 
@@ -185,8 +194,8 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg_distinct)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   bool is_distinct = true;
   bool is_number = false;
@@ -195,7 +204,7 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg_distinct)
   ObCollationType group_cs_type = CS_TYPE_INVALID;
 
   TestAggregateFactory::init(ctx, merge_groupby, col_count, is_distinct, is_number, agg_cs_type, group_cs_type);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL("r"), COL(1));
   ADD_ROW(fake_table, COL(2), COL("s"), COL(1));
   ADD_ROW(fake_table, COL(3), COL("t"), COL(1));
@@ -208,21 +217,23 @@ TEST_F(ObMergeGroupbyTest, test_utf8mb4_genaral_ci_agg_distinct)
   ADD_ROW(result_table, COL(0), COL(0), COL(0), COL(3), COL("t"), COL("r"), COL(3));
 
   TestAggregateFactory::open_operator(ctx, merge_groupby);
-  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby, col_count, merge_groupby.get_column_count(), agg_cs_type);
+  EXCEPT_RESULT_WITH_IDX(ctx, result_table, merge_groupby,
+                col_count, merge_groupby.get_column_count(), agg_cs_type);
   TestAggregateFactory::close_operator(ctx, merge_groupby);
 }
+
 
 TEST_F(ObMergeGroupbyTest, test_groupby_without_distinct)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
 
   TestAggregateFactory::init(ctx, merge_groupby, 3, false);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL(1), COL(1));
   ADD_ROW(fake_table, COL(2), COL(2), COL(1));
   ADD_ROW(fake_table, COL(3), COL(2), COL(1));
@@ -244,13 +255,13 @@ TEST_F(ObMergeGroupbyTest, test_groupby_without_distinct1)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = TestAggregateFactory::get_fake_table();
-  ObFakeTable& result_table = TestAggregateFactory::get_result_table();
+  ObFakeTable &fake_table = TestAggregateFactory::get_fake_table();
+  ObFakeTable &result_table = TestAggregateFactory::get_result_table();
   TestMergeGroupBy merge_groupby;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
 
   TestAggregateFactory::init(ctx, merge_groupby, 3, false);
-  // fake table: index_col(primary key), aggr_col, groupby_col
+  //fake table: index_col(primary key), aggr_col, groupby_col
   ADD_ROW(fake_table, COL(1), COL(3), COL(1));
   ADD_ROW(fake_table, COL(2), COL(null), COL(2));
   ADD_ROW(fake_table, COL(3), COL(null), COL(2));
@@ -393,11 +404,11 @@ TEST_F(ObMergeGroupbyTest, test_invalid_argument1)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_global_memory_pool();
   init_sql_factories();
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

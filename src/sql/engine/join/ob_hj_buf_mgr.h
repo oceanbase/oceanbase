@@ -16,16 +16,22 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 
-namespace oceanbase {
-namespace sql {
-namespace join {
+namespace oceanbase
+{
+namespace sql
+{
+namespace join
+{
 
-class ObHJBufMgr : public ObSqlMemoryCallback {
+class ObHJBufMgr : public ObSqlMemoryCallback
+{
 public:
   ObHJBufMgr() :
     reserve_memory_size_(0), pre_total_alloc_size_(0), total_alloc_size_(0),
     page_size_(-1), dumped_size_(0)
   {}
+
+  ~ObHJBufMgr() {}
 
   inline void set_page_size(int64_t page_size) { page_size_ = page_size; }
   inline int64_t get_page_size() { return page_size_; }
@@ -62,7 +68,7 @@ public:
   OB_INLINE virtual void alloc(int64_t mem)
   {
     total_alloc_size_ += mem;
-  }
+  }  
   OB_INLINE virtual void free(int64_t mem)
   {
     total_alloc_size_ -= mem;
@@ -80,7 +86,6 @@ public:
   {
     return reserve_memory_size_ * RATIO / 100 < total_alloc_size_;
   }
-
 private:
   const static int64_t RATIO = 80;
   int64_t reserve_memory_size_;
@@ -90,8 +95,11 @@ private:
   int64_t dumped_size_;
 };
 
-}  // namespace join
-}  // namespace sql
-}  // namespace oceanbase
+
+}
+}
+}
 
 #endif /* _OB_HJ_BUF_MGR_H */
+
+

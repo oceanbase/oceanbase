@@ -18,47 +18,44 @@
 #include "lib/lock/ob_lock_guard.h"
 #include "lib/lock/ob_latch.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 class ObMutex {
 public:
-  explicit ObMutex(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX) : latch_(), latch_id_(latch_id)
-  {}
-  ~ObMutex()
-  {}
-  inline int lock()
+  explicit ObMutex(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX)
+      : latch_(), latch_id_(latch_id)
   {
-    return latch_.lock(latch_id_);
   }
-  inline int trylock()
-  {
-    return latch_.try_lock(latch_id_);
-  }
-  inline int unlock()
-  {
-    return latch_.unlock();
-  }
-
+  ~ObMutex() { }
+  inline int lock() { return latch_.lock(latch_id_); }
+  inline int trylock() { return latch_.try_lock(latch_id_); }
+  inline int unlock() { return latch_.unlock(); }
+  void enable_record_stat(bool enable) { latch_.enable_record_stat(enable); }
+  void set_latch_id(const uint32_t latch_id) { latch_id_ = latch_id; }
 private:
   common::ObLatchMutex latch_;
   uint32_t latch_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMutex);
 };
 
 typedef ObLockGuard<ObMutex> ObMutexGuard;
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+} // end of namespace lib
+} // end of namespace oceanbase
+
 
 // belows for proxy
 typedef pthread_mutex_t ObMutex0;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-static inline int mutex_init(ObMutex0* m)
+static inline int mutex_init(ObMutex0 *m)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 != pthread_mutex_init(m, NULL))) {
@@ -68,12 +65,12 @@ static inline int mutex_init(ObMutex0* m)
   return ret;
 }
 
-static inline int mutex_destroy(ObMutex0* m)
+static inline int mutex_destroy(ObMutex0 *m)
 {
   return (0 == pthread_mutex_destroy(m)) ? OB_SUCCESS : OB_ERR_SYS;
 }
 
-static inline int mutex_acquire(ObMutex0* m)
+static inline int mutex_acquire(ObMutex0 *m)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 != pthread_mutex_lock(m))) {
@@ -83,7 +80,7 @@ static inline int mutex_acquire(ObMutex0* m)
   return ret;
 }
 
-static inline int mutex_release(ObMutex0* m)
+static inline int mutex_release(ObMutex0 *m)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 != pthread_mutex_unlock(m))) {
@@ -93,12 +90,12 @@ static inline int mutex_release(ObMutex0* m)
   return ret;
 }
 
-static inline bool mutex_try_acquire(ObMutex0* m)
+static inline bool mutex_try_acquire(ObMutex0 *m)
 {
   return (0 == pthread_mutex_trylock(m));
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
-#endif  // OB_MUTEX_H_
+#endif // OB_MUTEX_H_

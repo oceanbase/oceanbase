@@ -16,37 +16,44 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_to_temporal_base.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprStrToDate : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprStrToDate : public ObFuncExprOperator
+{
 public:
-  explicit ObExprStrToDate(common::ObIAllocator& alloc);
+  explicit  ObExprStrToDate(common::ObIAllocator &alloc);
   virtual ~ObExprStrToDate();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result2(common::ObObj& result, const common::ObObj& date, const common::ObObj& format,
-      common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &date,
+                                ObExprResType &format,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprStrToDate);
 };
 
-class ObExprOracleToDate : public ObExprToTemporalBase {
+class ObExprOracleToDate : public ObExprToTemporalBase
+{
 public:
-  explicit ObExprOracleToDate(common::ObIAllocator& alloc) : ObExprToTemporalBase(alloc, T_FUN_SYS_TO_DATE, N_TO_DATE)
+  explicit ObExprOracleToDate(common::ObIAllocator &alloc) :
+    ObExprToTemporalBase(alloc, T_FUN_SYS_TO_DATE, N_TO_DATE)
   {}
-  virtual ~ObExprOracleToDate()
-  {}
+  virtual ~ObExprOracleToDate() {}
 
-  int set_my_result_from_ob_time(common::ObExprCtx& expr_ctx, common::ObTime& ob_time, common::ObObj& result) const;
+  int set_my_result_from_ob_time(common::ObExprCtx &expr_ctx,
+                                 common::ObTime &ob_time,
+                                 common::ObObj &result) const;
   common::ObObjType get_my_target_obj_type() const
   {
     return common::ObDateTimeType;
   }
+
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_STR_TO_DATE_H_
+} //sql
+} //oceanbase
+#endif //OCEANBASE_SQL_OB_EXPR_STR_TO_DATE_H_

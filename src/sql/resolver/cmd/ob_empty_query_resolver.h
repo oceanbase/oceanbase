@@ -13,19 +13,23 @@
 #ifndef OCEANBASE_SQL_RESOLVER_CMD_EMPTY_QUERY_RESOLVER_H_
 #define OCEANBASE_SQL_RESOLVER_CMD_EMPTY_QUERY_RESOLVER_H_
 #include "sql/resolver/cmd/ob_cmd_resolver.h"
-namespace oceanbase {
-namespace sql {
-class ObEmptyQueryResolver : public ObCMDResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObEmptyQueryResolver : public ObCMDResolver
+{
 public:
-  explicit ObEmptyQueryResolver(ObResolverParams& params) : ObCMDResolver(params)
-  {}
+  explicit ObEmptyQueryResolver(ObResolverParams &params) : ObCMDResolver(params)
+  {
+  }
   virtual ~ObEmptyQueryResolver()
-  {}
-  virtual int resolve(const ParseNode& parse_tree);
-
+  {
+  }
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyQueryResolver);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /*OCEANBASE_RESOLVER_CMD_EMPTY_QUERY_RESOLVER_H_*/

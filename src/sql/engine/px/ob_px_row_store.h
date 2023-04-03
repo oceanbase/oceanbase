@@ -23,236 +23,171 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObDtlMsgReader : public dtl::ObDtlMsgIterator {
+class ObReceiveRowReader
+{
 public:
-  virtual void set_iterator_end() = 0;
-  virtual bool has_next() = 0;
-
-  virtual void reset() = 0;
-  virtual bool is_inited() = 0;
-  virtual bool is_iter_end() = 0;
-  virtual int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) = 0;
-  virtual void set_end() = 0;
-};
-
-class ObPxNewRowIterator : public ObDtlMsgReader {
-public:
-  ObPxNewRowIterator();
-  virtual ~ObPxNewRowIterator();
-
-  int get_next_row(common::ObNewRow& row) override;
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override
+  ObReceiveRowReader() :
+      recv_head_(NULL),
+      recv_tail_(NULL),
+      iterated_buffers_(NULL),
+      cur_iter_pos_(0),
+      cur_iter_rows_(0),
+      recv_list_rows_(0),
+      datum_iter_(NULL),
+      row_iter_(NULL)
   {
-    UNUSED(exprs);
-    UNUSED(eval_ctx);
-    return common::OB_ERR_UNEXPECTED;
   }
-  void reset() override;
-
-  bool is_inited() override
+  ~ObReceiveRowReader()
   {
-    return is_inited_;
-  }
-  void set_inited()
-  {
-    is_inited_ = true;
-  }
-  bool has_next() override
-  {
-    return rows_ > 0 && row_store_it_.has_next();
-  }
-  bool is_eof()
-  {
-    return is_eof_;
+    reset();
   }
 
-  bool is_iter_end() override
+  int add_buffer(dtl::ObDtlLinkedBuffer &buf, bool &transferred);
+
+  bool has_more() const
   {
-    return is_iter_end_;
+    return (recv_list_rows_ > cur_iter_rows_)
+        || (NULL != datum_iter_ && datum_iter_->is_valid() && datum_iter_->has_next())
+        || (NULL != row_iter_ && row_iter_->is_valid() && row_iter_->has_next());
   }
 
-  int64_t get_row_cnt()
+  // return left rows for non interm result.
+  // For interm result (%datum_iter_ or %row_iter_ not null):
+  //   return 0 for no more rows, return INT64_MAX for has more rows.
+  int64_t left_rows() const
   {
-    return row_store_.get_row_cnt();
+    int64_t rows = 0;
+    if (NULL != datum_iter_) {
+      rows = (datum_iter_->is_valid() && datum_iter_->has_next()) ? INT64_MAX : 0;
+    } else if (OB_UNLIKELY(NULL != row_iter_)) {
+      rows = (row_iter_->is_valid() && row_iter_->has_next()) ? INT64_MAX : 0;
+    } else {
+      rows = recv_list_rows_ - cur_iter_rows_;
+    }
+    return rows;
   }
 
-  void set_iterator_end() override;
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
-  void set_rows(int64_t rows)
-  {
-    rows_ = rows;
-  }
-  ObChunkRowStore::Iterator& get_row_store_it()
-  {
-    return row_store_it_;
-  }
-  void set_end() override;
+  static int to_expr(const ObChunkDatumStore::StoredRow *srow,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                     const ObIArray<ObExpr*> &exprs,
+                     ObEvalCtx &eval_ctx);
+
+  static int attach_rows(const common::ObIArray<ObExpr*> &exprs,
+                          const ObIArray<ObExpr*> &dynamic_const_exprs,
+                          ObEvalCtx &eval_ctx,
+                          const ObChunkDatumStore::StoredRow **srows,
+                          const int64_t read_rows);
+
+  // get row interface for PX_CHUNK_ROW
+  int get_next_row(common::ObNewRow &row);
+
+  // get row interface for PX_DATUM_ROW
+  int get_next_row(const ObIArray<ObExpr*> &exprs,
+                   const ObIArray<ObExpr*> &dynamic_const_exprs,
+                   ObEvalCtx &eval_ctx);
+
+  // get next batch rows
+  // set read row count to %read_rows
+  // return OB_ITER_END and set %read_rows to zero for iterate end.
+  int get_next_batch(const ObIArray<ObExpr*> &exprs,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                     ObEvalCtx &eval_ctx,
+                     const int64_t max_rows, int64_t &read_rows,
+                     const ObChunkDatumStore::StoredRow **srows);
+
+  void reset();
 
 private:
-  bool is_eof_;
-  bool is_iter_end_;
-  int64_t rows_;
-  ObChunkRowStore row_store_;
-  ObChunkRowStore::Iterator row_store_it_;
-  bool is_inited_;
-};
+  template <typename BLOCK, typename ROW>
+  // return NULL for iterate end.
+  const ROW *next_store_row();
 
-class ObPxDatumRowIterator : public ObDtlMsgReader {
-public:
-  ObPxDatumRowIterator();
-  virtual ~ObPxDatumRowIterator();
-
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override;
-  int get_next_row(common::ObNewRow& row) override
+  void move_to_iterated(const int64_t rows);
+  void free(dtl::ObDtlLinkedBuffer *buf);
+  inline void free_iterated_buffers()
   {
-    UNUSED(row);
-    return common::OB_ERR_UNEXPECTED;
+    if (NULL != iterated_buffers_) {
+      free_buffer_list(iterated_buffers_);
+      iterated_buffers_ = NULL;
+    }
   }
-  void reset() override;
-
-  bool is_inited() override
-  {
-    return is_inited_;
-  }
-  void set_inited()
-  {
-    is_inited_ = true;
-  }
-  bool has_next() override
-  {
-    return rows_ > 0 && datum_store_it_.has_next();
-  }
-  bool is_eof()
-  {
-    return is_eof_;
-  }
-
-  bool is_iter_end() override
-  {
-    return is_iter_end_;
-  }
-
-  int64_t get_row_cnt()
-  {
-    return datum_store_.get_row_cnt();
-  }
-
-  void set_iterator_end() override;
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
-  void set_rows(int64_t rows)
-  {
-    rows_ = rows;
-  }
-  ObChunkDatumStore::Iterator& get_row_store_it()
-  {
-    return datum_store_it_;
-  }
-  void set_end() override;
+  void free_buffer_list(dtl::ObDtlLinkedBuffer *buf);
 
 private:
-  bool is_eof_;
-  bool is_iter_end_;
-  int64_t rows_;
-  ObChunkDatumStore datum_store_;
-  ObChunkDatumStore::Iterator datum_store_it_;
-  bool is_inited_;
+  dtl::ObDtlLinkedBuffer *recv_head_;
+  dtl::ObDtlLinkedBuffer *recv_tail_;
+
+  dtl::ObDtlLinkedBuffer *iterated_buffers_;
+
+  int64_t cur_iter_pos_;
+  int64_t cur_iter_rows_;
+  int64_t recv_list_rows_;
+
+  // store iterator for interm result iteration.
+  ObChunkDatumStore::Iterator *datum_iter_;
+  ObChunkRowStore::Iterator *row_iter_;
 };
 
-class ObPxNewRow : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW> {
+class ObPxNewRow
+  : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW>
+{
   OB_UNIS_VERSION_V(1);
-
 public:
   // for deserialize
   ObPxNewRow()
-      : des_row_buf_(nullptr),
-        des_row_buf_size_(0),
-        row_(nullptr),
-        exprs_(nullptr),
-        row_cell_count_(0),
-        iter_(nullptr),
-        type_(dtl::ObDtlMsgType::PX_NEW_ROW)
-  {}
+    : des_row_buf_(nullptr),
+      des_row_buf_size_(0),
+      row_(nullptr),
+      exprs_(nullptr),
+      row_cell_count_(0),
+      type_(dtl::ObDtlMsgType::PX_NEW_ROW) {}
   // for serialize
-  ObPxNewRow(const common::ObNewRow& row)
-      : des_row_buf_(nullptr),
-        des_row_buf_size_(0),
-        row_(&row),
-        exprs_(nullptr),
-        row_cell_count_(row.get_count()),
-        iter_(nullptr),
-        type_(dtl::ObDtlMsgType::PX_CHUNK_ROW)
-  {}
-  ObPxNewRow(const common::ObIArray<ObExpr*>& exprs)
-      : des_row_buf_(nullptr),
-        des_row_buf_size_(0),
-        row_(nullptr),
-        exprs_(&exprs),
-        row_cell_count_(exprs.count()),
-        iter_(nullptr),
-        type_(dtl::ObDtlMsgType::PX_DATUM_ROW)
-  {}
-  ~ObPxNewRow()
-  {}
+  ObPxNewRow(const common::ObNewRow &row)
+    : des_row_buf_(nullptr),
+      des_row_buf_size_(0),
+      row_(&row),
+      exprs_(nullptr),
+      row_cell_count_(row.get_count()),
+      type_(dtl::ObDtlMsgType::PX_CHUNK_ROW)
+      {}
+  ObPxNewRow(const common::ObIArray<ObExpr*> &exprs)
+    : des_row_buf_(nullptr),
+      des_row_buf_size_(0),
+      row_(nullptr),
+      exprs_(&exprs),
+      row_cell_count_(exprs.count()),
+      type_(dtl::ObDtlMsgType::PX_DATUM_ROW)
+      {}
+  ~ObPxNewRow() { }
   void set_eof_row();
-  void reset()
-  {}
-  virtual OB_INLINE void set_iter(dtl::ObDtlMsgIterator* iter)
-  {
-    iter_ = iter;
-  }
-  virtual OB_INLINE bool has_iter()
-  {
-    return nullptr != iter_;
-  }
-  virtual OB_INLINE bool has_next()
-  {
-    return nullptr != iter_ && iter_->has_next();
-  }
-  virtual OB_INLINE void set_iterator_end()
-  {
-    if (nullptr != iter_) {
-      iter_->set_iterator_end();
-    }
-  }
+  void reset() {}
 
-  OB_INLINE const common::ObNewRow* get_row() const
-  {
-    return row_;
-  }
-  OB_INLINE const common::ObIArray<ObExpr*>* get_exprs() const
-  {
-    return exprs_;
-  }
-  virtual int get_row(common::ObNewRow& row);
-  virtual int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx);
-  int deep_copy(common::ObIAllocator& alloc, const ObPxNewRow& other);
-  int get_row_from_serialization(ObNewRow& row);
+  OB_INLINE const common::ObNewRow* get_row() const { return row_; }
+  OB_INLINE const common::ObIArray<ObExpr*>* get_exprs() const { return exprs_; }
+  int deep_copy(common::ObIAllocator &alloc, const ObPxNewRow &other);
+  int get_row_from_serialization(ObNewRow &row);
   inline dtl::ObDtlMsgType get_data_type() const
-  {
-    return type_;
-  }
+  { return type_; }
   inline void set_data_type(const dtl::ObDtlMsgType type)
-  {
-    type_ = type;
-  }
+  {  type_ = type; }
   TO_STRING_KV(K_(row_cell_count), K_(des_row_buf_size));
-
 private:
   static const int64_t EOF_ROW_FLAG = -1;
-  char* des_row_buf_;
-  int64_t des_row_buf_size_;
-  const common::ObNewRow* row_;
-  const common::ObIArray<ObExpr*>* exprs_;
-  // When row_cell_count_ takes a special value of -1, it means EOFRow, get_row returns OB_ITER_END
-  int64_t row_cell_count_;
-  dtl::ObDtlMsgIterator* iter_;
+  char *des_row_buf_; // 反序列化时用于指向 row_ 的序列化内容
+  int64_t des_row_buf_size_; // 反序列化时用于记录 row_ 的序列化内容的 buffer 长度，get_row 时需要参考
+  const common::ObNewRow *row_; // 序列化之前传入 row_，用于序列化
+  const common::ObIArray<ObExpr*> *exprs_;
+  int64_t row_cell_count_; // row_cell_count_ 取特殊值 -1 时表示 EOFRow，get_row 返回 OB_ITER_END
   dtl::ObDtlMsgType type_;
   DISALLOW_COPY_AND_ASSIGN(ObPxNewRow);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_ENGINE_PX_NEW_ROW_H_ */
 //// end of header file
+

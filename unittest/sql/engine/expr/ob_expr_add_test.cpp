@@ -19,39 +19,42 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprAddTest : public ::testing::Test {
+class ObExprAddTest: public ::testing::Test
+{
 public:
   ObExprAddTest();
   virtual ~ObExprAddTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprAddTest(const ObExprAddTest& other);
-  ObExprAddTest& operator=(const ObExprAddTest& other);
-
+  ObExprAddTest(const ObExprAddTest &other);
+  ObExprAddTest& operator=(const ObExprAddTest &other);
 protected:
   // data members
 };
 
 ObExprAddTest::ObExprAddTest()
-{}
+{
+}
 
 ObExprAddTest::~ObExprAddTest()
-{}
+{
+}
 
 void ObExprAddTest::SetUp()
-{}
+{
+}
 
 void ObExprAddTest::TearDown()
-{}
+{
+}
 
 #define R(t1, v1, t2, v2, rt, res) ARITH_EXPECT_OBJ(ObExprAdd, &buf, calc, t1, v1, t2, v2, rt, res)
 #define FE(t1, v1, t2, v2) ARITH_EXPECT_ERROR(ObExprAdd, &buf, calc, t1, v1, t2, v2)
 #define D_PRESCISION 10
-#define DEQ(v1, v2) EXPECT_TRUE(double_cmp_given_precision((v1), (v2), D_PRESCISION) == 0)
-#define DNEQ(v1, v2) EXPECT_TRUE(double_cmp_given_precision((v1), (v2), D_PRESCISION) != 0)
+#define DEQ(v1, v2) EXPECT_TRUE(double_cmp_given_precision((v1), (v2), D_PRESCISION)==0)
+#define DNEQ(v1, v2) EXPECT_TRUE(double_cmp_given_precision((v1), (v2), D_PRESCISION)!=0)
 #define RD(t1, v1, t2, v2, res, p) ARITH_EXPECT_OBJ_DOUBLE(ObExprAdd, &buf, calc, t1, v1, t2, v2, res, p)
 
 TEST_F(ObExprAddTest, int_uint_test)
@@ -79,9 +82,9 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(int, INT64_MAX, int, -1, int, INT64_MAX - 1);
 
   // int_uint
-  R(int, INT64_MAX, uint64, 0, uint64, static_cast<uint64_t> INT64_MAX);
-  R(int, INT64_MAX, uint64, static_cast<uint64_t> INT64_MAX + 1, uint64, UINT64_MAX);
-  R(int, INT64_MIN, uint64, static_cast<uint64_t> INT64_MAX + 1, int, 0);
+  R(int, INT64_MAX, uint64, 0, uint64, static_cast<uint64_t>INT64_MAX);
+  R(int, INT64_MAX, uint64, static_cast<uint64_t>INT64_MAX + 1, uint64, UINT64_MAX);
+  R(int, INT64_MIN, uint64, static_cast<uint64_t>INT64_MAX + 1, int, 0);
   R(int, 0, uint64, 0, uint64, 0);
   R(int, 0, uint64, UINT64_MAX, uint64, UINT64_MAX);
 
@@ -90,7 +93,7 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(uint64, UINT64_MAX, uint64, 0, uint64, UINT64_MAX);
   R(uint64, UINT64_MAX - 1, uint64, 1, uint64, UINT64_MAX);
 
-  // smallint--tinyint
+  //smallint--tinyint
   R(tinyint, -128, smallint, -32768, int, -32896);
   R(tinyint, -128, smallint, 32767, int, 32639);
   R(tinyint, -5, smallint, -12, int, -17);
@@ -102,7 +105,7 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(tinyint, 127, smallint, -32768, int, -32641);
   R(tinyint, 127, smallint, 32767, int, 32894);
 
-  // uint--smallint
+  //uint--smallint
   R(int, 1, uint64, 1u, uint64, 2u);
   R(int, 5, uint64, 5u, uint64, 10u);
   R(int, 12, uint64, 5u, uint64, 17u);
@@ -110,8 +113,8 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(int, 32767, uint64, 32767u, uint64, 65534u);
   R(int, 4294967295, uint64, 32767u, uint64, 4295000062u);
 
-  // type promotion test
-  // XX->int32->int
+  //type promotion test
+  //XX->int32->int
   R(int32, INT32_MAX, int32, INT32_MAX, int, 4294967294);
   R(int32, INT32_MAX, int32, 1, int, 2147483648);
   R(int32, INT32_MAX, mediumint, 1, int, 2147483648);
@@ -129,7 +132,7 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(tinyint, INT8_MAX, tinyint, INT8_MAX, int32, INT8_MAX * 2);
   R(tinyint, INT8_MAX, tinyint, 1, int32, INT8_MAX + 1);
 
-  // overflow/underflow
+  //overflow/underflow
   FE(int, INT64_MAX, int, INT64_MAX);
   FE(int, INT64_MAX, int, 1);
   FE(int, INT64_MAX, tinyint, 1);
@@ -143,7 +146,7 @@ TEST_F(ObExprAddTest, int_uint_test)
   FE(uint32, 0, tinyint, -1);
   FE(uint64, 0, tinyint, -1);
 
-  // null
+  //null
   R(tinyint, 42, null, , null, );
   R(smallint, 42, null, , null, );
   R(mediumint, 42, null, , null, );
@@ -169,13 +172,14 @@ TEST_F(ObExprAddTest, int_uint_test)
   R(null, , uint64, 42, null, );
 
   R(null, , null, , null, );
+
 }
 
 TEST_F(ObExprAddTest, float_double_test)
 {
   ObMalloc buf;
 
-  // int -- float
+  //int -- float
   RD(int, -12, float, static_cast<float>(-12.001), -24.0010004, 10);
   RD(int, -12, float, static_cast<float>(-12), -24, 10);
   RD(int, -5, float, static_cast<float>(-12), -17, 10);
@@ -185,7 +189,7 @@ TEST_F(ObExprAddTest, float_double_test)
   RD(int, 5, float, static_cast<float>(5.001), 10.00099993, 10);
   RD(int, 5, float, static_cast<float>(12), 17, 10);
 
-  // int--double
+  //int--double
   RD(int, -12, double, static_cast<double>(-12.001), -24.001, 10);
   RD(int, -12, double, static_cast<double>(-12), -24, 10);
   RD(int, -5, double, static_cast<double>(-12), -17, 10);
@@ -195,22 +199,23 @@ TEST_F(ObExprAddTest, float_double_test)
   RD(int, 5, double, static_cast<double>(5.001), 10.001, 10);
   RD(int, 5, double, static_cast<double>(12), 17, 10);
 
-  RD(smallint, 32767, float, static_cast<float>(123.45), static_cast<double>(32890.4499969), 10);
-  RD(smallint, 0, float, static_cast<float>(123.45), static_cast<double>(123.449996948), 10);
-  RD(smallint, -23, float, static_cast<float>(123.45), static_cast<double>(100.449996948), 10);
-  RD(smallint, 45, float, static_cast<float>(123.45), static_cast<double>(168.449996948), 10);
-  RD(smallint, 32722, float, static_cast<float>(123.45), static_cast<double>(32845.4499969), 10);
-  RD(smallint, -32745, float, static_cast<float>(123.45), static_cast<double>(-32621.5500031), 10);
+  RD(smallint, 32767, float, static_cast<float>(123.45),
+      static_cast<double>(32890.4499969), 10);
+  RD(smallint, 0, float, static_cast<float>(123.45),
+      static_cast<double>(123.449996948), 10);
+  RD(smallint, -23, float, static_cast<float>(123.45),
+      static_cast<double>(100.449996948), 10);
+  RD(smallint, 45, float, static_cast<float>(123.45),
+      static_cast<double>(168.449996948), 10);
+  RD(smallint, 32722, float, static_cast<float>(123.45),
+      static_cast<double>(32845.4499969), 10);
+  RD(smallint, -32745, float, static_cast<float>(123.45),
+      static_cast<double>(-32621.5500031), 10);
 
-  // basic test
+  //basic test
   R(float, static_cast<float>(45645645.67), int, 43243, double, static_cast<double>(45688887));
   R(float, static_cast<float>(34234.34534), uint64, 323121231, double, static_cast<double>(323155465.34375));
-  R(float,
-      static_cast<float>(24343.676),
-      double,
-      static_cast<double>(6767975.232),
-      double,
-      static_cast<double>(6792318.9077812498));
+  R(float, static_cast<float>(24343.676), double, static_cast<double>(6767975.232), double, static_cast<double>(6792318.9077812498));
   R(double, static_cast<double>(354543.5454), int, 3546567, double, static_cast<double>(3901110.5454));
   R(double, static_cast<double>(5765756.68), uint64, 5645743, double, static_cast<double>(11411499.68));
 
@@ -220,106 +225,36 @@ TEST_F(ObExprAddTest, float_double_test)
   R(float, -123.0, float, -123.0, double, -246.0);
 
   // float_int_uint
-  R(float,
-      static_cast<float>(INT64_MIN),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MIN), int, INT64_MIN, double, static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(INT64_MIN), int, 0, double, static_cast<double>(INT64_MIN));
-  R(float,
-      static_cast<float>(INT64_MIN),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(INT64_MIN), int, INT64_MAX, double, static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MAX));
   R(float, 0, int, INT64_MIN, double, static_cast<double>(INT64_MIN));
   R(float, 0, int, 0, double, 0);
   R(float, 0, int, INT64_MAX, double, static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(INT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MAX), int, INT64_MIN, double, static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(INT64_MAX), int, 0, double, static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(INT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MAX), int, INT64_MAX, double, static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), int, INT64_MIN, double, static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(UINT64_MAX), int, 0, double, static_cast<double>(UINT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      uint64,
-      UINT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(UINT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), int, INT64_MAX, double, static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), uint64, UINT64_MAX, double, static_cast<double>(UINT64_MAX) + static_cast<double>(UINT64_MAX));
 
   // double_int_uint
-  R(double,
-      static_cast<double>(INT64_MIN),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MIN), int, INT64_MIN, double, static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(INT64_MIN), int, 0, double, static_cast<double>(INT64_MIN));
-  R(double,
-      static_cast<double>(INT64_MIN),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(INT64_MIN), int, INT64_MAX, double, static_cast<double>(INT64_MIN) + static_cast<double>(INT64_MAX));
   R(double, 0, int, INT64_MIN, double, static_cast<double>(INT64_MIN));
   R(double, 0, int, 0, double, 0);
   R(double, 0, int, INT64_MAX, double, static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(INT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MAX), int, INT64_MIN, double, static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(INT64_MAX), int, 0, double, static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(INT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MAX), int, INT64_MAX, double, static_cast<double>(INT64_MAX) + static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), int, INT64_MIN, double, static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(UINT64_MAX), int, 0, double, static_cast<double>(UINT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      uint64,
-      UINT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) + static_cast<double>(UINT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), int, INT64_MAX, double, static_cast<double>(UINT64_MAX) + static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), uint64, UINT64_MAX, double, static_cast<double>(UINT64_MAX) + static_cast<double>(UINT64_MAX));
 
-  // overflow/underflow
+  //overflow/underflow
   FE(double, 1.79769e+308, double, 1.79769e+308);
   FE(double, 1.79769e+308, double, 1e+303);
   RD(double, 1.79769e+308, double, 1e+302, 1.79769e+308, 6);
@@ -328,7 +263,7 @@ TEST_F(ObExprAddTest, float_double_test)
   FE(double, -1.79769e+308, double, -1e+303);
   RD(double, -1.79769e+308, double, -1e+302, -1.79769e+308, 6);
 
-  // null test
+  //null test
   R(null, , float, static_cast<float>(123.45), null, );
   R(float, static_cast<float>(123.45), null, , null, );
 
@@ -350,7 +285,7 @@ TEST_F(ObExprAddTest, number_test)
   number::ObNumber num246_n;
   num246_n.from("-246", buf);
 
-  // basic test
+  //basic test
   R(number, num123_n, int, -123, number, num246_n);
   R(number, num123_n, int, 123, number, num_zero);
   R(number, num123_p, int, 123, number, num246_p);
@@ -367,9 +302,9 @@ TEST_F(ObExprAddTest, number_test)
   R(number, num123_p, number, num123_p, number, num246_p);
   R(number, num123_n, number, num123_n, number, num246_n);
 
-  // long decimal
-  // precision overflow
-  // value overflow/underflow
+  //long decimal
+  //precision overflow
+  //value overflow/underflow
   number::ObNumber n1, n2, n3;
   n1.from("99999999999999999999999999999999999999999999999999999999999999999", buf);
   n2.from("3", buf);
@@ -378,7 +313,7 @@ TEST_F(ObExprAddTest, number_test)
   n1.from("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", buf);
   n3.from("10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002", buf);
   R(number, n1, number, n2, number, n3);
-  // null test
+  //null test
   R(number, num123_n, null, , null, );
   R(null, , number, num123_n, null, );
 }
@@ -390,7 +325,7 @@ TEST_F(ObExprAddTest, flow_test)
   FE(int, INT64_MAX, int, INT64_MAX);
   FE(int, INT64_MIN, int, -2);
 
-  // int_uint
+  //int_uint
   FE(int, INT64_MAX, uint64, UINT64_MAX);
   FE(uint64, UINT64_MAX, int, 2);
   FE(int, INT64_MIN, uint64, 5);
@@ -420,26 +355,26 @@ TEST_F(ObExprAddTest, int_string_test)
   R(int, 13966, varchar, "-3430", double, 10536);
 
   // int_string alpha
-  // R(int, 10, varchar, "a0.22222", double, 10);
-  // R(int, 10, varchar, "0.2a2222", double, 10.2);
-  // R(int, 10, varchar, "-0.2a2222", double, 9.8);
-  // R(int, 10, varchar, "-3430a", double, -3420);
-  // R(int, 10, varchar, "-b3430a", double, 10);
-  // R(int, 10, varchar, "-.b3430a", double, 10);
-  // R(int, 10, varchar, "10b.3430a", double, 20);
-  // R(int, 10, varchar, "10-b.3430a", double, 20);
+  //R(int, 10, varchar, "a0.22222", double, 10);
+  //R(int, 10, varchar, "0.2a2222", double, 10.2);
+  //R(int, 10, varchar, "-0.2a2222", double, 9.8);
+  //R(int, 10, varchar, "-3430a", double, -3420);
+  //R(int, 10, varchar, "-b3430a", double, 10);
+  //R(int, 10, varchar, "-.b3430a", double, 10);
+  //R(int, 10, varchar, "10b.3430a", double, 20);
+  //R(int, 10, varchar, "10-b.3430a", double, 20);
 
   // uint_string
-  // R(uint64, 10, varchar, "a0.22222", double, 10);
+  //R(uint64, 10, varchar, "a0.22222", double, 10);
   ////R(uint64, 10, varchar, "0.2a2222", double, 10.2);
-  // R(uint64, 10, varchar, "-0.2a2222", double, 9.8);
-  // R(uint64, 10, varchar, "-3430a", double, -3420);
-  // R(uint64, 10, varchar, "-b3430a", double, 10);
-  // R(uint64, 10, varchar, "-.b3430a", double, 10);
-  // R(uint64, 10, varchar, "10b.3430a", double, 20);
-  // R(uint64, 10, varchar, "10-b.3430a", double, 20);
+  //R(uint64, 10, varchar, "-0.2a2222", double, 9.8);
+  //R(uint64, 10, varchar, "-3430a", double, -3420);
+  //R(uint64, 10, varchar, "-b3430a", double, 10);
+  //R(uint64, 10, varchar, "-.b3430a", double, 10);
+  //R(uint64, 10, varchar, "10b.3430a", double, 20);
+  //R(uint64, 10, varchar, "10-b.3430a", double, 20);
 
-  // null test
+  //null test
   R(varchar, "1234", null, , null, );
   R(null, , varchar, "1234", null, );
 }
@@ -455,31 +390,33 @@ TEST_F(ObExprAddTest, double_string_test)
   R(double, 321.2834, varchar, "-23.376", double, 297.9074);
 
   // double_string alpha
-  // R(double, 31.33, varchar, "-23a.376", double, 8.329999999999998);
-  // R(double, 31.33, varchar, "a-23a.376", double, 31.33);
-  // R(double, -209.33, varchar, "-6.2c02", double, -215.53);
-  /// R(double, 1209.33, varchar, "-.a6.2c02", double, 1209.33);
-  // R(double, 1209.33, varchar, "-0.a6.2c02", double, 1209.33);
-  // R(double, 1209.33, varchar, "-01.a6.2c02", double, 1208.33);
+  //R(double, 31.33, varchar, "-23a.376", double, 8.329999999999998);
+  //R(double, 31.33, varchar, "a-23a.376", double, 31.33);
+  //R(double, -209.33, varchar, "-6.2c02", double, -215.53);
+  ///R(double, 1209.33, varchar, "-.a6.2c02", double, 1209.33);
+  //R(double, 1209.33, varchar, "-0.a6.2c02", double, 1209.33);
+  //R(double, 1209.33, varchar, "-01.a6.2c02", double, 1208.33);
+
 }
 
 TEST_F(ObExprAddTest, float_string_test)
 {
-  // ObMalloc buf;
+  //ObMalloc buf;
 
   // float_string normal
-  // RD(float, static_cast<float>(173.125), varchar, "291.2354", 464.3604, 8);
-  // RD(float, static_cast<float>(200.2), varchar, "-23.376", 176.82399999999998, 8);
-  // RD(float, static_cast<float>(-0.2834), varchar, "-23.376", -23.6594, 8);
-  // RD(float, static_cast<float>(321.283), varchar, "-23.376", 297.9069895, 8);
+  //RD(float, static_cast<float>(173.125), varchar, "291.2354", 464.3604, 8);
+  //RD(float, static_cast<float>(200.2), varchar, "-23.376", 176.82399999999998, 8);
+  //RD(float, static_cast<float>(-0.2834), varchar, "-23.376", -23.6594, 8);
+  //RD(float, static_cast<float>(321.283), varchar, "-23.376", 297.9069895, 8);
 
   // float_string alpha
-  // RD(float, static_cast<float>(31.33), varchar, "-23a.376", 8.329999999999998, 8);
-  // RD(float, static_cast<float>(31.33), varchar, "a-23a.376", 31.33, 8);
-  // RD(float, static_cast<float>(-209.33), varchar, "-6.2c02", -215.53, 8);
-  // RD(float, static_cast<float>(1209.33), varchar, "-.a6.2c02", 1209.33, 8);
-  // RD(float, static_cast<float>(1209.33), varchar, "-0.a6.2c02", 1209.33, 8);
-  // RD(float, static_cast<float>(1209.33), varchar, "-01.a6.2c02", 1208.33, 8);
+  //RD(float, static_cast<float>(31.33), varchar, "-23a.376", 8.329999999999998, 8);
+  //RD(float, static_cast<float>(31.33), varchar, "a-23a.376", 31.33, 8);
+  //RD(float, static_cast<float>(-209.33), varchar, "-6.2c02", -215.53, 8);
+  //RD(float, static_cast<float>(1209.33), varchar, "-.a6.2c02", 1209.33, 8);
+  //RD(float, static_cast<float>(1209.33), varchar, "-0.a6.2c02", 1209.33, 8);
+  //RD(float, static_cast<float>(1209.33), varchar, "-01.a6.2c02", 1208.33, 8);
+
 }
 
 // datetime + int is decimal, so we cant't do this test now.
@@ -919,8 +856,8 @@ TEST_F(ObExprAddTest, datetime_test)
  }
  */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  // return RUN_ALL_TESTS();
+ // return RUN_ALL_TESTS();
 }

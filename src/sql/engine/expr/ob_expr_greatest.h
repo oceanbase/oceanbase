@@ -16,60 +16,22 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_least.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprBaseGreatest : public ObExprBaseLeastGreatest {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprGreatest : public ObExprLeastGreatest
+{
 public:
-  explicit ObExprBaseGreatest(common::ObIAllocator& alloc, int32_t param_num,
-      ObExprOperatorType type = T_FUN_SYS_GREATEST, const char* name = N_GREATEST);
-  virtual ~ObExprBaseGreatest();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& expected_type, common::ObExprCtx& expr_ctx);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_greatest(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  explicit  ObExprGreatest(common::ObIAllocator &alloc);
+  virtual ~ObExprGreatest() {}
+  static int calc_greatest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObExprBaseGreatest);
+  DISALLOW_COPY_AND_ASSIGN(ObExprGreatest);
 };
 
-class ObExprGreatestMySQL : public ObExprBaseGreatest {
-public:
-  explicit ObExprGreatestMySQL(common::ObIAllocator& alloc);
-  virtual ~ObExprGreatestMySQL();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprGreatestMySQL);
-};
-
-class ObExprGreatestMySQLInner : public ObExprBaseGreatest {
-public:
-  explicit ObExprGreatestMySQLInner(common::ObIAllocator& alloc);
-  virtual ~ObExprGreatestMySQLInner();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprGreatestMySQLInner);
-};
-
-class ObExprOracleGreatest : public ObExprBaseGreatest {
-public:
-  explicit ObExprOracleGreatest(common::ObIAllocator& alloc);
-  virtual ~ObExprOracleGreatest();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprOracleGreatest);
-};
-
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_GREATEST_H_ */

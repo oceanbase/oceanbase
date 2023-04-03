@@ -1,0 +1,421 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yanmu.ztl
+#owner group: SQL2
+# tags: optimizer
+#description: 该case是为了验证内部表是否符合规范
+## 规范:  1.基础系统表保持OB既有风格，以’__all_’开头，统一用单数、主动、第一人称一般时（不搞ing、ed、s等）
+##          2.虚拟表保持OB既有风格，以’__all_virtual’或者’__tenant_virtual’开头，统一用单数、主动、第一人称一般时（不搞ing、ed、s等）。__all_virtual为展示系统内部信息的虚拟表，支持直接查询，可基于此建立兼容其他数据库的视图；__tenant_virtual虚拟表为支持特定操作（如show）而创建的，一般不支持直接查询。
+##          3.基础系统表和虚拟表属OB系统内部实现，其定义要考虑版本平滑升级和扩展性的需要，不建议DBA及普通用户直接使用这两类对象。后续会增加对该类对象可见性的控制，在通常的show table等外部命令的一般性输出中不显示内部对象。
+##          4.明确_all_table对象的类型，区分基础系统表、用户表、虚拟表、系统视图、用户视图，同时确认各种对象table_id的范围符合设计。
+##          5.提供给DBA普通用户的信息，通过定义相应的视图来实现。视图的命名规则及模式按照需要兼容的目标数据库的相应视图来确定，保持定义的稳定。除MySQL兼容的视图外，系统诊断信息相关的视图，命名统一采用类Oracle的方式。
+##          6.虚拟表的名称和字段进行局部调整，如对于需要展示集群所有节点信息的虚拟表，统一使用server的唯一标识(`svr_ip`, `svr_port`)为分区键，部分特定的字段名称也加以统一（当前某些地方用host/port，有些用svr_ip/svr_port）；如果虚拟表包含`tenant_id`, `svr_ip`, `svr_port`字段，则主键包含这些字段。
+##
+
+##over all test
+connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys1;
+use oceanbase;
+
+set @@ob_query_timeout = 100000000;
+set @@ob_log_level = 'WARN';
+
+##overall check
+select 0xffffffffff & table_id, table_name, table_type, database_id, part_num from oceanbase.__all_virtual_table where tenant_id = 1 and table_type in (0,1,2) order by 1,2;
+
+##check count and table_id range (0, 10000] for inner sys table
+let $sys_table_count = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=0, count(table_id), 1);
+let $sys_table_count_with_tid = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=0 and (0xffffffffff & table_id) <= 10000, count(table_id), 1);
+if ($sys_table_count == $sys_table_count_with_tid)
+{
+  --echo check sys table count and table_id range success
+}
+
+##check count and table_id range (10000, 20000] for inner virtual table
+let $virtual_table_count = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=2, count(table_id), 1);
+let $virtual_table_count_with_tid = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=2 and (0xffffffffff & table_id) > 10000 and (0xffffffffff & table_id) <= 20000, count(table_id), 1);
+if ($virtual_table_count == $virtual_table_count_with_tid)
+{
+  --echo check count and table_id range for virtual table success
+}
+
+##check count and table_id range (10000, 20000] for inner view
+let $view_count = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=1, count(table_id), 1);
+let $view_count_with_tid = query_get_value(select count(table_id) from __all_virtual_table where tenant_id = 1 and table_type=1 and (0xffffffffff & table_id) > 20000 and (0xffffffffff & table_id) <= 30000, count(table_id), 1);
+if ($view_table_count == $view_count_with_tid)
+{
+  --echo check count and table_id range for view success
+}
+
+##
+## Check all sys tables created before 2018-11-15, new table added after this date should
+## add it's own case, can not depends on this hot point any more.
+##
+## table list are selected by: select concat(a, ".", b) from (select d.database_name a, t.table_name b from __all_virtual_database d, __all_virtual_table t where t.database_id = d.database_id and t.table_type in (0, 1, 2) and t.table_name not in ('__tenant_virtual_all_table','__tenant_virtual_current_tenant','__tenant_virtual_show_create_table','__tenant_virtual_show_create_database','__tenant_virtual_table_column','__all_virtual_proxy_schema', '__all_virtual_proxy_partition_info', '__all_virtual_proxy_partition', '__all_virtual_proxy_sub_partition', '__tenant_virtual_show_create_procedure', '__all_virtual_partition_location', '__tenant_virtual_show_tables', '__tenant_virtual_show_create_tablegroup') order by 1,2) x;
+#
+
+--disable_result_log
+select * from  information_schema.CHARACTER_SETS limit 1;
+select * from  information_schema.COLLATIONS limit 1;
+select * from  information_schema.COLLATION_CHARACTER_SET_APPLICABILITY limit 1;
+select * from  information_schema.COLUMNS limit 1;
+select * from  oceanbase.DBA_OB_OUTLINES limit 1;
+select * from  information_schema.ENGINES limit 1;
+select * from  information_schema.GLOBAL_STATUS limit 1;
+select * from  information_schema.GLOBAL_VARIABLES limit 1;
+select/*+no_rewrite*/ * from  information_schema.KEY_COLUMN_USAGE limit 1;
+select * from  information_schema.PARAMETERS limit 1;
+select * from  information_schema.PARTITIONS limit 1;
+select * from  information_schema.PROCESSLIST limit 1;
+select * from  information_schema.ROUTINES limit 1;
+select * from  information_schema.SCHEMATA limit 1;
+select * from  information_schema.SCHEMA_PRIVILEGES limit 1;
+select * from  information_schema.SESSION_STATUS limit 1;
+select * from  information_schema.SESSION_VARIABLES limit 1;
+select * from  information_schema.STATISTICS limit 1;
+select * from  information_schema.TABLES limit 1;
+select * from  information_schema.TABLE_CONSTRAINTS limit 1;
+select * from  information_schema.TABLE_PRIVILEGES limit 1;
+select * from  information_schema.USER_PRIVILEGES limit 1;
+select * from  oceanbase.DBA_RECYCLEBIN limit 1;
+select * from  information_schema.VIEWS limit 1;
+select * from  mysql.db limit 1;
+select * from  mysql.help_category limit 1;
+select * from  mysql.help_keyword limit 1;
+select * from  mysql.help_relation limit 1;
+select * from  mysql.help_topic limit 1;
+select * from  mysql.proc limit 1;
+select * from  mysql.time_zone limit 1;
+select * from  mysql.time_zone_name limit 1;
+select * from  mysql.time_zone_transition limit 1;
+select * from  mysql.time_zone_transition_type limit 1;
+select * from  mysql.user limit 1;
+select * from  oceanbase.DBA_OB_CONCURRENT_LIMIT_SQL limit 1;
+select * from  oceanbase.gv$latch limit 1;
+select * from  oceanbase.GV$OB_MEMORY limit 1;
+select * from  oceanbase.gv$ob_memstore limit 1;
+#select * from  oceanbase.GV$OB_RPC_INCOMING limit 1;
+#select * from  oceanbase.GV$OB_RPC_OUTGOING limit 1;
+select * from  oceanbase.DBA_OB_OUTLINES limit 1;
+select * from  oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN limit 1;
+select * from  oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT limit 1;
+select * from  oceanbase.GV$OB_PLAN_CACHE_STAT limit 1;
+select * from  oceanbase.gv$session_event limit 1;
+select * from  oceanbase.gv$session_longops limit 1;
+select * from  oceanbase.gv$session_wait limit 1;
+select * from  oceanbase.gv$session_wait_history limit 1;
+select * from  oceanbase.GV$OB_SQL_AUDIT limit 1;
+#select * from  oceanbase.gv$sql_monitor limit 1;
+select * from  oceanbase.gv$sql_plan_monitor limit 1;
+#select * from  oceanbase.gv$sql_plan_statistics limit 1;
+select * from  oceanbase.gv$sysstat limit 1;
+select * from  oceanbase.gv$system_event limit 1;
+select * from  oceanbase.DBA_OB_SEQUENCE_OBJECTS limit 1;
+select * from  oceanbase.GV$OB_PX_WORKER_STAT limit 1;
+select * from  oceanbase.V$OB_PX_WORKER_STAT limit 1;
+select * from  oceanbase.v$event_name limit 1;
+select * from  oceanbase.v$latch limit 1;
+select * from  oceanbase.V$OB_MEMORY limit 1;
+select * from  oceanbase.v$ob_memstore limit 1;
+#select * from  oceanbase.v$obrpc_incoming limit 1;
+#select * from  oceanbase.V$OB_RPC_OUTGOING limit 1;
+select * from  oceanbase.V$OB_PLAN_CACHE_PLAN_EXPLAIN limit 1;
+select * from  oceanbase.V$OB_PLAN_CACHE_PLAN_STAT limit 1;
+select * from  oceanbase.V$OB_PLAN_CACHE_STAT limit 1;
+select * from  oceanbase.v$session_longops limit 1;
+select * from  oceanbase.v$session_wait limit 1;
+select * from  oceanbase.v$session_wait_history limit 1;
+select * from  oceanbase.V$OB_SQL_AUDIT limit 1;
+#select * from  oceanbase.v$sql_monitor limit 1;
+select * from  oceanbase.v$sql_plan_monitor limit 1;
+#select * from  oceanbase.v$sql_plan_statistics limit 1;
+select * from  oceanbase.v$statname limit 1;
+select * from  oceanbase.v$sysstat limit 1;
+select * from  oceanbase.v$system_event limit 1;
+select * from  oceanbase.__all_acquired_snapshot limit 1;
+select * from  oceanbase.__all_charset limit 1;
+select * from  oceanbase.__all_collation limit 1;
+select * from  oceanbase.__all_virtual_column_history limit 1;
+select * from  oceanbase.__all_virtual_constraint limit 1;
+select * from  oceanbase.__all_virtual_constraint_history limit 1;
+select * from  oceanbase.__all_virtual_database limit 1;
+select * from  oceanbase.__all_virtual_database_history limit 1;
+select * from  oceanbase.__all_virtual_database_privilege limit 1;
+select * from  oceanbase.__all_virtual_database_privilege_history limit 1;
+select * from  oceanbase.__all_ddl_id limit 1;
+select * from  oceanbase.__all_virtual_def_sub_part limit 1;
+select * from  oceanbase.__all_virtual_def_sub_part_history limit 1;
+select * from  oceanbase.__all_dummy limit 1;
+select * from  oceanbase.__all_virtual_foreign_key limit 1;
+select * from  oceanbase.__all_virtual_foreign_key_column limit 1;
+select * from  oceanbase.__all_virtual_foreign_key_column_history limit 1;
+select * from  oceanbase.__all_virtual_foreign_key_history limit 1;
+select * from  oceanbase.__all_virtual_func limit 1;
+select * from  oceanbase.__all_virtual_func_history limit 1;
+select * from  oceanbase.__all_virtual_ori_schema_version limit 1;
+select * from  oceanbase.__all_virtual_outline limit 1;
+select * from  oceanbase.__all_virtual_outline_history limit 1;
+select * from  oceanbase.__all_virtual_package limit 1;
+select * from  oceanbase.__all_virtual_package_history limit 1;
+select * from  oceanbase.__all_virtual_part limit 1;
+select * from  oceanbase.__all_virtual_part_history limit 1;
+select * from  oceanbase.__all_virtual_part_info limit 1;
+select * from  oceanbase.__all_virtual_part_info_history limit 1;
+select * from  oceanbase.__all_privilege limit 1;
+select * from  oceanbase.__all_virtual_recyclebin limit 1;
+select * from  oceanbase.__all_resource_pool limit 1;
+select * from  oceanbase.__all_restore_job limit 1;
+select * from  oceanbase.__all_restore_job_history limit 1;
+#select * from  oceanbase.__all_restore_task limit 1;
+select * from  oceanbase.__all_rootservice_event_history limit 1;
+select * from  oceanbase.__all_rootservice_job limit 1;
+select * from  oceanbase.__all_virtual_routine limit 1;
+select * from  oceanbase.__all_virtual_routine_history limit 1;
+select * from  oceanbase.__all_virtual_routine_param limit 1;
+select * from  oceanbase.__all_virtual_routine_param_history limit 1;
+select * from  oceanbase.__all_virtual_sequence_object limit 1;
+select * from  oceanbase.__all_virtual_sequence_object_history limit 1;
+select * from  oceanbase.__all_auto_increment limit 1;
+select * from  oceanbase.__all_virtual_sequence_value limit 1;
+select * from  oceanbase.__all_server limit 1;
+select * from  oceanbase.__all_server_event_history limit 1;
+select * from  oceanbase.__all_virtual_sub_part limit 1;
+select * from  oceanbase.__all_virtual_sub_part_history limit 1;
+select * from  oceanbase.__all_virtual_synonym limit 1;
+select * from  oceanbase.__all_virtual_synonym_history limit 1;
+select * from  oceanbase.__all_sys_parameter limit 1;
+select * from  oceanbase.__all_virtual_sys_stat limit 1;
+select * from  oceanbase.__all_virtual_sys_variable limit 1;
+select * from  oceanbase.__all_virtual_sys_variable_history limit 1;
+select * from  oceanbase.__all_virtual_tablegroup limit 1;
+select * from  oceanbase.__all_virtual_tablegroup_history limit 1;
+select * from  oceanbase.__all_virtual_table_history limit 1;
+select * from  oceanbase.__all_virtual_table_privilege limit 1;
+select * from  oceanbase.__all_virtual_table_privilege_history limit 1;
+select * from  oceanbase.__all_virtual_temp_table limit 1;
+select * from  oceanbase.__all_tenant limit 1;
+select * from  oceanbase.__all_tenant_history limit 1;
+select * from  oceanbase.__all_unit limit 1;
+select * from  oceanbase.__all_unit_config limit 1;
+select * from  oceanbase.__all_virtual_user limit 1;
+select * from  oceanbase.__all_virtual_user_history limit 1;
+select * from  oceanbase.__all_virtual_bad_block_table limit 1;
+select * from  oceanbase.__all_virtual_concurrency_object_pool limit 1;
+select * from  oceanbase.__all_virtual_core_all_table limit 1;
+select * from  oceanbase.__all_virtual_core_column_table limit 1;
+select * from  oceanbase.__all_virtual_core_meta_table limit 1;
+select * from  oceanbase.__all_virtual_data_type limit 1;
+select * from  oceanbase.__all_virtual_data_type_class limit 1;
+select * from  oceanbase.__all_virtual_disk_stat limit 1;
+
+select * from  oceanbase.__all_virtual_engine limit 1;
+select * from  oceanbase.__all_virtual_io_stat limit 1;
+select * from  oceanbase.__all_virtual_kvcache_info limit 1;
+select * from  oceanbase.__all_virtual_kvcache_store_memblock limit 1;
+select * from  oceanbase.__all_virtual_latch limit 1;
+select * from  oceanbase.__all_virtual_long_ops_status limit 1;
+select * from  oceanbase.__all_virtual_macro_block_marker_status limit 1;
+select * from  oceanbase.__all_virtual_memory_info limit 1;
+select * from  oceanbase.__all_virtual_memstore_info limit 1;
+select * from  oceanbase.__all_virtual_mem_leak_checker_info limit 1;
+#select * from  oceanbase.__all_virtual_obrpc_stat limit 1;
+
+select * from  oceanbase.__all_virtual_plan_cache_plan_explain limit 1;
+select * from  oceanbase.__all_virtual_plan_cache_stat limit 1;
+select * from  oceanbase.__all_virtual_plan_stat limit 1;
+select * from  oceanbase.__all_virtual_processlist limit 1;
+select * from  oceanbase.__all_virtual_proxy_sys_variable limit 1;
+select * from  oceanbase.__all_virtual_px_worker_stat limit 1;
+select * from  oceanbase.__all_auto_increment limit 1;
+#select * from  oceanbase.__all_virtual_server_blacklist limit 1;
+#select * from  oceanbase.__all_virtual_server_clog_stat limit 1;
+select * from  oceanbase.__all_virtual_server_object_pool limit 1;
+select * from  oceanbase.__all_virtual_session_event limit 1;
+select * from  oceanbase.__all_virtual_session_wait limit 1;
+select * from  oceanbase.__all_virtual_session_wait_history limit 1;
+select * from  oceanbase.__all_virtual_sesstat limit 1;
+select * from  oceanbase.__all_virtual_sql_audit limit 1;
+#select * from  oceanbase.__all_virtual_sql_monitor limit 1;
+select * from  oceanbase.__all_virtual_sql_plan_monitor limit 1;
+#select * from  oceanbase.__all_virtual_sql_plan_statistics limit 1;
+#select * from  oceanbase.__all_virtual_storage_stat limit 1;
+select * from  oceanbase.__all_virtual_sysstat limit 1;
+select * from  oceanbase.__all_virtual_system_event limit 1;
+select * from  oceanbase.__all_virtual_sys_parameter_stat limit 1;
+select * from  oceanbase.__all_virtual_sys_task_status limit 1;
+select * from  oceanbase.__all_virtual_table_mgr limit 1;
+select * from  oceanbase.__all_virtual_tenant_memstore_allocator_info limit 1;
+select * from  oceanbase.__all_virtual_tenant_memstore_info limit 1;
+#select * from  oceanbase.__all_virtual_tenant_stat limit 1;
+#bug:
+#select * from  oceanbase.__all_virtual_trace_log limit 1;
+select * from  oceanbase.__all_virtual_trans_stat limit 1;
+select * from  oceanbase.__all_virtual_upgrade_inspection limit 1;
+select * from  oceanbase.__all_zone limit 1;
+select * from  oceanbase.__tenant_virtual_charset limit 1;
+select * from  oceanbase.__tenant_virtual_collation limit 1;
+select * from  oceanbase.__tenant_virtual_concurrent_limit_sql limit 1;
+select * from  oceanbase.__tenant_virtual_database_status limit 1;
+select * from  oceanbase.__tenant_virtual_event_name limit 1;
+select * from  oceanbase.__tenant_virtual_global_variable limit 1;
+select * from  oceanbase.__tenant_virtual_outline limit 1;
+#select * from  oceanbase.__tenant_virtual_partition_stat limit 1;
+select * from  oceanbase.__tenant_virtual_privilege_grant limit 1;
+select * from  oceanbase.__tenant_virtual_session_variable limit 1;
+select * from  oceanbase.__tenant_virtual_statname limit 1;
+select * from  oceanbase.__tenant_virtual_table_index limit 1;
+select * from  oceanbase.__tenant_virtual_tenant_status limit 1;
+select * from  oceanbase.__tenant_virtual_warning limit 1;
+
+
+select * from oceanbase.__all_ls_recovery_stat limit 1;
+select * from oceanbase.__all_ls_log_archive_progress limit 1;
+select * from oceanbase.__all_log_archive_progress limit 1;
+select * from oceanbase.__all_log_archive_history limit 1;
+select * from oceanbase.__all_log_archive_piece_files limit 1;
+select * from oceanbase.__all_virtual_tablet_info limit 1;
+select * from oceanbase.__all_virtual_tablet_ddl_kv_info limit 1;
+#select * from oceanbase.__all_virtual_cluster limit 1;
+select * from oceanbase.__all_virtual_id_service limit 1;
+select * from oceanbase.__all_virtual_log_stat limit 1;
+select * from oceanbase.__all_virtual_apply_stat limit 1;
+select * from oceanbase.__all_virtual_archive_stat limit 1;
+select * from oceanbase.__all_virtual_replay_stat limit 1;
+select * from oceanbase.__all_virtual_ls_info limit 1;
+select * from oceanbase.__all_virtual_tx_data_table limit 1;
+select * from oceanbase.__all_virtual_transaction_freeze_checkpoint limit 1;
+select * from oceanbase.__all_virtual_transaction_checkpoint limit 1;
+select * from oceanbase.__all_virtual_checkpoint limit 1;
+select * from oceanbase.__all_virtual_tablet_compaction_history limit 1;
+select * from oceanbase.__all_virtual_tablet_compaction_progress limit 1;
+select * from oceanbase.__all_virtual_server_compaction_progress limit 1;
+select * from oceanbase.__all_virtual_server_compaction_event_history limit 1;
+select * from oceanbase.__all_freeze_info limit 1;
+select * from oceanbase.__all_zone_merge_info limit 1;
+select * from oceanbase.__all_merge_info limit 1;
+select * from oceanbase.__all_ddl_task_status limit 1;
+select * from oceanbase.__all_tablet_meta_table limit 1;
+select * from oceanbase.__all_tablet_replica_checksum limit 1;
+select * from oceanbase.__all_tablet_checksum limit 1;
+select * from oceanbase.__all_weak_read_service limit 1;
+#select * from oceanbase.__all_virtual_reserved_table_mgr limit 1;
+select * from oceanbase.__all_virtual_obj_lock limit 1;
+select * from oceanbase.__all_virtual_tablet_sstable_macro_info limit 1;
+select * from oceanbase.V$OB_MEMSTORE_INFO limit 1;
+select * from oceanbase.GV$OB_MEMSTORE_INFO limit 1;
+select * from oceanbase.V$OB_SSTABLES limit 1;
+select * from oceanbase.GV$OB_SSTABLES limit 1;
+select * from oceanbase.DBA_OB_ZONE_MAJOR_COMPACTION limit 1;
+select * from oceanbase.DBA_OB_MAJOR_COMPACTION limit 1;
+select * from oceanbase.CDB_OB_ZONE_MAJOR_COMPACTION limit 1;
+select * from oceanbase.CDB_OB_MAJOR_COMPACTION limit 1;
+select * from oceanbase.DBA_OB_TABLET_REPLICAS limit 1;
+select * from oceanbase.DBA_OB_USERS limit 1;
+select * from oceanbase.CDB_OB_USERS limit 1;
+select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1;
+select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1;
+--enable_result_log
+
+## Test all performance built-in views
+#--enable_query_log
+#################################
+#    init variables
+#################################
+#let $cpu = 1;
+#let $memory = 1073741824;
+#let $min_memory = 1073741824;
+#let $disk = 536870912;
+#let $iops = 100000;
+#let $session = 64;
+#let $zone_name=query_get_value(select zone from oceanbase.__all_zone where zone != '' limit 1, zone, 1);
+
+#################################
+#     clean up
+#################################
+#--disable_warnings
+#drop tenant if exists te1 force;
+#drop resource pool if exists pool_te1;
+#drop resource unit if exists box_te1;
+
+#################################
+##    create resource unit
+#################################
+#eval create resource unit box_te1 max_cpu $cpu, max_memory $memory, max_iops $iops, max_disk_size $disk, max_session_num $session, MIN_CPU=1, MIN_MEMORY=$min_memory, MIN_IOPS=128;
+
+#################################
+##    create resource pool
+#################################
+#--disable_query_log
+#eval create resource pool pool_te1 unit = 'box_te1', unit_num = 1, zone_list = ('$zone_name');
+#--enable_query_log
+
+#################################
+## create tenant
+#################################
+#--enable_warnings
+#--disable_query_log
+#eval create tenant te1 replica_num = 1, primary_zone='$zone_name', resource_pool_list=('pool_te1') set ob_tcp_invited_nodes='%';
+#--source mysql_test/include/check_tenant_sync.inc
+#--enable_query_log
+#let $__tenant_name__ = 'te1';
+#--source mysql_test/include/get_tenant_server.inc
+#connect (conn1,$TE_SERVER_IP,root@te1,,*NO-ONE*,$TE_SERVER_PORT);
+
+#################################
+## TEST
+#################################
+## expect all '0'
+#set ob_query_timeout = 100000000;
+#select count(*) from oceanbase.GV$OB_MEMORY where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.gv$memstore where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.gv$memstore_info where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.gv$sysstat where con_id != effective_tenant_id();
+#select count(*) from oceanbase.gv$system_event where con_id != effective_tenant_id();
+#select count(*) from oceanbase.V$OB_MEMORY where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.v$memstore where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.v$memstore_info where tenant_id != effective_tenant_id();
+#select count(*) from oceanbase.v$sysstat where con_id != effective_tenant_id();
+#select count(*) from oceanbase.v$system_event where con_id != effective_tenant_id();
+
+#################################
+## check dictionary table
+#################################
+#select EVENT_ID, NAME, WAIT_CLASS_ID from oceanbase.v$event_name order by EVENT_ID, NAME;
+#select STAT_ID, NAME, CLASS from oceanbase.v$statname order by STAT_ID, NAME;
+
+## expect all '1'
+#connect (conn2,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+#set ob_query_timeout = 100000000;
+#select count(*) > 0 from oceanbase.GV$OB_MEMORY where tenant_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.GV$OB_MEMORY where tenant_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.gv$memstore where tenant_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.gv$memstore_info where tenant_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.gv$sysstat where con_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.gv$system_event where con_id != effective_tenant_id();
+#select count(*) > 0 from oceanbase.V$OB_MEMORY where tenant_id != effective_tenant_id();
+
+#################################
+## check dictionary table
+#################################
+#select EVENT_ID, NAME, WAIT_CLASS_ID from oceanbase.v$event_name order by EVENT_ID, NAME;
+#select STAT_ID, NAME, CLASS from oceanbase.v$statname order by STAT_ID, NAME;
+
+
+#################################
+## cleanup
+#################################
+
+#--disable_warnings
+#drop tenant if exists te1 force;
+#drop resource pool pool_te1;
+#drop resource unit box_te1;
+#--enable_warnings
+#--disable_query_log
+
+#--disable_query_log
+#--disable_result_log
+#sleep 20;
+#--enable_result_log
+#--enable_query_log
+

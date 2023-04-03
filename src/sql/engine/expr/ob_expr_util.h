@@ -16,8 +16,10 @@
 #include "lib/number/ob_number_v2.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 //
 // temporary allocator for number operation. e.g.:
@@ -27,78 +29,139 @@ namespace sql {
 //  expr_datum.set_number(num); // set_datum will deep copy num value.
 //
 template <int64_t NUM_CNT = 1>
-class ObNumStackAllocator : public common::ObDataBuffer {
+class ObNumStackAllocator : public common::ObDataBuffer
+{
 public:
   ObNumStackAllocator() : ObDataBuffer(local_buf_, sizeof(local_buf_))
-  {}
+  {
+  }
 
 private:
   char local_buf_[NUM_CNT * common::number::ObNumber::MAX_BYTE_LEN];
 };
 typedef ObNumStackAllocator<1> ObNumStackOnceAlloc;
 
-#define array_elements(A) ((uint)(sizeof(A) / sizeof(A[0])))
+#define array_elements(A) ((uint) (sizeof(A)/sizeof(A[0])))
 
-class ObExprUtil {
+class ObExprUtil
+{
 public:
-  static int get_trunc_int64(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& out);
-  static int get_round_int64(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& out);
+  static int get_trunc_int64(const common::ObObj &obj, common::ObExprCtx &expr_ctx, int64_t &out);
+  static int get_round_int64(const common::ObObj &obj, common::ObExprCtx &expr_ctx, int64_t &out);
 
-  static int get_trunc_int64(common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx, int64_t& out);
-  static int get_round_int64(common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx, int64_t& out);
+  static int get_trunc_int64(common::number::ObNumber &nmb, common::ObExprCtx &expr_ctx, int64_t &out);
+  static int get_round_int64(common::number::ObNumber &nmb, common::ObExprCtx &expr_ctx, int64_t &out);
 
-  static int kmp_reverse(const char* x, int64_t m, const char* y, int64_t n, int64_t count, int64_t& pos);
-  static int kmp(const char* x, int64_t m, const char* y, int64_t n, int64_t count, int64_t& pos);
+  // This function relies on `kmp_next` to do the calculation of next array
+  static int kmp(const char *pattern,
+                 const int64_t pattern_len,
+                 const char *text,
+                 const int64_t text_len,
+                 const int64_t nth_appearance,
+                 const int32_t *next, /* calculated, size same with pattern */
+                 int64_t &result);
+  static int kmp_next(const char *pattern, const int64_t pattern_len, int32_t *next);
 
-  static int get_mb_str_info(const common::ObString& str, common::ObCollationType cs_type,
-      common::ObIArray<size_t>& byte_num, common::ObIArray<size_t>& byte_offset);
+  // This function relies on `kmp_next_reverse` to do the calculation of next array
+  static int kmp_reverse(const char *pattern,
+                         const int64_t pattern_len,
+                         const char *text,
+                         const int64_t text_len,
+                         const int64_t nth_appearance,
+                         const int32_t *next, /* calculated, size same with pattern */
+                         int64_t &result);
+  static int kmp_next_reverse(const char *pattern,
+                              const int64_t pattern_len,
+                              int32_t *next);
+
+  static int get_mb_str_info(const common::ObString &str,
+                             common::ObCollationType cs_type,
+                             common::ObIArray<size_t> &byte_num,
+                             common::ObIArray<size_t> &byte_offset);
+  // 将double round到小数点后或者小数点前指定位置
   static double round_double(double val, int64_t dec);
+  // 将double round到小数点后指定位置，.5 -> 1 而不是0
   static double round_double_nearest(double val, int64_t dec);
   static uint64_t round_uint64(uint64_t val, int64_t dec);
+  // 将double trunc到小数点后或者小数点前指定位置
   static double trunc_double(double val, int64_t dec);
   template <typename T>
   static T trunc_integer(T val, int64_t dec);
 
   // truncate the decimal part, truncate to INT64_MAX/INT64_MIN too if out of range.
-  static int trunc_num2int64(const common::number::ObNumber& nmb, int64_t& v);
+  static int trunc_num2int64(const common::number::ObNumber &nmb, int64_t &v);
   // get number out of ObDatum and truncate to int64
-  static int trunc_num2int64(const common::ObDatum& datum, int64_t& v)
+  static int trunc_num2int64(const common::ObDatum &datum, int64_t &v)
   {
     return trunc_num2int64(common::number::ObNumber(datum.get_number()), v);
   }
-
+  // round the decimal part, round to INT64_MAX/INT64_MIN too if out of range.
+  static int round_num2int64(const common::number::ObNumber &nmb, int64_t &v);
+  
+  // get number out of ObDatum and round to int64
+  static int round_num2int64(const common::ObDatum &datum, int64_t &v)
+  {
+    return round_num2int64(common::number::ObNumber(datum.get_number()), v);
+  }
   // Get integer value from integer parameter which type is ObIntType in mysql
   // or ObNumberType in oracle.
   //
   // Keep %int_val unchanged if datum is NULL or datum->is_null().
-  static int get_int_param_val(common::ObDatum* datum, int64_t& int_val);
+  static int get_int_param_val(common::ObDatum *datum, int64_t &int_val);
 
   // Set the ASCII string to expression result.
   // e.g.:
   //   dump() need result is NLS_CHARACTERSET, but we can only generate ASCII string in code,
   //   this function is used to convert the result characterset.
-  static int set_expr_ascii_result(
-      const ObExpr& expr, ObEvalCtx& ctx, common::ObDatum& expr_datum, const common::ObString& ascii_str);
-
-  static int convert_string_collation(const common::ObString& in_str, const common::ObCollationType& in_collation,
-      common::ObString& out_str, const common::ObCollationType& out_collation, common::ObIAllocator& alloc);
-  static int need_convert_string_collation(
-      const common::ObCollationType& in_collation, const common::ObCollationType& out_collation, bool& need_convert);
+  static int set_expr_ascii_result(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                common::ObDatum &expr_datum,
+                                const common::ObString &ascii_str,
+                                const int64_t datum_idx,
+                                const bool is_ascii = true,
+                                const common::ObCollationType src_coll_type = CS_TYPE_UTF8MB4_BIN);
+  static int set_expr_ascii_result(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                common::ObDatum &expr_datum,
+                                const common::ObString &ascii_str,
+                                const bool is_ascii = true,
+                                const common::ObCollationType src_coll_type = CS_TYPE_UTF8MB4_BIN);
+  static int convert_string_collation(const common::ObString &in_str,
+                                      const common::ObCollationType &in_collation,
+                                      common::ObString &out_str,
+                                      const common::ObCollationType &out_collation,
+                                      common::ObIAllocator &alloc);
+  static int need_convert_string_collation(const common::ObCollationType &in_collation,
+                                           const common::ObCollationType &out_collation,
+                                           bool &need_convert);
   // deep copy src to out.
   // it is ok if src and out is same. like this deep_copy_str(str1, str1, alloc)
-  static int deep_copy_str(const common::ObString& src, common::ObString& out, common::ObIAllocator& alloc);
+  static int deep_copy_str(const common::ObString &src, common::ObString &out,
+                           common::ObIAllocator &alloc);
 
-  static int eval_generated_column(const ObExpr& rt_expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int eval_stack_overflow_check(const ObExpr &rt_expr,
+                                       ObEvalCtx &ctx,
+                                       ObDatum &expr_datum);
 
-  static int eval_stack_overflow_check(const ObExpr& rt_expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int eval_batch_stack_overflow_check(const ObExpr &expr,
+                                             ObEvalCtx &ctx,
+                                             const ObBitVector &skip,
+                                             const int64_t batch_size);
+
+  static int convert_utf8_charset(common::ObIAllocator& allocator,
+                                  const common::ObCollationType& from_collation,
+                                  const common::ObString &from_string,
+                                  common::ObString &dest_string);
 
 private:
-  static int get_int64_from_num(common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx,
-      const bool is_trunc,  // true: trunc; false: round
-      int64_t& out);
-  static int get_int64_from_obj(const common::ObObj& obj, common::ObExprCtx& expr_ctx,
-      const bool is_trunc,  // true: trunc; false: round
-      int64_t& out);
+  static int get_int64_from_num(common::number::ObNumber &nmb,
+                                common::ObExprCtx &expr_ctx,
+                                const bool is_trunc, //true: trunc; false: round
+                                int64_t &out);
+  static int get_int64_from_obj(const common::ObObj &obj,
+                                common::ObExprCtx &expr_ctx,
+                                const bool is_trunc, //true: trunc; false: round
+                                int64_t &out);
   DISALLOW_COPY_AND_ASSIGN(ObExprUtil);
 };
 
@@ -121,40 +184,46 @@ T ObExprUtil::trunc_integer(T val, int64_t dec)
   return res;
 }
 
-// define triangle calc functions
+// 定义三角函数的计算函数
 // eg: sin/cos/tan sinh/cosh/tanh asin/acos/atan
-// note: atan2 is defined elsewhere
+// atan2的计算函数单独实现
 #define DEF_CALC_TRIGONOMETRIC_EXPR(tritype, INVALID_DOUBLE_ARG_CHECK, INVALID_DOUBLE_ARG_ERRNO) \
-  int calc_##tritype##_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)              \
-  {                                                                                              \
-    int ret = OB_SUCCESS;                                                                        \
-    ObDatum* radian = NULL;                                                                      \
-    if (OB_FAIL(expr.args_[0]->eval(ctx, radian))) {                                             \
-      LOG_WARN("eval radian arg failed", K(ret), K(expr));                                       \
-    } else if (radian->is_null()) {                                                              \
-      /* radian is already be cast to number type, no need to is_null_oracle */                  \
-      res_datum.set_null();                                                                      \
-    } else if (ObNumberType == expr.args_[0]->datum_meta_.type_) {                               \
-      number::ObNumber res_nmb;                                                                  \
-      number::ObNumber radian_nmb(radian->get_number());                                         \
-      if (OB_FAIL(radian_nmb.tritype(res_nmb, ctx.get_reset_tmp_alloc()))) {                     \
-        LOG_WARN("calc expr failed", K(ret), K(radian_nmb), K(expr));                            \
-      } else {                                                                                   \
-        res_datum.set_number(res_nmb);                                                           \
-      }                                                                                          \
-    } else if (ObDoubleType == expr.args_[0]->datum_meta_.type_) {                               \
-      const double arg = radian->get_double();                                                   \
-      if (INVALID_DOUBLE_ARG_CHECK) {                                                            \
-        res_datum.set_null();                                                                    \
-      } else {                                                                                   \
-        res_datum.set_double(tritype(arg));                                                      \
-      }                                                                                          \
-    } else {                                                                                     \
-      ret = OB_ERR_UNEXPECTED;                                                                   \
-    }                                                                                            \
-    return ret;                                                                                  \
-  }
+int calc_##tritype##_expr(const ObExpr &expr, ObEvalCtx &ctx,                 \
+                               ObDatum &res_datum)                        \
+{                                                                             \
+  int ret = OB_SUCCESS;                                                       \
+  ObDatum *radian = NULL;                                                     \
+  if (OB_FAIL(expr.args_[0]->eval(ctx, radian))) {                            \
+    LOG_WARN("eval radian arg failed", K(ret), K(expr));                      \
+  } else if (radian->is_null()) {                                             \
+    /* radian is already be cast to number type, no need to is_null_oracle */ \
+    res_datum.set_null();                                                     \
+  } else if (ObNumberType == expr.args_[0]->datum_meta_.type_) {              \
+    number::ObNumber res_nmb;                                                 \
+    number::ObNumber radian_nmb(radian->get_number());                        \
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);                                          \
+    if (OB_FAIL(radian_nmb.tritype(res_nmb, alloc_guard.get_allocator()))) {    \
+      LOG_WARN("calc expr failed", K(ret), K(radian_nmb), K(expr));           \
+    } else {                                                                  \
+      res_datum.set_number(res_nmb);                                          \
+    }                                                                         \
+  } else if (ObDoubleType == expr.args_[0]->datum_meta_.type_) {              \
+    const double arg = radian->get_double();                                  \
+    if (INVALID_DOUBLE_ARG_CHECK) {                                           \
+      if(lib::is_oracle_mode()) {                                           \
+        ret = INVALID_DOUBLE_ARG_ERRNO;                                       \
+      } else {                                                                \
+        res_datum.set_null();                                                 \
+      }                                                                       \
+    } else {                                                                  \
+      res_datum.set_double(tritype(arg));                                     \
+    }                                                                         \
+  } else {                                                                    \
+    ret = OB_ERR_UNEXPECTED;                                                  \
+  }                                                                           \
+  return ret;                                                                 \
+}
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_ENGINE_EXPR_EXPR_UTIL_H_ */
+}
+}
+#endif  /* _OB_ENGINE_EXPR_EXPR_UTIL_H_ */

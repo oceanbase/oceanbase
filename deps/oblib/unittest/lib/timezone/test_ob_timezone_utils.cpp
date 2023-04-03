@@ -19,37 +19,46 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 
-class ObTimezoneUtilsTest : public ::testing::Test {
+class ObTimezoneUtilsTest : public ::testing::Test
+{
 public:
   ObTimezoneUtilsTest();
   virtual ~ObTimezoneUtilsTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObTimezoneUtilsTest(const ObTimezoneUtilsTest& other);
-  ObTimezoneUtilsTest& operator=(const ObTimezoneUtilsTest& other);
+  ObTimezoneUtilsTest(const ObTimezoneUtilsTest &other);
+  ObTimezoneUtilsTest& operator=(const ObTimezoneUtilsTest &other);
+
 };
 
+
 ObTimezoneUtilsTest::ObTimezoneUtilsTest()
-{}
+{
+}
 
 ObTimezoneUtilsTest::~ObTimezoneUtilsTest()
-{}
+{
+}
 
 void ObTimezoneUtilsTest::SetUp()
-{}
+{
+}
 
 void ObTimezoneUtilsTest::TearDown()
-{}
+{
+}
 
-#define PARSE_ZONE_FILE_RET(obj, filename)       \
-  {                                              \
-    int err = obj.parse_timezone_file(filename); \
-    ASSERT_EQ(OB_SUCCESS, err);                  \
-  }                                              \
-  while (0)
+
+
+#define PARSE_ZONE_FILE_RET(obj, filename)  \
+                                {                                     \
+                                 int err = obj.parse_timezone_file(filename); \
+                                 ASSERT_EQ(OB_SUCCESS, err); \
+                                } while(0)
+
+
 
 TEST(ObTimezoneUtilsTest, parse_timezone_file_test)
 {
@@ -66,8 +75,8 @@ TEST(ObTimezoneUtilsTest, parse_timezone_file_test)
   // PARSE_ZONE_FILE_RET(zoneObj, "/usr/share/zoneinfo/GMT");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

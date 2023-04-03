@@ -13,19 +13,22 @@
 #include "ob_all_virtual_memory_context_stat.h"
 #include "share/ob_errno.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace storage;
 using namespace lib;
-namespace observer {
+namespace observer
+{
 ObAllVirtualMemoryContextStat::ObAllVirtualMemoryContextStat()
-{}
+{
+}
 
 ObAllVirtualMemoryContextStat::~ObAllVirtualMemoryContextStat()
 {
   reset();
 }
 
-int ObAllVirtualMemoryContextStat::inner_get_next_row(common::ObNewRow*& row)
+int ObAllVirtualMemoryContextStat::inner_get_next_row(common::ObNewRow *&row)
 {
   UNUSEDx(row);
   return OB_ITER_END;

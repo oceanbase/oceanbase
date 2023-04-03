@@ -15,7 +15,8 @@
 #include "lib/atomic/ob_atomic.h"
 using namespace oceanbase::common;
 
-ObMeter::ObMeter() : value_(0)
+ObMeter::ObMeter()
+    :value_(0)
 {
   start_ts_ = ObTimeUtility::current_time();
   last_tick_ = start_ts_;
@@ -33,7 +34,7 @@ void ObMeter::legacy_tick_if_necessary()
     int64_t new_tick = cur_tick - age % LEGACY_TICK_INTERVAL_IN_USEC;
     if (ATOMIC_BCAS(&legacy_last_tick_, old_tick, new_tick)) {  //     legacy_last_tick_ = new_tick
       int64_t tick_times = age / LEGACY_TICK_INTERVAL_IN_USEC;
-      static const int64_t FACTOR = 5;  // performance. exp(-1)^5 = 0.00673794699 old value can be ignored.
+      static const int64_t FACTOR = 5; // performance. exp(-1)^5 = 0.00673794699 old value can be ignored.
       if (OB_UNLIKELY(tick_times > FACTOR * LEGACY_WINDOW_IN_SEC / LEGACY_TICK_INTERVAL_IN_SEC)) {
         legacy_rate_.retick();
       } else {
@@ -46,6 +47,7 @@ void ObMeter::legacy_tick_if_necessary()
   // compatibility code
 }
 
+
 void ObMeter::tick_if_necessary()
 {
   int64_t old_tick = ATOMIC_LOAD(&last_tick_);
@@ -55,7 +57,7 @@ void ObMeter::tick_if_necessary()
     int64_t new_tick = cur_tick - age % TICK_INTERVAL_IN_USEC;
     if (ATOMIC_BCAS(&last_tick_, old_tick, new_tick)) {  //     last_tick_ = new_tick
       int64_t tick_times = age / TICK_INTERVAL_IN_USEC;
-      static const int64_t FACTOR = 5;  // performance. exp(-1)^5 = 0.00673794699 old value can be ignored.
+      static const int64_t FACTOR = 5; // performance. exp(-1)^5 = 0.00673794699 old value can be ignored.
       if (OB_UNLIKELY(tick_times > FACTOR * WINDOW_IN_SEC / TICK_INTERVAL_IN_SEC)) {
         rate_.retick();
       } else {
@@ -99,3 +101,4 @@ double ObMeter::get_rate(int64_t rate_unit)
   tick_if_necessary();
   return rate_.get_rate(rate_unit);
 }
+

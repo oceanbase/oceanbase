@@ -16,34 +16,37 @@
 #include "sql/engine/ob_operator.h"
 #include "share/datum/ob_datum.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObMonitoringDumpSpec : public ObOpSpec {
+class ObMonitoringDumpSpec : public ObOpSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObMonitoringDumpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
+  ObMonitoringDumpSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(flags), K_(dst_op_id));
 
   uint64_t flags_;
   uint64_t dst_op_id_;
+
 };
 
-class ObMonitoringDumpOp : public ObOperator {
+class ObMonitoringDumpOp : public ObOperator
+{
 public:
-  ObMonitoringDumpOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
+  ObMonitoringDumpOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
 
   virtual int inner_open() override;
   virtual int inner_close() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
-  virtual void destroy() override
-  {
-    ObOperator::destroy();
-  }
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
+  virtual void destroy() override { ObOperator::destroy(); }
 
+  int calc_hash_value();
 private:
   common::ObDatum op_name_;
   common::ObDatum tracefile_identifier_;
@@ -52,9 +55,11 @@ private:
   uint64_t first_row_time_;
   uint64_t last_row_time_;
   bool first_row_fetched_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> output_hash_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* SRC_SQL_ENGINE_BASIC_OB_MONITORING_DUMP_OP_H_ */
+

@@ -14,17 +14,23 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_MYSQL_DB_TABLE_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObUserInfo;
 }
-}  // namespace share
-namespace sql {
+}
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace observer {
-class ObMySQLDBTable : public common::ObVirtualTableScannerIterator {
+namespace observer
+{
+class ObMySQLDBTable : public common::ObVirtualTableScannerIterator
+{
 private:
   enum MySQLDBTableColumns {
     HOST = 16,
@@ -54,21 +60,19 @@ private:
 public:
   ObMySQLDBTable();
   virtual ~ObMySQLDBTable();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
-  inline void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
 
 private:
-  int get_user_info(const uint64_t user_id, const share::schema::ObUserInfo*& user_info);
+  int get_user_info(const uint64_t tenant_id,
+                    const uint64_t user_id,
+                    const share::schema::ObUserInfo *&user_info);
   uint64_t tenant_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLDBTable);
 };
-}  // namespace observer
-}  // namespace oceanbase
-#endif  // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_MYSQL_DB_TABLE_
+}
+}
+#endif // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_MYSQL_DB_TABLE_

@@ -18,23 +18,29 @@
 #include "sql/resolver/ddl/ob_drop_dblink_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObDropDbLinkResolver::ObDropDbLinkResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObDropDbLinkResolver::ObDropDbLinkResolver(ObResolverParams &params)
+    : ObDDLResolver(params)
+{
+}
 
 ObDropDbLinkResolver::~ObDropDbLinkResolver()
-{}
+{
+}
 
-int ObDropDbLinkResolver::resolve(const ParseNode& parse_tree)
+int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObDropDbLinkStmt* drop_dblink_stmt = NULL;
-  if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_DROP_DBLINK) ||
-      OB_UNLIKELY(node->num_child_ != DBLINK_NODE_COUNT)) {
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObDropDbLinkStmt *drop_dblink_stmt = NULL;
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(node->type_ != T_DROP_DBLINK)
+      || OB_UNLIKELY(node->num_child_ != DBLINK_NODE_COUNT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
   } else if (OB_ISNULL(session_info_)) {
@@ -52,7 +58,7 @@ int ObDropDbLinkResolver::resolve(const ParseNode& parse_tree)
   }
   if (OB_SUCC(ret)) {
     ObString dblink_name;
-    ParseNode* name_node = node->children_[DBLINK_NAME];
+    ParseNode *name_node = node->children_[DBLINK_NAME];
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
@@ -65,18 +71,18 @@ int ObDropDbLinkResolver::resolve(const ParseNode& parse_tree)
     }
   }
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-    OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-           session_info_->get_priv_user_id(),
-           ObString(""),
-           stmt::T_DROP_DBLINK,
-           session_info_->get_enable_role_array()),
-        session_info_->get_effective_tenant_id(),
-        session_info_->get_user_id());
+    OZ (schema_checker_->check_ora_ddl_priv(
+          session_info_->get_effective_tenant_id(),
+          session_info_->get_priv_user_id(),
+          ObString(""),
+          stmt::T_DROP_DBLINK,
+          session_info_->get_enable_role_array()),
+          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
   }
-
+  
   LOG_INFO("resolve drop dblink finish", K(ret));
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} //end namespace sql
+} //end namespace oceanbase

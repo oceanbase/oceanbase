@@ -15,21 +15,20 @@
 #include "ob_block_cache_working_set.h"
 #include "ob_storage_cache_suite.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace blocksstable {
+namespace blocksstable
+{
 ObBlockCacheWorkingSet::ObBlockCacheWorkingSet()
-    : inited_(false),
-      tenant_id_(OB_INVALID_ID),
-      block_cache_(NULL),
-      put_size_(0),
-      use_working_set_(false),
-      working_set_(),
-      lock_()
-{}
+  : inited_(false), tenant_id_(OB_INVALID_ID), block_cache_(NULL),
+    put_size_(0), use_working_set_(false), working_set_(), lock_()
+{
+}
 
 ObBlockCacheWorkingSet::~ObBlockCacheWorkingSet()
-{}
+{
+}
 
 int ObBlockCacheWorkingSet::init(const uint64_t tenant_id)
 {
@@ -76,7 +75,7 @@ int ObBlockCacheWorkingSet::add_put_size(const int64_t put_size)
   return ret;
 }
 
-int ObBlockCacheWorkingSet::get_cache(BaseBlockCache*& cache)
+int ObBlockCacheWorkingSet::get_cache(BaseBlockCache *&cache)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -92,7 +91,7 @@ int ObBlockCacheWorkingSet::get_cache(BaseBlockCache*& cache)
   return ret;
 }
 
-int ObBlockCacheWorkingSet::get_allocator(ObIAllocator*& allocator)
+int ObBlockCacheWorkingSet::get_allocator(ObIAllocator *&allocator)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -104,10 +103,10 @@ int ObBlockCacheWorkingSet::get_allocator(ObIAllocator*& allocator)
   return ret;
 }
 
-int ObBlockCacheWorkingSet::put(const Key& key, const Value& value, bool overwrite)
+int ObBlockCacheWorkingSet::put(const Key &key, const Value &value, bool overwrite)
 {
   int ret = OB_SUCCESS;
-  BaseBlockCache* cache = NULL;
+  BaseBlockCache *cache = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -124,11 +123,11 @@ int ObBlockCacheWorkingSet::put(const Key& key, const Value& value, bool overwri
   return ret;
 }
 
-int ObBlockCacheWorkingSet::put_and_fetch(
-    const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite)
+int ObBlockCacheWorkingSet::put_and_fetch(const Key &key, const Value &value, const Value *&pvalue,
+    ObKVCacheHandle &handle, bool overwrite)
 {
   int ret = OB_SUCCESS;
-  BaseBlockCache* cache = NULL;
+  BaseBlockCache *cache = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -145,10 +144,10 @@ int ObBlockCacheWorkingSet::put_and_fetch(
   return ret;
 }
 
-int ObBlockCacheWorkingSet::get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle)
+int ObBlockCacheWorkingSet::get(const Key &key, const Value *&pvalue, ObKVCacheHandle &handle)
 {
   int ret = OB_SUCCESS;
-  BaseBlockCache* cache = NULL;
+  BaseBlockCache *cache = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -160,10 +159,10 @@ int ObBlockCacheWorkingSet::get(const Key& key, const Value*& pvalue, ObKVCacheH
   return ret;
 }
 
-int ObBlockCacheWorkingSet::erase(const Key& key)
+int ObBlockCacheWorkingSet::erase(const Key &key)
 {
   int ret = OB_SUCCESS;
-  BaseBlockCache* cache = NULL;
+  BaseBlockCache *cache = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -202,10 +201,10 @@ int ObBlockCacheWorkingSet::create_working_set_if_need()
 }
 
 int ObBlockCacheWorkingSet::alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size,
-    ObKVCachePair*& kvpair, ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle)
+      ObKVCachePair *&kvpair, ObKVCacheHandle &handle, ObKVCacheInstHandle &inst_handle)
 {
   int ret = OB_SUCCESS;
-  BaseBlockCache* cache = nullptr;
+  BaseBlockCache *cache = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -221,6 +220,5 @@ int ObBlockCacheWorkingSet::alloc(const uint64_t tenant_id, const int64_t key_si
   }
   return ret;
 }
-
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+}//end namespace blocksstable
+}//end namespace oceanbase

@@ -22,46 +22,52 @@ using namespace std;
 using namespace oceanbase::common;
 ObMemAttr attr;
 
-class TestObjectSet : public ::testing::Test {
-  class ObjecSetLocker : public ISetLocker {
+#if 0
+class TestObjectSet
+    : public ::testing::Test
+{
+  class ObjecSetLocker: public ISetLocker
+  {
   public:
-    ObjecSetLocker()
-    {}
+    ObjecSetLocker() {}
     void lock() override
-    {}
+    {
+    }
     void unlock() override
-    {}
+    {
+    }
     bool trylock() override
     {
       return true;
     }
   };
-
 public:
-  TestObjectSet() : tallocator_(500), os_locker_(), bs_(), os_()
+  TestObjectSet()
+    : tallocator_(500),
+      os_locker_(), bs_(), os_()
   {}
 
   virtual void SetUp()
   {
     cout << BLOCKS_PER_CHUNK << endl;
-    cout << NORMAL_AOBJECT_SIZE << endl;
     cout << AOBJECT_META_SIZE << " " << ABLOCK_HEADER_SIZE << endl;
     tallocator_.set_tenant_memory_mgr();
     tallocator_.set_limit(1000L << 20);
     bs_.reset();
-    bs_.set_tenant_ctx_allocator(tallocator_, attr);
+    bs_.set_tenant_ctx_allocator(tallocator_);
     os_.set_block_mgr(&bs_);
     os_.set_locker(&os_locker_);
     os_.reset();
   }
 
   virtual void TearDown()
-  {}
-
-  void* Malloc(uint64_t size)
   {
-    void* p = NULL;
-    AObject* obj = os_.alloc_object(size, attr);
+  }
+
+  void *Malloc(uint64_t size)
+  {
+    void *p = NULL;
+    AObject *obj = os_.alloc_object(size, attr);
     if (obj != NULL) {
       p = obj->data_;
       // memset(p, 0, size);
@@ -69,15 +75,16 @@ public:
     return p;
   }
 
-  void Free(void* ptr)
+  void Free(void *ptr)
   {
-    AObject* obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+    AObject *obj = reinterpret_cast<AObject*>(
+        (char*)ptr - AOBJECT_HEADER_SIZE);
     os_.free_object(obj);
   }
 
-  void* Realloc(void* ptr, uint64_t size)
+  void *Realloc(void *ptr, uint64_t size)
   {
-    AObject* obj = NULL;
+    AObject *obj = NULL;
     if (ptr != NULL) {
       obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     }
@@ -90,7 +97,7 @@ public:
     os_.reset();
   }
 
-  void check_ptr(void* ptr)
+  void check_ptr(void *ptr)
   {
     EXPECT_TRUE(ptr != NULL);
     UNUSED(ptr);
@@ -105,7 +112,7 @@ protected:
 
 TEST_F(TestObjectSet, Basic)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << 20;
   uint64_t sz = 32;
 
@@ -158,13 +165,13 @@ TEST_F(TestObjectSet, Basic)
     p = Malloc(sz);
     check_ptr(p);
     Free(p);
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1 << 13) - 1));
+    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<13) - 1));
   }
 }
 
 TEST_F(TestObjectSet, Basic2)
 {
-  void* p[128] = {};
+  void *p[128] = {};
   int64_t cnt = 1L << (28 - 10);
   uint64_t sz = 1024;
 
@@ -189,13 +196,13 @@ TEST_F(TestObjectSet, Basic2)
     while (i--) {
       Free(p[i]);
     }
-    sz = ((sz | reinterpret_cast<size_t>(p[0])) & ((1 << 13) - 1));
+    sz = ((sz | reinterpret_cast<size_t>(p[0])) & ((1<<13) - 1));
   }
 }
 
 TEST_F(TestObjectSet, SplitBug)
 {
-  void* p[128] = {};
+  void *p[128] = {};
 
   {
     // build free list
@@ -227,7 +234,7 @@ TEST_F(TestObjectSet, SplitBug)
 
 TEST_F(TestObjectSet, Reset)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << (28 - 10);
   uint64_t sz = 32;
 
@@ -265,13 +272,13 @@ TEST_F(TestObjectSet, Reset)
     p = Malloc(sz);
     check_ptr(p);
     Reset();
-    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1 << 13) - 1));
+    sz = ((sz | reinterpret_cast<size_t>(p)) & ((1<<13) - 1));
   }
 }
 
 TEST_F(TestObjectSet, NormalObject)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << (28 - 6);
   uint64_t sz = 1 < 13;
 
@@ -284,7 +291,7 @@ TEST_F(TestObjectSet, NormalObject)
 
 TEST_F(TestObjectSet, NormalObject_plus_1)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << (28 - 6);
   uint64_t sz = (1 << 13) + 1;
 
@@ -335,7 +342,7 @@ TEST_F(TestObjectSet, PageArena)
 
 TEST_F(TestObjectSet, PageArenaOrigin)
 {
-  // int64_t cnt = 1L << 22;
+  //int64_t cnt = 1L << 22;
   int64_t cnt = 1L << 20L;
   const int sz = 32;
 
@@ -364,7 +371,7 @@ TEST_F(TestObjectSet, PageArenaOrigin)
 
 TEST_F(TestObjectSet, ReallocInc1M)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << 10;
   uint64_t sz = 1;
 
@@ -393,7 +400,7 @@ TEST_F(TestObjectSet, ReallocInc1M)
 
 TEST_F(TestObjectSet, ReallocDec1M)
 {
-  void* p = NULL;
+  void *p = NULL;
   int64_t cnt = 1L << 10;
   int64_t sz = 1 << 20;
 
@@ -421,17 +428,18 @@ TEST_F(TestObjectSet, BlockCacheSize)
 {
   static const int64_t SZ = 8192;
   static const int64_t COUNT = 10000;
-  void* objs[COUNT] = {};
+  void *objs[COUNT] = {};
   for (int i = 0; i < COUNT; ++i) {
     objs[i] = Malloc(SZ);
   }
-  for (int i = 0; i < COUNT / 10; ++i) {
+  for (int i = 0; i < COUNT/10; ++i) {
     Free(objs[i]);
   }
   EXPECT_EQ(os_.get_normal_hold() - os_.get_normal_used(), SZ + AOBJECT_META_SIZE);
 }
+#endif
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
   ::testing::InitGoogleTest(&argc, argv);

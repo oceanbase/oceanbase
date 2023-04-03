@@ -14,20 +14,22 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/allocator/ob_delay_free_allocator.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(ObDelayFreeAllocator, test_delay_free_allocator)
 {
   int ret = OB_SUCCESS;
   ObDelayFreeAllocator allocator;
   const int64_t local_array_size = 100000;
-  void* data = NULL;
-  void* array[local_array_size];
+  void *data = NULL;
+  void *array[local_array_size];
   int64_t i = 0;
   int64_t size = 1000;
 
   // test invalid init
-  ret = allocator.init(-1, false, -1);
+  ret = allocator.init("DelayFreeAlloc", false, -1);
   EXPECT_NE(OB_SUCCESS, ret);
 
   // test invalid alloc and free
@@ -36,18 +38,18 @@ TEST(ObDelayFreeAllocator, test_delay_free_allocator)
   allocator.free(data);
 
   // test init
-  ret = allocator.init(0, false, 0);
+  ret = allocator.init("DelayFreeAlloc", false, 0);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   // test repeatly init
-  ret = allocator.init(0, false, 0);
+  ret = allocator.init("DelayFreeAlloc", false, 0);
   EXPECT_NE(OB_SUCCESS, ret);
 
   // test destroy
   allocator.destroy();
 
   // test init
-  ret = allocator.init(0, true, 0);
+  ret = allocator.init("DelayFreeAlloc", true, 0);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   // test normal alloc
@@ -93,10 +95,11 @@ TEST(ObDelayFreeAllocator, test_delay_free_allocator)
   allocator.reset();
   EXPECT_EQ(0, allocator.get_total_size());
   EXPECT_EQ(0, allocator.get_memory_fragment_size());
+
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 int main(int argc, char** argv)
 {

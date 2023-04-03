@@ -14,8 +14,10 @@
 #define OCEANBASE_HASH_OB_HASH_
 
 #include "lib/hash/ob_darray.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 typedef IAlloc IHashAlloc;
 
 inline uint64_t next2n(const uint64_t x)
@@ -69,31 +71,31 @@ inline uint64_t calc_hash(int64_t hash)
   return rand64(hash);
 }
 
-template <typename key_t>
-uint64_t calc_hash(key_t& key)
+template<typename key_t>
+uint64_t calc_hash(key_t &key)
 {
   return key.hash();
 }
 
-template <typename key_t>
-int compare(key_t& k1, key_t& k2)
+template<typename key_t>
+int compare(key_t &k1, key_t &k2)
 {
   return k1.compare(k2);
 }
 
-template <typename key_t>
-uint64_t hash_map_calc_hash(key_t& key)
+template<typename key_t>
+uint64_t hash_map_calc_hash(key_t &key)
 {
   return calc_hash(key) | 1ULL;
 }
 
-struct HashRoot {
+struct HashRoot
+{
   HashRoot() : root_(NULL), node_cnt_(), slot_limit_(0), filled_slot_(0)
   {
     node_cnt_.set_precision(0);
   }
-  ~HashRoot()
-  {}
+  ~HashRoot() {}
 
   uint64_t get_slot_limit()
   {
@@ -134,81 +136,72 @@ struct HashRoot {
     return purge_idx;
   }
 
-  ArrayHead* root_;
+  ArrayHead *root_;
   EstimateCounter node_cnt_;
   int64_t slot_limit_ CACHE_ALIGNED;
   int64_t filled_slot_ CACHE_ALIGNED;
 };
 
-template <typename key_t, typename val_t>
-class HashBase {
+template<typename key_t, typename val_t>
+class HashBase
+{
 public:
-  class IKVRCallback {
+  class IKVRCallback
+  {
   public:
-    IKVRCallback()
-    {}
-    virtual ~IKVRCallback()
-    {}
-    virtual void reclaim_key_value(key_t& key, val_t& value) = 0;
-    virtual void ref_key_value(key_t& key, val_t& value)
+    IKVRCallback() {}
+    virtual ~IKVRCallback() {}
+    virtual void reclaim_key_value(key_t &key, val_t &value) = 0;
+    virtual void ref_key_value(key_t &key, val_t &value)
     {
       UNUSED(key);
       UNUSED(value);
     }
-    virtual void release_key_value(key_t& key, val_t& value)
+    virtual void release_key_value(key_t &key, val_t &value)
     {
       UNUSED(key);
       UNUSED(value);
     }
   };
 
-  // typedef void* val_t;
+  //typedef void* val_t;
   typedef ArrayBase::Handle ArrayHandle;
-  struct DMark {
+  struct DMark
+  {
     const static uint64_t DELETE_MASK = 1ULL;
-    static bool is_set(void* node)
+    static bool is_set(void *node)
     {
       return 0 != ((uint64_t)node & DELETE_MASK);
     }
-    static void* set(void* node)
+    static void *set(void *node)
     {
-      return reinterpret_cast<void*>((uint64_t)node | DELETE_MASK);
+      return reinterpret_cast<void *>((uint64_t)node | DELETE_MASK);
     }
-    static void* unset(void* node)
+    static void *unset(void *node)
     {
-      return reinterpret_cast<void*>((uint64_t)node & ~DELETE_MASK);
+      return reinterpret_cast<void *>((uint64_t)node & ~DELETE_MASK);
     }
   };
 
-  struct Node : public HazardNode {
-    Node() : HazardNode(), next_(NULL), is_deleted_(false), hash_(0), key_(), val_()
-    {}
-    ~Node()
-    {}
-    Node* set_dummy(uint64_t idx)
+  struct Node: public HazardNode
+  {
+    Node(): HazardNode(), next_(NULL), is_deleted_(false), hash_(0), key_(), val_() {}
+    ~Node() {}
+    Node *set_dummy(uint64_t idx)
     {
       hash_ = bitrev(idx);
       return this;
     }
-    inline void set_deleted()
-    {
-      is_deleted_ = true;
-    }
-    bool is_deleted() const
-    {
-      return is_deleted_;
-    }
-    uint64_t get_spk() const
-    {
-      return bitrev(hash_);
-    }
-    Node* set(key_t key)
+    inline void set_deleted() { is_deleted_ = true; }
+    bool is_deleted() const { return is_deleted_; }
+    uint64_t get_spk() const { return bitrev(hash_); }
+    Node *set(key_t key)
     {
       hash_ = hash_map_calc_hash(key);
       key_ = key;
       return this;
     }
-    Node* set(key_t key, val_t val)
+    Node *set(key_t key, val_t val)
     {
       hash_ = hash_map_calc_hash(key);
       key_ = key;
@@ -219,7 +212,7 @@ public:
     {
       return 0 == (hash_ & 1);
     }
-    int compare(Node* that)
+    int compare(Node *that)
     {
       int ret = 0;
       if (OB_ISNULL(that)) {
@@ -235,15 +228,15 @@ public:
       }
       return ret;
     }
-    Node* get_next()
+    Node *get_next()
     {
-      return static_cast<Node*>(DMark::unset(ATOMIC_LOAD(&next_)));
+      return static_cast<Node *>(DMark::unset(ATOMIC_LOAD(&next_)));
     }
-    Node* get_next(bool& is_mark)
+    Node *get_next(bool &is_mark)
     {
-      Node* next = ATOMIC_LOAD(&next_);
+      Node *next = ATOMIC_LOAD(&next_);
       is_mark = DMark::is_set(next);
-      return static_cast<Node*>(DMark::unset((void*)next));
+      return static_cast<Node *>(DMark::unset((void *)next));
     }
     bool is_delete_mark_set() const
     {
@@ -251,36 +244,32 @@ public:
     }
     bool set_delete_mark()
     {
-      Node* next = ATOMIC_LOAD(&next_);
+      Node *next = ATOMIC_LOAD(&next_);
       return !DMark::is_set(next) && ATOMIC_BCAS(&next_, next, (Node*)DMark::set(next));
     }
     void clear_delete_mark()
     {
-      ATOMIC_STORE(&next_, static_cast<Node*>(DMark::unset(ATOMIC_LOAD(&next_))));
+      ATOMIC_STORE(&next_, static_cast<Node *>(DMark::unset(ATOMIC_LOAD(&next_))));
     }
-    bool cas_next(Node* oldv, Node* newv)
+    bool cas_next(Node *oldv, Node *newv)
     {
       return ATOMIC_BCAS(&next_, oldv, newv);
     }
 
-    Node* next_;
+    Node *next_;
     bool is_deleted_;
     uint64_t hash_;
     key_t key_;
     val_t val_;
-  };  // end struct Node
+  }; // end struct Node
 
-  class Iterator {
+  class Iterator
+  {
   public:
-    Iterator() : head_(NULL)
-    {}
-    ~Iterator()
-    {}
-    void set_head(Node* head)
-    {
-      head_ = head;
-    }
-    int next(key_t& key, val_t& val)
+    Iterator(): head_(NULL) {}
+    ~Iterator() {}
+    void set_head(Node *head) { head_ = head; }
+    int next(key_t &key, val_t &val)
     {
       int err = 0;
       while (0 == err) {
@@ -297,45 +286,39 @@ public:
       }
       return err;
     }
-
   private:
-    Node* head_;
+    Node *head_;
   };
-  class BaseHandle {
+  class BaseHandle
+  {
   public:
-    explicit BaseHandle(HashBase& host)
-        : alloc_(host.get_alloc()),
-          kvr_callback_(host.get_kvr_callback()),
-          hazard_handle_(host.get_hazard_ref()),
-          retire_list_handle_(host.get_hazard_ref(), host.get_retire_list())
+    explicit BaseHandle(HashBase &host):
+        alloc_(host.get_alloc()),
+        kvr_callback_(host.get_kvr_callback()),
+        hazard_handle_(host.get_hazard_ref()),
+        retire_list_handle_(host.get_hazard_ref(), host.get_retire_list())
     {
       acquire_ref();
     }
-    virtual ~BaseHandle()
-    {
-      release_ref();
-    }
-    bool is_hold_ref()
-    {
-      return hazard_handle_.is_hold_ref();
-    }
+    virtual ~BaseHandle() { release_ref(); }
+    bool is_hold_ref() { return hazard_handle_.is_hold_ref(); }
     void retire(int errcode)
     {
-      Node* p = NULL;
+      Node *p = NULL;
       retire_list_handle_.retire(errcode, 0);
-      while (NULL != (p = static_cast<Node*>(retire_list_handle_.reclaim()))) {
+      while (NULL != (p = static_cast<Node *>(retire_list_handle_.reclaim()))) {
         free_node(p);
       }
     }
-    Node* alloc_node()
+    Node *alloc_node()
     {
-      Node* node = NULL;
-      if (NULL != (node = static_cast<Node*>(alloc_.alloc(sizeof(Node))))) {
-        new (node) Node();
+      Node *node = NULL;
+      if (NULL != (node = static_cast<Node *>(alloc_.alloc(sizeof(Node))))) {
+        new(node)Node();
       }
       return node;
     }
-    void free_node(Node* p)
+    void free_node(Node *p)
     {
       if (OB_LIKELY(NULL != p)) {
         if (p->is_deleted()) {
@@ -346,15 +329,14 @@ public:
         p = NULL;
       }
     }
-    void add_to_alloc_list(Node* node)
+    void add_to_alloc_list(Node *node)
     {
       retire_list_handle_.add_alloc(node);
     }
-    void add_to_del_list(Node* node)
+    void add_to_del_list(Node *node)
     {
       retire_list_handle_.add_del(node);
     }
-
   private:
     int acquire_ref()
     {
@@ -364,32 +346,32 @@ public:
     {
       hazard_handle_.release_ref();
     }
-
   private:
-    IHashAlloc& alloc_;
-    IKVRCallback& kvr_callback_;
+    IHashAlloc &alloc_;
+    IKVRCallback &kvr_callback_;
     HazardHandle hazard_handle_;
     RetireListHandle retire_list_handle_;
   };
 
-  class Handle : public BaseHandle {
+  class Handle: public BaseHandle
+  {
   public:
-    Handle(HashBase& host, HashRoot& root) : BaseHandle(host), array_(host.get_array_base()), root_(root)
-    {}
-    ~Handle()
-    {}
+    Handle(HashBase &host, HashRoot &root) : BaseHandle(host),
+                                             array_(host.get_array_base()),
+                                             root_(root) {}
+    ~Handle() {}
 
-    Node* get_head()
+    Node *get_head()
     {
       return get_from_array(0);
     }
 
-    void print_list(FILE* fp)
+    void print_list(FILE *fp)
     {
       if (OB_UNLIKELY(NULL == fp)) {
-        COMMON_LOG(ERROR, "print list error, fp is null", K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "print list error, fp is null", K(lbt()));
       } else {
-        Node* head = get_head();
+        Node *head = get_head();
         fprintf(fp, "Hash: ");
         while (NULL != head) {
           fprintf(fp, "%lx[%lx]->", head->hash_, head->key_);
@@ -398,12 +380,12 @@ public:
         fprintf(fp, "\n");
       }
     }
-    int get(key_t key, val_t& val)
+    int get(key_t key, val_t &val)
     {
       int ret = 0;
       Node target;
-      Node* ret_node = NULL;
-      Node* pre = NULL;
+      Node *ret_node = NULL;
+      Node *pre = NULL;
       if (0 != (ret = get_pre(key, pre))) {
       } else if (0 != (ret = get_from_list(pre, target.set(key), ret_node))) {
       } else {
@@ -419,8 +401,8 @@ public:
     int insert(key_t key, val_t val)
     {
       int err = 0;
-      Node* node = NULL;
-      Node* pre = NULL;
+      Node *node = NULL;
+      Node *pre = NULL;
       if (0 != (err = get_pre(key, pre))) {
       } else if (NULL == (node = this->alloc_node())) {
         err = -ENOMEM;
@@ -434,12 +416,12 @@ public:
       return err;
     }
 
-    int del(key_t key, val_t& val)
+    int del(key_t key, val_t &val)
     {
       int ret = 0;
       Node target;
-      Node* ret_node = NULL;
-      Node* pre = NULL;
+      Node *ret_node = NULL;
+      Node *pre = NULL;
       if (0 != (ret = get_pre(key, pre, false))) {
       } else if (NULL == pre) {
         ret = -ENOENT;
@@ -461,9 +443,9 @@ public:
     }
 
   private:
-    int get_pre(key_t key, Node*& pre, bool need_add_bucket = true)
+    int get_pre(key_t key, Node *&pre, bool need_add_bucket = true)
     {
-      int err = 0;
+      int err  = 0;
       uint64_t hash = hash_map_calc_hash(key);
       uint64_t spk = bitrev(hash);
       uint64_t slot2fill = 0;
@@ -492,10 +474,10 @@ public:
       return bcnt == 0 ? 0 : (spk & (bcnt - 1));
     }
 
-    int get_pre_(uint64_t spk, Node*& pre, uint64_t& slot2fill)
+    int get_pre_(uint64_t spk, Node *&pre, uint64_t &slot2fill)
     {
       int err = -EAGAIN;
-      uint64_t limit = root_.get_slot_limit() ?: 1;
+      uint64_t limit = root_.get_slot_limit() ? : 1;
       uint64_t bcnt = next2n(limit);
       uint64_t target_idx = 0;
       uint64_t find_idx = 0;
@@ -515,14 +497,14 @@ public:
       return err;
     }
 
-    void search_pre_(uint64_t spk, uint64_t start_bcnt, Node*& item, uint64_t& find_idx, uint64_t& bcnt)
+    void search_pre_(uint64_t spk, uint64_t start_bcnt, Node *&item, uint64_t &find_idx, uint64_t &bcnt)
     {
       int tmp_ret = -EAGAIN;
       bcnt = start_bcnt;
       while (-EAGAIN == tmp_ret && bcnt > 0) {
         uint64_t idx = get_idx(spk, bcnt);
-        ArrayHandle handle(array_);  // WHITESCAN: OB_CUSTOM_LOOP_DECLARE
-        if (-EAGAIN == (tmp_ret = array_.get(handle, &root_.root_, idx, (ArrayBase::val_t&)item))) {
+        ArrayHandle handle(array_); // WHITESCAN: OB_CUSTOM_LOOP_DECLARE
+        if (-EAGAIN == (tmp_ret = array_.get(handle, &root_.root_, idx, (ArrayBase::val_t &)item))) {
         } else if (0 != tmp_ret) {
           bcnt >>= 1;
           tmp_ret = -EAGAIN;
@@ -532,37 +514,37 @@ public:
       }
     }
 
-    Node* get_from_array(int64_t idx)
+    Node *get_from_array(int64_t idx)
     {
-      Node* node = NULL;
+      Node *node = NULL;
       ArrayHandle handle(array_);
-      array_.get(handle, &root_.root_, idx, (void*&)node);
+      array_.get(handle, &root_.root_, idx, (void *&)node);
       return node;
     }
 
-    int insert_to_array(uint64_t idx, Node* node)
+    int insert_to_array(uint64_t idx, Node *node)
     {
       ArrayHandle handle(array_);
-      return array_.insert(handle, &root_.root_, idx, (void*)node);
+      return array_.insert(handle, &root_.root_, idx, (void *)node);
     }
 
-    int del_from_array(uint64_t idx, Node*& node)
+    int del_from_array(uint64_t idx, Node *&node)
     {
       ArrayHandle handle(array_);
-      return array_.del(handle, &root_.root_, idx, (void*&)node);
+      return array_.del(handle, &root_.root_, idx, (void *&)node);
     }
 
-    int del_bucket_from_list(Node* node)
+    int del_bucket_from_list(Node *node)
     {
       int ret = 0;
       if (OB_ISNULL(node)) {
         ret = -EINVAL;
         COMMON_LOG(ERROR, "del bucket error, node is null", K(ret), K(lbt()));
       } else {
-        Node* pre = NULL;
+        Node *pre = NULL;
         uint64_t spk = node->get_spk();
         uint64_t slot2fill = 0;
-        Node* ret_node = NULL;
+        Node *ret_node = NULL;
         (void)get_pre_(spk, pre, slot2fill);
         if (NULL != pre) {
           ret = del_from_list(pre, node, ret_node);
@@ -571,10 +553,10 @@ public:
       return ret;
     }
 
-    int add_bucket(Node* pre, uint64_t idx)
+    int add_bucket(Node *pre, uint64_t idx)
     {
       int err = 0;
-      Node* node = NULL;
+      Node *node = NULL;
       if (NULL == (node = this->alloc_node())) {
         err = -ENOMEM;
       } else if (NULL == node->set_dummy(idx)) {
@@ -598,12 +580,12 @@ public:
     {
       int err = 0;
       Node target;
-      Node* node = NULL;
+      Node *node = NULL;
       if (0 != (err = del_from_array(idx, node))) {
       } else {
         uint64_t spk = bitrev(bitrev(idx) - 1);
         uint64_t slot2fill = 0;
-        Node* pre = NULL;
+        Node *pre = NULL;
         while (true) {
           get_pre_(spk, pre, slot2fill);
           if (NULL == pre) {
@@ -629,17 +611,18 @@ public:
       }
     }
 
-    static int search_in_list(Node* start, Node* target, Node*& pre, Node*& next)
+    static int search_in_list(Node *start, Node *target, Node *&pre, Node *&next)
     {
       int err = 0;
       bool is_deleted = false;
       if (OB_ISNULL(start) || OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "search in list error, start is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "search in list error, start is null", K(err), K(lbt()));
       } else {
         pre = start;
         next = NULL;
-        while (NULL != (next = pre->get_next(is_deleted)) && target->compare(next) > 0) {
+        while (NULL != (next = pre->get_next(is_deleted))
+               && target->compare(next) > 0) {
           pre = next;
         }
         if (is_deleted) {
@@ -648,14 +631,14 @@ public:
       }
       return err;
     }
-    static int get_from_list(Node* start, Node* target, Node*& ret_node)
+    static int get_from_list(Node *start, Node *target, Node *&ret_node)
     {
       int err = 0;
-      Node* pre = NULL;
-      Node* next = NULL;
+      Node *pre = NULL;
+      Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL == next || 0 != target->compare(next)) {
         err = -ENOENT;
@@ -664,33 +647,33 @@ public:
       }
       return err;
     }
-    static int insert_to_list(Node* start, Node* target)
+    static int insert_to_list(Node *start, Node *target)
     {
       int err = 0;
-      Node* pre = NULL;
-      Node* next = NULL;
+      Node *pre = NULL;
+      Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL != next && 0 == target->compare(next)) {
         err = -EEXIST;
       } else if (OB_ISNULL(pre)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "pre is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pre is null", K(err), K(lbt()));
       } else if (!pre->cas_next(target->next_ = next, target)) {
         err = -EAGAIN;
       }
       return err;
     }
-    static int del_from_list(Node* start, Node* target, Node*& ret_node)
+    static int del_from_list(Node *start, Node *target, Node *&ret_node)
     {
       int err = 0;
-      Node* pre = NULL;
-      Node* next = NULL;
+      Node *pre = NULL;
+      Node *next = NULL;
       if (OB_ISNULL(target)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "get from list error, target is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get from list error, target is null", K(err), K(lbt()));
       } else if (0 != (err = search_in_list(start, target, pre, next))) {
       } else if (NULL == next || 0 != target->compare(next)) {
         err = -ENOENT;
@@ -698,7 +681,7 @@ public:
         err = -EAGAIN;
       } else if (OB_ISNULL(pre)) {
         err = -EINVAL;
-        COMMON_LOG(ERROR, "pre is null", K(err), K(lbt()));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pre is null", K(err), K(lbt()));
       } else if (!pre->cas_next(next, next->get_next())) {
         err = -EAGAIN;
         next->clear_delete_mark();
@@ -707,50 +690,31 @@ public:
       }
       return err;
     }
-
   private:
-    ArrayBase& array_;
-    HashRoot& root_;
+    ArrayBase &array_;
+    HashRoot &root_;
   };
 
 public:
-  HashBase(IHashAlloc& hash_alloc, IArrayAlloc& array_alloc, IKVRCallback& kvr_callback, int64_t array_node_size)
-      : alloc_(hash_alloc), kvr_callback_(kvr_callback), array_base_(array_alloc, array_node_size)
-  {}
-  ~HashBase()
+  HashBase(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc, IKVRCallback &kvr_callback,
+           int64_t array_node_size):
+      alloc_(hash_alloc), kvr_callback_(kvr_callback), array_base_(array_alloc, array_node_size) {}
+  ~HashBase() { clean_retire_list(); }
+  IHashAlloc &get_alloc() { return alloc_; }
+  IKVRCallback &get_kvr_callback() { return kvr_callback_; }
+  HazardRef &get_hazard_ref() { return hazard_ref_; }
+  RetireList &get_retire_list() { return retire_list_; }
+  ArrayBase &get_array_base() { return array_base_; }
+  void print(FILE *fp, HashRoot &root)
   {
-    clean_retire_list();
-  }
-  IHashAlloc& get_alloc()
-  {
-    return alloc_;
-  }
-  IKVRCallback& get_kvr_callback()
-  {
-    return kvr_callback_;
-  }
-  HazardRef& get_hazard_ref()
-  {
-    return hazard_ref_;
-  }
-  RetireList& get_retire_list()
-  {
-    return retire_list_;
-  }
-  ArrayBase& get_array_base()
-  {
-    return array_base_;
-  }
-  void print(FILE* fp, HashRoot& root)
-  {
-    // fprintf(fp, "%s\n", repr(root));
+    //fprintf(fp, "%s\n", repr(root));
     if (OB_ISNULL(root.root_)) {
-      COMMON_LOG(ERROR, "hash root is null", K(lbt()));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash root is null", K(lbt()));
     } else {
       root.root_->print(fp);
     }
   }
-  int get_iter(Handle& handle, Iterator& iter)
+  int get_iter(Handle &handle, Iterator &iter)
   {
     int err = 0;
     if (!handle.is_hold_ref()) {
@@ -760,7 +724,7 @@ public:
     }
     return err;
   }
-  int get(Handle& handle, key_t key, val_t& val)
+  int get(Handle &handle, key_t key, val_t &val)
   {
     int err = 0;
     if (!handle.is_hold_ref()) {
@@ -771,7 +735,7 @@ public:
     handle.retire(err);
     return err;
   }
-  int insert(Handle& handle, key_t key, val_t val)
+  int insert(Handle &handle, key_t key, val_t val)
   {
     int err = 0;
     if (!handle.is_hold_ref()) {
@@ -782,7 +746,7 @@ public:
     handle.retire(err);
     return err;
   }
-  int del(Handle& handle, key_t key, val_t& val)
+  int del(Handle &handle, key_t key, val_t &val)
   {
     int err = 0;
     if (!handle.is_hold_ref()) {
@@ -793,14 +757,13 @@ public:
     handle.retire(err);
     return err;
   }
-
 private:
   void clean_retire_list()
   {
     LIB_LOG(INFO, "clean retire list");
     RetireList::RetireNodeIterator iter(&retire_list_);
-    Node* node = NULL;
-    while (NULL != (node = static_cast<Node*>(iter.get_next()))) {
+    Node *node = NULL;
+    while (NULL != (node = static_cast<Node *>(iter.get_next()))) {
       if (node->is_deleted()) {
         kvr_callback_.reclaim_key_value(node->key_, node->val_);
       }
@@ -809,16 +772,16 @@ private:
       node = NULL;
     }
   }
-
 private:
-  IHashAlloc& alloc_;
-  IKVRCallback& kvr_callback_;
+  IHashAlloc &alloc_;
+  IKVRCallback &kvr_callback_;
   HazardRef hazard_ref_;
   RetireList retire_list_;
   ArrayBase array_base_;
-};  // end class HashBase
+}; // end class HashBase
 
-};  // namespace common
-};  // end namespace oceanbase
+}; // end namespace hash
+}; // end namespace oceanbase
 
-#endif  // OCEANBASE_HASH_OB_HASH_
+
+#endif // OCEANBASE_HASH_OB_HASH_

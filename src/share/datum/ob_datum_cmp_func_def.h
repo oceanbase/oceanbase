@@ -22,459 +22,463 @@
 #include "lib/rowid/ob_urowid.h"
 #include "ob_datum.h"
 #include "ob_datum_util.h"
+#include "lib/json_type/ob_json_base.h" // for ObIJsonBase
+#include "lib/json_type/ob_json_bin.h" // for ObJsonBin
+#include "share/ob_lob_access_utils.h" // for Text types
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
+namespace datum_cmp
+{
 
-namespace cmp_func_helper {
-// ************ CmpFunc Impl Helper ************
+// We define three core comparison:
+//
+// 1. ObDatumTypeCmp<ObObjType, ObObjType>: define non string obj type compare,
+//    if comparison not deinfed for specified type, use ObDatumTCCmp defined comparison.
+// 2. ObDatumTCCmp<ObObjTypeClass, ObObjTypeClass>: define non string obj type class compare
+// 3. ObDatumStrCmp<ObCollationType, bool>: define string compare
 
-template <ObObjTypeClass tc1, ObObjTypeClass tc2>
-struct ObDatumCmpHelperByTC {
-  constexpr static bool defined_ = false;
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+template <bool V = true>
+struct ObDefined
+{
+  constexpr static bool defined_ = V;
+};
+
+// define compare by ObObjTypeClass
+template <ObObjTypeClass L_TC, ObObjTypeClass R_TC>
+struct ObDatumTCCmp : public ObDefined<false>
+{
+  inline static int cmp(const ObDatum &, const ObDatum &) { return 0; }
+};
+
+template <ObObjTypeClass TC>
+struct ObTCPayloadCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    UNUSED(datum1);
-    UNUSED(datum2);
-    return 0;
+    return ObDatumPayload<TC>::get(l) == ObDatumPayload<TC>::get(r)
+        ? 0
+        : (ObDatumPayload<TC>::get(l) < ObDatumPayload<TC>::get(r) ? -1 : 1);
   }
 };
 
-// Default CmpFunc Impl
+// cmp(signed, unsgined)
+struct ObSignedUnsignedCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return l.get_int() < 0
+        ? -1
+        : (l.get_int() < r.get_uint()
+           ? -1
+           : (l.get_int() == r.get_uint() ? 0 : 1));
+  }
+};
+
+// cmp(unsigned, signed)
+struct ObUnsignedSignedCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return -ObSignedUnsignedCmp::cmp(r, l);
+  }
+};
+
+// specialization for all type class.
+template <> struct ObDatumTCCmp<ObIntTC, ObIntTC> : public ObTCPayloadCmp<ObIntTC> {};
+template <> struct ObDatumTCCmp<ObUIntTC, ObUIntTC> : public ObTCPayloadCmp<ObUIntTC> {};
 template <>
-struct ObDatumCmpHelperByTC<ObMaxTC, ObMaxTC> {
-  constexpr static bool defined_ = false;
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+struct ObDatumTCCmp<ObFloatTC, ObFloatTC> : public ObDefined<>
+{
+  template <typename T>
+  inline static int real_value_cmp(T l, T r)
   {
-    UNUSED(datum1);
-    UNUSED(datum2);
+    int ret = 0;
+    // Note: For NaN, we can't use C language compare logic, which is not compatible
+    // with oracle rule.
+    // Oracle NaN compare rule: NaN is the king (bigger than any number)
+    if (isnan(l) || isnan(r)) {
+      if (isnan(l) && isnan(r)) {
+        ret = 0;
+      } else if (isnan(l)) {
+        // l is nan, r is not nan:left always bigger than right
+        ret = 1;
+      } else {
+        // l is not nan, r is nan, left always less than right
+        ret = -1;
+      }
+    } else {
+      ret = l == r ? 0 : (l < r ? -1 : 1);
+    }
+    return ret;
+  }
+
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return real_value_cmp(l.get_float(), r.get_float());
+  }
+};
+
+template <ObScale SCALE>
+struct ObFixedDoubleCmp: public ObDefined<>
+{
+  constexpr static double LOG_10[] =
+  {
+    1e000, 1e001, 1e002, 1e003, 1e004, 1e005, 1e006, 1e007,
+    1e008, 1e009, 1e010, 1e011, 1e012, 1e013, 1e014, 1e015,
+    1e016, 1e017, 1e018, 1e019, 1e020, 1e021, 1e022, 1e023,
+    1e024, 1e025, 1e026, 1e027, 1e028, 1e029, 1e030, 1e031
+  };
+  constexpr static double P = 5 / LOG_10[SCALE + 1];
+  inline static int cmp(const ObDatum &l_datum, const ObDatum &r_datum)
+  {
+    int ret = 0;
+    const double l = l_datum.get_double();
+    const double r = r_datum.get_double();
+    if (l == r || fabs(l - r) < P) {
+      ret = 0;
+    } else {
+      ret = (l < r ? -1 : 1);
+    }
+    return ret;
+  }
+};
+
+
+template <>
+struct ObDatumTCCmp<ObDoubleTC, ObDoubleTC> : public ObDatumTCCmp<ObFloatTC, ObFloatTC>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return ObDatumTCCmp<ObFloatTC, ObFloatTC>::real_value_cmp(l.get_double(), r.get_double());
+  }
+};
+
+template <>
+struct ObDatumTCCmp<ObNumberTC, ObNumberTC> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return number::ObNumber::compare(l.get_number_desc(), l.get_number_digits(),
+                                     r.get_number_desc(), r.get_number_digits());
+  }
+};
+
+template <> struct ObDatumTCCmp<ObDateTC, ObDateTC> : public ObTCPayloadCmp<ObDateTC> {};
+template <> struct ObDatumTCCmp<ObTimeTC, ObTimeTC> : public ObTCPayloadCmp<ObTimeTC> {};
+template <> struct ObDatumTCCmp<ObYearTC, ObYearTC> : public ObTCPayloadCmp<ObYearTC> {};
+template <> struct ObDatumTCCmp<ObBitTC, ObBitTC> : public ObTCPayloadCmp<ObBitTC> {};
+template <> struct ObDatumTCCmp<ObEnumSetTC, ObEnumSetTC> : public ObTCPayloadCmp<ObEnumSetTC> {};
+
+// different type class compare
+template <> struct ObDatumTCCmp<ObIntTC, ObUIntTC> : public ObSignedUnsignedCmp {};
+template <> struct ObDatumTCCmp<ObIntTC, ObEnumSetTC> : public ObSignedUnsignedCmp {};
+template <> struct ObDatumTCCmp<ObUIntTC, ObIntTC> : public ObUnsignedSignedCmp {};
+template <> struct ObDatumTCCmp<ObEnumSetTC, ObIntTC> : public ObUnsignedSignedCmp {};
+template <> struct ObDatumTCCmp<ObUIntTC, ObEnumSetTC> : public ObTCPayloadCmp<ObUIntTC> {};
+template <> struct ObDatumTCCmp<ObEnumSetTC, ObUIntTC> : public ObTCPayloadCmp<ObUIntTC> {};
+
+
+// special process for extend and null class type.
+
+// extend type vs any type is depend on extend type is min or max
+template <ObObjTypeClass TC>
+struct ObDatumTCCmp<ObExtendTC, TC> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &)
+  {
+    return (ObObj::MIN_OBJECT_VALUE == *l.int_ ? -1 : 1);
+  }
+};
+
+template <ObObjTypeClass TC>
+struct ObDatumTCCmp<TC, ObExtendTC> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &, const ObDatum &r)
+  {
+    return (ObObj::MIN_OBJECT_VALUE == *r.int_ ? -1 : 1);
+  }
+};
+
+template <>
+struct ObDatumTCCmp<ObExtendTC, ObExtendTC> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return (ObObj::MIN_OBJECT_VALUE == *l.int_ && ObObj::MIN_OBJECT_VALUE == *r.int_)
+        || (ObObj::MAX_OBJECT_VALUE == *l.int_ && ObObj::MAX_OBJECT_VALUE == *r.int_)
+        ? 0 : (ObObj::MIN_OBJECT_VALUE == *l.int_ ? -1 : 1);
+  }
+};
+
+struct ObDummyCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &, const ObDatum &)
+  {
     return 0;
   }
 };
 
-// tc1 == tc2
-// only has same TC, define cmp<IntTC, UIntTC>, <EnumTC, IntTC/UIntTC>) except
-template <ObObjTypeClass tc>
-struct ObDatumCmpHelperByTC<tc, tc> {
-  constexpr static bool defined_ = true;
-  typedef const char* (*invalid_func_type)(const ObDatum&);
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+// null type compare is never used (out layer guaranteed), but should be defined.
+template <ObObjTypeClass TC> struct ObDatumTCCmp<TC, ObNullTC> : public ObDummyCmp {};
+template <ObObjTypeClass TC> struct ObDatumTCCmp<ObNullTC, TC> : public ObDummyCmp {};
+template <> struct ObDatumTCCmp<ObNullTC, ObExtendTC> : public ObDummyCmp {};
+template <> struct ObDatumTCCmp<ObExtendTC, ObNullTC> : public ObDummyCmp {};
+template <> struct ObDatumTCCmp<ObNullTC, ObNullTC> : public ObDummyCmp {};
+
+
+///////////////////////////////////////////////////////////////////////////////
+// begin define compare by ObObjType
+///////////////////////////////////////////////////////////////////////////////
+
+// define compare by ObObjType
+template <ObObjType L_T, ObObjType R_T>
+struct ObDatumTypeCmp : public ObDefined<false>
+{
+  inline static int cmp(const ObDatum &, const ObDatum &) { return 0; }
+};
+
+template <>
+struct ObDatumTypeCmp<ObDateTimeType, ObDateTimeType> : public ObTCPayloadCmp<ObDateTimeTC> {};
+template <>
+struct ObDatumTypeCmp<ObTimestampType, ObTimestampType> : public ObTCPayloadCmp<ObDateTimeTC> {};
+
+template <>
+struct ObDatumTypeCmp<ObTimestampLTZType, ObTimestampLTZType> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    static_assert(!std::is_same<decltype(&ObDatumPayload<tc>::get), invalid_func_type>::value,
-        "Not Supported TypeClass For SameTC Cmp");
-    return ObDatumPayload<tc>::get(datum1) == ObDatumPayload<tc>::get(datum2)
-               ? 0
-               : (ObDatumPayload<tc>::get(datum1) < ObDatumPayload<tc>::get(datum2) ? -1 : 1);
+    return l.get_otimestamp_tiny().compare(r.get_otimestamp_tiny());
   }
 };
 
-// <Signed, Unsigned>
-template <ObObjTypeClass tc1, ObObjTypeClass tc2>
-struct ObDatumCmpHelperBySignSU {
-  constexpr static bool defined_ = true;
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+template <> struct ObDatumTypeCmp<ObTimestampLTZType, ObTimestampNanoType>
+  : public ObDatumTypeCmp<ObTimestampLTZType, ObTimestampLTZType> {};
+
+template <> struct ObDatumTypeCmp<ObTimestampNanoType, ObTimestampLTZType>
+  : public ObDatumTypeCmp<ObTimestampLTZType, ObTimestampLTZType> {};
+
+template <> struct ObDatumTypeCmp<ObTimestampNanoType, ObTimestampNanoType>
+  : public ObDatumTypeCmp<ObTimestampLTZType, ObTimestampLTZType> {};
+
+template <>
+struct ObDatumTypeCmp<ObTimestampTZType, ObTimestampTZType> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    return ObDatumPayload<tc1>::get(datum1) < 0
-               ? -1
-               : (ObDatumPayload<tc1>::get(datum1) < ObDatumPayload<tc2>::get(datum2)
-                         ? -1
-                         : (ObDatumPayload<tc1>::get(datum1) == ObDatumPayload<tc2>::get(datum2) ? 0 : 1));
+    return l.get_otimestamp_tz().compare(r.get_otimestamp_tz());
   }
 };
 
-// <Unsigned, Signed>
-template <ObObjTypeClass tc1, ObObjTypeClass tc2>
-struct ObDatumCmpHelperBySignUS {
-  constexpr static bool defined_ = true;
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+template <>
+struct ObDatumTypeCmp<ObIntervalYMType, ObIntervalYMType> : public ObTCPayloadCmp<ObIntTC> {};
+
+template <>
+struct ObDatumTypeCmp<ObIntervalDSType, ObIntervalDSType> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    return ObDatumPayload<tc2>::get(datum2) < 0
-               ? 1
-               : (ObDatumPayload<tc1>::get(datum1) < ObDatumPayload<tc2>::get(datum2)
-                         ? -1
-                         : (ObDatumPayload<tc1>::get(datum1) == ObDatumPayload<tc2>::get(datum2) ? 0 : 1));
+    return l.get_interval_ds().compare(r.get_interval_ds());
   }
 };
 
-// <Unsigned, UnSigned>
-template <ObObjTypeClass tc1, ObObjTypeClass tc2>
-struct ObDatumCmpHelperBySignUU {
-  constexpr static bool defined_ = true;
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+template <>
+struct ObDatumTypeCmp<ObURowIDType, ObURowIDType> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    return ObDatumPayload<tc1>::get(datum1) < ObDatumPayload<tc2>::get(datum2)
-               ? -1
-               : (ObDatumPayload<tc1>::get(datum1) == ObDatumPayload<tc2>::get(datum2) ? 0 : 1);
+    const ObURowIDData l_v(l.len_, reinterpret_cast<const uint8_t *>(l.ptr_));
+    const ObURowIDData r_v(r.len_, reinterpret_cast<const uint8_t *>(r.ptr_));
+    return l_v.compare(r_v);
   }
 };
 
-// <ObObjType, ObObjType>::cmp
-template <ObObjType obj_type1, ObObjType obj_type2>
-struct ObDatumCmpHelperByType
-    : public ObDatumCmpHelperByTC<ObObjTypeTraits<obj_type1>::tc_, ObObjTypeTraits<obj_type2>::tc_> {};
-
-// ==========================================
-// Specialized template class implementation
-// is required for certain TypeClass or specific types
-// ==========================================
-#ifndef DATUM_CMP_FUNC_DEF
-#define DATUM_CMP_FUNC_DEF
-
-#define DECL_SAME_TC_CMP(tc)                               \
-  template <>                                              \
-  struct ObDatumCmpHelperByTC<tc, tc> {                    \
-    constexpr static bool defined_ = true;                 \
-    inline static int cmp(const ObDatum&, const ObDatum&); \
-  };
-
-#define IMPL_SAME_TC_CMP(tc) inline int ObDatumCmpHelperByTC<tc, tc>::cmp(const ObDatum& datum1, const ObDatum& datum2)
-
-#define DEF_SAME_TC_CMP(tc) \
-  DECL_SAME_TC_CMP(tc)      \
-  IMPL_SAME_TC_CMP(tc)
-
-#define DECL_TC1_TC2_CMP(tc1, tc2)                         \
-  template <>                                              \
-  struct ObDatumCmpHelperByTC<tc1, tc2> {                  \
-    constexpr static bool defined_ = true;                 \
-    inline static int cmp(const ObDatum&, const ObDatum&); \
-  };
-
-#define IMPL_TC1_TC2_CMP(tc1, tc2) \
-  inline int ObDatumCmpHelperByTC<tc1, tc2>::cmp(const ObDatum& datum1, const ObDatum& datum2)
-
-#define DEF_TC1_TC2_CMP(tc1, tc2) \
-  DECL_TC1_TC2_CMP(tc1, tc2)      \
-  IMPL_TC1_TC2_CMP(tc1, tc2)
-
-#define DECL_TC1_ANYTC_CMP(tc1)                            \
-  template <ObObjTypeClass tc2>                            \
-  struct ObDatumCmpHelperByTC<tc1, tc2> {                  \
-    constexpr static bool defined_ = true;                 \
-    inline static int cmp(const ObDatum&, const ObDatum&); \
-  };
-
-#define IMPL_TC1_ANYTC_CMP(tc1) \
-  template <ObObjTypeClass tc2> \
-  inline int ObDatumCmpHelperByTC<tc1, tc2>::cmp(const ObDatum& datum1, const ObDatum& datum2)
-#define DEF_TC1_ANYTC_CMP(tc1) \
-  DECL_TC1_ANYTC_CMP(tc1)      \
-  IMPL_TC1_ANYTC_CMP(tc1)
-
-#define DECL_TC2_ANYTC_CMP(tc2)                            \
-  template <ObObjTypeClass tc1>                            \
-  struct ObDatumCmpHelperByTC<tc1, tc2> {                  \
-    constexpr static bool defined_ = true;                 \
-    inline static int cmp(const ObDatum&, const ObDatum&); \
-  };
-
-#define IMPL_TC2_ANYTC_CMP(tc2) \
-  template <ObObjTypeClass tc1> \
-  inline int ObDatumCmpHelperByTC<tc1, tc2>::cmp(const ObDatum& datum1, const ObDatum& datum2)
-#define DEF_TC2_ANYTC_CMP(tc2) \
-  DECL_TC2_ANYTC_CMP(tc2)      \
-  IMPL_TC2_ANYTC_CMP(tc2)
-
-#define DECL_TYPE_TYPE_CMP(type1, type2)                   \
-  template <>                                              \
-  struct ObDatumCmpHelperByType<type1, type2> {            \
-    constexpr static bool defined_ = true;                 \
-    inline static int cmp(const ObDatum&, const ObDatum&); \
-  };
-
-#define IMPL_TYPE_TYPE_CMP(type1, type2) \
-  inline int ObDatumCmpHelperByType<type1, type2>::cmp(const ObDatum& datum1, const ObDatum& datum2)
-
-#define DEF_TYPE_TYPE_CMP(type1, type2) \
-  DECL_TYPE_TYPE_CMP(type1, type2)      \
-  IMPL_TYPE_TYPE_CMP(type1, type2)
-
-#define DECL_STR_CMP_FOR_CS(cs_type)                               \
-  template <bool calc_with_end_space>                              \
-  struct ObDatumStrCmpHelperCSImpl<cs_type, calc_with_end_space> { \
-    constexpr static bool defined_ = true;                         \
-    inline static int cmp(const ObDatum&, const ObDatum&);         \
-  };
-
-#define IMPL_STR_CMP_FOR_CS(cs_type)                                       \
-  template <bool calc_with_end_space>                                      \
-  inline int ObDatumStrCmpHelperCSImpl<cs_type, calc_with_end_space>::cmp( \
-      const ObDatum& datum1, const ObDatum& datum2)
-
-#define DEF_STR_CMP_FOR_CS(cs_type) \
-  DECL_STR_CMP_FOR_CS(cs_type)      \
-  IMPL_STR_CMP_FOR_CS(cs_type)
-
-// Implementation of ObNumberTC comparison
-// ObNumberTC needs an int64_t + int32_t in data storage
-// The default <TC, TC>::cmp cannot achieve the comparison of data storage
-// more than one int64_t, so special implementation is required
-DEF_SAME_TC_CMP(ObNumberTC)
+template <bool HAS_LOB_LOCATOR>
+struct ObDatumJsonCmp : public ObDefined<>
 {
-  const number::ObCompactNumber& l_num = ObDatumPayload<ObNumberTC>::get(datum1);
-  const number::ObCompactNumber& r_num = ObDatumPayload<ObNumberTC>::get(datum2);
-  return number::ObNumber::compare(l_num.desc_, l_num.digits_, r_num.desc_, r_num.digits_);
-}
-
-// Extend TYPE and any type of comparison depend on the value of Extend
-DEF_TC1_ANYTC_CMP(ObExtendTC)
-{
-  UNUSED(datum2);
-  return (ObObj::MIN_OBJECT_VALUE == *datum1.int_ ? -1 : 1);
-}
-
-DEF_TC2_ANYTC_CMP(ObExtendTC)
-{
-  UNUSED(datum1);
-  return (ObObj::MIN_OBJECT_VALUE == *datum2.int_ ? 1 : -1);
-}
-
-DEF_SAME_TC_CMP(ObExtendTC)
-{
-  return (ObObj::MIN_OBJECT_VALUE == *datum1.int_ && ObObj::MIN_OBJECT_VALUE == *datum2.int_) ||
-                 (ObObj::MAX_OBJECT_VALUE == *datum1.int_ && ObObj::MAX_OBJECT_VALUE == *datum2.int_)
-             ? 0
-             : (ObObj::MIN_OBJECT_VALUE == *datum1.int_ ? -1 : 1);
-}
-
-DEF_TC1_TC2_CMP(ObExtendTC, ObNullTC)
-{
-  UNUSED(datum1);
-  UNUSED(datum2);
-  return 0;
-}
-
-DEF_TC1_TC2_CMP(ObNullTC, ObExtendTC)
-{
-  UNUSED(datum1);
-  UNUSED(datum2);
-  return 0;
-}
-
-// not be called
-DEF_TC1_ANYTC_CMP(ObNullTC)
-{
-  UNUSED(datum1);
-  UNUSED(datum2);
-  return 0;
-}
-
-DEF_TC2_ANYTC_CMP(ObNullTC)
-{
-  UNUSED(datum1);
-  UNUSED(datum2);
-  return 0;
-}
-
-DEF_SAME_TC_CMP(ObNullTC)
-{
-  UNUSED(datum1);
-  UNUSED(datum2);
-  return 0;
-}
-
-DEF_TYPE_TYPE_CMP(ObTimestampLTZType, ObTimestampLTZType)
-{
-  const ObOTimestampData l = datum1.get_otimestamp_tiny();
-  const ObOTimestampData r = datum2.get_otimestamp_tiny();
-  return l.compare(r);
-}
-
-DEF_TYPE_TYPE_CMP(ObTimestampLTZType, ObTimestampNanoType)
-{
-  const ObOTimestampData l = datum1.get_otimestamp_tiny();
-  const ObOTimestampData r = datum2.get_otimestamp_tiny();
-  return l.compare(r);
-}
-
-DEF_TYPE_TYPE_CMP(ObTimestampNanoType, ObTimestampLTZType)
-{
-  const ObOTimestampData l = datum1.get_otimestamp_tiny();
-  const ObOTimestampData r = datum2.get_otimestamp_tiny();
-  return l.compare(r);
-}
-
-DEF_TYPE_TYPE_CMP(ObTimestampNanoType, ObTimestampNanoType)
-{
-  const ObOTimestampData l = datum1.get_otimestamp_tiny();
-  const ObOTimestampData r = datum2.get_otimestamp_tiny();
-  return l.compare(r);
-}
-
-DEF_TYPE_TYPE_CMP(ObTimestampTZType, ObTimestampTZType)
-{
-  const ObOTimestampData l = datum1.get_otimestamp_tz();
-  const ObOTimestampData r = datum2.get_otimestamp_tz();
-  return l.compare(r);
-}
-
-DEF_TYPE_TYPE_CMP(ObIntervalYMType, ObIntervalYMType)
-{
-  return ObDatumCmpHelperByTC<ObIntTC, ObIntTC>::cmp(datum1, datum2);
-}
-
-// <IntervalDSType, IntervalDSType>
-DEF_TYPE_TYPE_CMP(ObIntervalDSType, ObIntervalDSType)
-{
-  const ObIntervalDSValue* l = reinterpret_cast<const ObIntervalDSValue*>(ObDatumPayload<ObIntervalTC>::get(datum1));
-  const ObIntervalDSValue* r = reinterpret_cast<const ObIntervalDSValue*>(ObDatumPayload<ObIntervalTC>::get(datum2));
-  return l->compare(*r);
-}
-
-DEF_TYPE_TYPE_CMP(ObURowIDType, ObURowIDType)
-{
-  const ObURowIDData l(datum1.len_, reinterpret_cast<const uint8_t*>(datum1.ptr_));
-  const ObURowIDData r(datum2.len_, reinterpret_cast<const uint8_t*>(datum2.ptr_));
-  return l.compare(r);
-}
-
-//
-// General comparison function definition
-//
-
-#define DEF_CMP_FUNC_BY_SIGN_UNSIGN(tc1, tc2) \
-  template <>                                 \
-  struct ObDatumCmpHelperByTC<tc1, tc2> : public ObDatumCmpHelperBySignSU<tc1, tc2> {}
-
-#define DEF_CMP_FUNC_BY_UNSIGN_SIGN(tc1, tc2) \
-  template <>                                 \
-  struct ObDatumCmpHelperByTC<tc1, tc2> : public ObDatumCmpHelperBySignUS<tc1, tc2> {}
-
-#define DEF_CMP_FUNC_BY_UNSIGN_UNSIGN(tc1, tc2) \
-  template <>                                   \
-  struct ObDatumCmpHelperByTC<tc1, tc2> : public ObDatumCmpHelperBySignUU<tc1, tc2> {}
-
-#define UNDEF_CMP_FUNC_BY_TC(tc1, tc2) \
-  template <>                          \
-  struct ObDatumCmpHelperByTC<tc1, tc2> : public ObDatumCmpHelperByTC<ObMaxTC, ObMaxTC> {}
-
-#define UNDEF_CMP_FUNC_BY_TYPE(type1, type2) \
-  template <>                                \
-  struct ObDatumCmpHelperByType<type1, type2> : public ObDatumCmpHelperByTC<ObMaxTC, ObMaxTC> {}
-
-// Special <TC, TC> Cmp Funcs
-DEF_CMP_FUNC_BY_SIGN_UNSIGN(ObIntTC, ObUIntTC);
-DEF_CMP_FUNC_BY_SIGN_UNSIGN(ObIntTC, ObEnumSetTC);
-DEF_CMP_FUNC_BY_UNSIGN_SIGN(ObUIntTC, ObIntTC);
-DEF_CMP_FUNC_BY_UNSIGN_SIGN(ObEnumSetTC, ObIntTC);
-DEF_CMP_FUNC_BY_UNSIGN_UNSIGN(ObUIntTC, ObEnumSetTC);
-DEF_CMP_FUNC_BY_UNSIGN_UNSIGN(ObEnumSetTC, ObUIntTC);
-
-// Do not Define These <TC, TC> Cmp Funcs
-UNDEF_CMP_FUNC_BY_TC(ObStringTC, ObStringTC);
-UNDEF_CMP_FUNC_BY_TC(ObRawTC, ObRawTC);
-UNDEF_CMP_FUNC_BY_TC(ObTextTC, ObTextTC);
-UNDEF_CMP_FUNC_BY_TC(ObIntervalTC, ObIntervalTC);
-UNDEF_CMP_FUNC_BY_TC(ObEnumSetInnerTC, ObEnumSetInnerTC);
-UNDEF_CMP_FUNC_BY_TC(ObOTimestampTC, ObOTimestampTC);
-UNDEF_CMP_FUNC_BY_TC(ObRowIDTC, ObRowIDTC);
-UNDEF_CMP_FUNC_BY_TC(ObLobTC, ObLobTC);
-
-// Do not define These <Type, Type> Cmp Funcs
-UNDEF_CMP_FUNC_BY_TYPE(ObDateTimeType, ObTimestampType);
-UNDEF_CMP_FUNC_BY_TYPE(ObTimestampType, ObDateTimeType);
-
-//
-// Define comparison function according to Collation Type
-//
-typedef ObConstIntMapping<0, CS_TYPE_UTF8MB4_GENERAL_CI, 1, CS_TYPE_UTF8MB4_BIN, 1, CS_TYPE_BINARY, 1>
-    SupportedCollections;
-
-template <ObCollationType cs_type, bool calc_with_end_space>
-struct ObDatumStrCmpCore {
-  constexpr static bool defined_ = SupportedCollections::liner_search(cs_type);
-  inline static int cmp(const ObDatum& datum1, const ObDatum& datum2)
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    int cmp_res = ObCharset::strcmpsp(cs_type,
-        datum1.ptr_,
-        static_cast<int64_t>(datum1.len_),
-        datum2.ptr_,
-        static_cast<int64_t>(datum2.len_),
-        calc_with_end_space);
-    return cmp_res > 0 ? 1 : (cmp_res < 0 ? -1 : 0);
+    int ret = OB_SUCCESS;
+    int result = 0;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObJsonType, CS_TYPE_BINARY, l.get_string(), HAS_LOB_LOCATOR);
+    ObTextStringIter r_instr_iter(ObJsonType, CS_TYPE_BINARY, r.get_string(), HAS_LOB_LOCATOR);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+    } else {
+      ObJsonBin j_bin_l(l_data.ptr(), l_data.length());
+      ObJsonBin j_bin_r(r_data.ptr(), r_data.length());
+      ObIJsonBase *j_base_l = &j_bin_l;
+      ObIJsonBase *j_base_r = &j_bin_r;
+
+      if (OB_FAIL(j_bin_l.reset_iter())) {
+        COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l.len_));
+      } else if (OB_FAIL(j_bin_r.reset_iter())) {
+        COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r.len_));
+      } else if (OB_FAIL(j_base_l->compare(*j_base_r, result))) {
+        COMMON_LOG(WARN, "fail to compare json", K(ret), K(*j_base_l), K(*j_base_r));
+      }
+    }
+
+    return result;
   }
 };
 
-#undef DECL_SAME_TC_CMP
-#undef IMPL_SAME_TC_CMP
-#undef DEF_SAME_TC_CMP
-#undef DECL_TYPE_TYPE_CMP
-#undef IMPL_TYPE_TYPE_CMP
-#undef DEF_TYPE_TYPE_CMP
-#undef DECL_STR_CMP_FOR_CS
-#undef IMPL_STR_CMP_FOR_CS
-#undef DEF_STR_CMP_FOR_CS
-#undef DEF_CMP_FUNC_BY_SIGN_UNSIGN
-#undef DEF_CMP_FUNC_BY_UNSIGN_SIGN
-#undef UNDEF_CMP_FUNC_BY_TC
-#undef DEF_TC1_ANYTC_CMP
-#undef DEF_TC2_ANTTC_CMP
-#undef DEF_TC1_TC2_CMP
-#undef DECL_TC1_ANYTC_CMP
-#undef IMPL_TC1_ANYTC_CMP
-#undef DECL_TC2_ANYTC_CMP
-#undef IMPL_TC2_ANYTC_CMP
-#undef DECL_TC1_TC2_CMP
-#undef IMPL_TC1_TC2_CMP
+template <bool HAS_LOB_HEADER>
+struct ObDatumGeoCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int result = 0;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObGeometryType, CS_TYPE_BINARY, l.get_string(), HAS_LOB_HEADER);
+    ObTextStringIter r_instr_iter(ObGeometryType, CS_TYPE_BINARY, r.get_string(), HAS_LOB_HEADER);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+    } else {
+      result = ObCharset::strcmpsp(CS_TYPE_BINARY, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), false);
+    }
+    return result > 0 ? 1 : (result < 0 ? -1 : 0);
+  }
+};
 
-#endif  // DATUM_CMP_FUNC_DEF
+///////////////////////////////////////////////////////////////////////////////
+// begin define string compare functions
+///////////////////////////////////////////////////////////////////////////////
+typedef ObConstIntMapping<0,
+    CS_TYPE_GBK_CHINESE_CI, 1,
+    CS_TYPE_UTF8MB4_GENERAL_CI, 1,
+    CS_TYPE_UTF8MB4_BIN, 1,
+    CS_TYPE_UTF16_GENERAL_CI, 1,
+    CS_TYPE_UTF16_BIN, 1,
+    CS_TYPE_BINARY, 1,
+    CS_TYPE_GBK_BIN, 1,
+    CS_TYPE_UTF16_UNICODE_CI, 1,
+    CS_TYPE_UTF8MB4_UNICODE_CI, 1,
+    CS_TYPE_GB18030_CHINESE_CI, 1,
+    CS_TYPE_GB18030_BIN, 1,
+    CS_TYPE_LATIN1_SWEDISH_CI,1,
+    CS_TYPE_LATIN1_BIN,1 > SupportedCollections;
 
-// ===============================================
-// **************** Core Cmp Func ****************
-// ===============================================
-
-// Implementation of the core comparison function
-// Only define the comparison between the same TypeClass (except <IntTC, EnumTC>, <IntTC, UIntTC>)
-// The non-string comparison function can be implemented in two ways:
-// #1. Same TC:
-// a). <TypeClass, TypeClass> implementation, such as <IntTC, IntTC>.
-// Use this method when the comparison method in TypeClass is the same
-// b). <ObjType, ObjType> implementation, such as <IntervalYM, IntervalYM>.
-// The same TypeClass needs to distinguish between types when comparing, so implement a separate comparison function for
-// each type #2. Different TC The comparison between different TCs only defines: a) <IntTC, UIntTC> b) <IntTC,
-// ObEnumSetTC> c) <ObUIntTC, ObtIntTC> d) <ObEnumSetTC, ObIntTC>
-//
-// String type comparisons can be compared as long as the Collation is the same, so
-// Determine a comparison function according to the two dimensions of <ObCollationType, bool calc_with_end_space>
-// calc_with_end_space calculation:
 // bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 //                            bool is_oracle_mode,
 //                            ObCollationType cs_type1,
 //                            ObCollationType cs_type2)
 // {
-//  return is_oracle_mode && ( (ObVarcharType == type1 && CS_TYPE_BINARY !=
-//  cs_type1)
-//                             || (ObVarcharType == type2 && CS_TYPE_BINARY !=
-//                             cs_type2)
+//  return is_oracle_mode && ( (ObVarcharType == type1 && CS_TYPE_BINARY != cs_type1)
+//                             || (ObVarcharType == type2 && CS_TYPE_BINARY != cs_type2)
 //                             || (ObNVarchar2Type == type1)
 //                             || (ObNVarchar2Type == type2) );
 // }
 //
-// Examples:
-// 1. Add a new generic TypeClass implementation Do Nothing
-// 2. Add a new specific implementation of TypeClass
-// DEF_SAME_TC_CMP(tc) {
-// func impl...
-//}
-// 3. Add a new specific implementation of ObjType
-// DEF_TYPE_TYPE_CMP(type1, type2)
-// {
-// func impl...
-//}
-// 4. Do not define the comparison function of <TC1, TC2>: UNDEF_CMP_FUNC_BY_TC(TC1, TC2)
-//
-// 5. Define a new Collation Type string comparison function:
-// DEF_STR_CMP_FUNC_BY_CS(NEW_CS_TYPE);
-//
-// 6. If the general string comparison logic is not applicable, you can define a new comparison logic
-// DEF_STR_CMP_FOR_CS(cs_type)
-// {
-// func impl...
-//}
-template <ObObjType type1, ObObjType type2>
-struct ObDatumCmpFuncByType : public ObDatumCmpHelperByType<type1, type2> {};
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumStrCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  { // ToDo: @gehao need to handle ObDatum has_lob_header flags ?
+    int res = ObCharset::strcmpsp(
+        CS_TYPE, l.ptr_, l.len_, r.ptr_, r.len_, WITH_END_SPACE);
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
 
-}  // end namespace cmp_func_helper
-}  // end namespace common
-}  // end namespace oceanbase
-#endif  // OCEANBASE_OB_DATUM_CMP_FUNC_DEF_H_
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), WITH_END_SPACE);
+
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumTextStringCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString l_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l_data.ptr(), l_data.length(), r.ptr_, r.len_, WITH_END_SPACE);
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumStringTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);  // longtext only indicates its a lob type
+    if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l.ptr_, l.len_, r_data.ptr(), r_data.length(), WITH_END_SPACE);
+
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+} // end namespace datum_cmp
+} // end namespace common
+} // end namespace oceanbase
+#endif // OCEANBASE_OB_DATUM_CMP_FUNC_DEF_H_

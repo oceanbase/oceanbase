@@ -1,0 +1,34 @@
+set(OBLOGSVR_TEST_SRCS
+  env/ob_simple_log_server.cpp
+  env/ob_simple_arb_server.cpp
+  env/ob_simple_log_cluster_testbase.cpp
+  env/ob_simple_log_cluster_env.cpp)
+
+add_library(oblogsvr_test ${OBLOGSVR_TEST_SRCS})
+target_include_directories(oblogsvr_test PUBLIC
+  ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
+target_link_libraries(oblogsvr_test PUBLIC oceanbase)
+
+function(ob_unittest_clog case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock oblogsvr_test oceanbase)
+  set_tests_properties(${case} PROPERTIES TIMEOUT 600)
+endfunction()
+
+# do not add new case file to avoid port contention
+ob_unittest_clog(test_ob_simple_log_basic_func test_ob_simple_log_basic_func.cpp)
+ob_unittest_clog(test_ob_simple_log_rebuild test_ob_simple_log_rebuild.cpp)
+ob_unittest_clog(test_ob_simple_log_truncate test_ob_simple_log_truncate.cpp)
+ob_unittest_clog(test_ob_simple_log_config_change test_ob_simple_log_config_change.cpp)
+ob_unittest_clog(test_ob_simple_log_access_mode test_ob_simple_log_access_mode.cpp)
+ob_unittest_clog(test_ob_simple_log_engine test_ob_simple_log_engine.cpp)
+ob_unittest_clog(test_ob_simple_log_replay test_ob_simple_log_replay.cpp)
+ob_unittest_clog(test_ob_simple_log_apply test_ob_simple_log_apply.cpp)
+ob_unittest_clog(test_ob_simple_log_flashback test_ob_simple_log_flashback.cpp)
+ob_unittest_clog(test_ob_simple_log_arb test_ob_simple_log_arb.cpp)
+ob_unittest_clog(test_ob_simple_log_single_replica_func test_ob_simple_log_single_replica_func.cpp)
+ob_unittest_clog(test_ob_simple_arb_server_single_replica test_ob_simple_arb_server_single_replica.cpp)
+ob_unittest_clog(test_ob_simple_arb_server_mutil_replica test_ob_simple_arb_server_mutil_replica.cpp)
+#ob_unittest_clog(test_ob_simple_log_data_intergrity test_ob_simple_log_data_intergrity.cpp)
+
+add_subdirectory(archiveservice)

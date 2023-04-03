@@ -15,32 +15,37 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 #define CHECK_WHEN_EXPR_TYPE (1ULL)
-#define NEED_CHECK_WHEN_EXPR_TYPE(flag) (((flag)&CHECK_WHEN_EXPR_TYPE) != 0)
+#define NEED_CHECK_WHEN_EXPR_TYPE(flag) (((flag) & CHECK_WHEN_EXPR_TYPE) != 0)
 
-class ObExprCase : public ObExprOperator {
+class ObExprCase : public ObExprOperator
+{
 public:
-  explicit ObExprCase(common::ObIAllocator& alloc);
+  explicit  ObExprCase(common::ObIAllocator &alloc);
   virtual ~ObExprCase();
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& expected_type, common::ObExprCtx& expr_ctx) const;
-
-  static int calc_case_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int is_same_kind_type_for_case(const common::ObIArray<ObExprResType>& type_arr);
-
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_stack,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int calc_case_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int is_same_kind_type_for_case(const common::ObIArray<ObExprResType> &type_arr);
+  static int eval_case_batch(const ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             const ObBitVector &skip,
+                             const int64_t batch_size);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCase);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_OB_SQL_EXPR_CASE_H_
+}
+}
+#endif // OCEANBASE_OB_SQL_EXPR_CASE_H_

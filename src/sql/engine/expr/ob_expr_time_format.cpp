@@ -1,6 +1,14 @@
-// Copyright 2021 Alibaba Inc. All Rights Reserved.
-// Author:
-//     shanting <dachuan.sdc@antgroup.com>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "lib/ob_name_def.h"
@@ -9,6 +17,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -38,49 +47,11 @@ int ObExprTimeFormat::calc_result_type2(ObExprResType &type,
   time.set_calc_type(ObTimeType);
   format.set_calc_type(ObVarcharType);
   format.set_calc_collation_type(type.get_collation_type());
-
+  // result is null if cast first param to ObTimeType failed.
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
 
-
-int ObExprTimeFormat::calc_result2(ObObj &result,
-                                   const ObObj &time,
-                                   const ObObj &format,
-                                   ObExprCtx &expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t buf_len = format.get_val_len() * OB_TEMPORAL_BUF_SIZE_RATIO;
-  int64_t pos = 0;
-  bool res_null = false;
-  if (OB_UNLIKELY(time.is_null() || format.is_null())) {
-    result.set_null();
-  } else if (OB_UNLIKELY(ObVarcharType != format.get_type())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("TIME_FORMAT() expected a string as format argument");
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("the pointer is null");
-  } else if (OB_UNLIKELY(format.get_string().empty())) {
-    result.set_null();
-  } else if (OB_ISNULL(buf = static_cast<char *>(expr_ctx.calc_buf_->alloc(buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("no more memory to alloc for buf");
-  } else if (OB_FAIL(time_to_str_format(time.get_time(),
-                                        format.get_string(),
-                                        buf,
-                                        buf_len,
-                                        pos,
-                                        res_null))) {
-    LOG_WARN("failed to convert ob time to str with format");
-  } else if (res_null) {
-    result.set_null();
-  } else {
-    result.set_varchar(buf, static_cast<int32_t>(pos));
-    result.set_collation(result_type_);
-  }
-  return ret;
-}
 
 int ObExprTimeFormat::time_to_str_format(const int64_t &time_value, const ObString &format,
                                          char *buf, int64_t buf_len, int64_t &pos, bool &res_null)
@@ -270,20 +241,45 @@ int ObExprTimeFormat::calc_time_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_UNLIKELY(format->get_string().empty())) {
     expr_datum.set_null();
   } else if (FALSE_IT(buf_len = format->get_string().length() * OB_TEMPORAL_BUF_SIZE_RATIO)) {
-  } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
-  } else if (OB_FAIL(time_to_str_format(time->get_time(),
-                                        format->get_string(),
-                                        buf,
-                                        buf_len,
-                                        pos,
-                                        res_null))) {
-    LOG_WARN("failed to convert ob time to str with format");
-  } else if (res_null) {
-    expr_datum.set_null();
-  } else {
-    expr_datum.set_string(buf, static_cast<int32_t>(pos));
+  } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
+    } else if (OB_FAIL(time_to_str_format(time->get_time(),
+                                          format->get_string(),
+                                          buf,
+                                          buf_len,
+                                          pos,
+                                          res_null))) {
+      LOG_WARN("failed to convert ob time to str with format");
+    } else if (res_null) {
+      expr_datum.set_null();
+    } else {
+      expr_datum.set_string(buf, static_cast<int32_t>(pos));
+    }
+  } else { // text tc
+    ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (OB_FAIL(output_result.init(buf_len))) {
+      LOG_WARN("init lob result failed", K(ret), K(buf_len));
+    } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_len))) {
+      LOG_WARN("get reserved buffer for blob failed", K(ret), K(buf_len));
+    } else if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
+    } else if (OB_FAIL(time_to_str_format(time->get_time(),
+                                          format->get_string(),
+                                          buf,
+                                          buf_len,
+                                          pos,
+                                          res_null))) {
+      LOG_WARN("failed to convert ob time to lob str with format");
+    } else if (res_null) {
+      expr_datum.set_null();
+    } else if (OB_FAIL(output_result.lseek(pos, 0))){
+      LOG_WARN("lseek text or string result failed", K(ret), K(pos));
+    } else {
+      output_result.set_result();
+    }
   }
   return ret;
 }

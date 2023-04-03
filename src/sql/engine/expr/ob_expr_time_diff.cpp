@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_time_diff.h"
 #include "lib/ob_date_unit_type.h"
@@ -20,32 +20,33 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 
-namespace oceanbase {
-using namespace common;
-namespace sql {
-
-ObExprTimeDiff::ObExprTimeDiff(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_DIFF, N_TIME_DIFF, 2, NOT_ROW_DIMENSION)
-{}
-
-ObExprTimeDiff::~ObExprTimeDiff()
-{}
-
-int ObExprTimeDiff::calc_result2(ObObj& result, const ObObj& left, const ObObj& right, ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-  return calc(result, left, right, cast_ctx);
+using namespace common;
+namespace sql
+{
+
+ObExprTimeDiff::ObExprTimeDiff(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_DIFF, N_TIME_DIFF, 2, NOT_ROW_DIMENSION)
+{
 }
 
-int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime& ot1, ObTime& ot2, const ObTimeZoneInfo* tz_info, int64_t& diff)
+ObExprTimeDiff::~ObExprTimeDiff()
+{
+}
+
+int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime &ot1,
+                                                ObTime &ot2,
+                                                const ObTimeZoneInfo *tz_info,
+                                                int64_t &diff)
 {
   int ret = OB_SUCCESS;
   int64_t value1 = 0;
   int64_t value2 = 0;
   ObTimeConvertCtx cvrt_ctx(tz_info, true);
-  if (OB_UNLIKELY(0 == ot1.parts_[DT_DATE] && 0 != ot2.parts_[DT_DATE]) ||
-      (0 != ot1.parts_[DT_DATE] && 0 == ot2.parts_[DT_DATE])) {
-    // invalid in mysql. result will be null
+  if (OB_UNLIKELY(0 == ot1.parts_[DT_DATE] && 0 != ot2.parts_[DT_DATE])
+      || (0 != ot1.parts_[DT_DATE] && 0 == ot2.parts_[DT_DATE])) {
+       // invalid in mysql. result will be null
     ret = OB_INVALID_DATE_VALUE;
   } else {
     if (OB_UNLIKELY(0 == ot1.parts_[DT_DATE])) {
@@ -53,9 +54,9 @@ int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime& ot1, ObTime& ot2, const 
       value2 = ObTimeConverter::ob_time_to_time(ot2);
       diff = value1 - value2;
     } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot1, cvrt_ctx, value1))) {
-      ret = OB_INVALID_DATE_VALUE;  // in order to be compatible with mysql
+      ret = OB_INVALID_DATE_VALUE;//in order to be compatible with mysql
     } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot2, cvrt_ctx, value2))) {
-      ret = OB_INVALID_DATE_VALUE;  // in order to be compatible with mysql
+      ret = OB_INVALID_DATE_VALUE;//in order to be compatible with mysql
     } else {
       diff = value1 - value2;
     }
@@ -63,13 +64,16 @@ int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime& ot1, ObTime& ot2, const 
   return ret;
 }
 
-int ObExprTimeDiff::get_diff_value(const ObObj& obj1, const ObObj& obj2, const ObTimeZoneInfo* tz_info, int64_t& diff)
+int ObExprTimeDiff::get_diff_value(const ObObj &obj1,
+                                   const ObObj &obj2,
+                                   const ObTimeZoneInfo *tz_info,
+                                   int64_t &diff)
 {
   int ret = OB_INVALID_DATE_VALUE;
   ObTime ot1;
   ObTime ot2;
-  if (OB_LIKELY(OB_SUCCESS == ob_obj_to_ob_time_without_date(obj1, tz_info, ot1) &&
-                OB_SUCCESS == ob_obj_to_ob_time_without_date(obj2, tz_info, ot2))) {
+  if (OB_LIKELY(OB_SUCCESS == ob_obj_to_ob_time_without_date(obj1, tz_info, ot1)
+             && OB_SUCCESS == ob_obj_to_ob_time_without_date(obj2, tz_info, ot2))) {
     ret = get_diff_value_with_ob_time(ot1, ot2, tz_info, diff);
   } /*else ret will be OB_INVALID_DATE_VALUE itself.
       NOT overwritten by last call for ob_obj_to_ob_time_without_date.
@@ -77,7 +81,10 @@ int ObExprTimeDiff::get_diff_value(const ObObj& obj1, const ObObj& obj2, const O
   return ret;
 }
 
-int ObExprTimeDiff::calc(ObObj& result, const ObObj& left, const ObObj& right, ObCastCtx& cast_ctx)
+int ObExprTimeDiff::calc(ObObj &result,
+                         const ObObj &left,
+                         const ObObj &right,
+                         ObCastCtx &cast_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t int64_diff = 0;
@@ -87,9 +94,9 @@ int ObExprTimeDiff::calc(ObObj& result, const ObObj& left, const ObObj& right, O
     result.set_null();
   } else {
     int flag = int64_diff > 0 ? 1 : -1;
-    int64_diff *= flag;  // abs operation for time_overflow_trunc
+    int64_diff *= flag; //abs operation for time_overflow_trunc
     ret = ObTimeConverter::time_overflow_trunc(int64_diff);
-    int64_diff = int64_diff * flag;  // restore value
+    int64_diff = int64_diff * flag; //restore value
     result.set_time(int64_diff);
   }
 
@@ -99,7 +106,9 @@ int ObExprTimeDiff::calc(ObObj& result, const ObObj& left, const ObObj& right, O
   return ret;
 }
 
-int ObExprTimeDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprTimeDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
+                              const ObRawExpr &raw_expr,
+                              ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -107,7 +116,8 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, O
   if (rt_expr.arg_cnt_ != 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("timediff expr should have two params", K(ret), K(rt_expr.arg_cnt_));
-  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1])) {
+  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0])
+            || OB_ISNULL(rt_expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of timediff expr is null", K(ret), K(rt_expr.args_));
   } else {
@@ -116,13 +126,13 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, O
   return ret;
 }
 
-int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   bool calc_param_failure = false;
-  ObDatum* param_datum1 = NULL;
-  ObDatum* param_datum2 = NULL;
-  const ObSQLSessionInfo* session = NULL;
+  ObDatum *param_datum1 = NULL;
+  ObDatum *param_datum2 = NULL;
+  const ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -133,10 +143,11 @@ int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
     expr_datum.set_null();
   } else {
     int64_t int64_diff = 0;
-    ObTime ot1;
-    ObTime ot2;
-    if (OB_FAIL(ob_datum_to_ob_time_without_date(
-            *param_datum1, expr.args_[0]->datum_meta_.type_, get_timezone_info(session), ot1))) {
+    ObTime ot1(DT_TYPE_TIME);
+    ObTime ot2(DT_TYPE_TIME);
+    if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum1, expr.args_[0]->datum_meta_.type_,
+                                                get_timezone_info(session), ot1,
+                                                expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
@@ -145,19 +156,22 @@ int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
       LOG_WARN("eval param value failed", K(ret));
     } else if (param_datum2->is_null()) {
       expr_datum.set_null();
-    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(
-                   *param_datum2, expr.args_[1]->datum_meta_.type_, get_timezone_info(session), ot2))) {
+    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum2,
+                                                expr.args_[1]->datum_meta_.type_,
+                                                get_timezone_info(session), ot2,
+                                                expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
-    } else if (OB_FAIL(get_diff_value_with_ob_time(ot1, ot2, get_timezone_info(session), int64_diff))) {
+    } else if (OB_FAIL(get_diff_value_with_ob_time(ot1, ot2, get_timezone_info(session),
+                                                  int64_diff))) {
       LOG_WARN("get diff value with ob time failed", K(ret));
       expr_datum.set_null();
     } else {
       int flag = int64_diff > 0 ? 1 : -1;
-      int64_diff *= flag;  // abs operation for time_overflow_trunc
+      int64_diff *= flag; //abs operation for time_overflow_trunc
       ret = ObTimeConverter::time_overflow_trunc(int64_diff);
-      int64_diff = int64_diff * flag;  // restore value
+      int64_diff = int64_diff * flag; //restore value
       expr_datum.set_time(int64_diff);
     }
 
@@ -172,5 +186,5 @@ int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

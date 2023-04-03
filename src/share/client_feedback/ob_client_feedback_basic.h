@@ -17,54 +17,58 @@
 #include "lib/net/ob_addr.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 //--------------------------serialize---------------------
-#define OB_FB_ENCODE_INT(num)                                                        \
-  do {                                                                               \
-    if (OB_SUCC(ret)) {                                                              \
-      uint64_t tmp_num = static_cast<uint64_t>(num);                                 \
-      ret = ::oceanbase::obmysql::ObMySQLUtil::store_length(buf, len, tmp_num, pos); \
-    }                                                                                \
-  } while (0)
+#define OB_FB_ENCODE_INT(num) \
+do { \
+  if (OB_SUCC(ret)) { \
+    uint64_t tmp_num = static_cast<uint64_t>(num); \
+    ret = ::oceanbase::obmysql::ObMySQLUtil::store_length(buf, len, tmp_num, pos); \
+  } \
+} while(0)
 
-#define OB_FB_ENCODE_STRUCT                  \
-  do {                                       \
-    if (OB_SUCC(ret)) {                      \
-      ret = serialize_struct(buf, len, pos); \
-    }                                        \
-  } while (0)
+#define OB_FB_ENCODE_STRUCT \
+do { \
+  if (OB_SUCC(ret)) { \
+    ret = serialize_struct(buf, len, pos); \
+  } \
+} while(0)
 
 #define OB_FB_GET_T (static_cast<T*>(this))
 #define OB_FB_GET_CONST_T (static_cast<const T*>(this))
 
-#define OB_FB_ENCODE_STRUCT_CONTENT                                     \
-  do {                                                                  \
-    if (OB_SUCC(ret)) {                                                 \
-      ret = OB_FB_GET_CONST_T->serialize_struct_content(buf, len, pos); \
-    }                                                                   \
-  } while (0)
+#define OB_FB_ENCODE_STRUCT_CONTENT \
+do { \
+  if (OB_SUCC(ret)) { \
+    ret = OB_FB_GET_CONST_T->serialize_struct_content(buf, len, pos); \
+  } \
+} while(0)
 
-#define CHECK_SER_INPUT_VALUE_VALID                                           \
-  do {                                                                        \
-    if (OB_SUCC(ret)) {                                                       \
-      if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_UNLIKELY(pos < 0)) {  \
-        ret = common::OB_INVALID_ARGUMENT;                                    \
-        SHARE_LOG(WARN, "invalid argument", KP(buf), K(len), K(pos), K(ret)); \
-      } else if (OB_UNLIKELY(pos >= len)) {                                   \
-        ret = common::OB_SIZE_OVERFLOW;                                       \
-        SHARE_LOG(WARN, "buf is no enough", KP(buf), K(len), K(pos), K(ret)); \
-      }                                                                       \
-    }                                                                         \
-  } while (0)
+#define CHECK_SER_INPUT_VALUE_VALID \
+do { \
+  if (OB_SUCC(ret)) { \
+    if (OB_ISNULL(buf) \
+        || OB_UNLIKELY(len <= 0) \
+        || OB_UNLIKELY(pos < 0)) { \
+      ret = common::OB_INVALID_ARGUMENT; \
+      SHARE_LOG(WARN, "invalid argument", KP(buf), K(len), K(pos), K(ret)); \
+    } else if (OB_UNLIKELY(pos >= len)) { \
+      ret = common::OB_SIZE_OVERFLOW; \
+      SHARE_LOG(WARN, "buf is no enough", KP(buf), K(len), K(pos), K(ret)); \
+    } \
+  } \
+} while(0)
 
-#define OB_FB_ENCODE_STRUCT_ARRAY(array, count)           \
-  do {                                                    \
-    OB_FB_ENCODE_INT(count);                              \
-    for (int i = 0; (OB_SUCC(ret)) && (i < count); ++i) { \
-      ret = array[i].serialize_struct(buf, len, pos);     \
-    }                                                     \
-  } while (0)
+#define OB_FB_ENCODE_STRUCT_ARRAY(array, count) \
+do { \
+  OB_FB_ENCODE_INT(count); \
+  for (int i = 0; (OB_SUCC(ret)) && (i < count); ++i) { \
+    ret = array[i].serialize_struct(buf, len, pos); \
+  } \
+} while (0)
 
 #define OB_FB_ENCODE_STRING(str_ptr, str_len)                                                  \
   do {                                                                                         \
@@ -78,14 +82,14 @@ namespace share {
     }                                                                                          \
   } while (0)
 
-#define OB_FB_SER_START                 \
-  INIT_SUCC(ret);                       \
-  {                                     \
+#define OB_FB_SER_START \
+  INIT_SUCC(ret); \
+  { \
     ObSeriPosGuard pos_guard(pos, ret); \
     CHECK_SER_INPUT_VALUE_VALID;
 
 #define OB_FB_SER_END \
-  }                   \
+  } \
   return ret;
 
 //-------------------------deserialize-----------------------
@@ -93,77 +97,84 @@ namespace share {
 #define OB_FB_DESER_START OB_FB_SER_START
 #define OB_FB_DESER_END OB_FB_SER_END
 
-#define OB_FB_DECODE_STRUCT_CONTENT(tmp_buf, tmp_len, tmp_pos)                                              \
-  do {                                                                                                      \
-    if (OB_SUCC(ret)) {                                                                                     \
-      if (OB_FAIL(OB_FB_GET_T->deserialize_struct_content(tmp_buf, tmp_len, tmp_pos))) {                    \
-        SHARE_LOG(ERROR, "fail to deserialize_struct_content", K(tmp_buf), K(tmp_len), K(tmp_pos), K(ret)); \
-      }                                                                                                     \
-    }                                                                                                       \
+#define OB_FB_DECODE_STRUCT_CONTENT(tmp_buf, tmp_len, tmp_pos) \
+do { \
+  if (OB_SUCC(ret)) { \
+    if (OB_FAIL(OB_FB_GET_T->deserialize_struct_content(tmp_buf, tmp_len, tmp_pos))) { \
+      SHARE_LOG(ERROR, "fail to deserialize_struct_content", K(tmp_buf), K(tmp_len), K(tmp_pos), K(ret)); \
+    } \
+  } \
+} while(0)
+
+
+#define OB_FB_DECODE_INT(num, type) \
+do { \
+  if (OB_SUCC(ret) && (pos < len)) { \
+    uint64_t tmp_num = 0; \
+    const char *tmp_buf_start = buf + pos; \
+    if (OB_FAIL(::oceanbase::obmysql::ObMySQLUtil::get_length(tmp_buf_start, tmp_num))) { \
+      SHARE_LOG(ERROR, "fail to get length", K(pos), K(ret)); \
+    } else if (FALSE_IT(pos += (tmp_buf_start - buf - pos))) { \
+    } else if (OB_UNLIKELY(pos > len)) { \
+      ret = common::OB_ERR_UNEXPECTED; \
+      SHARE_LOG(ERROR, "invalid pos or len", K(pos), K(len), K(num), K(ret)); \
+    } else { \
+      num = static_cast<type>(tmp_num); \
+    }\
+  } \
+} while (0)
+
+#define OB_FB_DECODE_STRUCT_ARRAY(array, type) \
+do { \
+ int64_t count = 0; \
+ OB_FB_DECODE_INT(count, int64_t); \
+ for (int64_t i = 0; OB_SUCC(ret) && (i < count); ++i) { \
+   type object; \
+   if (OB_FAIL(object.deserialize_struct(buf, len, pos))) { \
+     SHARE_LOG(ERROR, "fail to deserialize_struct", K(len), K(pos), K(ret)); \
+   } else if (OB_UNLIKELY(!object.is_valid())) { \
+     ret = common::OB_INVALID_ARGUMENT; \
+     SHARE_LOG(ERROR, "invalid argument", K(object), K(ret)); \
+   } else if (OB_FAIL(array.push_back(object))) { \
+     SHARE_LOG(ERROR, "fail to push back", K(object), K(ret)); \
+   } \
+ } \
+} while (0)
+
+#define OB_FB_DECODE_STRING(str_ptr, max_str_len, dec_str_len)                \
+  do {                                                                        \
+    if (OB_SUCC(ret)) {                                                       \
+      uint64_t tmp_len = 0;                                                   \
+      const char *tmp_buf_start = buf + pos;                                  \
+      if (OB_ISNULL(str_ptr)) {              \
+        ret = common::OB_INVALID_ARGUMENT;                                    \
+        SHARE_LOG(ERROR, "invalid argument", K(str_ptr), K(ret));       \
+      } else if (OB_UNLIKELY(max_str_len <= 0)) {                       \
+        ret = common::OB_INVALID_ARGUMENT;                                    \
+        SHARE_LOG(ERROR, "invalid argument", K(max_str_len), K(ret));   \
+      } else if (OB_FAIL(::oceanbase::obmysql::ObMySQLUtil::get_length(       \
+                     tmp_buf_start, tmp_len))) {                              \
+        SHARE_LOG(ERROR, "failed to get string len", K(ret));                 \
+      } else if (FALSE_IT(pos += (tmp_buf_start - buf - pos))) {                \
+      } else if (OB_UNLIKELY(tmp_len > max_str_len)) {                        \
+        ret = common::OB_ERR_UNEXPECTED;                                      \
+        SHARE_LOG(ERROR, "invalid str len", K(ret), K(max_str_len),           \
+                  K(tmp_len));                                                \
+      } else {                                                                \
+        MEMCPY(str_ptr, buf + pos, tmp_len);                                  \
+        pos += tmp_len;                                                       \
+        dec_str_len = tmp_len;                                                \
+      }                                                                       \
+    }                                                                         \
   } while (0)
 
-#define OB_FB_DECODE_INT(num, type)                                                         \
-  do {                                                                                      \
-    if (OB_SUCC(ret) && (pos < len)) {                                                      \
-      uint64_t tmp_num = 0;                                                                 \
-      const char* tmp_buf_start = buf + pos;                                                \
-      if (OB_FAIL(::oceanbase::obmysql::ObMySQLUtil::get_length(tmp_buf_start, tmp_num))) { \
-        SHARE_LOG(ERROR, "fail to get length", K(pos), K(ret));                             \
-      } else if (FALSE_IT(pos += (tmp_buf_start - buf - pos))) {                            \
-      } else if (OB_UNLIKELY(pos > len)) {                                                  \
-        ret = common::OB_ERR_UNEXPECTED;                                                    \
-        SHARE_LOG(ERROR, "invalid pos or len", K(pos), K(len), K(num), K(ret));             \
-      } else {                                                                              \
-        num = static_cast<type>(tmp_num);                                                   \
-      }                                                                                     \
-    }                                                                                       \
-  } while (0)
-
-#define OB_FB_DECODE_STRUCT_ARRAY(array, type)                                  \
-  do {                                                                          \
-    int64_t count = 0;                                                          \
-    OB_FB_DECODE_INT(count, int64_t);                                           \
-    for (int64_t i = 0; OB_SUCC(ret) && (i < count); ++i) {                     \
-      type object;                                                              \
-      if (OB_FAIL(object.deserialize_struct(buf, len, pos))) {                  \
-        SHARE_LOG(ERROR, "fail to deserialize_struct", K(len), K(pos), K(ret)); \
-      } else if (OB_UNLIKELY(!object.is_valid())) {                             \
-        ret = common::OB_INVALID_ARGUMENT;                                      \
-        SHARE_LOG(ERROR, "invalid argument", K(object), K(ret));                \
-      } else if (OB_FAIL(array.push_back(object))) {                            \
-        SHARE_LOG(ERROR, "fail to push back", K(object), K(ret));               \
-      }                                                                         \
-    }                                                                           \
-  } while (0)
-
-#define OB_FB_DECODE_STRING(str_ptr, max_str_len, dec_str_len)                                     \
-  do {                                                                                             \
-    if (OB_SUCC(ret)) {                                                                            \
-      uint64_t tmp_len = 0;                                                                        \
-      const char* tmp_buf_start = buf + pos;                                                       \
-      if (OB_ISNULL(str_ptr) || OB_UNLIKELY(max_str_len <= 0)) {                                   \
-        ret = common::OB_INVALID_ARGUMENT;                                                         \
-        SHARE_LOG(ERROR, "invalid argument", K(str_ptr), K(max_str_len), K(ret));                  \
-      } else if (OB_FAIL(::oceanbase::obmysql::ObMySQLUtil::get_length(tmp_buf_start, tmp_len))) { \
-        SHARE_LOG(ERROR, "failed to get string len", K(ret));                                      \
-      } else if (FALSE_IT(pos += (tmp_buf_start - buf - pos))) {                                   \
-      } else if (OB_UNLIKELY(tmp_len > max_str_len)) {                                             \
-        ret = common::OB_ERR_UNEXPECTED;                                                           \
-        SHARE_LOG(ERROR, "invalid str len", K(ret), K(max_str_len), K(tmp_len));                   \
-      } else {                                                                                     \
-        MEMCPY(str_ptr, buf + pos, tmp_len);                                                       \
-        pos += tmp_len;                                                                            \
-        dec_str_len = tmp_len;                                                                     \
-      }                                                                                            \
-    }                                                                                              \
-  } while (0)
-
-static const char* const OB_CLIENT_FEEDBACK = "ob_client_feedback";
-static const char* const OB_CLIENT_REROUTE_INFO = "ob_client_reroute_info";
+static const char *const OB_CLIENT_FEEDBACK = "ob_client_feedback";
+static const char *const OB_CLIENT_REROUTE_INFO = "ob_client_reroute_info";
 
 // For compatibility, must not delete or modify ele type,
 // only append is allowed.
-enum ObFeedbackElementType {
+enum ObFeedbackElementType
+{
   MIN_FB_ELE = 0,
 #define OB_FB_TYPE_DEF(name) name,
 #include "share/client_feedback/ob_feedback_type_define.h"
@@ -171,14 +182,15 @@ enum ObFeedbackElementType {
   MAX_FB_ELE
 };
 
-extern const char* get_feedback_element_type_str(const ObFeedbackElementType type);
+extern const char *get_feedback_element_type_str(const ObFeedbackElementType type);
 
 extern bool is_valid_fb_element_type(const int64_t type);
 
-class ObSeriPosGuard {
+class ObSeriPosGuard
+{
 public:
-  ObSeriPosGuard(int64_t& pos, int& ret) : pos_(pos), orig_pos_(pos), ret_(ret)
-  {}
+  ObSeriPosGuard(int64_t &pos, int &ret)
+    : pos_(pos), orig_pos_(pos), ret_(ret) {}
 
   ~ObSeriPosGuard()
   {
@@ -188,33 +200,31 @@ public:
   }
 
 private:
-  int64_t& pos_;
+  int64_t &pos_;
   int64_t orig_pos_;
-  int& ret_;
+  int &ret_;
 };
 
-#define FB_OBJ_DEFINE_METHOD                                                      \
-  int deserialize_struct_content(char* buf, const int64_t len, int64_t& pos);     \
-  int serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const; \
+#define FB_OBJ_DEFINE_METHOD \
+  int deserialize_struct_content(char *buf, const int64_t len, int64_t &pos); \
+  int serialize_struct_content(char *buf, const int64_t len, int64_t &pos) const; \
   bool is_valid_obj() const;
 
 template <class T>
-class ObAbstractFeedbackObject {
+class ObAbstractFeedbackObject
+{
 public:
-  ObAbstractFeedbackObject(const ObFeedbackElementType type) : type_(type)
-  {}
-  virtual ~ObAbstractFeedbackObject()
-  {}
+  ObAbstractFeedbackObject(const ObFeedbackElementType type) : type_(type) {}
+  virtual ~ObAbstractFeedbackObject() {}
 
-  int serialize_struct(char* buf, const int64_t len, int64_t& pos) const;
-  int deserialize_struct(char* buf, const int64_t len, int64_t& pos);
+  int serialize_struct(char *buf, const int64_t len, int64_t &pos) const;
+  int deserialize_struct(char *buf, const int64_t len, int64_t &pos);
 
   // observer need serialize, OCJ && obproxy need deserialize
-  int serialize(char* buf, const int64_t len, int64_t& pos) const;
-  int deserialize(char* buf, const int64_t len, int64_t& pos);
+  int serialize(char *buf, const int64_t len, int64_t &pos) const;
+  int deserialize(char *buf, const int64_t len, int64_t &pos);
 
-  bool is_valid() const
-  {
+  bool is_valid() const {
     bool bret = true;
     if (MIN_FB_ELE != get_type()) {
       bret = is_valid_fb_element_type(get_type());
@@ -225,15 +235,9 @@ public:
     return bret;
   }
 
-  bool need_seri_type() const
-  {
-    return MIN_FB_ELE != get_type();
-  }
+  bool need_seri_type() const { return MIN_FB_ELE != get_type(); }
 
-  ObFeedbackElementType get_type() const
-  {
-    return type_;
-  }
+  ObFeedbackElementType get_type() const { return type_; }
 
   TO_STRING_KV("type", get_feedback_element_type_str(type_));
 
@@ -244,7 +248,7 @@ protected:
 };
 
 template <class T>
-inline int ObAbstractFeedbackObject<T>::serialize_struct(char* buf, const int64_t len, int64_t& pos) const
+inline int ObAbstractFeedbackObject<T>::serialize_struct(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   int64_t orig_pos = pos;
@@ -261,7 +265,7 @@ inline int ObAbstractFeedbackObject<T>::serialize_struct(char* buf, const int64_
   if (OB_SUCC(ret)) {
     content_encode_len = pos - orig_pos - 1;
     len_encode_len = static_cast<int64_t>(obmysql::ObMySQLUtil::get_number_store_len(content_encode_len));
-    if (1 == len_encode_len) {  // only one byte is enough
+    if (1 == len_encode_len) { // only one byte is enough
       // nothing
     } else {
       if ((orig_pos + len_encode_len + content_encode_len) > len) {
@@ -284,7 +288,7 @@ inline int ObAbstractFeedbackObject<T>::serialize_struct(char* buf, const int64_
 }
 
 template <class T>
-inline int ObAbstractFeedbackObject<T>::deserialize_struct(char* buf, const int64_t len, int64_t& pos)
+inline int ObAbstractFeedbackObject<T>::deserialize_struct(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
   int64_t struct_len = 0;
@@ -323,7 +327,7 @@ inline int ObAbstractFeedbackObject<T>::deserialize_struct(char* buf, const int6
 }
 
 template <class T>
-int ObAbstractFeedbackObject<T>::serialize(char* buf, const int64_t len, int64_t& pos) const
+int ObAbstractFeedbackObject<T>::serialize(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
 
@@ -333,7 +337,7 @@ int ObAbstractFeedbackObject<T>::serialize(char* buf, const int64_t len, int64_t
     SHARE_LOG(WARN, "invalid type", KPC(this), K(ret));
   }
 
-  if (OB_SUCC(ret)) {  // seri type if needed
+  if (OB_SUCC(ret)) { // seri type if needed
     if (need_seri_type()) {
       const int type_num = static_cast<int>(type_);
       // encode T
@@ -348,16 +352,16 @@ int ObAbstractFeedbackObject<T>::serialize(char* buf, const int64_t len, int64_t
 }
 
 template <class T>
-int ObAbstractFeedbackObject<T>::deserialize(char* buf, const int64_t len, int64_t& pos)
+int ObAbstractFeedbackObject<T>::deserialize(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
 
-  if (OB_SUCC(ret)) {  // deseri type if needed
+  if (OB_SUCC(ret)) { // deseri type if needed
     if (need_seri_type()) {
       int64_t type = 0;
       // read struct len
       OB_FB_DECODE_INT(type, int64_t);
-      if (OB_SUCC(ret)) {  // just for defense
+      if (OB_SUCC(ret)) { // just for defense
         if (type != type_) {
           ret = common::OB_ERR_UNEXPECTED;
           SHARE_LOG(ERROR, "unrecognise type", K(type), K_(type), K(ret));
@@ -374,7 +378,7 @@ int ObAbstractFeedbackObject<T>::deserialize(char* buf, const int64_t len, int64
   OB_FB_DESER_END;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_CLIENT_FEEDBACK_BASIC_H_
+#endif // OCEANBASE_SHARE_OB_CLIENT_FEEDBACK_BASIC_H_

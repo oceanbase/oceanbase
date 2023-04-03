@@ -17,19 +17,21 @@
 #include <sys/time.h>
 #include "lib/stat/ob_session_stat.h"
 #include "sql/session/ob_sql_session_mgr.h"
-#include "storage/ob_partition_service.h"
 #include "lib/random/ob_random.h"
-#include "observer/mysql/obsm_struct.h"
+#include "rpc/obmysql/obsm_struct.h"
 
 using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
-class DISABLED_TestSessionMgr : public ::testing::Test {
+class DISABLED_TestSessionMgr : public ::testing::Test
+{
 public:
-  DISABLED_TestSessionMgr() : mgr_(&pt_srv_)
-  {}
+  DISABLED_TestSessionMgr():
+    mgr_() {
+
+  }
 
   virtual void SetUp()
   {
@@ -37,16 +39,16 @@ public:
   }
 
   virtual void TearDown()
-  {}
-
+  {
+  }
 private:
-  class SessionOperator {
+  class SessionOperator
+  {
   public:
     uint64_t sum;
-    SessionOperator() : sum(0)
-    {}
-    bool operator()(ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info)
-    {
+    SessionOperator() : sum(0) {
+    }
+    bool operator()(ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info) {
       UNUSED(key);
       UNUSED(sess_info);
       sum++;
@@ -55,7 +57,6 @@ private:
   };
 
 protected:
-  oceanbase::storage::ObPartitionService pt_srv_;
   ObSQLSessionMgr mgr_;
   SessionOperator sess_operator_;
   ObSMConnection conn_;
@@ -63,21 +64,20 @@ protected:
 
 TEST_F(DISABLED_TestSessionMgr, test_exception)
 {
-  ObSQLSessionInfo* sess_info = NULL;
-  ObSQLSessionInfo* dup_sess = NULL;
+  ObSQLSessionInfo *sess_info = NULL;
+  ObSQLSessionInfo *dup_sess = NULL;
   conn_.sessid_ = 1;
   EXPECT_EQ(OB_SUCCESS, mgr_.create_session(&conn_, sess_info));
   EXPECT_EQ(OB_SESSION_ENTRY_EXIST, mgr_.create_session(&conn_, dup_sess));
   EXPECT_EQ(NULL, dup_sess);
-  EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+  mgr_.revert_session(sess_info);
 }
 
 TEST_F(DISABLED_TestSessionMgr, test_create)
 {
-  ObSQLSessionInfo* sess_info = NULL;
+  ObSQLSessionInfo *sess_info = NULL;
   int64_t sess_cnt = 0;
   const uint32_t SESSION_COUNT = 100;
-  const uint32_t version = 0;
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
     conn_.sessid_ = i;
     conn_.proxy_sessid_ = i * 10;
@@ -86,21 +86,20 @@ TEST_F(DISABLED_TestSessionMgr, test_create)
     EXPECT_EQ(i, sess_info->get_sessid());
     EXPECT_EQ(i * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
-    EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+    mgr_.revert_session(sess_info);
   }
 
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
-    EXPECT_EQ(OB_SUCCESS, mgr_.get_session(version, i, sess_info));
+    EXPECT_EQ(OB_SUCCESS, mgr_.get_session(i, sess_info));
     EXPECT_TRUE(sess_info);
     EXPECT_EQ(i, sess_info->get_sessid());
     EXPECT_EQ(i * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
-    EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+    mgr_.revert_session(sess_info);
     mgr_.get_session_count(sess_cnt);
     EXPECT_EQ(SESSION_COUNT - i, sess_cnt);
     ObFreeSessionCtx ctx;
     ctx.tenant_id_ = OB_SYS_TENANT_ID;
-    ctx.version_ = version;
     ctx.sessid_ = i;
     ctx.has_inc_active_num_ = false;
     EXPECT_EQ(OB_SUCCESS, mgr_.free_session(ctx));
@@ -109,10 +108,9 @@ TEST_F(DISABLED_TestSessionMgr, test_create)
 
 TEST_F(DISABLED_TestSessionMgr, test_performace)
 {
-  ObSQLSessionInfo* sess_info = NULL;
+  ObSQLSessionInfo *sess_info = NULL;
   const uint32_t SESSION_COUNT = 500;
-  struct timeval get_beg, get_end, stat_beg, stat_end;
-  const uint32_t version = 0;
+  struct timeval  get_beg, get_end, stat_beg, stat_end;
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
     conn_.sessid_ = i;
     mgr_.create_session(&conn_, sess_info);
@@ -120,7 +118,7 @@ TEST_F(DISABLED_TestSessionMgr, test_performace)
   }
   gettimeofday(&get_beg, NULL);
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
-    mgr_.get_session(version, i, sess_info);
+    mgr_.get_session(i, sess_info);
   }
   gettimeofday(&get_end, NULL);
   gettimeofday(&stat_beg, NULL);
@@ -130,17 +128,14 @@ TEST_F(DISABLED_TestSessionMgr, test_performace)
   }
   gettimeofday(&stat_end, NULL);
   const uint64_t WEIGHT = 1000000;
-  OB_LOG(INFO,
-      "performance average",
-      "get_session",
-      (WEIGHT * (get_end.tv_sec - get_beg.tv_sec) + get_end.tv_usec - get_beg.tv_usec) / SESSION_COUNT,
-      "stat",
-      (WEIGHT * (stat_end.tv_sec - stat_beg.tv_sec) + stat_end.tv_usec - stat_beg.tv_usec) / SESSION_COUNT);
+  OB_LOG(INFO, "performance average",
+         "get_session", (WEIGHT * (get_end.tv_sec - get_beg.tv_sec) + get_end.tv_usec - get_beg.tv_usec) / SESSION_COUNT,
+         "stat", (WEIGHT * (stat_end.tv_sec - stat_beg.tv_sec) + stat_end.tv_usec - stat_beg.tv_usec) / SESSION_COUNT);
 }
 
 TEST_F(DISABLED_TestSessionMgr, test_version)
 {
-  ObSQLSessionInfo* sess_info = NULL;
+  ObSQLSessionInfo *sess_info = NULL;
   const uint32_t SESS_ID = 1;
   for (uint32_t i = 0; i < 100; ++i) {
     conn_.sessid_ = SESS_ID;
@@ -151,33 +146,35 @@ TEST_F(DISABLED_TestSessionMgr, test_version)
     EXPECT_EQ(SESS_ID, sess_info->get_sessid());
     EXPECT_EQ(SESS_ID * 10, sess_info->get_proxy_sessid());
     sess_info->set_shadow(true);
-    EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+    mgr_.revert_session(sess_info);
   }
 
   for (uint32_t i = 0; i < 100; ++i) {
-    EXPECT_EQ(OB_SUCCESS, mgr_.get_session(i, SESS_ID, sess_info));
+    EXPECT_EQ(OB_SUCCESS, mgr_.get_session(SESS_ID, sess_info));
     EXPECT_EQ(SESS_ID, sess_info->get_sessid());
     EXPECT_EQ(SESS_ID * 10, sess_info->get_proxy_sessid());
     EXPECT_EQ(true, sess_info->is_shadow());
-    EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+    mgr_.revert_session(sess_info);
   }
 }
 
 TEST_F(DISABLED_TestSessionMgr, test_for_each)
 {
-  ObSQLSessionInfo* sess_info = NULL;
+  ObSQLSessionInfo *sess_info = NULL;
   for (uint32_t i = 0; i < 100; ++i) {
     conn_.sessid_ = i;
     EXPECT_EQ(OB_SUCCESS, mgr_.create_session(&conn_, sess_info));
     EXPECT_TRUE(sess_info);
-    EXPECT_EQ(OB_SUCCESS, mgr_.revert_session(sess_info));
+    mgr_.revert_session(sess_info);
   }
   EXPECT_EQ(OB_SUCCESS, mgr_.for_each_session(sess_operator_));
   EXPECT_EQ(100, sess_operator_.sum);
 }
 
+
 int64_t create_num = 0;
-class ObStressThread_create : public share::ObThreadPool {
+class ObStressThread_create : public share::ObThreadPool
+{
 public:
   void run1()
   {
@@ -185,10 +182,9 @@ public:
     ObSMConnection conn;
     int err = OB_SUCCESS;
     uint32_t N = 1000;
-    uint32_t version = 0;
     for (uint32_t i = 0; i < N; i++) {
       uint32_t id = static_cast<uint32_t>(ObRandom::rand(0, N));
-      err = mgr_->get_session(version, id, sess_info);
+      err = mgr_->get_session(id, sess_info);
       if (OB_ENTRY_NOT_EXIST == err) {
         conn.sessid_ = id;
         conn.proxy_sessid_ = id + 1;
@@ -200,19 +196,19 @@ public:
           EXPECT_EQ(id + 1, sess_info->get_proxy_sessid());
           // ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
           // sess_info->set_query_start_time(id);
-          EXPECT_EQ(OB_SUCCESS, mgr_->revert_session(sess_info));
+          mgr_->revert_session(sess_info);
         }
       } else {
         EXPECT_EQ(OB_SUCCESS, err);
         // ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
         // EXPECT_EQ(true, 0 == static_cast<uint32_t>(sess_info->get_query_start_time()) ||
         //           id == static_cast<uint32_t>(sess_info->get_query_start_time()));
-        EXPECT_EQ(OB_SUCCESS, mgr_->revert_session(sess_info));
+        mgr_->revert_session(sess_info);
       }
     }
   }
-  ObSQLSessionMgr* mgr_;
-  ObSMConnection* conn_;
+  ObSQLSessionMgr * mgr_;
+  ObSMConnection *conn_;
 };
 
 TEST_F(DISABLED_TestSessionMgr, create_concurrent)
@@ -229,25 +225,26 @@ TEST_F(DISABLED_TestSessionMgr, create_concurrent)
   EXPECT_EQ(create_num, sess_cnt);
 }
 
-struct ThreadArgs {
-  ObSQLSessionMgr* mgr_;
-  ObSMConnection* conn_;
+struct ThreadArgs
+{
+  ObSQLSessionMgr *mgr_;
+  ObSMConnection *conn_;
   uint32_t sess_cnt_;
 };
 
-void* thread_func_create_session(void* args)
+void *thread_func_create_session(void *args)
 {
-  ThreadArgs* thd_args = static_cast<ThreadArgs*>(args);
+  ThreadArgs *thd_args = static_cast<ThreadArgs*>(args);
   int ret = OB_SUCCESS;
   ObSMConnection conn;
   for (uint32_t i = 0; i < thd_args->sess_cnt_; ++i) {
-    ObSQLSessionInfo* sess_info = NULL;
+    ObSQLSessionInfo *sess_info = NULL;
     uint32_t id = static_cast<uint32_t>(ObRandom::rand(0, thd_args->sess_cnt_));
     conn.sessid_ = id;
     ret = thd_args->mgr_->create_session(&conn, sess_info);
     if (OB_SUCC(ret)) {
       EXPECT_EQ(SESSION_INIT, sess_info->get_session_state());
-      EXPECT_EQ(OB_SUCCESS, thd_args->mgr_->revert_session(sess_info));
+      thd_args->mgr_->revert_session(sess_info);
     } else {
       EXPECT_EQ(OB_SESSION_ENTRY_EXIST, ret);
     }
@@ -255,51 +252,47 @@ void* thread_func_create_session(void* args)
   return NULL;
 }
 
-void* thread_func_get_session(void* args)
+void *thread_func_get_session(void *args)
 {
-  ThreadArgs* thd_args = static_cast<ThreadArgs*>(args);
+  ThreadArgs *thd_args = static_cast<ThreadArgs*>(args);
   int ret = OB_SUCCESS;
-  uint32_t version = 0;
   for (uint32_t i = 0; i < thd_args->sess_cnt_; ++i) {
     uint32_t id = static_cast<uint32_t>(ObRandom::rand(0, thd_args->sess_cnt_));
-    ObSQLSessionInfo* sess_info = NULL;
-    ret = thd_args->mgr_->get_session(version, id, sess_info);
+    ObSQLSessionInfo *sess_info = NULL;
+    ret = thd_args->mgr_->get_session(id, sess_info);
     EXPECT_EQ(true, OB_SUCCESS == ret || OB_ENTRY_NOT_EXIST == ret);
     if (OB_SUCC(ret)) {
-      EXPECT_EQ(OB_SUCCESS, thd_args->mgr_->revert_session(sess_info));
+      thd_args->mgr_->revert_session(sess_info);
     }
   }
   return NULL;
 }
 
-void* thread_func_shadow_session(void* args)
+void *thread_func_shadow_session(void *args)
 {
-  ThreadArgs* thd_args = static_cast<ThreadArgs*>(args);
+  ThreadArgs *thd_args = static_cast<ThreadArgs*>(args);
   int ret = OB_SUCCESS;
-  uint32_t version = 0;
   for (uint32_t i = 0; i < thd_args->sess_cnt_; ++i) {
     uint32_t id = static_cast<uint32_t>(ObRandom::rand(0, thd_args->sess_cnt_));
-    ObSQLSessionInfo* sess_info = NULL;
-    ret = thd_args->mgr_->get_session(version, id, sess_info);
+    ObSQLSessionInfo *sess_info = NULL;
+    ret = thd_args->mgr_->get_session(id, sess_info);
     EXPECT_EQ(true, OB_SUCCESS == ret || OB_ENTRY_NOT_EXIST == ret);
     if (OB_SUCC(ret)) {
       sess_info->set_shadow(true);
-      EXPECT_EQ(OB_SUCCESS, thd_args->mgr_->revert_session(sess_info));
+      thd_args->mgr_->revert_session(sess_info);
     }
   }
   return NULL;
 }
 
-void* thread_func_free_session(void* args)
+void *thread_func_free_session(void *args)
 {
-  ThreadArgs* thd_args = static_cast<ThreadArgs*>(args);
+  ThreadArgs *thd_args = static_cast<ThreadArgs*>(args);
   int ret = OB_SUCCESS;
-  uint32_t version = 0;
   for (uint32_t i = 0; i < thd_args->sess_cnt_; ++i) {
     uint32_t id = static_cast<uint32_t>(ObRandom::rand(0, thd_args->sess_cnt_));
     ObFreeSessionCtx ctx;
     ctx.tenant_id_ = OB_SYS_TENANT_ID;
-    ctx.version_ = version;
     ctx.sessid_ = id;
     ctx.has_inc_active_num_ = false;
     ret = thd_args->mgr_->free_session(ctx);
@@ -315,7 +308,7 @@ TEST_F(DISABLED_TestSessionMgr, concurrent)
   pthread_t thread_get_arr[THREAD_NUM];
   pthread_t thread_free_arr[THREAD_NUM];
   pthread_t thread_shadow_arr[THREAD_NUM];
-  pthread_attr_t* attr_null = NULL;
+  pthread_attr_t *attr_null = NULL;
 
   for (int64_t i = 0; i < THREAD_NUM; ++i) {
     ThreadArgs thread_args;
@@ -335,7 +328,7 @@ TEST_F(DISABLED_TestSessionMgr, concurrent)
   }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   srand((unsigned)time(NULL));
   //  OB_LOGGER.set_file_name("test_session_mgr.log");

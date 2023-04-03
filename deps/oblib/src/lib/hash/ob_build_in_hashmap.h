@@ -17,21 +17,63 @@
 #include "lib/hash/ob_hashutils.h"
 #include "lib/list/ob_intrusive_list.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
+// A hash map usable by obproxy.
+//
+// This class depends on the @c DLL class from @c ob_intrusive_list.h. It assumes it can uses instances of
+// that class to store chains of elements.
+
+
+// @code
+// bool equal (Key lhs, Key rhs);
+// bool equal (Key key, Value const* value);
+// @endcode
+//
+// Example for @c ObMysqlServerSession keyed by the origin server IP address.
+//
+// @code
+// struct Hasher {
+//   typedef sockaddr const &Key;
+//   typedef ObMysqlServerSession Value;
+//   typedef ObDLList(ObMysqlServerSession, ip_hash_link_) ListHead;
+//
+//   static uint64_t hash(Key key) { return do_hash(key); }
+//   static sockaddr const &key(Value const *value) { return &value->ip_.sa_ }
+//   static bool equal(Key lhs, Key rhs) { return ops_ip_addr_port_eq(lhs, rhs); }
+//   // Alternatively
+//   // static uint64_t hash(Key key);
+//   // static Key key(Value const *value);
+//   // static bool equal(Key lhs, Key rhs);
+// };
+// @endcode
+//
+// In @c ObMysqlServerSession is the definition
+//
+// @code
+// LINK(ObMysqlServerSession, ip_hash_link_);
+// @endcode
+//
+// which creates the internal links used by @c ObBuildInHashMap.
+//
 template <typename H, int64_t bucket_num = 16>
-class ObBuildInHashMap {
+class ObBuildInHashMap
+{
 public:
   // Make embedded types easier to use by importing them to the class namespace.
-  typedef H Hasher;                            // Rename and promote.
-  typedef typename Hasher::Key Key;            // Key type.
-  typedef typename Hasher::Value Value;        // Stored value (element) type.
-  typedef typename Hasher::ListHead ListHead;  // Anchor for value chain.
+  typedef H Hasher; // Rename and promote.
+  typedef typename Hasher::Key Key; // Key type.
+  typedef typename Hasher::Value Value; // Stored value (element) type.
+  typedef typename Hasher::ListHead ListHead; // Anchor for value chain.
 
-  struct ObBuildInBucket {
-    ListHead chain_;  // Chain of elements.
-    int64_t count_;   // # of elements in chain.
+  struct ObBuildInBucket
+  {
+    ListHead chain_; // Chain of elements.
+    int64_t count_; // # of elements in chain.
 
     // Internal chain for iteration.
     //
@@ -52,58 +94,45 @@ public:
   // must use typename. Older compilers don't handle typename outside of
   // template context so if we put typename in the base definition it won't
   // work in non-template classes.
-  typedef DLL<ObBuildInBucket, typename ObBuildInBucket::Link_link_> BucketChain;  // Anchor for bucket chain
+  typedef DLL<ObBuildInBucket, typename ObBuildInBucket::Link_link_>
+  BucketChain; // Anchor for bucket chain
 
   // Standard iterator for walking the map.
   // This iterates over all elements.
   // @internal Iterator is end if value_ is NULL.
-  struct iterator {
-    Value* value_;             // Current location.
-    ObBuildInBucket* bucket_;  // Current bucket;
+  struct iterator
+  {
+    Value *value_; // Current location.
+    ObBuildInBucket *bucket_; // Current bucket;
 
-    iterator() : value_(NULL), bucket_(NULL)
-    {}
-    iterator& operator++()
+    iterator() : value_(NULL), bucket_(NULL) {}
+    iterator &operator ++ ()
     {
       if (NULL != value_) {
-        if (NULL == (value_ = ListHead::next(value_))) {         // end of bucket, next bucket.
-          if (NULL != (bucket_ = BucketChain::next(bucket_))) {  // found non-empty next bucket.
+        if (NULL == (value_ = ListHead::next(value_))) { // end of bucket, next bucket.
+          if (NULL != (bucket_ = BucketChain::next(bucket_))) { // found non-empty next bucket.
             value_ = bucket_->chain_.head_;
             if (OB_ISNULL(value_)) {
-              OB_LOG(ERROR, "NULL value", KP_(value));  // if bucket is in chain, must be non-empty.
+              OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "NULL value", KP_(value)); // if bucket is in chain, must be non-empty.
             }
           }
         }
       }
       return *this;
     }
-    Value& operator*()
-    {
-      return *value_;
-    }
-    Value* operator->()
-    {
-      return value_;
-    }
-    bool operator==(iterator const& that)
-    {
-      return bucket_ == that.bucket_ && value_ == that.value_;
-    }
-    bool operator!=(iterator const& that)
-    {
-      return !(*this == that);
-    }
+    Value &operator * () { return *value_; }
+    Value *operator -> () { return value_; }
+    bool operator == (iterator const &that) { return bucket_ == that.bucket_ && value_ == that.value_; }
+    bool operator != (iterator const &that) { return !(*this == that); }
 
   protected:
     // Internal iterator constructor.
-    iterator(ObBuildInBucket* b, Value* v) : value_(v), bucket_(b)
-    {}
+    iterator(ObBuildInBucket *b, Value *v) : value_(v), bucket_(b) {}
     friend class ObBuildInHashMap;
   };
 
 public:
-  ObBuildInHashMap() : count_(0)
-  {}
+  ObBuildInHashMap() : count_(0) {}
 
   // Remove all values from the map.
   // The values are not cleaned up. The values are not touched in this method,
@@ -114,33 +143,29 @@ public:
   }
 
   // Get the number of elements in the map.
-  int64_t count() const
-  {
-    return count_;
-  }
+  int64_t count() const { return count_; }
 
   iterator begin()
   {
     // Get the first non-empty bucket, if any.
-    ObBuildInBucket* b = bucket_chain_.head_;
-    return (NULL != b && NULL != b->chain_.head_) ? iterator(b, b->chain_.head_) : end();
+    ObBuildInBucket *b = bucket_chain_.head_;
+    return (NULL != b && NULL != b->chain_.head_)
+           ? iterator(b, b->chain_.head_) : end();
   }
 
-  iterator end()
-  {
-    return iterator(NULL, NULL);
-  }
+  iterator end() { return iterator(NULL, NULL); }
+
 
   // put a key value pair into HashMap
   // @retval OB_SUCCESS for success
   // @retval OB_HASH_EXIST when key already exist
-  int set_refactored(Value* value)
+  int set_refactored(Value *value)
   {
     int ret = OB_SUCCESS;
     Key key = Hasher::key(value);
-    ObBuildInBucket& bucket = buckets_[Hasher::hash(key) % bucket_num];
+    ObBuildInBucket &bucket = buckets_[Hasher::hash(key) % bucket_num];
 
-    if (!bucket.chain_.in(value)) {
+    if (! bucket.chain_.in(value)) {
       bucket.chain_.push(value);
       ++count_;
       // not empty, put it on the non-empty list.
@@ -156,36 +181,35 @@ public:
 
   // @retval OB_SUCCESS for success
   // @retval OB_HASH_NOT_EXIST for key not exist
-  int get_refactored(Key key, Value*& value) const
+  int get_refactored(Key key, Value *&value) const
   {
     int ret = OB_HASH_NOT_EXIST;
-    const ObBuildInBucket& bucket = buckets_[Hasher::hash(key) % bucket_num];
-    Value* v = bucket.chain_.head_;
-    while (NULL != v && !Hasher::equal(key, Hasher::key(v))) {
+    const ObBuildInBucket &bucket = buckets_[Hasher::hash(key) % bucket_num];
+    Value *v = bucket.chain_.head_;
+    while (NULL != v && ! Hasher::equal(key, Hasher::key(v))) {
       v = ListHead::next(v);
     }
     if (NULL != (value = v)) {
-      ret = OB_SUCCESS;
-      ;
+      ret = OB_SUCCESS;;
     }
     return ret;
   }
 
-  Value* get(Key key) const
+  Value *get(Key key) const
   {
-    const ObBuildInBucket& bucket = buckets_[Hasher::hash(key) % bucket_num];
-    Value* v = bucket.chain_.head_;
-    while (NULL != v && !Hasher::equal(key, Hasher::key(v))) {
+    const ObBuildInBucket &bucket = buckets_[Hasher::hash(key) % bucket_num];
+    Value *v = bucket.chain_.head_;
+    while (NULL != v && ! Hasher::equal(key, Hasher::key(v))) {
       v = ListHead::next(v);
     }
     return v;
   }
 
-  Value* remove(const Key key)
+  Value *remove(const Key key)
   {
-    ObBuildInBucket& bucket = buckets_[Hasher::hash(key) % bucket_num];
-    Value* v = bucket.chain_.head_;
-    while (NULL != v && !Hasher::equal(key, Hasher::key(v))) {
+    ObBuildInBucket &bucket = buckets_[Hasher::hash(key) % bucket_num];
+    Value *v = bucket.chain_.head_;
+    while (NULL != v && ! Hasher::equal(key, Hasher::key(v))) {
       v = ListHead::next(v);
     }
     if (NULL != v) {
@@ -204,7 +228,7 @@ public:
   int erase_refactored(const Key key)
   {
     int ret = OB_SUCCESS;
-    Value* v = remove(key);
+    Value *v = remove(key);
     if (NULL == v) {
       ret = OB_HASH_NOT_EXIST;
     }
@@ -213,10 +237,10 @@ public:
 
 private:
   ObBuildInBucket buckets_[bucket_num];
-  int64_t count_;  // of elements stored in the map.
+  int64_t count_; // of elements stored in the map.
   BucketChain bucket_chain_;
 };
-}  // namespace hash
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_LIB_HASH_OB_BUILD_IN_HASHMAP_
+} // namespace hash
+} // namespace common
+} // namespace oceanbase
+#endif //OCEANBASE_LIB_HASH_OB_BUILD_IN_HASHMAP_

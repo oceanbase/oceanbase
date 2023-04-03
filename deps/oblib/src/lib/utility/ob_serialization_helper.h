@@ -17,12 +17,15 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_template_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 template <typename T>
-struct DefaultItemEncode {
-  static int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const T& item)
+struct DefaultItemEncode
+{
+  static int encode_item(char *buf, const int64_t buf_len, int64_t &pos, const T &item)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buf)) {
@@ -33,7 +36,7 @@ struct DefaultItemEncode {
     }
     return ret;
   }
-  static int decode_item(const char* buf, const int64_t data_len, int64_t& pos, T& item)
+  static int decode_item(const char *buf, const int64_t data_len, int64_t &pos, T &item)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buf)) {
@@ -44,14 +47,15 @@ struct DefaultItemEncode {
     }
     return ret;
   }
-  static int64_t encoded_length_item(const T& item)
+  static int64_t encoded_length_item(const T &item)
   {
     return encoded_length_item_enum(item, BoolType<__is_enum(T)>());
   }
 
 private:
   // for class, struct, union
-  static int encode_item_enum(char* buf, const int64_t buf_len, int64_t& pos, const T& item, FalseType)
+  static int encode_item_enum(char *buf, const int64_t buf_len, int64_t &pos,
+                              const T &item, FalseType)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buf)) {
@@ -62,7 +66,8 @@ private:
     }
     return ret;
   }
-  static int decode_item_enum(const char* buf, const int64_t data_len, int64_t& pos, T& item, FalseType)
+  static int decode_item_enum(const char *buf, const int64_t data_len, int64_t &pos,
+                              T &item, FalseType)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buf)) {
@@ -73,14 +78,15 @@ private:
     }
     return ret;
   }
-  static int64_t encoded_length_item_enum(const T& item, FalseType)
+  static int64_t encoded_length_item_enum(const T &item, FalseType)
   {
     return item.get_serialize_size();
   }
 
   // for enum
   // only 4 byte enum supported.
-  static int encode_item_enum(char* buf, const int64_t buf_len, int64_t& pos, const T& item, TrueType)
+  static int encode_item_enum(char *buf, const int64_t buf_len, int64_t &pos,
+                              const T &item, TrueType)
   {
     int ret = OB_SUCCESS;
     STATIC_ASSERT(sizeof(int32_t) == sizeof(item), "type length mismatch");
@@ -92,7 +98,8 @@ private:
     }
     return ret;
   }
-  static int decode_item_enum(const char* buf, const int64_t data_len, int64_t& pos, T& item, TrueType)
+  static int decode_item_enum(const char *buf, const int64_t data_len, int64_t &pos,
+                              T &item, TrueType)
   {
     int ret = OB_SUCCESS;
     int32_t v = 0;
@@ -107,15 +114,15 @@ private:
     }
     return ret;
   }
-  static int64_t encoded_length_item_enum(const T& item, TrueType)
+  static int64_t encoded_length_item_enum(const T &item, TrueType)
   {
     STATIC_ASSERT(sizeof(int32_t) == sizeof(item), "type length mismatch");
     return serialization::encoded_length_vi32(static_cast<int32_t>(item));
   }
 };
 
-template <typename T>
-int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const T& item)
+template<typename T>
+int encode_item(char *buf, const int64_t buf_len, int64_t &pos, const T &item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -126,8 +133,8 @@ int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const T& item)
   }
   return ret;
 }
-template <typename T>
-int decode_item(const char* buf, const int64_t data_len, int64_t& pos, T& item)
+template<typename T>
+int decode_item(const char *buf, const int64_t data_len, int64_t &pos, T &item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -138,22 +145,24 @@ int decode_item(const char* buf, const int64_t data_len, int64_t& pos, T& item)
   }
   return ret;
 }
-template <typename T>
-int64_t encoded_length_item(const T& item)
+template<typename T>
+int64_t encoded_length_item(const T &item)
 {
   return DefaultItemEncode<T>::encoded_length_item(item);
 }
 
-#define DECLARE_ENCODE_ITEM(type)                                                              \
-  template <>                                                                                  \
-  struct DefaultItemEncode<type> {                                                             \
-    static int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const type& item);  \
-    static int decode_item(const char* buf, const int64_t data_len, int64_t& pos, type& item); \
-    static int64_t encoded_length_item(const type& item);                                      \
-  };                                                                                           \
-  int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const type& item);           \
-  int decode_item(const char* buf, const int64_t data_len, int64_t& pos, type& item);          \
-  int64_t encoded_length_item(const type& item);
+#define DECLARE_ENCODE_ITEM(type)                                       \
+  template<>                                                            \
+  struct DefaultItemEncode<type>                                        \
+  {                                                                     \
+    static int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const  type &item); \
+    static int decode_item(const char* buf, const int64_t data_len, int64_t& pos, type &item); \
+    static int64_t encoded_length_item(const type &item);               \
+  };                                                                    \
+  int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const  type &item); \
+  int decode_item(const char* buf, const int64_t data_len, int64_t& pos, type &item); \
+  int64_t encoded_length_item(const type &item);                        \
+
 
 DECLARE_ENCODE_ITEM(int64_t);
 DECLARE_ENCODE_ITEM(uint64_t);
@@ -163,8 +172,8 @@ DECLARE_ENCODE_ITEM(int8_t);
 DECLARE_ENCODE_ITEM(bool);
 DECLARE_ENCODE_ITEM(double);
 
-template <int64_t SIZE>
-int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const char (&item)[SIZE])
+template<int64_t SIZE>
+int encode_item(char *buf, const int64_t buf_len, int64_t &pos, const char(&item)[SIZE])
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -175,8 +184,8 @@ int encode_item(char* buf, const int64_t buf_len, int64_t& pos, const char (&ite
   }
   return ret;
 }
-template <int64_t SIZE>
-int decode_item(const char* buf, const int64_t data_len, int64_t& pos, char (&item)[SIZE])
+template<int64_t SIZE>
+int decode_item(const char *buf, const int64_t data_len, int64_t &pos, char(&item)[SIZE])
 {
   int ret = OB_SUCCESS;
   int64_t ret_str_length;
@@ -188,13 +197,13 @@ int decode_item(const char* buf, const int64_t data_len, int64_t& pos, char (&it
   }
   return ret;
 }
-template <int64_t SIZE>
-int64_t encoded_length_item(const char (&item)[SIZE])
+template<int64_t SIZE>
+int64_t encoded_length_item(const char(&item)[SIZE])
 {
   return serialization::encoded_length(item);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_SERIALIZATION_HELPER_H */

@@ -15,19 +15,20 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprBitOr : public ObBitwiseExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprBitOr : public ObBitwiseExprOperator
+{
 public:
-  explicit ObExprBitOr(common::ObIAllocator& alloc);
-  virtual ~ObExprBitOr(){};
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  explicit  ObExprBitOr(common::ObIAllocator &alloc);
+  virtual ~ObExprBitOr() {};
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitOr);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_EXPR_BITWISE_OR_H_ */
+}
+}
+#endif  /* _OB_EXPR_BITWISE_OR_H_ */

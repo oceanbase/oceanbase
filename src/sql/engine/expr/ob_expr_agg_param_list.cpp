@@ -12,15 +12,25 @@
 
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprAggParamList::ObExprAggParamList(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_OP_AGG_PARAM_LIST, N_AGG_PARAM_LIST, 1, NOT_ROW_DIMENSION)
-{}
+ObExprAggParamList::ObExprAggParamList(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_OP_AGG_PARAM_LIST, N_AGG_PARAM_LIST,
+                         1, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE,
+                         INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprAggParamList::~ObExprAggParamList()
-{}
+{
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */
+
+
+
+

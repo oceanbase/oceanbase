@@ -17,7 +17,7 @@
 #include "rpc/frame/ob_req_handler.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "observer/mysql/obsm_handler.h"
+#include "observer/mysql/obsm_handler.h"/*  */
 #include "observer/ob_srv_xlator.h"
 #include "observer/ob_srv_deliver.h"
 #include "observer/ob_server_struct.h"
@@ -26,17 +26,18 @@ namespace oceanbase {
 namespace rpc {
 namespace frame {
 class ObReqTranslator;
-}
-}  // namespace rpc
-}  // namespace oceanbase
+}}}
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObSrvNetworkFrame {
+class ObSrvNetworkFrame
+{
 public:
   enum { NET_IO_NORMAL_GID = 0, NET_IO_HP_GID = 64, NET_IO_BATCH_GID = 72 };
-  explicit ObSrvNetworkFrame(ObGlobalContext& gctx);
+  explicit ObSrvNetworkFrame(ObGlobalContext &gctx);
 
   virtual ~ObSrvNetworkFrame();
 
@@ -47,28 +48,33 @@ public:
   int rpc_shutdown();
   int high_prio_rpc_shutdown();
   int batch_rpc_shutdown();
+  int unix_rpc_shutdown();
+  void sql_nio_stop();
   void wait();
   int stop();
 
   int reload_config();
   int reload_ssl_config();
   static int extract_expired_time(const char *const cert_file, int64_t &expired_time);
-  static uint64_t get_ssl_file_hash(const char *ca_cert_file,
-      const char *ssl_cert_file,
-      const char *ssl_key_file,
-      bool &file_exist);
-  ObSrvDeliver& get_deliver()
-  {
-    return deliver_;
-  }
-  int get_proxy(obrpc::ObRpcProxy& proxy);
-  rpc::frame::ObReqTransport* get_req_transport();
-  rpc::frame::ObReqTransport* get_high_prio_req_transport();
-  rpc::frame::ObReqTransport* get_batch_rpc_req_transport();
-  inline rpc::frame::ObReqTranslator& get_xlator();
+  static uint64_t get_ssl_file_hash(const char *intl_file[3], const char *sm_file[5], bool &file_exist);
+  ObSMHandler &get_mysql_handler() { return mysql_handler_; }
+  ObSrvDeliver& get_deliver() { return deliver_; }
+  int get_proxy(obrpc::ObRpcProxy &proxy);
+  rpc::frame::ObReqTransport *get_req_transport();
+  rpc::frame::ObReqTransport *get_high_prio_req_transport();
+  rpc::frame::ObReqTransport *get_batch_rpc_req_transport();
+  inline rpc::frame::ObReqTranslator &get_xlator();
+  rpc::frame::ObNetEasy *get_net_easy();
+  void set_ratelimit_enable(int ratelimit_enabled);
+  int reload_sql_thread_config();
+  int reload_tenant_sql_thread_config(const uint64_t tenant_id);
 
+  int reload_mysql_login_thread_config() {
+    int cnt = deliver_.get_mysql_login_thread_count_to_set(static_cast<int32_t>(GCONF.sql_login_thread_count));
+    return deliver_.set_mysql_login_thread_count(cnt);
+  }
 private:
-  ObGlobalContext& gctx_;
+  ObGlobalContext &gctx_;
 
   ObSrvXlator xlator_;
   rpc::frame::ObReqQHandler request_qhandler_;
@@ -80,23 +86,44 @@ private:
   obrpc::ObRpcHandler rpc_handler_;
   ObSMHandler mysql_handler_;
 
+
   rpc::frame::ObNetEasy net_;
-  rpc::frame::ObReqTransport* rpc_transport_;
-  rpc::frame::ObReqTransport* high_prio_rpc_transport_;
-  rpc::frame::ObReqTransport* mysql_transport_;
-  rpc::frame::ObReqTransport* batch_rpc_transport_;
+  rpc::frame::ObReqTransport *rpc_transport_;
+  rpc::frame::ObReqTransport *high_prio_rpc_transport_;
+  rpc::frame::ObReqTransport *mysql_transport_;
+  rpc::frame::ObReqTransport *batch_rpc_transport_;
   uint64_t last_ssl_info_hash_;
 
   DISALLOW_COPY_AND_ASSIGN(ObSrvNetworkFrame);
-};  // end of class ObSrvNetworkFrame
+}; // end of class ObSrvNetworkFrame
 
 // inline functions
-inline rpc::frame::ObReqTranslator& ObSrvNetworkFrame::get_xlator()
-{
+inline
+rpc::frame::ObReqTranslator &
+ObSrvNetworkFrame::get_xlator() {
   return xlator_;
 }
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+static int get_default_net_thread_count()
+{
+  int cnt = 1;
+  int cpu_num = static_cast<int>(get_cpu_num());
+
+  if (cpu_num <= 4) {
+    cnt = 2;
+  } else if (cpu_num <= 8) {
+    cnt = 3;
+  } else if (cpu_num <= 16) {
+    cnt = 5;
+  } else if (cpu_num <= 32) {
+    cnt = 7;
+  } else {
+    cnt = max(8, static_cast<int>(get_cpu_num()) / 6);
+  }
+  return cnt;
+}
+
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_OBSERVER_OB_SRV_NETWORK_FRAME_H_ */

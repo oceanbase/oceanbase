@@ -18,48 +18,50 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/ob_define.h"
 using oceanbase::common::OB_APP_MIN_COLUMN_ID;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace common {
+namespace common
+{
 class ObMySQLProxy;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObSimpleTableSchemaV2;
 }
-}  // namespace share
-namespace observer {
-class ObTenantShowTables : public common::ObVirtualTableIterator {
-  enum TENANT_ALL_TABLES_COLUMN {
+}
+namespace observer
+{
+class ObTenantShowTables : public common::ObVirtualTableIterator
+{
+  enum TENANT_ALL_TABLES_COLUMN
+  {
     DATABASE_ID = OB_APP_MIN_COLUMN_ID,
     TABLE_NAME = OB_APP_MIN_COLUMN_ID + 1,
     TABLE_TYPE = OB_APP_MIN_COLUMN_ID + 2,
   };
-
 public:
   ObTenantShowTables();
   virtual ~ObTenantShowTables();
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_tenant_id(uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
 private:
   int inner_get_next_row();
-
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
-  common::ObSEArray<const share::schema::ObSimpleTableSchemaV2*, 128> table_schemas_;
+  common::ObSEArray<const share::schema::ObSimpleTableSchemaV2 *, 128> table_schemas_;
   int64_t table_schema_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantShowTables);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}// observer
+}// oceanbase
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_TENANT_SHOW_TABLES_ */

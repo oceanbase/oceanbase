@@ -1,0 +1,25 @@
+PROJECT=ob-configserver
+PROCESSOR=2
+VERSION=1.0
+PWD ?= $(shell pwd)
+
+GO              := GO111MODULE=on GOPROXY=https://mirrors.aliyun.com/goproxy/,direct go
+BUILD_FLAG      := -p $(PROCESSOR)
+GOBUILD         := $(GO) build $(BUILD_FLAG)
+GOBUILDCOVERAGE := $(GO) test -covermode=count -coverpkg="../..." -c .
+GOCOVERAGE_FILE := tests/coverage.out
+GOCOVERAGE_REPORT := tests/coverage-report
+GOTEST          := OB_CONFIGSERVER_CONFIG_PATH=$(PWD) $(GO) test -tags test -covermode=count -coverprofile=$(GOCOVERAGE_FILE) -p $(PROCESSOR)
+
+GO_RACE_FLAG =-race
+LDFLAGS += -X "github.com/oceanbase/configserver/config.Version=${VERSION}"
+LDFLAGS += -X "github.com/oceanbase/configserver/config.BuildTimestamp=$(shell date -u '+%Y-%m-%d %H:%M:%S')"
+LDFLAGS += -X "github.com/oceanbase/configserver/config.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
+LDFLAGS += -X "github.com/oceanbase/configserver/config.GitHash=$(shell git rev-parse HEAD)"
+LDFLAGS_DEBUG = -X "github.com/oceanbase/configserver/config.Mode=debug"
+LDFLAGS_RELEASE = -X "github.com/oceanbase/configserver/config.Mode=release"
+OB_CONFIGSERVER_LDFLAGS = $(LDFLAGS) -X "github.com/oceanbase/configserver/config.CurProcess=ob-configserver"
+
+GOFILES ?= $(shell git ls-files '*.go')
+GOTEST_PACKAGES = $(shell go list ./... | grep -v -f tests/excludes.txt)
+UNFMT_FILES ?= $(shell gofmt -l -s $(filter-out , $(GOFILES)))

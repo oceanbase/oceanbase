@@ -16,8 +16,10 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/timezone/ob_time_convert.h"
 #include <gtest/gtest.h>
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(test_time_zone_info_manager, test_time_zone_key)
 {
   ObTimeZoneKey tz_key1(ObString("Africa/Abidjan"));
@@ -30,9 +32,10 @@ TEST(test_time_zone_info_manager, test_time_zone_key)
 
   EXPECT_EQ(tz_key1.hash(0), tz_key2.hash(0));
   EXPECT_EQ(tz_key1.hash(0), tz_key3.hash(0));
+
 }
 
-void test_str_to_ob_time(const ObString& str, const ObString& expect_tz_name, const ObString& expect_tz_abbr)
+void test_str_to_ob_time(const ObString &str, const ObString &expect_tz_name, const ObString &expect_tz_abbr)
 {
   ObTime ob_time;
   EXPECT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
@@ -44,22 +47,23 @@ void test_str_to_ob_time(const ObString& str, const ObString& expect_tz_name, co
 TEST(test_time_zone_info_manager, str_to_digit_with_date)
 {
   ObTime ob_time;
-  // Test OB current parsing datetime str method
+  //Test OB current parsing datetime str method
   test_str_to_ob_time("2000-01-01 00:00:00abc", "", "");
-  test_str_to_ob_time("2000-01-01 00:00:00  ", "", "");
+  test_str_to_ob_time("2000-01-01 00:00:00  ", "","");
   test_str_to_ob_time("2000-01-01 00:00:00 abc", "abc", "");
   test_str_to_ob_time("2000-01-01 00:00:00.11111 abc", "abc", "");
   test_str_to_ob_time("2000-01-01 00:00:00abc1111", "", "");
-  test_str_to_ob_time("2000-01-01 00:00:00abc1111def222", "", "");
+  test_str_to_ob_time("2000-01-01 00:00:00abc1111def222","","");
 
-  // Test the parsing result of datetime string containing time zone and abbr
-  // 1. tz and abbr can only exist in the 6th or 7th element of delims.
-  // 2. And it can only exist in elements that start with space.
+  //Test the parsing result of datetime string containing time zone and abbr
+  //1. tz and abbr can only exist in the 6th or 7th element of delims.
+  //2. And it can only exist in elements that start with space.
   test_str_to_ob_time("2000-01-01 00:00:00 Asia/Shanghai", "asia/shanghai", "");
   test_str_to_ob_time("2000-01-01 00:00:00 Asia/Shanghai CDT", "asia/shanghai", "CDT");
   test_str_to_ob_time("2000-01-01 00:00:00.11111 Asia/Shanghai CDT", "asia/shanghai", "CDT");
   test_str_to_ob_time("15-12-31 23:59:59.000000", "", "");
 }
+
 
 TEST(test_time_zone_info_manager, str_to_digit_without_date)
 {
@@ -71,14 +75,14 @@ TEST(test_time_zone_info_manager, str_to_digit_without_date)
   EXPECT_EQ(OB_SUCCESS, ObTimeConverter::time_overflow_trunc(value));
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -rf test_time_zone_info_manager.log");
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_time_zone_info_manager.log", true);
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

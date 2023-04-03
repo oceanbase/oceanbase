@@ -18,69 +18,59 @@
 #include "share/ob_unit_table_operator.h"
 #include "../share/partition_table/fake_part_property_getter.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace share::host;
-namespace share {
+namespace share
+{
 const ObZone ZONE = "test_zone";
 const ObZone ZONE11 = "zone1";
 static int64_t TEST_UNIT_MEMORY = OB_UNIT_MIN_MEMORY * 3;
-class UnitInfoBuilder {
+class UnitInfoBuilder
+{
 public:
-  UnitInfoBuilder(common::ObMySQLProxy& proxy) : proxy_(proxy)
+  UnitInfoBuilder(common::ObMySQLProxy &proxy) : proxy_(proxy)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ut_operator_.init(proxy))) {
       SHARE_LOG(WARN, "unit table operator init failed", K(ret));
     }
   }
-  virtual ~UnitInfoBuilder()
-  {}
+  virtual ~UnitInfoBuilder() {}
 
-  UnitInfoBuilder& add_unit(const uint64_t unit_id, const uint64_t pool_id, const uint64_t group_id,
-      const common::ObAddr& server, const common::ObZone& zone = ZONE, const common::ObAddr& from_server = E);
-  UnitInfoBuilder& add_config(const uint64_t config_id, const double max_cpu);
-  UnitInfoBuilder& add_pool(const uint64_t pool_id, const int64_t unit_count, const uint64_t config_id,
-      const common::ObArray<common::ObZone>& zone_list, const uint64_t tenant_id = OB_SYS_TENANT_ID);
-  static bool unit_equal(const ObUnit& l, const ObUnit& r);
-  static bool config_equal(const ObUnitConfig& l, const ObUnitConfig& r);
-  static bool pool_equal(const ObResourcePool& l, const ObResourcePool& r);
+  UnitInfoBuilder &add_unit(const uint64_t unit_id, const uint64_t pool_id,
+                            const uint64_t group_id,
+                            const common::ObAddr &server,
+                            const common::ObZone &zone = ZONE,
+                            const common::ObAddr &from_server = E);
+  UnitInfoBuilder &add_config(const uint64_t config_id, const double max_cpu);
+  UnitInfoBuilder &add_pool(const uint64_t pool_id, const int64_t unit_count,
+                            const uint64_t config_id,
+                            const common::ObArray<common::ObZone> &zone_list,
+                            const uint64_t tenant_id = OB_SYS_TENANT_ID);
+  static bool unit_equal(const ObUnit &l, const ObUnit &r);
+  static bool config_equal(const ObUnitConfig &l, const ObUnitConfig &r);
+  static bool pool_equal(const ObResourcePool &l, const ObResourcePool &r);
   // write infos to system table
   int write_table();
 
-  common::ObIArray<ObUnitConfig>& get_configs()
-  {
-    return configs_;
-  }
-  common::ObIArray<ObUnit>& get_units()
-  {
-    return units_;
-  }
-  common::ObIArray<ObResourcePool>& get_pools()
-  {
-    return pools_;
-  }
-  const common::ObIArray<ObUnitConfig>& get_configs() const
-  {
-    return configs_;
-  }
-  const common::ObIArray<ObUnit>& get_units() const
-  {
-    return units_;
-  }
-  const common::ObIArray<ObResourcePool>& get_pools() const
-  {
-    return pools_;
-  }
+  common::ObIArray<ObUnitConfig> &get_configs() { return configs_; }
+  common::ObIArray<ObUnit> &get_units() { return units_; }
+  common::ObIArray<ObResourcePool> &get_pools() { return pools_; }
+  const common::ObIArray<ObUnitConfig> &get_configs() const { return configs_; }
+  const common::ObIArray<ObUnit> &get_units() const { return units_; }
+  const common::ObIArray<ObResourcePool> &get_pools() const { return pools_; }
 
 private:
-  common::ObMySQLProxy& proxy_;
+  common::ObMySQLProxy &proxy_;
   ObUnitTableOperator ut_operator_;
   common::ObArray<ObUnitConfig> configs_;
   common::ObArray<ObResourcePool> pools_;
   common::ObArray<ObUnit> units_;
 };
 
-UnitInfoBuilder& UnitInfoBuilder::add_config(const uint64_t config_id, const double max_cpu)
+UnitInfoBuilder &UnitInfoBuilder::add_config(
+    const uint64_t config_id, const double max_cpu)
 {
   int ret = OB_SUCCESS;
   ObUnitConfig config;
@@ -99,9 +89,10 @@ UnitInfoBuilder& UnitInfoBuilder::add_config(const uint64_t config_id, const dou
     config.min_cpu_ = max_cpu;
     config.max_memory_ = TEST_UNIT_MEMORY;
     config.min_memory_ = TEST_UNIT_MEMORY;
-    config.max_disk_size_ = OB_UNIT_MIN_DISK_SIZE;
+    config.log_disk_size_ = OB_UNIT_MIN_LOG_DISK_SIZE;
     config.max_iops_ = OB_UNIT_MIN_IOPS;
     config.min_iops_ = OB_UNIT_MIN_IOPS;
+    config.iops_weight_ = 0;
     config.max_session_num_ = OB_UNIT_MIN_SESSION_NUM;
     if (OB_FAIL(configs_.push_back(config))) {
       SHARE_LOG(WARN, "push_back failed", K(ret));
@@ -110,8 +101,10 @@ UnitInfoBuilder& UnitInfoBuilder::add_config(const uint64_t config_id, const dou
   return *this;
 }
 
-UnitInfoBuilder& UnitInfoBuilder::add_pool(const uint64_t pool_id, const int64_t unit_count, const uint64_t config_id,
-    const common::ObArray<common::ObZone>& zone_list, const uint64_t tenant_id)
+UnitInfoBuilder &UnitInfoBuilder::add_pool(
+    const uint64_t pool_id, const int64_t unit_count,
+    const uint64_t config_id, const common::ObArray<common::ObZone> &zone_list,
+    const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObResourcePool pool;
@@ -137,8 +130,12 @@ UnitInfoBuilder& UnitInfoBuilder::add_pool(const uint64_t pool_id, const int64_t
   return *this;
 }
 
-UnitInfoBuilder& UnitInfoBuilder::add_unit(const uint64_t unit_id, const uint64_t pool_id, const uint64_t group_id,
-    const common::ObAddr& server, const common::ObZone& zone, const common::ObAddr& from_server)
+UnitInfoBuilder &UnitInfoBuilder::add_unit(
+    const uint64_t unit_id, const uint64_t pool_id,
+    const uint64_t group_id,
+    const common::ObAddr &server,
+    const common::ObZone &zone,
+    const common::ObAddr &from_server)
 {
   int ret = OB_SUCCESS;
   ObUnit unit;
@@ -155,28 +152,38 @@ UnitInfoBuilder& UnitInfoBuilder::add_unit(const uint64_t unit_id, const uint64_
   return *this;
 }
 
-bool UnitInfoBuilder::unit_equal(const ObUnit& l, const ObUnit& r)
+bool UnitInfoBuilder::unit_equal(const ObUnit &l, const ObUnit &r)
 {
   bool equal = true;
-  equal = (l.unit_id_ == r.unit_id_) && (l.resource_pool_id_ == r.resource_pool_id_) && (l.group_id_ == r.group_id_) &&
-          (l.zone_ == r.zone_) && (l.server_ == r.server_) && (l.migrate_from_server_ == r.migrate_from_server_);
+  equal = (l.unit_id_ == r.unit_id_)
+      && (l.resource_pool_id_ == r.resource_pool_id_)
+      && (l.group_id_ == r.group_id_)
+      && (l.zone_ == r.zone_) && (l.server_ == r.server_)
+      && (l.migrate_from_server_ == r.migrate_from_server_);
   return equal;
 }
 
-bool UnitInfoBuilder::config_equal(const ObUnitConfig& l, const ObUnitConfig& r)
+bool UnitInfoBuilder::config_equal(const ObUnitConfig &l,
+                                   const ObUnitConfig &r)
 {
   bool equal = true;
-  equal = (l.unit_config_id_ == r.unit_config_id_) && (l.name_ == r.name_) && (l.max_cpu_ == r.max_cpu_) &&
-          (l.max_memory_ == r.max_memory_) && (l.max_iops_ == r.max_iops_) && (l.max_disk_size_ == r.max_disk_size_) &&
-          (l.max_session_num_ == r.max_session_num_);
+  equal = (l.unit_config_id_ == r.unit_config_id_)
+      && (l.name_ == r.name_) && (l.max_cpu_ == r.max_cpu_)
+      && (l.max_memory_ == r.max_memory_)
+      && (l.max_iops_ == r.max_iops_)
+      && (l.log_disk_size_ == r.log_disk_size_)
+      && (l.max_session_num_ == r.max_session_num_);
   return equal;
 }
 
-bool UnitInfoBuilder::pool_equal(const ObResourcePool& l, const ObResourcePool& r)
+bool UnitInfoBuilder::pool_equal(const ObResourcePool &l,
+                                 const ObResourcePool &r)
 {
   bool equal = true;
-  equal = (l.resource_pool_id_ == r.resource_pool_id_) && (l.name_ == r.name_) && (l.unit_count_ == r.unit_count_) &&
-          (l.unit_config_id_ == r.unit_config_id_) && (l.tenant_id_ == r.tenant_id_);
+  equal = (l.resource_pool_id_ == r.resource_pool_id_)
+      && (l.name_ == r.name_) && (l.unit_count_ == r.unit_count_)
+      && (l.unit_config_id_ == r.unit_config_id_)
+      && (l.tenant_id_ == r.tenant_id_);
   if (l.zone_list_.count() != r.zone_list_.count()) {
     equal = false;
   } else {
@@ -213,7 +220,7 @@ int UnitInfoBuilder::write_table()
   return ret;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_UNIT_INFO_BUILDER_H_
+#endif //OCEANBASE_SHARE_UNIT_INFO_BUILDER_H_

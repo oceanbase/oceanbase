@@ -16,34 +16,25 @@
 #include "lib/atomic/ob_atomic.h"
 #include <sched.h>
 
-namespace oceanbase {
-namespace common {
-class ObExternalRef {
+namespace oceanbase
+{
+namespace common
+{
+class ObExternalRef
+{
 public:
   enum { REF_LIMIT = OB_MAX_CPU_NUM * 16 };
   class IERefPtr {
   public:
-    IERefPtr() : next_(NULL)
-    {}
-    virtual ~IERefPtr()
-    {}
+    IERefPtr() {}
+    virtual ~IERefPtr() {}
     virtual void on_quiescent() = 0;
-    IERefPtr* next_;
   };
-  struct RetireList {
-    int64_t ref_;
-    IERefPtr* head_;
-  };
-  ObExternalRef()
-  {
-    memset(ref_array_, 0, sizeof(ref_array_));
-  }
-  ~ObExternalRef()
-  {}
-  void* acquire(void** paddr)
-  {
+  ObExternalRef() { memset(ref_array_, 0, sizeof(ref_array_)); }
+  ~ObExternalRef() {}
+  void* acquire(void** paddr) {
     void* addr = NULL;
-    while (1) {
+    while(1) {
       xref((addr = load_ptr(paddr)), 1);
       if (load_ptr(paddr) == addr) {
         break;
@@ -56,85 +47,29 @@ public:
     }
     return addr;
   }
-  void release(void* addr)
-  {
+  void release(void* addr) {
     if (NULL != addr) {
       xref(addr, -1);
     }
   }
-  void retire(IERefPtr* ptr)
-  {
+  void retire(IERefPtr* ptr) {
     if (NULL != ptr) {
       wait_quiescent(ptr);
       ptr->on_quiescent();
     }
   }
-  void wait_quiescent(void* addr)
-  {
-    while (!is_ref_clear(addr)) {
+  void wait_quiescent(void* addr) {
+    while(!is_ref_clear(addr)) {
       sched_yield();
     }
   }
-  IERefPtr* acquire(IERefPtr** paddr, RetireList& list)
-  {
-    IERefPtr* addr = (IERefPtr*)acquire((void**)paddr);
-    if (NULL != addr) {
-      list.ref_++;
-    }
-    return addr;
-  }
-  void release(IERefPtr* addr, RetireList& list)
-  {
-    if (NULL != addr) {
-      release((void*)addr);
-      list.ref_--;
-      if (0 == list.ref_) {
-        clear_list(list);
-      }
-    }
-  }
-  void retire(IERefPtr* ptr, RetireList& list)
-  {
-    if (0 == list.ref_) {
-      clear_list(list);
-      retire(ptr);
-    } else {
-      ptr->next_ = list.head_;
-      list.head_ = ptr;
-    }
-  }
-
 private:
-  void* load_ptr(void** paddr)
-  {
-    return (void*)(((uint64_t)ATOMIC_LOAD(paddr)) & ~1ULL);
-  }
-  void xref(void* addr, int x)
-  {
-    ATOMIC_FAA(locate(addr), x);
-  }
-  bool is_ref_clear(void* addr)
-  {
-    return get_ref(addr) == 0;
-  }
-  int64_t get_ref(void* addr)
-  {
-    return ATOMIC_LOAD(locate(addr));
-  }
-  int64_t* locate(void* addr)
-  {
-    return ref_array_ + (hash((uint64_t)addr) % REF_LIMIT);
-  }
-  void clear_list(RetireList& list)
-  {
-    while (NULL != list.head_) {
-      IERefPtr* node = list.head_;
-      list.head_ = node->next_;
-      retire(node);
-    }
-  }
-  static uint64_t hash(uint64_t h)
-  {
+  void* load_ptr(void** paddr) { return (void*)(((uint64_t)ATOMIC_LOAD(paddr)) & ~1ULL); }
+  void xref(void* addr, int x) { ATOMIC_FAA(locate(addr), x); }
+  bool is_ref_clear(void* addr) { return get_ref(addr) == 0; }
+  int64_t get_ref(void* addr) { return ATOMIC_LOAD(locate(addr)); }
+  int64_t* locate(void* addr) { return ref_array_ + (hash((uint64_t)addr) % REF_LIMIT); }
+  static uint64_t hash(uint64_t h) {
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccd;
     h ^= h >> 33;
@@ -142,11 +77,11 @@ private:
     h ^= h >> 33;
     return h;
   }
-
 private:
   int64_t ref_array_[REF_LIMIT];
 };
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase
 
 #endif /* OCEANBASE_ALLOCATOR_OB_EXTERNAL_REF_H_ */
+

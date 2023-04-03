@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #ifndef _OB_HTABLE_FILTER_PARSER_H
 #define _OB_HTABLE_FILTER_PARSER_H 1
 #include "lib/ob_define.h"
@@ -49,7 +49,7 @@ public:
 public:
   ObHTableFilterParser();
   virtual ~ObHTableFilterParser();
-  int init(common::ObArenaAllocator* allocator);
+  int init(common::ObIAllocator* allocator);
   void destroy();
   // parse the filter string
   int parse_filter(const common::ObString &filter_string, hfilter::Filter *&filter);
@@ -61,23 +61,23 @@ public:
   void *alloc(int64_t size);
   void *realloc(void *ptr, int64_t size);
   void free(void *ptr);
-  common::ObArenaAllocator *allocator() { return allocator_; }
-  int create_comparator(const SimpleString &bytes, hfilter::Comparable *&comparator);
+  common::ObIAllocator *allocator() { return allocator_; }
+  virtual int create_comparator(const SimpleString &bytes, hfilter::Comparable *&comparator);
   int create_prefix_comparator(const SimpleString &bytes, hfilter::Comparable *&comparator);
   int store_filter(hfilter::Filter *&filter);
-private:
-  static const common::ObString BINARY_TYPE;
-  static const common::ObString BINARY_PREFIX_TYPE;
-  static const common::ObString REGEX_STRING_TYPE;
-  static const common::ObString SUB_STRING_TYPE;
-private:
-  common::ObArenaAllocator* allocator_;
+protected:
+  common::ObIAllocator* allocator_;
   common::ObSEArray<hfilter::Comparable*, 8> comparators_;
   common::ObSEArray<hfilter::Filter*, 8> filters_;
   // the input filter string
   const common::ObString *filter_string_;
   // parse result
   hfilter::Filter *result_filter_;
+private:
+  static const common::ObString BINARY_TYPE;
+  static const common::ObString BINARY_PREFIX_TYPE;
+  static const common::ObString REGEX_STRING_TYPE;
+  static const common::ObString SUB_STRING_TYPE;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHTableFilterParser);
 };

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "election/ob_election_async_log.h"
 #include "lib/alloc/malloc_hook.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
@@ -26,6 +25,7 @@
 #include "lib/utility/ob_defer.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_struct.h"
+#include "observer/ob_server_utils.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_version.h"
@@ -37,6 +37,7 @@
 #include <sys/resource.h>
 // easy complains in compiling if put the right position.
 #include <link.h>
+#include "sql/monitor/ob_security_audit_utils.h"
 
 #ifdef __NEED_PERF__
 #include "lib/profile/gperf.h"
@@ -46,20 +47,19 @@ using namespace oceanbase::obsys;
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
+using namespace oceanbase::diagnose;
 using namespace oceanbase::observer;
-using namespace oceanbase::election;
 using namespace oceanbase::share;
 
 #define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
-#define MPRINTx(format, ...)     \
-  MPRINT(format, ##__VA_ARGS__); \
+#define MPRINTx(format, ...)                                                   \
+  MPRINT(format, ##__VA_ARGS__);                                               \
   exit(1)
 
 static void print_help()
 {
   MPRINT("observer [OPTIONS]");
   MPRINT("  -h,--help                print this help");
-  MPRINT("  -V,--version             print the information of version");
   MPRINT("  -z,--zone ZONE           zone");
   MPRINT("  -p,--mysql_port PORT     mysql port");
   MPRINT("  -P,--rpc_port PORT       rpc port");
@@ -71,32 +71,29 @@ static void print_help()
   MPRINT("  -o,--optstr OPTSTR       extra options string");
   MPRINT("  -r,--rs_list RS_LIST     root service list");
   MPRINT("  -l,--log_level LOG_LEVEL server log level");
-  MPRINT("  -6,--ipv6 USE_IPV6   server use ipv6 address");
+  MPRINT("  -6,--ipv6 USE_IPV6       server use ipv6 address");
   MPRINT("  -m,--mode MODE server mode");
   MPRINT("  -f,--scn flashback_scn");
 }
 
 static void print_version()
 {
+#ifndef ENABLE_SANITY
+  const char *extra_flags = "";
+#else
+  const char *extra_flags = "|Sanity";
+#endif
   MPRINT("observer (%s)\n", PACKAGE_STRING);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_BRANCH: %s", build_branch());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
-  MPRINT("BUILD_FLAGS: %s", build_flags());
+  MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
-  MPRINT("Copyright (c) 2021 Ant Group Co., Ltd.");
-  MPRINT("");
-  MPRINT("OceanBase CE is licensed under Mulan PubL v2.");
-  MPRINT("You can use this software according to the terms and conditions of the Mulan PubL v2.");
-  MPRINT("You may obtain a copy of Mulan PubL v2 at:");
-  MPRINT("            http://license.coscl.org.cn/MulanPubL-2.0");
-  MPRINT("THIS SOFTWARE IS PROVIDED ON AN \"AS IS\" BASIS, WITHOUT WARRANTIES OF ANY KIND,");
-  MPRINT("EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,");
-  MPRINT("MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.");
-  MPRINT("See the Mulan PubL v2 for more details.");
+  MPRINT("Copyright (c) 2011-2022 OceanBase Inc.");
+  MPRINT();
 }
 
-static void print_args(int argc, char* argv[])
+static void print_args(int argc, char *argv[])
 {
   for (int i = 0; i < argc - 1; ++i) {
     fprintf(stderr, "%s ", argv[i]);
@@ -104,44 +101,50 @@ static void print_args(int argc, char* argv[])
   fprintf(stderr, "%s\n", argv[argc - 1]);
 }
 
-static bool to_int64(const char* sval, int64_t& ival)
+static bool to_int64(const char *sval, int64_t &ival)
 {
-  char* endp = NULL;
-  ival = static_cast<int64_t>(strtol(sval, &endp, 10));
+  char *endp = NULL;
+  ival       = static_cast<int64_t>(strtol(sval, &endp, 10));
   return NULL != endp && *endp == '\0';
 }
 
-static int to_port_x(const char* sval)
+static int to_port_x(const char *sval)
 {
   int64_t port = 0;
   if (!to_int64(sval, port)) {
     MPRINTx("need port number: %s", sval);
   } else if (port <= 1024 || port >= 65536) {
-    MPRINTx("port number should greater than 1024 and less than 65536: %ld", port);
+    MPRINTx(
+        "port number should greater than 1024 and less than 65536: %ld", port);
   }
   return static_cast<int>(port);
 }
 
-static int64_t to_cluster_id_x(const char* sval)
+static int64_t to_cluster_id_x(const char *sval)
 {
   int64_t cluster_id = 0;
   if (!to_int64(sval, cluster_id)) {
     MPRINTx("need cluster id: %s", sval);
-  } else if (cluster_id <= 0 ||
-             cluster_id >= 4294967296) {  // cluster id given by command line must be in range [1,4294967295]
-    MPRINTx("cluster id in cmd option should be in range [1,4294967295], "
-            "but it is %ld",
+  } else if (
+      cluster_id <= 0 ||
+      cluster_id >=
+          4294967296) { // cluster id given by command line must be in range [1,4294967295]
+    MPRINTx(
+        "cluster id in cmd option should be in range [1,4294967295], "
+        "but it is %ld",
         cluster_id);
   }
   return cluster_id;
 }
 
-static void get_opts_setting(struct option long_opts[], char short_opts[], const size_t size)
+static void get_opts_setting(
+    struct option long_opts[], char short_opts[], const size_t size)
 {
-  static struct {
-    const char* long_name_;
-    char short_name_;
-    bool has_arg_;
+  static struct
+  {
+    const char *long_name_;
+    char        short_name_;
+    bool        has_arg_;
   } ob_opts[] = {
       {"help", 'h', 0},
       {"home", 'H', 1},
@@ -171,10 +174,10 @@ static void get_opts_setting(struct option long_opts[], char short_opts[], const
   int short_idx = 0;
 
   for (size_t i = 0; i < opts_cnt; ++i) {
-    long_opts[i].name = ob_opts[i].long_name_;
+    long_opts[i].name    = ob_opts[i].long_name_;
     long_opts[i].has_arg = ob_opts[i].has_arg_;
-    long_opts[i].flag = NULL;
-    long_opts[i].val = ob_opts[i].short_name_;
+    long_opts[i].flag    = NULL;
+    long_opts[i].val     = ob_opts[i].short_name_;
 
     short_opts[short_idx++] = ob_opts[i].short_name_;
     if (ob_opts[i].has_arg_) {
@@ -183,107 +186,108 @@ static void get_opts_setting(struct option long_opts[], char short_opts[], const
   }
 }
 
-static void parse_short_opt(const int c, const char* value, ObServerOptions& opts)
+static void
+parse_short_opt(const int c, const char *value, ObServerOptions &opts)
 {
   switch (c) {
-    case 'H':
-      MPRINT("home: %s", value);
-      opts.home_ = value;
-      // set home
-      break;
+  case 'H':
+    MPRINT("home: %s", value);
+    opts.home_ = value;
+    // set home
+    break;
 
-    case 'p':
-      MPRINT("mysql port: %s", value);
-      opts.mysql_port_ = to_port_x(value);
-      // set port
-      break;
+  case 'p':
+    MPRINT("mysql port: %s", value);
+    opts.mysql_port_ = to_port_x(value);
+    // set port
+    break;
 
-    case 'P':
-      MPRINT("rpc port: %s", value);
-      opts.rpc_port_ = to_port_x(value);
-      // set port
-      break;
+  case 'P':
+    MPRINT("rpc port: %s", value);
+    opts.rpc_port_ = to_port_x(value);
+    // set port
+    break;
 
-    case 'z':
-      MPRINT("zone: %s", value);
-      opts.zone_ = value;
-      break;
+  case 'z':
+    MPRINT("zone: %s", value);
+    opts.zone_ = value;
+    break;
 
-    case 'o':
-      MPRINT("optstr: %s", value);
-      opts.optstr_ = value;
-      break;
+  case 'o':
+    MPRINT("optstr: %s", value);
+    opts.optstr_ = value;
+    break;
 
-    case 'i':
-      MPRINT("devname: %s", value);
-      opts.devname_ = value;
-      break;
+  case 'i':
+    MPRINT("devname: %s", value);
+    opts.devname_ = value;
+    break;
 
-    case 'r':
-      MPRINT("rs list: %s", value);
-      opts.rs_list_ = value;
-      break;
+  case 'r':
+    MPRINT("rs list: %s", value);
+    opts.rs_list_ = value;
+    break;
 
-    case 'N':
-      MPRINT("nodaemon");
-      opts.nodaemon_ = true;
-      // set nondaemon
-      break;
+  case 'N':
+    MPRINT("nodaemon");
+    opts.nodaemon_ = true;
+    // set nondaemon
+    break;
 
-    case 'n':
-      MPRINT("appname: %s", value);
-      opts.appname_ = value;
-      break;
+  case 'n':
+    MPRINT("appname: %s", value);
+    opts.appname_ = value;
+    break;
 
-    case 'c':
-      MPRINT("cluster id: %s", value);
-      opts.cluster_id_ = to_cluster_id_x(value);
-      break;
+  case 'c':
+    MPRINT("cluster id: %s", value);
+    opts.cluster_id_ = to_cluster_id_x(value);
+    break;
 
-    case 'd':
-      MPRINT("data_dir: %s", value);
-      opts.data_dir_ = value;
-      break;
+  case 'd':
+    MPRINT("data_dir: %s", value);
+    opts.data_dir_ = value;
+    break;
 
-    case 'l':
-      MPRINT("log level: %s", value);
-      if (OB_SUCCESS != OB_LOGGER.level_str2int(value, opts.log_level_)) {
-        MPRINT("malformed log level, candicates are: "
-               "    ERROR,USER_ERR,WARN,INFO,TRACE,DEBUG");
-        MPRINT("!! Back to INFO log level.");
-        opts.log_level_ = 3;
-      }
-      break;
+  case 'l':
+    MPRINT("log level: %s", value);
+    if (OB_SUCCESS != OB_LOGGER.level_str2int(value, opts.log_level_)) {
+      MPRINT("malformed log level, candicates are: "
+             "    ERROR,USER_ERR,WARN,INFO,TRACE,DEBUG");
+      MPRINT("!! Back to INFO log level.");
+      opts.log_level_ = OB_LOG_LEVEL_WARN;
+    }
+    break;
 
-    case 'm':
-      // set mode
-      MPRINT("server mode: %s", value);
-      opts.mode_ = value;
-      break;
+  case 'm':
+    // set mode
+    MPRINT("server startup mode: %s", value);
+    opts.startup_mode_ = value;
+    break;
 
-    case 'f':
-      MPRINT("flashback scn: %s", value);
-      to_int64(value, opts.flashback_scn_);
-      break;
+  case 'f':
+    MPRINT("flashback scn: %s", value);
+    to_int64(value, opts.flashback_scn_);
+    break;
 
-    case 'V':
-      print_version();
-      exit(0);
-      break;
+  case 'V':
+    print_version();
+    exit(0);
+    break;
 
-    case '6':
-      opts.use_ipv6_ = true;
-      break;
-
-    case 'h':
-    default:
-      print_help();
-      exit(1);
+  case '6':
+    opts.use_ipv6_ = true;
+    break;
+  case 'h':
+  default:
+    print_help();
+    exit(1);
   }
 }
 
 // process long only option
-static void parse_long_opt(const char* name, const char* value, ObServerOptions& opts)
+static void
+parse_long_opt(const char *name, const char *value, ObServerOptions &opts)
 {
   MPRINT("long: %s %s", name, value);
   UNUSED(name);
@@ -291,27 +295,30 @@ static void parse_long_opt(const char* name, const char* value, ObServerOptions&
   UNUSED(opts);
 }
 
-static int callback(struct dl_phdr_info* info, size_t size, void* data)
+static int callback(struct dl_phdr_info *info, size_t size, void *data)
 {
   UNUSED(size);
   UNUSED(data);
   if (OB_ISNULL(info)) {
-    LOG_ERROR("invalid argument", K(info));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(info));
   } else {
     MPRINT("name=%s (%d segments)", info->dlpi_name, info->dlpi_phnum);
     for (int j = 0; j < info->dlpi_phnum; j++) {
       if (NULL != info->dlpi_phdr) {
-        MPRINT("\t\t header %2d: address=%10p", j, (void*)(info->dlpi_addr + info->dlpi_phdr[j].p_vaddr));
+        MPRINT(
+            "\t\t header %2d: address=%10p",
+            j,
+            (void *)(info->dlpi_addr + info->dlpi_phdr[j].p_vaddr));
       }
     }
   }
   return 0;
 }
 
-static void parse_opts(int argc, char* argv[], ObServerOptions& opts)
+static void parse_opts(int argc, char *argv[], ObServerOptions &opts)
 {
-  static const int MAX_OPTS_CNT = 128;
-  static char short_opts[MAX_OPTS_CNT * 2 + 1];
+  static const int     MAX_OPTS_CNT = 128;
+  static char          short_opts[MAX_OPTS_CNT * 2 + 1];
   static struct option long_opts[MAX_OPTS_CNT];
 
   get_opts_setting(long_opts, short_opts, MAX_OPTS_CNT);
@@ -322,7 +329,7 @@ static void parse_opts(int argc, char* argv[], ObServerOptions& opts)
   while (!end) {
     int c = getopt_long(argc, argv, short_opts, long_opts, &long_opts_idx);
 
-    if (-1 == c || long_opts_idx >= MAX_OPTS_CNT) {  // end
+    if (-1 == c || long_opts_idx >= MAX_OPTS_CNT) { // end
       end = true;
     } else if (0 == c) {
       parse_long_opt(long_opts[long_opts_idx].name, optarg, opts);
@@ -332,7 +339,7 @@ static void parse_opts(int argc, char* argv[], ObServerOptions& opts)
   }
 }
 
-static void print_limit(const char* name, const int resource)
+static void print_limit(const char *name, const int resource)
 {
   struct rlimit limit;
   if (0 == getrlimit(resource, &limit)) {
@@ -342,33 +349,60 @@ static void print_limit(const char* name, const int resource)
       _OB_LOG(INFO, "[%s] %-24s = %ld", __func__, name, limit.rlim_cur);
     }
   }
+  if (RLIMIT_CORE == resource) {
+    g_rlimit_core = limit.rlim_cur;
+  }
 }
 
 static void print_all_limits()
 {
   OB_LOG(INFO, "============= *begin server limit report * =============");
-  print_limit("RLIMIT_CORE", RLIMIT_CORE);
-  print_limit("RLIMIT_CPU", RLIMIT_CPU);
-  print_limit("RLIMIT_DATA", RLIMIT_DATA);
-  print_limit("RLIMIT_FSIZE", RLIMIT_FSIZE);
-  print_limit("RLIMIT_LOCKS", RLIMIT_LOCKS);
-  print_limit("RLIMIT_MEMLOCK", RLIMIT_MEMLOCK);
-  print_limit("RLIMIT_NOFILE", RLIMIT_NOFILE);
-  print_limit("RLIMIT_NPROC", RLIMIT_NPROC);
-  print_limit("RLIMIT_STACK", RLIMIT_STACK);
+  print_limit("RLIMIT_CORE",RLIMIT_CORE);
+  print_limit("RLIMIT_CPU",RLIMIT_CPU);
+  print_limit("RLIMIT_DATA",RLIMIT_DATA);
+  print_limit("RLIMIT_FSIZE",RLIMIT_FSIZE);
+  print_limit("RLIMIT_LOCKS",RLIMIT_LOCKS);
+  print_limit("RLIMIT_MEMLOCK",RLIMIT_MEMLOCK);
+  print_limit("RLIMIT_NOFILE",RLIMIT_NOFILE);
+  print_limit("RLIMIT_NPROC",RLIMIT_NPROC);
+  print_limit("RLIMIT_STACK",RLIMIT_STACK);
   OB_LOG(INFO, "============= *stop server limit report* ===============");
 }
 
-int main(int argc, char* argv[])
+static int check_uid_before_start(const char *dir_path)
+{
+  int ret = OB_SUCCESS;
+  uid_t current_uid = UINT_MAX;
+  struct stat64 dir_info;
+
+  current_uid = getuid();
+  if (0 != ::stat64(dir_path, &dir_info)) {
+    /* do nothing */
+  } else {
+    if (current_uid != dir_info.st_uid) {
+      ret = OB_UTL_FILE_ACCESS_DENIED;
+      MPRINT("ERROR: current user(uid=%u) that starts observer is not the same with the original one(uid=%u), observer starts failed!",
+              current_uid, dir_info.st_uid);
+    }
+  }
+
+  return ret;
+}
+extern "C" {
+typedef void *(*reasy_pool_realloc_pt)(void *ptr, size_t size);
+void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
+}
+int main(int argc, char *argv[])
 {
 #ifndef OB_USE_ASAN
   init_malloc_hook();
 #endif
   int64_t memory_used = get_virtual_memory_used();
+#ifndef OB_USE_ASAN
   /**
     signal handler stack
    */
-  void* ptr = malloc(SIG_STACK_SIZE);
+  void *ptr = malloc(SIG_STACK_SIZE);
   abort_unless(ptr != nullptr);
   stack_t nss;
   stack_t oss;
@@ -378,6 +412,8 @@ int main(int argc, char* argv[])
   nss.ss_size = SIG_STACK_SIZE;
   abort_unless(0 == sigaltstack(&nss, &oss));
   DEFER(sigaltstack(&oss, nullptr));
+  ::oceanbase::common::g_redirect_handler = true;
+#endif
 
 #ifdef __NEED_PERF__
   register_gperf_handlers();
@@ -386,25 +422,22 @@ int main(int argc, char* argv[])
   easy_pool_set_allocator(ob_easy_realloc);
   ev_set_allocator(ob_easy_realloc);
 
-  CoSetSched sched;
-  sched.CoMainRoutine::init();
-  sched.active_routine_ = &sched;
+#ifndef OB_USE_ASAN
   get_mem_leak_checker().init();
+#endif
 
-  // coroutine settings
-  ::oceanbase::common::USE_CO_LATCH = false;
-  ::oceanbase::lib::CO_FORCE_SYSCALL_FUTEX();
-
-  ObCurTraceId::SeqGenerator::seq_generator_ = ObTimeUtility::current_time();
-  static const int LOG_FILE_SIZE = 256 * 1024 * 1024;
-  char LOG_DIR[] = "log";
-  char PID_DIR[] = "run";
-  char CONF_DIR[] = "etc";
-  const char* const LOG_FILE_NAME = "log/observer.log";
-  const char* const RS_LOG_FILE_NAME = "log/rootservice.log";
-  const char* const ELECT_ASYNC_LOG_FILE_NAME = "log/election.log";
-  const char* const PID_FILE_NAME = "run/observer.pid";
-  int ret = OB_SUCCESS;
+  ObCurTraceId::SeqGenerator::seq_generator_  = ObTimeUtility::current_time();
+  static const int  LOG_FILE_SIZE             = 256 * 1024 * 1024;
+  char              LOG_DIR[]                 = "log";
+  char              PID_DIR[]                 = "run";
+  char              CONF_DIR[]                = "etc";
+  char              AUDIT_DIR[]               = "audit";
+  const char *const LOG_FILE_NAME             = "log/observer.log";
+  const char *const RS_LOG_FILE_NAME          = "log/rootservice.log";
+  const char *const ELECT_ASYNC_LOG_FILE_NAME = "log/election.log";
+  const char *const TRACE_LOG_FILE_NAME       = "log/trace.log";
+  const char *const PID_FILE_NAME             = "run/observer.pid";
+  int               ret                       = OB_SUCCESS;
 
   easy_log_format = ob_easy_log_format;
   // change signal mask first.
@@ -412,6 +445,9 @@ int main(int argc, char* argv[])
     MPRINT("change signal mask failed, ret=%d", ret);
   }
   ObServerOptions opts;
+
+  char audit_file[ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE] = {};
+  int64_t pos = 0;
 
   print_args(argc, argv);
 
@@ -422,58 +458,64 @@ int main(int argc, char* argv[])
   setlocale(LC_TIME, "en_US.UTF-8");
   setlocale(LC_NUMERIC, "en_US.UTF-8");
   // memset(&opts, 0, sizeof (opts));
-  opts.log_level_ = 3;
+  opts.log_level_ = OB_LOG_LEVEL_WARN;
   parse_opts(argc, argv, opts);
 
-  if (OB_FAIL(FileDirectoryUtils::create_full_path(PID_DIR))) {
+  if (OB_FAIL(check_uid_before_start(CONF_DIR))) {
+    MPRINT("Fail check_uid_before_start, please use the initial user to start observer!");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(PID_DIR))) {
     MPRINT("create pid dir fail: ./run/");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(LOG_DIR))) {
     MPRINT("create log dir fail: ./log/");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(CONF_DIR))) {
     MPRINT("create log dir fail: ./etc/");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(AUDIT_DIR))) {
+    MPRINT("create log dir fail: ./audit/");
+  } else if (OB_FAIL(ObSecurityAuditUtils::get_audit_file_name(audit_file,
+      ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE,
+      pos))) {
+  } else if (OB_FAIL(ObEncryptionUtil::init_ssl_malloc())) {
+    MPRINT("failed to init crypto malloc");
   } else if (!opts.nodaemon_ && OB_FAIL(start_daemon(PID_FILE_NAME))) {
   } else {
     CURLcode curl_code = curl_global_init(CURL_GLOBAL_ALL);
     OB_ASSERT(CURLE_OK == curl_code);
 
+    const char *syslog_file_info = ObServerUtils::build_syslog_file_info(ObAddr());
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_log_level(opts.log_level_);
     OB_LOGGER.set_max_file_size(LOG_FILE_SIZE);
-    OB_LOGGER.set_file_name(LOG_FILE_NAME, false, true, RS_LOG_FILE_NAME, ELECT_ASYNC_LOG_FILE_NAME);
+    OB_LOGGER.set_new_file_info(syslog_file_info);
+    OB_LOGGER.set_file_name(LOG_FILE_NAME, false, true, RS_LOG_FILE_NAME, ELECT_ASYNC_LOG_FILE_NAME, TRACE_LOG_FILE_NAME, audit_file);
     ObPLogWriterCfg log_cfg;
     // if (OB_SUCCESS != (ret = ASYNC_LOG_INIT(ELECT_ASYNC_LOG_FILE_NAME, opts.log_level_, true))) {
     //   LOG_ERROR("election async log init error.", K(ret));
     //   ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     // }
     LOG_INFO("succ to init logger",
-        "default file",
-        LOG_FILE_NAME,
-        "rs file",
-        RS_LOG_FILE_NAME,
-        "election file",
-        ELECT_ASYNC_LOG_FILE_NAME,
-        "max_log_file_size",
-        LOG_FILE_SIZE,
-        "enable_async_log",
-        OB_LOGGER.enable_async_log(),
-        "flush_tid",
-        OB_LOGGER.get_flush_tid(),
-        "group_commit_max_item_cnt",
-        log_cfg.group_commit_max_item_cnt_);
+             "default file", LOG_FILE_NAME,
+             "rs file", RS_LOG_FILE_NAME,
+             "election file", ELECT_ASYNC_LOG_FILE_NAME,
+             "trace file", TRACE_LOG_FILE_NAME,
+             K(audit_file),
+             "max_log_file_size", LOG_FILE_SIZE,
+             "enable_async_log", OB_LOGGER.enable_async_log());
     if (0 == memory_used) {
       _LOG_INFO("Get virtual memory info failed");
     } else {
       _LOG_INFO("Virtual memory : %'15ld byte", memory_used);
     }
     // print in log file.
+    LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
     print_args(argc, argv);
     print_version();
     print_all_limits();
     dl_iterate_phdr(callback, NULL);
+    ObProcMaps::get_instance().load_maps();
 
     static const int DEFAULT_MMAP_MAX_VAL = 1024 * 1024 * 1024;
     mallopt(M_MMAP_MAX, DEFAULT_MMAP_MAX_VAL);
-    mallopt(M_ARENA_MAX, 1);  // disable malloc multiple arena pool
+    mallopt(M_ARENA_MAX, 1); // disable malloc multiple arena pool
 
     // turn warn log on so that there's a observer.log.wf file which
     // records all WARN and ERROR logs in log directory.
@@ -483,10 +525,13 @@ int main(int argc, char* argv[])
       // worker. When ObThWorker is creating, it'd be aware of this
       // thread has already had a worker, which can prevent binding
       // new worker with it.
-      ObWorker worker;
-
-      ObServer& observer = ObServer::get_instance();
-      LOG_INFO("observer is start", "observer_version", PACKAGE_STRING);
+      lib::Worker worker;
+      lib::Worker::set_worker_to_thread_local(&worker);
+      ObServer &observer = ObServer::get_instance();
+      LOG_INFO("observer starts", "observer_version", PACKAGE_STRING);
+      // to speed up bootstrap phase, need set election INIT TS
+      // to count election keep silence time as soon as possible after observer process started
+      ATOMIC_STORE(&palf::election::INIT_TS, palf::election::get_monotonic_ts());
       if (OB_FAIL(observer.init(opts, log_cfg))) {
         LOG_ERROR("observer init fail", K(ret));
       } else if (OB_FAIL(observer.start())) {
@@ -496,14 +541,15 @@ int main(int argc, char* argv[])
       }
       observer.destroy();
       ObKVGlobalCache::get_instance().destroy();
-      ObTenantManager::get_instance().destroy();
+      ObVirtualTenantManager::get_instance().destroy();
     }
     curl_global_cleanup();
     unlink(PID_FILE_NAME);
   }
 
-  LOG_INFO("observer is exit", "observer_version", PACKAGE_STRING);
+  LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
   OB_LOGGER.set_stop_append_log();
-  OB_LOGGER.destroy();
+  OB_LOGGER.set_enable_async_log(false);
+  OB_LOGGER.set_enable_log_limit(false);
   return ret;
 }

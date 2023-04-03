@@ -10,1639 +10,865 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE
 #include "ob_admin_dump_backup_data_executor.h"
-#include "storage/ob_partition_base_data_backup.h"
-#include "../archive_tool/ob_admin_log_archive_executor.h"
-#include "share/ob_encrypt_kms.h"
+#include "share/backup/ob_backup_io_adapter.h"
+#include "lib/container/ob_array.h"
+#include "storage/blocksstable/ob_data_buffer.h"
+#include "../dumpsst/ob_admin_dumpsst_print_helper.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
-using namespace oceanbase::common;
-using namespace oceanbase::blocksstable;
-using namespace oceanbase::storage;
+#include <algorithm>
+#include <functional>
+
 using namespace oceanbase::share;
+using namespace oceanbase::common;
+using namespace oceanbase::backup;
+using namespace oceanbase::blocksstable;
 #define HELP_FMT "\t%-30s%-12s\n"
 
-namespace oceanbase
-{
-namespace tools
-{
+namespace oceanbase {
+namespace tools {
 
-int ObAdminDumpBackupDataReaderUtil::get_data_type(
-    const char *data_path,
-    const char *storage_info,
-    ObBackupFileType &data_type)
+/* ObAdminDumpBackupDataUtil */
+
+int ObAdminDumpBackupDataUtil::read_archive_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str,
+    share::ObIBackupSerializeProvider &serializer)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
   int64_t file_length = 0;
-  char *buf = nullptr;
+  char * buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
-  ObStorageUtil util(false/*need retry*/);
-  int64_t need_size = sizeof(uint16_t);
-  data_type = BACKUP_TYPE_MAX;
-
-  if (OB_ISNULL(data_path) || OB_ISNULL(storage_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get backup data common header get invalid argument", K(ret), KP(data_path), KP(storage_info));
-  } else if (OB_FAIL(util.get_file_length(data_path,
-      storage_info, file_length))) {
-    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(data_path), K(storage_info));
-  } else if (file_length < need_size) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup file length too small", K(ret), K(need_size), K(file_length), K(data_path), K(storage_info));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(need_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(need_size), K(data_path), K(storage_info));
-  } else if (OB_FAIL(util.read_part_file(data_path, storage_info,
-      buf, need_size, 0 /*offset*/, read_size))) {
-    STORAGE_LOG(WARN, "failed to read single file", K(ret), K(file_length), K(need_size), K(read_size));
-  } else if (need_size != read_size) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read file length not match", K(ret), K(file_length), K(need_size), K(read_size), K(data_path), K(storage_info));
-  } else {
-    uint16_t tmp_uint16 = *(reinterpret_cast<uint16_t *>(buf));
-    int16_t tmp_int16 = 0;
-    if (tmp_uint16 <= BACKUP_MAX_DIRECT_WRITE_TYPE) {
-      data_type = static_cast<ObBackupFileType>(tmp_uint16);
+  ObBackupIoAdapter util;
+  share::ObBackupStorageInfo storage_info;
+  ObBackupSerializeHeaderWrapper serializer_wrapper(&serializer);
+  if (OB_FAIL(storage_info.set(backup_path.ptr(), storage_info_str.ptr()))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.get_file_length(backup_path.ptr(), &storage_info, file_length))) {
+    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "failed to get file length.", K(ret), K(backup_path));
     } else {
-      int64_t pos = 0;
-      if (OB_FAIL(serialization::decode_i16(buf, need_size, pos, &tmp_int16))) {
-        LOG_WARN("failed to decode_i16", K(ret), K(need_size), K(pos));
-      } else {
-        data_type = static_cast<ObBackupFileType>(tmp_int16);
-      }
+      STORAGE_LOG(WARN, "file not exist.", K(ret), K(backup_path));
     }
-    STORAGE_LOG(INFO, "succeed to get data type", K(data_path), K(storage_info), K(data_type),
-        K(tmp_int16), K(tmp_uint16));
-  }
-  return ret;
-}
-
-int ObAdminDumpBackupDataReaderUtil::get_backup_data_common_header(
-    const char *data_dir, const char *storage_info,
-    ObBackupCommonHeader &header)
-{
-  int ret = OB_SUCCESS;
-  int64_t file_length = 0;
-  char *buf = nullptr;
-  int64_t read_size = 0;
-  ObArenaAllocator allocator;
-  ObStorageUtil util(false/*need retry*/);
-  const int64_t common_header_size = sizeof(ObBackupCommonHeader);
-  const int64_t offset = 0;
-
-  if (OB_ISNULL(data_dir) || OB_ISNULL(storage_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get backup data common header get invalid argument", K(ret), KP(data_dir), KP(storage_info));
-  } else if (OB_FAIL(util.get_file_length(data_dir,
-      storage_info, file_length))) {
-    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(data_dir), K(storage_info));
   } else if (0 == file_length) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup file length should not be empty", K(ret), K(data_dir), K(storage_info));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(common_header_size)))) {
+    STORAGE_LOG(WARN, "file is empty.", K(ret), K(backup_path));
+  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(common_header_size), K(data_dir), K(storage_info));
-  } else if (OB_FAIL(util.read_part_file(data_dir, storage_info,
-      buf, common_header_size, offset, read_size))) {
-    STORAGE_LOG(WARN, "failed to read single file", K(ret), K(file_length), K(common_header_size), K(read_size));
-  } else if (common_header_size != read_size) {
+    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(backup_path), K(file_length));
+  } else if (OB_FAIL(util.read_single_file(backup_path.ptr(), &storage_info, buf, file_length, read_size))) {
+    STORAGE_LOG(WARN, "failed to read file.", K(ret), K(backup_path), K(file_length));
+  } else if (file_length != read_size) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read file length not match", K(ret), K(file_length), K(common_header_size), K(read_size), K(data_dir), K(storage_info));
+    STORAGE_LOG(WARN, "read file length not match.", K(ret), K(backup_path), K(file_length), K(read_size));
+  } else if (OB_FAIL(serializer_wrapper.deserialize(buf, file_length, pos))) {
+    STORAGE_LOG(WARN, "failed to deserialize.", K(ret), K(backup_path), K(file_length));
   } else {
-    int64_t pos = 0;
-    const ObBackupCommonHeader *common_header =
-        reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
-    pos += common_header->header_length_;
-    if (OB_FAIL(common_header->check_header_checksum())) {
-      STORAGE_LOG(WARN, "failed to check common header", K(ret));
+    STORAGE_LOG(INFO, "succeed to read archive file.", K(backup_path), K(serializer));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataUtil::read_backup_file_header(const common::ObString &backup_path, const common::ObString &storage_info_str,
+    backup::ObBackupFileHeader &file_header)
+{
+  int ret = OB_SUCCESS;
+  file_header.reset();
+  char *buf = NULL;
+  int64_t file_length = 0;
+  ObArenaAllocator allocator;
+  const int64_t header_len = sizeof(ObBackupFileHeader);
+  if (OB_FAIL(get_backup_file_length(backup_path, storage_info_str, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info_str));
+  } else if (OB_UNLIKELY(file_length <= sizeof(header_len))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup file too small", K(ret), K(file_length), K(header_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(header_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(header_len));
+  } else if (OB_FAIL(pread_file(backup_path, storage_info_str, 0, header_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info_str), K(file_length), K(header_len));
+  } else {
+    ObBufferReader buffer_reader(buf, header_len);
+    const ObBackupFileHeader *header = NULL;
+    if (OB_FAIL(buffer_reader.get(header))) {
+      STORAGE_LOG(WARN, "failed to get file header", K(ret));
+    } else if (OB_ISNULL(header)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "backup data file header is null", K(ret));
     } else {
-      header = *common_header;
+      file_header = *header;
+    }
+  }
+
+  return ret;
+}
+
+int ObAdminDumpBackupDataUtil::read_data_file_trailer(const common::ObString &backup_path,
+    const common::ObString &storage_info_str, backup::ObBackupDataFileTrailer &file_trailer)
+{
+  int ret = OB_SUCCESS;
+  file_trailer.reset();
+  char *buf = NULL;
+  int64_t file_length = 0;
+  ObArenaAllocator allocator;
+  const int64_t trailer_len = sizeof(ObBackupDataFileTrailer);
+  if (OB_FAIL(get_backup_file_length(backup_path, storage_info_str, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info_str));
+  } else if (OB_UNLIKELY(file_length <= sizeof(trailer_len))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup index file too small", K(ret), K(file_length), K(trailer_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(trailer_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(trailer_len));
+  } else if (OB_FAIL(pread_file(backup_path, storage_info_str, file_length - trailer_len, trailer_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info_str), K(file_length), K(trailer_len));
+  } else {
+    ObBufferReader buffer_reader(buf, trailer_len);
+    const ObBackupDataFileTrailer *trailer = NULL;
+    if (OB_FAIL(buffer_reader.get(trailer))) {
+      STORAGE_LOG(WARN, "failed to get file trailer", K(ret));
+    } else if (OB_ISNULL(trailer)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "backup data file trailer is null", K(ret));
+    } else if (OB_FAIL(trailer->check_valid())) {
+      STORAGE_LOG(WARN, "failed to check is valid", K(ret), K(*trailer));
+    } else {
+      file_trailer = *trailer;
+      STORAGE_LOG(INFO, "read file trailer", K(backup_path), K(file_trailer));
     }
   }
   return ret;
 }
 
-int ObAdminDumpBackupDataReaderUtil::get_backup_data(
-    const char *data_dir,
-    const char *storage_info,
-    char *&buf,
-    int64_t &file_length,
-    common::ObIAllocator &allocator)
+int ObAdminDumpBackupDataUtil::read_index_file_trailer(const common::ObString &backup_path,
+    const common::ObString &storage_info_str, backup::ObBackupMultiLevelIndexTrailer &index_trailer)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t file_length = 0;
+  ObArenaAllocator allocator;
+  const int64_t trailer_len = sizeof(ObBackupMultiLevelIndexTrailer);
+  if (OB_FAIL(get_backup_file_length(backup_path, storage_info_str, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info_str));
+  } else if (OB_UNLIKELY(file_length <= sizeof(trailer_len))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup index file too small", K(ret), K(file_length), K(trailer_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(trailer_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(trailer_len));
+  } else if (OB_FAIL(pread_file(backup_path, storage_info_str, file_length - trailer_len, trailer_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info_str), K(file_length), K(trailer_len));
+  } else {
+    ObBufferReader buffer_reader(buf, trailer_len);
+    const ObBackupMultiLevelIndexTrailer *trailer = NULL;
+    if (OB_FAIL(buffer_reader.get(trailer))) {
+      STORAGE_LOG(WARN, "failed to get file trailer", K(ret));
+    } else if (OB_ISNULL(trailer)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "backup data file trailer is null", K(ret));
+    } else {
+      index_trailer = *trailer;
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataUtil::pread_file(const common::ObString &backup_path, const common::ObString &storage_info_str,
+    const int64_t offset, const int64_t read_size, char *buf)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  int64_t real_read_size = 0;
+  share::ObBackupStorageInfo storage_info;
+  if (OB_UNLIKELY(0 == backup_path.length())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "path is invalid", K(ret), K(backup_path));
+  } else if (OB_UNLIKELY(read_size <= 0)) {
+    STORAGE_LOG(INFO, "read data len is zero", K(backup_path));
+  } else if (OB_FAIL(storage_info.set(backup_path.ptr(), storage_info_str.ptr()))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.read_part_file(backup_path, &storage_info, buf, read_size, offset, real_read_size))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(offset), K(read_size));
+  } else if (OB_UNLIKELY(real_read_size != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "not read enough file", K(ret), K(read_size), K(real_read_size), K(backup_path));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataUtil::get_backup_file_length(
+    const common::ObString &backup_path, const common::ObString &storage_info_str, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
   file_length = 0;
-  buf = NULL;
-  int64_t read_size = 0;
-  ObStorageUtil util(false/*need retry*/);
-  const int64_t offset = 0;
-
-  if (OB_ISNULL(data_dir) || OB_ISNULL(storage_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get backup data get invalid argument", K(ret), KP(data_dir), KP(storage_info));
-  } else if (OB_FAIL(util.get_file_length(data_dir,
-      storage_info, file_length))) {
-    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(data_dir), K(storage_info));
-  } else if (0 == file_length) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup file length should not be empty", K(ret), K(data_dir), K(storage_info));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(file_length), K(data_dir), K(storage_info));
-  } else if (OB_FAIL(util.read_part_file(data_dir, storage_info,
-      buf, file_length, offset, read_size))) {
-    STORAGE_LOG(WARN, "failed to read single file", K(ret), K(file_length), K(read_size));
-  } else if (file_length != read_size) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read file length not match", K(ret), K(file_length), K(read_size), K(data_dir), K(storage_info));
+  ObBackupIoAdapter util;
+  share::ObBackupStorageInfo storage_info;
+  if (OB_FAIL(storage_info.set(backup_path.ptr(), storage_info_str.ptr()))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.get_file_length(backup_path, &storage_info, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info));
   }
   return ret;
 }
 
-int ObAdminDumpBackupDataReaderUtil::get_backup_data(
-    const char *data_dir,
-    const char *storage_info,
-    char *&buf,
-    const int64_t offset,
-    const int64_t data_length,
-    common::ObIAllocator &allocator)
+int ObAdminDumpBackupDataUtil::get_common_header(
+    blocksstable::ObBufferReader &buffer_reader, const share::ObBackupCommonHeader *&common_header)
 {
   int ret = OB_SUCCESS;
-  buf = NULL;
-  int64_t read_size = 0;
-  ObStorageUtil util(false/*need retry*/);
-
-  if (OB_ISNULL(data_dir) || OB_ISNULL(storage_info) || data_length <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get backup data get invalid argument", K(ret), KP(data_dir), KP(storage_info), K(data_length));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(data_length)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(data_length), K(data_dir), K(storage_info));
-  } else if (OB_FAIL(util.read_part_file(data_dir, storage_info,
-      buf, data_length, offset, read_size))) {
-    STORAGE_LOG(WARN, "failed to read single file", K(ret), K(data_length), K(read_size));
-  } else if (data_length != read_size) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read file length not match", K(ret), K(data_length), K(read_size), K(data_dir), K(storage_info));
-  }
-  return ret;
-}
-
-int ObAdminDumpBackupDataReaderUtil::get_meta_index(
-    blocksstable::ObBufferReader &buffer_reader,
-    share::ObBackupCommonHeader &header,
-    common::ObIArray<ObBackupMetaIndex> &meta_index_array)
-{
-  int ret = OB_SUCCESS;
-
-  const ObBackupCommonHeader *common_header = NULL;
-  ObBackupMetaIndex meta_index;
-
   if (OB_FAIL(buffer_reader.get(common_header))) {
-    STORAGE_LOG(WARN, "read meta index common header fail", K(ret));
+    STORAGE_LOG(WARN, "failed to read common header", K(ret));
   } else if (OB_ISNULL(common_header)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "meta index common header is null", K(ret));
+    STORAGE_LOG(WARN, "common header is null", K(ret));
   } else if (OB_FAIL(common_header->check_valid())) {
-    STORAGE_LOG(WARN, "common_header is not vaild", K(ret));
-  } else if (BACKUP_FILE_END_MARK == common_header->data_type_) {
-    STORAGE_LOG(INFO, "file reach the end mark, ", K(*common_header));
+    STORAGE_LOG(WARN, "common header is not valid", K(ret));
   } else if (common_header->data_length_ > buffer_reader.remain()) {
     ret = OB_BUF_NOT_ENOUGH;
-    STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-  } else if (OB_FAIL(common_header->check_data_checksum(
-      buffer_reader.current(),
-      common_header->data_length_))) {
-    STORAGE_LOG(WARN, "commonheader data checksum fail", K(ret));
-  } else {
-    int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
-    for (int64_t i=0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
-      if (OB_FAIL(buffer_reader.read_serialize(meta_index))) {
-        STORAGE_LOG(WARN, "read meta index fail", K(ret));
-      } else if (OB_FAIL(meta_index_array.push_back(meta_index))) {
-        STORAGE_LOG(WARN, "failed to push meta index into array", K(ret), K(meta_index));
-      }
-    }
-
-    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
-        STORAGE_LOG(WARN, "buffer_reader buf not enough", K(ret), K(*common_header));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    header = *common_header;
+    STORAGE_LOG(WARN, "buffer reader not enough", K(ret));
+  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_length_))) {
+    STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(buffer_reader));
   }
   return ret;
 }
 
-int ObAdminDumpBackupDataReaderUtil::get_meta_header(
-    const char *read_buf,
-    const int64_t read_size,
-    ObBackupMetaHeader &header)
+template <class IndexType>
+int ObAdminDumpBackupDataUtil::parse_from_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+    const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+    const std::function<int(const common::ObIArray<IndexType> &)> &print_func2)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(read_buf) || read_size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get backup meta index get invalid argument", K(ret), KP(read_buf), K(read_size));
-  } else {
-    ObBufferReader buffer_reader;
-    const ObBackupMetaHeader *meta_header = NULL;
-    int64_t pos = 0;
-    if (OB_FAIL(buffer_reader.deserialize(read_buf, read_size, pos))) {
-      LOG_WARN("failed to deserialize buffer reader", K(ret));
-    } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-      STORAGE_LOG(WARN, "read meta header fail", K(ret));
-    } else if (OB_ISNULL(meta_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "meta header is null", K(ret));
-    } else if (OB_FAIL(meta_header->check_valid())) {
-      STORAGE_LOG(WARN, "meta_header is invaild", K(ret));
-    } else if (meta_header->data_length_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-    } else if (OB_FAIL(meta_header->check_data_checksum(
-        buffer_reader.current(),
-        meta_header->data_length_))) {
-      STORAGE_LOG(WARN, "meta_header data checksum fail", K(ret));
-    } else {
-      header = *meta_header;
-    }
-  }
-  return ret;
-}
-
-int ObAdminDumpBackupDataReaderUtil::get_macro_block_index(
-    ObBufferReader &buffer_reader,
-    share::ObBackupCommonHeader &header,
-    common::ObIArray<ObBackupMacroIndex> &macro_index_array)
-{
-  int ret = OB_SUCCESS;
-
-  const ObBackupCommonHeader *common_header = NULL;
-  ObBackupMacroIndex macro_index;
-
-  if (OB_FAIL(buffer_reader.get(common_header))) {
-    STORAGE_LOG(WARN, "read macro index common header fail", K(ret));
-  } else if (OB_ISNULL(common_header)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "macro index common header is null", K(ret));
-  } else if (OB_FAIL(common_header->check_valid())) {
-    STORAGE_LOG(WARN, "common_header is not vaild", K(ret));
-  } else if (BACKUP_FILE_END_MARK == common_header->data_type_) {
-    STORAGE_LOG(INFO, "file reach the end mark, ", K(buffer_reader));
-  } else if (common_header->data_length_ > buffer_reader.remain()) {
-    ret = OB_BUF_NOT_ENOUGH;
-    STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-  } else if (OB_FAIL(common_header->check_data_checksum(
-      buffer_reader.current(),
-      common_header->data_length_))) {
-    STORAGE_LOG(WARN, "common header data checksum fail", K(ret));
-  } else {
-    int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
-    for (int i=0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
-      if (OB_FAIL(buffer_reader.read_serialize(macro_index))) {
-        STORAGE_LOG(WARN, "read macro index fail", K(ret));
-      } else if (OB_FAIL(macro_index_array.push_back(macro_index))) {
-        STORAGE_LOG(WARN, "failed to push macro index into array", K(ret), K(macro_index));
-      }
-    }
-
-    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
-        STORAGE_LOG(WARN, "buffer_reader buf not enough", K(ret), K(*common_header));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    header = *common_header;
-  }
-  return ret;
-}
-
-int ObAdminDumpBackupDataReaderUtil::get_macro_block_index_v2(
-    blocksstable::ObBufferReader &buffer_reader,
-    common::ObIAllocator &allocator,
-    TableMacroIndexMap &index_map)
-{
-  int ret = OB_SUCCESS;
-  const ObBackupCommonHeader *common_header = NULL;
-  ObBackupTableMacroIndex macro_index;
-  ObArray<ObBackupTableMacroIndex> index_list;
-  ObITable::TableKey cur_table_key;
-  ObBackupTableKeyInfo table_key_info;
-  int64_t sstable_macro_block_index = -1;
-  ObArray<ObITable::TableKey *> table_keys_ptr;
-  const ObITable::TableKey *table_key_ptr = NULL;
-  while(OB_SUCC(ret) && buffer_reader.remain() > 0) {
+  ObArray<IndexType> index_list;
+  const share::ObBackupCommonHeader *common_header = NULL;
+  while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
     common_header = NULL;
-    if (OB_FAIL(buffer_reader.get(common_header))) {
-      STORAGE_LOG(WARN, "read macro index common header fail", K(ret));
-    } else if (OB_ISNULL(common_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "macro index common header is null", K(ret));
-    } else if (OB_FAIL(common_header->check_valid())) {
-      STORAGE_LOG(WARN, "common_header is not vaild", K(ret));
-    } else if (BACKUP_FILE_END_MARK == common_header->data_type_) {
-      STORAGE_LOG(INFO, "file reach the end mark", K(ret));
-      break;
-    } else if (common_header->data_length_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-    } else if (OB_FAIL(common_header->check_data_checksum(
-        buffer_reader.current(), common_header->data_length_))) {
-      STORAGE_LOG(WARN, "common header data checksum fail", K(ret), K(*common_header));
+    index_list.reset();
+    int64_t start_pos = buffer_reader.pos();
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret));
     } else {
       int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
-      while (OB_SUCC(ret) && buffer_reader.pos() < end_pos) {
-        if (-1 == sstable_macro_block_index) {
-          int64_t start_pos = buffer_reader.pos();
-          if (OB_FAIL(buffer_reader.read_serialize(table_key_info))) {
-            STORAGE_LOG(WARN, "failed to read backup table key meta", K(ret),
-                K(start_pos), K(end_pos), K(*common_header));
-          } else if (0 == table_key_info.total_macro_block_count_) {
-            sstable_macro_block_index = -1;
-            table_key_info.reset();
-          } else {
-            sstable_macro_block_index = 0;
-          }
-        } else {
-          if (OB_FAIL(buffer_reader.read_serialize(macro_index))) {
-            STORAGE_LOG(WARN, "read macro index fail", K(ret));
-          } else if (OB_FAIL(get_table_key_ptr(allocator, table_keys_ptr, table_key_info.table_key_, table_key_ptr))) {
-            STORAGE_LOG(WARN, "failed to get table key ptr", K(ret), K(table_key_info));
-          } else if (FALSE_IT(macro_index.table_key_ptr_ = table_key_ptr)) {
-          } else if (!macro_index.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "macro index is invalid", K(ret), K(macro_index));
-          } else {
-            sstable_macro_block_index = macro_index.sstable_macro_index_;
-            if (0 == index_list.count()) {
-              if (OB_FAIL(index_list.push_back(macro_index))) {
-                STORAGE_LOG(WARN, "fail to put macro index", K(ret), K(macro_index));
-              }
-              cur_table_key = *macro_index.table_key_ptr_;
-            } else if (cur_table_key == *macro_index.table_key_ptr_) {
-              if (OB_FAIL(index_list.push_back(macro_index))) {
-                STORAGE_LOG(WARN, "fail to put macro index", K(ret), K(macro_index));
-              }
-            } else {
-              if (OB_FAIL(add_sstable_index(cur_table_key, index_list, allocator, index_map))) {
-                STORAGE_LOG(WARN, "fail to put index array to map", K(ret), K(cur_table_key));
-              } else {
-                index_list.reuse();
-                cur_table_key = *macro_index.table_key_ptr_;
-                if (OB_FAIL(index_list.push_back(macro_index))) {
-                  STORAGE_LOG(WARN, "fail to put macro index", K(ret), K(macro_index));
-                }
-              }
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (table_key_info.total_macro_block_count_ - 1 == sstable_macro_block_index) {
-              sstable_macro_block_index = -1;
-              table_key_info.reset();
-            }
-          }
+      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
+        IndexType index;
+        if (OB_FAIL(buffer_reader.read_serialize(index))) {
+          STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+        } else if (OB_FAIL(index_list.push_back(index))) {
+          STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
         }
       }
-
-      if (OB_SUCC(ret) && index_list.count() > 0 ) {
-        if (OB_FAIL(add_sstable_index(cur_table_key, index_list, allocator, index_map))) {
-          STORAGE_LOG(WARN, "fail to put index array to map", K(ret), K(cur_table_key));
-        } else {
-          index_list.reset();
-        }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(print_func1(*common_header))) {
+        STORAGE_LOG(WARN, "failed to print func 1", K(ret), KPC(common_header));
+      } else if (OB_FAIL(print_func2(index_list))) {
+        STORAGE_LOG(WARN, "failed to print func 2", K(ret), K(index_list));
       }
-
-      if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-        if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
-          STORAGE_LOG(WARN, "buffer_reader buf not enough", K(ret), K(*common_header));
-        }
+    }
+    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
+      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+        STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       }
     }
   }
   return ret;
 }
 
-int ObAdminDumpBackupDataReaderUtil::add_sstable_index(
-    const ObITable::TableKey &table_key,
-    const common::ObIArray<ObBackupTableMacroIndex> &index_list,
-    common::ObIAllocator &allocator,
-    TableMacroIndexMap &index_map)
+template <class IndexType>
+int ObAdminDumpBackupDataUtil::parse_from_index_blocks(
+    blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list)
 {
   int ret = OB_SUCCESS;
-  void *buf = NULL;
-  ObArray<ObBackupTableMacroIndex> *new_block_list = NULL;
-  int64_t block_count = index_list.count();
-
-  if (!table_key.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "add sstable index get invalid argument", K(ret), K(table_key));
-  } else if (index_list.empty()) {
-    //do nothing
-  } else if (OB_FAIL(index_map.get_refactored(table_key, new_block_list))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObArray<ObBackupTableMacroIndex>)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc buf", K(ret));
-      } else if (OB_ISNULL(new_block_list = new(buf) ObArray<ObBackupTableMacroIndex>())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to new block list", K(ret));
-      } else if (OB_FAIL(index_map.set_refactored(table_key, new_block_list, 1 /*rewrite*/))) {
-        STORAGE_LOG(WARN, "failed to set macro index map", K(ret));
-        new_block_list->~ObArray();
-      }
+  index_list.reset();
+  const share::ObBackupCommonHeader *common_header = NULL;
+  while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
+    common_header = NULL;
+    int64_t start_pos = buffer_reader.pos();
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret));
     } else {
-      STORAGE_LOG(WARN, "get old block list fail", K(ret), K(table_key));
-    }
-  } else if (OB_ISNULL(new_block_list)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "exist block list should not be null here", K(ret), K(table_key));
-  }
-
-  for (int i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
-    const ObBackupTableMacroIndex &index = index_list.at(i);//check
-    if (index.sstable_macro_index_ < new_block_list->count()) {
-      // skip
-    } else if (OB_UNLIKELY(index.sstable_macro_index_ != new_block_list->count())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "sstable macro index is not continued", K(ret),
-          K(table_key), K(index), "new_block_list_count", new_block_list->count(),
-          K(*new_block_list));
-    } else if (OB_FAIL(new_block_list->push_back(index))) {
-      STORAGE_LOG(WARN, "failed to push back block index", K(ret), K(i));
-    }
-  }
-  return ret;
-}
-
-int ObAdminDumpBackupDataReaderUtil::get_table_key_ptr(
-    common::ObIAllocator &allocator,
-    ObArray<ObITable::TableKey *> &table_keys_ptr,
-    const ObITable::TableKey &table_key,
-    const ObITable::TableKey *&table_key_ptr)
-{
-  int ret = OB_SUCCESS;
-  table_key_ptr = NULL;
-  if (!table_key.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get table key ptr get invalid argument", K(ret), K(table_key));
-  } else {
-    bool found = false;
-    for (int64_t i = 0; i < table_keys_ptr.count() && !found; ++i) {
-      const ObITable::TableKey &tmp_table_key = *table_keys_ptr.at(i);
-      if (tmp_table_key == table_key) {
-        table_key_ptr = table_keys_ptr.at(i);
-        found = true;
-      }
-    }
-
-    if (!found) {
-      void *buf = allocator.alloc(sizeof(ObITable::TableKey));
-      if (NULL == buf) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
-      } else {
-        ObITable::TableKey *tmp_table_key_ptr = new(buf) ObITable::TableKey();
-        *tmp_table_key_ptr = table_key;
-        if (OB_FAIL(table_keys_ptr.push_back(tmp_table_key_ptr))) {
-          STORAGE_LOG(WARN, "failed to push table key into array", K(ret), K(*tmp_table_key_ptr));
-        } else {
-          table_key_ptr = tmp_table_key_ptr;
+      int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
+      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
+        IndexType index;
+        if (OB_FAIL(buffer_reader.read_serialize(index))) {
+          STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+        } else if (OB_FAIL(index_list.push_back(index))) {
+          STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
         }
       }
     }
+    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
+      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+        STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
+      }
+    }
   }
   return ret;
 }
 
-ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor()
-  : common_header_(),
-    allocator_(),
-    is_quiet_(false),
-    offset_(0),
-    data_length_(0),
-    check_exist_(false)
+template <class IndexType>
+int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+    const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+    const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &print_func2,
+    const std::function<int(const common::ObIArray<IndexType> &)> &print_func3)
 {
-  MEMSET(data_path_, 0, common::OB_MAX_URI_LENGTH);
-  MEMSET(storage_info_, 0, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+  int ret = OB_SUCCESS;
+  ObArray<IndexType> index_list;
+  const share::ObBackupCommonHeader *common_header = NULL;
+  while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
+    common_header = NULL;
+    index_list.reset();
+    int64_t start_pos = buffer_reader.pos();
+    backup::ObBackupMultiLevelIndexHeader index_header;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret));
+    } else if (OB_FAIL(buffer_reader.read_serialize(index_header))) {
+      STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+    } else {
+      int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
+      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
+        IndexType index;
+        if (OB_FAIL(buffer_reader.read_serialize(index))) {
+          STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+        } else if (OB_FAIL(index_list.push_back(index))) {
+          STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(print_func1(*common_header))) {
+        STORAGE_LOG(WARN, "failed to print func 1", K(ret), KPC(common_header));
+      } else if (OB_FAIL(print_func2(index_header))) {
+        STORAGE_LOG(WARN, "failed to print func 2", K(ret), K(index_header));
+      } else if (OB_FAIL(print_func3(index_list))) {
+        STORAGE_LOG(WARN, "failed to print func 3", K(ret), K(index_header), K(index_list));
+      } else {
+        index_list.reset();
+      }
+    }
+    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
+      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+        STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
+      } else {
+        STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
+      }
+    }
+  }
+  return ret;
+}
+
+template <class IndexType, class IndexIndexType>
+int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBufferReader &buffer_reader,
+    const std::function<int(const share::ObBackupCommonHeader &)> &print_func1,
+    const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &print_func2,
+    const std::function<int(const common::ObIArray<IndexType> &)> &print_func3,
+    const std::function<int(const common::ObIArray<IndexIndexType> &)> &print_func4)
+{
+  int ret = OB_SUCCESS;
+  ObArray<IndexType> index_list;
+  ObArray<IndexIndexType> index_index_list;
+  const share::ObBackupCommonHeader *common_header = NULL;
+  while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
+    common_header = NULL;
+    index_list.reset();
+    int64_t start_pos = buffer_reader.pos();
+    backup::ObBackupMultiLevelIndexHeader index_header;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret), K(start_pos), K(buffer_reader));
+    } else {
+      int64_t data_size = 0;
+      const int64_t pos = buffer_reader.pos();
+      if (OB_FAIL(buffer_reader.read_serialize(index_header))) {
+        STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+      } else {
+        data_size = common_header->data_zlength_ - (buffer_reader.pos() - pos);
+      }
+      int64_t end_pos = buffer_reader.pos() + data_size;
+      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
+        if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
+          IndexType index;
+          if (OB_FAIL(buffer_reader.read_serialize(index))) {
+            STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+          } else if (OB_FAIL(index_list.push_back(index))) {
+            STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
+          }
+        } else {
+          IndexIndexType index_index;
+          if (OB_FAIL(buffer_reader.read_serialize(index_index))) {
+            STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+          } else if (OB_FAIL(index_index_list.push_back(index_index))) {
+            STORAGE_LOG(WARN, "failed to push back", K(ret), K(index_index));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(print_func1(*common_header))) {
+        STORAGE_LOG(WARN, "failed to print func 1", K(ret), KPC(common_header));
+      } else if (OB_FAIL(print_func2(index_header))) {
+        STORAGE_LOG(WARN, "failed to print func 2", K(ret), K(index_header));
+      } else {
+        if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
+          if (OB_FAIL(print_func3(index_list))) {
+            STORAGE_LOG(WARN, "failed to print func 3", K(ret), K(index_header), K(index_list));
+          } else {
+            index_list.reset();
+          }
+        } else {
+          if (OB_FAIL(print_func4(index_index_list))) {
+            STORAGE_LOG(WARN, "failed to print func 4", K(ret), K(index_header), K(index_index_list));
+          } else {
+            index_index_list.reset();
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
+      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+        STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
+      } else {
+        STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename BackupSmallFileType>
+int ObAdminDumpBackupDataUtil::read_backup_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str,
+    BackupSmallFileType &file_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t file_length = 0;
+  char *buf = nullptr;
+  int64_t read_size = 0;
+  ObArenaAllocator allocator;
+  ObBackupIoAdapter util;
+  share::ObBackupStorageInfo storage_info;
+  ObBackupSerializeHeaderWrapper serializer_wrapper(&file_info);
+
+  if (OB_FAIL(storage_info.set(backup_path.ptr(), storage_info_str.ptr()))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.get_file_length(backup_path.ptr(), &storage_info, file_length))) {
+    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "failed to get file length.", K(ret), K(backup_path));
+    } else {
+      STORAGE_LOG(WARN, "file not exist.", K(ret), K(backup_path));
+    }
+  } else if (0 == file_length) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "file is empty.", K(ret), K(backup_path));
+  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(backup_path), K(file_length));
+  } else if (OB_FAIL(util.read_single_file(ObString(backup_path.ptr()), &storage_info, buf, file_length, read_size))) {
+    STORAGE_LOG(WARN, "failed to read file.", K(ret), K(backup_path), K(file_length));
+  } else if (file_length != read_size) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "read file length not match.", K(ret), K(backup_path), K(file_length), K(read_size));
+  } else if (OB_FAIL(serializer_wrapper.deserialize(buf, file_length, pos))) {
+    STORAGE_LOG(WARN, "failed to deserialize.", K(ret), K(backup_path), K(file_length));
+  } else {
+    STORAGE_LOG(INFO, "succeed to read single file.", K(backup_path), K(file_info));
+  }
+  return ret;
+}
+
+/* ObAdminDumpBackupDataExecutor */
+
+ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor() : offset_(), length_(), file_type_(), is_quiet_(false),
+    allocator_()
+{
+  MEMSET(backup_path_, 0, common::OB_MAX_URI_LENGTH);
+  MEMSET(storage_info_, 0, share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
 }
 
 ObAdminDumpBackupDataExecutor::~ObAdminDumpBackupDataExecutor()
-{
-}
+{}
 
 int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
-  UNUSED(argc);
-  UNUSED(argv);
-  ObBackupFileType data_type = BACKUP_TYPE_MAX;
+  lib::set_memory_limit(96 * 1024 * 1024 * 1024LL);
+  lib::set_tenant_memory_limit(500, 96 * 1024 * 1024 * 1024LL);
+  int64_t data_type = 0;
+  ObBackupDestType::TYPE path_type;
+  if (OB_FAIL(parse_cmd_(argc, argv))) {
+    STORAGE_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
+  } else if (is_quiet_) {
+    OB_LOGGER.set_log_level("ERROR");
+  } else {
+    OB_LOGGER.set_log_level("INFO");
+  }
 
-  if (OB_SUCC(parse_cmd(argc, argv))) {
-    if (is_quiet_) {
-      OB_LOGGER.set_log_level("ERROR");
-    } else {
-      OB_LOGGER.set_log_level("INFO");
+  if (OB_FAIL(ret)) {
+  } else if (check_exist_) {
+    // ob_admin dump_backup -d'xxxxx' -c
+    if (OB_FAIL(do_check_exist_())) {
+      STORAGE_LOG(WARN, "fail to do check exist", K(ret));
     }
+  } else if (OB_FAIL(check_tenant_backup_path_type_(backup_path_, storage_info_, path_type))) {
+    STORAGE_LOG(WARN, "fail to check tenant backup path type", K(ret));
+  } else if (path_type == ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA) {
+    // if backup path is tenant backup path. dump the tenant backup infos of the latest backup set dir.
+    if (OB_FAIL(dump_tenant_backup_path_())) {
+      STORAGE_LOG(WARN, "fail to dump tenant backup path");
+    }
+  } else if (path_type == ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG) {
+    // if backup path is tenant archive path. dump the archive round info.
+    if (OB_FAIL(dump_tenant_archive_path_())) {
+      STORAGE_LOG(WARN, "fail to dump tenant archive path");
+    }
+  } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "failed to check exist", K(ret), K_(backup_path), K_(storage_info));
+  } else if (OB_FAIL(get_backup_file_type_())) {
+    STORAGE_LOG(WARN, "failed to get backup file type", K(ret), K_(backup_path), K_(storage_info));
+  } else if (OB_FAIL(do_execute_())) {
+    STORAGE_LOG(WARN, "failed to do execute", K(ret), K_(backup_path), K_(storage_info));
+  }
+  return ret;
+}
 
-    if (OB_SUCC(ret) && check_exist_) {
-      if (OB_FAIL(check_exist(data_path_, storage_info_))) {
-        STORAGE_LOG(WARN, "check file is exist fail", K(ret));
+int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
+{
+  int ret = OB_SUCCESS;
+  int opt = 0;
+  int index = -1;
+  const char *opt_str = "h:d:s:o:l:qc";
+  struct option longopts[] = {{"help", 0, NULL, 'h'},
+      {"backup_path", 1, NULL, 'd'},
+      {"storage_info", 1, NULL, 's'},
+      {"file_uri", 1, NULL, 'f'},
+      {"offset", 1, NULL, 'o'},
+      {"quiet", 0, NULL, 'q' },
+      {"check_exist", 0, NULL, 'c'},
+      {"length", 1, NULL, 'l'},
+      {NULL, 0, NULL, 0}};
+  while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
+    switch (opt) {
+      case 'h': {
+        print_usage_();
+        exit(1);
       }
-    }
-
-    if (OB_SUCC(ret) && !check_exist_) {
-      if (OB_FAIL(ret)) {
-#ifdef _WITH_OSS
-      } else if (OB_FAIL(ObOssEnvIniter::get_instance().global_init())) {
-        STORAGE_LOG(WARN, "init oss storage fail", K(ret));
-#endif
-      } else if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_data_type(data_path_, storage_info_, data_type))) {
-        STORAGE_LOG(WARN, "failed to get backup data common header", K(ret), K(data_path_), K(storage_info_));
+      case 'd': {
+        if (OB_FAIL(databuff_printf(backup_path_, sizeof(backup_path_), "%s", optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        }
+        break;
       }
-    }
-    lib::set_memory_limit(96 * 1024 * 1024 * 1024LL);
-    lib::set_tenant_memory_limit(500, 96 * 1024 * 1024 * 1024LL);
-    if (OB_SUCC(ret) && !check_exist_) {
-      switch (data_type) {
-        case BACKUP_INFO:
-          print_backup_info();
-          break;
-        case BACKUP_TENANT_INFO:
-          print_backup_tenant_info();
-          break;
-        case BACKUP_LOG_ARCHIVE_BACKUP_INFO:
-          print_clog_backup_info();
-          break;
-        case BACKUP_SET_INFO:
-          print_backup_set_info();
-          break;
-        case BACKUP_PG_LIST:
-          print_pg_list();
-          break;
-        case BACKUP_META_INDEX:
-          print_meta_index();
-          break;
-        case BACKUP_META:
-          print_meta_data();
-          break;
-        case BACKUP_MACRO_DATA_INDEX:
-          print_macro_data_index();
-          break;
-        case BACKUP_MACRO_DATA:
-          print_macro_block();
-          break;
-        case BACKUP_TENANT_NAME_INFO:
-          print_tenant_name_info();
-          break;
-        case BACKUP_PIECE_INFO: {
-          print_backup_piece_info();
-          break;
+      case 's': {
+        if (OB_FAIL(databuff_printf(storage_info_, sizeof(storage_info_), "%s", optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
         }
-        case BACKUP_SINGLE_PIECE_INFO: {
-          print_backup_single_piece_info();
-          break;
+        break;
+      }
+      case 'f': {
+        if (OB_FAIL(get_backup_file_path_())) {
+          STORAGE_LOG(WARN, "failed to get backup file path", K(ret));
         }
-        case BACKUP_SET_FILE_INFO: {
-          print_backup_set_file_info();
-          break;
-        }
-        case BACKUP_ARCHIVE_BLOCK_META:{
-          print_archive_block_meta();
-          break;
-        }
-        case BACKUP_ARCHIVE_INDEX_FILE: {
-          print_archive_index_file();
-          break;
-        }
-        default: {
-          ret = OB_ERR_SYS;
-          STORAGE_LOG(ERROR, "invalid data type", K(ret), K(data_type), K(data_path_), K(storage_info_));
-        }
+        break;
+      }
+      case 'o': {
+        offset_ = strtoll(optarg, NULL, 10);
+        break;
+      }
+      case 'q': {
+        is_quiet_ = true;
+        break;
+      }
+      case 'c': {
+        check_exist_ = true;
+        break;
+      }
+      case 'l': {
+        length_ = strtoll(optarg, NULL, 10);
+        break;
+      }
+      default: {
+        print_usage_();
+        exit(1);
       }
     }
   }
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
+int ObAdminDumpBackupDataExecutor::do_check_exist_()
 {
   int ret = OB_SUCCESS;
-
-  int opt = 0;
-  const char* opt_string = "hd:s:o:l:f:q:c";
-
-  struct option longopts[] = {
-    // commands
-    { "help", 0, NULL, 'h' },
-    // options
-    { "data_uri", 1, NULL, 'd' },
-    { "storage_info", 1, NULL, 's' },
-    { "offset", 1, NULL, 'o'},
-    { "data_length", 1, NULL, 'l'},
-    { "file_uri", 1, NULL , 'f'},
-    { "quiet", 0, NULL, 'q' },
-    { "check_exist", 0, NULL, 'c'}
-  };
-
-  int index = -1;
-  while ((opt = getopt_long(argc, argv, opt_string, longopts, &index)) != -1) {
-    switch (opt) {
-    case 'h': {
-      print_usage();
-      exit(1);
+  bool is_exist = true; ;
+  if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "fail to check file exist", K(ret));
     }
-    case 'd': {
-      if (OB_FAIL(databuff_printf(data_path_, sizeof(data_path_), "%s", optarg))) {
-        STORAGE_LOG(WARN, "failed to printf data_dir", K(ret), K(optarg));
+  }
+
+  if (OB_SUCC(ret) && !is_exist) {
+    if (OB_FAIL(check_dir_exist_(backup_path_, storage_info_, is_exist))) {
+      STORAGE_LOG(WARN, "fail to check dir exist", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dump_check_exist_result_(backup_path_, storage_info_, is_exist))) {
+      STORAGE_LOG(WARN, "fail to dump check exist result", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::check_dir_exist_(
+    const char *backup_path, const char *storage_info_str, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  bool is_empty_dir = true;
+  ObBackupIoAdapter util;
+  share::ObBackupStorageInfo storage_info;
+  if (OB_FAIL(storage_info.set(backup_path, storage_info_str))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.is_empty_directory(backup_path, &storage_info, is_empty_dir))) {
+    STORAGE_LOG(WARN, "failed to check dir exist", K(ret), K(backup_path), K(storage_info));
+  } else if (!is_empty_dir) {
+    is_exist = true;
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::check_file_exist_(const char *backup_path, const char *storage_info_str)
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  ObBackupIoAdapter util;
+  share::ObBackupStorageInfo storage_info;
+  if (OB_FAIL(storage_info.set(backup_path, storage_info_str))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
+  } else if (OB_FAIL(util.is_exist(backup_path, &storage_info, exist))) {
+    STORAGE_LOG(WARN, "failed to check file exist", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_UNLIKELY(!exist)) {
+    ret = OB_BACKUP_FILE_NOT_EXIST;
+    STORAGE_LOG(WARN, "index file do not exist", K(ret), K(backup_path));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::do_execute_()
+{
+  int ret = OB_SUCCESS;
+  switch (file_type_) {
+    case backup::ObBackupFileType::BACKUP_DATA_FILE: {
+      if (OB_FAIL(print_backup_data_file_())) {
+        STORAGE_LOG(WARN, "failed to print backup data file", K(ret));
       }
       break;
     }
-    case 's': {
-      if (OB_FAIL(databuff_printf(storage_info_, share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH, "%s", optarg))) {
-        STORAGE_LOG(WARN, "failed to printf storage info", K(ret), K(optarg));
+    case backup::ObBackupFileType::BACKUP_MACRO_RANGE_INDEX_FILE: {
+      if (OB_FAIL(print_macro_range_index_file())) {
+        STORAGE_LOG(WARN, "failed to print macro range index file", K(ret));
       }
       break;
     }
-    case 'o': {
-      offset_ = strtoll(optarg, NULL, 10);
-      break;
-    }
-    case 'l': {
-      data_length_ = strtoll(optarg, NULL, 10);
-      break;
-    }
-    case 'c': {
-      check_exist_ = true;
-      break;
-    }
-    case 'f': {
-      char current_absolute_path[MAX_PATH_SIZE] = "";
-      if (optarg[0] != '/') {
-        int64_t length = 0;
-        if (OB_ISNULL(getcwd(current_absolute_path, MAX_PATH_SIZE))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "failed to get current absolute path", K(ret), K(current_absolute_path));
-        } else if ((length = strlen(current_absolute_path)) >= MAX_PATH_SIZE) {
-          ret = OB_SIZE_OVERFLOW;
-          STORAGE_LOG(WARN, "current absolte path is overflow", K(ret), K(length), K(current_absolute_path));
-        } else {
-          current_absolute_path[length]= '/';
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(databuff_printf(data_path_, sizeof(data_path_), "%s%s%s", OB_FILE_PREFIX, current_absolute_path, optarg))) {
-          STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
-        } else if (OB_FAIL(databuff_printf(input_data_path_, sizeof(input_data_path_), optarg))) {
-          STORAGE_LOG(WARN, "failed to copy input_data_path_", K(ret), K(optarg));
-        }
+    case backup::ObBackupFileType::BACKUP_META_INDEX_FILE: {
+      if (OB_FAIL(print_meta_index_file())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
       }
       break;
     }
-    case 'q': {
-      is_quiet_ = true;
+    case share::ObBackupFileType::BACKUP_LS_INFO: {
+      if (OB_FAIL(print_ls_attr_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_TABLET_TO_LS_INFO: {
+      if (OB_FAIL(print_tablet_to_ls_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_DELETED_TABLET_INFO: {
+      if (OB_FAIL(print_deleted_tablet_info_())) {
+        STORAGE_LOG(WARN, "failed to print deleted tablet info", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_TENANT_LOCALITY_INFO: {
+      if (OB_FAIL(print_tenant_locality_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_SET_INFO: {
+      if (OB_FAIL(print_backup_set_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_TENANT_DIAGNOSE_INFO: {
+      if (OB_FAIL(print_tenant_diagnose_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_DATA_PLACEHOLDER: {
+      if (OB_FAIL(print_place_holder_info_())) {
+        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    // archive
+    case share::ObBackupFileType::BACKUP_ARCHIVE_ROUND_START_INFO: {
+      if (OB_FAIL(print_archive_round_start_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive round start file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_ARCHIVE_ROUND_END_INFO: {
+      if (OB_FAIL(print_archive_round_end_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive round end file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_ARCHIVE_PIECE_START_INFO: {
+      if (OB_FAIL(print_archive_piece_start_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive piece start file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_ARCHIVE_PIECE_END_INFO: {
+      if (OB_FAIL(print_archive_piece_end_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive piece end file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_ARCHIVE_SINGLE_PIECE_INFO: {
+      if (OB_FAIL(print_archive_single_piece_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive single piece file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_PIECE_INNER_PLACEHOLDER_INFO: {
+      if (OB_FAIL(print_archive_piece_inner_placeholder_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive inner piece placeholder file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_PIECE_SINGLE_LS_FILE_LIST_INFO: {
+      if (OB_FAIL(print_archive_single_ls_info_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive single ls info file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_PIECE_FILE_LIST_INFO: {
+      if (OB_FAIL(print_archive_piece_list_info_file_())) {
+        STORAGE_LOG(WARN, "failed to print archive piece list info file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_FORMAT_FILE: {
+      if (OB_FAIL(print_backup_format_file_())) {
+        STORAGE_LOG(WARN, "failed to print backup format file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_TENANT_SET_INFOS: {
+      if (OB_FAIL(print_tenant_backup_set_infos_())) {
+        STORAGE_LOG(WARN, "failed to print backup format file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_LS_META_INFOS_FILE: {
+      if (OB_FAIL(print_backup_ls_meta_infos_file_())) {
+        STORAGE_LOG(WARN, "failed to print backup ls meta infos file", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_TENANT_ARCHIVE_PIECE_INFOS: {
+      if (OB_FAIL(print_tenant_archive_piece_infos_file_())) {
+        STORAGE_LOG(WARN, "failed to print tenant archive piece infos", K(ret));
+      }
       break;
     }
     default: {
-      print_usage();
-      exit(1);
-    }
-    }
-  }
-
-  return ret;
-}
-
-void ObAdminDumpBackupDataExecutor::print_common_header(
-    const share::ObBackupCommonHeader &common_header)
-{
-  PrintHelper::print_dump_title("Common Header");
-  PrintHelper::print_dump_line("data_type", common_header.data_type_);
-  PrintHelper::print_dump_line("header_version", common_header.header_version_);
-  PrintHelper::print_dump_line("compressor_type", common_header.compressor_type_);
-  PrintHelper::print_dump_line("data_type", common_header.data_type_);
-  PrintHelper::print_dump_line("data_version", common_header.data_version_);
-  PrintHelper::print_dump_line("header_length", common_header.header_length_);
-  PrintHelper::print_dump_line("header_checksum", common_header.header_checksum_);
-  PrintHelper::print_dump_line("data_length_", common_header.data_length_);
-  PrintHelper::print_dump_line("data_zlength", common_header.data_zlength_);
-  PrintHelper::print_dump_line("data_checksum", common_header.data_checksum_);
-  PrintHelper::print_dump_line("align_length", common_header.align_length_);
-  PrintHelper::print_end_line();
-}
-
-void ObAdminDumpBackupDataExecutor::print_meta_header(
-    const share::ObBackupMetaHeader &meta_header)
-{
-  PrintHelper::print_dump_title("Meta Header");
-  PrintHelper::print_dump_line("header_version", meta_header.header_version_);
-  PrintHelper::print_dump_line("meta_type", meta_header.meta_type_);
-  PrintHelper::print_dump_line("header_checksum", meta_header.header_checksum_);
-  PrintHelper::print_dump_line("data_checksum", meta_header.data_checksum_);
-  PrintHelper::print_end_line();
-}
-
-void ObAdminDumpBackupDataExecutor::print_common_header()
-{
-  print_common_header(common_header_);
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternBackupInfos backup_infos;
-  ObArray<ObExternBackupInfo> info_array;
-  char backup_set_id_str[64] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(backup_infos.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "cluster backup info failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(backup_infos.get_extern_backup_infos(info_array))) {
-      STORAGE_LOG(WARN, "failed to get extern backup infos", K(ret), K(backup_infos));
-    } else if (info_array.empty()) {
-      //do nothing
-    } else {
-      const ObExternBackupInfo &info = info_array.at(0);
-      int64_t full_backup_set_id = info.full_backup_set_id_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < info_array.count();) {
-        const ObExternBackupInfo &info = info_array.at(i);
-        if (full_backup_set_id == info.full_backup_set_id_) {
-          PrintHelper::print_dump_title("BackupSet", full_backup_set_id, 1);
-        } else {
-          full_backup_set_id = info.full_backup_set_id_;
-          continue;
-        }
-        if (OB_FAIL(databuff_printf(backup_set_id_str, 64, "%ld", info.inc_backup_set_id_))) {
-         STORAGE_LOG(WARN, "failed to printf inc backup set id", K(ret), K(info));
-        } else {
-          ++i;
-          PrintHelper::print_dump_line(backup_set_id_str, to_cstring(info));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_tenant_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternTenantInfos tenant_infos;
-  ObArray<ObExternTenantInfo> tenant_info_array;
-  char tenant_id_str[64] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(tenant_infos.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "backup tenant info failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(tenant_infos.get_extern_tenant_infos(tenant_info_array))) {
-      STORAGE_LOG(WARN, "failed to get extern tenant infos", K(ret), K(tenant_infos));
-    } else if (tenant_info_array.empty()) {
-      //do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_info_array.count(); ++i) {
-        const ObExternTenantInfo &tenant_info = tenant_info_array.at(i);
-        if (OB_FAIL(databuff_printf(tenant_id_str, 64, "%lu", tenant_info.tenant_id_))) {
-         STORAGE_LOG(WARN, "failed to printf inc backup set id", K(ret), K(tenant_info));
-        } else {
-          PrintHelper::print_dump_line(tenant_id_str, to_cstring(tenant_info));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_clog_backup_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternLogArchiveBackupInfo log_achive_backup_infos;
-  ObArray<ObTenantLogArchiveStatus> status_array;
-  char tenant_id_str[64] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(log_achive_backup_infos.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "log achive backup infos failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(log_achive_backup_infos.get_log_archive_status(status_array))) {
-      STORAGE_LOG(WARN, "failed to get extern log archive status", K(ret), K(log_achive_backup_infos));
-    } else if (status_array.empty()) {
-      //do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < status_array.count(); ++i) {
-        const ObTenantLogArchiveStatus &status = status_array.at(i);
-        if (OB_FAIL(databuff_printf(tenant_id_str, 64, "%lu", status.tenant_id_))) {
-         STORAGE_LOG(WARN, "failed to printf inc backup set id", K(ret), K(status));
-        } else {
-          PrintHelper::print_dump_line(tenant_id_str, to_cstring(status));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_set_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternBackupSetInfos backup_set_infos;
-  ObArray<ObExternBackupSetInfo> set_info_array;
-  char backup_set_id_str[64] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(backup_set_infos.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "cluster backup set info failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(backup_set_infos.get_extern_backup_set_infos(set_info_array))) {
-      STORAGE_LOG(WARN, "failed to get extern backup set infos", K(ret), K(backup_set_infos));
-    } else if (set_info_array.empty()) {
-      //do nothing
-    } else {
-      const ObExternBackupSetInfo &info = set_info_array.at(0);
-      int64_t full_backup_set_id = info.backup_set_id_;
-      PrintHelper::print_dump_title("BackupSet", full_backup_set_id, 1);
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < set_info_array.count(); ++i) {
-        const ObExternBackupSetInfo &set_info = set_info_array.at(i);
-        if (OB_FAIL(databuff_printf(backup_set_id_str, 64, "%ld", set_info.backup_set_id_))) {
-         STORAGE_LOG(WARN, "failed to printf inc backup set id", K(ret), K(set_info));
-        } else {
-          PrintHelper::print_dump_line(backup_set_id_str, to_cstring(set_info));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_piece_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternalBackupPieceInfo backup_piece_info;
-  ObArray<share::ObBackupPieceInfo> piece_info_array;
-  char backup_piece_id_str[MAX_BACKUP_ID_STR_LENGTH] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(
-      data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(backup_piece_info.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "backup piece info failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(backup_piece_info.get_piece_array(piece_info_array))) {
-      STORAGE_LOG(WARN, "failed to get piece array", K(ret), K(backup_piece_info));
-    } else if (piece_info_array.empty()) {
-      // do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < piece_info_array.count(); ++i) {
-        const ObBackupPieceInfo &piece_info = piece_info_array.at(i);
-        if (OB_FAIL(databuff_printf(backup_piece_id_str, MAX_BACKUP_ID_STR_LENGTH, "%ld", piece_info.key_.backup_piece_id_))) {
-          STORAGE_LOG(WARN, "failed to printf backup piece id str", K(ret), K(piece_info));
-        } else {
-          PrintHelper::print_dump_line(backup_piece_id_str, to_cstring(piece_info));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_single_piece_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObBackupPieceInfo piece;
-  char backup_piece_id_str[MAX_BACKUP_ID_STR_LENGTH] = "";
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(
-      data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else {
-    int64_t pos = 0;
-    const ObBackupCommonHeader *common_header =
-        reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
-    pos += common_header->header_length_;
-    if (OB_FAIL(common_header->check_header_checksum())) {
-      STORAGE_LOG(WARN, "failed to check common header", K(ret));
-    } else if (common_header->data_zlength_ > file_length - pos) {
       ret = OB_ERR_SYS;
-      STORAGE_LOG(ERROR, "need more data then buf len", K(ret), KP(buf), K(file_length),
-          K(*common_header));
-    } else if (OB_FAIL(common_header->check_data_checksum(buf + pos, common_header->data_zlength_))) {
-      STORAGE_LOG(ERROR, "failed to check archive backup single piece", K(ret), K(*common_header));
-    } else if (OB_FAIL(piece.deserialize(buf, pos + common_header->data_zlength_, pos))) {
-      STORAGE_LOG(ERROR, "failed to deserialize piece", K(ret), K(*common_header));
-    } else {
-      print_common_header(*common_header);
-      if (OB_FAIL(databuff_printf(backup_piece_id_str, MAX_BACKUP_ID_STR_LENGTH, "%ld", piece.key_.backup_piece_id_))) {
-        STORAGE_LOG(WARN, "failed to printf backup piece id str", K(ret), K(piece));
-      } else {
-        PrintHelper::print_dump_line(backup_piece_id_str, to_cstring(piece));
-      }
-      PrintHelper::print_end_line();
+      STORAGE_LOG(WARN, "invalid type", K(ret), K_(file_type));
     }
   }
-}
-
-void ObAdminDumpBackupDataExecutor::print_backup_set_file_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternBackupSetFileInfos backup_set_infos;
-  ObArray<share::ObBackupSetFileInfo> backup_set_file_array;
-  char backup_set_id_str[MAX_BACKUP_ID_STR_LENGTH] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(
-      data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(backup_set_infos.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "backup piece info failed to read", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (OB_FAIL(backup_set_infos.get_backup_set_file_infos(backup_set_file_array))) {
-      STORAGE_LOG(WARN, "failed to get piece array", K(ret), K(backup_set_infos));
-    } else if (backup_set_file_array.empty()) {
-      // do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_array.count(); ++i) {
-        const ObBackupSetFileInfo &file_info = backup_set_file_array.at(i);
-        if (OB_FAIL(databuff_printf(backup_set_id_str, MAX_BACKUP_ID_STR_LENGTH, "%ld", file_info.backup_set_id_))) {
-          STORAGE_LOG(WARN, "failed to printf backup set id str", K(ret), K(file_info));
-        } else {
-          PrintHelper::print_dump_line(backup_set_id_str, to_cstring(file_info));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_pg_list()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObExternPGList pg_list;
-  ObArray<ObPartitionKey> pkey_array;
-  char table_id_str[64] = "";
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(pg_list.read_buf(buf, file_length))) {
-    STORAGE_LOG(WARN, "backup pg list read failed", K(ret), K(buf), K(file_length), K(data_path_), K(storage_info_));
-  } else {
-    print_common_header();
-    if (pg_list.get(pkey_array)) {
-      STORAGE_LOG(WARN, "failed to get extern pg list", K(ret), K(pg_list));
-    } else if (pkey_array.empty()) {
-      //do nothing
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < pkey_array.count(); ++i) {
-        const ObPartitionKey &pkey = pkey_array.at(i);
-        if (OB_FAIL(databuff_printf(table_id_str, 64, "%lu", pkey.get_table_id()))) {
-         STORAGE_LOG(WARN, "failed to printf table id", K(ret), K(pkey));
-        } else {
-          PrintHelper::print_dump_line(table_id_str, to_cstring(pkey));
-        }
-      }
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_meta_index()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObArray<ObBackupMetaIndex> meta_index_array;
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (0 == file_length) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "file length should not be zero", K(ret), K(file_length));
-  } else {
-    ObBufferReader buffer_reader(buf, file_length, 0);
-    while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
-      meta_index_array.reset();
-      ObBackupCommonHeader common_header;
-      if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_meta_index(buffer_reader, common_header, meta_index_array))) {
-        STORAGE_LOG(WARN, "failed to get meta index", K(ret), K(buffer_reader));
-      } else if (OB_FAIL(print_meta_index_(common_header, meta_index_array))) {
-        STORAGE_LOG(WARN, "failed to print meta index", K(ret), K(common_header));
-      } else {
-        STORAGE_LOG(INFO, "meta index", K(buffer_reader), K(meta_index_array), K(common_header));
-        if (BACKUP_FILE_END_MARK == common_header.data_type_) {
-          LOG_INFO("end print meta index");
-          break;
-        }
-      }
-    }
-  }
-}
-
-int ObAdminDumpBackupDataExecutor::print_meta_index_(
-    const share::ObBackupCommonHeader &common_header,
-    const common::ObIArray<ObBackupMetaIndex> &meta_index_array)
-{
-  int ret = OB_SUCCESS;
-  print_common_header(common_header);
-  for (int64_t i = 0; OB_SUCC(ret) && i < meta_index_array.count(); ++i) {
-    const ObBackupMetaIndex &meta_index = meta_index_array.at(i);
-    ObMetaIndexKey key(meta_index.table_id_, meta_index.partition_id_, meta_index.meta_type_);
-    PrintHelper::print_dump_line(to_cstring(key), to_cstring(meta_index));
-  }
-  PrintHelper::print_end_line();
-
   return ret;
 }
 
-
-void ObAdminDumpBackupDataExecutor::print_meta_data()
+int ObAdminDumpBackupDataExecutor::get_backup_file_path_()
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-  ObBackupMetaHeader meta_header;
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, offset_, data_length_, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_meta_header(buf, data_length_, meta_header))) {
-    STORAGE_LOG(WARN, "failed to get meta header", K(ret), K(data_length_));
-  } else {
-    if (PARTITION_GROUP_META == meta_header.meta_type_) {
-      print_partition_group_meta(buf, data_length_);
-    } else if (PARTITION_META == meta_header.meta_type_) {
-      print_partition_meta(buf, data_length_);
-    } else if (SSTABLE_METAS == meta_header.meta_type_) {
-      print_sstable_meta(buf, data_length_);
-    } else if (TABLE_KEYS == meta_header.meta_type_) {
-      print_table_keys(buf, data_length_);
-    } else if (PARTITION_GROUP_META_INFO == meta_header.meta_type_) {
-      print_partition_group_meta_info(buf, data_length_);
+  char current_absolute_path[MAX_PATH_SIZE] = "";
+  if (optarg[0] != '/') {
+    int64_t length = 0;
+    if (OB_ISNULL(getcwd(current_absolute_path, MAX_PATH_SIZE))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to get current absolute path", K(ret), K(current_absolute_path));
+    } else if ((length = strlen(current_absolute_path)) >= MAX_PATH_SIZE) {
+      ret = OB_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "current absolte path is overflow", K(ret), K(length), K(current_absolute_path));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "meta header is invalid", K(ret), K(meta_header));
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_partition_group_meta(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "print partition group meta is invalid", K(ret), KP(buf), K(size));
-  } else {
-    ObPartitionGroupMeta pg_meta;
-    int64_t pos = 0;
-    ObBufferReader buffer_reader;
-    const ObBackupMetaHeader *meta_header = NULL;
-    if (OB_FAIL(buffer_reader.deserialize(buf, size, pos))) {
-      LOG_WARN("failed to deserialize buffer reader", K(ret), K(size), K(pos));
-    } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-      STORAGE_LOG(WARN, "read meta header fail", K(ret));
-    } else if (OB_ISNULL(meta_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "meta header is null", K(ret));
-    } else if (OB_FAIL(meta_header->check_valid())) {
-      STORAGE_LOG(WARN, "meta_header is invalid", K(ret), K(buffer_reader));
-    } else if (meta_header->data_length_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-    } else if (OB_FAIL(meta_header->check_data_checksum(
-        buffer_reader.current(),
-        meta_header->data_length_))) {
-      STORAGE_LOG(WARN, "meta_header data checksum fail", K(ret), K(buffer_reader));
-    } else if (OB_FAIL(buffer_reader.read_serialize(pg_meta))) {
-      STORAGE_LOG(WARN, "read pg meta fail", K(ret), K(meta_header));
-    } else if (0 != buffer_reader.remain()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(meta_header), K(size));
-    } else {
-      print_meta_header(*meta_header);
-      PrintHelper::print_dump_title("Partition Group Meta");
-      PrintHelper::print_dump_line(to_cstring(pg_meta.pg_key_), to_cstring(pg_meta));
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_partition_meta(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "print partition group meta is invalid", K(ret), KP(buf), K(size));
-  } else {
-    ObPartitionStoreMeta meta;
-    int64_t pos = 0;
-    ObBufferReader buffer_reader;
-    const ObBackupMetaHeader *meta_header = NULL;
-
-    if (OB_FAIL(buffer_reader.deserialize(buf, size, pos))) {
-      LOG_WARN("failed to deserialize buffer reader", K(ret), K(size));
-    } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-      STORAGE_LOG(WARN, "read meta header fail", K(ret));
-    } else if (OB_ISNULL(meta_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "meta header is null", K(ret));
-    } else if (OB_FAIL(meta_header->check_valid())) {
-      STORAGE_LOG(WARN, "meta_header is invaild", K(ret));
-    } else if (meta_header->data_length_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-    } else if (OB_FAIL(meta_header->check_data_checksum(
-        buffer_reader.current(),
-        meta_header->data_length_))) {
-      STORAGE_LOG(WARN, "meta_header data checksum fail", K(ret));
-    } else if (OB_FAIL(buffer_reader.read_serialize(meta))) {
-      STORAGE_LOG(WARN, "read partition meta fail", K(ret), K(buffer_reader));
-    } else if (0 != buffer_reader.remain()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(buffer_reader));
-    } else {
-      print_meta_header(*meta_header);
-      PrintHelper::print_dump_title("Partition Meta");
-      PrintHelper::print_dump_line(to_cstring(meta.pkey_), to_cstring(meta));
-      PrintHelper::print_end_line();
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_sstable_meta(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObSSTableBaseMeta> sstable_meta_array;
-  int64_t table_count = 0;
-  int64_t pos = 0;
-  ObBufferReader buffer_reader;
-  const ObBackupMetaHeader *meta_header = NULL;
-
-  if (OB_ISNULL(buf) || size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "print partition group meta is invalid", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(buffer_reader.deserialize(buf, size, pos))) {
-    LOG_WARN("failed to deserialize buffer reader", K(ret), K(size), K(pos));
-  } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-    STORAGE_LOG(WARN, "read meta header fail", K(ret));
-  } else if (OB_ISNULL(meta_header)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "meta header is null", K(ret));
-  } else if (OB_FAIL(meta_header->check_valid())) {
-    STORAGE_LOG(WARN, "meta_header is invalid", K(ret));
-  } else if (meta_header->data_length_ > buffer_reader.remain()) {
-    ret = OB_BUF_NOT_ENOUGH;
-    STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-  } else if (OB_FAIL(meta_header->check_data_checksum(
-      buffer_reader.current(),
-      meta_header->data_length_))) {
-    STORAGE_LOG(WARN, "meta_header data checksum fail", K(ret));
-  } else if (OB_FAIL(buffer_reader.read(table_count))) {
-    STORAGE_LOG(WARN, "read sstable count", K(ret), K(buffer_reader));
-  } else {
-    ObSSTableBaseMeta meta(allocator_);
-    for (int i=0; OB_SUCC(ret) && i < table_count; ++i) {
-      meta.reset();
-      if (OB_FAIL(buffer_reader.read_serialize(meta))) {
-        STORAGE_LOG(WARN, "read sstable base meta fail", K(ret), K(buffer_reader));
-      } else if (OB_FAIL(sstable_meta_array.push_back(meta))) {
-        STORAGE_LOG(WARN, "push back meta fail", K(ret), K(buffer_reader));
-      }
-    }
-    if (0 != buffer_reader.remain()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(buffer_reader));
+      current_absolute_path[length] = '/';
     }
   }
 
   if (OB_SUCC(ret)) {
-    print_meta_header(*meta_header);
-    PrintHelper::print_dump_title("SSTable Meta");
-    for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta_array.count(); ++i) {
-      const ObSSTableBaseMeta &meta = sstable_meta_array.at(i);
-      PrintHelper::print_dump_line(to_cstring(meta.index_id_), to_cstring(meta));
-    }
-    PrintHelper::print_end_line();
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_table_keys(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  int64_t table_count = 0;
-  storage::ObITable::TableKey table_key;
-  ObArray<storage::ObITable::TableKey> table_key_array;
-  int64_t pos = 0;
-  ObBufferReader buffer_reader;
-  const ObBackupMetaHeader *meta_header = NULL;
-
-  if (OB_ISNULL(buf) || size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "print partition group meta is invalid", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(buffer_reader.deserialize(buf, size, pos))) {
-    LOG_WARN("failed to deserialize buffer reader", K(ret), K(size));
-  } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-    STORAGE_LOG(WARN, "read meta header fail", K(ret));
-  } else if (OB_ISNULL(meta_header)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "meta header is null", K(ret));
-  } else if (OB_FAIL(meta_header->check_valid())) {
-    STORAGE_LOG(WARN, "meta_header is invaild", K(ret), K(buffer_reader), K(*meta_header));
-  } else if (meta_header->data_length_ > buffer_reader.remain()) {
-    ret = OB_BUF_NOT_ENOUGH;
-    STORAGE_LOG(WARN, "meta_header data_length may be wrong, buffer_reader not enough", K(ret));
-  } else if (OB_FAIL(meta_header->check_data_checksum(
-      buffer_reader.current(),
-      meta_header->data_length_))) {
-    STORAGE_LOG(WARN, "meta_header data checksum fail", K(ret));
-  } else if (OB_FAIL(buffer_reader.read(table_count))) {
-    STORAGE_LOG(WARN, "read table count", K(ret), K(buffer_reader));
-  } else {
-    for (int i=0; OB_SUCC(ret) && i < table_count; ++i) {
-      if (OB_FAIL(buffer_reader.read_serialize(table_key))) {
-        STORAGE_LOG(WARN, "read table key fail", K(ret), K(i), K(buffer_reader));
-      } else if (OB_FAIL(table_key_array.push_back(table_key))) {
-        STORAGE_LOG(WARN, "push back table key fail", K(ret), K(i), K(buffer_reader));
-      }
-    }
-    if (0 != buffer_reader.remain()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(buffer_reader));
+    if (OB_FAIL(databuff_printf(
+            backup_path_, sizeof(backup_path_), "%s%s%s", OB_FILE_PREFIX, current_absolute_path, optarg))) {
+      STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
     }
   }
-  if (OB_SUCC(ret)) {
-    print_meta_header(*meta_header);
-    PrintHelper::print_dump_title("TableKeys");
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_key_array.count(); ++i) {
-      const storage::ObITable::TableKey &table_key = table_key_array.at(i);
-      PrintHelper::print_dump_line(to_cstring(table_key.table_id_), to_cstring(table_key));
-    }
-    PrintHelper::print_end_line();
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_partition_group_meta_info(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  ObBufferReader buffer_reader;
-  ObBackupPGMetaInfo pg_meta_info;
-  const ObBackupMetaHeader *meta_header = NULL;
-  if (OB_ISNULL(buf) || size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get invalid args", K(ret), K(buf), K(size));
-  } else if (OB_FAIL(buffer_reader.deserialize(buf, size, pos))) {
-    STORAGE_LOG(WARN, "failed to deserialize buffer reader", K(ret), K(buf), K(size));
-  } else if (OB_FAIL(buffer_reader.get(meta_header))) {
-    STORAGE_LOG(WARN, "failed to read meta header", K(ret), K(buffer_reader));
-  } else if (OB_ISNULL(meta_header)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "meta header is null", K(ret));
-  } else if (meta_header->data_length_ > buffer_reader.remain()) {
-    ret = OB_BUF_NOT_ENOUGH;
-    STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
-  } else if (OB_FAIL(meta_header->check_data_checksum(
-      buffer_reader.current(), meta_header->data_length_))) {
-    STORAGE_LOG(WARN, "failed to check data checksum", K(ret));
-  } else if (OB_FAIL(buffer_reader.read_serialize(pg_meta_info))) {
-    STORAGE_LOG(WARN, "failed to read pg meta info", K(ret));
-  } else if (0 != buffer_reader.remain()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(meta_header), K(size));
-  } else {
-    print_meta_header(*meta_header);
-    PrintHelper::print_dump_title("Partition Group Meta Info");
-    PrintHelper::print_dump_line(to_cstring(pg_meta_info.pg_meta_.pg_key_), to_cstring(pg_meta_info));
-    PrintHelper::print_end_line();
-  }
-}
-
-// TODO: refine it later, check the macro index is v1 or v2
-int ObAdminDumpBackupDataExecutor::get_macro_data_index_version(int64_t &version)
-{
-  int ret = OB_SUCCESS;
-  version = ObBackupMacroIndexVersion::BACKUP_MACRO_INDEX_VERSION_2;
   return ret;
 }
 
-void ObAdminDumpBackupDataExecutor::print_macro_data_index()
+int ObAdminDumpBackupDataExecutor::get_backup_file_type_()
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t file_length = 0;
-  int64_t pos = 0;
-  int64_t version = 0;
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  ObArenaAllocator allocator;
+  const int64_t type_len = sizeof(uint16_t);
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::get_backup_file_length(backup_path, storage_info, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_UNLIKELY(file_length <= sizeof(type_len))) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (0 == file_length) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "file length should not be zero", K(ret), K(file_length));
-  } else if (OB_FAIL(get_macro_data_index_version(version))) {
-    STORAGE_LOG(WARN, "failed to get macro data index version", K(ret), K(file_length));
+    STORAGE_LOG(WARN, "backup file too small", K(ret), K(file_length), K(type_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(type_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(type_len));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, 0, type_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info), K(file_length), K(type_len));
   } else {
-    if (ObBackupMacroIndexVersion::BACKUP_MACRO_INDEX_VERSION_1 == version) {
-      print_macro_data_index_v1(buf, file_length);
-    } else if (ObBackupMacroIndexVersion::BACKUP_MACRO_INDEX_VERSION_2 == version) {
-      print_macro_data_index_v2(buf, file_length);
-    } else {
-      // do nothing
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_macro_data_index_v1(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  ObBufferReader buffer_reader(buf, size, 0);
-  int64_t pos = 0;
-  ObArray<ObBackupMacroIndex> macro_index_array;
-  while (OB_SUCC(ret) && pos < size) {
-    macro_index_array.reset();
-    ObBackupCommonHeader common_header;
-    if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_macro_block_index(buffer_reader, common_header, macro_index_array))) {
-      STORAGE_LOG(WARN, "failed to get meta index", K(ret), K(size), K(pos));
-    } else if (OB_FAIL(print_macro_data_index_v1_(common_header, macro_index_array))) {
-      STORAGE_LOG(WARN, "failed to print meta index", K(ret), K(common_header));
-    } else {
-      STORAGE_LOG(INFO, "macro block index", "pos", pos, K(buffer_reader), K(macro_index_array), K(common_header));
-      if (BACKUP_FILE_END_MARK == common_header.data_type_) {
-        STORAGE_LOG(INFO, "end print macro data index");
-        break;
-      }
-    }
-  }
-}
-
-int ObAdminDumpBackupDataExecutor::print_macro_data_index_v1_(
-    const share::ObBackupCommonHeader &common_header,
-    const common::ObIArray<ObBackupMacroIndex> &macro_index_array)
-{
-  int ret = OB_SUCCESS;
-  print_common_header(common_header);
-  for (int64_t i = 0; OB_SUCC(ret) && i < macro_index_array.count(); ++i) {
-    const ObBackupMacroIndex &macro_index = macro_index_array.at(i);
-    ObMetaIndexKey key(macro_index.table_id_, macro_index.partition_id_, 0);
-    PrintHelper::print_dump_line(to_cstring(key), to_cstring(macro_index));
-  }
-  PrintHelper::print_end_line();
-
-  return ret;
-}
-
-void ObAdminDumpBackupDataExecutor::print_macro_data_index_v2(
-    const char *buf,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  ObBufferReader buffer_reader(buf, size, 0);
-  TableMacroIndexMap index_map;
-  static const int64_t BUCKET_NUM = 1000;
-  if (OB_FAIL(index_map.create(BUCKET_NUM, ObModIds::RESTORE))) {
-    STORAGE_LOG(WARN, "failed to create table macro index map", K(ret)); 
-  } else if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_macro_block_index_v2(buffer_reader, allocator_, index_map))) {
-    STORAGE_LOG(WARN, "failed to get macro block index", K(ret)); 
-  } else if (OB_FAIL(print_macro_data_index_v2_(index_map))) {
-    STORAGE_LOG(WARN, "failed to print macro data index", K(ret)); 
-  }
-}
-
-int ObAdminDumpBackupDataExecutor::print_macro_data_index_v2_(
-    const TableMacroIndexMap &index_map)
-{
-  int ret = OB_SUCCESS;
-  TableMacroIndexMap::const_iterator iter;
-  iter = index_map.begin();
-  for (; OB_SUCC(ret) && iter != index_map.end(); ++iter) {
-    const ObITable::TableKey &table_key = iter->first;
-    const ObArray<ObBackupTableMacroIndex> *index_list = iter->second;
-    PrintHelper::print_dump_line("table_key", to_cstring(table_key));
-    if (OB_ISNULL(index_list)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "index list should not be null", K(ret)); 
-    } 
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_list->count(); ++i) {
-      const ObBackupTableMacroIndex &index = index_list->at(i);
-      PrintHelper::print_dump_line("macro_index", to_cstring(index));
-    }
-    PrintHelper::print_end_line();
+    uint16_t *type = reinterpret_cast<uint16_t*>(buf);
+    file_type_ = *type;
+    STORAGE_LOG(INFO, "get file type", K(file_type_));
   }
   return ret;
 }
 
-void ObAdminDumpBackupDataExecutor::print_macro_block()
+int ObAdminDumpBackupDataExecutor::print_usage_()
 {
   int ret = OB_SUCCESS;
-  char *read_buf = NULL;
-  ObFullMacroBlockMeta full_macro_meta;
-  blocksstable::ObMacroBlockMeta *macro_meta = NULL;
-  ObSSTableDataBlockReader macro_reader;
-  ObSSTableMacroBlockChecker checker;
-
-  if (OB_ISNULL(read_buf = reinterpret_cast<char*>(allocator_.alloc(data_length_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc read buf", K(ret), K(data_length_));
-  } else if (OB_FAIL(ObRestoreFileUtil::pread_file(data_path_,
-      storage_info_,
-      offset_,
-      data_length_,
-      read_buf))) {
-    STORAGE_LOG(WARN, "fail to pread macro data buffer", K(ret), K(storage_info_), K(data_path_), K(data_length_), K(offset_));
-  } else {
-    const int64_t read_align_len = data_length_ + DIO_READ_ALIGN_SIZE;
-    ObBufferReader buffer_reader(read_buf, read_align_len, 0);
-    const ObBackupCommonHeader *common_header = NULL;
-    blocksstable::ObMacroBlockMeta tmp_meta;
-    blocksstable::ObBufferReader tmp_macro_meta_reader;
-    blocksstable::ObBufferReader tmp_macro_data;
-    //TODO: fix print ObBackupMacroData in this function, include below comment lines
-    //ObBackupMacroData backup_macro_data(tmp_meta, tmp_macro_data);
-    common_header = NULL;
-    common::ObObj *endkey = NULL;
-    if (OB_ISNULL(endkey = reinterpret_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * common::OB_MAX_COLUMN_NUMBER)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN,"fail to alloc memory for macro block end key", K(ret));
-    } else if (OB_ISNULL(tmp_meta.endkey_ = new(endkey) ObObj[common::OB_MAX_COLUMN_NUMBER])) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "macro meta endkey is null", K(ret));
-    } else if (OB_FAIL(buffer_reader.get(common_header))) {
-      STORAGE_LOG(WARN, "read macro data common header fail", K(ret));
-    } else if (OB_ISNULL(common_header)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "meta index common header is null", K(ret));
-    } else if (OB_FAIL(common_header->check_valid())) {
-      STORAGE_LOG(WARN, "common_header is not vaild", K(ret));
-    } else if (common_header->data_zlength_ > buffer_reader.remain()) {
-      ret = OB_BUF_NOT_ENOUGH;
-      STORAGE_LOG(WARN, "buffer_reader not enough", K(ret), K(buffer_reader));
-  /*  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
-      LOG_WARN("failed to check data checksum", K(ret), K(*common_header), K(buffer_reader));
-    } else if (OB_FAIL(buffer_reader.read_serialize(backup_macro_data))) {
-      STORAGE_LOG(WARN, "read macro meta fail", K(ret), K(*common_header), K(data_dir_));
-  */} else if (OB_FAIL(tmp_meta.deep_copy(macro_meta, allocator_))) {
-      STORAGE_LOG(WARN, "copy macro meta fail", K(ret), K(*common_header), K(data_path_));
-    } else if (OB_ISNULL(macro_meta)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "macro_meta is null", K(ret), K(*common_header), K(data_path_));
-    } else {
-      STORAGE_LOG(INFO, "start dump macro data", K(*common_header), K(buffer_reader), K(tmp_macro_data),
-          //"backup_macro_data need size", backup_macro_data.get_serialize_size(),
-          K(*macro_meta));
-      if (OB_FAIL(macro_reader.init(tmp_macro_data.data(), tmp_macro_data.capacity()))) {
-        STORAGE_LOG(ERROR, "failed to init macro reader", K(ret));
-      } else if (OB_FAIL(macro_reader.dump())) {
-        STORAGE_LOG(ERROR, "failed dump macro block", K(ret));
-//      } else if (OB_FAIL(checker.check(tmp_macro_data.data(), tmp_macro_data.capacity(), *macro_meta,
-//          ObMacroBlockCheckLevel::CHECK_LEVEL_AUTO))) {
-//        LOG_WARN("failed to check macro block", K(ret), K(tmp_macro_data), K(*macro_meta));
-      }
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_tenant_name_info()
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t file_length = 0;
-  ObTenantNameSimpleMgr mgr;
-  ObTenantNameSimpleMgr::ObTenantNameMeta meta;
-  common::ObArray<const ObTenantNameSimpleMgr::ObTenantNameInfo*> infos;
-
-  if (OB_FAIL(ObAdminDumpBackupDataReaderUtil::get_backup_data(data_path_, storage_info_, buf, file_length, allocator_))) {
-    STORAGE_LOG(WARN, "failed to get backup data", K(ret), K(data_path_), K(storage_info_));
-  } else if (OB_ISNULL(buf)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "buf should not be NULL", K(ret), KP(buf));
-  } else if (OB_FAIL(mgr.init())) {
-    LOG_WARN("failed to init mgr", K(ret));
-  } else if (OB_FAIL(mgr.read_buf(buf, file_length))) {
-    LOG_WARN("failed to read mgr", K(ret));
-  } else if (OB_FAIL(mgr.get_infos(meta, infos))) {
-    LOG_WARN("failed to get infos", K(ret));
-  } else {
-    print_common_header();
-    print_tenant_name_info_meta(meta);
-    for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      print_tenant_name_info(i, *infos.at(i));
-    }
-  }
-}
-
-void ObAdminDumpBackupDataExecutor::print_tenant_name_info_meta(
-    const ObTenantNameSimpleMgr::ObTenantNameMeta &meta)
-{
-  PrintHelper::print_dump_title("tenant name meta");
-  PrintHelper::print_dump_line("schema_version", meta.schema_version_);
-  PrintHelper::print_dump_line("tenant_count", meta.tenant_count_);
-  PrintHelper::print_end_line();
-}
-
-void ObAdminDumpBackupDataExecutor::print_tenant_name_info(
-    const int64_t idx, const ObTenantNameSimpleMgr::ObTenantNameInfo &info)
-{
-  PrintHelper::print_dump_title("tenant name info", idx, 1/*level*/);
-  PrintHelper::print_dump_line("tenant_name", to_cstring(info.tenant_name_));
-  PrintHelper::print_dump_line("is_complete", info.is_complete_);
-  for (int64_t i = 0; i < info.id_list_.count(); ++i) {
-    const ObTenantNameSimpleMgr::ObTenantIdItem &item = info.id_list_.at(i);
-    PrintHelper::print_dump_line("idx", i, 2/*level*/);
-    PrintHelper::print_dump_line("tenant_id", item.tenant_id_, 2/*level*/);
-    PrintHelper::print_dump_line("timestamp", item.timestamp_, 2/*level*/);
-  }
-  PrintHelper::print_end_line();
-}
-
-void ObAdminDumpBackupDataExecutor::print_usage()
-{
   printf("\n");
   printf("Usage: dump_backup command [command args] [options]\n");
   printf("commands:\n");
   printf(HELP_FMT, "-h,--help", "display this message.");
 
   printf("options:\n");
-  printf(HELP_FMT, "-d,--data-file-path", "absolute data file path with file prefix");
-  printf(HELP_FMT, "-o,--offset", "data file offset");
-  printf(HELP_FMT, "-l,--data-length", "data length");
+  printf(HELP_FMT, "-d,--backup-file-path", "absolute backup file path with file prefix");
+  printf(HELP_FMT, "-s,--storage-info", "oss/cos should provide storage info");
   printf(HELP_FMT, "-f,--file-path", "relative data file path");
-#ifdef _WITH_OSS
-  printf(HELP_FMT, "-s,--storage-info", "oss should provide storage info");
-#endif
-  printf(HELP_FMT, "-q,--quiet", "log level: ERROR");
-  printf(HELP_FMT, "-c,--check_exist", "check file is exist or not");
+  printf(HELP_FMT, "-o,--offset", "data offset");
+  printf(HELP_FMT, "-l,--length", "data length");
+  printf(HELP_FMT, "-c,--check-exist", "check file is exist or not");
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -1650,78 +876,1813 @@ void ObAdminDumpBackupDataExecutor::print_usage()
   printf("\tob_admin dump_backup -dfile:///home/admin/macro_block_1.0 -o1024 -l2048\n");
   printf("  dump data with -f: \n");
   printf("\tob_admin dump_backup -f/home/admin/macro_block_1.0 -o1024 -l2048\n");
-#ifdef _WITH_OSS
   printf("  dump data with -s: \n");
-  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' -s'host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222'\n");
-#endif
+  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
+         "-s'host=xxx.com&access_id=111&access_key=222'\n");
+  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
+  return ret;
 }
 
-void ObAdminDumpBackupDataExecutor::print_archive_block_meta()
+int ObAdminDumpBackupDataExecutor::check_tenant_backup_path_(const char *data_path, const char *storage_info_str, bool &is_exist)
 {
   int ret = OB_SUCCESS;
-  ObAdminLogArchiveExecutor executor;
-
-  if (OB_FAIL(executor.dump_single_file(input_data_path_))) {
-    LOG_WARN("failed to dump archive block data", K(ret), K(input_data_path_));
+  ObBackupPathString path;
+  share::ObBackupDest backup_dest;
+  share::ObBackupStore backup_store;
+  ObBackupFormatDesc desc;
+  is_exist = false;
+  if (OB_FAIL(backup_dest.set(data_path, storage_info_str))) {
+    STORAGE_LOG(WARN, "fail to set backup dest", K(ret));
+  } else if (OB_FAIL(backup_dest.get_backup_dest_str(path.ptr(), path.capacity()))) {
+    STORAGE_LOG(WARN, "fail to get backup dest str", K(ret));
+  } else if (OB_FAIL(backup_store.init(path.ptr()))) {
+    STORAGE_LOG(WARN, "fail to init backup store", K(ret));
+  } else if (OB_FAIL(backup_store.is_format_file_exist(is_exist))) {
+    STORAGE_LOG(WARN, "fail to check format file exist", K(ret));
+  } else if (is_exist) {
+    if (OB_FAIL(backup_store.read_format_file(desc))) {
+      STORAGE_LOG(WARN, "fail to read format file", K(ret));
+    } else if (desc.dest_type_ != ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA) {
+      is_exist = false;
+    }
   }
+
+  return ret;
 }
 
-void ObAdminDumpBackupDataExecutor::print_archive_index_file()
+int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
 {
   int ret = OB_SUCCESS;
-  ObAdminLogArchiveExecutor executor;
-
-  if (OB_FAIL(executor.dump_single_index_file(input_data_path_))) {
-    LOG_WARN("failed to dump archive index", K(ret), K(input_data_path_));
-  }
-}
-
-int ObAdminDumpBackupDataExecutor::check_exist(const char *data_path, const char *storage_info)
-{
-  int ret = OB_SUCCESS;
-  ObStorageUtil util(false);
-  bool exist = false;
-  const char *uri_str = "uri";
-  const char *is_exist_str = "is_exist";
-  size_t data_path_len = strlen(data_path);
-  char dir_data_path[common::OB_MAX_URI_LENGTH + 1] = {0};
-
-  if (data_path_len <= 0 || data_path[data_path_len - 1] == '/') {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(ERROR, "uri format not right", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-#ifdef _WITH_OSS
-  } else if (OB_FAIL(ObOssEnvIniter::get_instance().global_init())) {
-    STORAGE_LOG(WARN, "init oss storage fail", K(ret));
-#endif
-  } else if (OB_FAIL(util.is_exist(data_path, storage_info, exist))) {
-    STORAGE_LOG(WARN, "failed to check is exist", K(ret), K(data_path));
+  ObBackupIoAdapter util;
+  share::ObBackupSetFilter op;
+  share::ObBackupPath path;
+  share::ObBackupStorageInfo storage_info;
+  share::ObTenantBackupSetInfosDesc tenant_backup_set_infos;
+  ObSArray<share::ObBackupSetDesc> backup_set_array;
+  ObArray<share::ObBackupSetFileDesc> target_backup_set;
+  if (OB_FAIL(get_backup_set_placeholder_dir_path(path))) {
+    STORAGE_LOG(WARN, "fail to get backup set placeholder dir path", K(ret));
+  } else if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_));
+  } else if (OB_FAIL(util.list_files(path.get_ptr(), &storage_info, op))) {
+    STORAGE_LOG(WARN, "fail to list files", K(ret));
+  } else if (OB_FAIL(op.get_backup_set_array(backup_set_array))) {
+    STORAGE_LOG(WARN, "fail to get backup set names", K(ret));
   } else {
-    PrintHelper::print_dump_title("check_exist");
-    if (exist) {
-      PrintHelper::print_dump_line(uri_str, data_path);
-      PrintHelper::print_dump_line(is_exist_str, "true");
-    } else if (OB_FAIL(databuff_printf(dir_data_path, sizeof(dir_data_path), "%s/", data_path))) {
-      STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
-    } else {
-      bool empty = false;
-      if (OB_FAIL(util.is_empty_directory(dir_data_path, storage_info, empty))) {
-        STORAGE_LOG(WARN, "failed to check is empty", K(ret), K(data_path));
-      } else {
-        if (empty) {
-          PrintHelper::print_dump_line(uri_str, data_path);
-          PrintHelper::print_dump_line(is_exist_str, "false");
+    share::ObBackupDataStore::ObBackupSetDescComparator cmp;
+    std::sort(backup_set_array.begin(), backup_set_array.end(), cmp);
+    for (int64_t i = backup_set_array.count() - 1; i >= 0; i--) {
+      path.reset();
+      const share::ObBackupSetDesc &backup_set_dir = backup_set_array.at(i);
+      if (OB_FAIL(get_tenant_backup_set_infos_path_(backup_set_dir, path))) {
+        STORAGE_LOG(WARN, "fail to get backup set infos path");
+      } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(path.get_obstr(), ObString(storage_info_), tenant_backup_set_infos))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          continue;
         } else {
-          PrintHelper::print_dump_line(uri_str, data_path);
-          PrintHelper::print_dump_line(is_exist_str, "true");
+          STORAGE_LOG(WARN, "fail to read backup info file", K(ret));
         }
-        PrintHelper::print_end_line();
+      } else if (OB_FAIL(filter_backup_set_(tenant_backup_set_infos, backup_set_array, target_backup_set))) {
+        STORAGE_LOG(WARN, "fail to filter backup set", K(ret));
+      } else if (OB_FAIL(inner_print_common_header_(path.get_obstr(), ObString(storage_info_)))) {
+        STORAGE_LOG(WARN, "fail to print common header", K(ret));
+      } else if (OB_FAIL(dump_tenant_backup_set_infos_(target_backup_set))) {
+        STORAGE_LOG(WARN, "fail to dump tenant backup set infos", K(ret));
+      } else {
+        break;
       }
     }
   }
   return ret;
 }
 
-} //namespace tools
-} //namespace oceanbase
+int ObAdminDumpBackupDataExecutor::print_backup_data_file_()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  backup::ObBackupDataFileTrailer file_trailer;
+  ObArray<backup::ObBackupMetaIndex> meta_index_list;
+  if (OB_FAIL(print_backup_file_header_())) {
+    STORAGE_LOG(WARN, "failed to print backup file header", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_data_file_trailer(backup_path, storage_info, file_trailer))) {
+    STORAGE_LOG(WARN, "failed to read file trailer", K(ret), K(backup_path), K(storage_info));
+  } else {
+    if (OB_SUCC(ret)) {
+      char *buf = NULL;
+      const int64_t offset = file_trailer.macro_index_offset_;
+      const int64_t length = file_trailer.macro_index_length_;
+      ObArray<backup::ObBackupMacroBlockIndex> macro_index_list;
+      if (0 == length) {
+        // do nothing
+      } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+      } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+        STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+      } else {
+        ObBufferReader buffer_reader(buf, length);
+        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMacroBlockIndex>(
+                buffer_reader, macro_index_list))) {
+          STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < macro_index_list.count(); ++i) {
+            const backup::ObBackupMacroBlockIndex &index = macro_index_list.at(i);
+            if (OB_FAIL(inner_print_macro_block_(index.offset_, index.length_, i))) {
+              STORAGE_LOG(WARN, "failed to inner print macro block", K(ret), K(index));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      char *buf = NULL;
+      const int64_t offset = file_trailer.meta_index_offset_;
+      const int64_t length = file_trailer.meta_index_length_;
+      ObArray<backup::ObBackupMetaIndex> meta_index_list;
+      if (0 == length) {
+        // do nothing
+      } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+      } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+        STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+      } else {
+        ObBufferReader buffer_reader(buf, length);
+        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMetaIndex>(
+                buffer_reader, meta_index_list))) {
+          STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < meta_index_list.count(); ++i) {
+            const backup::ObBackupMetaIndex &index = meta_index_list.at(i);
+            if (backup::BACKUP_SSTABLE_META == index.meta_key_.meta_type_) {
+              if (OB_FAIL(inner_print_sstable_metas_(index.offset_, index.length_))) {
+                STORAGE_LOG(WARN, "failed to inner print sstable metas", K(ret), K(index));
+              }
+            } else if (backup::BACKUP_TABLET_META == index.meta_key_.meta_type_) {
+              if (OB_FAIL(inner_print_tablet_meta_(index.offset_, index.length_))) {
+                STORAGE_LOG(WARN, "failed to inner print tablet meta", K(ret), K(index));
+              }
+            } else if (backup::BACKUP_MACRO_BLOCK_ID_MAPPING_META == index.meta_key_.meta_type_) {
+              if (OB_FAIL(inner_print_backup_macro_block_id_mapping_metas_(index.offset_, index.length_))) {
+                STORAGE_LOG(WARN, "failed to inner print backup macro block id mapping meta", K(ret), K(index));
+              }
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_print_macro_block_index_list_(
+              file_trailer.macro_index_offset_, file_trailer.macro_index_length_))) {
+        STORAGE_LOG(WARN, "failed to inner print macro block index list", K(ret), K(backup_path), K(storage_info));
+      } else if (OB_FAIL(
+                     inner_print_meta_index_list_(file_trailer.meta_index_offset_, file_trailer.meta_index_length_))) {
+        STORAGE_LOG(WARN, "failed to inner print meta index list", K(ret), K(backup_path), K(storage_info));
+      } else if (OB_FAIL(dump_data_file_trailer_(file_trailer))) {
+        STORAGE_LOG(WARN, "failed to print data file trailer", K(ret), K(file_trailer));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_macro_range_index_file()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  const int64_t offset = 0;
+  int64_t length = 0;
+  char *buf = NULL;
+  backup::ObBackupMultiLevelIndexTrailer index_trailer;
+  if (OB_FAIL(print_backup_file_header_())) {
+    STORAGE_LOG(WARN, "failed to print backup file header", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::get_backup_file_length(backup_path, storage_info, length))) {
+    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_index_file_trailer(backup_path, storage_info, index_trailer))) {
+    STORAGE_LOG(WARN, "failed to read index file trailer", K(ret), K(backup_path));
+  } else {
+    const int64_t header_size = DIO_READ_ALIGN_SIZE;
+    const int64_t trailer_size = sizeof(backup::ObBackupMultiLevelIndexTrailer);
+    buf += header_size;
+    ObBufferReader buffer_reader(buf, length - header_size - trailer_size);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    auto print_func3 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_range_index_list_, this, std::placeholders::_1);
+    auto print_func4 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_list_, this, std::placeholders::_1);
+    auto ParseFunc = ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMacroRangeIndex,
+        backup::ObBackupMacroRangeIndexIndex>;
+    if (OB_FAIL(ParseFunc(buffer_reader, print_func1, print_func2, print_func3, print_func4))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_index_file_trailer_(index_trailer))) {
+      STORAGE_LOG(WARN, "failed to print index file trailer", K(ret), K(index_trailer));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_meta_index_file()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  const int64_t offset = 0;
+  int64_t length = 0;
+  char *buf = NULL;
+  backup::ObBackupMultiLevelIndexTrailer index_trailer;
+  if (OB_FAIL(print_backup_file_header_())) {
+    STORAGE_LOG(WARN, "failed to print backup file header", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::get_backup_file_length(backup_path, storage_info, length))) {
+    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_index_file_trailer(backup_path, storage_info, index_trailer))) {
+    STORAGE_LOG(WARN, "failed to read index file trailer", K(ret), K(backup_path));
+  } else {
+    const int64_t header_size = DIO_READ_ALIGN_SIZE;
+    const int64_t trailer_size = sizeof(backup::ObBackupMultiLevelIndexTrailer);
+    buf += header_size;
+    ObBufferReader buffer_reader(buf, length - header_size - trailer_size);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    auto print_func3 = std::bind(&ObAdminDumpBackupDataExecutor::dump_meta_index_list_, this, std::placeholders::_1);
+    auto print_func4 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_meta_index_index_list_, this, std::placeholders::_1);
+    auto ParseFunc = ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMetaIndex,
+        backup::ObBackupMetaIndexIndex>;
+    if (OB_FAIL(ParseFunc(buffer_reader, print_func1, print_func2, print_func3, print_func4))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_index_file_trailer_(index_trailer))) {
+      STORAGE_LOG(WARN, "failed to print index file trailer", K(ret), K(index_trailer));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_backup_file_header_()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  backup::ObBackupFileHeader file_header;
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_file_header(backup_path, storage_info, file_header))) {
+    STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
+  } else if (OB_FAIL(dump_backup_file_header_(file_header))) {
+    STORAGE_LOG(WARN, "failed to dump backup file header", K(ret), K(file_header));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_macro_block_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_macro_block_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print macro block", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tablet_meta_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_tablet_meta_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print tablet meta metas", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_sstable_metas_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_sstable_metas_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print sstable metas", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_macro_block_index_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_macro_block_index_list_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print macro block index list", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_meta_index_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_meta_index_list_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print meta index list", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_data_file_trailer_()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  backup::ObBackupDataFileTrailer file_trailer;
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::read_data_file_trailer(backup_path, storage_info, file_trailer))) {
+    STORAGE_LOG(WARN, "failed to read file trailer", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(dump_data_file_trailer_(file_trailer))) {
+    STORAGE_LOG(WARN, "failed to print data file trailer", K(ret), K(file_trailer));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_index_file_trailer_()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  backup::ObBackupMultiLevelIndexTrailer file_trailer;
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::read_index_file_trailer(backup_path, storage_info, file_trailer))) {
+    STORAGE_LOG(WARN, "failed to read file trailer", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(dump_index_file_trailer_(file_trailer))) {
+    STORAGE_LOG(WARN, "failed to print index file trailer", K(ret), K(file_trailer));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_macro_range_index_index_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_macro_range_index_index_list_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print macro range index index list", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_meta_index_index_list_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t offset = offset_;
+  const int64_t length = length_;
+  if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(inner_print_meta_index_index_list_(offset, length))) {
+    STORAGE_LOG(WARN, "failed to inner print meta index index list", K(ret), K(offset), K(length));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_ls_attr_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDataLSAttrDesc ls_attr_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), ls_attr_desc))) {
+    STORAGE_LOG(WARN, "fail to read ls attr info", K(ret), K(backup_path_), K(storage_info_));
+  } else {
+    ARRAY_FOREACH_X(ls_attr_desc.ls_attr_array_, i , cnt, OB_SUCC(ret)) {
+      const share::ObLSAttr ls_attr = ls_attr_desc.ls_attr_array_.at(i);
+      if (OB_FAIL(dump_ls_attr_info_(ls_attr))) {
+        STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(ls_attr));
+      }
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tablet_to_ls_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDataTabletToLSDesc tablet_to_ls_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), tablet_to_ls_desc))) {
+    STORAGE_LOG(WARN, "fail to read tablet to ls info", K(ret), K(backup_path_), K(storage_info_));
+  } else {
+    ARRAY_FOREACH_X(tablet_to_ls_desc.tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
+      const share::ObBackupDataTabletToLSInfo tablet_to_ls = tablet_to_ls_desc.tablet_to_ls_.at(i);
+      if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
+        STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
+      }
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_deleted_tablet_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDeletedTabletToLSDesc deleted_tablet_to_ls;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), deleted_tablet_to_ls))) {
+    STORAGE_LOG(WARN, "fail to read tablet to ls info", K(ret), K(backup_path_), K(storage_info_));
+  } else {
+    ARRAY_FOREACH_X(deleted_tablet_to_ls.deleted_tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
+      const share::ObBackupDataTabletToLSInfo tablet_to_ls = deleted_tablet_to_ls.deleted_tablet_to_ls_.at(i);
+      if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
+        STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
+      }
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tenant_locality_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObExternTenantLocalityInfoDesc locality_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), locality_desc))) {
+    STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_tenant_locality_info_(locality_desc))) {
+    STORAGE_LOG(WARN, "fail to dump tenant locality info", K(ret), K(locality_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tenant_diagnose_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObExternTenantDiagnoseInfoDesc diagnose_info;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), diagnose_info))) {
+    STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_tenant_diagnose_info_(diagnose_info))) {
+    STORAGE_LOG(WARN, "fail to dump tenant locality info", K(ret), K(diagnose_info));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_backup_set_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObExternBackupSetInfoDesc backup_set_info_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), backup_set_info_desc))) {
+    STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_backup_set_info(backup_set_info_desc.backup_set_file_))) {
+    STORAGE_LOG(WARN, "fail to dump tenant locality info", K(ret), K(backup_set_info_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_place_holder_info_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_round_start_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObRoundStartDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive round start file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_round_start_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive round start file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_round_end_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObRoundEndDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive round end file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_round_end_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive round end file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_piece_start_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObPieceStartDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece start file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_piece_start_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece start file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_piece_end_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObPieceEndDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece end file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_piece_end_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece end file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_single_piece_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObSinglePieceDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive single piece file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_single_piece_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive single piece file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_piece_inner_placeholder_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObPieceInnerPlaceholderDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece inner placeholder file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_piece_inner_placeholder_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece inner placeholder file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_single_ls_info_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObSingleLSInfoDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive single ls info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_single_ls_info_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive single ls info file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_archive_piece_list_info_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObPieceInfoDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_archive_piece_list_info_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tenant_archive_piece_infos_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantArchivePieceInfosDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_tenant_archive_piece_infos_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump tenant archive piece infos file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_backup_format_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupFormatDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_archive_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_backup_format_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantBackupSetInfosDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_backup_ls_meta_infos_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupLSMetaInfosDesc file_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
+    STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_backup_ls_meta_infos_file_(file_desc))) {
+    STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_macro_block_(
+    const int64_t offset, const int64_t length, const int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    const share::ObBackupCommonHeader *common_header = NULL;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_common_header_(*common_header))) {
+      STORAGE_LOG(WARN, "failed to print common header", K(ret), KPC(common_header));
+    } else {
+      const int64_t data_length = common_header->data_zlength_;
+      PrintHelper::print_dump_title("Macro Block");
+      PrintHelper::print_dump_line("Idx", idx);
+      PrintHelper::print_dump_line("MacroBlockLength", data_length);
+      PrintHelper::print_end_line();
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_tablet_meta_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    int64_t pos = 0;
+    ObBufferReader buffer_reader(buf, length);
+    backup::ObBackupTabletMeta tablet_meta;
+    const share::ObBackupCommonHeader *common_header = NULL;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_common_header_(*common_header))) {
+      STORAGE_LOG(WARN, "failed to print common header", K(ret), KPC(common_header));
+    } else if (OB_FAIL(tablet_meta.deserialize(buffer_reader.current(), common_header->data_zlength_, pos))) {
+      STORAGE_LOG(WARN, "failed to read data_header", K(ret), K(*common_header), K(backup_path));
+    } else if (OB_FAIL(dump_backup_tablet_meta_(tablet_meta))) {
+      STORAGE_LOG(WARN, "failed to print backup tablet meta", K(ret), K(tablet_meta));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_sstable_metas_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    int64_t pos = 0;
+    ObBufferReader buffer_reader(buf, length);
+    const share::ObBackupCommonHeader *common_header = NULL;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_common_header_(*common_header))) {
+      STORAGE_LOG(WARN, "failed to print common header", K(ret), KPC(common_header));
+    } else {
+      int64_t total_pos = 0;
+      char *tmp_buf = buffer_reader.current();
+      const int64_t total_data_size = common_header->data_zlength_;
+      ObBackupSSTableMeta sstable_meta;
+      while (OB_SUCC(ret) && total_data_size - total_pos > 0) {
+        int64_t pos = 0;
+        sstable_meta.reset();
+        if (OB_FAIL(sstable_meta.deserialize(tmp_buf + total_pos, total_data_size - total_pos, pos))) {
+          STORAGE_LOG(WARN, "failed to deserialize", K(ret), K(total_pos), K(total_data_size), K(*common_header));
+        } else if (OB_FAIL(dump_backup_sstable_meta_(sstable_meta))) {
+          STORAGE_LOG(WARN, "failed to push back", K(ret), K(sstable_meta));
+        } else {
+          total_pos += pos;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_backup_macro_block_id_mapping_metas_(
+    const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    int64_t pos = 0;
+    ObBufferReader buffer_reader(buf, length);
+    backup::ObBackupMacroBlockIDMappingsMeta mapping_meta;
+    const share::ObBackupCommonHeader *common_header = NULL;
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
+      STORAGE_LOG(WARN, "failed to get common header", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_common_header_(*common_header))) {
+      STORAGE_LOG(WARN, "failed to print common header", K(ret), KPC(common_header));
+    } else if (OB_FAIL(mapping_meta.deserialize(buffer_reader.current(), common_header->data_zlength_, pos))) {
+      STORAGE_LOG(WARN, "failed to read data_header", K(ret), K(*common_header), K(backup_path));
+    } else if (OB_FAIL(dump_backup_macro_block_id_mapping_meta_(mapping_meta))) {
+      STORAGE_LOG(WARN, "failed to print backup tablet meta", K(ret), K(mapping_meta));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_macro_block_index_list_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (0 == length) {
+    // do nothing
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_, this, std::placeholders::_1);
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMacroBlockIndex>(
+            buffer_reader, print_func1, print_func2))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_meta_index_list_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (0 == length) {
+    // do nothing
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 = std::bind(&ObAdminDumpBackupDataExecutor::dump_meta_index_list_, this, std::placeholders::_1);
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMetaIndex>(
+            buffer_reader, print_func1, print_func2))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_macro_range_index_list_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    auto print_func3 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_range_index_list_, this, std::placeholders::_1);
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMacroRangeIndex>(
+            buffer_reader, print_func1, print_func2, print_func3))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_macro_range_index_index_list_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(backup_path));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    auto print_func3 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_list_, this, std::placeholders::_1);
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMacroRangeIndexIndex>(
+            buffer_reader, print_func1, print_func2, print_func3))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_meta_index_index_list_(const int64_t offset, const int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  char *buf = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else {
+    ObBufferReader buffer_reader(buf, length);
+    auto print_func1 = std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    auto print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    auto print_func3 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_meta_index_index_list_, this, std::placeholders::_1);
+    if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMetaIndexIndex>(
+            buffer_reader, print_func1, print_func2, print_func3))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_common_header_(const char *data_path, const char *storage_info_str)
+{
+  int ret = OB_SUCCESS;
+  common::ObString tmp_data_path(data_path);
+  common::ObString tmp_storage_info(storage_info_str);
+  if (OB_FAIL(inner_print_common_header_(tmp_data_path, tmp_storage_info))) {
+    STORAGE_LOG(WARN, "failed to common header", K(ret), K(tmp_data_path), K(tmp_storage_info));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::inner_print_common_header_(const common::ObString &backup_path,
+    const common::ObString &storage_info)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t file_length = 0;
+  share::ObBackupCommonHeader *header = nullptr;
+  ObArenaAllocator allocator;
+  const int64_t header_len = sizeof(share::ObBackupCommonHeader);
+
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::get_backup_file_length(backup_path, storage_info, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_UNLIKELY(file_length <= sizeof(header_len))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup file too small", K(ret), K(file_length), K(header_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(header_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(header_len));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, 0, header_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info), K(file_length), K(header_len));
+  } else if (OB_FALSE_IT(header = reinterpret_cast<share::ObBackupCommonHeader *>(buf))) {
+  } else if (OB_FAIL(header->check_valid())) {
+    STORAGE_LOG(WARN, "fail to check common header valid");
+  } else if (OB_FAIL(dump_common_header_(*header))) {
+    STORAGE_LOG(WARN, "fail to dump common header", KPC(header));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_file_header_(const backup::ObBackupFileHeader &file_header)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup File Header");
+  PrintHelper::print_dump_line("magic", file_header.magic_);
+  PrintHelper::print_dump_line("version", file_header.version_);
+  PrintHelper::print_dump_line("file_type", file_header.file_type_);
+  PrintHelper::print_dump_line("compressor_type", file_header.reserved_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_common_header_(const share::ObBackupCommonHeader &common_header)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Common Header");
+  PrintHelper::print_dump_line("data_type", common_header.data_type_);
+  PrintHelper::print_dump_line("header_version", common_header.header_version_);
+  PrintHelper::print_dump_line("data_version", common_header.data_version_);
+  PrintHelper::print_dump_line("compressor_type", common_header.compressor_type_);
+  PrintHelper::print_dump_line("header_length", common_header.header_length_);
+  PrintHelper::print_dump_line("header_checksum", common_header.header_checksum_);
+  PrintHelper::print_dump_line("data_length", common_header.data_length_);
+  PrintHelper::print_dump_line("data_zlength", common_header.data_zlength_);
+  PrintHelper::print_dump_line("data_checksum", common_header.data_checksum_);
+  PrintHelper::print_dump_line("align_length", common_header.align_length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_data_file_trailer_(const backup::ObBackupDataFileTrailer &trailer)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Data File Trailer");
+  PrintHelper::print_dump_line("data_type", trailer.data_type_);
+  PrintHelper::print_dump_line("data_version", trailer.data_version_);
+  PrintHelper::print_dump_line("macro_block_count", trailer.macro_block_count_);
+  PrintHelper::print_dump_line("meta_count", trailer.meta_count_);
+  PrintHelper::print_dump_line("macro_index_offset", trailer.macro_index_offset_);
+  PrintHelper::print_dump_line("macro_index_length", trailer.macro_index_length_);
+  PrintHelper::print_dump_line("meta_index_offset", trailer.meta_index_offset_);
+  PrintHelper::print_dump_line("meta_index_length", trailer.meta_index_length_);
+  PrintHelper::print_dump_line("offset", trailer.offset_);
+  PrintHelper::print_dump_line("length", trailer.length_);
+  PrintHelper::print_dump_line("data_accumulate_checksum", trailer.data_accumulate_checksum_);
+  PrintHelper::print_dump_line("trailer_checksum", trailer.trailer_checksum_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_index_file_trailer_(const backup::ObBackupMultiLevelIndexTrailer &trailer)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Index File Trailer");
+  PrintHelper::print_dump_line("file_type", trailer.file_type_);
+  PrintHelper::print_dump_line("tree_height", trailer.tree_height_);
+  PrintHelper::print_dump_line("last_block_offset", trailer.last_block_offset_);
+  PrintHelper::print_dump_line("last_block_length", trailer.last_block_length_);
+  PrintHelper::print_dump_line("checksum", trailer.checksum_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_(const backup::ObBackupMultiLevelIndexHeader &header)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Multi Level Index Header");
+  PrintHelper::print_dump_line("magic", header.magic_);
+  PrintHelper::print_dump_line("backup_type", header.backup_type_);
+  PrintHelper::print_dump_line("index_level", header.index_level_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_block_index_(const backup::ObBackupMacroBlockIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Macro Block Index");
+  PrintHelper::print_dump_line("logic_id", to_cstring(index.logic_id_));
+  PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
+  PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
+  PrintHelper::print_dump_line("turn_id", index.turn_id_);
+  PrintHelper::print_dump_line("retry_id", index.retry_id_);
+  PrintHelper::print_dump_line("file_id", index.file_id_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_(
+    const common::ObIArray<ObBackupMacroBlockIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMacroBlockIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_macro_block_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print macro block index", K(ret), K_(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_range_index_(const backup::ObBackupMacroRangeIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Macro Range Index");
+  PrintHelper::print_dump_line("start_key:tablet_id", index.start_key_.tablet_id_);
+  PrintHelper::print_dump_line("start_key:logic_version", index.start_key_.logic_version_);
+  PrintHelper::print_dump_line("start_key:data_seq", index.start_key_.data_seq_);
+  PrintHelper::print_dump_line("end_key:tablet_id", index.end_key_.tablet_id_);
+  PrintHelper::print_dump_line("end_key:logic_version", index.end_key_.logic_version_);
+  PrintHelper::print_dump_line("end_key:data_seq", index.end_key_.data_seq_);
+  PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
+  PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
+  PrintHelper::print_dump_line("turn_id", index.turn_id_);
+  PrintHelper::print_dump_line("retry_id", index.retry_id_);
+  PrintHelper::print_dump_line("file_id", index.file_id_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_range_index_list_(
+    const common::ObIArray<backup::ObBackupMacroRangeIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMacroRangeIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_macro_range_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print macro range index", K(ret), K(index));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_(const backup::ObBackupMacroRangeIndexIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Macro Range Index Index");
+  PrintHelper::print_dump_line("end_key:start_key", to_cstring(index.end_key_.start_key_));
+  PrintHelper::print_dump_line("end_key:end_key", to_cstring(index.end_key_.end_key_));
+  PrintHelper::print_dump_line("end_key:backup_set_id", index.end_key_.backup_set_id_);
+  PrintHelper::print_dump_line("end_key:ls_id", index.end_key_.ls_id_.id());
+  PrintHelper::print_dump_line("end_key:turn_id", index.end_key_.turn_id_);
+  PrintHelper::print_dump_line("end_key:retry_id", index.end_key_.retry_id_);
+  PrintHelper::print_dump_line("end_key:file_id", index.end_key_.file_id_);
+  PrintHelper::print_dump_line("end_key:offset", index.end_key_.offset_);
+  PrintHelper::print_dump_line("end_key:length", index.end_key_.length_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_list_(
+    const common::ObIArray<backup::ObBackupMacroRangeIndexIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMacroRangeIndexIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_macro_range_index_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print macro range index index", K(ret), K(index));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_meta_index_(const backup::ObBackupMetaIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Meta Index");
+  PrintHelper::print_dump_line("meta_key", to_cstring(index.meta_key_));
+  PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
+  PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
+  PrintHelper::print_dump_line("turn_id", index.turn_id_);
+  PrintHelper::print_dump_line("retry_id", index.retry_id_);
+  PrintHelper::print_dump_line("file_id", index.file_id_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_meta_index_list_(const common::ObIArray<backup::ObBackupMetaIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMetaIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_meta_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print meta index", K(ret), K_(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_meta_index_index_(const backup::ObBackupMetaIndexIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Meta Index Index");
+  PrintHelper::print_dump_line("tablet_id", index.end_key_.meta_key_.tablet_id_.id());
+  PrintHelper::print_dump_line("meta_type", index.end_key_.meta_key_.meta_type_);
+  PrintHelper::print_dump_line("backup_set_id", index.end_key_.backup_set_id_);
+  PrintHelper::print_dump_line("ls_id", index.end_key_.ls_id_.id());
+  PrintHelper::print_dump_line("turn_id", index.end_key_.turn_id_);
+  PrintHelper::print_dump_line("retry_id", index.end_key_.retry_id_);
+  PrintHelper::print_dump_line("file_id", index.end_key_.file_id_);
+  PrintHelper::print_dump_line("offset", index.end_key_.offset_);
+  PrintHelper::print_dump_line("length", index.end_key_.length_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_meta_index_index_list_(
+    const common::ObIArray<backup::ObBackupMetaIndexIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMetaIndexIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_meta_index_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print meta index index", K(ret), K_(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_tablet_meta_(const backup::ObBackupTabletMeta &tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Tablet Meta");
+  PrintHelper::print_dump_line("tablet_id", tablet_meta.tablet_id_.id());
+  PrintHelper::print_dump_line("tablet_meta:ls_id", tablet_meta.tablet_meta_.ls_id_.id());
+  PrintHelper::print_dump_line("tablet_meta:tablet_id", tablet_meta.tablet_meta_.tablet_id_.id());
+  PrintHelper::print_dump_line("tablet_meta:data_tablet_id", tablet_meta.tablet_meta_.data_tablet_id_.id());
+  PrintHelper::print_dump_line("tablet_meta:ref_tablet_id", tablet_meta.tablet_meta_.ref_tablet_id_.id());
+  PrintHelper::print_dump_line("tablet_meta:clog_checkpoint_scn", tablet_meta.tablet_meta_.clog_checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("tablet_meta:ddl_checkpoint_scn", tablet_meta.tablet_meta_.ddl_checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("tablet_meta:tablet_status", tablet_meta.tablet_meta_.tx_data_.tablet_status_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBackupSSTableMeta &sstable_meta)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup SSTable Meta");
+  PrintHelper::print_dump_line("tablet_id", sstable_meta.tablet_id_.id());
+  PrintHelper::print_dump_line("table_key", to_cstring(sstable_meta.sstable_meta_.table_key_));
+  PrintHelper::print_dump_line("sstable_meta:row_count", sstable_meta.sstable_meta_.basic_meta_.row_count_);
+  PrintHelper::print_dump_line("sstable_meta:occupy_size", sstable_meta.sstable_meta_.basic_meta_.occupy_size_);
+  PrintHelper::print_dump_line("sstable_meta:original_size", sstable_meta.sstable_meta_.basic_meta_.original_size_);
+  PrintHelper::print_dump_line("sstable_meta:data_checksum", sstable_meta.sstable_meta_.basic_meta_.data_checksum_);
+  PrintHelper::print_dump_line("sstable_meta:index_type", sstable_meta.sstable_meta_.basic_meta_.index_type_);
+  PrintHelper::print_dump_line("sstable_meta:rowkey_column_count", sstable_meta.sstable_meta_.basic_meta_.rowkey_column_count_);
+  PrintHelper::print_dump_line("sstable_meta:column_cnt", sstable_meta.sstable_meta_.basic_meta_.column_cnt_);
+  PrintHelper::print_dump_line("sstable_meta:data_macro_block_count", sstable_meta.sstable_meta_.basic_meta_.data_macro_block_count_);
+  PrintHelper::print_dump_list_start("logic_id_array");
+  for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.logic_id_list_.count(); ++i) {
+    const blocksstable::ObLogicMacroBlockId &macro_id = sstable_meta.logic_id_list_.at(i);
+    PrintHelper::print_dump_list_value(to_cstring(macro_id), i == sstable_meta.logic_id_list_.count() - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
+    const backup::ObBackupMacroBlockIDMappingsMeta &mapping_meta)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup SSTable Macro Block ID Mapping Meta");
+  PrintHelper::print_dump_line("version", mapping_meta.version_);
+  PrintHelper::print_dump_line("sstable_count", mapping_meta.sstable_count_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < mapping_meta.sstable_count_; ++i) {
+    const ObBackupMacroBlockIDMapping &item = mapping_meta.id_map_list_[i];
+    const ObITable::TableKey &table_key = item.table_key_;
+    int64_t num_of_entries = item.id_pair_list_.count();
+    PrintHelper::print_dump_line("table_key", to_cstring(table_key));
+    PrintHelper::print_dump_line("num_of_entries", num_of_entries);
+    for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
+      const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
+      const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
+      const ObBackupPhysicalID &physical_id = pair.physical_id_;
+      PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
+      PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_ls_attr_info_(const share::ObLSAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("ls_attr info");
+  PrintHelper::print_dump_line("ls_id", ls_attr.get_ls_id().id());
+  PrintHelper::print_dump_line("ls_group_id", ls_attr.get_ls_group_id());
+  PrintHelper::print_dump_line("flag", ls_attr.get_ls_flag());
+  PrintHelper::print_dump_line("status", ls_attr.get_ls_status());
+  PrintHelper::print_dump_line("operation_type", ls_attr.get_ls_operatin_type());
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tablet_to_ls_info_(const share::ObBackupDataTabletToLSInfo &tablet_to_ls_info)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("tablet_to_ls info");
+  PrintHelper::print_dump_line("ls_id", tablet_to_ls_info.ls_id_.id());
+  PrintHelper::print_dump_list_start("tablet_id");
+  ARRAY_FOREACH_X(tablet_to_ls_info.tablet_id_list_, i , cnt, OB_SUCC(ret)) {
+    const ObTabletID &tablet_id = tablet_to_ls_info.tablet_id_list_.at(i);
+    PrintHelper::print_dump_list_value(to_cstring(tablet_id.id()), i == cnt - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_locality_info_(const share::ObExternTenantLocalityInfoDesc &locality_info)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("locality info");
+  PrintHelper::print_dump_line("tenant_id", locality_info.tenant_id_);
+  PrintHelper::print_dump_line("tenant_name", locality_info.tenant_name_.ptr());
+  PrintHelper::print_dump_line("backup_set_id", locality_info.backup_set_id_);
+  PrintHelper::print_dump_line("cluster_id", locality_info.cluster_id_);
+  PrintHelper::print_dump_line("cluster_name", locality_info.cluster_name_.ptr());
+  PrintHelper::print_dump_line("compat_mode", static_cast<int64_t>(locality_info.compat_mode_));
+  PrintHelper::print_dump_line("locality", locality_info.locality_.ptr());
+  PrintHelper::print_dump_line("primary_zone", locality_info.primary_zone_.ptr());
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_diagnose_info_(const share::ObExternTenantDiagnoseInfoDesc &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("diagnose info");
+  if (OB_FAIL(dump_tenant_locality_info_(diagnose_info.tenant_locality_info_))) {
+    STORAGE_LOG(WARN, "fail to dump tenant locality info", K(ret), K(diagnose_info));
+  } else if (OB_FAIL(dump_backup_set_info(diagnose_info.backup_set_file_))) {
+    STORAGE_LOG(WARN, "fail to dump backup set info", K(ret), K(diagnose_info));
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("tenant backup set infos");
+  ARRAY_FOREACH_X(backup_set_infos, i , cnt, OB_SUCC(ret)) {
+    const share::ObBackupSetFileDesc &backup_set_desc = backup_set_infos.at(i);
+    char buf[OB_MAX_CHAR_LEN] = { 0 };
+    char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+      STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+    } else if (OB_FALSE_IT(backup_set_desc.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+    } else {
+      PrintHelper::print_dump_line(buf, str_buf);
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_ls_meta_infos_file_(const share::ObBackupLSMetaInfosDesc &ls_meta_infos)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("ls meta infos");
+  ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i , cnt, OB_SUCC(ret)) {
+    const storage::ObLSMetaPackage &meta_package = ls_meta_infos.ls_meta_packages_.at(i);
+    char buf[OB_MAX_CHAR_LEN] = { 0 };
+    char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+      STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+    } else if (OB_FALSE_IT(meta_package.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+    } else {
+      PrintHelper::print_dump_line(buf, str_buf);
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("backup set info");
+  PrintHelper::print_dump_line("tenant_id", backup_set_info.tenant_id_);
+  PrintHelper::print_dump_line("backup_set_id", backup_set_info.backup_set_id_);
+  PrintHelper::print_dump_line("dest_id", backup_set_info.dest_id_);
+  PrintHelper::print_dump_line("incarnation", backup_set_info.incarnation_);
+  PrintHelper::print_dump_line("backup_type", backup_set_info.backup_type_.get_backup_type_str());
+  PrintHelper::print_dump_line("backup_date", backup_set_info.date_);
+  PrintHelper::print_dump_line("prev_full_backup_set_id", backup_set_info.prev_full_backup_set_id_);
+  PrintHelper::print_dump_line("prev_inc_backup_set_id", backup_set_info.prev_inc_backup_set_id_);
+  PrintHelper::print_dump_line("input_bytes", backup_set_info.stats_.input_bytes_);
+  PrintHelper::print_dump_line("output_bytes", backup_set_info.stats_.output_bytes_);
+  PrintHelper::print_dump_line("tablet_count", backup_set_info.stats_.tablet_count_);
+  PrintHelper::print_dump_line("finish tablet count", backup_set_info.stats_.finish_tablet_count_);
+  PrintHelper::print_dump_line("macro block count", backup_set_info.stats_.macro_block_count_);
+  PrintHelper::print_dump_line("finish macro block count", backup_set_info.stats_.finish_macro_block_count_);
+  PrintHelper::print_dump_line("extra_meta_bytes", backup_set_info.stats_.extra_bytes_);
+  PrintHelper::print_dump_line("finish file count", backup_set_info.stats_.finish_file_count_);
+  PrintHelper::print_dump_line("start_time", backup_set_info.start_time_);
+  PrintHelper::print_dump_line("end_time", backup_set_info.end_time_);
+  PrintHelper::print_dump_line("status", backup_set_info.status_);
+  PrintHelper::print_dump_line("result", backup_set_info.result_);
+  PrintHelper::print_dump_line("encryption_mode", backup_set_info.encryption_mode_);
+  PrintHelper::print_dump_line("passwd", backup_set_info.passwd_.ptr());
+  PrintHelper::print_dump_line("file_status", backup_set_info.file_status_);
+  PrintHelper::print_dump_line("backup_path", backup_set_info.backup_path_.ptr());
+  PrintHelper::print_dump_line("start_replay_scn", backup_set_info.start_replay_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("min_restore_scn", backup_set_info.min_restore_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("tenant_compatible", backup_set_info.tenant_compatible_);
+  PrintHelper::print_dump_line("backup_compatible", backup_set_info.backup_compatible_);
+  PrintHelper::print_dump_line("meta_turn_id", backup_set_info.meta_turn_id_);
+  PrintHelper::print_dump_line("data_turn_id", backup_set_info.data_turn_id_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_round_start_file_(const share::ObRoundStartDesc &round_start_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive round start info");
+  PrintHelper::print_dump_line("dest_id", round_start_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", round_start_file.round_id_);
+  PrintHelper::print_dump_line("start_scn", round_start_file.start_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("base_piece_id", round_start_file.base_piece_id_);
+  PrintHelper::print_dump_line("piece_switch_interval", round_start_file.piece_switch_interval_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_round_end_file_(const share::ObRoundEndDesc round_end_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive round end info");
+  PrintHelper::print_dump_line("dest_id", round_end_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", round_end_file.round_id_);
+  PrintHelper::print_dump_line("start_scn", round_end_file.start_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("checkpoint_scn", round_end_file.checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("base_piece_id", round_end_file.base_piece_id_);
+  PrintHelper::print_dump_line("piece_switch_interval", round_end_file.piece_switch_interval_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_piece_start_file_(const share::ObPieceStartDesc &piece_start_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive piece start info");
+  PrintHelper::print_dump_line("dest_id", piece_start_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece_start_file.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece_start_file.piece_id_);
+  PrintHelper::print_dump_line("start_scn", piece_start_file.start_scn_.get_val_for_logservice());
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_piece_end_file_(const share::ObPieceEndDesc &piece_end_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive piece end info");
+  PrintHelper::print_dump_line("dest_id", piece_end_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece_end_file.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece_end_file.piece_id_);
+  PrintHelper::print_dump_line("end_scn", piece_end_file.end_scn_.get_val_for_logservice());
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_archive_piece_infos_file_(const share::ObTenantArchivePieceInfosDesc &piece_infos_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive piece infos");
+  PrintHelper::print_dump_line("dest_id", piece_infos_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece_infos_file.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece_infos_file.piece_id_);
+  PrintHelper::print_dump_line("incarnation", piece_infos_file.incarnation_);
+  PrintHelper::print_dump_line("dest_no", piece_infos_file.dest_no_);
+  PrintHelper::print_dump_line("compatible", static_cast<int64_t>(piece_infos_file.compatible_.version_));
+  PrintHelper::print_dump_line("start_scn", piece_infos_file.start_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("end_scn", piece_infos_file.end_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("path", piece_infos_file.path_.ptr());
+  ARRAY_FOREACH_X(piece_infos_file.his_frozen_pieces_, i , cnt, OB_SUCC(ret)) {
+    const ObTenantArchivePieceAttr &piece = piece_infos_file.his_frozen_pieces_.at(i);
+    char buf[OB_MAX_CHAR_LEN] = { 0 };
+    char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+      STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+    } else if (OB_FALSE_IT(piece.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+    } else {
+      PrintHelper::print_dump_line(buf, str_buf);
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_one_piece_(const share::ObTenantArchivePieceAttr &piece)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_line("tenant_id", piece.key_.tenant_id_);
+  PrintHelper::print_dump_line("dest_id", piece.key_.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece.key_.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece.key_.piece_id_);
+  PrintHelper::print_dump_line("incarnation", piece.incarnation_);
+  PrintHelper::print_dump_line("dest_no", piece.dest_no_);
+  PrintHelper::print_dump_line("file_count", piece.file_count_);
+  PrintHelper::print_dump_line("start_scn", piece.start_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("checkpoint_scn", piece.checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("max_scn", piece.max_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("end_scn", piece.end_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("compatible", static_cast<int64_t>(piece.compatible_.version_));
+  PrintHelper::print_dump_line("input_bytes", piece.input_bytes_);
+  PrintHelper::print_dump_line("output_bytes", piece.output_bytes_);
+  PrintHelper::print_dump_line("status", piece.status_.to_status_str());
+  PrintHelper::print_dump_line("file_status", ObBackupFileStatus::get_str(piece.file_status_));
+  PrintHelper::print_dump_line("cp_file_id", piece.cp_file_id_);
+  PrintHelper::print_dump_line("cp_file_offset", piece.cp_file_offset_);
+  PrintHelper::print_dump_line("path", piece.path_.ptr());
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_single_piece_file_(const share::ObSinglePieceDesc &piece_single_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive single piece info");
+  dump_one_piece_(piece_single_file.piece_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_piece_inner_placeholder_file_(const share::ObPieceInnerPlaceholderDesc &piece_inner_placeholder)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive piece inner placeholder info");
+  PrintHelper::print_dump_line("dest_id", piece_inner_placeholder.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece_inner_placeholder.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece_inner_placeholder.piece_id_);
+  PrintHelper::print_dump_line("start_scn", piece_inner_placeholder.start_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("checkpoint_scn", piece_inner_placeholder.checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_single_ls_info_file_(const share::ObSingleLSInfoDesc &single_ls_info_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive single ls info");
+  PrintHelper::print_dump_line("dest_id", single_ls_info_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", single_ls_info_file.round_id_);
+  PrintHelper::print_dump_line("piece_id", single_ls_info_file.piece_id_);
+  PrintHelper::print_dump_line("ls_id", single_ls_info_file.ls_id_.id());
+  PrintHelper::print_dump_line("checkpoint_scn", single_ls_info_file.checkpoint_scn_.get_val_for_logservice());
+  PrintHelper::print_dump_line("max_lsn", single_ls_info_file.max_lsn_);
+  ARRAY_FOREACH_X(single_ls_info_file.filelist_, i , cnt, OB_SUCC(ret)) {
+    const ObSingleLSInfoDesc::OneFile &one_file = single_ls_info_file.filelist_.at(i);
+    PrintHelper::print_dump_list_value(one_file.file_id_, i == cnt - 1);
+    PrintHelper::print_dump_list_value(one_file.size_bytes_, i == cnt - 1);
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_archive_piece_list_info_file_(const share::ObPieceInfoDesc &piece_info_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("archive piece list info");
+  PrintHelper::print_dump_line("dest_id", piece_info_file.dest_id_);
+  PrintHelper::print_dump_line("round_id", piece_info_file.round_id_);
+  PrintHelper::print_dump_line("piece_id", piece_info_file.piece_id_);
+  ARRAY_FOREACH_X(piece_info_file.filelist_, i , cnt, OB_SUCC(ret)) {
+    const share::ObSingleLSInfoDesc &one_file = piece_info_file.filelist_.at(i);
+    if (OB_FAIL(dump_archive_single_ls_info_file_(one_file))) {
+      STORAGE_LOG(WARN, "fail to dump archive single ls info file", K(ret));
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_backup_format_file_(const share::ObBackupFormatDesc &format_file)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("backup format info");
+  PrintHelper::print_dump_line("cluster_name", format_file.cluster_name_.ptr());
+  PrintHelper::print_dump_line("cluster_id", format_file.cluster_id_);
+  PrintHelper::print_dump_line("tenant_name", format_file.tenant_name_.ptr());
+  PrintHelper::print_dump_line("tenant_id", format_file.tenant_id_);
+  PrintHelper::print_dump_line("path", format_file.path_.ptr());
+  PrintHelper::print_dump_line("incarnation", format_file.incarnation_);
+  PrintHelper::print_dump_line("dest_id", format_file.dest_id_);
+  PrintHelper::print_dump_line("dest_type", format_file.dest_type_);
+  PrintHelper::print_dump_line("ts", format_file.ts_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_check_exist_result_(
+    const char *data_path, const char *storage_info_str, const bool is_exist)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("check_exist");
+  PrintHelper::print_dump_line("uri", data_path);
+  PrintHelper::print_dump_line("is_exist", is_exist ? "true" : "false");
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_tablet_autoinc_seq_(const share::ObTabletAutoincSeq &autoinc_seq)
+{
+  int ret = OB_SUCCESS;
+  const common::ObSArray<share::ObTabletAutoincInterval> &intervals = autoinc_seq.get_intervals();
+  for (int64_t i = 0; OB_SUCC(ret) && intervals.count(); ++i) {
+    const share::ObTabletAutoincInterval &interval = intervals.at(i);
+    PrintHelper::print_dump_line("tablet_meta:autoinc_seq:start", interval.start_);
+    PrintHelper::print_dump_line("tablet_meta:autoinc_seq:end", interval.end_);
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::get_tenant_backup_set_infos_path_(
+    const share::ObBackupSetDesc &backup_set_dir_name,
+    share::ObBackupPath &target_path)
+{
+  int ret = OB_SUCCESS;
+  target_path.reset();
+  if (OB_FAIL(target_path.init(backup_path_))) {
+    STORAGE_LOG(WARN, "fail to init tmp_path", K(ret));
+  } else if (OB_FAIL(target_path.join_backup_set(backup_set_dir_name))) {
+    STORAGE_LOG(WARN, "fail to join backup set dir name", K(ret), K(backup_set_dir_name));
+  } else if (OB_FAIL(target_path.join(OB_STR_TENANT_BACKUP_SET_INFOS, ObBackupFileSuffix::BACKUP))) {
+    STORAGE_LOG(WARN, "fail to join tenant backup set infos", K(ret), K(backup_set_dir_name));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::get_backup_set_placeholder_dir_path(
+    share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest dest;
+  if (OB_FAIL(dest.set(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to set backup dest", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(dest, path))) {
+    STORAGE_LOG(WARN, "fail to get backup place holder dir path", K(ret), K(path));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::filter_backup_set_(
+    const share::ObTenantBackupSetInfosDesc &tenant_backup_set_infos,
+    const ObSArray<share::ObBackupSetDesc> &placeholder_infos,
+    ObIArray<share::ObBackupSetFileDesc> &target_backup_set)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH_X(tenant_backup_set_infos.backup_set_infos_, i, cnt, OB_SUCC(ret)) {
+    const share::ObBackupSetFileDesc &backup_set_info = tenant_backup_set_infos.backup_set_infos_.at(i);
+    share::ObBackupSetDesc backup_set_dir_name;
+    backup_set_dir_name.backup_set_id_ = backup_set_info.backup_set_id_;
+    backup_set_dir_name.backup_type_.type_ = backup_set_info.backup_type_.type_;
+    ARRAY_FOREACH_X(placeholder_infos, j, cnt, OB_SUCC(ret)) {
+      const share::ObBackupSetDesc &tmp_name = placeholder_infos.at(j);
+      if (tmp_name == backup_set_dir_name) {
+        if (OB_FAIL(target_backup_set.push_back(backup_set_info))) {
+          STORAGE_LOG(WARN, "fail to get backup set dir name", K(ret), K(backup_set_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::check_tenant_backup_path_type_(const char *data_path, const char *storage_info_str, ObBackupDestType::TYPE &type)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_dest;
+  share::ObBackupStore backup_store;
+  ObBackupFormatDesc desc;
+  bool is_exist = false;
+  if (OB_FAIL(backup_dest.set(data_path, storage_info_str))) {
+    STORAGE_LOG(WARN, "fail to set backup dest", K(ret));
+  } else if (OB_FAIL(backup_store.init(backup_dest))) {
+    STORAGE_LOG(WARN, "fail to init backup store", K(ret));
+  } else if (OB_FAIL(backup_store.is_format_file_exist(is_exist))) {
+    STORAGE_LOG(WARN, "fail to check format file exist", K(ret));
+  } else if (!is_exist) {
+    type = ObBackupDestType::TYPE::DEST_TYPE_MAX;
+  } else if (OB_FAIL(backup_store.read_format_file(desc))) {
+    STORAGE_LOG(WARN, "fail to read format file", K(ret));
+  } else {
+    type = static_cast<ObBackupDestType::TYPE>(desc.dest_type_);
+  }
+
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::build_rounds_info_(
+    const share::ObPieceKey &first_piece,
+    const common::ObIArray<share::ObTenantArchivePieceAttr> &pieces,
+    common::ObIArray<share::ObTenantArchiveRoundAttr> &rounds)
+{
+  int ret = OB_SUCCESS;
+  ObTenantArchiveRoundAttr round;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pieces.count(); i++) {
+    const ObTenantArchivePieceAttr &current_piece = pieces.at(i);
+    if (current_piece.key_.piece_id_ < first_piece.piece_id_) {
+      // May be it is cleaned.
+      continue;
+    }
+
+    if (current_piece.key_.dest_id_ != first_piece.dest_id_) {
+      // This piece is archived to other path.
+      continue;
+    }
+
+    if (round.round_id_ != current_piece.key_.round_id_) {
+      if (round.is_valid() && OB_FAIL(rounds.push_back(round))) {
+        STORAGE_LOG(WARN, "failed to push backup round", K(ret));
+      } else {
+        round.key_.tenant_id_ = current_piece.key_.tenant_id_;
+        round.key_.dest_no_ = current_piece.dest_no_;
+        round.incarnation_ = current_piece.incarnation_;
+        round.dest_id_ = current_piece.key_.dest_id_;
+        round.round_id_ = current_piece.key_.round_id_;
+
+        round.start_scn_ = current_piece.start_scn_;
+        round.checkpoint_scn_ = current_piece.checkpoint_scn_;
+        round.max_scn_ = current_piece.max_scn_;
+        round.compatible_ = current_piece.compatible_;
+        round.base_piece_id_ = current_piece.key_.piece_id_;
+        round.used_piece_id_ = current_piece.key_.piece_id_;
+        round.piece_switch_interval_ = current_piece.end_scn_.convert_to_ts() - current_piece.start_scn_.convert_to_ts();
+        round.path_ = current_piece.path_;
+
+        if (current_piece.is_active()) {
+          round.state_.set_doing();
+          round.active_input_bytes_ = current_piece.input_bytes_;
+          round.active_output_bytes_ = current_piece.output_bytes_;
+          round.frozen_input_bytes_ = 0;
+          round.frozen_output_bytes_ = 0;
+        } else {
+          round.state_.set_stop();
+          round.active_input_bytes_ = 0;
+          round.active_output_bytes_ = 0;
+          round.frozen_input_bytes_ = current_piece.input_bytes_;
+          round.frozen_output_bytes_ = current_piece.output_bytes_;
+        }
+      }
+    } else {
+      round.used_piece_id_ = current_piece.key_.piece_id_;
+      round.checkpoint_scn_ = current_piece.checkpoint_scn_;
+      round.max_scn_ = current_piece.max_scn_;
+      if (current_piece.is_active()) {
+        round.state_.set_doing();
+        round.active_input_bytes_ = current_piece.input_bytes_;
+        round.active_output_bytes_ = current_piece.output_bytes_;
+      } else {
+        round.state_.set_stop();
+        round.frozen_input_bytes_ = current_piece.input_bytes_;
+        round.frozen_output_bytes_ = current_piece.output_bytes_;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!round.is_valid()) {
+    STORAGE_LOG(INFO, "no round");
+  } else if (OB_FAIL(rounds.push_back(round))) {
+    STORAGE_LOG(WARN, "failed to push backup round", K(ret));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_archive_path_()
+{
+  int ret = OB_SUCCESS;
+  ObArchiveStore store;
+  ObBackupDest backup_dest;
+  ObArray<ObPieceKey> piece_keys;
+  ObArray<ObTenantArchiveRoundAttr> rounds;
+  if (OB_FAIL(backup_dest.set(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "failed to set backup dest", K(ret), K_(storage_info), K_(backup_path));
+  } else if (OB_FAIL(store.init(backup_dest))) {
+     STORAGE_LOG(WARN, "failed to init archive store", K(ret));
+  } else if (OB_FAIL(store.get_all_piece_keys(piece_keys))) {
+    STORAGE_LOG(WARN, "failed to get all piece keys", K(ret));
+  } else {
+    bool is_empty_piece = true;
+    ObExternPieceWholeInfo piece_whole_info;
+    for (int64_t i = piece_keys.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      const ObPieceKey &key = piece_keys.at(i);
+      if (OB_FAIL(store.get_whole_piece_info(key.dest_id_, key.round_id_, key.piece_id_, is_empty_piece, piece_whole_info))) {
+        STORAGE_LOG(WARN, "failed to get whole piece info", K(ret), K(key));
+      } else if (!is_empty_piece) {
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_empty_piece) {
+    } else if (OB_FAIL(piece_whole_info.his_frozen_pieces_.push_back(piece_whole_info.current_piece_))) {
+      STORAGE_LOG(WARN, "failed to push backup current piece", K(ret));
+    } else if (OB_FAIL(build_rounds_info_(piece_keys.at(0), piece_whole_info.his_frozen_pieces_, rounds))) {
+      STORAGE_LOG(WARN, "failed to build rounds info", K(ret), K(piece_keys), K(piece_whole_info));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    PrintHelper::print_dump_title("tenant archive round infos");
+    ARRAY_FOREACH_X(rounds, i , cnt, OB_SUCC(ret)) {
+      const ObTenantArchiveRoundAttr &round = rounds.at(i);
+      char buf[OB_MAX_CHAR_LEN] = { 0 };
+      char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+      if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+        STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+      } else if (OB_FALSE_IT(round.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+      } else {
+        PrintHelper::print_dump_line(buf, str_buf);
+      }
+    }
+    PrintHelper::print_end_line();
+  }
+
+  return ret;
+}
+
+}  // namespace tools
+}  // namespace oceanbase

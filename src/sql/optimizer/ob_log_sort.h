@@ -15,144 +15,108 @@
 #include "lib/container/ob_array.h"
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObRawExpr;
-class ObLogSort;
-class ObLogSort : public ObLogicalOperator {
-  // for calc pushed down sort cost
-  static constexpr double DISTRIBUTED_SORT_COST_RATIO = .8;
+namespace oceanbase
+{
+namespace sql
+{
+  class ObRawExpr;
+  class ObLogSort;
+  class ObLogSort : public ObLogicalOperator
+  {
+  public:
+    ObLogSort(ObLogPlan &plan)
+        : ObLogicalOperator(plan),
+          hash_sortkey_(),
+          sort_keys_(),
+          encode_sortkeys_(),
+          topn_expr_(NULL),
+          minimum_row_count_(0),
+          topk_precision_(0),
+          prefix_pos_(0),
+          is_local_merge_sort_(false),
+          topk_limit_expr_(NULL),
+          topk_offset_expr_(NULL),
+          is_fetch_with_ties_(false),
+          part_cnt_(0)
+    {}
+    virtual ~ObLogSort()
+    {}
+    virtual int est_cost() override;
+    virtual int est_width() override;
+    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    int inner_est_cost(double child_card, double &topn_count, double &op_cost);
+    const OrderItem &get_hash_sortkey() const { return hash_sortkey_; }
+    OrderItem &get_hash_sortkey() { return hash_sortkey_; }
+    inline void set_hash_sortkey(const OrderItem &hash_sortkey) { hash_sortkey_ = hash_sortkey; }
+    const common::ObIArray<OrderItem> &get_sort_keys() const { return sort_keys_; }
+    common::ObIArray<OrderItem> &get_sort_keys() { return sort_keys_; }
+    const common::ObIArray<OrderItem> &get_encode_sortkeys() const { return encode_sortkeys_; }
+    common::ObIArray<OrderItem> &get_encode_sortkeys() { return encode_sortkeys_; }
+    int get_sort_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
+    int create_encode_sortkey_expr(const common::ObIArray<OrderItem> &order_keys);
+    int get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs);
 
-public:
-  ObLogSort(ObLogPlan& plan)
-      : ObLogicalOperator(plan),
-        sort_keys_(),
-        topn_count_(NULL),
-        minimum_row_count_(0),
-        topk_precision_(0),
-        prefix_pos_(0),
-        is_local_merge_sort_(false),
-        topk_limit_count_(NULL),
-        topk_offset_count_(NULL),
-        is_fetch_with_ties_(false)
-  {}
-  virtual ~ObLogSort()
-  {}
-  int calc_cost();
-  virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  const common::ObIArray<OrderItem>& get_sort_keys() const
-  {
-    return sort_keys_;
-  }
-  common::ObIArray<OrderItem>& get_sort_keys()
-  {
-    return sort_keys_;
-  }
+    inline void set_topn_expr(ObRawExpr *expr) { topn_expr_ = expr; }
+    inline void set_prefix_pos(int64_t prefix_pos) { prefix_pos_ = prefix_pos; }
+    inline void set_local_merge_sort(bool is_local_merge_sort) { is_local_merge_sort_ = is_local_merge_sort; }
+    inline void set_fetch_with_ties(bool is_fetch_with_ties) { is_fetch_with_ties_ = is_fetch_with_ties; }
+    inline void set_part_cnt(uint64_t part_cnt) { part_cnt_ = part_cnt; }
 
-  int get_sort_exprs(common::ObIArray<ObRawExpr*>& sort_exprs);
-  int clone_sort_keys_for_topk(common::ObIArray<OrderItem>& topk_sort_keys,
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& push_down_avg_arr);
+    // check if the current sort is a pushed down
+    inline bool is_prefix_sort() const { return prefix_pos_ != 0; }
+    inline bool is_local_merge_sort() const { return is_local_merge_sort_; }
+    inline bool is_part_sort() const { return part_cnt_ != 0; }
+    inline bool is_fetch_with_ties() const { return is_fetch_with_ties_; }
+    inline bool enable_encode_sortkey_opt() const { return encode_sortkeys_.count()!=0; }
+    inline int64_t get_part_cnt() const { return part_cnt_; }
+    inline int64_t get_prefix_pos() const { return prefix_pos_; }
+    inline ObRawExpr *get_topn_expr() const { return topn_expr_; }
+    inline void set_topk_limit_expr(ObRawExpr *top_limit_expr)
+    {
+      topk_limit_expr_ = top_limit_expr;
+    }
+    inline ObRawExpr *get_topk_limit_expr() { return topk_limit_expr_; }
+    inline void set_topk_offset_expr(ObRawExpr *topk_offset_expr)
+    {
+      topk_offset_expr_ = topk_offset_expr;
+    }
+    inline ObRawExpr *get_topk_offset_expr() { return topk_offset_expr_; }
+    int set_sort_keys(const common::ObIArray<OrderItem> &order_keys);
+    virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual uint64_t hash(uint64_t seed) const override;
+    virtual const char *get_name() const;
+    inline void set_minimal_row_count(int64_t minimum_row_count)
+    {
+      minimum_row_count_ = minimum_row_count;
+    }
+    inline int64_t get_minimum_row_count() const {return minimum_row_count_;}
+    inline void set_topk_precision(int64_t topk_precision)
+    {
+      topk_precision_ = topk_precision;
+    }
+    inline int64_t get_topk_precision() const {return topk_precision_;}
+    virtual bool is_block_op() const override { return !is_prefix_sort(); }
+    virtual int compute_op_ordering() override;
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  protected:
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs);
+  private:
+    OrderItem hash_sortkey_;
+    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+    common::ObSEArray<OrderItem, 1, common::ModulePageAllocator, true> encode_sortkeys_;
+    ObRawExpr *topn_expr_;
+    int64_t minimum_row_count_;
+    int64_t topk_precision_;
+    int64_t prefix_pos_; //  for prefix_sort
+    bool is_local_merge_sort_; // is used for final sort operator
+    ObRawExpr *topk_limit_expr_;
+    ObRawExpr *topk_offset_expr_;
+    bool is_fetch_with_ties_;
+    int64_t part_cnt_;
+  };
+} // end of namespace sql
+} // end of namespace oceanbase
 
-  inline void set_topn_count(ObRawExpr* expr)
-  {
-    topn_count_ = expr;
-  }
-  inline void set_prefix_pos(int64_t prefix_pos)
-  {
-    prefix_pos_ = prefix_pos;
-  }
-  inline void set_local_merge_sort(bool is_local_merge_sort)
-  {
-    is_local_merge_sort_ = is_local_merge_sort;
-  }
-  inline void set_fetch_with_ties(bool is_fetch_with_ties)
-  {
-    is_fetch_with_ties_ = is_fetch_with_ties;
-  }
-
-  // check if the current sort is a pushed down
-  inline bool is_prefix_sort() const
-  {
-    return prefix_pos_ != 0;
-  }
-  inline bool is_local_merge_sort() const
-  {
-    return is_local_merge_sort_;
-  }
-  inline bool is_fetch_with_ties() const
-  {
-    return is_fetch_with_ties_;
-  }
-  inline int64_t get_prefix_pos() const
-  {
-    return prefix_pos_;
-  }
-  inline ObRawExpr* get_topn_count() const
-  {
-    return topn_count_;
-  }
-  inline ObRawExpr* get_topk_limit_count()
-  {
-    return topk_limit_count_;
-  }
-  inline ObRawExpr* get_topk_offset_count()
-  {
-    return topk_offset_count_;
-  }
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  // @brief Set the sorting columns
-  int set_sort_keys(const common::ObIArray<OrderItem>& order_keys);
-  int check_prefix_sort();
-  int check_local_merge_sort();
-  int add_sort_key(const OrderItem& key);
-  int gen_filters();
-  int gen_output_columns();
-  int allocate_exchange_post(AllocExchContext* ctx) override;
-  int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
-  int push_down_sort(ObLogicalOperator* consumer_exc);
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual uint64_t hash(uint64_t seed) const override;
-  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
-  virtual const char* get_name() const override;
-  int set_topk_params(
-      ObRawExpr* limit_count, ObRawExpr* limit_offset, int64_t minimum_row_cuont, int64_t topk_precision);
-  inline int64_t get_minimum_row_count() const
-  {
-    return minimum_row_count_;
-  }
-  inline int64_t get_topk_precision() const
-  {
-    return topk_precision_;
-  }
-  virtual int transmit_op_ordering() override;
-  virtual bool is_block_op() const override
-  {
-    return !is_prefix_sort();
-  }
-  virtual int compute_op_ordering() override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
-
-protected:
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs) override;
-
-private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-
-private:
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
-  ObRawExpr* topn_count_;
-  int64_t minimum_row_count_;
-  int64_t topk_precision_;
-  int64_t prefix_pos_;  //  for prefix_sort
-  bool is_local_merge_sort_;
-  ObRawExpr* topk_limit_count_;
-  ObRawExpr* topk_offset_count_;
-  bool is_fetch_with_ties_;
-};
-}  // end of namespace sql
-}  // end of namespace oceanbase
-
-#endif  // OCEANBASE_SQL_OB_LOG_SORT_H
+#endif // OCEANBASE_SQL_OB_LOG_SORT_H

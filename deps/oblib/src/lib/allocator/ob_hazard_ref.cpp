@@ -17,11 +17,11 @@ using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-uint64_t* HazardRef::acquire_ref()
+uint64_t *HazardRef::acquire_ref()
 {
   int64_t start_idx = get_itid() * THREAD_REF_COUNT_LIMIT;
   int64_t end_idx = min(start_idx + THREAD_REF_COUNT_LIMIT, TOTAL_REF_COUNT_LIMIT);
-  uint64_t* ref = NULL;
+  uint64_t *ref = NULL;
   for (int64_t i = start_idx; i < end_idx; i++) {
     if (ref_array_[i] == INVALID_VERSION) {
       ref = ref_array_ + i;
@@ -39,7 +39,7 @@ uint64_t* HazardRef::acquire_ref()
   return ref;
 }
 
-void HazardRef::release_ref(uint64_t* ref)
+void HazardRef::release_ref(uint64_t *ref)
 {
   if (NULL != ref) {
     if (debug_) {
@@ -49,10 +49,10 @@ void HazardRef::release_ref(uint64_t* ref)
   }
 }
 
-void HazardNodeList::push(HazardNode* node)
+void HazardNodeList::push(HazardNode *node)
 {
   if (OB_ISNULL(node) || OB_ISNULL(tail_)) {
-    _OB_LOG(WARN, "invalid node");
+    _OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid node");
   } else {
     count_++;
     node->next_ = tail_->next_;
@@ -69,7 +69,7 @@ void RetireList::set_reclaim_version(uint64_t version)
 
 void RetireList::set_retire_version(uint64_t version)
 {
-  ThreadRetireList* retire_list = NULL;
+  ThreadRetireList *retire_list = NULL;
   _OB_LOG(DEBUG, "retire_version: %ld", version);
   if (NULL != (retire_list = get_thread_retire_list())) {
     retire_list->prepare_list_.set_version(version);

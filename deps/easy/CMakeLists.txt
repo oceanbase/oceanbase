@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.20)
 project(easy
   VERSION 1.1.22
   LANGUAGES C CXX)
@@ -26,16 +26,13 @@ target_include_directories(
   ${DEP_DIR}/include
 )
 
-set(EASY_ARCH_COMPILE_OPTIONS "")
-if(${ARCHITECTURE} STREQUAL "aarch64")
-  set(EASY_ARCH_COMPILE_OPTIONS -Wno-tautological-constant-out-of-range-compare)
-endif()
-
 
 if (OB_USE_CLANG)
-  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-unused-function -fmax-type-align=8 ${EASY_ARCH_COMPILE_OPTIONS})
+  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-unused-function -fmax-type-align=8
+  -Wno-tautological-constant-out-of-range-compare)
 else()
-  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-function ${EASY_ARCH_COMPILE_OPTIONS})
+  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration 
+  -Wno-unused-but-set-variable -Wno-unused-function)
 endif()
 
 
@@ -49,6 +46,7 @@ target_compile_options(easy_base
 target_link_libraries(easy_base
   INTERFACE
   -L${DEP_DIR}/lib
+  -L${DEP_3RD_DIR}/usr/local/babassl-ob/lib/
   -lpthread -lm -l:libssl.a -l:libcrypto.a
   ${ARCH_LDFLAGS}
 )

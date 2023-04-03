@@ -12,12 +12,53 @@
 
 #include "ob_tenant_mutil_allocator.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
+#include "lib/rc/context.h"
+#include "observer/omt/ob_multi_tenant.h"
+#include "logservice/palf/log_io_task.h"
+#include "logservice/palf/fetch_log_engine.h"
+#include "logservice/replayservice/ob_replay_status.h"
 
-namespace oceanbase {
-using namespace clog;
-using namespace election;
+namespace oceanbase
+{
 using namespace share;
-namespace common {
+using namespace palf;
+using namespace logservice;
+namespace common
+{
+
+ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
+  : tenant_id_(tenant_id), total_limit_(INT64_MAX), pending_replay_mutator_size_(0),
+    LOG_IO_FLUSH_LOG_TASK_SIZE(sizeof(palf::LogIOFlushLogTask)),
+    LOG_IO_TRUNCATE_LOG_TASK_SIZE(sizeof(palf::LogIOTruncateLogTask)),
+    LOG_IO_FLUSH_META_TASK_SIZE(sizeof(palf::LogIOFlushMetaTask)),
+    LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE(sizeof(palf::LogIOTruncatePrefixBlocksTask)),
+    PALF_FETCH_LOG_TASK_SIZE(sizeof(palf::FetchLogTask)),
+    LOG_IO_FLASHBACK_TASK_SIZE(sizeof(palf::LogIOFlashbackTask)),
+    clog_blk_alloc_(),
+    common_blk_alloc_(),
+    unlimited_blk_alloc_(),
+    replay_log_task_blk_alloc_(REPLAY_MEM_LIMIT_THRESHOLD),
+    clog_ge_alloc_(ObMemAttr(tenant_id, ObModIds::OB_CLOG_GE), ObVSliceAlloc::DEFAULT_BLOCK_SIZE, clog_blk_alloc_),
+    log_io_flush_log_task_alloc_(LOG_IO_FLUSH_LOG_TASK_SIZE, ObMemAttr(tenant_id, "FlushLog"), choose_blk_size(LOG_IO_FLUSH_LOG_TASK_SIZE), clog_blk_alloc_, this),
+    log_io_truncate_log_task_alloc_(LOG_IO_TRUNCATE_LOG_TASK_SIZE, ObMemAttr(tenant_id, "TruncateLog"), choose_blk_size(LOG_IO_TRUNCATE_LOG_TASK_SIZE), clog_blk_alloc_, this),
+    log_io_flush_meta_task_alloc_(LOG_IO_FLUSH_META_TASK_SIZE, ObMemAttr(tenant_id, "FlushMeta"), choose_blk_size(LOG_IO_FLUSH_META_TASK_SIZE), clog_blk_alloc_, this),
+    log_io_truncate_prefix_blocks_task_alloc_(LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE, ObMemAttr(tenant_id, "FlushMeta"), choose_blk_size(LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE), clog_blk_alloc_, this),
+    palf_fetch_log_task_alloc_(PALF_FETCH_LOG_TASK_SIZE, ObMemAttr(tenant_id, ObModIds::OB_FETCH_LOG_TASK), choose_blk_size(PALF_FETCH_LOG_TASK_SIZE), clog_blk_alloc_, this),
+    replay_log_task_alloc_(ObMemAttr(tenant_id, ObModIds::OB_LOG_REPLAY_TASK), common::OB_MALLOC_BIG_BLOCK_SIZE, replay_log_task_blk_alloc_),
+    log_io_flashback_task_alloc_(LOG_IO_FLASHBACK_TASK_SIZE, ObMemAttr(tenant_id, "Flashback"), choose_blk_size(LOG_IO_FLASHBACK_TASK_SIZE), clog_blk_alloc_, this)
+{
+  // set_nway according to tenant's max_cpu
+  double min_cpu = 0;
+  double max_cpu = 0;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (NULL == omt) {
+  } else if (OB_SUCCESS != omt->get_tenant_cpu(tenant_id, min_cpu, max_cpu)) {
+  } else {
+    const int32_t nway = (int32_t)max_cpu;
+    set_nway(nway);
+  }
+}
+
 int ObTenantMutilAllocator::choose_blk_size(int obj_size)
 {
   static const int MIN_SLICE_CNT = 64;
@@ -32,266 +73,195 @@ int ObTenantMutilAllocator::choose_blk_size(int obj_size)
   return blk_size;
 }
 
-void* ObTenantMutilAllocator::alloc_log_task_buf()
+void ObTenantMutilAllocator::try_purge()
 {
-  void* ptr = log_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ATOMIC_INC(&log_task_alloc_count_);
-  } else {
-    if (REACH_TIME_INTERVAL(1000 * 1000)) {
-      OB_LOG(WARN,
-          "alloc_log_task_buf failed",
-          K(tenant_id_),
-          K(log_task_alloc_count_),
-          "hold",
-          log_task_alloc_.hold(),
-          "limit",
-          log_task_alloc_.limit());
-    }
-  }
-  return ptr;
+  clog_ge_alloc_.purge_extra_cached_block(0);
+  log_io_flush_log_task_alloc_.purge_extra_cached_block(0);
+  log_io_truncate_log_task_alloc_.purge_extra_cached_block(0);
+  log_io_flush_meta_task_alloc_.purge_extra_cached_block(0);
+  log_io_truncate_prefix_blocks_task_alloc_.purge_extra_cached_block(0);
+  log_io_flashback_task_alloc_.purge_extra_cached_block(0);
+  palf_fetch_log_task_alloc_.purge_extra_cached_block(0);
+  replay_log_task_alloc_.purge_extra_cached_block(0);
 }
 
-void ObTenantMutilAllocator::free_log_task_buf(void* ptr)
+void *ObTenantMutilAllocator::ge_alloc(const int64_t size)
 {
-  if (OB_LIKELY(NULL != ptr)) {
-    ATOMIC_DEC(&log_task_alloc_count_);
-    log_task_alloc_.free(ptr);
-  }
-}
-
-void* ObTenantMutilAllocator::ge_alloc(const int64_t size)
-{
-  void* ptr = NULL;
+  void *ptr = NULL;
   ptr = clog_ge_alloc_.alloc(size);
   return ptr;
 }
 
-void ObTenantMutilAllocator::ge_free(void* ptr)
+void ObTenantMutilAllocator::ge_free(void *ptr)
 {
   clog_ge_alloc_.free(ptr);
 }
 
-ObLogFlushTask* ObTenantMutilAllocator::alloc_log_flush_task()
+void *ObTenantMutilAllocator::alloc(const int64_t size)
 {
-  ObLogFlushTask* ret_ptr = NULL;
-  void* ptr = log_flush_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObLogFlushTask();
-  }
-  return ret_ptr;
+  return ob_malloc(size, lib::ObMemAttr(tenant_id_, "LogAlloc"));
 }
 
-void ObTenantMutilAllocator::free_log_flush_task(ObLogFlushTask* ptr)
+void *ObTenantMutilAllocator::alloc(const int64_t size, const lib::ObMemAttr &attr)
 {
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObLogFlushTask();
-    log_flush_task_alloc_.free(ptr);
-  }
+  return ob_malloc(size, attr);
 }
 
-ObFetchLogTask* ObTenantMutilAllocator::alloc_fetch_log_task()
+void ObTenantMutilAllocator::free(void *ptr)
 {
-  ObFetchLogTask* ret_ptr = NULL;
-  void* ptr = fetch_log_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObFetchLogTask();
-  }
-  return ret_ptr;
+  ob_free(ptr);
 }
 
-void ObTenantMutilAllocator::free_fetch_log_task(ObFetchLogTask* ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObFetchLogTask();
-    fetch_log_task_alloc_.free(ptr);
-  }
-}
-
-ObLogStateEventTaskV2* ObTenantMutilAllocator::alloc_log_event_task()
-{
-  ObLogStateEventTaskV2* ret_ptr = NULL;
-  void* ptr = log_event_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObLogStateEventTaskV2();
-  }
-  return ret_ptr;
-}
-
-void ObTenantMutilAllocator::free_log_event_task(ObLogStateEventTaskV2* ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObLogStateEventTaskV2();
-    log_event_task_alloc_.free(ptr);
-  }
-}
-
-ObTraceProfile* ObTenantMutilAllocator::alloc_trace_profile()
-{
-  ObTraceProfile* ret_ptr = NULL;
-  void* ptr = trace_profile_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObTraceProfile();
-  }
-  return ret_ptr;
-}
-
-void ObTenantMutilAllocator::free_trace_profile(ObTraceProfile* ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObTraceProfile();
-    trace_profile_alloc_.free(ptr);
-  }
-}
-
-ObBatchSubmitCtx* ObTenantMutilAllocator::alloc_batch_submit_ctx()
-{
-  ObBatchSubmitCtx* ret_ptr = NULL;
-  void* ptr = batch_submit_ctx_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObBatchSubmitCtx();
-  }
-  return ret_ptr;
-}
-
-void ObTenantMutilAllocator::free_batch_submit_ctx(ObBatchSubmitCtx* ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObBatchSubmitCtx();
-    batch_submit_ctx_alloc_.free(ptr);
-  }
-}
-
-ObBatchSubmitDiskTask* ObTenantMutilAllocator::alloc_batch_submit_dtask()
-{
-  ObBatchSubmitDiskTask* ret_ptr = NULL;
-  void* ptr = batch_submit_dtask_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new (ptr) ObBatchSubmitDiskTask();
-  }
-  return ret_ptr;
-}
-
-const ObBlockAllocMgr& ObTenantMutilAllocator::get_clog_blk_alloc_mgr() const
+const ObBlockAllocMgr &ObTenantMutilAllocator::get_clog_blk_alloc_mgr() const
 {
   return clog_blk_alloc_;
 }
 
-void ObTenantMutilAllocator::free_batch_submit_dtask(ObBatchSubmitDiskTask* ptr)
+LogIOFlushLogTask *ObTenantMutilAllocator::alloc_log_io_flush_log_task(
+		const int64_t palf_id, const int64_t palf_epoch)
 {
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObBatchSubmitDiskTask();
-    batch_submit_dtask_alloc_.free(ptr);
-  }
-}
-
-ObElection* ObTenantMutilAllocator::alloc_election()
-{
-  ObElection* ret_ptr = NULL;
-  void* ptr = election_alloc_.alloc();
+  LogIOFlushLogTask *ret_ptr = NULL;
+  void *ptr = log_io_flush_log_task_alloc_.alloc();
   if (NULL != ptr) {
-    ret_ptr = new (ptr) ObElection();
+    ret_ptr = new(ptr)LogIOFlushLogTask(palf_id, palf_epoch);
+    ATOMIC_INC(&flying_log_task_);
   }
   return ret_ptr;
 }
 
-void ObTenantMutilAllocator::free_election(ObElection* ptr)
+void ObTenantMutilAllocator::free_log_io_flush_log_task(LogIOFlushLogTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObElection();
-    election_alloc_.free(ptr);
+    ptr->~LogIOFlushLogTask();
+    log_io_flush_log_task_alloc_.free(ptr);
+    ATOMIC_DEC(&flying_log_task_);
   }
 }
 
-ObElectionGroup* ObTenantMutilAllocator::alloc_election_group()
+LogIOTruncateLogTask *ObTenantMutilAllocator::alloc_log_io_truncate_log_task(
+		const int64_t palf_id, const int64_t palf_epoch)
 {
-  void* ptr = election_group_alloc_.alloc();
-  ObElectionGroup* ret_ptr = NULL;
+  LogIOTruncateLogTask *ret_ptr = NULL;
+  void *ptr = log_io_truncate_log_task_alloc_.alloc();
   if (NULL != ptr) {
-    ret_ptr = new (ptr) ObElectionGroup();
+    ret_ptr = new(ptr) LogIOTruncateLogTask(palf_id, palf_epoch);
   }
   return ret_ptr;
 }
 
-void ObTenantMutilAllocator::free_election_group(ObElectionGroup* ptr)
+void ObTenantMutilAllocator::free_log_io_truncate_log_task(LogIOTruncateLogTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObElectionGroup();
-    election_group_alloc_.free(ptr);
+    ptr->~LogIOTruncateLogTask();
+    log_io_truncate_log_task_alloc_.free(ptr);
   }
 }
 
-ObIPartitionLogService* ObTenantMutilAllocator::alloc_partition_log_service()
+LogIOFlushMetaTask *ObTenantMutilAllocator::alloc_log_io_flush_meta_task(
+		const int64_t palf_id, const int64_t palf_epoch)
 {
-  void* ptr = partition_log_service_alloc_.alloc();
-  ObIPartitionLogService* ret_ptr = NULL;
+  LogIOFlushMetaTask *ret_ptr = NULL;
+  void *ptr = log_io_flush_meta_task_alloc_.alloc();
   if (NULL != ptr) {
-    ret_ptr = new (ptr) ObPartitionLogService();
+    ret_ptr = new(ptr)LogIOFlushMetaTask(palf_id, palf_epoch);
+    ATOMIC_INC(&flying_meta_task_);
   }
   return ret_ptr;
 }
 
-void ObTenantMutilAllocator::free_partition_log_service(ObIPartitionLogService* ptr)
+void ObTenantMutilAllocator::free_log_io_flush_meta_task(LogIOFlushMetaTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
-    ptr->~ObIPartitionLogService();
-    partition_log_service_alloc_.free(ptr);
+    ptr->~LogIOFlushMetaTask();
+    log_io_flush_meta_task_alloc_.free(ptr);
+    ATOMIC_DEC(&flying_meta_task_);
   }
 }
 
-void* ObTenantMutilAllocator::alloc_replay_task_buf(const bool is_inner_table, const int64_t size)
+palf::LogIOTruncatePrefixBlocksTask *ObTenantMutilAllocator::alloc_log_io_truncate_prefix_blocks_task(
+		const int64_t palf_id, const int64_t palf_epoch)
 {
-  void* ptr = NULL;
-  ObVSliceAlloc& allocator = is_inner_table ? inner_table_replay_task_alloc_ : user_table_replay_task_alloc_;
-  ptr = allocator.alloc(size);
-  return ptr;
+  LogIOTruncatePrefixBlocksTask *ret_ptr = NULL;
+  void *ptr = log_io_truncate_prefix_blocks_task_alloc_.alloc();
+  if (NULL != ptr) {
+    ret_ptr = new(ptr)LogIOTruncatePrefixBlocksTask(palf_id ,palf_epoch);
+  }
+  return ret_ptr;
 }
 
-void ObTenantMutilAllocator::free_replay_task(const bool is_inner_table, void* ptr)
+void ObTenantMutilAllocator::free_log_io_truncate_prefix_blocks_task(palf::LogIOTruncatePrefixBlocksTask *ptr)
 {
   if (OB_LIKELY(NULL != ptr)) {
-    ObVSliceAlloc& allocator = is_inner_table ? inner_table_replay_task_alloc_ : user_table_replay_task_alloc_;
-    allocator.free(ptr);
+    ptr->~LogIOTruncatePrefixBlocksTask();
+    log_io_truncate_prefix_blocks_task_alloc_.free(ptr);
   }
 }
 
-bool ObTenantMutilAllocator::can_alloc_replay_task(const bool is_inner_table, int64_t size) const
+palf::FetchLogTask *ObTenantMutilAllocator::alloc_palf_fetch_log_task()
 {
-  const ObVSliceAlloc& allocator = is_inner_table ? inner_table_replay_task_alloc_ : user_table_replay_task_alloc_;
-  return allocator.can_alloc_block(size);
+  FetchLogTask *ret_ptr = NULL;
+  void *ptr = palf_fetch_log_task_alloc_.alloc();
+  if (NULL != ptr) {
+    ret_ptr = new(ptr)FetchLogTask();
+  }
+  return ret_ptr;
 }
 
-void ObTenantMutilAllocator::inc_pending_replay_mutator_size(int64_t size)
+void ObTenantMutilAllocator::free_palf_fetch_log_task(palf::FetchLogTask *ptr)
 {
-  ATOMIC_AAF(&pending_replay_mutator_size_, size);
+  if (OB_LIKELY(NULL != ptr)) {
+    ptr->~FetchLogTask();
+    palf_fetch_log_task_alloc_.free(ptr);
+  }
 }
 
-void ObTenantMutilAllocator::dec_pending_replay_mutator_size(int64_t size)
+void *ObTenantMutilAllocator::alloc_replay_task(const int64_t size)
 {
-  ATOMIC_SAF(&pending_replay_mutator_size_, size);
+  return replay_log_task_alloc_.alloc(size);
 }
 
-int64_t ObTenantMutilAllocator::get_pending_replay_mutator_size() const
+void *ObTenantMutilAllocator::alloc_replay_log_buf(const int64_t size)
 {
-  return ATOMIC_LOAD(&pending_replay_mutator_size_);
+  return replay_log_task_alloc_.alloc(size);
+}
+
+void ObTenantMutilAllocator::free_replay_task(logservice::ObLogReplayTask *ptr)
+{
+  if (OB_LIKELY(NULL != ptr)) {
+    ptr->~ObLogReplayTask();
+    replay_log_task_alloc_.free(ptr);
+  }
+}
+
+void ObTenantMutilAllocator::free_replay_log_buf(void *ptr)
+{
+  if (OB_LIKELY(NULL != ptr)) {
+    replay_log_task_alloc_.free(ptr);
+  }
+}
+
+palf::LogIOFlashbackTask *ObTenantMutilAllocator::alloc_log_io_flashback_task(const int64_t palf_id, const int64_t palf_epoch)
+{
+  LogIOFlashbackTask *ret_ptr = NULL;
+  void *ptr = log_io_flashback_task_alloc_.alloc();
+  if (NULL != ptr) {
+    ret_ptr = new(ptr)LogIOFlashbackTask(palf_id, palf_epoch);
+  }
+  return ret_ptr;
+}
+
+void ObTenantMutilAllocator::free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr)
+{
+  if (OB_LIKELY(NULL != ptr)) {
+    ptr->~LogIOFlashbackTask();
+    log_io_flashback_task_alloc_.free(ptr);
+  }
 }
 
 void ObTenantMutilAllocator::set_nway(const int32_t nway)
 {
   if (nway > 0) {
-    log_task_alloc_.set_nway(nway);
-    log_flush_task_alloc_.set_nway(nway);
-    fetch_log_task_alloc_.set_nway(nway);
-    log_event_task_alloc_.set_nway(nway);
-    //    trace_profile_alloc_.set_nway(nway);;
-    batch_submit_ctx_alloc_.set_nway(nway);
-    batch_submit_dtask_alloc_.set_nway(nway);
     clog_ge_alloc_.set_nway(nway);
-    election_alloc_.set_nway(nway);
-    election_group_alloc_.set_nway(nway);
-    clog_ge_alloc_.set_nway(nway);
-    inner_table_replay_task_alloc_.set_nway(nway);
-    user_table_replay_task_alloc_.set_nway(nway);
     OB_LOG(INFO, "finish set nway", K(tenant_id_), K(nway));
   }
 }
@@ -302,22 +272,12 @@ void ObTenantMutilAllocator::set_limit(const int64_t total_limit)
     ATOMIC_STORE(&total_limit_, total_limit);
     const int64_t clog_limit = total_limit / 100 * CLOG_MEM_LIMIT_PERCENT;
     const int64_t replay_limit = std::min(total_limit / 100 * REPLAY_MEM_LIMIT_PERCENT, REPLAY_MEM_LIMIT_THRESHOLD);
-    const int64_t inner_table_replay_limit = replay_limit * INNER_TABLE_REPLAY_MEM_PERCENT / 100;
-    const int64_t user_table_replay_limit = replay_limit * (100 - INNER_TABLE_REPLAY_MEM_PERCENT) / 100;
     const int64_t common_limit = total_limit - (clog_limit + replay_limit);
     clog_blk_alloc_.set_limit(clog_limit);
-    inner_table_replay_blk_alloc_.set_limit(inner_table_replay_limit);
-    user_table_replay_blk_alloc_.set_limit(user_table_replay_limit);
     common_blk_alloc_.set_limit(common_limit);
-    OB_LOG(INFO,
-        "ObTenantMutilAllocator set tenant mem limit finished",
-        K(tenant_id_),
-        K(total_limit),
-        K(clog_limit),
-        K(replay_limit),
-        K(common_limit),
-        K(inner_table_replay_limit),
-        K(user_table_replay_limit));
+    replay_log_task_alloc_.set_limit(replay_limit);
+    OB_LOG(INFO, "ObTenantMutilAllocator set tenant mem limit finished", K(tenant_id_), K(total_limit), K(clog_limit),
+        K(replay_limit), K(common_limit));
   }
 }
 
@@ -328,33 +288,23 @@ int64_t ObTenantMutilAllocator::get_limit() const
 
 int64_t ObTenantMutilAllocator::get_hold() const
 {
-  return clog_blk_alloc_.hold() + inner_table_replay_blk_alloc_.hold() + user_table_replay_blk_alloc_.hold() +
-         common_blk_alloc_.hold();
+  return clog_blk_alloc_.hold() + common_blk_alloc_.hold()
+      + replay_log_task_blk_alloc_.hold();
 }
 
-#define SLICE_FREE_OBJ(name, cls)                                                                                \
-  void ob_slice_free_##name(typeof(cls)* ptr)                                                                    \
-  {                                                                                                              \
-    if (NULL != ptr) {                                                                                           \
-      ObBlockSlicer::Item* item = (ObBlockSlicer::Item*)ptr - 1;                                                 \
-      if (NULL != item->host_) {                                                                                 \
-        ObTenantMutilAllocator* tma = reinterpret_cast<ObTenantMutilAllocator*>(item->host_->get_tmallocator()); \
-        if (NULL != tma) {                                                                                       \
-          tma->free_##name(ptr);                                                                                 \
-        }                                                                                                        \
-      }                                                                                                          \
-    }                                                                                                            \
-  }
+#define SLICE_FREE_OBJ(name, cls) \
+void ob_slice_free_##name(typeof(cls) *ptr) \
+  { \
+    if (NULL != ptr) { \
+      ObBlockSlicer::Item *item = (ObBlockSlicer::Item*)ptr - 1; \
+      if (NULL != item->host_) { \
+        ObTenantMutilAllocator *tma = reinterpret_cast<ObTenantMutilAllocator*>(item->host_->get_tmallocator()); \
+        if (NULL != tma) { \
+          tma->free_##name(ptr); \
+        } \
+      } \
+    } \
+  } \
 
-SLICE_FREE_OBJ(election, ObElection);
-SLICE_FREE_OBJ(election_group, ObElectionGroup);
-SLICE_FREE_OBJ(log_flush_task, ObLogFlushTask);
-SLICE_FREE_OBJ(fetch_log_task, ObFetchLogTask);
-SLICE_FREE_OBJ(log_event_task, ObLogStateEventTaskV2);
-SLICE_FREE_OBJ(trace_profile, ObTraceProfile);
-SLICE_FREE_OBJ(batch_submit_ctx, ObBatchSubmitCtx);
-SLICE_FREE_OBJ(batch_submit_dtask, ObBatchSubmitDiskTask);
-SLICE_FREE_OBJ(partition_log_service, ObIPartitionLogService);
-
-}  // namespace common
-}  // namespace oceanbase
+}
+}

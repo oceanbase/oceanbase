@@ -15,21 +15,20 @@
 #include "sql/engine/ob_physical_plan.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
-namespace oceanbase {
-namespace sql {
-class TestPhysicalPlan : public ::testing::Test {
+namespace oceanbase
+{
+namespace sql
+{
+class TestPhysicalPlan : public ::testing::Test
+{
 public:
-  TestPhysicalPlan()
-  {}
-  virtual ~TestPhysicalPlan()
-  {}
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  TestPhysicalPlan() {}
+  virtual ~TestPhysicalPlan() {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
 };
 
-TEST_F(TestPhysicalPlan, test_get_view_table)
+TEST_F(TestPhysicalPlan,  test_get_view_table)
 {
   ObPhysicalPlan plan;
   const int64_t VIEW_COUNT = 5;
@@ -43,10 +42,11 @@ TEST_F(TestPhysicalPlan, test_get_view_table)
   }
   EXPECT_EQ(VIEW_COUNT, plan.get_dependency_table_size());
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

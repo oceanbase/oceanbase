@@ -16,8 +16,10 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc::frame;
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
 oceanbase::common::ObCompressorType ObRpcCompressCtx::get_compress_type(ObRpcCompressMode mode) const
 {
@@ -34,15 +36,21 @@ oceanbase::common::ObCompressorType ObRpcCompressCtx::get_compress_type(ObRpcCom
   return type;
 }
 
-int ObRpcCompressCCtx::init(ObRpcCompressMode mode, int16_t block_size, char* ring_buffer, int64_t ring_buffer_size)
+
+int ObRpcCompressCCtx::init(ObRpcCompressMode mode,
+                            int16_t block_size,
+                            char *ring_buffer,
+                            int64_t ring_buffer_size)
 {
   int ret = OB_SUCCESS;
   oceanbase::common::ObCompressorType type = get_compress_type(mode);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(mode), K(block_size), K(ret));
-  } else if (OB_UNLIKELY(!is_valid_compress_mode(mode)) || OB_UNLIKELY(block_size <= 0) || OB_ISNULL(ring_buffer) ||
-             OB_UNLIKELY(ring_buffer_size <= 0)) {
+  } else if (OB_UNLIKELY(!is_valid_compress_mode(mode))
+             || OB_UNLIKELY(block_size <= 0)
+             || OB_ISNULL(ring_buffer)
+             || OB_UNLIKELY(ring_buffer_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compress mode", K(mode), K(ret));
   } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_stream_compressor(type, compressor_))) {
@@ -74,13 +82,14 @@ int ObRpcCompressCCtx::reset_mode(ObRpcCompressMode new_mode)
     ret = OB_NOT_INIT;
     LOG_WARN("compress ctx is not inited", K(ret));
   } else if (compress_mode_ == new_mode) {
-    // no change, do nothing
+    //no change, do nothing
   } else {
     if (RPC_STREAM_COMPRESS_NONE != compress_mode_) {
-      // free old ctx, and set ctx to NULL
+      //free old ctx, and set ctx to NULL
       if (OB_ISNULL(compressor_) || OB_ISNULL(cctx_) || OB_ISNULL(ring_buffer_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid ctx member is NULL", KP(compressor_), KP(cctx_), KP(ring_buffer_), K(compress_mode_), K(ret));
+        LOG_WARN("invalid ctx member is NULL", KP(compressor_), KP(cctx_), KP(ring_buffer_),
+                 K(compress_mode_), K(ret));
       } else if (OB_FAIL(compressor_->free_compress_ctx(cctx_))) {
         LOG_WARN("failed to free compress ctx", K(ret));
       } else {
@@ -126,21 +135,25 @@ int ObRpcCompressCCtx::free_ctx_mem()
       LOG_ERROR("compressor_ is NULL when ctx is not NULL", K(compress_mode_), K(ret));
     } else if (OB_FAIL(compressor_->free_compress_ctx(cctx_))) {
       LOG_ERROR("failed to free compress ctx", K(compress_mode_), K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
-int ObRpcCompressDCtx::init(ObRpcCompressMode mode, int16_t block_size, char* ring_buffer, int64_t ring_buffer_size)
+int ObRpcCompressDCtx::init(ObRpcCompressMode mode,
+                            int16_t block_size,
+                            char *ring_buffer,
+                            int64_t ring_buffer_size)
 {
   int ret = OB_SUCCESS;
   oceanbase::common::ObCompressorType type = get_compress_type(mode);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(mode), K(block_size), K(ret));
-  } else if (OB_UNLIKELY(!is_valid_compress_mode(mode)) || OB_UNLIKELY(block_size <= 0) || OB_ISNULL(ring_buffer) ||
-             OB_UNLIKELY(ring_buffer_size <= 0)) {
+  } else if (OB_UNLIKELY(!is_valid_compress_mode(mode))
+             || OB_UNLIKELY(block_size <= 0)
+             || OB_ISNULL(ring_buffer)
+             || OB_UNLIKELY(ring_buffer_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compress mode", K(mode), K(ret));
   } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_stream_compressor(type, compressor_))) {
@@ -171,13 +184,14 @@ int ObRpcCompressDCtx::reset_mode(ObRpcCompressMode new_mode)
     ret = OB_NOT_INIT;
     LOG_WARN("decompress ctx is not inited", K(ret));
   } else if (compress_mode_ == new_mode) {
-    // no change, do nothing
+    //no change, do nothing
   } else {
     if (RPC_STREAM_COMPRESS_NONE != compress_mode_) {
-      // free old ctx, and set ctx to NULL
+      //free old ctx, and set ctx to NULL
       if (OB_ISNULL(compressor_) || OB_ISNULL(dctx_) || OB_ISNULL(ring_buffer_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid ctx member is NULL", KP(compressor_), KP(dctx_), KP(ring_buffer_), K(compress_mode_), K(ret));
+        LOG_WARN("invalid ctx member is NULL", KP(compressor_), KP(dctx_), KP(ring_buffer_),
+                 K(compress_mode_), K(ret));
       } else if (OB_FAIL(compressor_->free_decompress_ctx(dctx_))) {
         LOG_WARN("failed to free compress ctx", K(ret));
       } else {
@@ -221,8 +235,7 @@ int ObRpcCompressDCtx::free_ctx_mem()
       LOG_ERROR("compressor_ is NULL when ctx is not NULL", K(compress_mode_), K(ret));
     } else if (OB_FAIL(compressor_->free_decompress_ctx(dctx_))) {
       LOG_ERROR("failed to free decompress ctx", K(compress_mode_), K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
@@ -253,7 +266,7 @@ int ObCompressPacketHeader::init_magic(ObRpcCompressMode compress_mode, bool is_
   return ret;
 }
 
-int ObCompressPacketHeader::encode(char* buf, int64_t buf_len, int64_t& pos)
+int ObCompressPacketHeader::encode(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos > buf_len)) {
@@ -263,12 +276,11 @@ int ObCompressPacketHeader::encode(char* buf, int64_t buf_len, int64_t& pos)
     LOG_WARN("encode failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, full_size_))) {
     LOG_WARN("encode failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObCompressPacketHeader::decode(char* buf, int64_t data_len, int64_t& pos)
+int ObCompressPacketHeader::decode(char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == buf) || OB_UNLIKELY(data_len <= 0)) {
@@ -278,8 +290,7 @@ int ObCompressPacketHeader::decode(char* buf, int64_t data_len, int64_t& pos)
     LOG_WARN("decode failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &full_size_))) {
     LOG_WARN("decode failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
 
   return ret;
 }
@@ -292,23 +303,25 @@ int64_t ObCompressPacketHeader::get_encode_size() const
   return size;
 }
 
-int ObCompressHeadPacketHeader::init(ObRpcCompressMode compress_mode, int32_t full_size,
-    int32_t data_len_before_compress, int32_t data_len_after_compress, int16_t compressed_len, int16_t origin_len,
-    bool is_data_compressed)
+int ObCompressHeadPacketHeader::init(ObRpcCompressMode compress_mode,
+                                     int32_t full_size,
+                                     int32_t data_len_before_compress,
+                                     int32_t data_len_after_compress,
+                                     int16_t compressed_len,
+                                     int16_t origin_len,
+                                     bool is_data_compressed)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ObRpcCompressCtx::is_valid_compress_mode(compress_mode)) || OB_UNLIKELY(full_size <= 0) ||
-      OB_UNLIKELY(data_len_before_compress <= 0) || OB_UNLIKELY(data_len_after_compress <= 0) ||
-      OB_UNLIKELY(compressed_len <= 0) || OB_UNLIKELY(origin_len <= 0)) {
+  if (OB_UNLIKELY(!ObRpcCompressCtx::is_valid_compress_mode(compress_mode))
+                || OB_UNLIKELY(full_size <= 0)
+                || OB_UNLIKELY(data_len_before_compress <= 0)
+                || OB_UNLIKELY(data_len_after_compress <= 0)
+                || OB_UNLIKELY(compressed_len <= 0)
+                || OB_UNLIKELY(origin_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments",
-        K(compress_mode),
-        K(data_len_before_compress),
-        K(data_len_after_compress),
-        K(compressed_len),
-        K(origin_len),
-        K(is_data_compressed),
-        K(ret));
+    LOG_WARN("invalid arguments", K(compress_mode),
+             K(data_len_before_compress), K(data_len_after_compress),
+             K(compressed_len), K(origin_len), K(is_data_compressed), K(ret));
 
   } else {
     magic_ = (int8_t)0x00;
@@ -323,10 +336,10 @@ int ObCompressHeadPacketHeader::init(ObRpcCompressMode compress_mode, int32_t fu
       origin_size_ = origin_len;
     }
   }
-  return ret;
+    return ret;
 }
 
-int ObCompressHeadPacketHeader::encode(char* buf, int64_t buf_len, int64_t& pos)
+int ObCompressHeadPacketHeader::encode(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos > buf_len)) {
@@ -342,12 +355,11 @@ int ObCompressHeadPacketHeader::encode(char* buf, int64_t buf_len, int64_t& pos)
     LOG_WARN("encode compressed_size_ failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, origin_size_))) {
     LOG_WARN("encode origin_size_ failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObCompressHeadPacketHeader::decode(char* buf, int64_t data_len, int64_t& pos)
+int ObCompressHeadPacketHeader::decode(char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos > data_len)) {
@@ -363,8 +375,7 @@ int ObCompressHeadPacketHeader::decode(char* buf, int64_t data_len, int64_t& pos
     LOG_WARN("decode compressed_size_ failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &origin_size_))) {
     LOG_WARN("decode origin_size_ failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
 
   return ret;
 }
@@ -380,14 +391,17 @@ int64_t ObCompressHeadPacketHeader::get_encode_size() const
   return size;
 }
 
-int ObCompressSegmentPacketHeader::init(
-    ObRpcCompressMode compress_mode, int16_t compressed_len, int16_t origin_len, bool is_data_compressed)
+int ObCompressSegmentPacketHeader::init(ObRpcCompressMode compress_mode,
+                                        int16_t compressed_len,
+                                        int16_t origin_len,
+                                        bool is_data_compressed)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ObRpcCompressCtx::is_valid_compress_mode(compress_mode)) || OB_UNLIKELY(compressed_len <= 0) ||
-      OB_UNLIKELY(origin_len <= 0)) {
+  if (OB_UNLIKELY(!ObRpcCompressCtx::is_valid_compress_mode(compress_mode))
+      || OB_UNLIKELY(compressed_len <= 0) || OB_UNLIKELY(origin_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(compress_mode), K(compressed_len), K(origin_len), K(is_data_compressed), K(ret));
+    LOG_WARN("invalid argument", K(compress_mode), K(compressed_len),
+             K(origin_len), K(is_data_compressed), K(ret));
   } else {
     magic_ = int8_t(0x80);
 
@@ -398,10 +412,11 @@ int ObCompressSegmentPacketHeader::init(
       origin_size_ = origin_len;
     }
   }
-  return ret;
+    return ret;
 }
 
-int ObCompressSegmentPacketHeader::encode(char* buf, int64_t buf_len, int64_t& pos)
+
+int ObCompressSegmentPacketHeader::encode(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos > buf_len)) {
@@ -411,12 +426,11 @@ int ObCompressSegmentPacketHeader::encode(char* buf, int64_t buf_len, int64_t& p
     LOG_WARN("encode header failed", K(ret));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, origin_size_))) {
     LOG_WARN("encode origin_size_ failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObCompressSegmentPacketHeader::decode(char* buf, int64_t data_len, int64_t& pos)
+int ObCompressSegmentPacketHeader::decode(char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == buf) || OB_UNLIKELY(data_len <= 0)) {
@@ -426,8 +440,7 @@ int ObCompressSegmentPacketHeader::decode(char* buf, int64_t data_len, int64_t& 
     LOG_WARN("encode header failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &origin_size_))) {
     LOG_WARN("decode origin_size_ failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
 
   return ret;
 }
@@ -458,7 +471,7 @@ ObCmdPacketInCompress::ObCmdPacketInCompress()
   compress_mode_ = static_cast<int16_t>(RPC_STREAM_COMPRESS_NONE);
 }
 
-int ObCmdPacketInCompress::encode(char* buf, int64_t buf_len, int64_t& pos)
+int ObCmdPacketInCompress::encode(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
@@ -466,21 +479,20 @@ int ObCmdPacketInCompress::encode(char* buf, int64_t buf_len, int64_t& pos)
     LOG_WARN("invalid argument", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(ObCompressPacketHeader::encode(buf, buf_len, pos))) {
     LOG_WARN("encode header failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, payload_))) {  // next 4 for packet content length
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, payload_))) { // next 4 for packet content length
     LOG_WARN("Encode payload_ error", K(ret));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, cmd_type_))) {
     LOG_WARN("Encode cmd_type_ error", K(ret));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, compress_mode_))) {
     LOG_WARN("Encode compress_mode_ error", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObCmdPacketInCompress::decode(char* buf, int64_t data_len, int64_t& pos)
+int ObCmdPacketInCompress::decode(char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  // maybe need to cmp first 4 byte
+  //maybe need to cmp first 4 byte
   if (OB_UNLIKELY(NULL == buf) || OB_UNLIKELY(data_len <= 4)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(data_len));
@@ -492,64 +504,65 @@ int ObCmdPacketInCompress::decode(char* buf, int64_t data_len, int64_t& pos)
     LOG_WARN("decode cmd_type_ failed", K(ret));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &compress_mode_))) {
     LOG_WARN("decode compress_mode_ failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
 int64_t ObCmdPacketInCompress::get_encode_size() const
 {
-  int64_t size = ObCompressPacketHeader::get_encode_size() + serialization::encoded_length_i16(payload_) +
-                 serialization::encoded_length_i16(cmd_type_) + serialization::encoded_length_i16(compress_mode_);
+  int64_t size = ObCompressPacketHeader::get_encode_size()
+      + serialization::encoded_length_i16(payload_)
+      + serialization::encoded_length_i16(cmd_type_)
+      + serialization::encoded_length_i16(compress_mode_);
   return size;
 }
 
 int64_t ObCmdPacketInCompress::get_decode_size() const
 {
-  return ObCompressPacketHeader::get_decode_size() + serialization::encoded_length_i16(payload_) + payload_;
+  return  ObCompressPacketHeader::get_decode_size() + serialization::encoded_length_i16(payload_) + payload_;
 }
 
-int ObCmdPacketInNormal::encode(char* buf, int64_t buf_len, int64_t& pos)
+int ObCmdPacketInNormal::encode(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0) ||
-      OB_UNLIKELY((buf_len - pos) < sizeof(ObReqHandler::MAGIC_COMPRESS_HEADER_FLAG))) {
+  if (OB_ISNULL(buf)
+      || OB_UNLIKELY(buf_len <= 0)
+      || OB_UNLIKELY((buf_len - pos) < sizeof(ObRpcPacket::MAGIC_COMPRESS_HEADER_FLAG))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(buf), K(buf_len), K(pos), K(ret));
   } else {
-    MEMCPY(buf, ObReqHandler::MAGIC_COMPRESS_HEADER_FLAG, 4);  // first 4 bytes store magic flag
+    MEMCPY(buf, ObRpcPacket::MAGIC_COMPRESS_HEADER_FLAG, 4);                    // first 4 bytes store magic flag
     pos += 4;
-    if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, full_size_))) {  // next 4 for packet content length
+    if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, full_size_))) { // next 4 for packet content length
       LOG_WARN("Encode full_size_ error", K(ret));
-    } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, payload_))) {  // next 4 for packet content length
+    } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, payload_))) { // next 4 for packet content length
       LOG_WARN("Encode payload_ error", K(ret));
     } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, compress_mode_))) {
       LOG_WARN("Encode compress_mode_ error", K(ret));
-    } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, block_size_))) {  // skip 4 bytes for reserved
+    } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, block_size_))) {//skip 4 bytes for reserved
       LOG_WARN("Encode block_size_ error", K(ret));
-    } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, ring_buffer_size_))) {  // skip 4 bytes for reserved
+    } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, ring_buffer_size_))) {//skip 4 bytes for reserved
       LOG_WARN("Encode ring_buffer_size_ error", K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
-int ObCmdPacketInNormal::decode(char* buf, int64_t data_len, int64_t& pos)
+int ObCmdPacketInNormal::decode(char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  // maybe need to cmp first 4 byte
+  //maybe need to cmp first 4 byte
   if (OB_UNLIKELY(NULL == buf) || OB_UNLIKELY(data_len <= 4)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(data_len));
   } else {
-    uint8_t mflag[4] = {static_cast<uint8_t>(buf[0]),
-        static_cast<uint8_t>(buf[1]),
-        static_cast<uint8_t>(buf[2]),
-        static_cast<uint8_t>(buf[3])};
-    pos += 4;
-    if (OB_UNLIKELY(0 != MEMCMP(&mflag[0], ObReqHandler::MAGIC_COMPRESS_HEADER_FLAG, sizeof(mflag)))) {
+    uint8_t mflag[4] = {static_cast<uint8_t> (buf[0]),
+      static_cast<uint8_t> (buf[1]),
+      static_cast<uint8_t> (buf[2]),
+      static_cast<uint8_t> (buf[3])};
+     pos += 4;
+    if (OB_UNLIKELY(0 != MEMCMP(&mflag[0], ObRpcPacket::MAGIC_COMPRESS_HEADER_FLAG, sizeof(mflag)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid mflag", K(buf[0]), K(buf[1]), K(buf[2]), K(buf[3]), K(ret));
     } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &full_size_))) {
@@ -562,23 +575,25 @@ int ObCmdPacketInNormal::decode(char* buf, int64_t data_len, int64_t& pos)
       LOG_WARN("decode block_size_ failed", K(ret));
     } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &ring_buffer_size_))) {
       LOG_WARN("decode ring_buffer_size_ failed", K(ret));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
 int64_t ObCmdPacketInNormal::get_encode_size() const
 {
-  return 4 + serialization::encoded_length_i32(full_size_) + serialization::encoded_length_i16(payload_) +
-         serialization::encoded_length_i16(compress_mode_) + serialization::encoded_length_i16(block_size_) +
-         serialization::encoded_length_i32(ring_buffer_size_);
+  return  4 + serialization::encoded_length_i32(full_size_)
+      + serialization::encoded_length_i16(payload_)
+      + serialization::encoded_length_i16(compress_mode_)
+      + serialization::encoded_length_i16(block_size_)
+      + serialization::encoded_length_i32(ring_buffer_size_);
 }
 
 int64_t ObCmdPacketInNormal::get_decode_size() const
 {
-  return 4 + serialization::encoded_length_i32(full_size_) + serialization::encoded_length_i16(payload_) + payload_;
+  return  4 + serialization::encoded_length_i32(full_size_)
+      + serialization::encoded_length_i16(payload_) + payload_;
 }
 
-}  // namespace obrpc
-}  // namespace oceanbase
+}//namespace obrpc
+}//namespace oceanbase

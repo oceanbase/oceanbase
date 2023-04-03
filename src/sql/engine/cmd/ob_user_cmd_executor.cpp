@@ -26,23 +26,27 @@
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
-namespace sql {
-int ObCreateUserExecutor::encrypt_passwd(
-    const common::ObString& pwd, common::ObString& encrypted_pwd, char* enc_buf, int64_t buf_len)
+namespace sql
+{
+int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,
+                                         common::ObString& encrypted_pwd,
+                                         char *enc_buf,
+                                         int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(enc_buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("enc_buf is NULL", K(ret));
-  } else if (buf_len < SCRAMBLE_LENGTH * 2 + 1) {
+  } else if (buf_len < ENC_BUF_LEN) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Encrypt buf not enough");
   } else {
-    encrypted_pwd.assign_ptr(enc_buf, SCRAMBLE_LENGTH * 2 + 1);
+    encrypted_pwd.assign_ptr(enc_buf, ENC_STRING_BUF_LEN);
     if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
       SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
     }
@@ -50,9 +54,12 @@ int ObCreateUserExecutor::encrypt_passwd(
   return ret;
 }
 
-int ObCreateUserExecutor::userinfo_extract_user_name(const common::ObIArray<share::schema::ObUserInfo>& user_infos,
-    const common::ObIArray<int64_t>& index, common::ObIArray<common::ObString>& users,
-    common::ObIArray<common::ObString>& hosts)
+
+int ObCreateUserExecutor::userinfo_extract_user_name(
+      const common::ObIArray<share::schema::ObUserInfo> &user_infos,
+      const common::ObIArray<int64_t> &index,
+      common::ObIArray<common::ObString> &users,
+      common::ObIArray<common::ObString> &hosts)
 {
   int ret = OB_SUCCESS;
   users.reset();
@@ -71,13 +78,13 @@ int ObCreateUserExecutor::userinfo_extract_user_name(const common::ObIArray<shar
   return ret;
 }
 
-int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
+int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
-  const ObStrings& users = stmt.get_users();
+  const ObStrings &users = stmt.get_users();
   const bool if_not_exist = stmt.get_if_not_exists();
   const int64_t FIX_MEMBER_CNT = 4;
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -99,7 +106,7 @@ int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
     ObString x509_issuer;
     ObString x509_subject;
     ObSSLType ssl_type_enum = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
-    ObCreateUserArg& arg = static_cast<ObCreateUserArg&>(stmt.get_ddl_arg());
+    ObCreateUserArg &arg = static_cast<ObCreateUserArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = tenant_id;
     arg.user_infos_.reset();
     arg.if_not_exist_ = if_not_exist;
@@ -120,13 +127,17 @@ int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
 
     for (int64_t i = 0; OB_SUCC(ret) && i < users_cnt; i += FIX_MEMBER_CNT) {
       if (OB_FAIL(users.get_string(i, user_name))) {
-        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error",
+            "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 1, host_name))) {
-        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error",
+            "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 2, pwd))) {
-        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error",
+            "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 3, need_enc))) {
-        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error",
+            "count", users.count(), K(i), K(ret));
       } else {
         ObUserInfo user_info;
         if (ObString::make_string("YES") == need_enc) {
@@ -163,7 +174,7 @@ int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
           } else {
             user_info.set_tenant_id(tenant_id);
             if (user_name.empty()) {
-              user_info.set_user_id(combine_id(tenant_id, OB_EMPTY_USER_ID));
+              user_info.set_user_id(OB_EMPTY_USER_ID);
             }
             user_info.set_profile_id(stmt.get_profile_id());
             user_info.set_max_connections(stmt.get_max_connections_per_hour());
@@ -187,7 +198,8 @@ int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
   return ret;
 }
 
-int ObCreateUserExecutor::create_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObCreateUserArg& arg) const
+int ObCreateUserExecutor::create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                      const obrpc::ObCreateUserArg& arg) const
 {
   int ret = OB_SUCCESS;
   ObSArray<int64_t> failed_index;
@@ -206,16 +218,18 @@ int ObCreateUserExecutor::create_user(obrpc::ObCommonRpcProxy* rpc_proxy, const 
       LOG_WARN("Build fail msg error", K(ret));
     } else {
       ret = OB_CANNOT_USER;
-      LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("CREATE USER"), "CREATE USER", (int)fail_msg.length(), fail_msg.ptr());
+      LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("CREATE USER"), "CREATE USER",
+          (int)fail_msg.length(), fail_msg.ptr());
     }
   } else {
-    // Create user completely success
+    //Create user completely success
   }
   return ret;
 }
 
-int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString>& users,
-    const common::ObIArray<common::ObString>& hosts, common::ObSqlString& msg)
+
+int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> &users,
+    const common::ObIArray<common::ObString> &hosts, common::ObSqlString &msg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(users.count() < 1) || OB_UNLIKELY(users.count() != hosts.count())) {
@@ -227,16 +241,18 @@ int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString>&
         LOG_WARN("Build msg fail", K(ret));
       }
       if (OB_SUCC(ret)) {
-        const ObString& user = users.at(i);
-        const ObString& host = hosts.at(i);
+        const ObString &user = users.at(i);
+        const ObString &host = hosts.at(i);
         if (OB_UNLIKELY(user.empty()) || OB_UNLIKELY(host.empty())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Username is invalid", K(ret), K(user), K(host));
         } else {
-          if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'", user.length(), user.ptr(), host.length(), host.ptr()))) {
+          if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
+                                     user.length(), user.ptr(),
+                                     host.length(), host.ptr()))) {
             LOG_WARN("Build msg fail", K(user), K(host), K(ret));
           } else {
-            // do nothing
+            //do nothing
           }
         }
       }
@@ -245,9 +261,9 @@ int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString>&
   return ret;
 }
 
-int ObDropUserExecutor::string_array_index_extract(const common::ObIArray<common::ObString>& src_users,
-    const common::ObIArray<common::ObString>& src_hosts, const common::ObIArray<int64_t>& index,
-    common::ObIArray<common::ObString>& dst_users, common::ObIArray<common::ObString>& dst_hosts)
+int ObDropUserExecutor::string_array_index_extract(const common::ObIArray<common::ObString> &src_users,
+    const common::ObIArray<common::ObString> &src_hosts, const common::ObIArray<int64_t> &index,
+    common::ObIArray<common::ObString> &dst_users, common::ObIArray<common::ObString> &dst_hosts)
 {
   int ret = OB_SUCCESS;
   dst_users.reset();
@@ -262,19 +278,19 @@ int ObDropUserExecutor::string_array_index_extract(const common::ObIArray<common
       LOG_WARN("Failed to push back user", K(ret));
     } else if (OB_FAIL(dst_hosts.push_back(src_hosts.at(in)))) {
       LOG_WARN("Failed to push back host", K(ret));
-      // do nothing
+      //do nothing
     }
   }
   return ret;
 }
 
-int ObDropUserExecutor::execute(ObExecContext& ctx, ObDropUserStmt& stmt)
+int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
-  const ObStrings* user_names = NULL;
+  const ObStrings *user_names = NULL;
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", K(ret));
@@ -293,7 +309,7 @@ int ObDropUserExecutor::execute(ObExecContext& ctx, ObDropUserStmt& stmt)
   } else {
     ObString user_name;
     ObString host_name;
-    ObDropUserArg& arg = static_cast<ObDropUserArg&>(stmt.get_ddl_arg());
+    ObDropUserArg &arg = static_cast<ObDropUserArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = tenant_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < user_names->count(); i += 2) {
       if (OB_FAIL(user_names->get_string(i, user_name))) {
@@ -305,21 +321,22 @@ int ObDropUserExecutor::execute(ObExecContext& ctx, ObDropUserStmt& stmt)
       } else if (OB_FAIL(arg.hosts_.push_back(host_name))) {
         LOG_WARN("Add host name failed", K(ret));
       } else {
-        // do nothing
+        //do nothing
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(drop_user(common_rpc_proxy, arg))) {
         LOG_WARN("Drop user completely failed", K(ret));
       } else {
-        // do nothing
+        //do nothing
       }
     }
   }
   return ret;
 }
 
-int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg)
+int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                  const obrpc::ObDropUserArg &arg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -345,8 +362,9 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrp
     } else if (0 != failed_index.count()) {
       ObSArray<ObString> failed_users;
       ObSArray<ObString> failed_hosts;
-      if (OB_FAIL(ObDropUserExecutor::string_array_index_extract(
-              arg.users_, arg.hosts_, failed_index, failed_users, failed_hosts))) {
+      if (OB_FAIL(ObDropUserExecutor::string_array_index_extract(arg.users_, arg.hosts_,
+                                                                 failed_index, failed_users,
+                                                                 failed_hosts))) {
         LOG_WARN("Failed to extract user name", K(arg), K(ret));
       } else if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
         LOG_WARN("Build fail msg error", K(arg), K(ret));
@@ -355,19 +373,19 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrp
         LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("DROP USER"), "DROP USER", (int)fail_msg.length(), fail_msg.ptr());
       }
     } else {
-      // do nothing
+      //do nothing
     }
   }
   return ret;
 }
 
-int ObLockUserExecutor::execute(ObExecContext& ctx, ObLockUserStmt& stmt)
+int ObLockUserExecutor::execute(ObExecContext &ctx, ObLockUserStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
-  const ObStrings* user_names = NULL;
+  const ObStrings *user_names = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", K(ret));
@@ -386,7 +404,7 @@ int ObLockUserExecutor::execute(ObExecContext& ctx, ObLockUserStmt& stmt)
   } else {
     ObString user_name;
     ObString host_name;
-    ObLockUserArg& arg = static_cast<ObLockUserArg&>(stmt.get_ddl_arg());
+    ObLockUserArg &arg = static_cast<ObLockUserArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = tenant_id;
     arg.locked_ = stmt.is_locked();
     for (int64_t i = 0; OB_SUCC(ret) && i < user_names->count(); i += 2) {
@@ -399,21 +417,22 @@ int ObLockUserExecutor::execute(ObExecContext& ctx, ObLockUserStmt& stmt)
       } else if (OB_FAIL(arg.hosts_.push_back(host_name))) {
         LOG_WARN("Add host name failed", K(ret));
       } else {
-        // do nothing
+        //do nothing
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(lock_user(common_rpc_proxy, arg))) {
         LOG_WARN("Rename user completely failed", K(arg), K(ret));
       } else {
-        // do nothing
+        //do nothing
       }
     }
   }
   return ret;
 }
 
-int ObLockUserExecutor::lock_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObLockUserArg& arg)
+int ObLockUserExecutor::lock_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                  const obrpc::ObLockUserArg &arg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -440,7 +459,7 @@ int ObLockUserExecutor::lock_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrp
       ObSArray<ObString> failed_users;
       ObSArray<ObString> failed_hosts;
       if (OB_FAIL(ObDropUserExecutor::string_array_index_extract(
-              arg.users_, arg.hosts_, failed_index, failed_users, failed_hosts))) {
+          arg.users_, arg.hosts_, failed_index, failed_users, failed_hosts))) {
         LOG_WARN("Failed to extract user name", K(arg), K(ret));
       } else {
         if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
@@ -451,80 +470,81 @@ int ObLockUserExecutor::lock_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrp
         }
       }
     } else {
-      // do nothing
+      //do nothing
     }
   }
   return ret;
 }
 
-int ObAlterUserProfileExecutor::set_role_exec(ObExecContext& ctx, ObAlterUserProfileStmt& stmt)
+int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserProfileStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session = NULL;
+  ObSQLSessionInfo *session = NULL;
   uint64_t role_id = OB_INVALID_ID;
-  CK(1 == stmt.get_set_role_flag());
+  CK (1 == stmt.get_set_role_flag());
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
     const uint64_t tenant_id = session->get_effective_tenant_id();
-    int disable_flag = 0;
-    const ObUserInfo* user_info = NULL;
-    common::ObSEArray<uint64_t, 8>& enable_role_id_array = session->get_enable_role_array();
+    const ObUserInfo * user_info = NULL;
+    common::ObIArray<uint64_t> &enable_role_id_array =
+                          session->get_enable_role_array();
     ObSchemaGetterGuard schema_guard;
 
-    obrpc::ObAlterUserProfileArg& arg = static_cast<obrpc::ObAlterUserProfileArg&>(stmt.get_ddl_arg());
-    OZ(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-    OZ(schema_guard.get_user_info(session->get_user_id(), user_info));
+    obrpc::ObAlterUserProfileArg &arg = static_cast<obrpc::ObAlterUserProfileArg &>(stmt.get_ddl_arg());
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(
+                  tenant_id,
+                  schema_guard));
+    OZ (schema_guard.get_user_info(tenant_id, session->get_user_id(), user_info));
     if (OB_SUCC(ret) && NULL == user_info) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user info is null", K(ret));
     }
     if (OB_SUCC(ret)) {
       switch (arg.default_role_flag_) {
-        case OB_DEFAULT_ROLE_ALL:
-          OZ(session->set_enable_role_array(user_info->get_role_id_array()));
-          break;
-        case OB_DEFAULT_ROLE_NONE:
-          OX(enable_role_id_array.reset());
-          break;
-        case OB_DEFAULT_ROLE_LIST:
-          OX(enable_role_id_array.reset());
-          for (int i = 0; OB_SUCC(ret) && i < arg.role_id_array_.count(); i++) {
-            OX(role_id = arg.role_id_array_.at(i));
-            OZ(enable_role_id_array.push_back(role_id));
+      case OB_DEFAULT_ROLE_ALL:
+        OZ (session->set_enable_role_array(user_info->get_role_id_array()));
+        break;
+      case OB_DEFAULT_ROLE_NONE:
+        OX (enable_role_id_array.reset());
+        break;
+      case OB_DEFAULT_ROLE_LIST:
+        OX (enable_role_id_array.reset());
+        for (int i = 0; OB_SUCC(ret) && i < arg.role_id_array_.count(); i++) {
+          OX (role_id = arg.role_id_array_.at(i));
+          OZ (enable_role_id_array.push_back(role_id));
+        }
+        break;
+      case OB_DEFAULT_ROLE_ALL_EXCEPT:
+        OX (enable_role_id_array.reset());
+        /* scan all role granted to the user */
+        for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); i++) {
+          OX (role_id = user_info->get_role_id_array().at(i));
+          /* if not in execpt set, then push back */
+          if (OB_SUCC(ret) && !has_exist_in_array(arg.role_id_array_, role_id)) {
+            OZ (enable_role_id_array.push_back(role_id));
           }
-          break;
-        case OB_DEFAULT_ROLE_ALL_EXCEPT:
-          int64_t idx;
-          OX(enable_role_id_array.reset());
-          /* scan all role granted to the user */
-          for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); i++) {
-            OX(role_id = user_info->get_role_id_array().at(i));
-            /* if not in execpt set, then push back */
-            if (OB_SUCC(ret) && !has_exist_in_array(arg.role_id_array_, role_id)) {
-              OZ(enable_role_id_array.push_back(role_id));
-            }
-          }
-          break;
+        }
+        break;
       }
-      OZ(enable_role_id_array.push_back(combine_id(session->get_effective_tenant_id(), OB_ORA_PUBLIC_ROLE_ID)));
+      OZ (enable_role_id_array.push_back(OB_ORA_PUBLIC_ROLE_ID));
     }
   }
   return ret;
 }
 
-int ObAlterUserProfileExecutor::execute(ObExecContext& ctx, ObAlterUserProfileStmt& stmt)
+int ObAlterUserProfileExecutor::execute(ObExecContext &ctx, ObAlterUserProfileStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
 
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", K(ret));
   } else if (1 == stmt.get_set_role_flag()) {
-    OZ(set_role_exec(ctx, stmt));
+    OZ (set_role_exec(ctx, stmt));
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(ret));
@@ -534,13 +554,13 @@ int ObAlterUserProfileExecutor::execute(ObExecContext& ctx, ObAlterUserProfileSt
   return ret;
 }
 
-int ObRenameUserExecutor::execute(ObExecContext& ctx, ObRenameUserStmt& stmt)
+int ObRenameUserExecutor::execute(ObExecContext &ctx, ObRenameUserStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
-  const ObStrings* rename_infos = NULL;
+  const ObStrings *rename_infos = NULL;
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", K(ret));
@@ -564,9 +584,9 @@ int ObRenameUserExecutor::execute(ObExecContext& ctx, ObRenameUserStmt& stmt)
     ObString old_hostname;
     ObString new_username;
     ObString new_hostname;
-    ObRenameUserArg& arg = static_cast<ObRenameUserArg&>(stmt.get_ddl_arg());
+    ObRenameUserArg &arg = static_cast<ObRenameUserArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = tenant_id;
-    // rename_infos arr contains old names and new names in pairs, so step is 2
+    //rename_infos arr contains old names and new names in pairs, so step is 2
     for (int64_t i = 0; OB_SUCC(ret) && i < rename_infos->count(); i += 4) {
       if (OB_FAIL(rename_infos->get_string(i, old_username))) {
         LOG_WARN("Get origin name failed", K(ret));
@@ -595,7 +615,8 @@ int ObRenameUserExecutor::execute(ObExecContext& ctx, ObRenameUserStmt& stmt)
   return ret;
 }
 
-int ObRenameUserExecutor::rename_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObRenameUserArg& arg)
+int ObRenameUserExecutor::rename_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                      const obrpc::ObRenameUserArg &arg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -616,38 +637,36 @@ int ObRenameUserExecutor::rename_user(obrpc::ObCommonRpcProxy* rpc_proxy, const 
         LOG_WARN("Build fail msg error", K(arg), K(ret));
       } else {
         ret = OB_CANNOT_USER;
-        LOG_USER_ERROR(
-            OB_CANNOT_USER, (int)strlen("RENAME USER"), "RENAME USER", (int)fail_msg.length(), fail_msg.ptr());
+        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("RENAME USER"), "RENAME USER", (int)fail_msg.length(), fail_msg.ptr());
       }
     } else if (0 != failed_index.count()) {
       ObSArray<ObString> failed_users;
       ObSArray<ObString> failed_hosts;
       if (OB_FAIL(ObDropUserExecutor::string_array_index_extract(
-              arg.old_users_, arg.old_hosts_, failed_index, failed_users, failed_hosts))) {
+          arg.old_users_, arg.old_hosts_, failed_index, failed_users, failed_hosts))) {
         LOG_WARN("Failed to extract user name", K(arg), K(ret));
       } else {
         if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
           LOG_WARN("Build fail msg error", K(arg), K(ret));
         } else {
           ret = OB_CANNOT_USER;
-          LOG_USER_ERROR(
-              OB_CANNOT_USER, (int)strlen("RENAME USER"), "RENAME USER", (int)fail_msg.length(), fail_msg.ptr());
+          LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("RENAME USER"), "RENAME USER", (int)fail_msg.length(), fail_msg.ptr());
         }
       }
     } else {
-      // Rename user completely success
+      //Rename user completely success
     }
   }
   return ret;
 }
 
-int ObAlterUserPrimaryZoneExecutor::execute(ObExecContext& ctx, ObAlterUserPrimaryZoneStmt& stmt)
+int ObAlterUserPrimaryZoneExecutor::execute(ObExecContext &ctx, ObAlterUserPrimaryZoneStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   ObString first_stmt;
-  ObSQLSessionInfo* session = NULL;
+  ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "session is NULL");
@@ -658,7 +677,7 @@ int ObAlterUserPrimaryZoneExecutor::execute(ObExecContext& ctx, ObAlterUserPrima
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(ret));
   } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
+    LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     stmt.arg_.exec_tenant_id_ = session->get_effective_tenant_id();
     stmt.arg_.ddl_stmt_str_ = first_stmt;
@@ -668,5 +687,5 @@ int ObAlterUserPrimaryZoneExecutor::execute(ObExecContext& ctx, ObAlterUserPrima
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}// ns sql
+}// ns oceanbase

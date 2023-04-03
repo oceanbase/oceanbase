@@ -1,25 +1,9 @@
-/** @file
-
-  A brief file description
-
-  @section license License
-
-  Licensed to the Apache Software Foundation (ASF) under one
-  or more contributor license agreements.  See the NOTICE file
-  distributed with this work for additional information
-  regarding copyright ownership.  The ASF licenses this file
-  to you under the Apache License, Version 2.0 (the
-  "License"); you may not use this file except in compliance
-  with the License.  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
- */
+// Copyright (c) 2014 Alibaba Inc. All Rights Reserved.
+// Author:
+//
+// ob_hrtime.h
+// This file contains code supporting the Inktomi high-resolution
+// timer.
 
 #ifndef OB_LIB_HRTIEM_H_
 #define OB_LIB_HRTIEM_H_
@@ -31,37 +15,39 @@
 
 typedef int64_t ObHRTime;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 #define HAVE_CLOCK_GETTIME 1
 
 // Factors to multiply units by to obtain coresponding HRTime values.
 
-#define HRTIME_FOREVER (10 * HRTIME_DECADE)
-#define HRTIME_DECADE (10 * HRTIME_YEAR)
-#define HRTIME_YEAR (365 * HRTIME_DAY + HRTIME_DAY / 4)
-#define HRTIME_WEEK (7 * HRTIME_DAY)
-#define HRTIME_DAY (24 * HRTIME_HOUR)
-#define HRTIME_HOUR (60 * HRTIME_MINUTE)
-#define HRTIME_MINUTE (60 * HRTIME_SECOND)
-#define HRTIME_SECOND (1000 * HRTIME_MSECOND)
-#define HRTIME_MSECOND (1000 * HRTIME_USECOND)
-#define HRTIME_USECOND (1000 * HRTIME_NSECOND)
-#define HRTIME_NSECOND (1LL)
+#define HRTIME_FOREVER  (10*HRTIME_DECADE)
+#define HRTIME_DECADE   (10*HRTIME_YEAR)
+#define HRTIME_YEAR     (365*HRTIME_DAY+HRTIME_DAY/4)
+#define HRTIME_WEEK     (7*HRTIME_DAY)
+#define HRTIME_DAY      (24*HRTIME_HOUR)
+#define HRTIME_HOUR     (60*HRTIME_MINUTE)
+#define HRTIME_MINUTE   (60*HRTIME_SECOND)
+#define HRTIME_SECOND   (1000*HRTIME_MSECOND)
+#define HRTIME_MSECOND  (1000*HRTIME_USECOND)
+#define HRTIME_USECOND  (1000*HRTIME_NSECOND)
+#define HRTIME_NSECOND  (1LL)
 
-#define HRTIME_APPROX_SECONDS(x) ((x) >> 30)  // off by 7.3%
-#define HRTIME_APPROX_FACTOR ((static_cast<float>((1 << 30))) / ((static_cast<float>(HRTIME_SECOND))))
+#define HRTIME_APPROX_SECONDS(x) ((x)>>30)    // off by 7.3%
+#define HRTIME_APPROX_FACTOR     ((static_cast<float>((1<<30)))/((static_cast<float>(HRTIME_SECOND))))
 
 // Map from units to HRTime values,
 // imple macros
 
-#define HRTIME_YEARS(x) ((x)*HRTIME_YEAR)
-#define HRTIME_WEEKS(x) ((x)*HRTIME_WEEK)
-#define HRTIME_DAYS(x) ((x)*HRTIME_DAY)
-#define HRTIME_HOURS(x) ((x)*HRTIME_HOUR)
-#define HRTIME_MINUTES(x) ((x)*HRTIME_MINUTE)
-#define HRTIME_SECONDS(x) ((x)*HRTIME_SECOND)
+#define HRTIME_YEARS(x)    ((x)*HRTIME_YEAR)
+#define HRTIME_WEEKS(x)    ((x)*HRTIME_WEEK)
+#define HRTIME_DAYS(x)     ((x)*HRTIME_DAY)
+#define HRTIME_HOURS(x)    ((x)*HRTIME_HOUR)
+#define HRTIME_MINUTES(x)  ((x)*HRTIME_MINUTE)
+#define HRTIME_SECONDS(x)  ((x)*HRTIME_SECOND)
 #define HRTIME_MSECONDS(x) ((x)*HRTIME_MSECOND)
 #define HRTIME_USECONDS(x) ((x)*HRTIME_USECOND)
 #define HRTIME_NSECONDS(x) ((x)*HRTIME_NSECOND)
@@ -101,12 +87,12 @@ static inline ObHRTime hrtime_from_nsec(int64_t nsec)
   return (HRTIME_NSECONDS(nsec));
 }
 
-static inline ObHRTime hrtime_from_timespec(const struct timespec* ts)
+static inline ObHRTime hrtime_from_timespec(const struct timespec * ts)
 {
   return hrtime_from_sec(ts->tv_sec) + hrtime_from_nsec(ts->tv_nsec);
 }
 
-static inline ObHRTime hrtime_from_timeval(const struct timeval* tv)
+static inline ObHRTime hrtime_from_timeval(const struct timeval * tv)
 {
   return hrtime_from_sec(tv->tv_sec) + hrtime_from_usec(tv->tv_usec);
 }
@@ -115,60 +101,60 @@ static inline ObHRTime hrtime_from_timeval(const struct timeval* tv)
 
 static inline ObHRTime hrtime_to_years(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_YEAR));
+  return ((ObHRTime) (t / HRTIME_YEAR));
 }
 static inline ObHRTime hrtime_to_weeks(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_WEEK));
+  return ((ObHRTime) (t / HRTIME_WEEK));
 }
 static inline ObHRTime hrtime_to_days(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_DAY));
+  return ((ObHRTime) (t / HRTIME_DAY));
 }
 static inline ObHRTime hrtime_to_mins(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_MINUTE));
+  return ((ObHRTime) (t / HRTIME_MINUTE));
 }
 static inline ObHRTime hrtime_to_sec(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_SECOND));
+  return ((ObHRTime) (t / HRTIME_SECOND));
 }
 static inline ObHRTime hrtime_to_msec(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_MSECOND));
+  return ((ObHRTime) (t / HRTIME_MSECOND));
 }
 static inline ObHRTime hrtime_to_usec(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_USECOND));
+  return ((ObHRTime) (t / HRTIME_USECOND));
 }
 static inline ObHRTime hrtime_to_nsec(ObHRTime t)
 {
-  return ((ObHRTime)(t / HRTIME_NSECOND));
+  return ((ObHRTime) (t / HRTIME_NSECOND));
 }
 
 static inline int64_t usec_to_msec(const int64_t t)
 {
-  return (static_cast<int64_t>(t / 1000));
+  return (static_cast<int64_t> (t / 1000));
 }
 static inline int64_t usec_to_sec(const int64_t t)
 {
-  return (static_cast<int64_t>(t / 1000000));
+  return (static_cast<int64_t> (t / 1000000));
 }
 static inline int64_t msec_to_sec(const int64_t t)
 {
-  return (static_cast<int64_t>(t / 1000));
+  return (static_cast<int64_t> (t / 1000));
 }
 static inline int64_t msec_to_usec(const int64_t t)
 {
-  return (static_cast<int64_t>(t * 1000));
+  return (static_cast<int64_t> (t * 1000));
 }
 static inline int64_t sec_to_msec(const int64_t t)
 {
-  return (static_cast<int64_t>(t * 1000));
+  return (static_cast<int64_t> (t * 1000));
 }
 static inline int64_t sec_to_usec(const int64_t t)
 {
-  return (static_cast<int64_t>(t * 1000000));
+  return (static_cast<int64_t> (t * 1000000));
 }
 
 static inline struct timespec hrtime_to_timespec(ObHRTime t)
@@ -191,7 +177,7 @@ static inline struct timeval hrtime_to_timeval(ObHRTime t)
   return (tv);
 }
 
-static inline int hrtime_to_timeval2(ObHRTime t, struct timeval* tv)
+static inline int hrtime_to_timeval2(ObHRTime t, struct timeval *tv)
 {
   int64_t usecs = hrtime_to_usec(t);
   tv->tv_sec = usecs / 1000000;
@@ -233,7 +219,7 @@ static inline void hrtime_sleep(ObHRTime delay)
   nanosleep(&ts, NULL);
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
-#endif  // OB_LIB_HRTIEM_H_
+#endif // OB_LIB_HRTIEM_H_

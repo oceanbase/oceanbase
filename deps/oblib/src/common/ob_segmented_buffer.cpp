@@ -15,20 +15,22 @@
 #include "common/ob_segmented_buffer.h"
 #include "lib/allocator/ob_malloc.h"
 
-namespace oceanbase {
-namespace common {
-int ObSegmentedBufffer::append(char* ptr, const int64_t len)
+namespace oceanbase
+{
+namespace common
+{
+int ObSegmentedBufffer::append(char *ptr, const int64_t len)
 {
   int ret = OB_SUCCESS;
   if (nullptr == ptr || len < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const static int tail_size = sizeof(char*);
+    const static int tail_size = sizeof(char *);
     if (nullptr == block_) {
-      if (nullptr == (block_ = (char*)ob_malloc(block_size_, attr_))) {
+      if (nullptr == (block_ = (char *)ob_malloc(block_size_, attr_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        *reinterpret_cast<char**>(block_ + block_size_ - tail_size) = nullptr;
+        *reinterpret_cast<char **>(block_ + block_size_ - tail_size) = nullptr;
         head_ = block_;
         pos_ = 0;
       }
@@ -44,12 +46,12 @@ int ObSegmentedBufffer::append(char* ptr, const int64_t len)
 
         if (left > 0) {
           LOG_INFO("alloc new block");
-          char* new_block = nullptr;
-          if (nullptr == (new_block = (char*)ob_malloc(block_size_, attr_))) {
+          char *new_block = nullptr;
+          if (nullptr == (new_block = (char *)ob_malloc(block_size_, attr_))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
           } else {
-            *reinterpret_cast<char**>(new_block + block_size_ - tail_size) = nullptr;
-            *reinterpret_cast<char**>(block_ + block_size_ - tail_size) = new_block;
+            *reinterpret_cast<char **>(new_block + block_size_ - tail_size) = nullptr;
+            *reinterpret_cast<char **>(block_ + block_size_ - tail_size) = new_block;
             pos_ += tail_size;
             block_ = new_block;
           }
@@ -63,8 +65,8 @@ int ObSegmentedBufffer::append(char* ptr, const int64_t len)
 
 int64_t ObSegmentedBufffer::size() const
 {
-  return 0 == pos_ ? 0
-                   : (block_size_ - sizeof(char*)) * ((pos_ - pos_ % block_size_) / block_size_) + pos_ % block_size_;
+  return 0 == pos_ ? 0 :
+    (block_size_ - sizeof(char *)) * ((pos_ - pos_ % block_size_) / block_size_) + pos_ % block_size_;
 }
 
 int ObSegmentedBufffer::padding(int64_t len)
@@ -88,16 +90,16 @@ int ObSegmentedBufffer::padding(int64_t len)
 
 void ObSegmentedBufffer::destory()
 {
-  char* cur = head_;
+  char *cur = head_;
   while (cur != nullptr) {
-    char* next = *reinterpret_cast<char**>(cur + block_size_ - sizeof(char*));
+    char *next = *reinterpret_cast<char **>(cur + block_size_ - sizeof(char *));
     ob_free(cur);
     cur = next;
   }
   head_ = nullptr;
 }
 
-int ObSegmentedBufffer::dump_to_file(const char* file_name)
+int ObSegmentedBufffer::dump_to_file(const char *file_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(file_name)) {
@@ -108,10 +110,10 @@ int ObSegmentedBufffer::dump_to_file(const char* file_name)
     fd = ::open(file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("create new file failed", K(file_name), K(strerror(errno)));
+      LOG_WARN("create new file failed", KCSTRING(file_name), KCSTRING(strerror(errno)));
     } else {
       ObSegmentedBuffferIterator sbi(*this);
-      char* buf = nullptr;
+      char *buf = nullptr;
       int64_t len = 0;
       while ((buf = sbi.next(len)) != nullptr) {
         ssize_t size = ::write(fd, buf, len);
@@ -123,16 +125,17 @@ int ObSegmentedBufffer::dump_to_file(const char* file_name)
   return ret;
 }
 
-char* ObSegmentedBuffferIterator::next(int64_t& len)
+
+char *ObSegmentedBuffferIterator::next(int64_t &len)
 {
-  char* buf = nullptr;
+  char *buf = nullptr;
   if (next_buf_ != nullptr) {
     buf = next_buf_;
-    next_buf_ = *reinterpret_cast<char**>(next_buf_ + sb_.block_size_ - sizeof(char*));
-    len = next_buf_ != nullptr ? sb_.block_size_ - sizeof(char*) : sb_.pos_ % sb_.block_size_;
+    next_buf_ = *reinterpret_cast<char **>(next_buf_ + sb_.block_size_ - sizeof(char *));
+    len = next_buf_ != nullptr ? sb_.block_size_ - sizeof(char *) : sb_.pos_ % sb_.block_size_;
   }
   return buf;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

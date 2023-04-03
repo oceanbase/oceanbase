@@ -1385,7 +1385,7 @@ SELECT COUNT(c1) AS c2 FROM t1 GROUP BY c2 HAVING c2 = 2;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -1461,9 +1461,9 @@ SELECT COUNT(c1) AS c2 FROM t1 GROUP BY c2 HAVING c2 = 2;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -1907,7 +1907,7 @@ select X.c1 from t1 AS X group by X.c2 having (X.c2 = 1);
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -1983,9 +1983,9 @@ select X.c1 from t1 AS X group by X.c2 having (X.c2 = 1);
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],

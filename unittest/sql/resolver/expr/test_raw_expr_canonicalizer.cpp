@@ -23,45 +23,48 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class TestRawExprCanonicalizer : public ::testing::Test {
+class TestRawExprCanonicalizer: public ::testing::Test
+{
 public:
   TestRawExprCanonicalizer();
   virtual ~TestRawExprCanonicalizer();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprCanonicalizer);
-
 protected:
   // function members
-  void canon(const char* expr, const char*& canon_expr);
-
+  void canon(const char* expr, const char *&canon_expr);
 protected:
   // data members
 };
 
 TestRawExprCanonicalizer::TestRawExprCanonicalizer()
-{}
+{
+}
 
 TestRawExprCanonicalizer::~TestRawExprCanonicalizer()
-{}
+{
+}
 
 void TestRawExprCanonicalizer::SetUp()
-{}
+{
+}
 
 void TestRawExprCanonicalizer::TearDown()
-{}
+{
+}
 
-void TestRawExprCanonicalizer::canon(const char* expr, const char*& canon_expr)
+void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
 {
   ObArray<ObQualifiedName> columns;
   ObArray<ObVarInfo> sys_vars;
   ObArray<ObSubQueryInfo> sub_query_info;
   ObArray<ObAggFunRawExpr*> aggr_exprs;
   ObArray<ObWinFunRawExpr*> win_exprs;
-  const char* expr_str = expr;
+  ObArray<ObUDFInfo> udf_info;
+  const char *expr_str = expr;
   ObArenaAllocator allocator(ObModIds::TEST);
   ObRawExprFactory expr_factory(allocator);
   ObTimeZoneInfo tz_info;
@@ -74,11 +77,10 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char*& canon_expr)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.stmt_ = &stmt;
   ObSQLSessionInfo session;
-  session.set_use_static_typing_engine(false);
   ctx.session_info_ = &session;
-  ObRawExpr* raw_expr = NULL;
-  OK(ObRawExprUtils::make_raw_expr_from_str(
-      expr_str, strlen(expr_str), ctx, raw_expr, columns, sys_vars, &sub_query_info, aggr_exprs, win_exprs));
+  ObRawExpr *raw_expr = NULL;
+  OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
+                                            sys_vars, &sub_query_info, aggr_exprs ,win_exprs, udf_info));
   _OB_LOG(DEBUG, "================================================================");
   _OB_LOG(DEBUG, "%s", expr);
   _OB_LOG(DEBUG, "%s", CSJ(raw_expr));
@@ -113,8 +115,8 @@ TEST_F(TestRawExprCanonicalizer, basic_test)
   std::remove("./test_raw_expr_canonicalizer.tmp");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

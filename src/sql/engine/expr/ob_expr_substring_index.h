@@ -16,38 +16,36 @@
 #include "lib/container/ob_array.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprSubstringIndex : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprSubstringIndex : public ObStringExprOperator
+{
 public:
-  explicit ObExprSubstringIndex(common::ObIAllocator& alloc);
+  explicit  ObExprSubstringIndex(common::ObIAllocator &alloc);
   virtual ~ObExprSubstringIndex();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& str, ObExprResType& delim, ObExprResType& count,
-      common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& str, const common::ObObj& delim,
-      const common::ObObj& count, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &str,
+                                ObExprResType &delim,
+                                ObExprResType &count,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int eval_substring_index(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-private:
-  /**
-   * find m_count apperance of m_delim in m_str(from left or from right)
-   * @param[in] result      calculated result
-   * parma[in] m_str        string
-   * @param[in] m_delim     substring
-   * @param[in] m_count     nth apperance
-   * @return                position of nth apperance of delim
-   */
-  static int string_search(
-      common::ObString& result, const common::ObString& m_str, const common::ObString& m_delim, const int64_t m_count);
+  static int eval_substring_index(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_substring_index_batch(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObBitVector &skip,
+                                        const int64_t batch_size);
+ virtual bool need_rt_ctx() const override { return true; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstringIndex);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_SUBSTRING_INDEX_
+#endif // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_SUBSTRING_INDEX_

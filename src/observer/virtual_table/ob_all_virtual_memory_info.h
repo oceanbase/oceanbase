@@ -16,21 +16,21 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace common {
-class ObTenantManager;
-}
-namespace observer {
-class ObAllVirtualMemoryInfo : public common::ObVirtualTableScannerIterator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualMemoryInfo : public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualMemoryInfo();
   virtual ~ObAllVirtualMemoryInfo();
   virtual int inner_open();
   virtual void reset();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  enum CACHE_COLUMN {
+  enum CACHE_COLUMN
+  {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
     SVR_PORT,
@@ -53,7 +53,7 @@ private:
   bool has_start_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMemoryInfo);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_MEMORY_INFO_H_
+#endif // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_MEMORY_INFO_H_

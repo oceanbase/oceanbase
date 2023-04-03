@@ -28,26 +28,37 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::dtl;
 
-class ObMergeSortReceiveTest : public ::testing::Test {
+class ObMergeSortReceiveTest : public ::testing::Test
+{
 public:
   void test_sort(int64_t n_channel, bool local_order, int64_t row_count);
-  int mock_channel_loop(
-      ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx, int64_t n_channel, int64_t row_count, bool local_order);
-  int init_merge_sort_input(ObExecContext& ctx, ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx,
-      ObPxMergeSortReceive& merge_sort_receive, int64_t n_channel);
-
+  int mock_channel_loop(ObPxMergeSortReceive::ObPxMergeSortReceiveCtx *recv_ctx,
+                        int64_t n_channel,
+                        int64_t row_count,
+                        bool local_order);
+  int init_merge_sort_input(
+    ObExecContext &ctx,
+    ObPxMergeSortReceive::ObPxMergeSortReceiveCtx *recv_ctx,
+    ObPxMergeSortReceive &merge_sort_receive,
+    int64_t n_channel);
 private:
-  int init_open(ObExecContext& ctx, ObPxMergeSortReceive& merge_sort_receive, int64_t n_channel, int64_t row_count,
-      bool local_order);
+  int init_open(ObExecContext &ctx,
+                ObPxMergeSortReceive &merge_sort_receive,
+                int64_t n_channel,
+                int64_t row_count,
+                bool local_order);
 };
 
-class ObMockPxNewRow : public ObPxNewRow {
+class ObMockPxNewRow : public ObPxNewRow
+{
 public:
-  ObMockPxNewRow(int64_t count, bool local_order, int64_t n_channel)
-      : count_(count), local_order_(local_order), cur_(0), n_channel_(n_channel)
-  {}
+  ObMockPxNewRow(int64_t count, bool local_order, int64_t n_channel) :
+    count_(count),
+    local_order_(local_order),
+    cur_(0),
+    n_channel_(n_channel) {}
   ~ObMockPxNewRow() = default;
-  virtual int get_row(ObNewRow& row);
+  virtual int get_row(ObNewRow &row);
 
 private:
   int64_t count_;
@@ -56,32 +67,32 @@ private:
   int64_t n_channel_;
 };
 
-class ObMockChannelLoop : public ObDtlChannelLoop {
+class ObMockChannelLoop : public ObDtlChannelLoop
+{
 public:
-  ObMockChannelLoop(int64_t n_channel) : n_channel_(n_channel), nth_process_channel_(0)
-  {}
+  ObMockChannelLoop(int64_t n_channel) :
+    n_channel_(n_channel), nth_process_channel_(0) {}
   ~ObMockChannelLoop() = default;
 
-  virtual int process_one(int64_t& nth_channel, int64_t timeout);
-  virtual int process_one_if(PredFunc pred, int64_t timeout, int64_t& nth_channel);
-
+  virtual int process_one(int64_t &nth_channel, int64_t timeout);
+  virtual int process_one_if(PredFunc pred, int64_t timeout, int64_t &nth_channel);
 private:
   int64_t n_channel_;
   int64_t nth_process_channel_;
 };
 
-int ObMockPxNewRow::get_row(ObNewRow& row)
+int ObMockPxNewRow::get_row(ObNewRow &row)
 {
   int ret = OB_SUCCESS;
   int64_t n_group = local_order_ ? 2 : 1;
   int64_t pos = (cur_ + n_channel_) / n_channel_;
-  if (pos > count_ * n_group) {
+  if (pos  > count_ * n_group) {
     ret = OB_ITER_END;
     cout << "cur_" << cur_ << " ,pos:" << pos << " ,count:" << count_ * n_group << endl;
   }
   int64_t column_count = 1;
   if (OB_SUCC(ret)) {
-    row.cells_ = static_cast<ObObj*>(malloc(column_count * sizeof(ObObj)));
+    row.cells_ = static_cast<ObObj *>(malloc(column_count * sizeof(ObObj)));
     row.count_ = column_count;
     // fill data
     int64_t val = cur_;
@@ -91,41 +102,44 @@ int ObMockPxNewRow::get_row(ObNewRow& row)
       }
     }
     // cout << "fill val:" << val << " ,cur_:" << cur_ << endl;
-    ObObj* obj = COL(val);
+    ObObj *obj = COL(val);
     row.assign(obj, column_count);
   }
   cur_++;
   return ret;
 }
 
-int ObMockChannelLoop::process_one(int64_t& nth_channel, int64_t timeout)
+int ObMockChannelLoop::process_one(int64_t &nth_channel, int64_t timeout)
 {
   int ret = OB_SUCCESS;
   UNUSED(timeout);
   nth_channel = nth_process_channel_ % n_channel_;
-  //  cout << "channel:" << nth_process_channel_ << endl;
+//  cout << "channel:" << nth_process_channel_ << endl;
   nth_process_channel_ = (nth_process_channel_ + 1) % n_channel_;
   return ret;
 }
 
-int ObMockChannelLoop::process_one_if(PredFunc pred, int64_t timeout, int64_t& nth_channel)
+int ObMockChannelLoop::process_one_if(PredFunc pred, int64_t timeout, int64_t &nth_channel)
 {
   int ret = OB_SUCCESS;
   UNUSED(pred);
   UNUSED(timeout);
   nth_channel = nth_process_channel_ % n_channel_;
-  //  cout << "channel:" << nth_process_channel_ << endl;
+//  cout << "channel:" << nth_process_channel_ << endl;
   nth_process_channel_ = (nth_process_channel_ + 1) % n_channel_;
   return ret;
 }
 
-int ObMergeSortReceiveTest::init_open(ObExecContext& ctx, ObPxMergeSortReceive& merge_sort_receive, int64_t n_channel,
-    int64_t row_count, bool local_order)
+int ObMergeSortReceiveTest::init_open(ObExecContext &ctx,
+  ObPxMergeSortReceive &merge_sort_receive,
+  int64_t n_channel,
+  int64_t row_count,
+  bool local_order)
 {
   int ret = OB_SUCCESS;
-  ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx = nullptr;
+  ObPxMergeSortReceive::ObPxMergeSortReceiveCtx *recv_ctx = nullptr;
   ObSQLSessionInfo my_session;
-  my_session.test_init(0, 0, 0, NULL);
+  my_session.test_init(0,0,0,NULL);
   ctx.set_my_session(&my_session);
   merge_sort_receive.set_id(0);
   if (OB_FAIL(ctx.init_phy_op(1))) {
@@ -137,14 +151,12 @@ int ObMergeSortReceiveTest::init_open(ObExecContext& ctx, ObPxMergeSortReceive& 
   } else if (OB_FAIL(merge_sort_receive.init_op_ctx(ctx))) {
     ret = OB_ERR_UNEXPECTED;
     cout << "fail to inner open" << endl;
-  } else if (OB_ISNULL(recv_ctx = GET_PHY_OPERATOR_CTX(
-                           ObPxMergeSortReceive::ObPxMergeSortReceiveCtx, ctx, merge_sort_receive.get_id()))) {
+  } else if (OB_ISNULL(recv_ctx = GET_PHY_OPERATOR_CTX(ObPxMergeSortReceive::ObPxMergeSortReceiveCtx, ctx, merge_sort_receive.get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     cout << "fail to create physica operator ctx" << endl;
   } else if (OB_FAIL(mock_channel_loop(recv_ctx, n_channel, row_count, local_order))) {
     cout << "fail to mock channel loop" << endl;
-  } else if (!merge_sort_receive.local_order_ &&
-             OB_FAIL(recv_ctx->row_heap_.init(n_channel, merge_sort_receive.sort_columns_))) {
+  } else if (!merge_sort_receive.local_order_ && OB_FAIL(recv_ctx->row_heap_.init(n_channel, merge_sort_receive.sort_columns_))) {
     cout << "fail to init row heap" << endl;
   } else if (OB_FAIL(init_merge_sort_input(ctx, recv_ctx, merge_sort_receive, n_channel))) {
     // mock the number of channels is 2
@@ -156,9 +168,11 @@ int ObMergeSortReceiveTest::init_open(ObExecContext& ctx, ObPxMergeSortReceive& 
   return ret;
 }
 
-int ObMergeSortReceiveTest::init_merge_sort_input(ObExecContext& ctx,
-    ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx, ObPxMergeSortReceive& merge_sort_receive,
-    int64_t n_channel)
+int ObMergeSortReceiveTest::init_merge_sort_input(
+  ObExecContext &ctx,
+  ObPxMergeSortReceive::ObPxMergeSortReceiveCtx *recv_ctx,
+  ObPxMergeSortReceive &merge_sort_receive,
+  int64_t n_channel)
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
@@ -171,8 +185,8 @@ int ObMergeSortReceiveTest::init_merge_sort_input(ObExecContext& ctx,
       if (0 >= n_channel) {
         cout << "channels are not init" << endl;
       } else {
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < n_channel; ++idx) {
-          ObRARowStore* row_store = OB_NEW(ObRARowStore, ObModIds::OB_SQL_PX);
+        for(int64_t idx = 0; OB_SUCC(ret) && idx < n_channel; ++idx) {
+          ObRARowStore *row_store = OB_NEW(ObRARowStore, ObModIds::OB_SQL_PX);
           int64_t mem_limit = 0;
           if (OB_FAIL(row_store->init(mem_limit))) {
             cout << "row store init fail" << endl;
@@ -189,9 +203,8 @@ int ObMergeSortReceiveTest::init_merge_sort_input(ObExecContext& ctx,
         cout << "channels are not init" << endl;
       } else {
         cout << "start alloc msi" << endl;
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < n_channel; ++idx) {
-          ObPxMergeSortReceive::MergeSortInput* msi =
-              OB_NEW(ObPxMergeSortReceive::GlobalOrderInput, ObModIds::OB_SQL_PX, OB_SERVER_TENANT_ID);
+        for(int64_t idx = 0; OB_SUCC(ret) && idx < n_channel; ++idx) {
+          ObPxMergeSortReceive::MergeSortInput *msi = OB_NEW(ObPxMergeSortReceive::GlobalOrderInput, ObModIds::OB_SQL_PX, OB_SERVER_TENANT_ID);
           cout << "alloc succ msi" << endl;
           if (nullptr == msi) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -210,15 +223,18 @@ int ObMergeSortReceiveTest::init_merge_sort_input(ObExecContext& ctx,
 }
 
 int ObMergeSortReceiveTest::mock_channel_loop(
-    ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx, int64_t n_channel, int64_t row_count, bool local_order)
+  ObPxMergeSortReceive::ObPxMergeSortReceiveCtx *recv_ctx,
+  int64_t n_channel,
+  int64_t row_count,
+  bool local_order)
 {
   int ret = OB_SUCCESS;
-  ObMockChannelLoop* mock_channel_loop = new ObMockChannelLoop(n_channel);
+  ObMockChannelLoop *mock_channel_loop = new ObMockChannelLoop(n_channel);
   if (OB_ISNULL(mock_channel_loop)) {
     cout << "fail to alloc mock channel loop" << endl;
   } else {
     recv_ctx->ptr_row_msg_loop_ = mock_channel_loop;
-    ObMockPxNewRow* mock_px_row = new ObMockPxNewRow(row_count, local_order, n_channel);
+    ObMockPxNewRow *mock_px_row = new ObMockPxNewRow(row_count, local_order, n_channel);
     if (OB_ISNULL(mock_px_row)) {
       ret = OB_ERR_UNEXPECTED;
       cout << "fail to mock px row" << endl;
@@ -228,7 +244,7 @@ int ObMergeSortReceiveTest::mock_channel_loop(
   }
   ObAddr self;
   self.set_ip_addr("127.0.0.1", 8086);
-  ObDtlRpcChannel* tmp_channel = new ObDtlRpcChannel(1, 1, self);
+  ObDtlRpcChannel *tmp_channel = new ObDtlRpcChannel(1, 1, self);
   for (int idx = 0; idx < n_channel; ++idx) {
     if (OB_FAIL(recv_ctx->task_channels_.push_back(tmp_channel))) {
       cout << "fail to push back channel" << endl;
@@ -238,8 +254,9 @@ int ObMergeSortReceiveTest::mock_channel_loop(
   return ret;
 }
 
-// n_channel     -- number of channels
-// local_order   -- whether data is having local order property
+// n_channel channel个数
+// local_order是否局部有序
+// 每组有序多少行，如果是local order，则每个channel有两组，否则是一组
 void ObMergeSortReceiveTest::test_sort(int64_t n_channel, bool local_order, int64_t row_count)
 {
   int ret = OB_SUCCESS;
@@ -248,12 +265,12 @@ void ObMergeSortReceiveTest::test_sort(int64_t n_channel, bool local_order, int6
   ObExecContext ctx;
   merge_sort_receive.init_sort_columns(1);
   merge_sort_receive.add_sort_column(0, CS_TYPE_UTF8MB4_BIN, true, ObMaxType, default_asc_direction());
-  const ObNewRow* out_row = NULL;
+  const ObNewRow *out_row = NULL;
   if (OB_FAIL(init_open(ctx, merge_sort_receive, n_channel, row_count, local_order))) {
     ret = OB_ERR_UNEXPECTED;
     cout << "fail to init open" << endl;
   } else {
-    const ObObj* cell = NULL;
+    const ObObj *cell = NULL;
     int64_t val;
     int64_t n_group = local_order ? 2 : 1;
     int64_t total_row_count = n_channel * row_count * n_group;
@@ -265,15 +282,14 @@ void ObMergeSortReceiveTest::test_sort(int64_t n_channel, bool local_order, int6
         ret = OB_ERR_UNEXPECTED;
         cout << "fail to get next row: " << cnt << " ,total_row_count:" << total_row_count << endl;
       } else {
-        //        cout << "times:" << cnt << endl;
+//        cout << "times:" << cnt << endl;
         cell = &out_row->cells_[0];
         cell->get_int(val);
         // cout << val << endl;
         if (true == need_cmp) {
           ASSERT_TRUE(val > last_value);
           if (val <= last_value) {
-            cout << "compare error, data is no order:" << cnt << ", value: " << val << " ,last_value: " << last_value
-                 << endl;
+            cout << "compare error, data is no order:" << cnt << ", value: " << val << " ,last_value: " << last_value << endl;
           }
           if (local_order) {
             need_cmp = !need_cmp;
@@ -283,8 +299,7 @@ void ObMergeSortReceiveTest::test_sort(int64_t n_channel, bool local_order, int6
             need_cmp = !need_cmp;
             ASSERT_EQ(last_value, val);
             if (last_value != val) {
-              cout << "compare error, there are two same data in local order:" << cnt << ", value: " << val
-                   << " ,last_value: " << last_value << endl;
+              cout << "compare error, there are two same data in local order:" << cnt << ", value: " << val << " ,last_value: " << last_value << endl;
             }
           }
         }
@@ -325,12 +340,12 @@ TEST_F(ObMergeSortReceiveTest, merge_sort_receive_1)
   test_sort(19, true, 300);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -f test_merge_sort.log*");
   OB_LOGGER.set_file_name("test_merge_sort.log", true, true);
-  // OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  //OB_LOGGER.set_log_level("INFO");
+  ::testing::InitGoogleTest(&argc,argv);
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   return RUN_ALL_TESTS();
 }

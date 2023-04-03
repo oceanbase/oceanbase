@@ -1,245 +1,241 @@
-// **********************************************************************
-//
-// Copyright (c) 2003-2016 ZeroC, Inc. All rights reserved.
-//
-// This copy of Ice is licensed to you under the terms described in the
-// ICE_LICENSE file included in this distribution.
-//
-// **********************************************************************
 #ifndef TBSYS_TIME_H
 #define TBSYS_TIME_H
 #include <sys/time.h>
 #include <stdint.h>
 #include <string>
-namespace tbutil {
+namespace obutil
+{
 /**
- * @brief Time class provide interface for time operation
- */
-class Time {
+* @brief Time class provide interface for time operation
+*/
+class ObSysTime
+{
 public:
-  Time();
 
-  enum Clock { Realtime, Monotonic };
-  /**
-   * @brief get current time
-   *
-   * @param clock Realtime: system rtc time; Monotonic: system time from boost
-   *
-   * @return
-   */
-  static Time now(Clock clock = Realtime);
-  /**
-   * @brief construct a Time object
-   *
-   * @param usec: time of construct(seconds)
-   *
-   * @return
-   */
-  static Time seconds(int64_t usec);
-  /**
-   * @brief construct a Time object
-   *
-   * @param milli : time of construct(milliseconds)
-   *
-   * @return
-   */
-  static Time milliSeconds(int64_t milli);
-  /**
-   * @brief construct a Time object
-   *
-   * @param micro : time of construct(microseconds)
-   *
-   * @return
-   */
-  static Time microSeconds(int64_t micro);
+    ObSysTime();
 
-  /**
-   * @brief convert Time to timeval
-   *
-   * @return
-   */
-  operator timeval() const;
+    enum Clock { Realtime, Monotonic };
+    /**
+     * @brief get current time
+     *
+     * @param clock Realtime: system rtc time; Monotonic: system time from boost
+     *
+     * @return
+     */
+    static ObSysTime now(Clock clock= Realtime);
+    /**
+     * @brief construct a Time object
+     *
+     * @param usec: time of construct(seconds)
+     *
+     * @return
+     */
+    static ObSysTime seconds(int64_t usec);
+    /**
+     * @brief construct a Time object
+     *
+     * @param milli : time of construct(milliseconds)
+     *
+     * @return
+     */
+    static ObSysTime milliSeconds(int64_t milli);
+    /**
+     * @brief construct a Time object
+     *
+     * @param micro : time of construct(microseconds)
+     *
+     * @return
+     */
+    static ObSysTime microSeconds(int64_t micro);
 
-  /**
-   * @brief convert time to second
-   *
-   * @return
-   */
-  int64_t toSeconds() const;
-  /**
-   * @brief convert time to millisecond
-   *
-   * @return
-   */
-  int64_t toMilliSeconds() const;
-  /**
-   * @brief convert time to microseconds
-   *
-   * @return
-   */
-  int64_t toMicroSeconds() const;
+    /**
+     * @brief convert Time to timeval
+     *
+     * @return
+     */
+    operator timeval() const;
 
-  double toSecondsDouble() const;
-  double toMilliSecondsDouble() const;
-  double toMicroSecondsDouble() const;
+    /**
+     * @brief convert time to second
+     *
+     * @return
+     */
+    int64_t toSeconds() const;
+    /**
+     * @brief convert time to millisecond
+     *
+     * @return
+     */
+    int64_t toMilliSeconds() const;
+    /**
+     * @brief convert time to microseconds
+     *
+     * @return
+     */
+    int64_t toMicroSeconds() const;
 
-  /**
-   * @brief convert time to string, such as: 2009-10-26 10:47:47.932
-   *
-   * @return
-   */
-  std::string toDateTime() const;
-  /**
-   * @brief convert time to string, such as: 14543d 02:47:47.932
-   *
-   * @return
-   */
-  std::string toDuration() const;
+    double toSecondsDouble() const;
+    double toMilliSecondsDouble() const;
+    double toMicroSecondsDouble() const;
 
-  Time operator-() const
-  {
-    return Time(-_usec);
-  }
+    /**
+     * @brief convert time to string, such as: 2009-10-26 10:47:47.932
+     *
+     * @return
+     */
+    std::string toDateTime() const;
+    /**
+     * @brief convert time to string, such as: 14543d 02:47:47.932
+     *
+     * @return
+     */
+    std::string toDuration() const;
 
-  Time operator-(const Time& rhs) const
-  {
-    return Time(_usec - rhs._usec);
-  }
+    ObSysTime operator-() const
+    {
+        return ObSysTime(-_usec);
+    }
 
-  Time operator+(const Time& rhs) const
-  {
-    return Time(_usec + rhs._usec);
-  }
+    ObSysTime operator-(const ObSysTime& rhs) const
+    {
+        return ObSysTime(_usec - rhs._usec);
+    }
 
-  Time& operator+=(const Time& rhs)
-  {
-    _usec += rhs._usec;
-    return *this;
-  }
+    ObSysTime operator+(const ObSysTime& rhs) const
+    {
+        return ObSysTime(_usec + rhs._usec);
+    }
 
-  Time& operator-=(const Time& rhs)
-  {
-    _usec -= rhs._usec;
-    return *this;
-  }
+    ObSysTime& operator+=(const ObSysTime& rhs)
+    {
+        _usec += rhs._usec;
+        return *this;
+    }
 
-  bool operator<(const Time& rhs) const
-  {
-    return _usec < rhs._usec;
-  }
+    ObSysTime& operator-=(const ObSysTime& rhs)
+    {
+        _usec -= rhs._usec;
+        return *this;
+    }
 
-  bool operator<=(const Time& rhs) const
-  {
-    return _usec <= rhs._usec;
-  }
+    bool operator<(const ObSysTime& rhs) const
+    {
+        return _usec < rhs._usec;
+    }
 
-  bool operator>(const Time& rhs) const
-  {
-    return _usec > rhs._usec;
-  }
+    bool operator<=(const ObSysTime& rhs) const
+    {
+        return _usec <= rhs._usec;
+    }
 
-  bool operator>=(const Time& rhs) const
-  {
-    return _usec >= rhs._usec;
-  }
+    bool operator>(const ObSysTime& rhs) const
+    {
+        return _usec > rhs._usec;
+    }
 
-  bool operator==(const Time& rhs) const
-  {
-    return _usec == rhs._usec;
-  }
+    bool operator>=(const ObSysTime& rhs) const
+    {
+        return _usec >= rhs._usec;
+    }
 
-  bool operator!=(const Time& rhs) const
-  {
-    return _usec != rhs._usec;
-  }
+    bool operator==(const ObSysTime& rhs) const
+    {
+        return _usec == rhs._usec;
+    }
 
-  double operator/(const Time& rhs) const
-  {
-    return (double)_usec / (double)rhs._usec;
-  }
+    bool operator!=(const ObSysTime& rhs) const
+    {
+        return _usec != rhs._usec;
+    }
 
-  Time& operator*=(int rhs)
-  {
-    _usec *= rhs;
-    return *this;
-  }
+    double operator/(const ObSysTime& rhs) const
+    {
+        return (double)_usec / (double)rhs._usec;
+    }
 
-  Time operator*(int rhs) const
-  {
-    Time t;
-    t._usec = _usec * rhs;
-    return t;
-  }
+    ObSysTime& operator*=(int rhs)
+    {
+        _usec *= rhs;
+        return *this;
+    }
 
-  Time& operator/=(int rhs)
-  {
-    _usec /= rhs;
-    return *this;
-  }
+    ObSysTime operator*(int rhs) const
+    {
+        ObSysTime t;
+        t._usec = _usec * rhs;
+        return t;
+    }
 
-  Time operator/(int rhs) const
-  {
-    Time t;
-    t._usec = _usec / rhs;
-    return t;
-  }
+    ObSysTime& operator/=(int rhs)
+    {
+        _usec /= rhs;
+        return *this;
+    }
 
-  Time& operator*=(int64_t rhs)
-  {
-    _usec *= rhs;
-    return *this;
-  }
+    ObSysTime operator/(int rhs) const
+    {
+        ObSysTime t;
+        t._usec = _usec / rhs;
+        return t;
+    }
 
-  Time operator*(int64_t rhs) const
-  {
-    Time t;
-    t._usec = _usec * rhs;
-    return t;
-  }
+    ObSysTime& operator*=(int64_t rhs)
+    {
+        _usec *= rhs;
+        return *this;
+    }
 
-  Time& operator/=(int64_t rhs)
-  {
-    _usec /= rhs;
-    return *this;
-  }
+    ObSysTime operator*(int64_t rhs) const
+    {
+        ObSysTime t;
+        t._usec = _usec * rhs;
+        return t;
+    }
 
-  Time operator/(int64_t rhs) const
-  {
-    Time t;
-    t._usec = _usec / rhs;
-    return t;
-  }
+    ObSysTime& operator/=(int64_t rhs)
+    {
+        _usec /= rhs;
+        return *this;
+    }
 
-  Time& operator*=(double rhs)
-  {
-    _usec = static_cast<int64_t>(static_cast<double>(_usec) * rhs);
-    return *this;
-  }
+    ObSysTime operator/(int64_t rhs) const
+    {
+        ObSysTime t;
+        t._usec = _usec / rhs;
+        return t;
+    }
 
-  Time operator*(double rhs) const
-  {
-    Time t;
-    t._usec = static_cast<int64_t>(static_cast<double>(_usec) * rhs);
-    return t;
-  }
+    ObSysTime& operator*=(double rhs)
+    {
+        _usec = static_cast<int64_t>(static_cast<double>(_usec) * rhs);
+        return *this;
+    }
 
-  Time& operator/=(double rhs)
-  {
-    _usec = static_cast<int64_t>(static_cast<double>(_usec) / rhs);
-    return *this;
-  }
+    ObSysTime operator*(double rhs) const
+    {
+        ObSysTime t;
+        t._usec = static_cast<int64_t>(static_cast<double>(_usec) * rhs);
+        return t;
+    }
 
-  Time operator/(double rhs) const
-  {
-    Time t;
-    t._usec = static_cast<int64_t>(static_cast<double>(_usec) / rhs);
-    return t;
-  }
+    ObSysTime& operator/=(double rhs)
+    {
+        _usec = static_cast<int64_t>(static_cast<double>(_usec) / rhs);
+        return *this;
+    }
 
-  Time(int64_t);
+    ObSysTime operator/(double rhs) const
+    {
+        ObSysTime t;
+        t._usec = static_cast<int64_t>(static_cast<double>(_usec) / rhs);
+        return t;
+    }
+
+    ObSysTime(int64_t);
 
 private:
-  int64_t _usec;
+
+    int64_t _usec;
 };
-}  // namespace tbutil
+}//end namespace
 #endif

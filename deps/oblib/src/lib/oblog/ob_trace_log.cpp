@@ -14,38 +14,17 @@
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
-#include "lib/time/tbtimeutil.h"
 
-namespace oceanbase {
-namespace common {
-const char* const ObTraceLogConfig::LOG_LEVEL_ENV_KEY = "_OB_TRACE_LOG_LEVEL_";
-const char* const ObTraceLogConfig::level_strs_[] = {"ERROR", "USER_ERR", "WARN", "INFO", "TRACE", "DEBUG"};
+namespace oceanbase
+{
+namespace common
+{
+const char *const ObTraceLogConfig::LOG_LEVEL_ENV_KEY = "_OB_TRACE_LOG_LEVEL_";
+const char *const ObTraceLogConfig::level_strs_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 volatile int ObTraceLogConfig::log_level_ = OB_LOG_LEVEL_TRACE;
 bool ObTraceLogConfig::got_env_ = false;
 
-int32_t ObTraceLogConfig::up_log_level()
-{
-  int32_t prev_log_level = log_level_;
-  int32_t modify_log_level = log_level_ - 1;
-  if (OB_LOG_LEVEL_DEBUG >= modify_log_level && OB_LOG_LEVEL_ERROR <= modify_log_level) {
-    log_level_ = modify_log_level;
-  }
-  LOG_INFO("up_log_level", "prev_log_level", prev_log_level, "cur_log_level", log_level_);
-  return log_level_;
-}
-
-int32_t ObTraceLogConfig::down_log_level()
-{
-  int32_t prev_log_level = log_level_;
-  int32_t modify_log_level = log_level_ + 1;
-  if (OB_LOG_LEVEL_DEBUG >= modify_log_level && OB_LOG_LEVEL_ERROR <= modify_log_level) {
-    log_level_ = modify_log_level;
-  }
-  LOG_INFO("down_log_level", "prev_log_level", prev_log_level, "cur_log_level", log_level_);
-  return log_level_;
-}
-
-int32_t ObTraceLogConfig::set_log_level(const char* log_level_str)
+int32_t ObTraceLogConfig::set_log_level(const char *log_level_str)
 {
   if (NULL != log_level_str) {
     set_log_level(log_level_str, log_level_);
@@ -54,10 +33,10 @@ int32_t ObTraceLogConfig::set_log_level(const char* log_level_str)
   return log_level_;
 }
 
-int32_t ObTraceLogConfig::set_log_level(const char* log_level_str, volatile int& log_level)
+int32_t ObTraceLogConfig::set_log_level(const char *log_level_str, volatile int &log_level)
 {
   if (NULL != log_level_str) {
-    int32_t level_num = sizeof(level_strs_) / sizeof(const char*);
+    int32_t level_num = sizeof(level_strs_) / sizeof(const char *);
     bool find_level = false;
     for (int32_t idx = 0; !find_level && idx < level_num; ++idx) {
       if (0 == STRCASECMP(level_strs_[idx], log_level_str)) {
@@ -69,5 +48,5 @@ int32_t ObTraceLogConfig::set_log_level(const char* log_level_str, volatile int&
   return log_level;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

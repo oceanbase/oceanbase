@@ -15,11 +15,13 @@
 #include "share/client_feedback/ob_client_feedback_manager.h"
 #include "share/partition_table/ob_partition_location.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 
-int ObFeedbackManager::serialize(char* buf, const int64_t len, int64_t& pos) const
+int ObFeedbackManager::serialize(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   SERI_FEEDBACK_OBJ(follower_first_feedback_);
@@ -27,13 +29,13 @@ int ObFeedbackManager::serialize(char* buf, const int64_t len, int64_t& pos) con
   OB_FB_SER_END;
 }
 
-int ObFeedbackManager::deserialize(char* buf, const int64_t len, int64_t& pos)
+int ObFeedbackManager::deserialize(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
   reset();
   while ((pos < len) && OB_SUCC(ret)) {
     int64_t type = 0;
-    int64_t tmp_pos = pos;  // pos before read type
+    int64_t tmp_pos = pos; // pos before read type
     // read type
     OB_FB_DECODE_INT(type, int64_t);
 
@@ -46,7 +48,7 @@ int ObFeedbackManager::deserialize(char* buf, const int64_t len, int64_t& pos)
           pos += struct_len;
         }
       } else {
-        pos = tmp_pos;  // recover the pos before type
+        pos = tmp_pos; // recover the pos before type
         switch (type) {
           case PARTITION_LOCATION_FB_ELE: {
             if (OB_FAIL(deserialize_feedback_obj(buf, len, pos, pl_feedback_))) {
@@ -61,8 +63,8 @@ int ObFeedbackManager::deserialize(char* buf, const int64_t len, int64_t& pos)
             break;
           }
           default: {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("invalid type", K(type), K(ret));
+             ret = OB_ERR_UNEXPECTED;
+             LOG_ERROR("invalid type", K(type), K(ret));
           }
         }
       }
@@ -75,10 +77,10 @@ int ObFeedbackManager::deserialize(char* buf, const int64_t len, int64_t& pos)
   OB_FB_DESER_END;
 }
 
-int ObFeedbackManager::add_partition_fb_info(const ObFBPartitionParam& param)
+int ObFeedbackManager::add_partition_fb_info(const ObFBPartitionParam &param)
 {
   INIT_SUCC(ret);
-  ObFeedbackPartitionLocation* fb_pl = NULL;
+  ObFeedbackPartitionLocation *fb_pl = NULL;
 
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -101,11 +103,11 @@ int ObFeedbackManager::add_partition_fb_info(const ObFBPartitionParam& param)
     fb_pl->set_table_id(param.pl_.get_table_id());
     fb_pl->set_partition_id(param.original_partition_id_);
     fb_pl->set_schema_version(param.schema_version_);
-    const ObIArray<ObReplicaLocation>& rl_array = param.pl_.get_replica_locations();
+    const ObIArray<ObReplicaLocation> &rl_array = param.pl_.get_replica_locations();
     ObFeedbackReplicaLocation fb_rl;
     for (int64_t i = 0; OB_SUCC(ret) && (i < rl_array.count()); ++i) {
       fb_rl.reset();
-      const ObReplicaLocation& rl = rl_array.at(i);
+      const ObReplicaLocation &rl = rl_array.at(i);
       fb_rl.server_ = rl.server_;
       fb_rl.role_ = rl.role_;
       fb_rl.replica_type_ = rl.replica_type_;
@@ -141,7 +143,7 @@ int ObFeedbackManager::add_partition_fb_info(const ObFBPartitionParam& param)
     fb_pl = NULL;
   }
 
-  pl_feedback_ = fb_pl;  // no matter succ or not
+  pl_feedback_ = fb_pl; // no matter succ or not
   return ret;
 }
 
@@ -152,7 +154,7 @@ int ObFeedbackManager::add_follower_first_fb_info(const ObFollowerFirstFeedbackT
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid type", K(type), K(ret));
   } else {
-    ObFollowerFirstFeedback* fff = NULL;
+    ObFollowerFirstFeedback *fff = NULL;
     if (NULL != follower_first_feedback_) {
       follower_first_feedback_->reset();
       fff = follower_first_feedback_;
@@ -174,10 +176,10 @@ int ObFeedbackManager::add_follower_first_fb_info(const ObFollowerFirstFeedbackT
       fff = NULL;
     }
 
-    follower_first_feedback_ = fff;  // no matter succ or not
+    follower_first_feedback_ = fff; // no matter succ or not
   }
   return ret;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase

@@ -14,16 +14,21 @@
 
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
+#include "storage/ob_file_system_router.h"
+#include <sys/utsname.h>
+#include "share/ob_version.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
+namespace observer
+{
 
-int ObServerUtils::get_server_ip(ObIAllocator* allocator, ObString& ipstr)
+int ObServerUtils::get_server_ip(ObIAllocator *allocator, ObString &ipstr)
 {
   int ret = OB_SUCCESS;
-  ObAddr addr = GCTX.self_addr_;
+  ObAddr addr = GCTX.self_addr();
   char ip_buf[OB_IP_STR_BUFF] = {'\0'};
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
@@ -33,7 +38,7 @@ int ObServerUtils::get_server_ip(ObIAllocator* allocator, ObString& ipstr)
     SERVER_LOG(WARN, "ip to string failed", K(ret));
   } else {
     ObString ipstr_tmp = ObString::make_string(ip_buf);
-    if (OB_FAIL(ob_write_string(*allocator, ipstr_tmp, ipstr))) {
+    if (OB_FAIL(ob_write_string (*allocator, ipstr_tmp, ipstr))) {
       SERVER_LOG(WARN, "ob write string failed", K(ret));
     } else if (ipstr.empty()) {
       ret = OB_ERR_UNEXPECTED;
@@ -43,5 +48,234 @@ int ObServerUtils::get_server_ip(ObIAllocator* allocator, ObString& ipstr)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+int ObServerUtils::get_log_disk_info_in_config(int64_t& log_disk_size,
+                                               int64_t& log_disk_percentage)
+{
+  int64_t data_disk_size = 0;
+  int64_t data_disk_percentage = 0;
+
+  return observer::ObServerUtils::cal_all_part_disk_size(GCONF.datafile_size,
+                                                         GCONF.log_disk_size,
+                                                         GCONF.datafile_disk_percentage,
+                                                         GCONF.log_disk_percentage,
+                                                         data_disk_size,
+                                                         log_disk_size,
+                                                         data_disk_percentage,
+                                                         log_disk_percentage);
+}
+
+int ObServerUtils::get_data_disk_info_in_config(int64_t& data_disk_size,
+                                                int64_t& data_disk_percentage)
+{
+  int64_t log_disk_size = 0;
+  int64_t log_disk_percentage = 0;
+
+  return observer::ObServerUtils::cal_all_part_disk_size(GCONF.datafile_size,
+                                                         GCONF.log_disk_size,
+                                                         GCONF.datafile_disk_percentage,
+                                                         GCONF.log_disk_percentage,
+                                                         data_disk_size,
+                                                         log_disk_size,
+                                                         data_disk_percentage,
+                                                         log_disk_percentage);
+}
+
+int ObServerUtils::cal_all_part_disk_size(const int64_t suggested_data_disk_size,
+                                          const int64_t suggested_log_disk_size,
+                                          const int64_t suggested_data_disk_percentage,
+                                          const int64_t suggested_log_disk_percentage,
+                                          int64_t& data_disk_size,
+                                          int64_t& log_disk_size,
+                                          int64_t& data_disk_percentage,
+                                          int64_t& log_disk_percentage)
+{
+  int ret = OB_SUCCESS;
+
+// background information about default disk percentage:
+// If not in shared mode, disk will be used up to 90%.
+// If in shared mode, data and clog disk usage will be up to 60% and 30%
+  const int64_t DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE = 90;
+  const int64_t DEFAULT_DATA_DISK_PERCENTAGE_IN_SHARED_MODE = 60;
+  const int64_t DEFAULT_CLOG_DISK_PERCENTAGE_IN_SHARED_MODE = 30;
+
+  // We use sstable_dir as the data disk directory to identify whether the log and data are located
+  // on the same file system, and the storage module will ensure that sstable_dir and slog_dir are
+  // located on the same file system;
+  const char* data_dir = OB_FILE_SYSTEM_ROUTER.get_sstable_dir();
+  const char* clog_dir = OB_FILE_SYSTEM_ROUTER.get_clog_dir();
+
+  struct statvfs data_statvfs;
+  struct statvfs clog_statvfs;
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(0 != statvfs(data_dir, &data_statvfs))) {
+      LOG_ERROR("Failed to get data disk space ", KR(ret), K(data_dir), K(errno));
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_UNLIKELY(0 != statvfs(clog_dir, &clog_statvfs))) {
+      LOG_ERROR("Failed to get clog disk space ", KR(ret), K(clog_dir), K(errno));
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+
+  bool shared_mode = true;
+  int64_t data_default_disk_percentage = 0;
+  int64_t clog_default_disk_percentage = 0;
+
+  if (OB_SUCC(ret)) {
+    if (data_statvfs.f_fsid == clog_statvfs.f_fsid) {
+      shared_mode = true;
+      data_default_disk_percentage = DEFAULT_DATA_DISK_PERCENTAGE_IN_SHARED_MODE;
+      clog_default_disk_percentage = DEFAULT_CLOG_DISK_PERCENTAGE_IN_SHARED_MODE;
+    } else {
+      shared_mode = false;
+      data_default_disk_percentage = DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE;
+      clog_default_disk_percentage = DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE;
+    }
+    if (OB_FAIL(decide_disk_size(data_statvfs,
+                                 suggested_data_disk_size,
+                                 suggested_data_disk_percentage,
+                                 data_default_disk_percentage,
+                                 data_dir,
+                                 data_disk_size,
+                                 data_disk_percentage))) {
+      LOG_ERROR("decide data disk size failed",
+          KR(ret), K(data_dir), K(suggested_data_disk_size), K(suggested_data_disk_percentage),
+          K(data_default_disk_percentage), K(shared_mode));
+    } else if (OB_FAIL(decide_disk_size(clog_statvfs,
+                                        suggested_log_disk_size,
+                                        suggested_log_disk_percentage,
+                                        clog_default_disk_percentage,
+                                        clog_dir,
+                                        log_disk_size,
+                                        log_disk_percentage))) {
+      LOG_ERROR("decide clog disk size failed",
+          KR(ret), K(clog_dir), K(suggested_data_disk_size), K(suggested_data_disk_percentage),
+          K(clog_default_disk_percentage), K(shared_mode));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_ERROR("decide_all_disk_size failed",
+        KR(ret), K(data_dir), K(clog_dir),
+        K(suggested_data_disk_size), K(suggested_data_disk_percentage),
+        K(data_default_disk_percentage), K(clog_default_disk_percentage),
+        K(shared_mode), K(data_disk_size), K(log_disk_size));
+  } else {
+    LOG_INFO("decide_all_disk_size succ",
+        K(data_dir), K(clog_dir),
+        K(suggested_data_disk_size), K(suggested_data_disk_percentage),
+        K(data_default_disk_percentage), K(clog_default_disk_percentage),
+        K(shared_mode), K(data_disk_size), K(log_disk_size));
+  }
+
+  return ret;
+}
+
+int ObServerUtils::decide_disk_size(const struct statvfs& svfs,
+                               const int64_t suggested_disk_size,
+                               const int64_t suggested_disk_percentage,
+                               const int64_t default_disk_percentage,
+                               const char* dir,
+                               int64_t& disk_size,
+                               int64_t& disk_percentage)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t total_space =  (svfs.f_blocks + svfs.f_bavail - svfs.f_bfree) * svfs.f_bsize;
+  int64_t free_space = svfs.f_bavail * svfs.f_bsize;
+
+  if (suggested_disk_size <= 0) {
+    int64_t disk_percentage = 0;
+    if (suggested_disk_percentage <= 0) {
+      disk_percentage = default_disk_percentage;
+    } else {
+      disk_percentage = suggested_disk_percentage;
+    }
+    disk_size = total_space * disk_percentage / 100;
+  } else {
+    disk_size = suggested_disk_size;
+  }
+
+  if (disk_size > total_space) {
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
+  }
+  LOG_INFO("decide disk size finished",
+        K(dir),
+        K(suggested_disk_size), K(suggested_disk_percentage),
+        K(default_disk_percentage),
+        K(total_space), K(free_space), K(disk_size));
+  return ret;
+}
+
+int ObServerUtils::check_slog_data_binding(
+    const char *sstable_dir,
+    const char *slog_dir)
+{
+  int ret = OB_SUCCESS;
+  struct statvfs sstable_svfs;
+  struct statvfs slog_svfs;
+  if (OB_ISNULL(sstable_dir) || OB_ISNULL(slog_dir)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), KP(sstable_dir), KP(slog_dir));
+  } else if (OB_UNLIKELY(0 != statvfs(sstable_dir, &sstable_svfs))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to get sstable directory vfs", K(ret), K(sstable_dir));
+  } else if (OB_UNLIKELY(0 != statvfs(slog_dir, &slog_svfs))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to get slog directory vfs", K(ret), K(slog_dir));
+  } else if (sstable_svfs.f_fsid != slog_svfs.f_fsid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("SLOG and datafile must be on the same disk", K(ret), K(sstable_svfs.f_fsid),
+        K(slog_svfs.f_fsid));
+  }
+  return ret;
+}
+
+const char *ObServerUtils::build_syslog_file_info(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  const static int64_t max_info_len = 512;
+  static char info[max_info_len];
+
+  // self address
+  const char *self_addr = addr.is_valid() ? to_cstring(addr) : "";
+
+  // OS info
+  struct utsname uts;
+  if (0 != ::uname(&uts)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("call uname failed");
+  }
+
+  // time zone info
+  int gmtoff_hour = 0;
+  int gmtoff_minute = 0;
+  if (OB_SUCC(ret)) {
+    time_t t = time(NULL);
+    struct tm lt;
+    if (NULL == localtime_r(&t, &lt)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("call localtime failed");
+    } else {
+      gmtoff_hour = (std::abs(lt.tm_gmtoff) / 3600) * (lt.tm_gmtoff < 0 ? -1 : 1);
+      gmtoff_minute = std::abs(lt.tm_gmtoff) % 3600 / 60;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int n = snprintf(info, max_info_len,
+                     "address: %s, observer version: %s, revision: %s, "
+                     "sysname: %s, os release: %s, machine: %s, tz GMT offset: %02d:%02d",
+                     self_addr, PACKAGE_STRING, build_version(),
+                     uts.sysname, uts.release, uts.machine, gmtoff_hour, gmtoff_minute);
+    if (n <= 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("snprintf failed");
+    }
+  }
+
+  return OB_SUCCESS == ret ? info : nullptr;
+}
+
+} // namespace observer
+} // namespace oceanbase
+

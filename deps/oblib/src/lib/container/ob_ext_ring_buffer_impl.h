@@ -24,46 +24,39 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_small_spin_lock.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/allocator/ob_external_ref.h"
+#include "lib/allocator/ob_heavy_ref.h"
 
-namespace oceanbase {
-namespace common {
-namespace erb {
+namespace oceanbase
+{
+namespace common
+{
+namespace erb
+{
 static inline void on_fatal_error()
 {
-  while (true) {
-    LIB_LOG(ERROR, "on_fatal_error");
+  while(true) {
+    LIB_LOG_RET(ERROR, common::OB_ERROR, "on_fatal_error");
     sleep(1);
   }
 }
 
 // alloc
-class RingBufferAlloc : public ObIAllocator {
+class RingBufferAlloc : public ObIAllocator
+{
 public:
   RingBufferAlloc() : mem_attr_()
   {
     mem_attr_.label_ = ObModIds::OB_RING_BUFFER;
     mem_attr_.tenant_id_ = OB_SERVER_TENANT_ID;
   }
-  virtual ~RingBufferAlloc()
-  {}
-  virtual void* alloc(const int64_t size)
-  {
-    return alloc(size, mem_attr_);
-  }
+  virtual ~RingBufferAlloc() { }
+  virtual void* alloc(const int64_t size) { return alloc(size, mem_attr_); }
   virtual void* alloc(const int64_t size, const ObMemAttr& attr)
-  {
-    return ob_malloc(size, attr);
-  }
-  virtual void free(void* ptr)
-  {
-    ob_free(ptr);
-  }
-  virtual void set_attr(const ObMemAttr& attr)
-  {
-    mem_attr_ = attr;
-  }
-
+  { return ob_malloc(size, attr); }
+  virtual void free(void* ptr) { ob_free(ptr); }
+  virtual void set_attr(const ObMemAttr& attr) { mem_attr_ = attr; }
 private:
   ObMemAttr mem_attr_;
   DISALLOW_COPY_AND_ASSIGN(RingBufferAlloc);
@@ -74,57 +67,65 @@ private:
 
 // Ptr slot.
 template <typename T>
-struct PtrSlot {
+struct PtrSlot
+{
   typedef ObPtrSpinLock<T> Lock;
-  T* val_;
+  T *val_;
 };
 
 // Slot operation.
-namespace SlotOp {
-// PtrSlot.
-template <typename T>
-void init(PtrSlot<T>& slot)
+namespace SlotOp
 {
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  lock.init();
+  // PtrSlot.
+  template <typename T> void init(PtrSlot<T> &slot)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    lock.init();
+  }
+  template <typename T> void lock(PtrSlot<T> &slot)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    lock.lock();
+  }
+  template <typename T> bool try_lock(PtrSlot<T> &slot)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    return lock.try_lock();
+  }
+  template <typename T> void unlock(PtrSlot<T> &slot)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    lock.unlock();
+  }
+  template <typename T> T* get(PtrSlot<T> &slot)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    return lock.get_ptr();
+  }
+  template <typename T> void set(PtrSlot<T> &slot, T* const &val)
+  {
+    typename PtrSlot<T>::Lock &lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
+    lock.set_ptr(val);
+  }
+  template <typename T> T* default_val(PtrSlot<T> &slot)
+  {
+    UNUSED(slot);
+    return NULL;
+  }
 }
+
 template <typename T>
-void lock(PtrSlot<T>& slot)
+class DummyRef
 {
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  lock.lock();
-}
-template <typename T>
-bool try_lock(PtrSlot<T>& slot)
-{
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  return lock.try_lock();
-}
-template <typename T>
-void unlock(PtrSlot<T>& slot)
-{
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  lock.unlock();
-}
-template <typename T>
-T* get(PtrSlot<T>& slot)
-{
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  return lock.get_ptr();
-}
-template <typename T>
-void set(PtrSlot<T>& slot, T* const& val)
-{
-  typename PtrSlot<T>::Lock& lock = reinterpret_cast<typename PtrSlot<T>::Lock&>(slot.val_);
-  lock.set_ptr(val);
-}
-template <typename T>
-T* default_val(PtrSlot<T>& slot)
-{
-  UNUSED(slot);
-  return NULL;
-}
-}  // namespace SlotOp
+public:
+  DummyRef() {}
+  virtual ~DummyRef() {}
+  T* acquire(T** paddr) { return load_ptr(paddr); }
+  void release(T* addr) { UNUSED(addr); }
+  void retire(T* addr) { UNUSED(addr); }
+private:
+  T* load_ptr(T** paddr) { return (T*)(((uint64_t)ATOMIC_LOAD(paddr)) & ~1ULL); }
+};
 
 // ring buffer base of T ptr
 // allocator is iallcoator interface
@@ -132,14 +133,17 @@ T* default_val(PtrSlot<T>& slot)
 
 // data type should have its default value. Because, user may pop an entry that has not been initialized.
 
+
 // Just write function definitions inside the class
-template <typename ValT, typename SlotT>
-class ObExtendibleRingBufferBase {
+template <typename ValT, typename SlotT, typename RefT = DummyRef<ValT>>
+class ObExtendibleRingBufferBase
+{
   // Segment.
-  struct Segment : public ObExternalRef::IERefPtr {
-    ObIAllocator* allocator_;
+  struct Segment : public ObExternalRef::IERefPtr
+  {
+    ObIAllocator *allocator_;
     SlotT slots_[0];
-    void reset(const int64_t capacity, ObIAllocator* alloc)
+    void reset(const int64_t capacity, ObIAllocator *alloc)
     {
       allocator_ = alloc;
       for (int64_t idx = 0; idx < capacity; ++idx) {
@@ -162,12 +166,13 @@ class ObExtendibleRingBufferBase {
     }
   };
   // Dir.
-  struct Dir : public ObExternalRef::IERefPtr {
-    ObIAllocator* allocator_;
+  struct Dir : public ObExternalRef::IERefPtr
+  {
+    ObIAllocator *allocator_;
     int64_t seg_cnt_;
     int64_t mod_val_;
-    Segment* segs_[0];
-    void reset(const int64_t seg_cnt, const int64_t seg_capacity, ObIAllocator* alloc)
+    Segment *segs_[0];
+    void reset(const int64_t seg_cnt, const int64_t seg_capacity, ObIAllocator *alloc)
     {
       allocator_ = alloc;
       seg_cnt_ = seg_cnt;
@@ -176,8 +181,7 @@ class ObExtendibleRingBufferBase {
         segs_[idx] = NULL;
       }
     }
-    virtual void purge()
-    {
+    virtual void purge() {
       int ret = OB_SUCCESS;
       for (int64_t idx = 0; idx < seg_cnt_; ++idx) {
         segs_[idx] = NULL;
@@ -191,46 +195,41 @@ class ObExtendibleRingBufferBase {
         allocator_->free(this);
       }
     }
-    void on_quiescent()
-    {
+    void on_quiescent() {
       purge();
     }
   };
-  struct TrueCond {
-    bool operator()(const ValT& val)
-    {
-      UNUSED(val);
-      return true;
-    }
-    bool operator()(const ValT& oldval, const ValT& newval)
-    {
-      UNUSED(oldval);
-      UNUSED(newval);
-      return true;
-    }
+  struct TrueCond
+  {
+    bool operator()(const ValT &val) { UNUSED(val); return true; }
+    bool operator()(const ValT &oldval, const ValT &newval) { UNUSED(oldval); UNUSED(newval); return true; }
   };
   // Defines.
-  typedef ObExtendibleRingBufferBase<ValT, SlotT> MyType;
+  typedef ObExtendibleRingBufferBase<ValT, SlotT, RefT> MyType;
   static const int64_t MIN_SEG_CNT = 2;
   static const int64_t INIT_SEG_CNT = MIN_SEG_CNT;
-  typedef std::pair<int64_t, int64_t> SlotIdx;  // <Segment index, Slot index on Segment>
+  typedef std::pair<int64_t, int64_t> SlotIdx; // <Segment index, Slot index on Segment>
 public:
-  static const int64_t DEFAULT_SEG_SIZE = (1LL << 9);  // 512 bytes
-  static const int64_t DEFAULT_SEG_CAPACITY =
-      static_cast<int64_t>((DEFAULT_SEG_SIZE - sizeof(Segment)) / sizeof(SlotT));
+  static const int64_t DEFAULT_SEG_SIZE = (1LL << 9);    // 512 bytes
+  static const int64_t DEFAULT_SEG_CAPACITY = static_cast<int64_t>((DEFAULT_SEG_SIZE - sizeof(Segment)) / sizeof(SlotT));
+
   // Interface for subclass.
-  ObExtendibleRingBufferBase()
-      : inited_(false), seg_size_(0), seg_capacity_(0), begin_sn_(0), end_sn_(0), dir_(0), es_lock_(), allocator_(NULL)
-  {}
-  virtual ~ObExtendibleRingBufferBase()
-  {}
+  ObExtendibleRingBufferBase() :
+    inited_(false),
+    seg_size_(0),
+    seg_capacity_(0),
+    begin_sn_(0),
+    end_sn_(0),
+    dir_(0),
+    es_lock_(common::ObLatchIds::ALLOC_ESS_LOCK),
+    allocator_(NULL)
+  { }
+  virtual ~ObExtendibleRingBufferBase() { }
 
-  bool is_inited() const
-  {
-    return inited_;
-  }
+  bool is_inited() const { return inited_; }
 
-  int init(const int64_t begin_sn, ObIAllocator* allocator, const int64_t seg_size = DEFAULT_SEG_SIZE)
+  int init(const int64_t begin_sn, ObIAllocator *allocator,
+      const int64_t seg_size = DEFAULT_SEG_SIZE)
   {
     int ret = OB_SUCCESS;
     if (inited_) {
@@ -265,29 +264,27 @@ public:
     }
     return ret;
   }
-  int get(const int64_t sn, ValT& val) const
+  int get(const int64_t sn, ValT &val) const
   {
     return const_cast<MyType*>(this)->do_get_(sn, val);
   }
-  int set(const int64_t sn, const ValT& val)
+  int set(const int64_t sn, const ValT &val)
   {
     TrueCond cond;
     bool set = false;
     return do_set_(sn, val, cond, set);
   }
-  template <typename Func>
-  int set(const int64_t sn, const ValT& val, Func& cond, bool& set)
+  template <typename Func> int set(const int64_t sn, const ValT &val, Func &cond, bool &set)
   {
     return do_set_(sn, val, cond, set);
   }
-  int pop(ValT& val)
+  int pop(ValT &val)
   {
     TrueCond cond;
     bool popped = false;
-    return do_pop_(cond, val, popped, false /*use_lock*/);
+    return do_pop_(cond, val, popped, false/*use_lock*/);
   }
-  template <typename Func>
-  int pop(Func& cond, ValT& val, bool& popped, bool use_lock = false)
+  template <typename Func> int pop(Func &cond, ValT &val, bool &popped, bool use_lock = false)
   {
     return do_pop_(cond, val, popped, use_lock);
   }
@@ -307,7 +304,6 @@ public:
   }
 
 protected:
-  typedef common::ObExternalRef::RetireList RetireList;
   ObExternalRef& get_dir_ref()
   {
     static ObExternalRef dir_ref;
@@ -318,39 +314,18 @@ protected:
     static ObExternalRef seg_ref;
     return seg_ref;
   }
-  ObExternalRef& get_val_ref()
+  RefT& get_val_ref()
   {
-    static ObExternalRef val_ref;
+    static RefT val_ref;
     return val_ref;
   }
-  static RetireList& get_retire_list()
-  {
-    static __thread RetireList retire_list;
-    return retire_list;
-  }
-
 private:
   // Atomic loader & setter.
-  int64_t load_begin_sn_()
-  {
-    return ATOMIC_LOAD(&(begin_sn_));
-  }
-  int64_t load_end_sn_()
-  {
-    return ATOMIC_LOAD(&(end_sn_));
-  }
-  Dir* load_dir_()
-  {
-    return ATOMIC_LOAD(&(dir_));
-  }
-  void set_dir_(Dir* dir)
-  {
-    UNUSED(ATOMIC_STORE(&(dir_), dir));
-  }
-  bool is_dir_changed(Dir* dir)
-  {
-    return dir != load_dir_();
-  }
+  int64_t load_begin_sn_() { return ATOMIC_LOAD(&(begin_sn_)); }
+  int64_t load_end_sn_() { return ATOMIC_LOAD(&(end_sn_)); }
+  Dir* load_dir_() { return ATOMIC_LOAD(&(dir_)); }
+  void set_dir_(Dir *dir) { UNUSED(ATOMIC_STORE(&(dir_), dir)); }
+  bool is_dir_changed(Dir* dir) { RLockGuard guard(sn_dir_lock_); return dir != load_dir_(); }
   void update_begin_sn_(const int64_t begin_sn)
   {
     UNUSED(ATOMIC_STORE(&begin_sn_, begin_sn));
@@ -365,53 +340,39 @@ private:
   }
   // Pop lock
   // Expand, shrink, Segment alloc lock.
-  bool estrylock_()
-  {
-    return OB_SUCCESS == es_lock_.trylock();
-  }
-  void eslock_()
-  {
-    int ret = es_lock_.lock();
-    if (OB_SUCCESS != ret) {
-      LIB_LOG(ERROR, "err lock", K(ret));
-    }
-  }
-  void esunlock_()
-  {
-    int ret = es_lock_.unlock();
-    if (OB_SUCCESS != ret) {
-      LIB_LOG(ERROR, "err unlock", K(ret));
-    }
-  }
+  bool estrylock_() { return OB_SUCCESS == es_lock_.trylock(); }
+  void eslock_() { int ret = es_lock_.lock(); if (OB_SUCCESS != ret) { LIB_LOG(ERROR, "err lock", K(ret)); } }
+  void esunlock_() { int ret = es_lock_.unlock(); if (OB_SUCCESS != ret) { LIB_LOG(ERROR, "err unlock", K(ret)); }}
   // Calc.
-  SlotIdx calc_slot_idx_(const int64_t sn, Dir* dir)
+  SlotIdx calc_slot_idx_(const int64_t sn, Dir *dir)
   {
     int64_t idx = sn % dir->mod_val_;
     return SlotIdx(idx / seg_capacity_, idx % seg_capacity_);
   }
-  int64_t calc_upper_lmt_sn_(const int64_t begin_sn, Dir* dir)
+  int64_t calc_upper_lmt_sn_(const int64_t begin_sn, Dir *dir)
   {
     return (dir->mod_val_ + (begin_sn - (begin_sn % seg_capacity_)));
   }
-  int64_t calc_ctrl_sn_(const int64_t begin_sn, Dir* dir)
+  int64_t calc_ctrl_sn_(const int64_t begin_sn, Dir *dir)
   {
     return (begin_sn - (calc_slot_idx_(begin_sn, dir).second) + seg_capacity_ - 1);
   }
   // Segment - New & Delete.
   Segment* new_segment_()
   {
-    Segment* pret = NULL;
+    Segment *pret = NULL;
     if (NULL == allocator_) {
-      LIB_LOG(ERROR, "err alloc");
-    } else if (NULL == (pret = static_cast<Segment*>(allocator_->alloc(seg_size_)))) {
-      LIB_LOG(WARN, "failed to alloc Segment", K(seg_size_));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err alloc");
+    }
+    else if (NULL == (pret = static_cast<Segment*>(allocator_->alloc(seg_size_)))) {
+      LIB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "failed to alloc Segment", K(seg_size_));
     } else {
-      new (pret) Segment();
+      new(pret)Segment();
       pret->reset(seg_capacity_, allocator_);
     }
     return pret;
   }
-  void delete_segment_(Segment* seg)
+  void delete_segment_(Segment *seg)
   {
     if (NULL != seg) {
       seg->purge();
@@ -419,17 +380,17 @@ private:
     }
   }
   // Ensure Segment. Hazard pointer for new Segment is acquired.
-  int ensure_segment_(Dir* dir, const int64_t seg_idx, Segment*& seg)
+  int ensure_segment_(Dir *dir, const int64_t seg_idx, Segment *&seg)
   {
     int ret = OB_SUCCESS;
     if (estrylock_()) {
       if (dir != load_dir_()) {
-        ret = OB_EAGAIN;  // Dir changed.
+        ret = OB_EAGAIN; // Dir changed.
       } else if (NULL != dir->segs_[seg_idx]) {
         // Segment not NULL.
       } else if (NULL == (dir->segs_[seg_idx] = new_segment_())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LIB_LOG(ERROR, "failed to new Segment", K(ret), K(seg_idx));
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LIB_LOG(ERROR, "failed to new Segment", K(ret), K(seg_idx));
       }
       if (OB_SUCC(ret)) {
         // Acquire haz, so Segment is safe.
@@ -437,26 +398,26 @@ private:
       }
       esunlock_();
     } else {
-      ret = OB_EAGAIN;  // Dir under modification.
+      ret = OB_EAGAIN; // Dir under modification.
     }
     return ret;
   }
   // Dir - New & Delete.
   Dir* new_dir_(const int64_t seg_cnt)
   {
-    Dir* pret = NULL;
+    Dir *pret = NULL;
     int64_t size = static_cast<int64_t>(sizeof(Dir) + (seg_cnt * sizeof(Segment*)));
     if (NULL == allocator_) {
-      LIB_LOG(ERROR, "err alloc");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err alloc");
     } else if (NULL == (pret = static_cast<Dir*>(allocator_->alloc(size)))) {
-      LIB_LOG(WARN, "failed to alloc Dir", K(size));
+      LIB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "failed to alloc Dir", K(size));
     } else {
-      new (pret) Dir();
+      new(pret)Dir();
       pret->reset(seg_cnt, seg_capacity_, allocator_);
     }
     return pret;
   }
-  void delete_dir_(Dir* dir)
+  void delete_dir_(Dir *dir)
   {
     if (NULL != dir) {
       dir->purge();
@@ -468,13 +429,13 @@ private:
   {
     int ret = OB_SUCCESS;
     int64_t init_seg_cnt = INIT_SEG_CNT;
-    Dir* dir = NULL;
+    Dir *dir = NULL;
     if (NULL == (dir = new_dir_(init_seg_cnt))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LIB_LOG(ERROR, "failed to init Dir", K(ret), K(init_seg_cnt));
     } else {
       for (int64_t idx = 0; OB_SUCC(ret) && idx < dir->seg_cnt_; ++idx) {
-        Segment* seg = NULL;
+        Segment *seg = NULL;
         if (NULL == (seg = new_segment_())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LIB_LOG(ERROR, "failed to init Segment", K(ret), K(idx));
@@ -487,7 +448,7 @@ private:
       set_dir_(dir);
     } else if (NULL != dir) {
       for (int64_t idx = 0; idx < dir->seg_cnt_; ++idx) {
-        Segment*& seg = dir->segs_[idx];
+        Segment *&seg = dir->segs_[idx];
         if (NULL != seg) {
           delete_segment_(seg);
         }
@@ -499,9 +460,9 @@ private:
   int dir_seg_destroy_()
   {
     int ret = OB_SUCCESS;
-    Dir* dir = load_dir_();
+    Dir *dir = load_dir_();
     for (int64_t idx = 0; idx < dir->seg_cnt_; ++idx) {
-      Segment*& seg = dir->segs_[idx];
+      Segment *&seg = dir->segs_[idx];
       if (NULL != seg) {
         get_seg_ref().retire(seg);
       }
@@ -511,7 +472,7 @@ private:
   }
   // Dir - Expand.
   // Control upper_lmt_sn by locking the last Slot on begin_sn's Segment.
-  int ctrl_upper_lmt_sn_(Dir* dir, int64_t& ctrl_sn)
+  int ctrl_upper_lmt_sn_(Dir *dir, int64_t &ctrl_sn)
   {
     int ret = OB_SUCCESS;
     bool ctrl = false;
@@ -523,9 +484,9 @@ private:
       int64_t begin_sn = load_begin_sn_();
       ctrl_sn = calc_ctrl_sn_(begin_sn, dir);
       SlotIdx slot_idx = calc_slot_idx_(ctrl_sn, dir);
-      Segment*& seg = dir->segs_[slot_idx.first];
+      Segment *&seg = dir->segs_[slot_idx.first];
       if (NULL != seg || (NULL != (seg = new_segment_()))) {
-        SlotT& slot = seg->slots_[slot_idx.second];
+        SlotT &slot = seg->slots_[slot_idx.second];
         SlotOp::lock(slot);
         // Double check.
         if (load_begin_sn_() <= ctrl_sn) {
@@ -540,18 +501,19 @@ private:
     }
     return ret;
   }
-  void unctrl_upper_lmt_sn_(const int64_t ctrl_sn, Dir* dir)
+  void unctrl_upper_lmt_sn_(const int64_t ctrl_sn, Dir *dir)
   {
     SlotIdx slot_idx = calc_slot_idx_(ctrl_sn, dir);
-    SlotT& slot = dir->segs_[slot_idx.first]->slots_[slot_idx.second];
+    SlotT &slot = dir->segs_[slot_idx.first]->slots_[slot_idx.second];
     SlotOp::unlock(slot);
   }
   // Rearrange Segments in new Dir.
-  void expand_rearrange_(const int64_t ctrl_sn, Dir* dir, Dir* new_dir)
+  void expand_rearrange_(const int64_t ctrl_sn, Dir *dir, Dir *new_dir)
   {
     if (NULL == dir || NULL == new_dir) {
-      LIB_LOG(ERROR, "err dir", K(dir), K(new_dir));
-    } else {
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err dir", K(dir), K(new_dir));
+    }
+    else {
       SlotIdx slot_idx = calc_slot_idx_(ctrl_sn, dir);
       SlotIdx new_slot_idx = calc_slot_idx_(ctrl_sn, new_dir);
       for (int64_t idx = 0; idx < dir->seg_cnt_; ++idx) {
@@ -567,12 +529,13 @@ private:
     int ret = OB_SUCCESS;
     Dir* dir2retire = NULL;
     if (estrylock_()) {
-      Dir* old_dir = load_dir_();
+      Dir *old_dir = load_dir_();
       if (NULL == old_dir) {
         ret = OB_ERR_UNEXPECTED;
         LIB_LOG(ERROR, "err dir", K(ret));
-      } else if (old_dir->seg_cnt_ < seg_cnt) {
-        Dir* new_dir = NULL;
+      }
+      else if (old_dir->seg_cnt_ < seg_cnt) {
+        Dir *new_dir = NULL;
         int64_t ctrl_sn = -1;
         if (NULL == (new_dir = new_dir_(seg_cnt))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -582,16 +545,16 @@ private:
           LIB_LOG(WARN, "failed to control upper lmt sn", K(ret), K(ctrl_sn));
         } else {
           expand_rearrange_(ctrl_sn, old_dir, new_dir);
-          set_dir_(new_dir);  // Replace.
+          set_dir_(new_dir); // Replace.
           unctrl_upper_lmt_sn_(ctrl_sn, old_dir);
           dir2retire = old_dir;
         }
       } else {
-        ret = OB_EAGAIN;  // Seg cnt enough.
+        ret = OB_EAGAIN; // Seg cnt enough.
       }
       esunlock_();
     } else {
-      ret = OB_EAGAIN;  // Dir under modification.
+      ret = OB_EAGAIN; // Dir under modification.
     }
     if (NULL != dir2retire) {
       get_dir_ref().retire(dir2retire);
@@ -599,7 +562,7 @@ private:
     return ret;
   }
   // Dir - Shrink.
-  bool need_shrink_(const SlotIdx& slot_idx, Dir* dir)
+  bool need_shrink_(const SlotIdx &slot_idx, Dir *dir)
   {
     bool bret = false;
     if (seg_capacity_ - 1 == slot_idx.second) {
@@ -612,12 +575,13 @@ private:
     return bret;
   }
   // Rearrange Segments in new Dir.
-  void shrink_rearrange_(const int64_t ctrl_sn, Dir* dir, Dir* new_dir)
+  void shrink_rearrange_(const int64_t ctrl_sn, Dir *dir, Dir *new_dir)
   {
     if (NULL == dir || NULL == new_dir) {
-      LIB_LOG(ERROR, "err dir", K(dir), K(new_dir));
-    } else {
-      SlotIdx slot_idx = calc_slot_idx_(ctrl_sn + 1, dir);  // Slot index of the next begin slot.
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err dir", K(dir), K(new_dir));
+    }
+    else {
+      SlotIdx slot_idx = calc_slot_idx_(ctrl_sn + 1, dir); // Slot index of the next begin slot.
       SlotIdx new_slot_idx = calc_slot_idx_(ctrl_sn + 1, new_dir);
       for (int64_t idx = 0; idx < (dir->seg_cnt_ - 1); ++idx) {
         int64_t seg_idx = (slot_idx.first + idx) % dir->seg_cnt_;
@@ -627,12 +591,12 @@ private:
     }
   }
   // Do shrink.
-  int do_shrink_(const int64_t ctrl_sn, const Dir* dir)
+  int do_shrink_(const int64_t ctrl_sn, const Dir *dir)
   {
     int ret = OB_SUCCESS;
     if (estrylock_()) {
-      Dir* old_dir = load_dir_();
-      Dir* new_dir = NULL;
+      Dir *old_dir = load_dir_();
+      Dir *new_dir = NULL;
       int64_t seg_cnt = 0;
       if (NULL == old_dir) {
         ret = OB_ERR_UNEXPECTED;
@@ -646,21 +610,23 @@ private:
       } else {
         shrink_rearrange_(ctrl_sn, old_dir, new_dir);
         // Order is Vital!!!
-        set_dir_(new_dir);  // Replace. It's caller's duty to retire Dir & Segment.
+        WLockGuard guard(sn_dir_lock_);
+        set_dir_(new_dir); // Replace. It's caller's duty to retire Dir & Segment.
         // Ensure atomicity of updating begin_sn_ & Dir
-        update_begin_sn_(ctrl_sn + 1);
+        //
+        update_begin_sn_(ctrl_sn+1);
       }
       esunlock_();
     } else {
-      ret = OB_EAGAIN;  // Dir under modification.
+      ret = OB_EAGAIN; // Dir under modification.
     }
     return ret;
   }
   // Data access - Get.
-  int do_get_(const int64_t sn, ValT& val)
+  int do_get_(const int64_t sn, ValT &val)
   {
     int ret = OB_EAGAIN;
-    while (OB_EAGAIN == ret) {
+    while(OB_EAGAIN == ret) {
       // Check sn.
       if (sn < load_begin_sn_()) {
         ret = OB_ERR_OUT_OF_LOWER_BOUND;
@@ -669,23 +635,25 @@ private:
       }
       // Do get.
       else {
-        Dir* dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
+        Dir *dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
         if (NULL == dir) {
           ret = OB_ERR_UNEXPECTED;
           LIB_LOG(ERROR, "err dir", K(ret));
-        } else {
+        }
+        else {
           SlotIdx slot_idx = calc_slot_idx_(sn, dir);
-          Segment* seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
+          Segment *seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
           if (is_dir_changed(dir)) {
           } else if (NULL == seg) {
             // NULL Segment, get default val of T.
             SlotT fake_slot;
             val = SlotOp::default_val(fake_slot);
             ret = OB_SUCCESS;
-          } else {
-            SlotT& slot = seg->slots_[slot_idx.second];
+          }
+          else {
+            SlotT &slot = seg->slots_[slot_idx.second];
             SlotOp::lock(slot);
-            val = (ValT)get_val_ref().acquire((common::ObExternalRef::IERefPtr**)&slot.val_, get_retire_list());
+            val = (ValT)get_val_ref().acquire((ValT*)&slot.val_);
             SlotOp::unlock(slot);
             ret = OB_SUCCESS;
           }
@@ -701,8 +669,7 @@ private:
     return ret;
   }
   // Data access - Set.
-  template <typename Func>
-  int do_set_(const int64_t sn, const ValT& val, Func& cond, bool& set)
+  template <typename Func> int do_set_(const int64_t sn, const ValT &val, Func &cond, bool &set)
   {
     int ret = OB_EAGAIN;
     set = false;
@@ -710,11 +677,12 @@ private:
       int64_t begin_sn = load_begin_sn_();
       // Check sn.
       if (begin_sn <= sn) {
-        Dir* dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
+        Dir *dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
         if (NULL == dir) {
           ret = OB_ERR_UNEXPECTED;
           LIB_LOG(ERROR, "err dir", K(ret));
-        } else {
+        }
+        else {
           // upper limit sn sets a limit on slot, only slots of
           // sn < upper limit sn are writable.
           // upper limit sn increases monotonically, user figures if out
@@ -723,11 +691,11 @@ private:
           // upper limit sn always valid.
           if (sn < calc_upper_lmt_sn_(begin_sn, dir)) {
             SlotIdx slot_idx = calc_slot_idx_(sn, dir);
-            Segment* seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
+            Segment *seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
             // Ensure Segment.
             if (is_dir_changed(dir)) {
             } else if (NULL != seg || (OB_SUCCESS == (ret = ensure_segment_(dir, slot_idx.first, seg)))) {
-              SlotT& slot = seg->slots_[slot_idx.second];
+              SlotT &slot = seg->slots_[slot_idx.second];
               SlotOp::lock(slot);
               // Double check.
               if (load_begin_sn_() <= sn) {
@@ -738,14 +706,16 @@ private:
                   set = true;
                 }
                 ret = OB_SUCCESS;
-              } else {
+              }
+              else {
                 ret = OB_ERROR_OUT_OF_RANGE;
               }
               SlotOp::unlock(slot);
             }
             get_seg_ref().release(seg);
             get_dir_ref().release(dir);
-          } else {
+          }
+          else {
             // Capacity not enough. Expand and retry on success OR when Dir modified.
             int64_t expect_seg_cnt = (2 + ((sn - begin_sn + 1) / seg_capacity_));
             get_dir_ref().release(dir);
@@ -756,12 +726,12 @@ private:
       } else {
         ret = OB_ERROR_OUT_OF_RANGE;
       }
+
     }
     return ret;
   }
   // Data access - Pop.
-  template <typename Func>
-  int do_pop_(Func& cond, ValT& val, bool& popped, bool use_lock)
+  template <typename Func> int do_pop_(Func &cond, ValT &val, bool &popped, bool use_lock)
   {
     int ret = OB_EAGAIN;
     popped = false;
@@ -770,17 +740,18 @@ private:
       int64_t begin_sn = load_begin_sn_();
       // Check sn.
       if (begin_sn < load_end_sn_()) {
-        Dir* dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
+        Dir *dir = (Dir*)get_dir_ref().acquire((void**)&dir_);
         if (NULL == dir) {
           ret = OB_ERR_UNEXPECTED;
           LIB_LOG(ERROR, "err dir", K(ret));
-        } else {
+        }
+        else {
           SlotIdx slot_idx = calc_slot_idx_(begin_sn, dir);
-          Segment* seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
+          Segment *seg = (Segment*)get_seg_ref().acquire((void**)&dir->segs_[slot_idx.first]);
           // Ensure Segment.
           if (is_dir_changed(dir)) {
           } else if (NULL != seg || (OB_SUCCESS == (ret = ensure_segment_(dir, slot_idx.first, seg)))) {
-            SlotT& slot = seg->slots_[slot_idx.second];
+            SlotT &slot = seg->slots_[slot_idx.second];
             bool lock_succ = false;
             if (use_lock) {
               SlotOp::lock(slot);
@@ -811,9 +782,11 @@ private:
                     ret = do_shrink_(begin_sn, dir);
                     if (OB_SUCCESS == ret) {
                       shrink = true;
-                    } else if (OB_EAGAIN == ret) {
+                    }
+                    else if (OB_EAGAIN == ret) {
                       // Pass.
-                    } else {
+                    }
+                    else {
                       // Err happened, print err code.
                       LIB_LOG(WARN, "failed to do shrink", K(ret));
                     }
@@ -828,8 +801,9 @@ private:
                   ValT deft_val = SlotOp::default_val(slot);
                   SlotOp::set(slot, deft_val);
                 }
-                ret = OB_SUCCESS;  // OB_SUCCESS no matter popped or not.
-              } else {
+                ret = OB_SUCCESS; // OB_SUCCESS no matter popped or not.
+              }
+              else {
                 ret = OB_EAGAIN;
               }
               SlotOp::unlock(slot);
@@ -845,30 +819,34 @@ private:
           }
         }
       } else {
-        ret = OB_ENTRY_NOT_EXIST;  // No available Slot.
+        ret = OB_ENTRY_NOT_EXIST; // No available Slot.
       }
     }
     return ret;
   }
-
 private:
+  typedef common::RWLock RWLock;
+  typedef RWLock::RLockGuard RLockGuard;
+  typedef RWLock::WLockGuard WLockGuard;
   bool inited_;
   int64_t seg_size_;
   int64_t seg_capacity_;
   int64_t begin_sn_;
-  int64_t end_sn_ CACHE_ALIGNED;  // Trade mem for speed.
+  int64_t end_sn_ CACHE_ALIGNED; // Trade mem for speed.
   // Dir.
-  Dir* dir_;
+  Dir *dir_;
   // Expand, shrink, Segment alloc lock.
   ObSpinLock es_lock_;
+  RWLock sn_dir_lock_;
   // Pop lock;
   // Dir & Segment allocator.
-  ObIAllocator* allocator_;
+  ObIAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObExtendibleRingBufferBase);
 };
 
-}  // namespace erb
-}  // namespace common
-}  // namespace oceanbase
+
+}
+}
+}
 
 #endif

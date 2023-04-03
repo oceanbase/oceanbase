@@ -14,6 +14,11 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-namespace oceanbase {
-namespace sql {}  // namespace sql
-}  // namespace oceanbase
+namespace oceanbase
+{
+namespace sql
+{
+
+}// end of sql
+}//end of oceanbase
+

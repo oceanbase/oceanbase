@@ -17,29 +17,36 @@
 #include "sql/resolver/ddl/ob_tenant_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
 /**
  *  ALTER TENANT tenant_name LOCKED|UNLOCKED
  *
  */
 
-ObLockTenantResolver::ObLockTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObLockTenantResolver::ObLockTenantResolver(ObResolverParams &params)
+  : ObDDLResolver(params)
+{
+}
 
 ObLockTenantResolver::~ObLockTenantResolver()
-{}
+{
+}
 
-int ObLockTenantResolver::resolve(const ParseNode& parse_tree)
+int ObLockTenantResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObLockTenantStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObLockTenantStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_LOCK_TENANT != node->type_) || OB_UNLIKELY(2 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_LOCK_TENANT != node->type_)
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret));
   }
@@ -60,8 +67,8 @@ int ObLockTenantResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("invalid node", K(ret));
     } else {
       ObString tenant_name;
-      tenant_name.assign_ptr(
-          (char*)(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
+      tenant_name.assign_ptr((char *)(node->children_[0]->str_value_),
+                             static_cast<int32_t>(node->children_[0]->str_len_));
       mystmt->set_tenant_name(tenant_name);
     }
   }
@@ -82,5 +89,6 @@ int ObLockTenantResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+} /* sql */
+} /* oceanbase */

@@ -15,8 +15,10 @@
 #include "common/row/ob_row.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 DEFINE_SERIALIZE(ObColumnInfo)
 {
@@ -42,7 +44,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObColumnInfo)
   int64_t len = 0;
   int32_t cs_type_int = static_cast<int32_t>(cs_type_);
   OB_UNIS_ADD_LEN(index_);
-  OB_UNIS_ADD_LEN(cs_type_int);  // for cs_type_.
+  OB_UNIS_ADD_LEN(cs_type_int);   // for cs_type_.
   return len;
 }
 
@@ -62,11 +64,11 @@ int64_t ObNewRow::get_deep_copy_size() const
   for (int64_t i = 0; i < count_; ++i) {
     size += cells_[i].get_deep_copy_size();
   }
-  // The projector_ array is of int32_t type, no additional buffer is required
+  //The projector_ array is of int32_t type, no additional buffer is required
   return size;
 }
 
-bool ObNewRow::operator==(const ObNewRow& other) const
+bool ObNewRow::operator==(const ObNewRow &other) const
 {
   bool is_equal = true;
   int64_t count1 = get_count();
@@ -81,7 +83,7 @@ bool ObNewRow::operator==(const ObNewRow& other) const
   return is_equal;
 }
 
-int ObNewRow::deep_copy(const ObNewRow& src, char* buf, int64_t len, int64_t& pos)
+int ObNewRow::deep_copy(const ObNewRow &src, char *buf, int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
@@ -89,7 +91,7 @@ int ObNewRow::deep_copy(const ObNewRow& src, char* buf, int64_t len, int64_t& po
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow, ", K(ret), "need", src.get_deep_copy_size() + pos, K(len));
   } else {
-    cells_ = new (buf + pos) ObObj[src.count_];
+    cells_ = new(buf + pos) ObObj[src.count_];
     pos += src.count_ * sizeof(ObObj);
     count_ = src.count_;
     projector_size_ = 0;
@@ -113,13 +115,13 @@ int ObNewRow::deep_copy(const ObNewRow& src, char* buf, int64_t len, int64_t& po
   return ret;
 }
 
-int ObNewRow::construct(char* buf, int64_t len, int64_t& pos, ObNewRow*& row)
+int ObNewRow::construct(char *buf, int64_t len, int64_t &pos, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  // first, construct ObNewRow header
+  //first, construct ObNewRow header
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(buf));
+    LOG_WARN("invalid arguments", K(ret), KP(buf));
   } else {
     row = reinterpret_cast<ObNewRow*>(buf + pos);
     pos += sizeof(ObNewRow);
@@ -128,7 +130,7 @@ int ObNewRow::construct(char* buf, int64_t len, int64_t& pos, ObNewRow*& row)
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow", K(ret), K(pos), K(len));
   }
-  // construct obj cells_
+  //construct obj cells_
   if (OB_SUCC(ret)) {
     row->cells_ = reinterpret_cast<ObObj*>(buf + pos);
     pos += row->count_ * sizeof(ObObj);
@@ -137,7 +139,7 @@ int ObNewRow::construct(char* buf, int64_t len, int64_t& pos, ObNewRow*& row)
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow", K(ret), K(pos), K(len));
   }
-  // construct deep copy data ptr
+  //construct deep copy data ptr
   for (int64_t i = 0; OB_SUCC(ret) && i < row->count_; ++i) {
     if (row->cells_[i].need_deep_copy()) {
       row->cells_[i].set_data_ptr(buf + pos);
@@ -148,7 +150,7 @@ int ObNewRow::construct(char* buf, int64_t len, int64_t& pos, ObNewRow*& row)
       }
     }
   }
-  // construct projector_ ptr
+  //construct projector_ ptr
   if (OB_SUCC(ret) && row->projector_size_ > 0) {
     row->projector_ = reinterpret_cast<int32_t*>(buf + pos);
     pos += row->projector_size_ * sizeof(int32_t*);
@@ -200,8 +202,8 @@ DEFINE_DESERIALIZE(ObNewRow)
       projector_size_ = projector_size;
     } else {
       ret = OB_ERR_SYS;
-      COMMON_LOG(
-          ERROR, "projector_size must not larger than projector_size_", K(ret), K(projector_size), K(projector_size_));
+      COMMON_LOG(ERROR, "projector_size must not larger than projector_size_",
+          K(ret), K(projector_size), K(projector_size_));
     }
   }
 
@@ -224,5 +226,5 @@ DEFINE_GET_SERIALIZE_SIZE(ObNewRow)
   return len;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

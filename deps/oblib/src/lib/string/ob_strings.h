@@ -17,22 +17,25 @@
 #include "lib/container/ob_array.h"
 #include "common/ob_string_buf.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /**
  * an array of strings
  *
  */
-class ObStrings {
+class ObStrings
+{
 public:
   ObStrings();
   virtual ~ObStrings();
-  int add_string(const ObString& str, int64_t* idx = NULL);
-  int get_string(int64_t idx, ObString& str) const;
+  int add_string(const ObString &str, int64_t *idx = NULL);
+  int get_string(int64_t idx, ObString &str) const;
   int64_t count() const;
   void reuse();
 
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
@@ -41,7 +44,7 @@ private:
 
   DISALLOW_COPY_AND_ASSIGN(ObStrings);
 };
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_OB_STRINGS_H_
+#endif // OCEANBASE_LIB_OB_STRINGS_H_

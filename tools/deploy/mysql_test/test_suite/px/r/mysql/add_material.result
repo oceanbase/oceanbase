@@ -1,0 +1,124 @@
+drop table if exists t1;
+drop table if exists t2;
+create table t1(c1 bigint primary key,c2 bigint) partition by hash (c1) partitions 10;
+create table t2(c1 bigint primary key,c2 bigint) partition by hash (c1) partitions 6;
+insert into t1 values(1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(0,1),(7,8),(8,9),(9,10);
+insert into t2 values(1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(0,1),(7,8),(8,9),(9,10);
+commit;
+explain basic
+select /*+ USE_PX parallel(3) */* from
+(select c1,count(*) over(partition by c1) c2 from
+(select c1,count(c2) c2 from t1 group by c1)c) a join
+(select c1,count(*) c2 from t2 group by c1)b on a.c1=b.c1 ;
+Query Plan
+===========================================
+|ID|OPERATOR                     |NAME    |
+-------------------------------------------
+|0 |PX COORDINATOR               |        |
+|1 | EXCHANGE OUT DISTR          |:EX10001|
+|2 |  HASH JOIN                  |        |
+|3 |   PX PARTITION ITERATOR     |        |
+|4 |    TABLE SCAN               |t1      |
+|5 |   EXCHANGE IN DISTR         |        |
+|6 |    EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|7 |     PX BLOCK ITERATOR       |        |
+|8 |      TABLE SCAN             |t2      |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
+      dop=3
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  3 - output([t1.c1]), filter(nil), rowset=256
+      affinitize
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-9])
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  5 - output([t2.c1]), filter(nil), rowset=256
+  6 - output([t2.c1]), filter(nil), rowset=256
+      (#keys=1, [t2.c1]), dop=3
+  7 - output([t2.c1]), filter(nil), rowset=256
+  8 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([t2.c1]), range(MIN ; MAX)always true
+select /*+ USE_PX parallel(3) */* from
+(select c1,count(*) over(partition by c1) c2 from
+(select c1,count(c2) c2 from t1 group by c1)c) a join
+(select c1,count(*) c2 from t2 group by c1)b on a.c1=b.c1;
+c1	c2	c1	c2
+0	1	0	1
+1	1	1	1
+2	1	2	1
+3	1	3	1
+4	1	4	1
+5	1	5	1
+6	1	6	1
+7	1	7	1
+8	1	8	1
+9	1	9	1
+explain basic
+select a.c2,count(*) from (select /*+ USE_PX parallel(3) PQ_DISTRIBUTE(b HASH HASH) */a.c1,a.c2,b.c1 c3,b.c2 c4 from t1 a join t2 b on a.c1=b.c1)a group by a.c2;
+Query Plan
+==================================================
+|ID|OPERATOR                            |NAME    |
+--------------------------------------------------
+|0 |PX COORDINATOR                      |        |
+|1 | EXCHANGE OUT DISTR                 |:EX10002|
+|2 |  HASH GROUP BY                     |        |
+|3 |   EXCHANGE IN DISTR                |        |
+|4 |    EXCHANGE OUT DISTR (HASH)       |:EX10001|
+|5 |     HASH GROUP BY                  |        |
+|6 |      HASH JOIN                     |        |
+|7 |       PART JOIN FILTER CREATE      |:BF0000 |
+|8 |        EXCHANGE IN DISTR           |        |
+|9 |         EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|10|          PX BLOCK ITERATOR         |        |
+|11|           TABLE SCAN               |b       |
+|12|       PX PARTITION HASH JOIN-FILTER|:BF0000 |
+|13|        TABLE SCAN                  |a       |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256
+      dop=3
+  2 - output([a.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group([a.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  3 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+  4 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      (#keys=1, [a.c2]), dop=3
+  5 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group([a.c2]), agg_func([T_FUN_COUNT(*)])
+  6 - output([a.c2]), filter(nil), rowset=256
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  7 - output([b.c1]), filter(nil), rowset=256
+  8 - output([b.c1]), filter(nil), rowset=256
+  9 - output([b.c1]), filter(nil), rowset=256
+      (#keys=1, [b.c1]), dop=3
+ 10 - output([b.c1]), filter(nil), rowset=256
+ 11 - output([b.c1]), filter(nil), rowset=256
+      access([b.c1]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+ 12 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      affinitize
+ 13 - output([a.c1], [a.c2], [PARTITION_ID]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p[0-9])
+      is_index_back=false, is_global_index=false,
+      range_key([a.c1]), range(MIN ; MAX)always true
+select a.c2,count(*) from (select /*+ USE_PX parallel(3) PQ_DISTRIBUTE(b HASH HASH) */a.c1,a.c2,b.c1 c3,b.c2 c4 from t1 a join t2 b on a.c1=b.c1)a group by a.c2;
+c2	count(*)
+1	1
+10	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1

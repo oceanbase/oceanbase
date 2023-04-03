@@ -10,25 +10,29 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
-#define OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
+#ifndef  OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
+#define  OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
 
 #include "lib/allocator/page_arena.h"
 
-namespace oceanbase {
-namespace unittest {
+namespace oceanbase
+{
+namespace unittest
+{
 using namespace oceanbase::common;
 
-class ObModAllocator : public DefaultPageAllocator {
+class ObModAllocator : public DefaultPageAllocator
+{
 public:
-  void* mod_alloc(const int64_t size, const char* label)
+  void *mod_alloc(const int64_t size, const char *label)
   {
     set_label(label);
     return alloc(size);
   }
 };
 
-}  // namespace unittest
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
+#endif //OCEANBASE_UNITTEST_MEMTABLE_MOD_ALLOCATOR_H_
+

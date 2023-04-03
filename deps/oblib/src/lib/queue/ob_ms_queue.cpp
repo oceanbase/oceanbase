@@ -10,13 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX LIB
+#define USING_LOG_PREFIX  LIB
 
 #include "lib/queue/ob_ms_queue.h"
-#include "lib/allocator/ob_allocator.h"  // ObIAllocator
+#include "lib/allocator/ob_allocator.h"   // ObIAllocator
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ////////////////////////////////////////////// ObMsQueue::TaskHead ///////////////////////////////////
 void ObMsQueue::TaskHead::add(ObMsQueue::Task* node)
 {
@@ -53,7 +55,7 @@ int ObMsQueue::QueueInfo::init(char* buf, const int64_t len)
   int ret = OB_SUCCESS;
   if (NULL == buf || len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(ERROR, "invalid args", K(ret), K(buf), K(len));
+    LIB_LOG(ERROR, "invalid args", K(ret), KP(buf), K(len));
   } else {
     array_ = reinterpret_cast<TaskHead*>(buf);
     memset(array_, 0, sizeof(TaskHead) * len);
@@ -83,7 +85,7 @@ int ObMsQueue::QueueInfo::add(const int64_t seq, ObMsQueue::Task* task)
     ret = OB_ERR_UNEXPECTED;
     LIB_LOG(ERROR, "invalid array", K(ret), K(array_));
   } else {
-    array_[seq % len_].add(task);
+    array_ [seq % len_].add(task);
   }
   return ret;
 }
@@ -109,7 +111,12 @@ bool ObMsQueue::QueueInfo::next_is_ready(const int64_t ready_seq) const
 }
 ////////////////////////////////////////////// ObMsQueue::TaskHead ///////////////////////////////////
 
-ObMsQueue::ObMsQueue() : inited_(false), qlen_(0), qcount_(0), qinfo_(NULL), seq_queue_(), allocator_(NULL)
+ObMsQueue::ObMsQueue() : inited_(false),
+                         qlen_(0),
+                         qcount_(0),
+                         qinfo_(NULL),
+                         seq_queue_(),
+                         allocator_(NULL)
 {}
 
 ObMsQueue::~ObMsQueue()
@@ -117,7 +124,7 @@ ObMsQueue::~ObMsQueue()
   destroy();
 }
 
-int ObMsQueue::init(const int64_t n_queue, const int64_t queue_len, ObIAllocator* allocator)
+int ObMsQueue::init(const int64_t n_queue, const int64_t queue_len, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (n_queue <= 0 || queue_len <= 0 || NULL == allocator) {
@@ -130,16 +137,16 @@ int ObMsQueue::init(const int64_t n_queue, const int64_t queue_len, ObIAllocator
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     for (int i = 0; OB_SUCC(ret) && i < n_queue; i++) {
-      char* ptr = NULL;
+      char *ptr = NULL;
 
       if (NULL == (ptr = static_cast<char*>(allocator->alloc(queue_len * sizeof(TaskHead))))) {
         LOG_ERROR("allocate memory for TaskHead fail", "size", queue_len * sizeof(TaskHead));
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        new (qinfo_ + i) QueueInfo();
+        new(qinfo_ + i)QueueInfo();
 
         if (OB_FAIL(qinfo_[i].init(ptr, queue_len))) {
-          LOG_ERROR("init queue info fail", K(i), K(ret), K(ptr), K(queue_len));
+          LOG_ERROR("init queue info fail", K(i), K(ret), KP(ptr), K(queue_len));
         }
       }
     }
@@ -195,9 +202,10 @@ int ObMsQueue::push(Task* task, const int64_t seq, const uint64_t hash)
   if (NULL == task || seq < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid args", K(ret), K(task), K(seq), K(hash));
-  } else if (!inited_) {
+  } else if (! inited_) {
     ret = OB_NOT_INIT;
-  } else if (OB_SUCCESS != (ret = qinfo_[hash % qcount_].add(seq, task)) && OB_EAGAIN != ret) {
+  } else if (OB_SUCCESS != (ret = qinfo_[hash % qcount_].add(seq, task))
+           && OB_EAGAIN != ret) {
     LOG_ERROR("push to ms_queue: unexpected error", K(seq), K(task), K(hash));
   } else {
     // succ
@@ -212,9 +220,10 @@ int ObMsQueue::get(Task*& task, const int64_t idx)
   if (idx < 0 || idx >= qcount_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid args", K(ret), K(idx));
-  } else if (!inited_) {
+  } else if (! inited_) {
     ret = OB_NOT_INIT;
-  } else if (OB_SUCCESS != (ret = qinfo_[idx].get(seq_queue_.get_next(), task)) && OB_EAGAIN != ret) {
+  } else if (OB_SUCCESS != (ret = qinfo_[idx].get(seq_queue_.get_next(), task))
+           && OB_EAGAIN != ret) {
     LOG_ERROR("get task from queue info fail", K(ret), K(idx));
   }
   return ret;
@@ -234,7 +243,7 @@ int ObMsQueue::end_batch(const int64_t seq, const int64_t count)
   int ret = OB_SUCCESS;
   UNUSED(count);
 
-  if (!inited_) {
+  if (! inited_) {
     ret = OB_NOT_INIT;
   } else {
     int64_t next_seq = seq_queue_.add(seq);
@@ -242,5 +251,5 @@ int ObMsQueue::end_batch(const int64_t seq, const int64_t count)
   }
   return ret;
 }
-};  // namespace common
-};  // end namespace oceanbase
+}; // end namespace clog
+}; // end namespace oceanbase

@@ -18,39 +18,39 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprLikeTest : public ::testing::Test {
-public:
+class ObExprLikeTest : public ::testing::Test
+{
+ public:
   ObExprLikeTest();
   virtual ~ObExprLikeTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprLikeTest(const ObExprLikeTest& other);
-  ObExprLikeTest& operator=(const ObExprLikeTest& other);
-
+  ObExprLikeTest(const ObExprLikeTest &other);
+  ObExprLikeTest& operator=(const ObExprLikeTest &other);
 private:
   // data members
 };
 ObExprLikeTest::ObExprLikeTest()
-{}
+{
+}
 
 ObExprLikeTest::~ObExprLikeTest()
-{}
+{
+}
 
 void ObExprLikeTest::SetUp()
-{}
+{
+}
 
 void ObExprLikeTest::TearDown()
-{}
+{
+}
 
-#define T(obj, t1, v1, t2, v2, ref_type, ref_value) \
-  EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, "\\", ref_type, ref_value)
-#define F(obj, t1, v1, t2, v2, ref_type, ref_value) \
-  EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, "\\", ref_type, ref_value)
-#define T_ESCAPE(obj, t1, v1, t2, v2, escape, ref_type, ref_value) \
-  EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, escape, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, ref_type, ref_value) EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, "\\", ref_type, ref_value)
+#define F(obj, t1, v1, t2, v2, ref_type, ref_value) EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, "\\", ref_type, ref_value)
+#define T_ESCAPE(obj, t1, v1, t2, v2, escape, ref_type, ref_value) EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, varchar, escape, ref_type, ref_value)
 
 /*
 TEST_F(ObExprLikeTest, basic_test)
@@ -115,6 +115,7 @@ TEST_F(ObExprLikeTest, fail_like_basic_test)
   // int vs normal
   T(like,int, 1, varchar, "1", int, 1);
   //todo
+  //1.0打印成字符串时，末尾的0被去掉了
   //T(like,int, 1, double, 1.0, int, 0);
   T(like,int, 1, varchar, "h1", int, 0);
   T(like,int, 0, varchar, "", int, 0);
@@ -272,9 +273,9 @@ TEST_F(ObExprLikeTest, is_substr_mode)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

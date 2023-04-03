@@ -595,7 +595,7 @@ bool parse_param(int args, char* argv[])
     extern char* optarg;
     extern int opterr;
 
-    opterr = 0;  // getpot_long will not print error messages
+    opterr = 0;  // getopt_long will not print error messages
     int option_index = 0;
     static struct option long_options[] = {
         {"help", 0, 0, 'h'}, {"version", 0, 0, 'V'}, {"argument", 1, 0, 'a'}, {0, 0, 0, 0}};

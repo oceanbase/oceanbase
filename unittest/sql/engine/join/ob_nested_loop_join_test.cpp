@@ -23,35 +23,35 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::test;
 using namespace oceanbase::common;
 
-class ObNestedLoopJoinTest : public ::testing::Test {
+class ObNestedLoopJoinTest: public ::testing::Test
+{
 public:
   ObNestedLoopJoinTest();
   virtual ~ObNestedLoopJoinTest();
-
 protected:
   void join_test(int64_t case_id, ObJoinType join_type);
   void serialize_test();
   void join_exception_test(int expect_ret);
   void serialize_exception_test(int expect_ret);
   // disallow copy
-  ObNestedLoopJoinTest(const ObNestedLoopJoinTest& other);
-  ObNestedLoopJoinTest& operator=(const ObNestedLoopJoinTest& other);
-
+  ObNestedLoopJoinTest(const ObNestedLoopJoinTest &other);
+  ObNestedLoopJoinTest& operator=(const ObNestedLoopJoinTest &other);
 private:
   // data members
 };
 
-class ObNestedLoopJoinPlan {
+class ObNestedLoopJoinPlan
+{
 public:
-  static ObNestedLoopJoin& get_instance()
+  static ObNestedLoopJoin &get_instance()
   {
     return nested_loop_join_;
   }
-  static ObJoinFakeTable& get_out_data()
+  static ObJoinFakeTable &get_out_data()
   {
     return out_data_;
   }
-  static ObPhysicalPlan* get_phy_plan()
+  static ObPhysicalPlan *get_phy_plan()
   {
     return &phy_plan_;
   }
@@ -62,16 +62,15 @@ public:
     set_id();
     set_column_count(2);
     right_op_.set_type(PHY_TABLE_SCAN);
-    if (OB_FAIL(nested_loop_join_.set_child(0, left_op_))) {
-    } else if (OB_FAIL(nested_loop_join_.set_child(1, right_op_))) {
-    } else if (OB_FAIL(nested_loop_join_.set_join_type(join_type))) {
-    } else if (OB_FAIL(init_scan_index())) {
-    } else if (OB_FAIL(init_equal_conds())) {
-    } else if (OB_FAIL(init_other_conds())) {
-    } else if (OB_FAIL(left_op_.prepare_data(case_id, TT_LEFT_TABLE, join_type))) {
-    } else if (OB_FAIL(right_op_.prepare_data(case_id, TT_RIGHT_TABLE, join_type))) {
-    } else if (OB_FAIL(out_data_.prepare_data(case_id, TT_OUT_TABLE, join_type))) {
-    }
+    if      (OB_FAIL(nested_loop_join_.set_child(0, left_op_))) {}
+    else if (OB_FAIL(nested_loop_join_.set_child(1, right_op_))) {}
+    else if (OB_FAIL(nested_loop_join_.set_join_type(join_type))) {}
+    else if (OB_FAIL(init_scan_index())) {}
+    else if (OB_FAIL(init_equal_conds())) {}
+    else if (OB_FAIL(init_other_conds())) {}
+    else if (OB_FAIL(left_op_.prepare_data(case_id, TT_LEFT_TABLE, join_type))) {}
+    else if (OB_FAIL(right_op_.prepare_data(case_id, TT_RIGHT_TABLE, join_type))) {}
+    else if (OB_FAIL(out_data_.prepare_data(case_id, TT_OUT_TABLE, join_type))) {}
     return ret;
   }
   static void reuse()
@@ -87,7 +86,6 @@ public:
     out_data_.reuse();
     allocator_.reuse();
   }
-
 private:
   static void set_id()
   {
@@ -119,11 +117,10 @@ private:
     int64_t idx = 1;
     item_col.set_column(idx);
     item_op.set_op("=", 2);
-    if (OB_FAIL(equal_expr_[idx].add_expr_item(item_col))) {
-    } else if (OB_FAIL(equal_expr_[idx].add_expr_item(item_col))) {
-    } else if (OB_FAIL(equal_expr_[idx].add_expr_item(item_op))) {
-    } else if (OB_FAIL(nested_loop_join_.add_equijoin_condition(&equal_expr_[idx]))) {
-    }
+    if      (OB_FAIL(equal_expr_[idx].add_expr_item(item_col))) {}
+    else if (OB_FAIL(equal_expr_[idx].add_expr_item(item_col))) {}
+    else if (OB_FAIL(equal_expr_[idx].add_expr_item(item_op))) {}
+    else if (OB_FAIL(nested_loop_join_.add_equijoin_condition(&equal_expr_[idx]))) {}
     return ret;
   }
   static int init_other_conds()
@@ -141,20 +138,17 @@ private:
       item_int.set_int(60);
       item_int.set_item_type(T_INT);
       item_op_gt.set_op(">", 2);
-      if (OB_FAIL(other_expr_[i].add_expr_item(item_col))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_col))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_add))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_int))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_gt))) {
-      } else if (OB_FAIL(nested_loop_join_.add_other_join_condition(&other_expr_[i]))) {
-      }
+      if      (OB_FAIL(other_expr_[i].add_expr_item(item_col))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_col))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_add))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_int))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_gt))) {}
+      else if (OB_FAIL(nested_loop_join_.add_other_join_condition(&other_expr_[i]))) {}
     }
     return ret;
   }
-
 private:
   ObNestedLoopJoinPlan();
-
 private:
   static ObPhysicalPlan phy_plan_;
   static ObSqlExpression equal_expr_[2];
@@ -178,41 +172,42 @@ ObJoinFakeTable ObNestedLoopJoinPlan::out_data_;
 ObArenaAllocator ObNestedLoopJoinPlan::allocator_(ObModIds::OB_PAGE_ARENA);
 
 ObNestedLoopJoinTest::ObNestedLoopJoinTest()
-{}
+{
+}
 
 ObNestedLoopJoinTest::~ObNestedLoopJoinTest()
-{}
+{
+}
 
 void ObNestedLoopJoinTest::join_test(int64_t case_id, ObJoinType join_type)
 {
   ASSERT_EQ(OB_SUCCESS, ObNestedLoopJoinPlan::init(case_id, join_type));
-  BEGIN_THREAD_CODE(join_test, 8)
-  {
+  BEGIN_THREAD_CODE(join_test, 8) {
     ObExecContext exec_ctx;
     ASSERT_EQ(OB_SUCCESS, exec_ctx.init_phy_op(4));
     ASSERT_EQ(OB_SUCCESS, exec_ctx.create_physical_plan_ctx());
 
-    ObNestedLoopJoin& nested_loop_join = ObNestedLoopJoinPlan::get_instance();
+    ObNestedLoopJoin &nested_loop_join = ObNestedLoopJoinPlan::get_instance();
     ASSERT_EQ(OB_SUCCESS, nested_loop_join.open(exec_ctx));
-    ObJoinFakeTable& out_data = ObNestedLoopJoinPlan::get_out_data();
+    ObJoinFakeTable &out_data = ObNestedLoopJoinPlan::get_out_data();
     ASSERT_EQ(OB_SUCCESS, out_data.open(exec_ctx));
 
     int join_ret = OB_SUCCESS;
     int out_ret = OB_SUCCESS;
-    const ObNewRow* join_row = NULL;
-    const ObNewRow* out_row = NULL;
+    const ObNewRow *join_row = NULL;
+    const ObNewRow *out_row = NULL;
     while (OB_SUCCESS == join_ret && OB_SUCCESS == out_ret) {
       join_ret = nested_loop_join.get_next_row(exec_ctx, join_row);
       out_ret = out_data.get_next_row(exec_ctx, out_row);
       usleep(10 * 1000);
       ASSERT_EQ(join_ret, out_ret);
       if (OB_SUCCESS == join_ret && OB_SUCCESS == out_ret) {
-        ObObj* join_cells = join_row->cells_;
+        ObObj *join_cells = join_row->cells_;
         int64_t join_cell0 = join_cells[0].is_null() ? 0 : join_cells[0].get_int();
         int64_t join_cell1 = join_cells[1].is_null() ? 0 : join_cells[1].get_int();
         int64_t join_cell2 = join_cells[2].is_null() ? 0 : join_cells[2].get_int();
         int64_t join_cell3 = join_cells[3].is_null() ? 0 : join_cells[3].get_int();
-        ObObj* out_cells = out_row->cells_;
+        ObObj *out_cells = out_row->cells_;
         int64_t out_cell0 = out_cells[0].is_null() ? 0 : out_cells[0].get_int();
         int64_t out_cell1 = out_cells[1].is_null() ? 0 : out_cells[1].get_int();
         int64_t out_cell2 = out_cells[2].is_null() ? 0 : out_cells[2].get_int();
@@ -222,21 +217,20 @@ void ObNestedLoopJoinTest::join_test(int64_t case_id, ObJoinType join_type)
         ASSERT_EQ(join_cell2, out_cell2);
         ASSERT_EQ(join_cell3, out_cell3);
       }
-    }  // while
+    } // while
     ASSERT_EQ(OB_ITER_END, join_ret);
     ASSERT_EQ(OB_ITER_END, out_ret);
     ASSERT_EQ(OB_ITER_END, nested_loop_join.get_next_row(exec_ctx, join_row));
     ASSERT_EQ(OB_ITER_END, out_data.get_next_row(exec_ctx, out_row));
     ASSERT_EQ(OB_SUCCESS, nested_loop_join.close(exec_ctx));
     ASSERT_EQ(OB_SUCCESS, out_data.close(exec_ctx));
-  }
-  END_THREAD_CODE(join_test);
+  } END_THREAD_CODE(join_test);
   ObNestedLoopJoinPlan::reuse();
 }
 
 void ObNestedLoopJoinTest::serialize_test()
 {
-  ObNestedLoopJoin& nested_loop_join_1 = ObNestedLoopJoinPlan::get_instance();
+  ObNestedLoopJoin &nested_loop_join_1 = ObNestedLoopJoinPlan::get_instance();
   ObNestedLoopJoin nested_loop_join_2;
   const int64_t MAX_SERIALIZE_BUF_LEN = 1024;
   char buf[MAX_SERIALIZE_BUF_LEN] = {'\0'};
@@ -247,12 +241,12 @@ void ObNestedLoopJoinTest::serialize_test()
   ASSERT_EQ(pos, nested_loop_join_1.get_serialize_size());
   int64_t data_len = pos;
 
-  nested_loop_join_2.set_phy_plan(const_cast<ObPhysicalPlan*>(nested_loop_join_1.get_phy_plan()));
+  nested_loop_join_2.set_phy_plan(const_cast<ObPhysicalPlan *>(nested_loop_join_1.get_phy_plan()));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, nested_loop_join_2.deserialize(buf, data_len, pos));
   ASSERT_EQ(pos, data_len);
-  const char* str_1 = to_cstring(nested_loop_join_1);
-  const char* str_2 = to_cstring(nested_loop_join_2);
+  const char *str_1 = to_cstring(nested_loop_join_1);
+  const char *str_2 = to_cstring(nested_loop_join_2);
   ASSERT_EQ(0, strcmp(str_1, str_2));
 
   ObNestedLoopJoinPlan::reuse();
@@ -262,15 +256,15 @@ void ObNestedLoopJoinTest::join_exception_test(int expect_ret)
 {
   int ret = OB_SUCCESS;
   ObExecContext exec_ctx;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
 
   ASSERT_EQ(OB_SUCCESS, exec_ctx.init_phy_op(4));
   ASSERT_EQ(OB_SUCCESS, exec_ctx.create_physical_plan_ctx());
-  ObNestedLoopJoin& nested_loop_join = ObNestedLoopJoinPlan::get_instance();
+  ObNestedLoopJoin &nested_loop_join = ObNestedLoopJoinPlan::get_instance();
 
-  if (OB_FAIL(ObNestedLoopJoinPlan::init(0, LEFT_OUTER_JOIN))) {
-  } else if (OB_FAIL(nested_loop_join.open(exec_ctx))) {
-  } else {
+  if (OB_FAIL(ObNestedLoopJoinPlan::init(0, LEFT_OUTER_JOIN))) {}
+  else if (OB_FAIL(nested_loop_join.open(exec_ctx))) {}
+  else {
     while (OB_SUCC(ret)) {
       ret = nested_loop_join.get_next_row(exec_ctx, row);
     }
@@ -287,14 +281,14 @@ void ObNestedLoopJoinTest::join_exception_test(int expect_ret)
 void ObNestedLoopJoinTest::serialize_exception_test(int expect_ret)
 {
   int ret = OB_SUCCESS;
-  ObNestedLoopJoin& nested_loop_join = ObNestedLoopJoinPlan::get_instance();
+  ObNestedLoopJoin &nested_loop_join = ObNestedLoopJoinPlan::get_instance();
   const int64_t MAX_SERIALIZE_BUF_LEN = 1024;
   char buf[MAX_SERIALIZE_BUF_LEN] = {'\0'};
   ASSERT_EQ(OB_SUCCESS, ObNestedLoopJoinPlan::init(0, INNER_JOIN));
 
   int64_t pos = 0;
-  if (OB_FAIL(nested_loop_join.serialize(buf, MAX_SERIALIZE_BUF_LEN, pos))) {
-  } else {
+  if (OB_FAIL(nested_loop_join.serialize(buf, MAX_SERIALIZE_BUF_LEN, pos))) {}
+  else {
     int64_t data_len = pos;
     pos = 0;
     ObNestedLoopJoinPlan::reuse();
@@ -343,19 +337,19 @@ TEST_F(ObNestedLoopJoinTest, join_case_5)
   join_test(5, LEFT_OUTER_JOIN);
 }
 
-// TEST_F(ObNestedLoopJoinTest, serialize_case_0)
+//TEST_F(ObNestedLoopJoinTest, serialize_case_0)
 //{
 //  serialize_test();
 //}
 
 #define JOIN_EXCEPTION_TEST(file, func, key, err, expect_ret) \
-  do {                                                        \
-    TP_SET_ERROR("engine/join/" file, func, key, err);        \
-    join_exception_test(expect_ret);                          \
-    TP_SET_ERROR("engine/join/" file, func, key, NULL);       \
+  do { \
+    TP_SET_ERROR("engine/join/"file, func, key, err); \
+    join_exception_test(expect_ret); \
+    TP_SET_ERROR("engine/join/"file, func, key, NULL); \
   } while (0)
 
-// TEST_F(ObNestedLoopJoinTest, join_exception_0)
+//TEST_F(ObNestedLoopJoinTest, join_exception_0)
 //{
 //  JOIN_EXCEPTION_TEST("ob_nested_loop_join.cpp", "open", "t1", OB_ERROR, OB_ERROR);
 //  JOIN_EXCEPTION_TEST("ob_nested_loop_join.cpp", "open", "t3", OB_ERROR, OB_ERROR);
@@ -378,7 +372,7 @@ TEST_F(ObNestedLoopJoinTest, join_case_5)
 //  JOIN_EXCEPTION_TEST("ob_nested_loop_join.cpp", "calc_right_query_range", "t5", 1, OB_NOT_INIT);
 //}
 //
-// TEST_F(ObNestedLoopJoinTest, join_exception_1)
+//TEST_F(ObNestedLoopJoinTest, join_exception_1)
 //{
 //  JOIN_EXCEPTION_TEST("ob_join.cpp", "open", "t1", UNKNOWN_JOIN, OB_NOT_INIT);
 //  JOIN_EXCEPTION_TEST("ob_join.cpp", "open", "t3", OB_ERROR, OB_ERROR);
@@ -395,13 +389,13 @@ TEST_F(ObNestedLoopJoinTest, join_case_5)
 //}
 
 #define SERIALIZE_EXCEPTION_TEST(file, func, key, err, expect_ret) \
-  do {                                                             \
-    TP_SET_ERROR("engine/join/" file, func, key, err);             \
-    serialize_exception_test(expect_ret);                          \
-    TP_SET_ERROR("engine/join/" file, func, key, NULL);            \
+  do { \
+    TP_SET_ERROR("engine/join/"file, func, key, err); \
+    serialize_exception_test(expect_ret); \
+    TP_SET_ERROR("engine/join/"file, func, key, NULL); \
   } while (0)
 
-// TEST_F(ObNestedLoopJoinTest, serialize_exception)
+//TEST_F(ObNestedLoopJoinTest, serialize_exception)
 //{
 //  SERIALIZE_EXCEPTION_TEST("ob_join.cpp", "serialize", "t1", OB_ERROR, OB_ERROR);
 //  SERIALIZE_EXCEPTION_TEST("ob_join.cpp", "serialize", "t3", OB_ERROR, OB_ERROR);
@@ -423,9 +417,9 @@ TEST_F(ObNestedLoopJoinTest, join_case_5)
 //  SERIALIZE_EXCEPTION_TEST("ob_nested_loop_join.cpp", "deserialize", "t3", OB_ERROR, OB_ERROR);
 //}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_sql_factories();
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

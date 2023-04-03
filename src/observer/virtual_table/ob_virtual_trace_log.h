@@ -16,26 +16,34 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
-namespace sql {
-class ObSQLSessionInfo;
+namespace oceanbase
+{
+namespace sql
+{
+  class ObSQLSessionInfo;
 }
-namespace observer {
-class ObVirtualTraceLog : public common::ObVirtualTableScannerIterator {
+namespace observer
+{
+class ObVirtualTraceLog : public common::ObVirtualTableScannerIterator
+{
 public:
   ObVirtualTraceLog();
   virtual ~ObVirtualTraceLog();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTraceLog);
-  enum TRACE_COLUMN { TITLE = common::OB_APP_MIN_COLUMN_ID, KEY_VALUE, TIME };
+  enum TRACE_COLUMN
+  {
+    TITLE = common::OB_APP_MIN_COLUMN_ID,
+    KEY_VALUE,
+    TIME
+  };
   int fill_scanner();
   int fill_trace_buf();
-  int fill_phy_plan_into_trace_buf();
 };
-}  // end namespace observer
-}  // end namespace oceanbase
+}// end namespace observer
+}// end namespace oceanbase
 
 #endif

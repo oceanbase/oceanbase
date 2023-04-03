@@ -15,13 +15,19 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-ObExplainStmt::ObExplainStmt() : ObDMLStmt(stmt::T_EXPLAIN), format_(EXPLAIN_UNINITIALIZED), explain_query_stmt_(NULL)
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObExplainStmt::ObExplainStmt() : ObDMLStmt(stmt::T_EXPLAIN),
+                                 format_(EXPLAIN_UNINITIALIZED),
+                                 explain_query_stmt_(NULL)
+{
+}
 
 ObExplainStmt::~ObExplainStmt()
-{}
+{
+}
 
 bool ObExplainStmt::is_select_explain() const
 {
@@ -41,7 +47,7 @@ bool ObExplainStmt::is_dml_explain() const
   return bool_ret;
 }
 
-int64_t ObExplainStmt::to_string(char* buf, const int64_t buf_len) const
+int64_t ObExplainStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
@@ -54,10 +60,10 @@ int64_t ObExplainStmt::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//end of sql
+}//end of oceanbase
 
-// void ObExplainStmt::print(FILE *fp, int32_t level, int32_t index)
+//void ObExplainStmt::print(FILE *fp, int32_t level, int32_t index)
 //{
 //  UNUSED(index);
 //  print_indentation(fp, level);

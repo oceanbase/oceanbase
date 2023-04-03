@@ -15,22 +15,27 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprTimestampNvl : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprTimestampNvl : public ObStringExprOperator
+{
 public:
-  explicit ObExprTimestampNvl(common::ObIAllocator& alloc);
+  explicit  ObExprTimestampNvl(common::ObIAllocator &alloc);
   virtual ~ObExprTimestampNvl();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_timestampnvl(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_timestampnvl(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprTimestampNvl);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_TIMESTAMP_NVL_H_ */

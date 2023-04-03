@@ -14,57 +14,33 @@
 #define _OB_LOG_SUBQUERY_SCAN_H_
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogSubPlanScan : public ObLogicalOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogSubPlanScan : public ObLogicalOperator
+{
 public:
-  ObLogSubPlanScan(ObLogPlan& plan)
-      : ObLogicalOperator(plan), subquery_id_(common::OB_INVALID_ID), subquery_name_(), access_exprs_()
+  ObLogSubPlanScan(ObLogPlan &plan)
+      : ObLogicalOperator(plan),
+        subquery_id_(common::OB_INVALID_ID),
+        subquery_name_(),
+        access_exprs_()
   {}
 
-  ~ObLogSubPlanScan(){};
-  int calc_cost();
-  virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  int allocate_expr_post(ObAllocExprContext& ctx) override;
-  int allocate_exchange_post(AllocExchContext* ctx) override;
-  int update_weak_part_exprs(AllocExchContext* ctx);
-  int gen_filters();
-  int gen_output_columns();
-  int set_properties() override;
-  void set_subquery_id(uint64_t subquery_id)
-  {
-    subquery_id_ = subquery_id;
-  }
-  inline const uint64_t& get_subquery_id() const
-  {
-    return subquery_id_;
-  }
-  inline common::ObString& get_subquery_name()
-  {
-    return subquery_name_;
-  }
-  inline const common::ObIArray<ObRawExpr*>& get_access_exprs() const
-  {
-    return access_exprs_;
-  }
-  inline common::ObIArray<ObRawExpr*>& get_access_exprs()
-  {
-    return access_exprs_;
-  }
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int transmit_op_ordering() override;
-  virtual int transmit_local_ordering() override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
-
-private:
-  virtual int print_operator_for_outline(planText& plan_text) override;
-  virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used) override;
-  virtual int is_used_in_leading_hint(bool& is_used) override;
-
+  ~ObLogSubPlanScan() {};
+  int generate_access_exprs();
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
+  void set_subquery_id(uint64_t subquery_id) { subquery_id_ = subquery_id; }
+  inline const uint64_t &get_subquery_id() const { return subquery_id_; }
+  inline common::ObString &get_subquery_name() { return subquery_name_; }
+  inline const common::ObIArray<ObRawExpr *> &get_access_exprs() const { return access_exprs_; }
+  inline common::ObIArray<ObRawExpr *> &get_access_exprs() { return access_exprs_; }
+  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int check_output_dependance(ObIArray<ObRawExpr *> &child_output, PPDeps &deps) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
@@ -72,7 +48,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanScan);
 };
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} // end of namespace sql
+} // end of namespace oceanbase
+
 
 #endif /* OB_LOG_SUBQUERY_SCAN_H_ */

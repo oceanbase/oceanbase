@@ -39,17 +39,21 @@ using namespace std;
 static constexpr int64_t cluster_id = 1000;
 static bool change_src_cluster_id = false;
 
-class TestProxy : public ObRpcProxy {
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
   RPC_S(@PR5 test, OB_TEST_PCODE);
-  // RPC_S(@PR5 test2, OB_TEST2_PCODE, (int64_t), int64_t);
+  //RPC_S(@PR5 test2, OB_TEST2_PCODE, (int64_t), int64_t);
   RPC_S(@PR5 test2, OB_TEST2_PCODE, (uint64_t));
   RPC_S(@PR5 test_cluster_id, OB_TEST3_PCODE);
 };
 
-class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
+class MyProcessor
+    : public TestProxy::Processor<OB_TEST_PCODE>
+{
 protected:
   int process()
   {
@@ -65,32 +69,36 @@ protected:
     }
     EXPECT_LT(get_run_timestamp() - get_receive_timestamp(), 10000);
 
-    // LOG_USER_ERROR(OB_ERROR);
-    // LOG_USER_WARN(OB_ERROR);
+    //LOG_USER_ERROR(OB_ERROR);
+    //LOG_USER_WARN(OB_ERROR);
     ++rpc_count_;
     return OB_ERROR;
   }
 };
 
-class MyProcessor2 : public TestProxy::Processor<OB_TEST2_PCODE> {
+class MyProcessor2
+    : public TestProxy::Processor<OB_TEST2_PCODE>
+{
 protected:
   int process()
   {
-    const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
+    const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
     EXPECT_EQ(arg_, pkt.get_priv_tenant_id());
     return OB_SUCCESS;
   }
 };
 
-class MyProcessor3 : public TestProxy::Processor<OB_TEST3_PCODE> {
+class MyProcessor3
+    : public TestProxy::Processor<OB_TEST3_PCODE>
+{
 protected:
   int process()
   {
-    const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
+    const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
     EXPECT_EQ(cluster_id, pkt.get_dst_cluster_id());
     EXPECT_EQ(cluster_id, pkt.get_src_cluster_id());
     // It is not easy to simulate the exchange of rpc between two clusters on one side
-    // Here, src_cluster_id is forcibly modified in the process to achieve a similar effect
+    //Here, src_cluster_id is forcibly modified in the process to achieve a similar effect
     if (change_src_cluster_id) {
       const_cast<ObRpcPacket&>(pkt).set_src_cluster_id(cluster_id + 1);
     }
@@ -98,14 +106,13 @@ protected:
   }
 };
 
-class ObTestDeliver : public rpc::frame::ObReqDeliver {
+class ObTestDeliver
+    : public rpc::frame::ObReqDeliver
+{
 public:
-  int init()
-  {
-    return 0;
-  }
+  int init() { return 0; }
 
-  int deliver(rpc::ObRequest& req)
+  int deliver(rpc::ObRequest &req)
   {
     LOG_INFO("request", K(req));
     /*
@@ -126,7 +133,7 @@ public:
       mp.set_buffer(&buf);
       mp.run();
     */
-    const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
+    const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
 
     switch (pkt.get_pcode()) {
       case OB_TEST_PCODE: {
@@ -158,13 +165,15 @@ public:
     return 0;
   }
 
-  void stop()
-  {}
+  void stop() {}
 };
 
-class TestRpcServer : public ::testing::Test {
+class TestRpcServer
+    : public ::testing::Test
+{
 public:
-  TestRpcServer() : handler_(server_), transport_(NULL)
+  TestRpcServer()
+      : handler_(server_), transport_(NULL)
   {}
 
   void SetUp() override
@@ -189,7 +198,7 @@ protected:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObTestDeliver server_;
-  rpc::frame::ObReqTransport* transport_;
+  rpc::frame::ObReqTransport *transport_;
   ObRandom rand;
   int32_t PORT;
 };
@@ -206,7 +215,7 @@ TEST_F(TestRpcServer, TestName)
     EXPECT_EQ(OB_ERROR, proxy.timeout(12340).test());
   }
 
-  ObAddr dst2(ObAddr::IPV4, "127.0.0.1", PORT + 1);
+  ObAddr dst2(ObAddr::IPV4, "127.0.0.1", PORT+1);
   EXPECT_EQ(OB_TIMEOUT, proxy.to(dst2).test());
 
   // EXPECT_EQ(OB_SUCCESS, proxy.to(dst).by(2).as(10).test2(10));
@@ -243,7 +252,8 @@ TEST_F(TestRpcServer, TestClusterId)
   }
 */
 
-int main(int argc, char* argv[])
+
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   ob_get_tsi_warning_buffer()->set_warn_log_on(true);

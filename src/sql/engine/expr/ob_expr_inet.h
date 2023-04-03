@@ -29,8 +29,6 @@ public:
   explicit ObExprInetAton(common::ObIAllocator& alloc);
   virtual ~ObExprInetAton();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj& text, uint64_t cast_mode);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -60,8 +58,6 @@ public:
   explicit ObExprInet6Ntoa(common::ObIAllocator& alloc);
   virtual ~ObExprInet6Ntoa();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprStringBuf& string_buf, uint64_t cast_mode);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -74,8 +70,6 @@ public:
   explicit ObExprInet6Aton(common::ObIAllocator& alloc);
   virtual ~ObExprInet6Aton();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprStringBuf& string_buf, uint64_t cast_mode);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -103,8 +97,6 @@ public:
   explicit ObExprIsIpv4(common::ObIAllocator& alloc);
   virtual ~ObExprIsIpv4();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj& text);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv4(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -134,8 +126,6 @@ public:
   explicit ObExprIsIpv4Mapped(common::ObIAllocator& alloc);
   virtual ~ObExprIsIpv4Mapped();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static void calc(common::ObObj& result, const common::ObObj& text);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv4_mapped(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -164,8 +154,6 @@ public:
   explicit ObExprIsIpv4Compat(common::ObIAllocator& alloc);
   virtual ~ObExprIsIpv4Compat();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static void calc(common::ObObj& result, const common::ObObj& text);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -194,8 +182,6 @@ public:
   explicit ObExprIsIpv6(common::ObIAllocator& alloc);
   virtual ~ObExprIsIpv6();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj& text);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv6(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

@@ -15,21 +15,43 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "share/object/ob_obj_cast.h"
-namespace oceanbase {
-namespace sql {
-class ObExprRawtohex : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprRawtohex : public ObStringExprOperator
+{
 public:
-  explicit ObExprRawtohex(common::ObIAllocator& alloc);
+  explicit  ObExprRawtohex(common::ObIAllocator &alloc);
   virtual ~ObExprRawtohex();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_rawtohex_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const;
+  static int calc_rawtohex_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRawtohex);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+
+class ObExprRawtonhex : public ObStringExprOperator
+{
+public:
+  explicit ObExprRawtonhex(common::ObIAllocator &alloc);
+  virtual ~ObExprRawtonhex();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_exr) const;
+  static int calc_rawtonhex_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprRawtonhex);
+
+};
+
+
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_RAWTOHEX_ */

@@ -12,102 +12,188 @@
 
 #include "ob_lock_wait_mgr.h"
 
+#include "common/ob_clock_generator.h"
 #include "lib/hash_func/murmur_hash.h"
+#include "lib/ob_errno.h"
+#include "lib/rowid/ob_urowid.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "observer/ob_server.h"
+#include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "lib/function/ob_function.h"
+#include "lib/hash/ob_linear_hash_map.h"
+#include "lib/utility/utility.h"
+#include "storage/tx/ob_trans_ctx.h"
+#include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_trans_deadlock_adapter.h"
+#include <cstdint>
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
 // replace function in library
 void request_finish_callback()
 {
   bool unused = false;
-  memtable::ObLockWaitMgr& lock_wait_mgr = memtable::get_global_lock_wait_mgr();
-  lock_wait_mgr.post_process(false, unused);
-  lock_wait_mgr.clear_thread_node();
+  auto lock_wait_mgr = MTL(memtable::ObLockWaitMgr*);
+  if (OB_ISNULL(lock_wait_mgr)) {
+    TRANS_LOG(TRACE, "MTL(lock wait mgr) is null", K(MTL_ID()));
+  } else {
+    lock_wait_mgr->post_process(false, unused);
+  }
+  memtable::ObLockWaitMgr::clear_thread_node();
 }
 
-}  // namespace obmysql
-}  // namespace oceanbase
-namespace oceanbase {
+}
+}
+namespace oceanbase
+{
 
-using namespace transaction;
 using namespace storage;
 using namespace common::hash;
 using namespace common;
+using namespace share;
+using namespace memtable::tablelock;
 
-namespace memtable {
-
-static const uint64_t TRANS_MARK = 1L << 63L;
-
-static inline uint64_t hash_rowkey(const ObLockWaitMgr::Key& key)
+namespace memtable
 {
-  return (key.hash() & ~TRANS_MARK) | 1;
+// this flag is used to indicate wether if need register to deadlock when end_stmt
+// CAUTIONS: DO NOT use get_thread_node().neet_wait(), it MAY CORE!
+TLOCAL(bool, TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR) = false;
+
+static const uint64_t TRANS_FLAG = 1L << 63L;       // 10
+static const uint64_t TABLE_LOCK_FLAG = 1L << 62L;  // 01
+static const uint64_t ROW_FLAG = 0L;                // 00
+static const uint64_t HASH_MASK = ~(TRANS_FLAG | TABLE_LOCK_FLAG);
+
+static inline
+uint64_t hash_rowkey(const ObTabletID &tablet_id, const ObLockWaitMgr::Key &key)
+{
+  uint64_t hash_id = tablet_id.hash();
+  uint64_t hash_key = key.hash();
+  uint64_t hash = murmurhash(&hash_key, sizeof(hash_key), hash_id);
+  return ((hash & HASH_MASK) | ROW_FLAG) | 1;
 }
 
-static inline uint64_t hash_trans(const uint32_t ctx_desc)
+static inline
+uint64_t hash_trans(const ObTransID &tx_id)
 {
-  return (murmurhash(&ctx_desc, sizeof(ctx_desc), 0) | TRANS_MARK) | 1;
+  return ((murmurhash(&tx_id, sizeof(tx_id), 0) & HASH_MASK) | TRANS_FLAG) | 1;
 }
 
-ObLockWaitMgr::ObLockWaitMgr() : is_inited_(false), hash_(hash_buf_, sizeof(hash_buf_)), mt_id_map_(NULL)
+static inline
+uint64_t hash_lock_id(const ObLockID &lock_id)
+{
+  return ((lock_id.hash() & HASH_MASK) | TABLE_LOCK_FLAG) | 1;
+}
+
+static inline
+bool is_rowkey_hash(const uint64_t hash)
+{
+  return (hash & ~HASH_MASK) == ROW_FLAG;
+}
+
+ObLockWaitMgr::ObLockWaitMgr()
+    : is_inited_(false),
+      hash_(hash_buf_, sizeof(hash_buf_)),
+      deadlocked_sessions_lock_(common::ObLatchIds::DEADLOCK_DETECT_LOCK),
+      deadlocked_sessions_index_(0)
 {
   memset(sequence_, 0, sizeof(sequence_));
 }
 
-ObLockWaitMgr::~ObLockWaitMgr()
-{}
+ObLockWaitMgr::~ObLockWaitMgr() {}
+
+int ObLockWaitMgr::mtl_init(ObLockWaitMgr *&lock_wait_mgr)
+{
+  return lock_wait_mgr->init();
+}
 
 int ObLockWaitMgr::init()
 {
   int ret = OB_SUCCESS;
-  ObIMemtableCtxFactory* imt_ctx_factory = NULL;
-  ObMemtableCtxFactory* mt_ctx_factory = NULL;
-
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "ob lock wait mgr already init", K(ret), K(is_inited_));
-  } else if (OB_ISNULL(imt_ctx_factory = ObPartitionService::get_instance().get_mem_ctx_factory())) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "can't get imem_ctx_factory from ObPartitionService", K(ret));
-  } else if (OB_ISNULL(mt_ctx_factory = static_cast<ObMemtableCtxFactory*>(imt_ctx_factory))) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "can't get mem_ctx_factory from imem_ctx_factory", K(ret), K(imt_ctx_factory));
+  } else if (OB_FAIL(row_holder_mapper_.init())) {
+    TRANS_LOG(WARN, "can't init row_holder", KR(ret));
   } else {
-    mt_id_map_ = &(mt_ctx_factory->get_id_map());
+    share::ObThreadPool::set_run_wrapper(MTL_CTX());
     is_inited_ = true;
   }
-
+  TRANS_LOG(INFO, "LockWaitMgr.init", K(ret));
   return ret;
 }
 
-void ObLockWaitMgr::destroy()
-{
+int ObLockWaitMgr::start() {
+  int ret = share::ObThreadPool::start();
+  TRANS_LOG(INFO, "LockWaitMgr.start", K(ret));
+  return ret;
+}
+
+void ObLockWaitMgr::stop() {
+  share::ObThreadPool::stop();
+  TRANS_LOG(INFO, "LockWaitMgr.stop");
+}
+void ObLockWaitMgr::destroy() {
   is_inited_ = false;
+}
+
+void RowHolderMapper::set_hash_holder(const ObTabletID &tablet_id,
+                                      const ObMemtableKey &key,
+                                      const transaction::ObTransID &tx_id) {
+  if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
+    int ret = OB_SUCCESS;
+    uint64_t hash = hash_rowkey(tablet_id, key);
+    if (!tx_id.is_valid()) {
+      TRANS_LOG(WARN, "trans_id is invalid", KR(ret), K(hash), K(tx_id));
+    } else if (OB_FAIL(map_.insert(ObIntWarp(hash), tx_id))) {
+      TRANS_LOG(WARN, "set hash holder error", KR(ret), K(hash), K(tx_id));
+    }
+  }
+}
+
+void RowHolderMapper::reset_hash_holder(const ObTabletID &tablet_id,
+                                        const ObMemtableKey &key,
+                                        const ObTransID &tx_id) {
+  if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
+    int ret = OB_SUCCESS;
+    uint64_t hash = hash_rowkey(tablet_id, key);
+    auto remove_if_op = [tx_id](const ObIntWarp &k, const ObTransID &v) {
+      return tx_id == v;
+    };
+    if (OB_FAIL(map_.erase_if(ObIntWarp(hash), remove_if_op))) {
+      if (ret != OB_ENTRY_NOT_EXIST) {
+        TRANS_LOG(WARN, "clear hash holder error", KR(ret), K(hash), K(tx_id));
+      }
+    }
+  }
 }
 
 void ObLockWaitMgr::run1()
 {
-  (void)prctl(PR_SET_NAME, "ObLockWaitMgr", 0, 0, 0);
-  while (!has_set_stop() || !is_hash_empty()) {
+  int64_t last_dump_ts = 0;
+  int64_t now = 0;
+  lib::set_thread_name("LockWaitMgr");
+  while(!has_set_stop() || !is_hash_empty()) {
     ObLink* iter = check_timeout();
     while (NULL != iter) {
       Node* cur = CONTAINER_OF(iter, Node, retire_link_);
       iter = iter->next_;
       (void)repost(cur);
     }
-
-    usleep(10000);
+    // dump debug info, and check deadlock enabdle, clear mapper if deadlock is disabled
+    now = ObClockGenerator::getCurrentTime();
+    if (now - last_dump_ts > 5_s) {
+      last_dump_ts = now;
+      row_holder_mapper_.dump_mapper_info();
+      if (!ObDeadLockDetectorMgr::is_deadlock_enabled()) {
+        row_holder_mapper_.clear();
+      }
+    }
+    ob_usleep(10000);
   }
-}
-
-void ObLockWaitMgr::setup(Node& node, int64_t recv_ts)
-{
-  node.reset_need_wait();
-  node.recv_ts_ = recv_ts;
-  get_thread_node() = &node;
-  get_thread_hold_key() = node.hold_key_;
-  node.hold_key_ = 0;
 }
 
 int64_t ObLockWaitMgr::get_wait_lock_timeout(int64_t timeout)
@@ -124,18 +210,90 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
   bool wait_succ = false;
   Node* node = get_thread_node();
   if (node != nullptr) {
-    uint64_t& hold_key = get_thread_hold_key();
+    uint64_t &hold_key = get_thread_hold_key();
     need_wait = false;
     if (0 != hold_key) {
       wakeup(hold_key);
     }
     if (need_retry) {
       if ((need_wait = node->need_wait())) {
-        wait_succ = wait(node);
+        TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;
+        // FIXME(xuwang.txw):create detector in check_timeout process
+        // below code must keep current order to fix concurrency bug
+        // more info see
+        int tmp_ret = OB_SUCCESS;
+        if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
+          ObTransID self_tx_id(node->tx_id_);
+          ObTransID blocked_tx_id(node->holder_tx_id_);
+          if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = register_to_deadlock_detector_(self_tx_id,
+                                                                                  blocked_tx_id,
+                                                                                  node->sessid_)))) {
+            DETECT_LOG_RET(WARN, tmp_ret, "register to deadlock detector failed", K(tmp_ret), K(*node));
+          } else {
+            DETECT_LOG(TRACE, "register to deadlock detector success", K(tmp_ret), K(*node));
+          }
+          wait_succ = wait(node);
+          if (OB_UNLIKELY(!wait_succ && (OB_SUCCESS == tmp_ret))) {
+            (void) ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
+                                                                                     ObTransDeadlockDetectorAdapter::
+                                                                                     UnregisterPath::
+                                                                                     LOCK_WAIT_MGR_WAIT_FAILED);
+          }
+        } else {
+          wait_succ = wait(node);
+        }
+        if (OB_UNLIKELY(!wait_succ)) {
+          TRANS_LOG_RET(WARN, tmp_ret, "fail to wait node", KR(tmp_ret), KPC(node));
+        }
+      }
+    }
+    // CAUTION: if need_retry is false, node may be not NULL, but can't be accessed.
+    // case IO thread may already free it.
+  }
+  return wait_succ;
+}
+
+int ObLockWaitMgr::register_to_deadlock_detector_(const ObTransID &self_tx_id,
+                                                  const ObTransID &blocked_tx_id,
+                                                  const uint32_t self_sess_id)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session_info = NULL;
+  ObSessionGetterGuard guard(*GCTX.session_mgr_, self_sess_id);
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid session_mgr is NULL");
+  } else if (OB_FAIL(guard.get_session(session_info))) {
+    TRANS_LOG(WARN, "failed to get session_info", K(ret), K(self_sess_id));
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "got session_info is NULL", K(ret), K(self_sess_id));
+  } else {
+    CollectCallBack on_collect_callback((LocalDeadLockCollectCallBack(self_tx_id,
+                                                                      get_thread_node()->key_,
+                                                                      self_sess_id)));
+    if (is_rowkey_hash(get_thread_node()->hash())) {// waiting for row
+      DeadLockBlockCallBack deadlock_block_call_back(row_holder_mapper_, get_thread_node()->hash());
+      if (OB_FAIL(ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detector_waiting_for_row(on_collect_callback,
+                                                                                                               deadlock_block_call_back,
+                                                                                                               self_tx_id,
+                                                                                                               self_sess_id))) {
+        TRANS_LOG(WARN, "fail to regester to deadlock detector", K(ret), K(self_sess_id));
+      } else {
+        TRANS_LOG(INFO, "wait for row", K(get_thread_node()->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
+      }
+    } else {// waiting for other trans
+      if (OB_FAIL(ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detector_waiting_for_trans(on_collect_callback,
+                                                                                                                 blocked_tx_id,
+                                                                                                                 self_tx_id,
+                                                                                                                 self_sess_id))) {
+        TRANS_LOG(WARN, "fail to regester to deadlock detector", K(ret), K(self_sess_id));
+      } else {
+        TRANS_LOG(INFO, "wait for trans", K(get_thread_node()->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
       }
     }
   }
-  return wait_succ;
+  return ret;
 }
 
 bool ObLockWaitMgr::wait(Node* node)
@@ -154,7 +312,7 @@ bool ObLockWaitMgr::wait(Node* node)
       // 1. set the task as standalone task which need to be forced to wake up
       node->try_lock_times_++;
       node->set_standalone_task(is_standalone_task);
-      while (-EAGAIN == (err = hash_.insert(node)))
+      while(-EAGAIN == (err = hash_.insert(node)))
         ;
       assert(0 == err);
 
@@ -166,10 +324,10 @@ bool ObLockWaitMgr::wait(Node* node)
       }
       // 3. Exception operation
       if (has_set_stop()) {
-        while (-EAGAIN == (err = hash_.del(node, tmp_node)))
+        while(-EAGAIN == (err = hash_.del(node, tmp_node)))
           ;
         if (0 != err) {
-          wait_succ = true;  // maybe repost by checktimeout
+          wait_succ = true; // maybe repost by checktimeout
           node = NULL;
         } else {
           node->try_lock_times_--;
@@ -184,20 +342,28 @@ bool ObLockWaitMgr::wait(Node* node)
       WaitQuiescent(get_qs());
     }
   }
+  TRANS_LOG(TRACE, "LockWaitMgr.wait", K(is_standalone_task),
+            K(wait_succ), K(has_set_stop()), KPC(node));
   return wait_succ;
 }
 
 void ObLockWaitMgr::wakeup(uint64_t hash)
 {
-  Node* node = fetch_waiter(hash);
+  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.start", K(hash));
+  Node *node = NULL;
+  do {
+    node = fetch_waiter(hash);
 
-  if (NULL != node) {
-    EVENT_INC(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT);
-    EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::CTimeUtil::getTime() - node->lock_ts_);
-    node->on_retry_lock(hash);
-
-    (void)repost(node);
-  }
+    if (NULL != node) {
+      EVENT_INC(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT);
+      EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, ObTimeUtility::current_time() - node->lock_ts_);
+      node->on_retry_lock(hash);
+      (void)repost(node);
+    }
+    // continue loop to wake up all requests waitting on the transaction.
+    // or continue loop to wake up all requests waitting on the tablelock.
+  } while (!is_rowkey_hash(hash) && node != NULL);
+  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.done", K(hash));
 }
 
 ObLockWaitMgr::Node* ObLockWaitMgr::next(Node*& iter, Node* target)
@@ -205,8 +371,8 @@ ObLockWaitMgr::Node* ObLockWaitMgr::next(Node*& iter, Node* target)
   CriticalGuard(get_qs());
   if (NULL != (iter = hash_.next(iter))) {
     *target = *iter;
-    Node* node = hash_.get_next_internal(target->hash());
-    while (NULL != node && node->hash() < target->hash()) {
+    Node *node = hash_.get_next_internal(target->hash());
+    while(NULL != node && node->hash() < target->hash()) {
       node = (Node*)link_next(node);
     }
     if (NULL != node && node->hash() == target->hash()) {
@@ -227,14 +393,14 @@ ObLockWaitMgr::Node* ObLockWaitMgr::fetch_waiter(uint64_t hash)
     ATOMIC_INC(&sequence_[(hash >> 1) % LOCK_BUCKET_COUNT]);
     node = hash_.get_next_internal(hash);
     // we do not need to wake up if the request is not running
-    while (NULL != node && node->hash() <= hash) {
+    while(NULL != node && node->hash() <= hash) {
       if (node->hash() == hash) {
-        if (node->get_run_ts() > obsys::CTimeUtil::getTime()) {
+        if (node->get_run_ts() > ObTimeUtility::current_time()) {
           // wake up the first task whose execution time is not yet
           break;
         } else {
           int err = 0;
-          while (-EAGAIN == (err = hash_.del(node, ret)))
+          while(-EAGAIN == (err = hash_.del(node, ret)))
             ;
           if (0 != err) {
             ret = NULL;
@@ -260,6 +426,9 @@ ObLink* ObLockWaitMgr::check_timeout()
   static int64_t last_check_session_idle_ts = 0;
   bool need_check_session = false;
   const int64_t MAX_WAIT_TIME_US = 10 * 1000 * 1000;
+  DeadlockedSessionArray *deadlocked_session = NULL;
+  fetch_deadlocked_sessions_(deadlocked_session);
+  // FIX:
   // lower down session idle check frequency to 10s
   int64_t curr_ts = ObClockGenerator::getClock();
   if (curr_ts - last_check_session_idle_ts > MAX_WAIT_TIME_US) {
@@ -268,7 +437,7 @@ ObLink* ObLockWaitMgr::check_timeout()
   }
   {
     CriticalGuard(get_qs());
-    while (NULL != (iter = hash_.quick_next(iter))) {
+    while(NULL != (iter = hash_.quick_next(iter))) {
       if (NULL != node2del) {
         retire_node(tail, node2del);
         node2del = NULL;
@@ -276,86 +445,70 @@ ObLink* ObLockWaitMgr::check_timeout()
       TRANS_LOG(TRACE, "LOCK_MGR: check", K(*iter));
       uint64_t hash = iter->hash();
       uint64_t last_lock_seq = iter->lock_seq_;
-      uint64_t curr_lock_seq = ATOMIC_LOAD(&sequence_[(hash >> 1) % LOCK_BUCKET_COUNT]);
+      uint64_t curr_lock_seq = ATOMIC_LOAD(&sequence_[(hash >> 1)% LOCK_BUCKET_COUNT]);
       if (iter->is_timeout() || has_set_stop()) {
-        TRANS_LOG(WARN, "LOCK_MGR: req wait lock timeout", K(curr_lock_seq), K(last_lock_seq), K(*iter));
+        TRANS_LOG_RET(WARN, OB_TIMEOUT, "LOCK_MGR: req wait lock timeout", K(curr_lock_seq), K(last_lock_seq), K(*iter));
         need_check_session = true;
         node2del = iter;
         EVENT_INC(MEMSTORE_WRITE_LOCK_WAIT_TIMEOUT_COUNT);
         // it needs to be placed before the judgment of session_id to prevent the
         // abnormal case which session_id equals 0 from causing the problem of missing wakeup
-      } else if (iter->is_standalone_task() ||
-                 (iter->get_run_ts() > 0 && obsys::CTimeUtil::getTime() > iter->get_run_ts())) {
+      } else if (iter->is_standalone_task() && iter->get_run_ts() == 0) {
         node2del = iter;
         need_check_session = true;
-        // it is desgined to fix the case once the lock_for_write does not try
+        iter->on_retry_lock(hash);
+        TRANS_LOG(INFO, "standalone task should be waken up", K(*iter), K(curr_lock_seq));
+      } else if (iter->get_run_ts() > 0 && ObTimeUtility::current_time() > iter->get_run_ts()) {
+        node2del = iter;
+        need_check_session = true;
+        // it is desgined to fix the case once the mvcc_write does not try
         // again, the reuqests waiting on the same row can also be wakup after
         // the request ends
         iter->on_retry_lock(hash);
-        TRANS_LOG(INFO, "current task should be waken up", K(*iter));
+        TRANS_LOG(INFO, "current task should be waken up cause reaching run ts", K(*iter));
       } else if (0 == iter->sessid_) {
-        // do nothing, may be rpc plan, sessionid is not setted
-      } else {
-        // do nothing
+        //do nothing, may be rpc plan, sessionid is not setted
+      } else if (NULL != deadlocked_session
+                 && is_deadlocked_session_(deadlocked_session,
+                                           iter->sessid_)) {
+        node2del = iter;
+        TRANS_LOG(INFO, "session is deadlocked, pop the request",
+                  "sessid", iter->sessid_, K(*iter));
       }
       if (need_check_session) {
-        sql::ObSQLSessionInfo* session_info = NULL;
+        sql::ObSQLSessionInfo *session_info = NULL;
         int ret = OB_SUCCESS;
         int tmp_ret = OB_SUCCESS;
-        if (OB_ISNULL(GCTX.session_mgr_)) {
-          TRANS_LOG(ERROR, "invalid session_mgr is NULL");
-        } else if (OB_FAIL(GCTX.session_mgr_->get_session(iter->sessid_version_, iter->sessid_, session_info))) {
-          TRANS_LOG(ERROR,
-              "failed to get session_info ",
-              K(ret),
-              "version",
-              iter->sessid_version_,
-              "sessid",
-              iter->sessid_,
-              K(*iter));
+        ObSessionGetterGuard guard(*GCTX.session_mgr_, iter->sessid_);
+        if (OB_FAIL(guard.get_session(session_info))) {
+          TRANS_LOG(ERROR, "failed to get session_info ", K(ret),  "sessid", iter->sessid_, K(*iter));
         } else if (OB_ISNULL(session_info)) {
           // when the request exist, the session should exist as well
-          TRANS_LOG(ERROR,
-              "got session_info is NULL",
-              K(ret),
-              "version",
-              iter->sessid_version_,
-              "sessid",
-              iter->sessid_,
-              K(*iter));
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "got session_info is NULL", K(ret),  "sessid", iter->sessid_, K(*iter));
         } else if (OB_UNLIKELY(session_info->is_terminate(tmp_ret))) {
           // session is killed, just pop the request
           node2del = iter;
-          TRANS_LOG(INFO,
-              "session is killed, pop the request",
-              "version",
-              iter->sessid_version_,
-              "sessid",
-              iter->sessid_,
-              K(*iter),
-              K(tmp_ret));
-        } else if (NULL == node2del && curr_ts - iter->lock_ts_ > MAX_WAIT_TIME_US / 2) {
+          TRANS_LOG(INFO, "session is killed, pop the request",  "sessid", iter->sessid_, K(*iter), K(tmp_ret));
+        } else if (NULL == node2del && curr_ts - iter->lock_ts_ > MAX_WAIT_TIME_US/2) {
           // in order to prevent missing to wakeup request, so we force to wakeup every 5s
           node2del = iter;
           iter->on_retry_lock(hash);
-          TRANS_LOG(WARN, "LOCK_MGR: req wait lock cost too much time", K(curr_lock_seq), K(last_lock_seq), K(*iter));
-        } else { /*do nothing*/
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "LOCK_MGR: req wait lock cost too much time", K(curr_lock_seq), K(last_lock_seq), K(*iter));
+        } else {
+          auto tx_desc = session_info->get_tx_desc();
+          bool ac = false, has_explicit_start_tx = session_info->has_explicit_start_trans();
+          session_info->get_autocommit(ac);
+          if (OB_ISNULL(tx_desc) && (!ac || has_explicit_start_tx)) {
+            auto session_id = session_info->get_sessid();
+            auto &trace_id = session_info->get_current_trace_id();
+            TRANS_LOG(WARN, "LOG_MGR: found session ac = 0 or has_explicit_start_trans but txDesc was released!",
+                      K(session_id), K(trace_id), K(ac), K(has_explicit_start_tx));
+          }
         }
-
-        if (NULL != session_info) {
-          if (need_check_session) {
-            TRANS_LOG(INFO, "check transaction state", "trans_desc", session_info->get_trans_desc());
-          }
-          if (OB_FAIL(GCTX.session_mgr_->revert_session(session_info))) {
-            TRANS_LOG(ERROR,
-                "failed to revert session",
-                "version",
-                iter->sessid_version_,
-                "sessid",
-                iter->sessid_,
-                K(*iter),
-                K(ret));
-          }
+        if (OB_NOT_NULL(session_info)) {
+          auto tx_desc = session_info->get_tx_desc();
+          TRANS_LOG(INFO, "check transaction state", KP(tx_desc));
         }
       }
     }
@@ -374,7 +527,7 @@ void ObLockWaitMgr::retire_node(ObLink*& tail, Node* node)
   int err = 0;
   Node* tmp_node = NULL;
   EVENT_INC(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT);
-  EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::CTimeUtil::getTime() - node->lock_ts_);
+  EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, ObTimeUtility::current_time() - node->lock_ts_);
   while (-EAGAIN == (err = hash_.del(node, tmp_node)))
     ;
   if (0 == err) {
@@ -383,113 +536,165 @@ void ObLockWaitMgr::retire_node(ObLink*& tail, Node* node)
   }
 }
 
-void ObLockWaitMgr::delay_header_node_run_ts(const Key& key)
+void ObLockWaitMgr::delay_header_node_run_ts(const uint64_t hash)
 {
-  uint64_t hash = (key.hash() | 1);
   Node* node = NULL;
   CriticalGuard(get_qs());
   node = hash_.get_next_internal(hash);
   if (NULL != node && !node->is_dummy()) {
     // delay the execution of the header node by 10ms to ensure that the remote
     // request can be executed successfully
-    node->update_run_ts(obsys::CTimeUtil::getTime() + 50 * 1000);
+    node->update_run_ts(ObTimeUtility::current_time() + 50 * 1000);
     TRANS_LOG(INFO, "LOCK_MGR: delay header node");
   }
 }
 
-int ObLockWaitMgr::post_lock(int tmp_ret, ObRowLock& lock, const Key& key, int64_t timeout, const bool is_remote_sql,
-    const bool can_elr, const int64_t total_trans_node_cnt, uint32_t ctx_desc)
+int ObLockWaitMgr::post_lock(const int tmp_ret,
+                             const ObTabletID &tablet_id,
+                             const ObStoreRowkey& row_key,
+                             const int64_t timeout,
+                             const bool is_remote_sql,
+                             const int64_t last_compact_cnt,
+                             const int64_t total_trans_node_cnt,
+                             const ObTransID &tx_id,
+                             const ObTransID &holder_tx_id,
+                             ObFunction<int(bool&, bool&)> &rechecker)
 {
   int ret = OB_SUCCESS;
-  Node* node = get_thread_node();
-
-  if (node != nullptr) {
-    uint64_t& hold_key = get_thread_hold_key();
-    if (hold_key == hash_rowkey(key)) {
-      hold_key = 0;
-    }
-
-    if (OB_UNLIKELY(!is_inited_)) {
-      ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "lock wait mgr not inited", K(ret));
-    } else if (NULL != node) {
-      if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
-        if (is_remote_sql && can_elr) {
-          delay_header_node_run_ts(key);
+  Node *node = NULL;
+  if (OB_NOT_NULL(node = get_thread_node())) {
+    Key key(&row_key);
+    uint64_t &hold_key = get_thread_hold_key();
+    if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
+      auto row_hash = hash_rowkey(tablet_id, key);
+      auto tx_hash = hash_trans(holder_tx_id);
+      auto row_lock_seq = get_seq(row_hash);
+      auto tx_lock_seq = get_seq(tx_hash);
+      bool locked = false, wait_on_row = true;
+      if (OB_FAIL(rechecker(locked, wait_on_row))) {
+        TRANS_LOG(WARN, "recheck lock fail", K(key), K(holder_tx_id));
+      } else if (locked) {
+        auto hash = wait_on_row ? row_hash : tx_hash;
+        if (hold_key == hash) {
+          hold_key = 0;
         }
-
+        if (is_remote_sql) {
+          delay_header_node_run_ts(hash);
+        }
         node->set((void*)node,
-            hash_rowkey(key),
-            get_seq(hash_rowkey(key)),
-            timeout,
-            key.get_table_id(),
-            total_trans_node_cnt,
-            to_cstring(key),
-            ctx_desc);
-
-        if (lock.is_locked()) {
-          node->set_need_wait();
-        }
+                hash,
+                wait_on_row ? row_lock_seq : tx_lock_seq,
+                timeout,
+                tablet_id.id(),
+                last_compact_cnt,
+                total_trans_node_cnt,
+                to_cstring(row_key),// just for virtual table display
+                tx_id,
+                holder_tx_id);
+        node->set_need_wait();
       }
     }
   }
+  TRANS_LOG(TRACE, "post_lock", K(ret), K(row_key), K(tx_id), K(holder_tx_id));
+  return ret;
+}
 
+int ObLockWaitMgr::post_lock(const int tmp_ret,
+                             const ObTabletID &tablet_id,
+                             const ObLockID &lock_id,
+                             const int64_t timeout,
+                             const bool is_remote_sql,
+                             const int64_t last_compact_cnt,
+                             const int64_t total_trans_node_cnt,
+                             const transaction::ObTransID &tx_id,
+                             const transaction::ObTransID &holder_tx_id,
+                             ObFunction<int(bool&)> &check_need_wait)
+{
+  int ret = OB_SUCCESS;
+  Node *node = NULL;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "lock wait mgr not inited", K(ret));
+  } else if (NULL == (node = get_thread_node())) {
+  } else if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
+    auto hash = hash_lock_id(lock_id);
+    const bool need_delay = is_remote_sql;
+    char lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH];
+    lock_id.to_string(lock_id_buf, sizeof(lock_id_buf));
+    lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH - 1] = '\0';
+    uint64_t &hold_key = get_thread_hold_key();
+    if (hold_key == hash) {
+      hold_key = 0;
+    }
+    if (need_delay) {
+      delay_header_node_run_ts(hash);
+    }
+    auto lock_seq = get_seq(hash);
+    bool need_wait = false;
+    if (OB_FAIL(check_need_wait(need_wait))) {
+      TRANS_LOG(WARN, "check need wait failed", K(ret));
+    } else if (need_wait) {
+      node->set((void*)node,
+                hash,
+                lock_seq,
+                timeout,
+                tablet_id.id(),
+                last_compact_cnt,
+                total_trans_node_cnt,
+                lock_id_buf, // just for virtual table display
+                tx_id,
+                holder_tx_id);
+      node->set_need_wait();
+    }
+  }
   return ret;
 }
 
 int ObLockWaitMgr::repost(Node* node)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  TRANS_LOG(TRACE, "LockWaitMgr.repost", KPC(node));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(ERROR, "lock wait mgr not inited", K(ret));
-  } else if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
-    TRANS_LOG(WARN, "report error", K(ret), K(*node));
-  }
-  return ret;
-}
-
-int ObLockWaitMgr::post_lock(int tmp_ret, const ObIMvccCtx& ctx, const uint64_t table_id, const ObStoreRowkey& key,
-    int64_t timeout, const int64_t total_trans_node_cnt, uint32_t ctx_desc)
-{
-  int ret = OB_SUCCESS;
-
-  Node* node = NULL;
-
-  if (NULL == (node = get_thread_node())) {
-  } else if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "lock wait mgr not inited", K(ret));
   } else {
-    if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
-      const uint32_t owner_desc = ctx.get_ctx_descriptor();
-      uint64_t hash_trx = hash_trans(owner_desc);
-
-      node->set(
-          (void*)node, hash_trx, get_seq(hash_trx), timeout, table_id, total_trans_node_cnt, to_cstring(key), ctx_desc);
-
-      if (!ctx.is_rowlocks_released()) {
-        node->set_need_wait();
-        TRANS_LOG(DEBUG, "try lock wait on trx", K(key), K(ctx_desc), K(owner_desc), K(hash_trx));
-      }
+    ObTransID self_tx_id(node->tx_id_);
+    ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
+                                                                      ObTransDeadlockDetectorAdapter::
+                                                                      UnregisterPath::
+                                                                      LOCK_WAIT_MGR_REPOST);
+    if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
+      TRANS_LOG(WARN, "report error", K(ret));
     }
   }
 
   return ret;
 }
 
-int ObLockWaitMgr::delegate_waiting_querys_to_trx(const Key& key, const ObIMvccCtx& ctx)
+// wait lock on trans_id
+int ObLockWaitMgr::transform_row_lock_to_tx_lock(const ObTabletID &tablet_id,
+                                                 const Key &row_key,
+                                                 const ObTransID &tx_id,
+                                                 const ObAddr &tx_scheduler)
 {
   int ret = OB_SUCCESS;
 
-  const uint32_t ctx_desc = ctx.get_ctx_descriptor();
-  uint64_t hash_trx = hash_trans(ctx_desc);
-  uint64_t hash_row = hash_rowkey(key);
+  uint64_t hash_tx_id = hash_trans(tx_id);
+  uint64_t hash_row_key = hash_rowkey(tablet_id, row_key);
 
-  int64_t lock_seq = get_seq(hash_trx);
-  Node* node = NULL;
-  while (NULL != (node = fetch_waiter(hash_row))) {
-    node->change_hash(hash_trx, lock_seq);
+  int64_t lock_seq = get_seq(hash_tx_id);
+  Node *node = NULL;
+  while (NULL != (node = fetch_waiter(hash_row_key))) {
+    int tmp_ret = OB_SUCCESS;
+    ObTransID self_tx_id(node->tx_id_);
+    if (tx_scheduler.is_valid()) {
+      ObTransDeadlockDetectorAdapter::change_detector_waiting_obj_from_row_to_trans(self_tx_id, tx_id, tx_scheduler);
+    } else {
+      TRANS_LOG(WARN, "tx scheduler is invalid", K(tx_scheduler), K(tx_id), K(row_key));
+    }
+    node->change_hash(hash_tx_id, lock_seq);
 
     if (!wait(node)) {
       repost(node);
@@ -502,30 +707,72 @@ int ObLockWaitMgr::delegate_waiting_querys_to_trx(const Key& key, const ObIMvccC
   return ret;
 }
 
-void ObLockWaitMgr::wakeup(const Key& key)
+void ObLockWaitMgr::wakeup(const ObTabletID &tablet_id, const Key& key)
 {
-  wakeup(hash_rowkey(key));
+  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byRowKey", K(tablet_id), K(key), K(lbt()));
+  wakeup(hash_rowkey(tablet_id, key));
 }
 
-void ObLockWaitMgr::wakeup(const uint32_t ctx_desc)
+void ObLockWaitMgr::wakeup(const ObTransID &tx_id)
 {
-  wakeup(hash_trans(ctx_desc));
+  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byTransID", K(tx_id), K(lbt()));
+  wakeup(hash_trans(tx_id));
 }
 
-int ObLockWaitMgr::fullfill_row_key(uint64_t hash, char* row_key, int64_t length)
+void ObLockWaitMgr::wakeup(const ObLockID &lock_id)
+{
+  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byLockID", K(lock_id), K(lbt()));
+  wakeup(hash_lock_id(lock_id));
+}
+
+int ObLockWaitMgr::fullfill_row_key(uint64_t hash, char *row_key, int64_t length)
 {
   int ret = OB_SUCCESS;
   CriticalGuard(get_qs());
-  Node* node = NULL;
+  Node *node = NULL;
 
   if (hash_.get(hash, node)) {
     snprintf(row_key, std::min(length, static_cast<int64_t>(sizeof(node->key_)) + 1), "%s", node->key_);
   } else {
-    const char* err = "can't found";
+    const char *err = "can't found";
     snprintf(row_key, std::min(length, static_cast<int64_t>(strlen(err)) + 1), "%s", err);
   }
 
   return ret;
 }
-};  // end namespace memtable
-};  // end namespace oceanbase
+
+int ObLockWaitMgr::notify_deadlocked_session(const uint32_t sess_id)
+{
+  ObSpinLockGuard guard(deadlocked_sessions_lock_);
+  return deadlocked_sessions_[deadlocked_sessions_index_].push_back(SessPair{sess_id});
+}
+
+void ObLockWaitMgr::fetch_deadlocked_sessions_(DeadlockedSessionArray* &sessions)
+{
+  ObSpinLockGuard guard(deadlocked_sessions_lock_);
+
+  deadlocked_sessions_index_ = 1 - deadlocked_sessions_index_;
+  if (0 != deadlocked_sessions_index_
+      && 1 != deadlocked_sessions_index_) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected deadlocked session index", K(deadlocked_sessions_index_));
+  }
+  deadlocked_sessions_[deadlocked_sessions_index_].reset();
+  sessions = deadlocked_sessions_ + (1 - deadlocked_sessions_index_);
+}
+
+bool ObLockWaitMgr::is_deadlocked_session_(DeadlockedSessionArray *sessions,
+                                           const uint32_t sess_id)
+{
+  bool is_deadlocked_session = false;
+
+  for (int64_t i = 0; i < sessions->count(); i++) {
+    if (sess_id == (*sessions)[i].sess_id_) {
+      is_deadlocked_session = true;
+    }
+  }
+
+  return is_deadlocked_session;
+}
+
+}; // end namespace memtable
+}; // end namespace oceanbase

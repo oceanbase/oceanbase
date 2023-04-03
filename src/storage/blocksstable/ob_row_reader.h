@@ -19,161 +19,165 @@
 #include "common/object/ob_obj_type.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "share/schema/ob_schema_struct.h"
-namespace oceanbase {
-namespace common {
-class ObNewRow;
-class ObObj;
-class ObObjMeta;
-}  // namespace common
-namespace blocksstable {
-class ObColumnMap;
-class ObColumnIndexItem;
-class ObIRowReader {
+#include "storage/access/ob_table_read_info.h"
+#include "ob_datum_rowkey.h"
+
+namespace oceanbase
+{
+namespace memtable
+{
+class ObNopBitMap;
+}
+namespace blocksstable
+{
+typedef common::ObIArray<share::schema::ObColDesc> ObColDescIArray;
+
+class ObClusterColumnReader
+{
 public:
-  ObIRowReader();
-  virtual ~ObIRowReader();
-  // read rowkey with no meta(just column object array)
-  // ( buf + pos ) point to header of column object array;
-  virtual int read_compact_rowkey(const common::ObObjMeta* column_types, const int64_t column_count, const char* buf,
-      const int64_t row_end_pos, int64_t& pos, common::ObNewRow& row) = 0;
+  ObClusterColumnReader()
+   : cluster_buf_(nullptr),
+     cell_end_pos_(0),
+     column_cnt_(0),
+     sparse_column_cnt_(0),
+     cur_idx_(0),
+     column_offset_(nullptr),
+     column_idx_array_(nullptr),
+     special_vals_(nullptr),
+     offset_bytes_(ObColClusterInfoMask::BYTES_MAX),
+     col_idx_bytes_(ObColClusterInfoMask::BYTES_MAX),
+     is_sparse_row_(false),
+     is_inited_(false)
+  {
+  }
+  bool is_init() const { return is_inited_; }
+  int init(
+      const char *cluster_buf,
+      const uint64_t cluster_len,
+      const uint64_t cluster_col_cnt,
+      const ObColClusterInfoMask &info_mask);
+  void reset();
+  int read_storage_datum(const int64_t column_idx, ObStorageDatum &datum);
+  int sequence_read_datum(const int64_t column_idx, ObStorageDatum &datum);
+  int sequence_deep_copy_datums(const int64_t start_idx, ObStorageDatum *datum);
+  int read_cell_with_bitmap(
+      const int64_t start_idx,
+      const storage::ObTableReadInfo &read_info,
+      ObDatumRow &datum_row,
+      memtable::ObNopBitMap &nop_bitmap);
+  OB_INLINE int64_t get_sparse_col_idx(const int64_t column_idx);
+  OB_INLINE int64_t get_column_count() const { return column_cnt_; }
+
+  TO_STRING_KV(KP_(cluster_buf), K_(cell_end_pos), K_(column_cnt),
+      K_(is_sparse_row), K_(offset_bytes), K_(col_idx_bytes), KP_(special_vals));
+private:
+  int sequence_deep_copy_datums_of_sparse(const int64_t start_idx, ObStorageDatum *datums);
+  int sequence_deep_copy_datums_of_dense(const int64_t start_idx, ObStorageDatum *datums);
+  int read_8_bytes_column(
+      const char *buf,
+      const int64_t buf_len,
+      ObStorageDatum &datum);
+  int read_column_from_buf(
+      int64_t tmp_pos,
+      int64_t next_pos, 
+      const ObRowHeader::SPECIAL_VAL special_val,
+      ObStorageDatum &datum);    
+  int read_datum(const int64_t column_idx, ObStorageDatum &datum);
+  OB_INLINE uint8_t read_special_value(const int64_t column_idx) 
+  {
+    const int64_t index = column_idx >> 1; 
+    const int64_t shift = (column_idx % 2) << 2;
+    return (special_vals_[index] >> shift) & 0x0F;
+  }
+private:
+  const char *cluster_buf_;
+  int64_t cell_end_pos_;
+  int64_t column_cnt_;
+  int64_t sparse_column_cnt_;
+  int64_t cur_idx_; // only use when sequence read sparse cell
+  const void *column_offset_;
+  const void *column_idx_array_;
+  const uint8_t *special_vals_;
+  ObColClusterInfoMask::BYTES_LEN offset_bytes_;
+  ObColClusterInfoMask::BYTES_LEN col_idx_bytes_;
+  bool is_sparse_row_;
+  bool is_inited_;
+};
+
+class ObRowReader
+{
+public:
+  ObRowReader();
+  virtual ~ObRowReader() { reset(); }
   // read row from flat storage(RowHeader | cells array | column index array)
   // @param (row_buf + pos) point to RowHeader
   // @param row_len is buffer capacity
   // @param column_map use when schema version changed use column map to read row
   // @param [out]row parsed row object.
   // @param out_type indicates the type of ouput row
-  virtual int read_row(const char* row_buf, const int64_t row_len, int64_t pos, const ObColumnMap& column_map,
-      common::ObIAllocator& allocator, storage::ObStoreRow& row,
-      const common::ObRowStoreType out_type = common::FLAT_ROW_STORE) = 0;
-  // need to call setup_row first
-  virtual int read_column(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, const int64_t col_index,
-      common::ObObj& obj) = 0;
-  // read all cells
-  virtual int read_full_row(const char* row_buf, const int64_t row_len, int64_t pos,
-      common::ObObjMeta* column_type_array, common::ObIAllocator& allocator, storage::ObStoreRow& row) = 0;
-  virtual int compare_meta_rowkey(const common::ObStoreRowkey& rhs, const ObColumnMap* column_map,
-      const int64_t compare_column_count, const char* buf, const int64_t row_end_pos, const int64_t pos,
-      int32_t& cmp_result) = 0;
-  inline void reuse_allocator()
-  {
-    allocator_.reuse();
-  }
-  /*
-   * just parse rowkey column if needed.
-   */
-  // -1 == column_index_count, it means the row format is compact, without row header and column
-  // index array
-  // 0 == column_index_count, it means ignore column index array
-  // row_store_column_count == column_index_count, it means the row is meta row, with row header and
-  // column index arrray
-  // other value of column_index_count is invalid
-  virtual int setup_row(const char* buf, const int64_t row_end_pos, const int64_t pos,
-      const int64_t column_index_count = INT_MAX, transaction::ObTransID* trans_id_ptr = nullptr) = 0;
-  int get_row_header(const ObRowHeader*& row_header) const;
-  int get_pos() const
-  {
-    return pos_;
-  }
-  static int cast_obj(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj);
+  int read_row(
+      const char *row_buf,
+      const int64_t row_len,
+      const storage::ObTableReadInfo *read_info,
+      ObDatumRow &datum_row);
+  // only read cells where bitmap shows col_idx = TRUE
+  int read_memtable_row(
+      const char *row_buf,
+      const int64_t row_len,
+      const storage::ObTableReadInfo &read_info,
+      ObDatumRow &datum_row,
+      memtable::ObNopBitMap &nop_bitmap,
+      bool &read_finished);
+  int read_row_header(const char *row_buf, const int64_t row_len, const ObRowHeader *&row_header);
+  int dump_row(const char *row_buf, const int64_t buf_len, FILE* fd);
+  int read_column(
+      const char *row_buf,
+      const int64_t row_len,
+      const int64_t col_index,
+      ObStorageDatum &datum);
+  int compare_meta_rowkey(
+      const ObDatumRowkey &rhs,
+      const storage::ObTableReadInfo &read_info,
+      const char *buf,
+      const int64_t row_len,
+      int32_t &cmp_result);
   void reset();
-  bool judge_need_setup(const char* buf, const int64_t row_end_pos, const int64_t pos);
+  TO_STRING_KV(KP_(buf), K_(row_len), KPC_(row_header), K_(cluster_cnt),
+      K_(cur_read_cluster_idx), K_(cluster_reader));
+private:
+  int setup_row(const char *buf, const int64_t row_len);
+  OB_INLINE int analyze_row_header();
+  OB_INLINE int analyze_cluster_info();
 
+  OB_INLINE int read_specific_column_in_cluster(const int64_t store_idx, ObStorageDatum &datum);
+  static int read_char(const char* buf, int64_t end_pos, int64_t &pos, ObString &value);
+  template<class T> static const T *read(const char *row_buf, int64_t &pos);
+  OB_INLINE bool is_valid() const;
+  OB_INLINE uint64_t get_cluster_offset(const int64_t cluster_idx) const;
+  OB_INLINE uint64_t get_cluster_end_pos(const int64_t cluster_idx) const;
+  OB_INLINE int analyze_info_and_init_reader(const int64_t cluster_idx);
 protected:
-  int read_text_store(const storage::ObStoreMeta& store_meta, common::ObIAllocator& allocator, common::ObObj& obj);
-  template <class T>
-  static const T* read(const char* row_buf, int64_t& pos);
-
-protected:
-  const char* buf_;
-  int64_t row_end_pos_;
-  int64_t start_pos_;
-  int64_t pos_;
-  const ObRowHeader* row_header_;
-  transaction::ObTransID* trans_id_ptr_;
-  const void* store_column_indexs_;
-  const uint16_t* column_ids_;
-  common::ObArenaAllocator allocator_;
+  const char *buf_;
+  int64_t row_len_;
+  const ObRowHeader *row_header_;
+  const void *cluster_offset_;
+  const void *column_offset_;
+  const void *column_idx_array_;
+  ObClusterColumnReader cluster_reader_;
+  uint32_t cur_read_cluster_idx_;
+  uint32_t cluster_cnt_;
+  bool rowkey_independent_cluster_;
   bool is_setuped_;
 };
 
-template <class T>
-inline const T* ObIRowReader::read(const char* row_buf, int64_t& pos)
+template<class T>
+inline const T *ObRowReader::read(const char *row_buf, int64_t &pos)
 {
-  const T* ptr = reinterpret_cast<const T*>(row_buf + pos);
+  const T *ptr = reinterpret_cast<const T*>(row_buf + pos);
   pos += sizeof(T);
   return ptr;
 }
 
-class ObFlatRowReader : public ObIRowReader {
-public:
-  ObFlatRowReader();
-  virtual ~ObFlatRowReader()
-  {}
-
-  virtual int setup_row(const char* buf, const int64_t row_end_pos, const int64_t pos,
-      const int64_t column_index_count = INT_MAX, transaction::ObTransID* trans_id_ptr = nullptr) override;
-  int read_row(const char* row_buf, const int64_t row_len, int64_t pos, const ObColumnMap& column_map,
-      common::ObIAllocator& allocator, storage::ObStoreRow& row,
-      const common::ObRowStoreType out_type = common::FLAT_ROW_STORE) override;
-  int compare_meta_rowkey(const common::ObStoreRowkey& rhs, const ObColumnMap* column_map,
-      const int64_t compare_column_count, const char* buf, const int64_t row_end_pos, const int64_t pos,
-      int32_t& cmp_result) override;
-  // need to call setup_row first
-  int read_column(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, const int64_t col_index,
-      common::ObObj& obj) override;
-  int read_full_row(const char* row_buf, const int64_t row_len, int64_t pos, common::ObObjMeta* column_type_array,
-      common::ObIAllocator& allocator, storage::ObStoreRow& row) override;
-  // read rowkey with no meta(just column object array)
-  // ( buf + pos ) point to header of column object array;
-  int read_compact_rowkey(const common::ObObjMeta* column_types, const int64_t column_count, const char* buf,
-      const int64_t row_end_pos, int64_t& pos, common::ObNewRow& row) override;
-  int read_obj(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj);
-  int read_obj_no_meta(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj);
-
-protected:
-  OB_INLINE int analyze_row_header(const int64_t column_cnt, transaction::ObTransID* trans_id_ptr);
-
-private:
-  int read_flat_row_from_flat_storage(
-      const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
-  int read_sparse_row_from_flat_storage(
-      const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
-  int sequence_read_flat_column(
-      const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
-};
-
-class ObSparseRowReader : public ObIRowReader {
-public:
-  ObSparseRowReader();
-  virtual ~ObSparseRowReader()
-  {}
-  virtual int setup_row(const char* buf, const int64_t row_end_pos, const int64_t pos,
-      const int64_t column_index_count = INT_MAX, transaction::ObTransID* trans_id_ptr = nullptr) override;
-  int read_row(const char* row_buf, const int64_t row_len, int64_t pos, const ObColumnMap& column_map,
-      common::ObIAllocator& allocator, storage::ObStoreRow& row,
-      const common::ObRowStoreType out_type = common::FLAT_ROW_STORE) override;
-  int compare_meta_rowkey(const common::ObStoreRowkey& rhs, const ObColumnMap* column_map,
-      const int64_t compare_column_count, const char* buf, const int64_t row_end_pos, const int64_t pos,
-      int32_t& cmp_result) override;
-  int read_column(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, const int64_t col_index,
-      common::ObObj& obj) override;
-  int read_full_row(const char* row_buf, const int64_t row_len, int64_t pos, common::ObObjMeta* column_type_array,
-      common::ObIAllocator& allocator, storage::ObStoreRow& row) override;
-  // read rowkey with no meta(just column object array)
-  // ( buf + pos ) point to header of column object array;
-  int read_compact_rowkey(const common::ObObjMeta* column_types, const int64_t column_count, const char* buf,
-      const int64_t row_end_pos, int64_t& pos, common::ObNewRow& row) override;
-
-protected:
-  OB_INLINE int analyze_row_header(transaction::ObTransID* trans_id_ptr);
-
-private:
-  int read_flat_row_from_sparse_storage(
-      const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
-  int read_sparse_row_from_sparse_storage(
-      const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
-};
-
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+}//end namespace blocksstable
+}//end namespace oceanbase
 #endif

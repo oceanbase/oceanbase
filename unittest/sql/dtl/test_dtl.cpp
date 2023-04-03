@@ -32,7 +32,9 @@ public:
   virtual void run() = 0;
 };
 
-class Producer : public ObDtlTask, public Runnable {
+class Producer
+    : public ObDtlTask, public Runnable
+{
 public:
   void run()
   {
@@ -49,14 +51,16 @@ public:
   }
 };
 
-class Consumer : public ObDtlTask, public Runnable {
+class Consumer
+    : public ObDtlTask, public Runnable
+{
 public:
   void run()
   {
     cout << "Consumer" << endl;
     int ret = link_chans();
     EXPECT_EQ(OB_SUCCESS, ret);
-    const ObNewRow* row = nullptr;
+    const ObNewRow *row = nullptr;
     int cnt = 0;
     while (OB_SUCC(chans_[0]->pop(row, 3000))) {
       cout << "pop row, got: " << cnt << endl;
@@ -66,13 +70,15 @@ public:
   }
 };
 
-void th(void* arg)
+void th(void *arg)
 {
-  Runnable* task = reinterpret_cast<Runnable*>(arg);
+  Runnable *task = reinterpret_cast<Runnable*>(arg);
   task->run();
 }
 
-class TestDtl : public ::testing::Test {
+class TestDtl
+    : public ::testing::Test
+{
 public:
   virtual void SetUp()
   {
@@ -87,7 +93,7 @@ public:
 protected:
   Consumer c;
   Producer p;
-  thread* thes_[10];
+  thread *thes_[10];
 };
 
 TEST_F(TestDtl, TestName)
@@ -107,7 +113,7 @@ TEST_F(TestDtl, TestName)
   thes_[1]->join();
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   OB_LOGGER.set_log_level(3);

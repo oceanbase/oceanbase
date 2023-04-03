@@ -12,179 +12,338 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_row_reader.h"
-#include "share/object/ob_obj_cast.h"
-#include "ob_column_map.h"
-#include "ob_sparse_cell_reader.h"
+#include "storage/memtable/ob_nop_bitmap.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace storage;
 using namespace common;
-namespace blocksstable {
-
-#define SET_ROW_BASIC_INFO(row_type, row)                        \
-  {                                                              \
-    row.is_sparse_row_ = SPARSE_ROW_STORE == row_type;           \
-    row.flag_ = row_header_->get_row_flag();                     \
-    row.set_dml_val(row_header_->get_row_dml());                 \
-    row.row_type_flag_.flag_ = row_header_->get_row_type_flag(); \
-  }
-
-#define ALLOC_COL_ID_ARRAY(allocator, row)                                                      \
-  {                                                                                             \
-    void* buf = nullptr;                                                                        \
-    if (OB_ISNULL(buf = allocator.alloc(sizeof(uint16_t) * row_header_->get_column_count()))) { \
-      ret = OB_ALLOCATE_MEMORY_FAILED;                                                          \
-      STORAGE_LOG(WARN, "fail to allocate memory for ObLobData", K(ret));                       \
-    } else {                                                                                    \
-      row.column_ids_ = reinterpret_cast<uint16_t*>(buf);                                       \
-    }                                                                                           \
-  }
-
-#define DESERIALIZE_TRANS_ID(trans_id_ptr)                                         \
-  {                                                                                \
-    if (ObRowHeader::RHV_NO_TRANS_ID == row_header_->get_version()) {              \
-      STORAGE_LOG(DEBUG, "without trans id", K(ret), K(pos_));                     \
-    } else if (ObRowHeader::RHV_WITH_TRANS_ID == row_header_->get_version()) {     \
-      if (OB_FAIL(deserialize_trans_id(buf_, row_end_pos_, pos_, trans_id_ptr))) { \
-        STORAGE_LOG(WARN, "failed to deserialize trans id", K(ret));               \
-      }                                                                            \
-    }                                                                              \
-  }
-
-//----------------------ObIRowReader-----------------------------------
-
-ObIRowReader::ObIRowReader()
-    : buf_(NULL),
-      row_end_pos_(0),
-      start_pos_(0),
-      pos_(0),
-      row_header_(NULL),
-      trans_id_ptr_(NULL),
-      store_column_indexs_(NULL),
-      column_ids_(NULL),
-      allocator_(ObModIds::OB_CS_ROW_READER),
-      is_setuped_(false)
-{}
-
-ObIRowReader::~ObIRowReader()
+namespace blocksstable
 {
-  trans_id_ptr_ = NULL;
-  reset();
+
+#define SET_ROW_BASIC_INFO(row) \
+  { \
+    row.row_flag_ = row_header_->get_row_flag(); \
+    row.mvcc_row_flag_.flag_ = row_header_->get_mvcc_row_flag(); \
+    row.trans_id_ = row_header_->get_trans_id(); \
+  }
+
+//----------------------ObRowReaderV2-----------------------------------
+
+ObRowReader::ObRowReader()
+   : buf_(NULL),
+     row_len_(0),
+     row_header_(NULL),
+     cluster_offset_(NULL),
+     column_offset_(NULL),
+     column_idx_array_(NULL),
+     cluster_reader_(),
+     cur_read_cluster_idx_(-1),
+     cluster_cnt_(0),
+     rowkey_independent_cluster_(false),
+     is_setuped_(false)
+{
 }
 
-void ObIRowReader::reset()
+void ObRowReader::reset()
 {
   buf_ = NULL;
-  row_end_pos_ = 0;
-  start_pos_ = 0;
-  pos_ = 0;
+  row_len_ = 0;
   row_header_ = NULL;
-  store_column_indexs_ = NULL;
-  column_ids_ = NULL;
+  cluster_offset_ = NULL;
+  column_offset_ = NULL;
+  column_idx_array_ = NULL;
+  cluster_reader_.reset();
+  cur_read_cluster_idx_ = -1;
+  cluster_cnt_ = 0;
+  rowkey_independent_cluster_ = false;
   is_setuped_ = false;
 }
 
-int ObIRowReader::get_row_header(const ObRowHeader*& row_header) const
+bool ObRowReader::is_valid() const
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row_header_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "row_header is null");
-  } else {
-    row_header = row_header_;
-  }
-  return ret;
+  return is_setuped_ && NULL != row_header_  && row_header_->is_valid() && NULL != buf_ && row_len_ > 0;
 }
 
-int deserialize_trans_id(const char* buf, const int64_t row_end_pos, int64_t& pos, transaction::ObTransID* trans_id_ptr)
-{
-  int ret = OB_SUCCESS;
-  transaction::ObTransID not_use_trans_id;  // don't set trans id from outside
-  if (OB_ISNULL(trans_id_ptr)) {
-    trans_id_ptr = &not_use_trans_id;
-    STORAGE_LOG(DEBUG, "TransID ptr is null", K(ret), K(buf), K(row_end_pos), K(pos));
-  }
-  if (OB_FAIL(trans_id_ptr->deserialize(buf, row_end_pos, pos))) {
-    STORAGE_LOG(WARN, "Failed to deserialize TransID", K(ret), K(buf), K(row_end_pos), K(pos));
-  } else {
-    STORAGE_LOG(DEBUG, "Deserialize TransId success", K(*trans_id_ptr));
-  }
-  return ret;
-}
+static uint64_t get_offset_0(const void *offset_array, const int64_t idx)
+{ UNUSEDx(offset_array, idx); return INT64_MAX; }
+static uint64_t get_offset_8(const void *offset_array, const int64_t idx)
+{ return reinterpret_cast<const uint8_t*>(offset_array)[idx]; }
+static uint64_t get_offset_16(const void *offset_array, const int64_t idx)
+{ return reinterpret_cast<const uint16_t*>(offset_array)[idx]; }
+static uint64_t get_offset_32(const void *offset_array, const int64_t idx)
+{ return reinterpret_cast<const uint32_t*>(offset_array)[idx]; }
 
-int ObIRowReader::cast_obj(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj)
+uint64_t (*get_offset_func[ObColClusterInfoMask::BYTES_MAX])(const void *, const int64_t)
+    = {get_offset_0, get_offset_8, get_offset_16, get_offset_32};
+
+int ObClusterColumnReader::init(
+    const char *cluster_buf,
+    const uint64_t cluster_len,
+    const uint64_t cluster_col_cnt,
+    const ObColClusterInfoMask &info_mask)
 {
   int ret = OB_SUCCESS;
-  if (ObNullType == obj.get_type() || ObExtendType == obj.get_type()) {
-    // ignore src_meta type, do nothing, just return obj
+  if (IS_INIT) {
+    reset();
+  }
+  int64_t serialize_column_cnt = 0;
+  if (OB_UNLIKELY(nullptr == cluster_buf || !info_mask.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(cluster_buf), K(cluster_len), K(info_mask));
+  } else if (FALSE_IT(serialize_column_cnt = info_mask.is_sparse_row() ? info_mask.get_sparse_column_count() : cluster_col_cnt)) {
+  } else if (OB_UNLIKELY(info_mask.get_total_array_size(serialize_column_cnt) >= cluster_len)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("invalid cluster reader argument", K(ret), K(info_mask), K(cluster_len));
   } else {
-    const ObObjTypeClass type_class = src_meta.get_type_class();
-    bool need_cast = true;
-    bool empty_str = false;
-    if (type_class == obj.get_type_class()) {
-      switch (type_class) {
-        case ObIntTC: {
-          need_cast = src_meta.get_type() < obj.get_type();
-          break;
-        }
-        case ObUIntTC: {
-          need_cast = (obj.get_int() < 0 || static_cast<uint64_t>(obj.get_int()) > UINT_MAX_VAL[src_meta.get_type()]);
-          break;
-        }
-        case ObFloatTC: {
-          need_cast = (obj.get_float() < 0.0);
-          break;
-        }
-        case ObDoubleTC: {
-          need_cast = (obj.get_double() < 0.0);
-          break;
-        }
-        case ObNumberTC: {
-          need_cast = obj.is_negative_number();
-          break;
-        }
-        case ObStringTC: {
-          need_cast = (obj.get_collation_type() != src_meta.get_collation_type());
-          empty_str = 0 == obj.get_val_len();
-          break;
-        }
-        case ObTextTC: {
-          need_cast = obj.is_lob_inrow() && (obj.get_collation_type() != src_meta.get_collation_type());
-          empty_str = 0 == obj.get_val_len();
-          break;
-        }
-        default: {
-          need_cast = false;
-        }
-      }
+    cluster_buf_ = cluster_buf;
+    const int64_t specail_val_pos = cluster_len - info_mask.get_special_value_array_size(serialize_column_cnt);
+    special_vals_ = reinterpret_cast<const uint8_t*>(cluster_buf_ + specail_val_pos);
+
+    cell_end_pos_ = specail_val_pos - info_mask.get_offset_type_len() * serialize_column_cnt;
+    column_cnt_ = cluster_col_cnt;
+    column_offset_ = cluster_buf_ + cell_end_pos_;
+    offset_bytes_ = info_mask.get_offset_type();
+    if (info_mask.is_sparse_row()) {
+      is_sparse_row_ = true;
+      sparse_column_cnt_ = info_mask.get_sparse_column_count();
+      col_idx_bytes_ = info_mask.get_column_idx_type();
+      cell_end_pos_ -= info_mask.get_column_idx_type_len() * sparse_column_cnt_;
+      column_idx_array_ = cluster_buf_ + cell_end_pos_;
     }
+    is_inited_ = true;
+    LOG_DEBUG("success to init cluster column reader", K(ret), K(cluster_len),
+        KPC(this), K(cell_end_pos_), K(column_cnt_), K(sparse_column_cnt_));
+  }
+  return ret;
+}
 
-    if ((obj.get_type() == src_meta.get_type() && !need_cast) || empty_str) {
-      // just change the type
-      obj.set_type(src_meta.get_type());
-      if (empty_str && ObTextTC == type_class) {
-        obj.set_lob_inrow();
+void ObClusterColumnReader::reset()
+{
+  cluster_buf_ = nullptr;
+  is_sparse_row_ = false;
+  offset_bytes_ = ObColClusterInfoMask::BYTES_MAX;
+  col_idx_bytes_ = ObColClusterInfoMask::BYTES_MAX;
+  cell_end_pos_ = 0;
+  cur_idx_ = 0;
+  column_offset_ = nullptr;
+  column_idx_array_ = nullptr;
+  is_inited_ = false;
+}
+
+int64_t ObClusterColumnReader::get_sparse_col_idx(const int64_t column_idx)
+{
+  int64_t idx = -1;
+  int64_t col_idx = 0;
+  for (int i = 0; i < sparse_column_cnt_; ++i) {
+    col_idx = get_offset_func[col_idx_bytes_](column_idx_array_, i);
+    if (col_idx == column_idx) {
+      idx = i;
+      break;
+    } else if (col_idx > column_idx) {
+      break;
+    }
+  }
+  return idx;
+}
+
+int ObClusterColumnReader::read_storage_datum(const int64_t column_idx, ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("cluster column reader is not init", K(ret), K(column_idx));
+  } else if (OB_UNLIKELY(column_idx < 0 || column_idx >= column_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(column_idx), K(column_cnt_));
+  } else {
+    int64_t idx = is_sparse_row_ ? get_sparse_col_idx(column_idx) : column_idx;
+
+    if (-1 == idx) {
+      datum.set_nop();
+    } else if (idx >= 0) {
+      if (OB_FAIL(read_datum(idx, datum))) {
+        LOG_WARN("read datum fail", K(ret), KP(cluster_buf_), K(cell_end_pos_), K(idx), K(column_idx));
+      } else {
+        LOG_DEBUG("read_storage_datum", K(idx), K(datum));
       }
     } else {
-      // not support data alteration
-      ObObj ori_obj = obj;
-      int64_t cm_mode = CM_NONE;
-      if (ObIntTC == ori_obj.get_type_class() && ObUIntTC == type_class) {
-        obj.set_uint(src_meta.get_type(), static_cast<uint64_t>(ori_obj.get_int()));
-      } else if (ObIntTC == ori_obj.get_type_class() && ObBitTC == type_class) {
-        obj.set_bit(static_cast<uint64_t>(ori_obj.get_int()));
+      LOG_WARN("invalid idx for read datum", K(ret), K(column_idx), K(idx), K(datum));
+    }
+  }
+  return ret;
+}
+
+int ObClusterColumnReader::sequence_read_datum(const int64_t column_idx, ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("cluster column reader is not init", K(ret), K(column_idx));
+  } else if (OB_UNLIKELY(column_idx < 0 || column_idx >= column_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(column_idx), K(column_cnt_));
+  } else {
+    int64_t idx = -1;
+    if (is_sparse_row_) {
+      if (cur_idx_ < sparse_column_cnt_) {
+        if (get_offset_func[col_idx_bytes_](column_idx_array_, cur_idx_) == column_idx) {
+          idx = cur_idx_++;
+        }
+      }
+    } else {
+      idx = column_idx;
+    }
+    if (-1 == idx) {
+      datum.set_nop();
+    } else if (idx >= 0) {
+      if (OB_FAIL(read_datum(idx, datum))) {
+        LOG_WARN("read datum fail", K(ret), KP(cluster_buf_), K(cell_end_pos_), K(idx), K(column_idx));
+      }
+    } else {
+      LOG_WARN("invalid idx for sequence read obj", K(column_idx), K(idx), K(datum));
+    }
+  }
+  return ret;
+}
+
+int ObClusterColumnReader::sequence_deep_copy_datums_of_sparse(
+    const int64_t start_idx,
+    ObStorageDatum *datums)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = -1;
+  int64_t next_pos = -1;
+  int64_t col_idx = 0;
+  ObRowHeader::SPECIAL_VAL special_val = ObRowHeader::VAL_MAX;
+  for (int i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+    if (cur_idx_ < sparse_column_cnt_
+        && i == get_offset_func[col_idx_bytes_](column_idx_array_, cur_idx_)) { // have val
+      col_idx = start_idx + i;
+      special_val = (ObRowHeader::SPECIAL_VAL)read_special_value(cur_idx_);
+      if (OB_UNLIKELY(ObRowHeader::VAL_NOP == special_val)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nop val", K(ret), K(i), K(col_idx), K(tmp_pos));
+      } else if (ObRowHeader::VAL_NULL == special_val) {
+        datums[col_idx].set_null();
+      } else if (OB_UNLIKELY(ObRowHeader::VAL_NORMAL != special_val
+          && ObRowHeader::VAL_ENCODING_NORMAL != special_val)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected specail val", K(ret), K(i), K(col_idx), K(special_val));
       } else {
-        ObCastCtx cast_ctx(&allocator, NULL, cm_mode, src_meta.get_collation_type());
-        if (OB_FAIL(ObObjCaster::to_type(src_meta.get_type(), cast_ctx, ori_obj, obj))) {
-          STORAGE_LOG(WARN,
-              "fail to cast obj",
-              K(ret),
-              K(ori_obj),
-              K(obj),
-              K(ori_obj.get_type()),
-              K(ob_obj_type_str(ori_obj.get_type())),
-              K(src_meta.get_type()),
-              K(ob_obj_type_str(src_meta.get_type())));
+        tmp_pos = get_offset_func[offset_bytes_](column_offset_, cur_idx_);
+        if (cur_idx_ + 1 < sparse_column_cnt_) {
+          next_pos = get_offset_func[offset_bytes_](column_offset_, cur_idx_ + 1);
+        } else { // cur cell is the last cell
+          next_pos = cell_end_pos_;
+        }
+        LOG_DEBUG("sequence_deep_copy_datums_of_sparse", K(col_idx), K(tmp_pos), K(next_pos), K(cell_end_pos_));
+        if (OB_FAIL(read_column_from_buf(tmp_pos, next_pos, special_val, datums[col_idx]))) {
+          LOG_WARN("failed to read column from buf", K(ret), K(tmp_pos), K(next_pos), K(special_val)); 
+        }
+      }
+      cur_idx_++;
+    } else { // set nop
+      datums[start_idx + i].set_nop();
+    }
+  } // end of for
+  return ret;
+}
+
+int ObClusterColumnReader::sequence_deep_copy_datums_of_dense(const int64_t start_idx, ObStorageDatum *datums)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = -1;
+  int64_t next_pos = -1;
+  int64_t cur_idx = 0;
+  ObRowHeader::SPECIAL_VAL special_val = ObRowHeader::VAL_MAX;
+  for (int idx = 0; OB_SUCC(ret) && idx < column_cnt_; ++idx) {
+    tmp_pos = get_offset_func[offset_bytes_](column_offset_, idx);
+    cur_idx = start_idx + idx;
+    special_val = (ObRowHeader::SPECIAL_VAL)read_special_value(idx);
+    if (ObRowHeader::VAL_NOP == special_val) {
+      datums[cur_idx].set_nop();
+    } else if (ObRowHeader::VAL_NULL == special_val) {
+      datums[cur_idx].set_null();
+    } else if (OB_UNLIKELY(ObRowHeader::VAL_NORMAL != special_val
+        && ObRowHeader::VAL_ENCODING_NORMAL != special_val)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected specail val", K(ret), K(idx), K(cur_idx), K(special_val));
+    } else {
+      datums[cur_idx].reset();
+      if (idx + 1 < column_cnt_) {
+        next_pos = get_offset_func[offset_bytes_](column_offset_, idx + 1);
+      } else { // cur cell is the last cell
+        next_pos = cell_end_pos_;
+      }
+      LOG_DEBUG("sequence_deep_copy_datums_of_dense", K(cur_idx), K(tmp_pos), K(next_pos));
+      if (OB_FAIL(read_column_from_buf(tmp_pos, next_pos, special_val, datums[cur_idx]))) {
+        LOG_WARN("failed to read column from buf", K(ret), K(tmp_pos), K(next_pos), K(special_val)); 
+      }
+    }
+  } // end of for
+  return ret;
+}
+
+int ObClusterColumnReader::sequence_deep_copy_datums(const int64_t start_idx, ObStorageDatum *datums)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("cluster column reader is not init", K(ret), K(start_idx));
+  } else if (OB_UNLIKELY(start_idx < 0 || nullptr == datums)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(start_idx), K(datums));
+  } else if (is_sparse_row_) {
+    if (OB_FAIL(sequence_deep_copy_datums_of_sparse(start_idx, datums))) {
+      LOG_WARN("failed to deep copy datums in sparse cluster", K(ret), K(start_idx), K(datums));
+    }
+  } else if (OB_FAIL(sequence_deep_copy_datums_of_dense(start_idx, datums))) {
+    LOG_WARN("failed to deep copy datums in dense cluster", K(ret), K(start_idx), K(datums));
+  }
+  return ret;
+}
+
+int ObClusterColumnReader::read_cell_with_bitmap(
+    const int64_t start_idx,
+    const ObTableReadInfo &read_info,
+    ObDatumRow &datum_row,
+    memtable::ObNopBitMap &nop_bitmap)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("cluster column reader is not init", K(ret));
+  } else {
+    int64_t cur_idx = 0;
+    const common::ObIArray<int32_t> &cols_index = read_info.get_memtable_columns_index();
+
+    for (int i = 0; OB_SUCC(ret) && i < read_info.get_request_count(); ++i) {
+      if (!nop_bitmap.test(i)) { // is_nop, read current cell
+      } else if (FALSE_IT(cur_idx = cols_index.at(i) - start_idx)) {
+      } else if (cur_idx >= 0 && cur_idx < column_cnt_) {
+        if (is_sparse_row_) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < sparse_column_cnt_; ++j) {
+            if (get_offset_func[col_idx_bytes_](column_idx_array_, j) == cur_idx) {
+              if (OB_FAIL(read_datum(j, datum_row.storage_datums_[i]))) {
+                LOG_WARN("failed to read non nop datum", K(ret), K(j), K(i), K(cur_idx), K(start_idx));
+              } else {
+                if (datum_row.storage_datums_[i].is_nop()) {
+                  LOG_ERROR("chaser debug unexpected nop datum", K(j), K(i), K(cur_idx), K(start_idx), K(*this));
+                }
+                nop_bitmap.set_false(i);
+                break;
+              }
+            }
+          }
+          LOG_DEBUG("chaser debug read sparse column", K(i), K(cur_idx), K(start_idx), K(nop_bitmap.get_nop_cnt()));
+        } else if (read_special_value(cur_idx) == ObRowHeader::VAL_NOP) {
+          // skip nop
+        } else if (OB_FAIL(read_datum(cur_idx, datum_row.storage_datums_[i]))) {
+          LOG_WARN("failed to read non nop datum", K(ret), K(i), K(cur_idx), K(start_idx), K(is_sparse_row_));
+        } else {
+          nop_bitmap.set_false(i);
+          LOG_DEBUG("chaser debug read dense column", K(i), K(cur_idx), K(start_idx), K(datum_row.storage_datums_[i]), K(nop_bitmap.get_nop_cnt()));
         }
       }
     }
@@ -192,1266 +351,432 @@ int ObIRowReader::cast_obj(const common::ObObjMeta& src_meta, common::ObIAllocat
   return ret;
 }
 
-int ObIRowReader::read_text_store(const ObStoreMeta& store_meta, common::ObIAllocator& allocator, ObObj& obj)
+int ObClusterColumnReader::read_8_bytes_column(
+    const char *buf, 
+    const int64_t buf_len,
+    ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
-  if (STORE_WITHOUT_COLLATION == store_meta.attr_) {
-    obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  } else if (STORE_WITH_COLLATION == store_meta.attr_) {
-    obj.set_collation_type(static_cast<ObCollationType>(*read<uint8_t>(buf_, pos_)));
+  uint64_t value = 0;
+  if (OB_UNLIKELY(buf_len <= 0 || buf_len >= sizeof(uint64_t))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid size of column ", K(ret), KP(buf), K(buf_len));
   } else {
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "row reader only suport utf8 character set", K(ret), K(store_meta.attr_));
+    switch (buf_len) {
+    case 1:
+      value = reinterpret_cast<const uint8_t *>(buf)[0]; 
+    break;
+    case 2:
+      value = reinterpret_cast<const uint16_t *>(buf)[0]; 
+    break;
+    case 4:
+      value = reinterpret_cast<const uint32_t *>(buf)[0]; 
+    break;
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Not supported buf_len ", KP(buf), K(buf_len), K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
-    const uint8_t* type = read<uint8_t>(buf_, pos_);
-    const uint8_t* scale = read<uint8_t>(buf_, pos_);
-    const uint8_t* version = read<uint8_t>(buf_, pos_);
-    const ObObjType store_type = static_cast<ObObjType>(*type);
-    ObLobScale lob_scale(*scale);
-    if (STORE_TEXT_STORE_VERSION != *version) {
-      STORAGE_LOG(WARN, "[LOB] unexpected text store version", K(*version), K(ret));
-    }
-    if (lob_scale.is_in_row()) {
-      const uint32_t* len = read<uint32_t>(buf_, pos_);
-      if (pos_ + *len > row_end_pos_) {
-        ret = OB_BUF_NOT_ENOUGH;
-        STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(*len), K(row_end_pos_));
-      } else {
-        obj.set_lob_value(store_type, (char*)(buf_ + pos_), *len);
-        pos_ += *len;
-      }
-    } else if (lob_scale.is_out_row()) {
-      void* buf = NULL;
-      ObLobData* value = NULL;
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObLobData)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to allocate memory for ObLobData", K(ret));
-      } else {
-        value = new (buf) ObLobData();
-        if (OB_FAIL(value->deserialize(buf_, row_end_pos_, pos_))) {
-          STORAGE_LOG(WARN, "fail to deserialize lob data", K(ret));
-        } else {
-          obj.set_lob_value(store_type, value, value->get_handle_size());
-        }
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "error unexpected, invalid obj type", K(ret), K(obj));
-    }
-  }
-
+    datum.reuse(); 
+    datum.set_uint(value);
+    LOG_DEBUG("ObClusterColumnReader read 8 bytes column ", K(value));
+  } 
   return ret;
 }
 
-//----------------------ObFlatRowReader-----------------------------------
-
-ObFlatRowReader::ObFlatRowReader()
-{}
-/*
- * FlatRow : ObRowHeader | Column Array | Column Index Array
- * */
-inline int ObFlatRowReader::setup_row(const char* buf, const int64_t row_end_pos, const int64_t pos,
-    const int64_t column_index_count, transaction::ObTransID* trans_id_ptr /* = nullptr*/)
+int ObClusterColumnReader::read_column_from_buf(
+    const int64_t tmp_pos,
+    const int64_t next_pos,
+    const ObRowHeader::SPECIAL_VAL special_val,
+    ObStorageDatum &datum) 
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || row_end_pos <= 0 || column_index_count < -1 || pos < 0 || pos >= row_end_pos)) {
+  const char *buf = cluster_buf_ + tmp_pos; 
+  const int64_t buf_len = next_pos - tmp_pos;
+  if (special_val == ObRowHeader::VAL_ENCODING_NORMAL) {
+    if (OB_FAIL(read_8_bytes_column(buf, buf_len, datum))) {
+      LOG_WARN("failed to decode 8 bytes column", K(ret), K(special_val), KP(buf), K(buf_len), KPC(this));  
+    } 
+  } else if (OB_FAIL(datum.from_buf_enhance(buf, buf_len))) {
+    LOG_WARN("failed to copy datum", K(ret), K(special_val), KP(buf), K(buf_len), KPC(this));
+  } 
+  return ret;
+}
+
+int ObClusterColumnReader::read_datum(const int64_t column_idx, ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  ObRowHeader::SPECIAL_VAL special_val = (ObRowHeader::SPECIAL_VAL)read_special_value(column_idx);
+  if (ObRowHeader::VAL_NOP == special_val) {
+    datum.set_nop();
+  } else if (ObRowHeader::VAL_NULL == special_val) {
+    datum.set_null();
+  } else if (OB_UNLIKELY(ObRowHeader::VAL_NORMAL != special_val
+      && ObRowHeader::VAL_ENCODING_NORMAL != special_val)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected specail val", K(ret), K(column_idx), K(special_val));
+  } else {
+    int64_t next_pos = -1;
+    int64_t tmp_pos = get_offset_func[offset_bytes_](column_offset_, column_idx);
+    if (column_idx + 1 < (is_sparse_row_ ? sparse_column_cnt_ : column_cnt_)) {
+      next_pos = get_offset_func[offset_bytes_](column_offset_, column_idx+ 1);
+    } else { // cur cell is the last cell
+      next_pos = cell_end_pos_;
+    }
+    if (OB_FAIL(read_column_from_buf(tmp_pos, next_pos, special_val, datum))) {
+      LOG_WARN("failed to read column from buf", K(ret), KP(tmp_pos), K(next_pos), K(special_val)); 
+    }
+  }
+  return ret;
+}
+/*
+ * ObRowReaderV2 implement
+ * */
+inline int ObRowReader::setup_row(
+    const char *buf,
+    const int64_t row_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == buf || row_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid row reader argument", K(ret), K(OB_P(buf)), K(row_end_pos), K(column_index_count));
+    LOG_WARN("invalid row reader argument", K(ret), K(OB_P(buf)), K(row_len));
   } else {
     // set all position
     buf_ = buf;
-    row_end_pos_ = row_end_pos;
-    start_pos_ = pos;
-    pos_ = pos;
-    if (column_index_count >= 0) {
-      if (OB_FAIL(analyze_row_header(column_index_count,
-              trans_id_ptr))) {  // analyze row header
-        STORAGE_LOG(WARN, "invalid row reader argument.", K(ret), K(column_index_count));
-      } else if (column_index_count > 0) {  // get column index array
-        store_column_indexs_ = buf_ + row_end_pos_ - row_header_->get_column_index_bytes() * column_index_count;
-      } else {  // 0 == column_index_count : ignore index array
-        store_column_indexs_ = NULL;
-      }
-    } else {  // -1 == column_index_count : no RowHeader and index array
-      row_header_ = NULL;
-      store_column_indexs_ = NULL;
-    }
-    if (OB_SUCC(ret)) {
+    row_len_ = row_len;
+    cur_read_cluster_idx_ = -1;
+    if (OB_FAIL(analyze_row_header())) {
+      LOG_WARN("invalid row reader argument.", K(ret));
+    } else {
       is_setuped_ = true;
     }
   }
+  LOG_DEBUG("ObRowReaderV2::setup_row", K(ret), KPC(row_header_), KPC(this));
+  return ret;
+}
+
+int ObRowReader::read_row_header(
+    const char *row_buf,
+    const int64_t row_len,
+    const ObRowHeader *&row_header)
+{
+  int ret = OB_SUCCESS;
+  row_header = nullptr;
+  if (OB_UNLIKELY(nullptr == row_buf || row_len < sizeof(ObRowHeader))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid row reader argument", K(ret), K(OB_P(row_buf)), K(row_len));
+  } else {
+    row_header = reinterpret_cast<const ObRowHeader*>(row_buf); // get NewRowHeader
+  }
+  return ret;
+}
+
+int ObRowReader::read_memtable_row(
+    const char *row_buf,
+    const int64_t row_len,
+    const ObTableReadInfo &read_info,
+    ObDatumRow &datum_row,
+    memtable::ObNopBitMap &nop_bitmap,
+    bool &read_finished)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!read_info.is_valid() || read_info.get_request_count() > datum_row.get_capacity() || read_finished)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to read row", K(ret), K(read_info), K(datum_row), K(read_finished));
+  } else if (OB_FAIL(setup_row(row_buf, row_len))) {
+    LOG_WARN("Fail to set up row", K(ret), K(row_len));
+  } else {
+    datum_row.count_ = read_info.get_request_count();
+    int64_t store_idx = 0;
+    const common::ObIArray<int32_t> &cols_index = read_info.get_memtable_columns_index();
+    for (int i = 0; OB_SUCC(ret) && i < read_info.get_request_count(); ++i) {
+      if (!nop_bitmap.test(i)) { // is_nop, read current cell
+      } else  {
+        store_idx = cols_index.at(i);
+        if (store_idx < 0 || store_idx >= row_header_->get_column_count()) { // not exists
+        } else if (OB_FAIL(read_specific_column_in_cluster(store_idx, datum_row.storage_datums_[i]))) {
+          LOG_WARN("failed to read datum from cluster column reader", K(ret), KPC(row_header_), K(store_idx));
+        } else if (!datum_row.storage_datums_[i].is_nop()) {
+          nop_bitmap.set_false(i);
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (nop_bitmap.is_empty()
+      || row_header_->get_row_flag().is_delete()
+      || row_header_->get_row_flag().is_insert()) {
+    read_finished = true;
+  }
+  LOG_DEBUG("chaser debug read memtable row", K(nop_bitmap.get_nop_cnt()), KPC(row_header_), K(datum_row));
   return ret;
 }
 
 /*
- * Row : ObRowHeader | (ObTransID) | Column Array | Column Index Array
+ * Row with cluster : ObRowHeader | Column Cluster | Cluster Offset Array
+ *       Column Cluster: ClusterInfoMask | Column Array | Column Offset Array
+ * Row without cluster : ObRowHeader | Column Array | Column Offset Array
  * */
-OB_INLINE int ObFlatRowReader::analyze_row_header(const int64_t input_column_cnt, transaction::ObTransID* trans_id_ptr)
+OB_INLINE int ObRowReader::analyze_row_header()
 {
   int ret = OB_SUCCESS;
-  int64_t row_header_size = ObRowHeader::get_serialized_size();
-  row_header_ = reinterpret_cast<const ObRowHeader*>(buf_ + pos_);  // get RowHeader
-  if (OB_UNLIKELY(input_column_cnt < 0 ||
-                  pos_ + row_header_size + row_header_->get_column_index_bytes() * input_column_cnt >= row_end_pos_)) {
+  row_header_ = reinterpret_cast<const ObRowHeader*>(buf_); // get NewRowHeader
+  if (OB_UNLIKELY(!row_header_->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row header is invalid", K(ret), K(row_len_), KPC(row_header_));
+  } else if (OB_FAIL(analyze_cluster_info())) {
+    LOG_WARN("failed to analyze cluster info", K(ret), KPC(row_header_));
+  }
+
+  return ret;
+}
+
+int ObRowReader::analyze_cluster_info()
+{
+  int ret = OB_SUCCESS;
+  rowkey_independent_cluster_ = row_header_->has_rowkey_independent_cluster();
+  cluster_cnt_ = row_header_->get_cluster_cnt();
+  const int64_t cluster_offset_len = row_header_->get_offset_type_len() * cluster_cnt_;
+  if (OB_UNLIKELY(ObRowHeader::get_serialized_size() + cluster_offset_len >= row_len_)) {
     ret = OB_SIZE_OVERFLOW;
-    STORAGE_LOG(WARN, "invalid row reader argument", K(ret), K(pos_), K(row_end_pos_), KPC(row_header_));
+    LOG_WARN("invalid row reader argument", K(ret), K(row_len_), KPC(row_header_));
     row_header_ = NULL;
   } else {
-    pos_ += row_header_size;  // move forward
-    DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), K(*trans_id_ptr), K(row_header_->get_version()));
+    cluster_offset_ = buf_ + row_len_ - cluster_offset_len;
+    LOG_DEBUG("analyze cluster info", K(ret), K(cluster_offset_),
+        K(cluster_offset_len), K(cluster_cnt_),
+        K(row_len_), KPC(row_header_));
   }
   return ret;
 }
 
-// row is store in flat type (cells array | index array)
-int ObFlatRowReader::read_row(const char* row_buf, const int64_t row_end_pos, int64_t pos,
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row,
-    const ObRowStoreType out_type /* = FLAT_ROW_STORE*/)
+uint64_t ObRowReader::get_cluster_offset(const int64_t cluster_idx) const
+{
+  return cluster_idx == 0 ? sizeof(ObRowHeader) :
+             get_offset_func[row_header_->get_offset_type()](cluster_offset_, cluster_idx);
+}
+
+uint64_t ObRowReader::get_cluster_end_pos(const int64_t cluster_idx) const
+{
+  return cluster_cnt_ - 1 == cluster_idx ? row_len_ - row_header_->get_offset_type_len() * cluster_cnt_:
+          get_offset_func[row_header_->get_offset_type()](cluster_offset_, cluster_idx + 1);
+}
+
+int ObRowReader::analyze_info_and_init_reader(const int64_t cluster_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(cluster_idx < 0 || cluster_idx > cluster_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(row_header_), K(cluster_idx));
+  } else if (cur_read_cluster_idx_ != cluster_idx) { // need init another ClusterReader
+    cluster_reader_.reset();
+    const uint64_t cluster_start_pos = get_cluster_offset(cluster_idx);
+    const ObColClusterInfoMask *info_mask = reinterpret_cast<const ObColClusterInfoMask*>(buf_ + cluster_start_pos);
+    if (OB_FAIL(cluster_reader_.init(
+            buf_ + cluster_start_pos,
+            get_cluster_end_pos(cluster_idx) - cluster_start_pos, // cluster len
+            row_header_->is_single_cluster() ? row_header_->get_column_count() : info_mask->get_column_count(),
+            *info_mask))) {
+      LOG_WARN("failed to init cluster column reader", K(ret), KPC(row_header_), K(cluster_idx));
+    } else {
+      // only rowkey independent cluster have columns more than CLUSTER_COLUMN_CNT, but it can't be sparse
+      cur_read_cluster_idx_ = cluster_idx;
+      LOG_DEBUG("success to init cluster reader", K(cluster_idx), KPC(info_mask), KPC(row_header_),
+          K(cluster_start_pos), K(get_cluster_end_pos(cluster_idx)));
+    }
+  }
+  return ret;
+}
+
+int ObRowReader::read_row(
+    const char *row_buf,
+    const int64_t row_len,
+    const ObTableReadInfo *read_info,
+    ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   // set position and get row header
-  if (OB_FAIL(setup_row(row_buf, row_end_pos, pos, column_map.get_store_count(), row.trans_id_ptr_))) {
-    STORAGE_LOG(WARN, "Fail to set up row", K(ret), K(pos), K(row_end_pos));
-  } else if (OB_LIKELY(FLAT_ROW_STORE == out_type)) {  // read into flat row type
-    if (OB_FAIL(read_flat_row_from_flat_storage(column_map, allocator, row))) {
-      STORAGE_LOG(WARN, "Fail to read flat row from flat storage", K(ret), K(column_map));
-    }
-  } else if (SPARSE_ROW_STORE == out_type) {  // read into sparse row type
-    if (OB_FAIL(read_sparse_row_from_flat_storage(column_map, allocator, row))) {
-      STORAGE_LOG(WARN, "Fail to read flat row from flat storage", K(ret), K(column_map));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "not support out type", K(ret), K(out_type));
-  }
-  reset();
-  return ret;
-}
-
-int ObFlatRowReader::read_flat_row_from_flat_storage(
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == column_map.get_store_count() || 0 == column_map.get_request_count() ||
-                  NULL == column_map.get_column_indexs() || column_map.get_request_count() > row.row_val_.count_)) {
+  if (OB_UNLIKELY((nullptr != read_info && !read_info->is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "Invalid argument, ",
-        K(ret),
-        K(column_map.get_store_count()),
-        K(column_map.get_request_count()),
-        K(column_map.get_column_indexs()),
-        K(row));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
+    LOG_WARN("Invalid argument to read row", K(ret), KPC(read_info));
+  } else if (OB_FAIL(setup_row(row_buf, row_len))) {
+    LOG_WARN("Fail to set up row", K(ret), K(row_len));
   } else {
-    SET_ROW_BASIC_INFO(FLAT_ROW_STORE, row);  // set row_type/flag/dml/row_type_flag
-    const int64_t column_cnt = column_map.get_request_count();
-    row.row_val_.count_ = column_cnt;  // set row count
-    const ObColumnIndexItem* column_idx = column_map.get_column_indexs();
-    const int8_t column_index_bytes = row_header_->get_column_index_bytes();
-    int64_t cur_read_idx = 0;
-    int64_t column_index_offset = 0;
-    int i = 0;
-    if (column_map.get_seq_read_column_count() > 0) {
-      if (OB_FAIL(sequence_read_flat_column(column_map, allocator, row))) {
-        STORAGE_LOG(WARN, "seuqence read flat column failed", K(column_map));
-      } else {
-        i += column_map.get_seq_read_column_count();
-      }
+    int64_t seq_read_cnt = 0;
+    int64_t column_cnt = 0;
+    if (nullptr == read_info) {
+      seq_read_cnt = column_cnt = row_header_->get_column_count();
+    } else {
+      seq_read_cnt = read_info->get_seq_read_column_count();
+      column_cnt = read_info->get_request_count();
     }
-    for (; OB_SUCC(ret) && i < column_cnt; ++i) {  // loop the ColumnIndex array
-      if (column_idx[i].store_index_ < 0) {        // not exists
-        row.row_val_.cells_[i].set_nop_value();
-      } else {
-        if (cur_read_idx == column_idx[i].store_index_) {  // sequence read at pos
-          if (OB_FAIL(read_obj(column_idx[i].request_column_type_, allocator, row.row_val_.cells_[i]))) {
-            STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(i), K_(pos), K(column_idx[i]));
-            for (int j = 0; j < i; ++j) {
-              STORAGE_LOG(WARN, "Fail to read column", K(ret), K(j), K(row.row_val_.cells_[j]), K(column_idx[j]));
-            }
-          } else {
-            cur_read_idx++;
-          }
-        } else {                          // need project
-          if (2 == column_index_bytes) {  // get offset
-            column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else if (1 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else if (4 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else {
-            ret = OB_INVALID_DATA;
-            STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(column_index_bytes));
-          }
-          if (OB_SUCC(ret)) {  // read an obj
-            pos_ = start_pos_ + column_index_offset;
-            if (OB_FAIL(read_obj(column_idx[i].request_column_type_, allocator, row.row_val_.cells_[i]))) {
-              STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(i), K_(pos), K(column_idx[i]));
-              for (int j = 0; j < i; ++j) {
-                STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(j), K(row.row_val_.cells_[j]), K(column_idx[j]));
-              }
-            } else {  // set sequence read pos
-              cur_read_idx = column_idx[i].store_index_ + 1;
-            }
-          }
-        }
+    if (datum_row.is_valid()) {
+      if (OB_FAIL(datum_row.reserve(column_cnt))) {
+        STORAGE_LOG(WARN, "Failed to reserve datum row", K(ret), K(column_cnt));
       }
-    }  // end for
-  }
-  return ret;
-}
-
-int ObFlatRowReader::read_sparse_row_from_flat_storage(
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == column_map.get_store_count() || 0 == column_map.get_request_count() ||
-                  NULL == column_map.get_column_indexs())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "Invalid argument, ",
-        K(ret),
-        K(column_map.get_store_count()),
-        K(column_map.get_request_count()),
-        K(column_map.get_column_indexs()));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    SET_ROW_BASIC_INFO(SPARSE_ROW_STORE, row);  // set row_type/flag/dml/row_type_flag
-    // read columns
-    const int64_t column_cnt = column_map.get_request_count();
-    const ObColumnIndexItem* column_idx = column_map.get_column_indexs();
-    const int8_t column_index_bytes = row_header_->get_column_index_bytes();
-    int64_t cur_read_idx = 0;
-    int sparse_col_index = 0;  // write index
-    int64_t column_index_offset = 0;
-    if (OB_ISNULL(row.column_ids_)) {  // need alloc column id array
-      ALLOC_COL_ID_ARRAY(allocator, row);
+    } else if (OB_FAIL(datum_row.init(column_cnt))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(column_cnt));
     }
-    // loop the ColumnIndex array in ObColumnMap
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-      if (column_idx[i].store_index_ < 0) {
-        // do nothing
-      } else if (sparse_col_index > row.capacity_) {
-        ret = OB_BUF_NOT_ENOUGH;
-        STORAGE_LOG(WARN, "input row cell array is not enough", K(row.capacity_));
-      } else {
-        if (cur_read_idx == column_idx[i].store_index_) {
-          // sequence read
-          if (OB_FAIL(read_obj(column_idx[i].request_column_type_, allocator, row.row_val_.cells_[sparse_col_index]))) {
-            STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(i), K_(pos), K(column_idx[i]));
-          } else {
-            cur_read_idx++;
-            if (!row.row_val_.cells_[sparse_col_index].is_nop_value()) {     // not nop value
-              row.column_ids_[sparse_col_index] = column_idx[i].column_id_;  // record column_id
-              sparse_col_index++;                                            // move forward
-            }
-          }
-        } else {  // need project
-          if (2 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else if (1 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else if (4 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[column_idx[i].store_index_];
-          } else {
-            ret = OB_INVALID_DATA;
-            STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(column_index_bytes));
-          }
-
-          if (OB_SUCC(ret)) {
-            pos_ = start_pos_ + column_index_offset;
-            if (OB_FAIL(
-                    read_obj(column_idx[i].request_column_type_, allocator, row.row_val_.cells_[sparse_col_index]))) {
-              STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(i), K_(pos), K(column_idx[i]));
+    if (OB_SUCC(ret)) {
+      SET_ROW_BASIC_INFO(datum_row);  // set flag/row_type_flag/trans_id
+      datum_row.count_ = column_cnt;
+      // sequence read
+      int64_t idx = 0;
+      if (seq_read_cnt > 0) {
+        int64_t cluster_col_cnt = 0;
+      for (int64_t cluster_idx = 0; OB_SUCC(ret) && cluster_idx < row_header_->get_cluster_cnt() && idx < seq_read_cnt; ++cluster_idx) {
+        if (OB_FAIL(analyze_info_and_init_reader(cluster_idx))) {
+          LOG_WARN("failed to init cluster column reader", K(ret), KPC(row_header_), K(cluster_idx));
+        } else {
+          cluster_col_cnt = cluster_reader_.get_column_count();
+          for (int64_t i = 0; OB_SUCC(ret) && i < cluster_col_cnt && idx < seq_read_cnt; ++idx, ++i) {
+            if (i >= row_header_->get_column_count()) { // not exists
+              datum_row.storage_datums_[i].set_nop();
+            } else if (OB_FAIL(cluster_reader_.sequence_read_datum(i, datum_row.storage_datums_[idx]))) {
+              LOG_WARN("Fail to read column", K(ret), K(idx));
             } else {
-              cur_read_idx = column_idx[i].store_index_ + 1;
-              if (!row.row_val_.cells_[sparse_col_index].is_nop_value()) {
-                row.column_ids_[sparse_col_index] = column_idx[i].column_id_;  // record column_id
-                sparse_col_index++;
-              }
+              LOG_DEBUG("sequence read datum", K(ret), K(idx), K(i), K(datum_row.storage_datums_[idx]),
+                  K(cluster_col_cnt));
             }
           }
         }
-      }
-    }                    // end for
-    if (OB_SUCC(ret)) {  // set count to sparse column count
-      row.row_val_.count_ = sparse_col_index;
+      } // end of for
     }
-  }
-  STORAGE_LOG(DEBUG, "read sparse row", K(row));
-  return ret;
-}
 
-int ObFlatRowReader::read_full_row(const char* row_buf, const int64_t row_len, int64_t pos,
-    common::ObObjMeta* column_type_array, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  int ret = OB_SUCCESS;
-  const int64_t column_cnt = row.row_val_.count_;
-  if (OB_FAIL(setup_row(row_buf, row_len, pos, column_cnt, row.trans_id_ptr_))) {
-    STORAGE_LOG(WARN, "setup flat row failed", K(ret));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_ ||
-                         NULL == column_type_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    SET_ROW_BASIC_INFO(FLAT_ROW_STORE, row);                    // set row_type/flag/dml/row_type_flag
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {  // read column array
-      if (OB_FAIL(read_obj(column_type_array[i], allocator, row.row_val_.cells_[i]))) {
-        STORAGE_LOG(WARN, "Fail to read column", K(ret), K(i));
-      }
+    if (nullptr != read_info) {
+      int64_t store_idx = 0;
+      const common::ObIArray<int32_t> &cols_index = read_info->get_columns_index();
+      for (; OB_SUCC(ret) && idx < read_info->get_request_count(); ++idx) { // loop the ColumnIndex array
+        store_idx = cols_index.at(idx);
+        if (store_idx < 0 || store_idx >= row_header_->get_column_count()) { // not exists
+          datum_row.storage_datums_[idx].set_nop();
+        } else if (OB_FAIL(read_specific_column_in_cluster(store_idx, datum_row.storage_datums_[idx]))) {
+          LOG_WARN("failed to read datum from cluster column reader", K(ret), KPC(row_header_), K(store_idx));
+        }
+      } // end of for
+    }
     }
   }
   reset();
   return ret;
 }
 
-int ObFlatRowReader::sequence_read_flat_column(
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row)
+int ObRowReader::read_column(
+    const char *row_buf,
+    const int64_t row_len,
+    const int64_t col_idx,
+    ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_setuped_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "should call setup func first", K(ret));
-  } else if (OB_UNLIKELY(column_map.get_seq_read_column_count() <= 0)) {
+  if (OB_FAIL(setup_row(row_buf, row_len))) {
+    LOG_WARN("failed to setup row", K(ret), K(row_buf), K(row_len));
+  } else if (OB_UNLIKELY(col_idx < 0 || col_idx >= row_header_->get_column_count())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(column_map.get_seq_read_column_count()));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    const ObColumnIndexItem* column_idx = column_map.get_column_indexs();
-    for (int i = 0; OB_SUCC(ret) && i < column_map.get_seq_read_column_count(); ++i) {
-      if (OB_FAIL(read_obj(column_idx[i].request_column_type_, allocator, row.row_val_.cells_[i]))) {
-        STORAGE_LOG(WARN, "Fail to read column, ", K(ret), K(i), K_(pos), K(column_idx[i]));
-      }
-    }
+    LOG_WARN("invalid argument", K(ret), K(col_idx));
+  } else if (OB_FAIL(read_specific_column_in_cluster(col_idx, datum))) {
+    LOG_WARN("failed to read obj from cluster column reader", K(ret), KPC(row_header_), K(col_idx));
   }
   return ret;
 }
 
-int ObFlatRowReader::read_column(
-    const common::ObObjMeta& src_meta, ObIAllocator& allocator, const int64_t col_index, ObObj& obj)
+int ObRowReader::read_specific_column_in_cluster(
+    const int64_t store_idx,
+    ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_setuped_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "should call setup func first", K(ret), K(col_index));
-  } else if (OB_UNLIKELY(col_index < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(col_index));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
+  int64_t cluster_idx = 0;
+  int64_t col_idx_in_cluster = 0;
+  if (row_header_->is_single_cluster()) {
+    cluster_idx = 0;
+    col_idx_in_cluster = store_idx;
+  } else if (!rowkey_independent_cluster_) {
+    cluster_idx = ObRowHeader::calc_cluster_idx(store_idx);
+    col_idx_in_cluster = ObRowHeader::calc_column_idx_in_cluster(store_idx);
+  } else if (store_idx < row_header_->get_rowkey_count()) { // rowkey independent
+    cluster_idx = 0;
+    col_idx_in_cluster = store_idx;
   } else {
-    const int8_t store_column_index_bytes = row_header_->get_column_index_bytes();
-    int64_t column_index_offset = 0;
-    if (2 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[col_index];
-    } else if (1 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[col_index];
-    } else if (4 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[col_index];
-    } else {
-      ret = OB_INVALID_DATA;
-      STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(store_column_index_bytes));
-    }
-    pos_ = start_pos_ + column_index_offset;  // set position
-    if (OB_SUCC(ret) && OB_FAIL(read_obj(src_meta, allocator, obj))) {
-      STORAGE_LOG(WARN, "read column failed", K(ret), K(src_meta));
-    }
+    int64_t idx = store_idx - row_header_->get_rowkey_count();
+    cluster_idx = ObRowHeader::calc_cluster_idx(idx) + 1;
+    col_idx_in_cluster = ObRowHeader::calc_column_idx_in_cluster(idx);
+  }
+  LOG_DEBUG("DEBUG cluster reader", K(cluster_idx), K(col_idx_in_cluster), K(cur_read_cluster_idx_));
+  if (OB_FAIL(analyze_info_and_init_reader(cluster_idx))) {
+    LOG_WARN("failed to init cluster column reader", K(ret), KPC(row_header_),
+        K(cluster_idx), K(col_idx_in_cluster));
+  } else if (OB_FAIL(cluster_reader_.read_storage_datum(col_idx_in_cluster, datum))) {
+    LOG_WARN("failed to read datum from cluster column reader", K(ret), KPC(row_header_),
+        K(cluster_idx), K(col_idx_in_cluster));
   }
   return ret;
 }
 
-int ObFlatRowReader::read_compact_rowkey(const ObObjMeta* column_types, const int64_t column_count, const char* buf,
-    const int64_t row_end_pos, int64_t& pos, ObNewRow& row)
+int ObRowReader::read_char(
+    const char* buf,
+    int64_t end_pos,
+    int64_t &pos,
+    ObString &value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == column_types || column_count <= 0 || NULL == buf || pos < 0 || row_end_pos <= 0 ||
-                  pos >= row_end_pos)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(column_types), K(column_count), K(buf), K(row_end_pos), K(pos));
-  } else if (OB_FAIL(setup_row(buf, row_end_pos, pos, -1))) {  // no RowHeader
-    STORAGE_LOG(WARN, "row reader fail to setup", K(ret), K(OB_P(buf)), K(row_end_pos), K(pos));
+  const uint32_t *len = read<uint32_t>(buf, pos);
+  if (OB_UNLIKELY(pos + *len > end_pos)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("buf is not large", K(ret), K(pos), K(*len), K(end_pos));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
-      row.cells_[i].set_meta_type(column_types[i]);
-      if (OB_FAIL(read_obj_no_meta(column_types[i], allocator_, row.cells_[i]))) {
-        STORAGE_LOG(WARN, "row reader fail to read column", K(ret), K(i));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      pos = pos_;
-      row.count_ = column_count;
-    }
+    value.assign_ptr((char*) (buf + pos), *len);
+    pos += *len;
   }
-  reset();
   return ret;
 }
 
-int ObFlatRowReader::compare_meta_rowkey(const common::ObStoreRowkey& rhs, const ObColumnMap* column_map,
-    const int64_t compare_column_count, const char* buf, const int64_t row_end_pos, const int64_t pos,
-    int32_t& cmp_result)
+// called by ObIMicroBlockFlatReader::find_bound_::PreciseCompare
+int ObRowReader::compare_meta_rowkey(
+    const ObDatumRowkey &rhs,
+    const ObTableReadInfo &read_info,
+    const char *buf,
+    const int64_t row_len,
+    int32_t &cmp_result)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!rhs.is_valid() || NULL == column_map || !column_map->is_valid() || compare_column_count <= 0 ||
-                  NULL == buf || pos >= row_end_pos || pos < 0 || row_end_pos <= 0)) {
+  if (OB_UNLIKELY(!rhs.is_valid() || !read_info.is_valid() || nullptr == buf || row_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "invalid row header argument.",
-        K(ret),
-        K(column_map),
-        K(compare_column_count),
-        K(rhs),
-        K(buf),
-        K(row_end_pos),
-        K(pos));
+    LOG_WARN("invalid row header argument.", K(ret), K(read_info),
+             K(rhs), K(buf), K(row_len));
   } else {
-    const int64_t schema_rowkey_count = column_map->get_rowkey_store_count();
-    const int64_t extra_multi_version_col_cnt = column_map->get_multi_version_rowkey_cnt();
-    const int64_t store_rowkey_count = schema_rowkey_count + extra_multi_version_col_cnt;
-    const int64_t version_column_index = ObMultiVersionRowkeyHelpper::get_trans_version_col_store_index(
-        schema_rowkey_count, extra_multi_version_col_cnt);
-    const int64_t sql_sequence_index =
-        ObMultiVersionRowkeyHelpper::get_sql_sequence_col_store_index(schema_rowkey_count, extra_multi_version_col_cnt);
-    if (OB_UNLIKELY(compare_column_count > store_rowkey_count || compare_column_count > rhs.get_obj_cnt())) {
+    cmp_result = 0;
+    const int64_t compare_column_count = rhs.get_datum_cnt();
+    const ObStorageDatumUtils &datum_utils = read_info.get_datum_utils();
+    if (OB_UNLIKELY(datum_utils.get_rowkey_count() < compare_column_count)) {
       ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN,
-          "invalid compare column count",
-          K(ret),
-          K(compare_column_count),
-          K(store_rowkey_count),
-          K(rhs.get_obj_cnt()));
-    } else if (OB_FAIL(setup_row(buf, row_end_pos, pos, 0 /*ignore column_index_array*/))) {
-      STORAGE_LOG(WARN, "row reader fail to setup.", K(ret), K(OB_P(buf)), K(row_end_pos), K(pos));
-    } else {
-      cmp_result = 0;
-      common::ObObj obj;
-      const ObColumnIndexItem* items = column_map->get_column_indexs();
-      for (int64_t i = 0; 0 == cmp_result && OB_SUCC(ret) && i < compare_column_count; ++i) {
-        ObObjMeta obj_meta;
-        if (OB_UNLIKELY(version_column_index == i || sql_sequence_index == i)) {
-          obj_meta.set_int();  // trans version column OR sql sequence column
-        } else {
-          obj_meta = items[i].get_obj_meta();
-        }
-        obj.set_meta_type(obj_meta);
-        if (OB_FAIL(read_obj_no_meta(obj_meta, allocator_, obj))) {
-          STORAGE_LOG(WARN, "row reader fail to read column.", K(ret), K(i));
-        } else {
-          cmp_result = obj.compare(rhs.get_obj_ptr()[i], common::CS_TYPE_INVALID);
-        }
-      }  // end for
-    }
-  }
-  reset();
-  return ret;
-}
-
-int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator, ObObj& obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_setuped_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "should call setup func first", K(ret));
-  } else if (OB_UNLIKELY(NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error", K(ret), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    const ObObj* obj_ptr = NULL;
-    const ObObjTypeClass type_class = src_meta.get_type_class();
-    const ObObjType column_type = src_meta.get_type();
-    bool need_cast = true;
-    bool empty_str = false;
-    const ObStoreMeta* meta = read<ObStoreMeta>(buf_, pos_);
-    obj.set_meta_type(src_meta);
-    switch (meta->type_) {
-      case ObNullStoreType: {
-        obj.set_null();
-        break;
-      }
-      case ObIntStoreType: {
-        switch (meta->attr_) {
-          case 0:  // value is 1 byte
-            obj.set_tinyint(*read<int8_t>(buf_, pos_));
-            break;
-          case 1:  // value is 2 bytes
-            obj.set_smallint(*read<int16_t>(buf_, pos_));
-            break;
-          case 2:  // value is 4 bytes
-            obj.set_int32(*read<int32_t>(buf_, pos_));
-            break;
-          case 3:  // value is 8 bytes
-            obj.set_int(*read<int64_t>(buf_, pos_));
-            break;
-          default:
-            ret = OB_NOT_SUPPORTED;
-            STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-        }
-        if (ObIntTC == type_class && src_meta.get_type() > obj.get_type()) {
-          need_cast = false;
-        } else if (ObUIntTC == type_class && obj.get_int() >= 0 &&
-                   static_cast<uint64_t>(obj.get_int()) <= UINT_MAX_VAL[src_meta.get_type()]) {
-          need_cast = false;
-        }
-        break;
-      }
-      case ObFloatStoreType: {
-        obj.set_float(*read<float>(buf_, pos_));
-        if (ObFloatTC == type_class && obj.get_float() >= 0.0) {
-          need_cast = false;
-        }
-        break;
-      }
-      case ObDoubleStoreType: {
-        obj.set_double(*read<double>(buf_, pos_));
-        if (ObDoubleTC == type_class && obj.get_double() >= 0.0) {
-          need_cast = false;
-        }
-        break;
-      }
-      case ObNumberStoreType: {
-        number::ObNumber::Desc tmp_desc;
-        tmp_desc.desc_ = *read<uint32_t>(buf_, pos_);
-        tmp_desc.cap_ = tmp_desc.len_;
-        obj.set_number(tmp_desc, 0 == tmp_desc.len_ ? NULL : (uint32_t*)(buf_ + pos_));
-        pos_ += sizeof(uint32_t) * tmp_desc.len_;
-        if (ObNumberTC == type_class && !obj.is_negative_number()) {
-          need_cast = false;
-        }
-        break;
-      }
-      case ObTimestampStoreType: {
-        switch (meta->attr_) {
-          case 0:  // ObDateType
-            obj.set_date(*read<int32_t>(buf_, pos_));
-            break;
-          case 1:  // ObDateTimeType
-            obj.set_datetime(*read<int64_t>(buf_, pos_));
-            break;
-          case 2:  // ObTimestampType
-            obj.set_timestamp(*read<int64_t>(buf_, pos_));
-            break;
-          case 3:  // ObTimeType
-            obj.set_time(*read<int64_t>(buf_, pos_));
-            break;
-          case 4:  // ObYearType
-            obj.set_year(*read<uint8_t>(buf_, pos_));
-            break;
-          default:
-            ret = OB_NOT_SUPPORTED;
-            STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-        }
-        break;
-      }
-      case ObTimestampTZStoreType: {
-        const int64_t* time_us = NULL;
-        const uint32_t* time_ctx_desc = NULL;
-        const uint16_t* time_desc = NULL;
-        const int64_t length = ObObj::get_otimestamp_store_size(common::OTMAT_TIMESTAMP_TZ == meta->attr_);
-        if (OB_UNLIKELY(pos_ + length > row_end_pos_)) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(length), K(row_end_pos_));
-        } else if (OB_ISNULL((time_us = read<int64_t>(buf_, pos_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "time_us is not expected", K(ret), K(pos_));
-        } else if (common::OTMAT_TIMESTAMP_TZ == meta->attr_ &&
-                   OB_ISNULL((time_ctx_desc = read<uint32_t>(buf_, pos_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "time_ctx_desc is not expected", K(ret), K(pos_));
-        } else if (common::OTMAT_TIMESTAMP_TZ != meta->attr_ && OB_ISNULL((time_desc = read<uint16_t>(buf_, pos_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "time_desc is not expected", K(ret), K(pos_));
-        } else {
-          switch (meta->attr_) {
-            case common::OTMAT_TIMESTAMP_TZ:  // ObTimestampTZType
-              obj.set_timestamp_tz(*time_us, *time_ctx_desc);
-              break;
-            case common::OTMAT_TIMESTAMP_LTZ:  // ObTimestampLTZType
-              obj.set_timestamp_ltz(*time_us, *time_desc);
-              break;
-            case common::OTMAT_TIMESTAMP_NANO:  // ObTimestampNanoType
-              obj.set_timestamp_nano(*time_us, *time_desc);
-              break;
-            default:
-              ret = OB_NOT_SUPPORTED;
-              STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-          }
-        }
-        break;
-      }
-      case ObCharStoreType: {
-        ObString value;
-        if (0 == meta->attr_) {
-          obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-        } else if (1 == meta->attr_) {
-          obj.set_collation_type(static_cast<ObCollationType>(*read<uint8_t>(buf_, pos_)));
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          STORAGE_LOG(WARN, "row reader only suport utf8 character set.", K(ret), K(meta->attr_));
-        }
-        if (OB_SUCC(ret)) {
-          const uint32_t* len = read<uint32_t>(buf_, pos_);
-          if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(*len), K_(row_end_pos));
-          } else {
-            value.assign_ptr((char*)(buf_ + pos_), *len);
-            pos_ += *len;
-            obj.set_char(value);
-          }
-        }
-        empty_str = 0 == obj.get_val_len();
-        if ((ob_is_string_tc(src_meta.get_type()) || (src_meta.is_raw())) &&
-            obj.get_collation_type() == src_meta.get_collation_type()) {
-          need_cast = false;
-        }
-        break;
-      }
-      case ObTextStoreType: {
-        if (OB_FAIL(read_text_store(*meta, allocator, obj))) {
-          STORAGE_LOG(WARN, "fail to read text store", K(ret));
-        } else if (src_meta.is_lob_outrow() || obj.get_collation_type() == src_meta.get_collation_type()) {
-          need_cast = false;
-        }
-        empty_str = 0 == obj.get_val_len();
-        break;
-      }
-      case ObHexStoreType: {
-        ObString value;
-        const uint32_t* len = read<uint32_t>(buf_, pos_);
-        if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(*len), K(row_end_pos_));
-        } else {
-          value.assign_ptr((char*)(buf_ + pos_), *len);
-          pos_ += *len;
-          obj.set_hex_string(value);
-        }
-        break;
-      }
-      case ObExtendStoreType: {
-        if (0 == meta->attr_) {
-          obj.set_nop_value();
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          STORAGE_LOG(WARN, "the attr type is not supported.", K(ret), K(meta->attr_));
-        }
-        break;
-      }
-      case ObIntervalYMStoreType: {
-        if (OB_UNLIKELY(pos_ + ObIntervalYMValue::get_store_size() > row_end_pos_)) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(row_end_pos_));
-        } else {
-          const int64_t year_value = *read<int64_t>(buf_, pos_);
-          obj.set_interval_ym(ObIntervalYMValue(year_value));
-        }
-        break;
-      }
-      case ObIntervalDSStoreType: {
-        if (OB_UNLIKELY(pos_ + ObIntervalDSValue::get_store_size() > row_end_pos_)) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(row_end_pos_));
-        } else {
-          const int64_t second_value = *read<int64_t>(buf_, pos_);
-          const int32_t fs_value = *read<int32_t>(buf_, pos_);
-          obj.set_interval_ds(ObIntervalDSValue(second_value, fs_value));
-        }
-        break;
-      }
-      case ObRowIDStoreType: {
-        const uint32_t* len = read<uint32_t>(buf_, pos_);
-        if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(*len), K(row_end_pos_));
-        } else {
-          obj.set_urowid((char*)(buf_ + pos_), *len);
-          pos_ += *len;
-        }
-        break;
-      }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        STORAGE_LOG(WARN, "the attr type is not supported.", K(ret), K(meta), K(src_meta));
-      } break;
-    }
-
-    if (OB_SUCC(ret)) {
-      if (ObNullType == obj.get_type() || ObExtendType == obj.get_type()) {
-        // ignore src_meta type, do nothing, just return obj
-      } else if (((obj.get_type() == src_meta.get_type() || src_meta.is_raw()) && !need_cast) ||
-                 empty_str) {  // just change the type
-        // extra bypaas path for raw, or data will be wrong
-        obj.set_type(src_meta.get_type());
-        if (empty_str && ObTextTC == type_class) {
-          obj.set_lob_inrow();
-        }
-      } else {
-        // not support data alteration
-        ObObj ori_obj = obj;
-        int64_t cm_mode = CM_NONE;
-        ObObjTypeClass ori_type_class = ori_obj.get_type_class();
-        if (ObIntTC == ori_type_class && ObUIntTC == type_class) {
-          obj.set_uint(src_meta.get_type(), static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_class && ObBitTC == type_class) {
-          obj.set_bit(static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_class && ObEnumType == column_type) {
-          obj.set_enum(static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_class && ObSetType == column_type) {
-          obj.set_set(static_cast<uint64_t>(ori_obj.get_int()));
-        } else {
-          ObCastCtx cast_ctx(&allocator, NULL, cm_mode, src_meta.get_collation_type());
-          if (OB_FAIL(ObObjCaster::to_type(src_meta.get_type(), cast_ctx, ori_obj, obj))) {
-            STORAGE_LOG(WARN,
-                "fail to cast obj",
-                K(ret),
-                K(ori_obj),
-                K(obj),
-                K(obj_ptr),
-                K(ori_obj.get_type()),
-                K(ob_obj_type_str(ori_obj.get_type())),
-                K(src_meta.get_type()),
-                K(ob_obj_type_str(src_meta.get_type())));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObFlatRowReader::read_obj_no_meta(
-    const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_setuped_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "should call setup func first", K(ret));
-  } else if (OB_UNLIKELY(NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error", K(ret), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    const ObStoreMeta* meta = read<ObStoreMeta>(buf_, pos_);
-    if (obj.is_null() || obj.is_nop_value()) {
-      STORAGE_LOG(ERROR, "obj can not be null or nop here!!!", K(obj), K(src_meta));
+      LOG_WARN("Invalid argument to compare meta rowkey", K(ret), K(compare_column_count), K(rhs), K(read_info));
+    } else if (OB_FAIL(setup_row(buf, row_len))) {
+      LOG_WARN("row reader fail to setup.", K(ret), K(OB_P(buf)), K(row_len));
+    } else if (OB_UNLIKELY(row_header_->get_rowkey_count() < compare_column_count)) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected rowkey count", K(ret), K(compare_column_count), K(rhs), KPC(row_header_));
     } else {
-      switch (meta->type_) {
-        case ObNullStoreType: {
-          obj.set_null();
-          break;
-        }
-        case ObIntStoreType: {
-          switch (meta->attr_) {
-            case 0:  // value is 1 byte
-              obj.set_tinyint_value(*read<int8_t>(buf_, pos_));
-              break;
-            case 1:  // value is 2 bytes
-              obj.set_smallint_value(*read<int16_t>(buf_, pos_));
-              break;
-            case 2:  // value is 4 bytes
-              obj.set_int32_value(*read<int32_t>(buf_, pos_));
-              break;
-            case 3:  // value is 8 bytes
-              obj.set_int_value(*read<int64_t>(buf_, pos_));
-              break;
-            default:
-              ret = OB_NOT_SUPPORTED;
-              STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-          }
-          break;
-        }
-        case ObFloatStoreType: {
-          obj.set_float_value(*read<float>(buf_, pos_));
-          break;
-        }
-        case ObDoubleStoreType: {
-          obj.set_double_value(*read<double>(buf_, pos_));
-          break;
-        }
-        case ObNumberStoreType: {
-          number::ObNumber::Desc tmp_desc;
-          tmp_desc.desc_ = *read<uint32_t>(buf_, pos_);
-          tmp_desc.cap_ = tmp_desc.len_;
-          obj.set_number_value(tmp_desc, 0 == tmp_desc.len_ ? NULL : (uint32_t*)(buf_ + pos_));
-          pos_ += sizeof(uint32_t) * tmp_desc.len_;
-          break;
-        }
-        case ObTimestampStoreType: {
-          switch (meta->attr_) {
-            case 0:  // ObDateType
-              obj.set_date_value(*read<int32_t>(buf_, pos_));
-              break;
-            case 1:  // ObDateTimeType
-              obj.set_datetime_value(*read<int64_t>(buf_, pos_));
-              break;
-            case 2:  // ObTimestampType
-              obj.set_timestamp_value(*read<int64_t>(buf_, pos_));
-              break;
-            case 3:  // ObTimeType
-              obj.set_time_value(*read<int64_t>(buf_, pos_));
-              break;
-            case 4:  // ObYearType
-              obj.set_year_value(*read<uint8_t>(buf_, pos_));
-              break;
-            default:
-              ret = OB_NOT_SUPPORTED;
-              STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-          }
-          break;
-        }
-        case ObTimestampTZStoreType: {
-          const int64_t* time_us = NULL;
-          const uint32_t* time_ctx_desc = NULL;
-          const uint16_t* time_desc = NULL;
-          const int64_t length = ObObj::get_otimestamp_store_size(common::OTMAT_TIMESTAMP_TZ == meta->attr_);
-          if (OB_UNLIKELY(pos_ + length > row_end_pos_)) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(length), K(row_end_pos_));
-          } else if (OB_ISNULL((time_us = read<int64_t>(buf_, pos_)))) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "time_us is not expected", K(ret), K(pos_));
-          } else if (common::OTMAT_TIMESTAMP_TZ == meta->attr_ &&
-                     OB_ISNULL((time_ctx_desc = read<uint32_t>(buf_, pos_)))) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "time_ctx_desc is not expected", K(ret), K(pos_));
-          } else if (common::OTMAT_TIMESTAMP_TZ != meta->attr_ && OB_ISNULL((time_desc = read<uint16_t>(buf_, pos_)))) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "time_desc is not expected", K(ret), K(pos_));
-          } else {
-            switch (meta->attr_) {
-              case common::OTMAT_TIMESTAMP_TZ:  // ObTimestampTZType
-                obj.set_timestamp_tz(*time_us, *time_ctx_desc);
-                break;
-              case common::OTMAT_TIMESTAMP_LTZ:  // ObTimestampLTZType
-                obj.set_timestamp_ltz(*time_us, *time_desc);
-                break;
-              case common::OTMAT_TIMESTAMP_NANO:  // ObTimestampNanoType
-                obj.set_timestamp_nano(*time_us, *time_desc);
-                break;
-              default:
-                ret = OB_NOT_SUPPORTED;
-                STORAGE_LOG(WARN, "not support attr, ", K(ret), K(meta->attr_));
-            }
-          }
-          break;
-        }
-        case ObCharStoreType: {
-          ObString value;
-          if (0 == meta->attr_) {
-            obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-          } else if (1 == meta->attr_) {
-            obj.set_collation_type(static_cast<ObCollationType>(*read<uint8_t>(buf_, pos_)));
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            STORAGE_LOG(WARN, "row reader only suport utf8 character set.", K(ret), K(meta->attr_));
-          }
-          if (OB_SUCC(ret)) {
-            const uint32_t* len = read<uint32_t>(buf_, pos_);
-            if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-              ret = OB_BUF_NOT_ENOUGH;
-              STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(*len), K(row_end_pos_));
-            } else {
-              value.assign_ptr((char*)(buf_ + pos_), *len);
-              pos_ += *len;
-              obj.set_char(value);
-            }
-          }
-          if ((src_meta.is_string_type() || src_meta.is_raw()) &&
-              obj.get_collation_type() == src_meta.get_collation_type()) {
-            obj.set_type(src_meta.get_type());
-            // for Compatibility with 1470
-            if (src_meta.is_lob()) {
-              obj.set_lob_inrow();
-            }
-          }
-          break;
-        }
-        case ObTextStoreType: {
-          if (OB_FAIL(read_text_store(*meta, allocator, obj))) {
-            STORAGE_LOG(WARN, "fail to read text store", K(ret));
-          } else if (src_meta.is_lob() && obj.get_collation_type() == src_meta.get_collation_type()) {
-            obj.set_type(src_meta.get_type());
-          }
-          break;
-        }
-        case ObHexStoreType: {
-          ObString value;
-          const int32_t* len = read<int32_t>(buf_, pos_);
-          if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(*len), K(row_end_pos_));
-          } else {
-            value.assign_ptr((char*)(buf_ + pos_), *len);
-            pos_ += *len;
-            obj.set_hex_string_value(value);
-          }
-          break;
-        }
-        case ObExtendStoreType: {
-          if (0 == meta->attr_) {
-            obj.set_nop_value();
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            STORAGE_LOG(WARN, "the attr type is not supported.", K(ret), K(meta->attr_));
-          }
-          // obj.set_type(src_meta.get_type());
-          break;
-        }
-        case ObIntervalYMStoreType: {
-          if (pos_ + ObIntervalYMValue::get_store_size() > row_end_pos_) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(row_end_pos_));
-          } else {
-            const int64_t year_value = *read<int64_t>(buf_, pos_);
-            obj.set_interval_ym(ObIntervalYMValue(year_value));
-          }
-          break;
-        }
-        case ObIntervalDSStoreType: {
-          if (pos_ + ObIntervalDSValue::get_store_size() > row_end_pos_) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf not enough, ", K(ret), K(pos_), K(row_end_pos_));
-          } else {
-            const int64_t second_value = *read<int64_t>(buf_, pos_);
-            const int32_t fs_value = *read<int32_t>(buf_, pos_);
-            obj.set_interval_ds(ObIntervalDSValue(second_value, fs_value));
-          }
-          break;
-        }
-        case ObRowIDStoreType: {
-          const uint32_t* len = read<uint32_t>(buf_, pos_);
-          if (OB_UNLIKELY(pos_ + *len > row_end_pos_)) {
-            ret = OB_BUF_NOT_ENOUGH;
-            STORAGE_LOG(WARN, "buf is not large", K(ret), K(pos_), K(*len), K(row_end_pos_));
-          } else {
-            obj.set_urowid((char*)(buf_ + pos_), *len);
-            pos_ += *len;
-          }
-          break;
-        }
-        default:
-          ret = OB_NOT_SUPPORTED;
-          STORAGE_LOG(
-              ERROR, "row reader don't support this data type.", K(ret), K(src_meta.get_type()), K(meta->type_));
-      }  // switch end
-    }
-    STORAGE_LOG(DEBUG, "row reader", K(ret), K(src_meta.get_type()), K(meta->type_), K(pos_), K(obj));
-  }
-  return ret;
-}
-
-/***********************************ObSparseRowReader*******************************************/
-ObSparseRowReader::ObSparseRowReader()
-{}
-/*
- * SparseRow : ObRowHeader | Column Array | Column Index Array | Column id Array
- * */
-inline int ObSparseRowReader::setup_row(const char* buf, const int64_t row_end_pos, const int64_t pos,
-    const int64_t column_index_count /* = INT_MAX*/, transaction::ObTransID* trans_id_ptr /* = nullptr*/)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || row_end_pos <= 0 || pos < 0 || pos >= row_end_pos)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid row reader argument.", K(ret), K(OB_P(buf)), K(row_end_pos));
-  } else {
-    // set all position
-    buf_ = buf;
-    row_end_pos_ = row_end_pos;
-    start_pos_ = pos;
-    pos_ = start_pos_;
-    if (column_index_count >= 0) {
-      if (OB_FAIL(analyze_row_header(trans_id_ptr))) {  // analyze row header
-        STORAGE_LOG(WARN, "invalid row reader argument.", K(ret));
-      } else if (column_index_count > 0) {                     // get index array and column id array
-        int16_t column_cnt = row_header_->get_column_count();  // use column_count in RowHeader
-        const char* column_id_pos = buf_ + row_end_pos_ - sizeof(uint16_t) * column_cnt;
-        column_ids_ = reinterpret_cast<const uint16_t*>(column_id_pos);
-        store_column_indexs_ = column_id_pos - row_header_->get_column_index_bytes() * column_cnt;
-      } else {  // 0 == column_index_count : ignore column index array & column id array
-        store_column_indexs_ = NULL;
-        column_ids_ = NULL;
-      }
-    } else {  // -1 == column_index_count : no RowHeader & column index array & column id array
-      row_header_ = NULL;
-      store_column_indexs_ = NULL;
-      column_ids_ = NULL;
-    }
-    if (OB_SUCC(ret)) {
-      is_setuped_ = true;
-    }
-  }
-  return ret;
-}
-
-/*
- * Row : ObRowHeader | (ObTransID) | Column Array | Column Index Array | Column id Array
- * */
-OB_INLINE int ObSparseRowReader::analyze_row_header(transaction::ObTransID* trans_id_ptr)
-{
-  int ret = OB_SUCCESS;
-  int64_t row_header_size = ObRowHeader::get_serialized_size();
-  row_header_ = reinterpret_cast<const ObRowHeader*>(buf_ + pos_);  // get RowHeader
-  // sparse row use the column_count_ in RowHeader
-  int64_t column_count = row_header_->get_column_count();
-  if (OB_UNLIKELY(column_count < 0 || pos_ + row_header_size +
-                                              sizeof(uint16_t) * column_count  // column id array length
-                                              + row_header_->get_column_index_bytes() * column_count >=
-                                          row_end_pos_)) {  // column index array length
-    ret = OB_SIZE_OVERFLOW;
-    STORAGE_LOG(WARN, "invalid row reader argument", K(ret), K(pos_), K(row_end_pos_), KPC(row_header_));
-    row_header_ = NULL;
-  } else {
-    pos_ += row_header_size;  // move forward
-    DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), K(row_header_->get_version()));
-  }
-  return ret;
-}
-
-int ObSparseRowReader::read_row(const char* row_buf, const int64_t row_end_pos, int64_t pos,
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row,
-    const ObRowStoreType out_type /* = FLAT_ROW_STORE*/)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(setup_row(row_buf, row_end_pos, pos, INT64_MAX, row.trans_id_ptr_))) {
-    STORAGE_LOG(WARN, "Fail to set up sparse row", K(ret), K(row_end_pos), K(pos));
-  } else if (FLAT_ROW_STORE == out_type) {
-    if (OB_FAIL(read_flat_row_from_sparse_storage(column_map, allocator, row))) {
-      STORAGE_LOG(WARN, "Fail to read flat row from sparse storage", K(column_map));
-    }
-  } else if (SPARSE_ROW_STORE == out_type) {
-    if (OB_FAIL(read_sparse_row_from_sparse_storage(column_map, allocator, row))) {
-      STORAGE_LOG(WARN, "Fail to read flat row from sparse storage", K(column_map));
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "not support out type", K(ret), K(out_type));
-  }
-  reset();
-  return ret;
-}
-
-int ObSparseRowReader::read_flat_row_from_sparse_storage(
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  UNUSED(allocator);
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == column_map.get_cols_map() || NULL == column_map.get_column_indexs() ||
-                  0 == column_map.get_request_count())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "invalid argument",
-        K(ret),
-        K(column_map.get_cols_map()),
-        K(column_map.get_column_indexs()),
-        K(column_map.get_request_count()));
-  } else if (OB_ISNULL(row_header_) || OB_ISNULL(store_column_indexs_) || OB_ISNULL(buf_) ||
-             OB_UNLIKELY(pos_ >= row_end_pos_) || OB_ISNULL(column_ids_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN,
-        "unexpected error",
-        K(ret),
-        K(row_header_),
-        K(store_column_indexs_),
-        K(buf_),
-        K(pos_),
-        K(row_end_pos_),
-        K(column_ids_));
-  } else {
-    SET_ROW_BASIC_INFO(FLAT_ROW_STORE, row);  // set row_type/flag/dml/row_type_flag
-    row.row_val_.count_ = column_map.get_request_count();
-    int column_index_bytes = row_header_->get_column_index_bytes();
-    for (int i = 0; i < row.row_val_.count_; ++i) {  // set nop value to all column
-      row.row_val_.cells_[i].set_nop_value();
-    }
-    int64_t column_index_offset = 0;
-    int proj_pos = -1;
-    const share::schema::ColumnMap* cols_id_map_ptr = column_map.get_cols_map();
-    const ObColumnIndexItem* column_index_ptr = column_map.get_column_indexs();
-    ObSparseCellReader cell_reader;  // Use CellReader to read column
-    if (OB_FAIL(cell_reader.init(buf_, row_end_pos_, &allocator))) {
-      STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(row_end_pos_));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_header_->get_column_count(); ++i) {
-      if (OB_FAIL(cols_id_map_ptr->get(column_ids_[i], proj_pos))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;  // not found is not an error
+      ObStorageDatum datum;
+      int64_t cluster_col_cnt = 0;
+      int64_t idx = 0;
+      for (int64_t cluster_idx = 0;
+          OB_SUCC(ret) && cmp_result == 0 && cluster_idx < row_header_->get_cluster_cnt() && idx < compare_column_count;
+          ++cluster_idx) {
+        if (OB_FAIL(analyze_info_and_init_reader(cluster_idx))) {
+          LOG_WARN("failed to init cluster column reader", K(ret), KPC(row_header_), K(cluster_idx));
         } else {
-          STORAGE_LOG(WARN, "get projector from ColumnMap failed", K(ret), K(i), "column_id", column_ids_[i]);
-        }
-      } else if (0 > proj_pos) {  // not needed column
-        STORAGE_LOG(DEBUG, "not needed column", K(column_ids_[i]), K(row.row_val_.count_), K(*cols_id_map_ptr));
-      } else if (proj_pos >= row.row_val_.count_) {
-        ret = OB_BUF_NOT_ENOUGH;
-        STORAGE_LOG(WARN, "input row cell array is not enough", K(row.row_val_.count_));
-      } else {
-        if (2 == column_index_bytes) {
-          column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[i];
-        } else if (1 == column_index_bytes) {
-          column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[i];
-        } else if (4 == column_index_bytes) {
-          column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[i];
-        } else {
-          ret = OB_INVALID_DATA;
-          STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(column_index_bytes));
-        }
-        pos_ = start_pos_ + column_index_offset;
-        cell_reader.set_pos(pos_);  // set CellReader position
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(cell_reader.read_cell(row.row_val_.cells_[proj_pos]))) {
-            STORAGE_LOG(WARN, "read object failed", K(ret), "column_id", column_ids_[i], K(proj_pos));
-          } else if (!row.row_val_.cells_[proj_pos].is_nop_value() && !row.row_val_.cells_[proj_pos].is_null() &&
-                     column_index_ptr[i].request_column_type_ != row.row_val_.cells_[proj_pos].get_meta()) {
-            if (OB_FAIL(cast_obj(
-                    column_index_ptr[proj_pos].request_column_type_, allocator, row.row_val_.cells_[proj_pos]))) {
-              STORAGE_LOG(WARN,
-                  "failed to cast",
-                  K(ret),
-                  K(i),
-                  K(proj_pos),
-                  K(column_index_ptr[proj_pos].request_column_type_),
-                  K(row.row_val_.cells_[proj_pos]));
+          cluster_col_cnt = cluster_reader_.get_column_count();
+          for (int64_t i = 0;
+              OB_SUCC(ret) && cmp_result == 0 && i < cluster_col_cnt && idx < compare_column_count;
+              ++idx, ++i) {
+            if (OB_FAIL(cluster_reader_.sequence_read_datum(i, datum))) {
+              LOG_WARN("Fail to read column", K(ret), K(i), K(idx), K(read_info));
+            } else if (OB_FAIL(datum_utils.get_cmp_funcs().at(idx).compare(datum, rhs.datums_[idx], cmp_result))) {
+              STORAGE_LOG(WARN, "Failed to compare datums", K(ret), K(idx), K(datum), K(rhs.datums_[idx]));
             }
+            LOG_DEBUG("chaser debug compare rowkey", K(datum), K(idx), K(datum), K(rhs.datums_[idx]));
           }
-        }
-      }
-    }  // end for
-  }
-  return ret;
-}
-
-int ObSparseRowReader::read_sparse_row_from_sparse_storage(
-    const ObColumnMap& column_map, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == column_map.get_cols_map() || NULL == column_map.get_column_indexs() ||
-                  0 == column_map.get_request_count())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "invalid argument",
-        K(ret),
-        K(column_map.get_cols_map()),
-        K(column_map.get_column_indexs()),
-        K(column_map.get_request_count()));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_ ||
-                         NULL == column_ids_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN,
-        "unexpected error",
-        K(ret),
-        K(row_header_),
-        K(store_column_indexs_),
-        K(buf_),
-        K(pos_),
-        K(row_end_pos_),
-        K(column_ids_));
-  } else {
-    SET_ROW_BASIC_INFO(SPARSE_ROW_STORE, row);  // set row_type/flag/dml/row_type_flag
-    if (OB_ISNULL(row.column_ids_)) {           // need allocate column id array
-      ALLOC_COL_ID_ARRAY(allocator, row);
-    }
-    if (OB_SUCC(ret)) {
-      int proj_pos = -1;
-      int64_t column_index_offset = 0;
-      int sparse_col_index = 0;
-      int column_index_bytes = row_header_->get_column_index_bytes();
-      const share::schema::ColumnMap* cols_id_map_ptr = column_map.get_cols_map();
-      ObSparseCellReader cell_reader;
-      if (OB_FAIL(cell_reader.init(buf_, row_end_pos_, &allocator))) {  // init cell reader
-        STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(row_end_pos_));
-      }
-      // loop all sparse column
-      for (int64_t i = 0; OB_SUCC(ret) && i < row_header_->get_column_count(); ++i) {
-        if (OB_FAIL(cols_id_map_ptr->get(column_ids_[i], proj_pos))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;  // not found is not an error
-          } else {
-            STORAGE_LOG(WARN, "get projector from ColumnMap failed", K(ret), "column_id", column_ids_[i]);
-          }
-        } else if (0 > proj_pos) {  // not needed column
-          STORAGE_LOG(DEBUG, "not needed column", K(ret), "column_id", column_ids_[i]);
-        } else if (sparse_col_index >= row.capacity_ && sparse_col_index >= row.row_val_.count_) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "input row cell array is not enough", K(row.capacity_), K(row.row_val_.count_));
-        } else {
-          if (2 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[i];
-          } else if (1 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[i];
-          } else if (4 == column_index_bytes) {
-            column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[i];
-          } else {
-            ret = OB_INVALID_DATA;
-            STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(column_index_bytes));
-          }
-          if (OB_SUCC(ret)) {
-            pos_ = start_pos_ + column_index_offset;
-            cell_reader.set_pos(pos_);  // set position of CellReader
-            if (OB_FAIL(cell_reader.read_cell(row.row_val_.cells_[sparse_col_index]))) {
-              STORAGE_LOG(WARN, "read object failed", K(ret), "column_id", column_ids_[i]);
-            } else {  // sparse row need to set column_ids_ array
-              row.column_ids_[sparse_col_index] = column_ids_[i];
-              ++sparse_col_index;
-            }
-          }
-        }
-      }                    // end for
-      if (OB_SUCC(ret)) {  // set count to sparse column count
-        row.row_val_.count_ = sparse_col_index;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObSparseRowReader::read_full_row(const char* row_buf, const int64_t row_len, int64_t pos,
-    common::ObObjMeta* column_type_array, ObIAllocator& allocator, storage::ObStoreRow& row)
-{
-  UNUSEDx(column_type_array, allocator);
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(setup_row(row_buf, row_len, pos, INT64_MAX, row.trans_id_ptr_))) {
-    STORAGE_LOG(WARN, "setup sparse row failed", K(ret));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == column_ids_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
-  } else {
-    SET_ROW_BASIC_INFO(SPARSE_ROW_STORE, row);  // set row_type/flag/dml/row_type_flag
-    if (OB_SUCC(ret)) {
-      int index = 0;
-      ObSparseCellReader cell_reader;
-      if (OB_FAIL(cell_reader.init(buf_ + pos_, row_end_pos_, &allocator))) {
-        STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(pos_), K(row_end_pos_));
-      }
-      for (; OB_SUCC(ret) && index < row_header_->get_column_count(); ++index) {
-        if (index >= row.capacity_) {
-          ret = OB_BUF_NOT_ENOUGH;
-          STORAGE_LOG(WARN, "input row cell array is not enough", K(row.row_val_.count_), K(row.capacity_));
-        } else if (OB_FAIL(cell_reader.read_cell(row.row_val_.cells_[index]))) {
-          STORAGE_LOG(WARN, "read cell failed", K(ret), "column_id", column_ids_[index]);
-        }
-      }
-      if (OB_SUCC(ret)) {                  // set count to sparse column count
-        if (OB_ISNULL(row.column_ids_)) {  // use column id array
-          ALLOC_COL_ID_ARRAY(allocator, row);
-        }
-        if (OB_SUCC(ret)) {
-          MEMCPY(row.column_ids_, column_ids_, sizeof(uint16_t) * index);
-          pos_ += cell_reader.get_pos();
-          row.row_val_.count_ = index;
         }
       }
     }
@@ -1460,120 +785,14 @@ int ObSparseRowReader::read_full_row(const char* row_buf, const int64_t row_len,
   return ret;
 }
 
-int ObSparseRowReader::read_column(
-    const common::ObObjMeta& src_meta, ObIAllocator& allocator, const int64_t col_index, ObObj& obj)
+int ObRowReader::dump_row(
+    const char *row_buf,
+    const int64_t buf_len,
+    FILE* fd)
 {
-  UNUSED(src_meta);
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_setuped_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "should call setup func first", K(ret), K(col_index));
-  } else if (OB_UNLIKELY(NULL == row_header_ || NULL == store_column_indexs_ || NULL == buf_ || pos_ >= row_end_pos_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(
-        WARN, "unexpected error", K(ret), K(row_header_), K(store_column_indexs_), K(buf_), K(pos_), K(row_end_pos_));
-  } else if (OB_UNLIKELY(col_index >= row_header_->get_column_count() || col_index < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(col_index));
-  } else {
-    const int8_t store_column_index_bytes = row_header_->get_column_index_bytes();
-    int64_t column_index_offset = 0;
-    ObSparseCellReader cell_reader;
-    if (2 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int16_t*>(store_column_indexs_)[col_index];
-    } else if (1 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int8_t*>(store_column_indexs_)[col_index];
-    } else if (4 == store_column_index_bytes) {
-      column_index_offset = reinterpret_cast<const int32_t*>(store_column_indexs_)[col_index];
-    } else {
-      ret = OB_INVALID_DATA;
-      STORAGE_LOG(WARN, "Invalid column index bytes, ", K(ret), K(store_column_index_bytes));
-    }
-    if (OB_SUCC(ret)) {
-      pos_ = start_pos_ + column_index_offset;
-      if (OB_FAIL(cell_reader.init(buf_ + pos_, row_end_pos_, &allocator))) {
-        STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(pos_), K(row_end_pos_));
-      } else if (OB_FAIL(cell_reader.read_cell(obj))) {
-        STORAGE_LOG(WARN, "Failed to read cell", K(ret), K(pos_), K(row_end_pos_));
-      }
-    }
-  }
-  return ret;
+  UNUSEDx(row_buf, buf_len, fd);
+  return OB_NOT_SUPPORTED;
 }
 
-int ObSparseRowReader::read_compact_rowkey(const ObObjMeta* column_types, const int64_t column_count, const char* buf,
-    const int64_t row_end_pos, int64_t& pos, ObNewRow& row)
-{
-  UNUSED(column_types);
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(setup_row(buf, row_end_pos, pos, -1))) {  // -1: no RowHeader & index/col_id array
-    STORAGE_LOG(WARN, "row reader fail to setup", K(ret), K(OB_P(buf)), K(row_end_pos), K(pos));
-  } else {
-    ObSparseCellReader cell_reader;
-    if (OB_FAIL(cell_reader.init(buf_ + pos_, row_end_pos_, &allocator_))) {
-      STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(pos_), K(row_end_pos_));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {  // read column array
-      if (OB_FAIL(cell_reader.read_cell(row.cells_[i]))) {
-        STORAGE_LOG(WARN, "cell reader fail to read column", K(ret), K(i), K(column_types[i]));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      pos = pos_ + cell_reader.get_pos();
-      row.count_ = column_count;
-    }
-  }
-  reset();
-  return ret;
-}
-
-int ObSparseRowReader::compare_meta_rowkey(const common::ObStoreRowkey& rhs,
-    const ObColumnMap* column_map,  // ObColumnMap can be null
-    const int64_t compare_column_count, const char* buf, const int64_t row_end_pos, const int64_t pos,
-    int32_t& cmp_result)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!rhs.is_valid() ||
-                  (NULL != column_map && (!column_map->is_valid() ||
-                                             compare_column_count > column_map->get_rowkey_store_count() +
-                                                                        column_map->get_multi_version_rowkey_cnt())) ||
-                  compare_column_count <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN,
-        "invalid row header argument.",
-        K(ret),
-        K(column_map),
-        K(compare_column_count),
-        K(rhs),
-        K(buf),
-        K(row_end_pos),
-        K(pos));
-  } else {
-    if (OB_UNLIKELY(compare_column_count > rhs.get_obj_cnt())) {
-      ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "invalid compare column count", K(ret), K(compare_column_count), K(rhs.get_obj_cnt()));
-    } else if (OB_FAIL(setup_row(buf, row_end_pos, pos, 0))) {  // 0: ignore index/col_id array
-      STORAGE_LOG(WARN, "row reader fail to setup.", K(ret), K(OB_P(buf)), K(row_end_pos), K(pos));
-    } else {
-      cmp_result = 0;
-      common::ObObj obj;
-      ObSparseCellReader cell_reader;
-      if (OB_FAIL(cell_reader.init(buf_ + pos_, row_end_pos_, &allocator_))) {  // init cell reader
-        STORAGE_LOG(WARN, "Failed to init CellReader", K(ret), K(row_end_pos_));
-      }
-      for (int64_t i = 0; 0 == cmp_result && OB_SUCC(ret) && i < compare_column_count; ++i) {
-        ObObjMeta obj_meta;
-        if (OB_FAIL(cell_reader.read_cell(obj))) {
-          STORAGE_LOG(WARN, "row reader fail to read column.", K(ret), K(i));
-        } else {
-          cmp_result = obj.compare(rhs.get_obj_ptr()[i], common::CS_TYPE_INVALID);
-        }
-      }
-    }
-  }
-  reset();
-  return ret;
-}
-
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+}//end namespace blocksstable
+}//end namespace oceanbase

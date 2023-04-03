@@ -17,19 +17,19 @@
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
-
-ObExprBitLeftShift::ObExprBitLeftShift(ObIAllocator& alloc)
-    : ObBitwiseExprOperator(alloc, T_OP_BIT_LEFT_SHIFT, N_BIT_LEFT_SHIFT, 2, NOT_ROW_DIMENSION)
-{}
-
-int ObExprBitLeftShift::calc_result2(ObObj& res, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  return ObBitwiseExprOperator::calc_(res, obj1, obj2, expr_ctx, ObBitwiseExprOperator::BIT_LEFT_SHIFT);
-}
+namespace sql
+{
 
-int ObExprBitLeftShift::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+ObExprBitLeftShift::ObExprBitLeftShift(ObIAllocator &alloc) :
+    ObBitwiseExprOperator(alloc, T_OP_BIT_LEFT_SHIFT, N_BIT_LEFT_SHIFT, 2, NOT_ROW_DIMENSION)
+  {
+  }
+
+
+int ObExprBitLeftShift::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   const BitOperator op = BIT_LEFT_SHIFT;
@@ -39,5 +39,7 @@ int ObExprBitLeftShift::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_e
 
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */
+
+

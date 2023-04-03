@@ -16,21 +16,23 @@
 #include "share/ob_web_service_root_addr.h"
 #include "schema/db_initializer.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 
-class TestWebServiceRootAddr : public ::testing::Test {
+class TestWebServiceRootAddr : public ::testing::Test
+{
 public:
-  TestWebServiceRootAddr() : service_pid_(0)
-  {}
+  TestWebServiceRootAddr() : service_pid_(0) {}
 
   virtual void SetUp();
   virtual void TearDown();
   void start_new_shell();
 
-  void set_response_json(const char* json);
-  void set_response_json2(const char* json);
+  void set_response_json(const char *json);
+  void set_response_json2(const char *json);
 
 protected:
   pid_t service_pid_;
@@ -50,7 +52,8 @@ void TestWebServiceRootAddr::start_new_shell()
     ret = setpgid(pid, pid);
     if (ret < 0) {
       LOG_ERROR("setpgid failed", K(errno));
-    } else if (-1 == (ret = execl("/bin/bash", "./fake_ob_config-sh2", "./fake_ob_config-sh2", "8658", NULL))) {
+    } else if (-1 == (ret = execl(
+                "/bin/bash", "./fake_ob_config-sh2", "./fake_ob_config-sh2", "8658", NULL))) {
       LOG_ERROR("execl failed", K(errno));
     }
     exit(1);
@@ -76,7 +79,8 @@ void TestWebServiceRootAddr::SetUp()
     ret = setpgid(pid, pid);
     if (ret < 0) {
       LOG_ERROR("setpgid failed", K(errno));
-    } else if (-1 == (ret = execl("/bin/bash", "./fake_ob_config-sh", "./fake_ob_config-sh", "8657", NULL))) {
+    } else if (-1 == (ret = execl(
+        "/bin/bash", "./fake_ob_config-sh", "./fake_ob_config-sh", "8657", NULL))) {
       LOG_ERROR("execl failed", K(errno));
     }
     exit(1);
@@ -99,24 +103,24 @@ void TestWebServiceRootAddr::TearDown()
   LOG_INFO("child exit", K(pid));
 }
 
-void TestWebServiceRootAddr::set_response_json2(const char* json)
+void TestWebServiceRootAddr::set_response_json2(const char *json)
 {
   usleep(50000);
   ObSqlString cmd;
-  int ret =
-      cmd.assign_fmt("echo -n 'POST / HTTP/1.1\r\nContent-Length: %ld\r\n%s' | nc 127.0.0.1 8658", strlen(json), json);
+  int ret = cmd.assign_fmt("echo -n 'POST / HTTP/1.1\r\nContent-Length: %ld\r\n%s' | nc 127.0.0.1 8658",
+      strlen(json), json);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = system(cmd.ptr());
   LOG_INFO("set response json", K(cmd), K(ret), K(errno), K(json));
   usleep(50000);
 }
 
-void TestWebServiceRootAddr::set_response_json(const char* json)
+void TestWebServiceRootAddr::set_response_json(const char *json)
 {
   usleep(50000);
   ObSqlString cmd;
-  int ret =
-      cmd.assign_fmt("echo -n 'POST / HTTP/1.1\r\nContent-Length: %ld\r\n%s' | nc 127.0.0.1 8657", strlen(json), json);
+  int ret = cmd.assign_fmt("echo -n 'POST / HTTP/1.1\r\nContent-Length: %ld\r\n%s' | nc 127.0.0.1 8657",
+      strlen(json), json);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = system(cmd.ptr());
   LOG_INFO("set response json", K(cmd), K(ret), K(errno), K(json));
@@ -177,17 +181,14 @@ TEST_F(TestWebServiceRootAddr, fetch)
 {
   ObSEArray<ObRootAddr, 16> rs_list;
   ObSEArray<ObRootAddr, 16> readonly_rs_list;
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\",\"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\",\"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"}]}");
   int ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(2, rs_list.count());
   ASSERT_EQ(0, readonly_rs_list.count());
   ASSERT_EQ(1234, rs_list[0].sql_port_);
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, rs_list.count());
@@ -223,36 +224,26 @@ TEST_F(TestWebServiceRootAddr, fetch)
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  // check readonly_rs_list
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-                    "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.5:99\",\"role\":\"FOLLOWER\"}]}");
+  //check readonly_rs_list
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.5:99\",\"role\":\"FOLLOWER\"}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, rs_list.count());
   ASSERT_EQ(2, readonly_rs_list.count());
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-                    "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, rs_list.count());
   ASSERT_EQ(1, readonly_rs_list.count());
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, rs_list.count());
   ASSERT_EQ(0, readonly_rs_list.count());
 
-  set_response_json(
-      "{\"RsList\":[], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, rs_list.count());
@@ -262,65 +253,39 @@ TEST_F(TestWebServiceRootAddr, fetch)
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json("{\"RsList\":[{\"address\":123,\"role\":\"FOLLOWER\", \"sql_port\": 1234}], "
-                    "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":123,\"role\":\"FOLLOWER\", \"sql_port\": 1234}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role_NO\":\"FOLLOWER\", \"sql_port\": 1234}], "
-                    "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role_NO\":\"FOLLOWER\", \"sql_port\": 1234}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":{}}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":{}}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json(
-      "{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-      "\"ReadonlyRsList\":[{\"address_NO\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address_NO\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json(
-      "{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-      "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role_NO\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role_NO\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json(
-      "{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-      "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port_NO\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port_NO\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-                    "\"ReadonlyRsList\":[{\"address\":123,\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":123,\"role\":\"FOLLOWER\", \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": "
-                    "1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-                    "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-                    "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":0, \"sql_port\": 1234}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":0, \"sql_port\": 1234}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  set_response_json(
-      "{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": "
-      "1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], "
-      "\"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": \"abc\"}]}");
+  set_response_json("{\"RsList\":[{\"address\":\"127.0.0.1:99\",\"role\":\"FOLLOWER\", \"sql_port\": 1234},{\"sql_port\": 1234,\"address\":\"127.0.0.2:99\",\"role\":\"LEADER\"},{\"sql_port\": 1234,\"address\":\"127.0.0.3:99\",\"role\":\"FOLLOWER\"}], \"ReadonlyRsList\":[{\"address\":\"127.0.0.4:99\",\"role\":\"FOLLOWER\", \"sql_port\": \"abc\"}]}");
   ret = ws_.fetch(rs_list, readonly_rs_list);
   ASSERT_NE(OB_SUCCESS, ret);
 }
@@ -343,10 +308,10 @@ TEST_F(TestWebServiceRootAddr, invalid)
   rs.push_back(ra);
   ASSERT_NE(OB_SUCCESS, ws.store(rs, readonly_rs, true, LEADER));
 }
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

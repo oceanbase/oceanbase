@@ -1,0 +1,94 @@
+#owner: peihan.dph
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+--sleep 2
+connection default;
+set ob_enable_plan_cache = false;
+
+select 1 xor 0 from dual;
+select 1 xor 0 xor 1 from dual;
+select 1 xor 1 xor 1 from dual;
+
+select 0.4 xor 0.6 from dual;
+select 0.5 xor 0.5 from dual;
+
+explain select 1 xor 1 xor 1 from dual;
+
+select null xor 0 from dual;
+select 1 xor null xor pow(200, 2000000) from dual;
+select pow(200m 2000000) xor null xor 1 from dual;
+
+
+connection conn_admin;
+
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+
+connection conn_admin;
+
+--sleep 2
+connection default;
+
+let $cnt1 = 1;
+
+while ($cnt1 < 30)
+{
+let $cnt2 = 1;
+while ($cnt2 < 30)
+{
+  eval select t$cnt1 xor t$cnt2 from t;
+  eval explain select t$cnt1 xor t$cnt2 from t;
+
+  inc $cnt2;
+}
+inc $cnt1;
+}
+
+drop table t;
+connection conn_admin;
+--sleep 2

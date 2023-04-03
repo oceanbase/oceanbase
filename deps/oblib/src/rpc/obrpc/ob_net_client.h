@@ -18,15 +18,19 @@
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/frame/ob_req_transport.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObAddr;
-}  // end of namespace common
+} // end of namespace common
 
-namespace obrpc {
+namespace obrpc
+{
 class ObRpcProxy;
 
-class ObNetClient {
+class ObNetClient
+{
 public:
   ObNetClient();
   virtual ~ObNetClient();
@@ -34,38 +38,43 @@ public:
   int init();
   int init(const rpc::frame::ObNetOptions opts);
   void destroy();
-  int get_proxy(ObRpcProxy& proxy);
+  int get_proxy(ObRpcProxy &proxy);
 
-  int load_ssl_config(const char *ca_cert,
-                      const char *public_cert,
-                      const char *private_key);
-  
-  void set_pkt_handler_ssl_opt()
-  {
-    pkt_handler_.ez_handler()->is_ssl = 1;
-    pkt_handler_.ez_handler()->is_ssl_opt = 0;
-  }
+  /*
+   * Load ssl config
+   * Support local file mode and BKMI mode
+   * 1. For local file mode, ca_cert/public_cert/private_key is local file path
+   * 2. For BKMI mode, ca_cert/public_cert/private_key is real content
+   *
+   * @param [in] use_bkmi    whether（or not）to use BKMI
+   * @param [in] use_sm      whether（or not）to use China cryptographic algorithm,eg SM2/SM3/SM4
+   * @param [in] ca_cert     CA cert
+   * @param [in] public_cert public cert
+   * @param [in] private_key private key
+   *
+   * @param OB_SUCCESS  success
+   * @param other code  fail
+   *
+   */
+  int load_ssl_config(const bool use_bkmi,
+      const bool use_sm,
+      const char *ca_cert,
+      const char *public_cert, const char *private_key,
+      const char *enc_cert, const char *enc_private_key);
 
-  void set_transport_ssl_opt()
-  {
-    if (NULL != transport_) {
-      transport_->enable_use_ssl();
-    }
-  }
 private:
   int init_(const rpc::frame::ObNetOptions opts);
-
 private:
   bool inited_;
   rpc::frame::ObNetEasy net_;
   ObRpcNetHandler pkt_handler_;
-  rpc::frame::ObReqTransport* transport_;
+  rpc::frame::ObReqTransport *transport_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNetClient);
-};  // end of class ObNetClient
+}; // end of class ObNetClient
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace rpc
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_OB_NET_CLIENT_
+#endif //OCEANBASE_RPC_OBRPC_OB_NET_CLIENT_

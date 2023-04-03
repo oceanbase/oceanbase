@@ -15,39 +15,43 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprIp2int : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprIp2int : public ObFuncExprOperator
+{
 public:
-  explicit ObExprIp2int(common::ObIAllocator& alloc);
+  explicit  ObExprIp2int(common::ObIAllocator &alloc);
   virtual ~ObExprIp2int();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
-  static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int ip2int_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int ip2int_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // helper func
   template <typename T>
-  static int ip2int(T& result, const common::ObString& text);
-
+  static int ip2int(T &result, const common::ObString &text);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIp2int);
 };
 
-inline int ObExprIp2int::calc_result_type1(
-    ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprIp2int::calc_result_type1(ObExprResType &type,
+                                           ObExprResType &text,
+                                           common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(text);
   type.set_int();
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
-  // set calc type
+  //set calc type
   text.set_calc_type(common::ObVarcharType);
   return common::OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_IP2INT_ */

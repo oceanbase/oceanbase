@@ -14,20 +14,22 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_net_client.h"
 
+using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc::frame;
 
 template <int64_t SZ>
-struct ArgT {
+struct ArgT
+{
 public:
   int64_t sz_ = SZ;
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
   {
     UNUSEDx(buf, buf_len, pos);
     return OB_SUCCESS;
   }
-  int deserialize(const char* buf, const int64_t data_len, int64_t& pos) const
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos) const
   {
     UNUSEDx(buf, data_len, pos);
     return OB_SUCCESS;
@@ -39,14 +41,16 @@ public:
 };
 
 typedef ArgT<(OB_MAX_RPC_PACKET_LENGTH) + 1> Arg_overflow;
-typedef ArgT<(OB_MAX_RPC_PACKET_LENGTH)-1> Arg_succ;
+typedef ArgT<(OB_MAX_RPC_PACKET_LENGTH) - 1> Arg_succ;
 typedef ArgT<(OB_MAX_RPC_PACKET_LENGTH)> Arg;
 
 static Arg_overflow arg_overflow;
 static Arg_succ arg_succ;
 static Arg arg;
 
-class TestProxy : public ObRpcProxy {
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
@@ -59,32 +63,36 @@ public:
   RPC_S(@PR5 testx, OB_TEST9_PCODE, (Arg), int);
 };
 
-class TestCB : public TestProxy::AsyncCB<OB_TEST_PCODE> {
+class TestCB
+    : public TestProxy::AsyncCB<OB_TEST_PCODE>
+{
 public:
-  TestCB() : processed_(false)
-  {}
+  TestCB()
+      : processed_(false)
+  { }
 
-  int process()
-  {
+  int process() {
     processed_ = true;
     return OB_SUCCESS;
   }
 
-  ObReqTransport::AsyncCB* clone(const SPAlloc& alloc) const
-  {
+  ObReqTransport::AsyncCB *clone(const SPAlloc &alloc) const {
     UNUSED(alloc);
-    return const_cast<TestCB*>(this);
+    return const_cast<TestCB *>(this);
   }
 
-  void set_args(const Request& arg)
+  void set_args(const Request &arg)
   {
     UNUSED(arg);
   }
 
+
   bool processed_;
 };
 
-class TestRpcProxy : public ::testing::Test {
+class TestRpcProxy
+    : public ::testing::Test
+{
 public:
   virtual void SetUp()
   {
@@ -94,10 +102,11 @@ public:
   }
 
   virtual void TearDown()
-  {}
+  {
+  }
 
 protected:
-  void serialize_rcode(const ObRpcResultCode& rc)
+  void serialize_rcode(const ObRpcResultCode &rc)
   {
     int64_t pos = 0;
     ASSERT_EQ(OB_SUCCESS, rc.serialize(buf_, 1024, pos));
@@ -111,7 +120,7 @@ protected:
   char buf_[1024];
 };
 
-int async_process(easy_request_t* r);
+int async_process(easy_request_t *r);
 
 TEST_F(TestRpcProxy, AsyncCB)
 {
@@ -138,6 +147,7 @@ TEST_F(TestRpcProxy, AsyncCB)
   async_process(&r_);
   EXPECT_FALSE(cb_.processed_);
 }
+
 
 TEST_F(TestRpcProxy, PacketSize)
 {
@@ -175,7 +185,7 @@ TEST_F(TestRpcProxy, PacketSize)
   }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

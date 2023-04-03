@@ -18,49 +18,67 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 
-int ObExprSysOpOpnsize::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprSysOpOpnsize::calc_result_type1(ObExprResType &type,
+                                          ObExprResType &type1,
+                                          ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(type1);
   int ret = OB_SUCCESS;
   if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
-    type.set_uint64();
-    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
-    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
+    type.set_int();
+    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
   }
   return ret;
 }
 
-int ObExprSysOpOpnsize::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int ObExprSysOpOpnsize::calc_sys_op_opnsize_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                                 ObDatum &res)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  uint64_t size = sizeof(ObObj) + obj.get_deep_copy_size();
-  result.set_uint64(size);
-  return ret;
-}
-
-int ObExprSysOpOpnsize::calc_sys_op_opnsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+	int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval param failed", K(ret));
   } else {
-    uint64_t size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
-    res.set_uint(size);
+    int64_t size = 0;
+    if (OB_FAIL(calc_sys_op_opnsize(expr.args_[0], arg, size))) {
+      LOG_WARN("fail to cal sys_op_opnsize", K(ret));
+    } else {
+      res.set_int(size);
+    }
   }
-  return ret;
+	return ret;
 }
 
-int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_sys_op_opnsize_expr;
+  return ret;
+}
+
+int ObExprSysOpOpnsize::calc_sys_op_opnsize(ObExpr *expr, ObDatum *arg, int64_t &size) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(arg) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (!is_lob_storage(expr->datum_meta_.type_) || arg->is_null()) {
+    size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
+  } else { // (texts except tiny, json, gis)
+    ObLobLocatorV2 locator(arg->get_string(), expr->obj_meta_.has_lob_header());
+    int64_t lob_data_byte_len = 0;
+    if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
+      LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+    } else {
+      size = sizeof(*arg) + static_cast<int64_t>(lob_data_byte_len);
+    }
+  }
   return ret;
 }
 

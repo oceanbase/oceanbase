@@ -16,82 +16,92 @@
 #include "lib/container/ob_se_array.h"
 #include "sql/engine/px/ob_dfo.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObDfoMgr {
+class ObPxCoordInfo;
+class ObDfoMgr
+{
 public:
-  explicit ObDfoMgr(common::ObIAllocator& allocator) : allocator_(allocator), inited_(false), root_dfo_(NULL)
+  explicit ObDfoMgr(common::ObIAllocator &allocator) :
+      allocator_(allocator), inited_(false),
+      root_dfo_(NULL)
   {}
   virtual ~ObDfoMgr() = default;
   void destroy();
   void reset();
-  int init(ObExecContext& exec_ctx, const ObPhyOperator& root_op, int64_t expected_worker_count,
-      int64_t allocated_worker_count, const ObDfoInterruptIdGen& dfo_int_gen);
-  int init(ObExecContext& exec_ctx, const ObOpSpec& root_op_spec, int64_t expected_worker_count,
-      int64_t allocated_worker_count, const ObDfoInterruptIdGen& dfo_int_gen);
-  ObDfo* get_root_dfo()
-  {
-    return root_dfo_;
-  }
+  int init(ObExecContext &exec_ctx,
+                   const ObOpSpec &root_op_spec,
+                   int64_t expected_worker_count,
+                   int64_t admited_worker_count,
+                   const ObDfoInterruptIdGen &dfo_int_gen,
+                   ObPxCoordInfo &px_coord_info);
+  ObDfo *get_root_dfo() { return root_dfo_; }
+  
+  virtual int get_ready_dfo(ObDfo *&dfo) const; // 仅用于单层dfo调度
+  // 可以入选即将调度队列的 DFO
+  virtual int get_ready_dfos(common::ObIArray<ObDfo *> &dfos) const;
+  // 已经入选即将调度队列的 DFO
+  virtual int get_active_dfos(common::ObIArray<ObDfo *> &dfos) const;
+  // 已经调度的 DFO
+  virtual int get_scheduled_dfos(ObIArray<ObDfo*> &dfos) const;
+  // 已经调度，且没有执行完成的 DFO
+  virtual int get_running_dfos(ObIArray<ObDfo*> &dfos) const;
 
-  virtual int get_ready_dfo(ObDfo*& dfo) const;  // only used for single-layer dfo scheduling
-  virtual int get_ready_dfos(common::ObIArray<ObDfo*>& dfos) const;
-  virtual int get_active_dfos(common::ObIArray<ObDfo*>& dfos) const;
-  virtual int get_scheduled_dfos(ObIArray<ObDfo*>& dfos) const;
-  virtual int get_running_dfos(ObIArray<ObDfo*>& dfos) const;
-
-  int add_dfo_edge(ObDfo* edge);
-  int find_dfo_edge(int64_t id, ObDfo*& edge);
-  const ObIArray<ObDfo*>& get_all_dfos()
-  {
-    return edges_;
-  }
-  ObIArray<ObDfo*>& get_all_dfos_for_update()
-  {
-    return edges_;
-  }
+  int add_dfo_edge(ObDfo *edge);
+  int find_dfo_edge(int64_t id, ObDfo *&edge);
+  const ObIArray<ObDfo *> &get_all_dfos() { return edges_; }
+  ObIArray<ObDfo *> &get_all_dfos_for_update() { return edges_; }
 
   DECLARE_TO_STRING;
-
 private:
-  int do_split(ObExecContext& exec_ctx, common::ObIAllocator& allocator, const ObPhyOperator* phy_op,
-      ObDfo*& parent_dfo, const ObDfoInterruptIdGen& dfo_id_gen) const;
-  int create_dfo(common::ObIAllocator& allocator, const ObPhyOperator* dfo_root_op, ObDfo*& dfo) const;
-  int do_split(ObExecContext& exec_ctx, common::ObIAllocator& allocator, const ObOpSpec* phy_op, ObDfo*& parent_dfo,
-      const ObDfoInterruptIdGen& dfo_id_gen) const;
-  int create_dfo(common::ObIAllocator& allocator, const ObOpSpec* dfo_root_op, ObDfo*& dfo) const;
-
+  int do_split(ObExecContext &exec_ctx,
+               common::ObIAllocator &allocator,
+               const ObOpSpec *phy_op,
+               ObDfo *&parent_dfo,
+               const ObDfoInterruptIdGen &dfo_id_gen,
+               ObPxCoordInfo &px_coord_info) const;
+  int create_dfo(common::ObIAllocator &allocator,
+                 const ObOpSpec *dfo_root_op,
+                 ObDfo *&dfo) const;
 protected:
-  common::ObIAllocator& allocator_;
+  common::ObIAllocator &allocator_;
   bool inited_;
-  ObDfo* root_dfo_;
-  common::ObSEArray<ObDfo*, 2> edges_;
-
+  ObDfo *root_dfo_;
+  common::ObSEArray<ObDfo *, 2> edges_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoMgr);
 };
 
-class ObDfoTreeNormalizer {
+class ObDfoSchedOrderGenerator
+{
 public:
-  // Rotate the leaf node to the right, making sure that the middle node is on the left.
-  // at the same time check the bushy tree situation, report an error and exit
-  static int normalize(ObDfo& root);
-};
-
-class ObDfoSchedOrderGenerator {
-public:
-  static int generate_sched_order(ObDfoMgr& dfo_mgr);
-
+  static int generate_sched_order(ObDfoMgr &dfo_mgr);
 private:
-  static int do_generate_sched_order(ObDfoMgr& dfo_mgr, ObDfo& root);
+  static int do_generate_sched_order(ObDfoMgr &dfo_mgr, ObDfo &root);
 };
 
-class ObDfoWorkerAssignment {
+class ObDfoSchedDepthGenerator
+{
 public:
-  static int assign_worker(ObDfoMgr& dfo_mgr, int64_t expected_worker_count, int64_t allocated_worker_count);
+  static int generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr);
+private:
+  static int do_generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr, ObDfo &root);
+  static int try_set_dfo_block(ObExecContext &exec_ctx, ObDfo &dfo, bool block = true);
+  static int try_set_dfo_unblock(ObExecContext &exec_ctx, ObDfo &dfo);
+  static bool check_if_need_do_earlier_sched(ObDfo &child);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+class ObDfoWorkerAssignment
+{
+public:
+  static int assign_worker(ObDfoMgr &dfo_mgr,
+                           int64_t expected_worker_count,
+                           int64_t admited_worker_count);
+};
+
+}
+}
 #endif /* __OCEANBASE_SQL_ENGINE_PX_DFO_MGR_H__ */

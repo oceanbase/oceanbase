@@ -16,55 +16,77 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/worker.h"
 
-#define futex(...) syscall(SYS_futex, __VA_ARGS__)
-inline int futex_wake(volatile int* p, int val)
-{
-  return static_cast<int>(futex((int*)p, FUTEX_WAKE_PRIVATE, val, NULL, NULL, 0));
-}
 
-inline int futex_wait(volatile int* p, int val, const timespec* timeout)
+namespace oceanbase
 {
-  int ret = 0;
-  if (0 != futex((int*)p, FUTEX_WAIT_PRIVATE, val, timeout, NULL, 0)) {
-    ret = errno;
+namespace common
+{
+bool USE_CO_LATCH = false;
+thread_local uint32_t* ObLatch::current_lock = nullptr;
+thread_local uint32_t* ObLatch::current_wait = nullptr;
+
+class ObLatchWaitEventGuard : public ObWaitEventGuard
+{
+public:
+  explicit ObLatchWaitEventGuard(
+    const int64_t event_no,
+    const uint64_t timeout_ms = 0,
+    const int64_t p1 = 0,
+    uint32_t* p2_addr = 0,
+    const int64_t p3 = 0,
+    const bool is_atomic = false
+  ) : ObWaitEventGuard(event_no, timeout_ms, p1, OB_ISNULL(p2_addr) ? 0 : *p2_addr, p3, is_atomic)
+  {
+    ObLatch::current_wait = p2_addr;
   }
-  return ret;
-}
-
-namespace oceanbase {
-namespace common {
-bool USE_CO_LATCH = true;
+  ~ObLatchWaitEventGuard() { ObLatch::current_wait = nullptr; }
+};
 /**
  * -------------------------------------------------------ObLatchMutex---------------------------------------------------------------
  */
-ObLatchMutex::ObLatchMutex() : lock_()
-{}
+ObLatchMutex::ObLatchMutex()
+  : lock_()
+    #ifndef PERF_MODE
+    ,record_stat_(true)
+    #endif
+{
+}
 
 ObLatchMutex::~ObLatchMutex()
 {
   if (0 != lock_.val()) {
-    COMMON_LOG(DEBUG, "invalid lock,", K(lock_.val()), K(lbt()));
+    COMMON_LOG(DEBUG, "invalid lock,", K(lock_.val()), KCSTRING(lbt()));
   }
 }
 
-int ObLatchMutex::try_lock(const uint32_t latch_id, const uint32_t* puid)
+int ObLatchMutex::try_lock(
+    const uint32_t latch_id,
+    const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   uint32_t uid = (NULL == puid) ? static_cast<uint32_t>(GETTID()) : *puid;
-  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END) || OB_UNLIKELY(0 == uid) || OB_UNLIKELY(uid >= WRITE_MASK)) {
+  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END)
+      || OB_UNLIKELY(0 == uid)
+      || OB_UNLIKELY(uid >= WRITE_MASK)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(ret));
   } else {
     if (!ATOMIC_BCAS(&lock_.val(), 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
+    } else {
+      ObLatch::current_lock = (uint32_t*)&lock_.val();
     }
-    TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
+    if (need_record_stat()) {
+      TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
+    }
   }
   HOLD_LOCK_INC();
   return ret;
 }
 
-int ObLatchMutex::lock(const uint32_t latch_id, const int64_t abs_timeout_us)
+int ObLatchMutex::lock(
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   uint64_t i = 0;
@@ -73,18 +95,20 @@ int ObLatchMutex::lock(const uint32_t latch_id, const int64_t abs_timeout_us)
   uint64_t yield_cnt = 0;
   const uint32_t uid = static_cast<uint32_t>(GETTID());
 
-  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END) || OB_UNLIKELY(0 == uid) || OB_UNLIKELY(uid >= WRITE_MASK) ||
-      OB_UNLIKELY(abs_timeout_us <= 0)) {
+  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END)
+        || OB_UNLIKELY(0 == uid)
+        || OB_UNLIKELY(uid >= WRITE_MASK)
+        || OB_UNLIKELY(abs_timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(abs_timeout_us), K(ret));
+    COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(abs_timeout_us), K(ret), KCSTRING(lbt()));
   } else {
     while (OB_SUCC(ret)) {
-      // spin
+      //spin
       i = low_try_lock(OB_LATCHES[latch_id].max_spin_cnt_, (WRITE_MASK | uid));
       spin_cnt += i;
 
       if (OB_LIKELY(i < OB_LATCHES[latch_id].max_spin_cnt_)) {
-        // success lock
+        //success lock
         ++spin_cnt;
         break;
       } else if (yield_cnt < OB_LATCHES[latch_id].max_yield_cnt_) {
@@ -92,13 +116,14 @@ int ObLatchMutex::lock(const uint32_t latch_id, const int64_t abs_timeout_us)
         ++yield_cnt;
         continue;
       } else {
-        // wait
+        //wait
         waited = true;
         // latch mutex wait is an atomic wait event
-        ObWaitEventGuard wait_guard(OB_LATCHES[latch_id].wait_event_idx_,
+        ObLatchWaitEventGuard wait_guard(
+            OB_LATCHES[latch_id].wait_event_idx_,
             abs_timeout_us / 1000,
             reinterpret_cast<uint64_t>(this),
-            lock_.val(),
+            (uint32_t*)&lock_.val(),
             0,
             true /*is_atomic*/);
         if (OB_FAIL(wait(abs_timeout_us, uid))) {
@@ -110,7 +135,9 @@ int ObLatchMutex::lock(const uint32_t latch_id, const int64_t abs_timeout_us)
         }
       }
     }
-    LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt);
+    if (need_record_stat()) {
+      LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt);
+    }
   }
   HOLD_LOCK_INC();
   return ret;
@@ -120,7 +147,7 @@ int ObLatchMutex::wait(const int64_t abs_timeout_us, const uint32_t uid)
 {
   // performance critical, do not double check the parameters
   int ret = OB_SUCCESS;
-  ObDiagnoseSessionInfo* dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
+  ObDiagnoseSessionInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
   int64_t timeout = 0;
   int lock = 0;
 
@@ -128,24 +155,26 @@ int ObLatchMutex::wait(const int64_t abs_timeout_us, const uint32_t uid)
     timeout = abs_timeout_us - ObTimeUtility::current_time();
     if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
-      COMMON_LOG(DEBUG, "wait latch mutex timeout, ", K(abs_timeout_us), K(lbt()), K(get_wid()), K(ret));
+      COMMON_LOG(DEBUG, "wait latch mutex timeout, ", K(abs_timeout_us), KCSTRING(lbt()), K(get_wid()), K(ret));
     } else {
       if (NULL != dsi) {
         ++dsi->get_curr_wait().p3_;
       }
       lock = lock_.val();
-      if (WAIT_MASK == (lock & WAIT_MASK) ||
-          0 != (lock = ATOMIC_CAS(&lock_.val(), (lock | WRITE_MASK), (lock | WAIT_MASK)))) {
+      if (WAIT_MASK == (lock & WAIT_MASK)
+          || 0 != (lock = ATOMIC_CAS(&lock_.val(), (lock | WRITE_MASK), (lock | WAIT_MASK)))) {
         ret = lock_.wait((lock | WAIT_MASK), timeout);
       }
       if (OB_LIKELY(OB_TIMEOUT != ret)) {
         // spin try lock
-        if (MAX_SPIN_CNT_AFTER_WAIT > low_try_lock(MAX_SPIN_CNT_AFTER_WAIT, (WAIT_MASK | WRITE_MASK | uid))) {
+        if (MAX_SPIN_CNT_AFTER_WAIT >
+            low_try_lock(MAX_SPIN_CNT_AFTER_WAIT, (WAIT_MASK | WRITE_MASK | uid))) {
           ret = OB_SUCCESS;
           break;
         }
-      } else {
-        COMMON_LOG(DEBUG, "wait latch mutex timeout", K(abs_timeout_us), K(lbt()), K(get_wid()), K(ret));
+      } else  {
+        COMMON_LOG(DEBUG, "wait latch mutex timeout",
+            K(abs_timeout_us), KCSTRING(lbt()), K(get_wid()), K(ret));
       }
     }
   }
@@ -156,7 +185,7 @@ int ObLatchMutex::unlock()
 {
   int ret = OB_SUCCESS;
   uint32_t lock = ATOMIC_SET(&lock_.val(), 0);
-
+  ObLatch::current_lock = nullptr;
   if (OB_UNLIKELY(0 == lock)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid lock,", K(lock), K(ret));
@@ -167,7 +196,7 @@ int ObLatchMutex::unlock()
   return ret;
 }
 
-int64_t ObLatchMutex::to_string(char* buf, const int64_t buf_len)
+int64_t ObLatchMutex::to_string(char *buf, const int64_t buf_len)
 {
   int64_t pos = 0;
   databuff_print_kv(buf, buf_len, pos, "lock_", lock_.val());
@@ -177,21 +206,29 @@ int64_t ObLatchMutex::to_string(char* buf, const int64_t buf_len)
 /**
  * -------------------------------------------------------ObLatchWaitQueue---------------------------------------------------------------
  */
-ObLatchWaitQueue::ObLatchWaitQueue() : wait_map_()
-{}
+ObLatchWaitQueue::ObLatchWaitQueue()
+  : wait_map_()
+{
+}
 
 ObLatchWaitQueue::~ObLatchWaitQueue()
-{}
+{
+}
 
-ObLatchWaitQueue& ObLatchWaitQueue::get_instance()
+ObLatchWaitQueue &ObLatchWaitQueue::get_instance()
 {
   static ObLatchWaitQueue instance_;
   return instance_;
 }
 
-template <typename LowTryLock>
-int ObLatchWaitQueue::wait(ObWaitProc& proc, const uint32_t latch_id, const uint32_t uid, LowTryLock& lock_func,
-    LowTryLock& lock_func_ignore, const int64_t abs_timeout_us)
+template<typename LowTryLock>
+int ObLatchWaitQueue::wait(
+    ObWaitProc &proc,
+    const uint32_t latch_id,
+    const uint32_t uid,
+    LowTryLock &lock_func,
+    LowTryLock &lock_func_ignore,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -201,55 +238,52 @@ int ObLatchWaitQueue::wait(ObWaitProc& proc, const uint32_t latch_id, const uint
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument, ", K(proc), K(uid), K(abs_timeout_us), K(ret));
   } else {
-    ObLatch& latch = *proc.addr_;
+    ObLatch &latch = *proc.addr_;
     uint64_t pos = reinterpret_cast<uint64_t>((&latch)) % LATCH_MAP_BUCKET_CNT;
-    ObLatchBucket& bucket = wait_map_[pos];
+    ObLatchBucket &bucket = wait_map_[pos];
     int64_t timeout = 0;
     bool conflict = false;
     struct timespec ts;
-    ObDiagnoseSessionInfo* dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    ObDiagnoseSessionInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
 
-    // check if need wait
+    //check if need wait
     if (OB_FAIL(try_lock(bucket, proc, latch_id, uid, lock_func))) {
       if (OB_EAGAIN != ret) {
         COMMON_LOG(ERROR, "Fail to try lock, ", K(ret));
       }
     }
 
-    // wait signal or timeout
+    //wait signal or timeout
     while (OB_EAGAIN == ret) {
       timeout = abs_timeout_us - ObTimeUtility::current_time();
       if (OB_UNLIKELY(timeout <= 0)) {
         ret = OB_TIMEOUT;
-        COMMON_LOG(DEBUG, "Wait latch timeout, ", K(abs_timeout_us), K(lbt()), K(latch.get_wid()), K(ret));
+        COMMON_LOG(DEBUG, "Wait latch timeout, ", K(abs_timeout_us), KCSTRING(lbt()), K(latch.get_wid()), K(ret));
       } else {
         if (NULL != dsi) {
           ++dsi->get_curr_wait().p3_;
         }
 
         {
-          ObWaitEventGuard wait_guard(ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
+          ObLatchWaitEventGuard wait_guard(
+              ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
               abs_timeout_us / 1000,
               reinterpret_cast<uint64_t>(this),
-              latch.lock_,
+              (uint32_t*)&latch.lock_,
               0,
               true /*is_atomic*/);
-          if (USE_CO_LATCH && lib::CO_IS_ENABLED()) {
-            tmp_ret = lib::CO_WAIT(timeout);
-          } else {
-            ts.tv_sec = timeout / 1000000;
-            ts.tv_nsec = 1000 * (timeout % 1000000);
-            // futex_wait is an atomic wait event
-            if (ETIMEDOUT == (tmp_ret = futex_wait(&proc.wait_, 1, &ts))) {
-              tmp_ret = OB_TIMEOUT;
-            }
+          ts.tv_sec = timeout / 1000000;
+          ts.tv_nsec = 1000 * (timeout % 1000000);
+          // futex_wait is an atomic wait event
+          if (ETIMEDOUT == (tmp_ret = futex_wait(&proc.wait_, 1, &ts))) {
+            tmp_ret = OB_TIMEOUT;
           }
         }
 
         if (OB_TIMEOUT != tmp_ret) {
-          // try lock
+          //try lock
           conflict = false;
-          while (!conflict) {
+          while(!conflict) {
             if (OB_SUCC(lock_func_ignore(&latch.lock_, latch.lock_, uid, conflict))) {
               break;
             } else if (OB_EAGAIN != ret) {
@@ -262,37 +296,32 @@ int ObLatchWaitQueue::wait(ObWaitProc& proc, const uint32_t latch_id, const uint
           if (OB_EAGAIN == ret) {
             if (OB_FAIL(try_lock(bucket, proc, latch_id, uid, lock_func_ignore))) {
               if (OB_EAGAIN != ret) {
-                COMMON_LOG(ERROR,
-                    "Fail to try lock, ",
-                    K(ret),
-                    K(tmp_ret),
-                    K(lib::CO_CURRENT().get_run_status()),
-                    K(lib::CO_CURRENT().get_id()),
-                    K(proc));
+                COMMON_LOG(ERROR, "Fail to try lock, ", K(ret), K(tmp_ret), K(proc));
               }
             }
           }
         } else {
           ret = OB_TIMEOUT;
-          COMMON_LOG(
-              DEBUG, "Wait latch timeout, ", K(abs_timeout_us), K(timeout), K(lbt()), K(latch.get_wid()), K(ret));
+          COMMON_LOG(DEBUG, "Wait latch timeout, ", K(abs_timeout_us), K(timeout), KCSTRING(lbt()),
+            K(latch.get_wid()), K(ret));
         }
       }
     }
 
-    // remove proc from wait list if it is necessary, in the common case, we do not need remove
+    //remove proc from wait list if it is necessary, in the common case, we do not need remove
     if (OB_UNLIKELY(1 == proc.wait_)) {
       lock_bucket(bucket);
       if (1 == proc.wait_) {
         if (OB_ISNULL(bucket.wait_list_.remove(&proc))) {
-          // should not happen
+          //should not happen
           tmp_ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(ERROR, "Fail to remove proc, ", K(tmp_ret));
         } else {
-          // if there is not any wait proc, clear the wait mask
+          //if there is not any wait proc, clear the wait mask
           bool has_wait = false;
-          for (ObWaitProc* iter = bucket.wait_list_.get_first(); iter != bucket.wait_list_.get_header();
-               iter = iter->get_next()) {
+          for (ObWaitProc *iter = bucket.wait_list_.get_first();
+              iter != bucket.wait_list_.get_header();
+              iter = iter->get_next()) {
             if (iter->addr_ == proc.addr_) {
               has_wait = true;
               break;
@@ -311,16 +340,15 @@ int ObLatchWaitQueue::wait(ObWaitProc& proc, const uint32_t latch_id, const uint
   return ret;
 }
 
-int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
+int ObLatchWaitQueue::wake_up(ObLatch &latch, const bool only_rd_wait)
 {
   int ret = OB_SUCCESS;
   uint64_t pos = reinterpret_cast<uint64_t>((&latch)) % LATCH_MAP_BUCKET_CNT;
-  ObLatchBucket& bucket = wait_map_[pos];
-  ObWaitProc* iter = NULL;
-  ObWaitProc* tmp = NULL;
+  ObLatchBucket &bucket = wait_map_[pos];
+  ObWaitProc *iter = NULL;
+  ObWaitProc *tmp = NULL;
   int32_t wait_mode = ObLatchWaitMode::NOWAIT;
-  lib::CoRoutine* cr_wait = NULL;
-  volatile int32_t* pwait = NULL;
+  volatile int32_t *pwait = NULL;
   uint32_t wake_cnt = 0;
   uint32_t actual_wake_cnt = 0;
   ObDList<ObWaitProc> wake_list;
@@ -340,14 +368,14 @@ int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
   do {
     wake_cnt = 0;
     // get all wait proc which need wake up
-    for (iter = bucket.wait_list_.get_first(); OB_SUCC(ret) && iter != bucket.wait_list_.get_header();) {
+    for (iter = bucket.wait_list_.get_first(); OB_SUCC(ret) && iter != bucket.wait_list_.get_header(); ) {
       if (iter->addr_ == &latch) {
         wait_mode = iter->mode_;
-        if (ObLatchWaitMode::READ_WAIT == wait_mode ||
-            (ObLatchWaitMode::WRITE_WAIT == wait_mode && 0 == wake_cnt && !only_rd_wait)) {
+        if (ObLatchWaitMode::READ_WAIT == wait_mode
+            || (ObLatchWaitMode::WRITE_WAIT == wait_mode && 0 == wake_cnt && !only_rd_wait)) {
           tmp = iter->get_next();
           if (OB_ISNULL(bucket.wait_list_.remove(iter))) {
-            // should not happen
+            //should not happen
             ret = OB_ERR_UNEXPECTED;
             COMMON_LOG(ERROR, "Fail to remove iter from wait list, ", K(ret));
           } else if (OB_UNLIKELY(false == wake_list.add_last(iter))) {
@@ -363,12 +391,12 @@ int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
           break;
         }
       } else {
-        // other latch in the same bucket, just ignore
+        //other latch in the same bucket, just ignore
         iter = iter->get_next();
       }
     }
 
-    // check if there is other waiting in the waiting list
+    //check if there is other waiting in the waiting list
     has_wait = false;
     for (; iter != bucket.wait_list_.get_header(); iter = iter->get_next()) {
       if (iter->addr_ == &latch) {
@@ -377,7 +405,7 @@ int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
       }
     }
     if (!has_wait) {
-      // no wait, clear the wait mask
+      //no wait, clear the wait mask
       ATOMIC_ANDF(&latch.lock_, ~latch.WAIT_MASK);
     }
 
@@ -385,23 +413,16 @@ int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
     for (iter = wake_list.get_first(); iter != wake_list.get_header();) {
       tmp = iter->get_next();
       if (OB_ISNULL(wake_list.remove(iter))) {
-        // should not happen
+        //should not happen
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "Fail to remove iter from wait list, ", K(ret));
       } else {
-        cr_wait = iter->cr_wait_;
         pwait = &iter->wait_;
-        // the proc.wait_ must be set to 0 at last, once the 0 is set, the *iter may be not valid any more
+        //the proc.wait_ must be set to 0 at last, once the 0 is set, the *iter may be not valid any more
         MEM_BARRIER();
         *pwait = 0;
-        if (NULL == cr_wait) {
-          // a thread waits using sys futex
-          if (1 == futex_wake(pwait, 1)) {
-            ++actual_wake_cnt;
-          }
-        } else {
-          // a coro waits using coro futex
-          lib::CO_WAKEUP(*(cr_wait));
+        // a thread waits using sys futex
+        if (1 == futex_wake(pwait, 1)) {
           ++actual_wake_cnt;
         }
       }
@@ -414,15 +435,19 @@ int ObLatchWaitQueue::wake_up(ObLatch& latch, const bool only_rd_wait)
   return ret;
 }
 
-template <typename LowTryLock>
+template<typename LowTryLock>
 int ObLatchWaitQueue::try_lock(
-    ObLatchBucket& bucket, ObWaitProc& proc, const uint32_t latch_id, const uint32_t uid, LowTryLock& lock_func)
+    ObLatchBucket &bucket,
+    ObWaitProc &proc,
+    const uint32_t latch_id,
+    const uint32_t uid,
+    LowTryLock &lock_func)
 {
   // performance critical, do not double check the parameters
   int ret = OB_SUCCESS;
   uint32_t lock = 0;
   bool conflict = false;
-  ObLatch& latch = *(proc.addr_);
+  ObLatch &latch = *(proc.addr_);
 
   lock_bucket(bucket);
   while (true) {
@@ -443,14 +468,19 @@ int ObLatchWaitQueue::try_lock(
   }
 
   if (OB_EAGAIN == ret) {
-    // fail to lock, add the proc to wait list
-    if (ObLatchPolicy::LATCH_READ_PREFER == OB_LATCHES[latch_id].policy_ && ObLatchWaitMode::READ_WAIT == proc.mode_) {
-      if (NULL == proc.get_prev() && NULL == proc.get_next() && !bucket.wait_list_.add_first(&proc)) {
+    //fail to lock, add the proc to wait list
+    if (ObLatchPolicy::LATCH_READ_PREFER == OB_LATCHES[latch_id].policy_
+        && ObLatchWaitMode::READ_WAIT == proc.mode_) {
+      if (NULL == proc.get_prev()
+          && NULL == proc.get_next()
+          && !bucket.wait_list_.add_first(&proc)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "Fail to add proc to wait list, ", K(ret));
       }
     } else {
-      if (NULL == proc.get_prev() && NULL == proc.get_next() && !bucket.wait_list_.add_last(&proc)) {
+      if (NULL == proc.get_prev()
+          && NULL == proc.get_next()
+          && !bucket.wait_list_.add_last(&proc)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "Fail to add proc to wait list, ", K(ret));
       }
@@ -467,19 +497,21 @@ int ObLatchWaitQueue::try_lock(
  * -------------------------------------------------------ObLatch---------------------------------------------------------------
  */
 #ifdef ENABLE_LATCH_DIAGNOSE
-ObLDHandleNode::ObLDHandleNode() : slot_(nullptr)
+ObLDHandleNode::ObLDHandleNode()
+  : slot_(nullptr)
 {}
 
 void ObLDHandle::reset()
 {
-  abort_unless(node_ != nullptr);
-  abort_unless(node_->slot_ != nullptr);
-  node_->slot_->remove(node_);
-  delete node_;
-  node_ = nullptr;
+  if (node_ != nullptr) {
+    abort_unless(node_->slot_ != nullptr);
+    node_->slot_->remove(node_);
+    delete node_;
+    node_ = nullptr;
+  }
 }
 
-void ObLDSlot::add(ObLDHandleNode* node)
+void ObLDSlot::add(ObLDHandleNode *node)
 {
   abort_unless(nullptr == node->slot_);
   node->slot_ = this;
@@ -488,7 +520,7 @@ void ObLDSlot::add(ObLDHandleNode* node)
   mutex_.unlock();
 }
 
-void ObLDSlot::remove(ObLDHandleNode* node)
+void ObLDSlot::remove(ObLDHandleNode *node)
 {
   mutex_.lock();
   node_list_.remove(node);
@@ -498,11 +530,10 @@ void ObLDSlot::remove(ObLDHandleNode* node)
 
 ObLockDiagnose::~ObLockDiagnose()
 {
-  for (int i = 0; i < ARRAYSIZEOF(slots_); i++) {
-    auto& mutex = slots_[i].mutex_;
+  for (int i = 0; i< ARRAYSIZEOF(slots_); i++) {
+    auto &mutex = slots_[i].mutex_;
     mutex.lock();
-    DLIST_FOREACH_NORET(node, slots_[i].node_list_)
-    {
+    DLIST_FOREACH_NORET(node, slots_[i].node_list_) {
       delete node;
     }
     slots_[i].node_list_.clear();
@@ -510,10 +541,10 @@ ObLockDiagnose::~ObLockDiagnose()
   }
 }
 
-void ObLockDiagnose::lock(const ObLDLockType::Type type, ObLDHandle& handle)
+void ObLockDiagnose::lock(const ObLDLockType::Type type, ObLDHandle &handle)
 {
   abort_unless(nullptr == handle.node_);
-  auto* node = new ObLDHandleNode();
+  auto *node = new ObLDHandleNode();
   abort_unless(node != nullptr);
   node->tid_ = GETTID();
   node->type_ = type;
@@ -525,25 +556,33 @@ void ObLockDiagnose::lock(const ObLDLockType::Type type, ObLDHandle& handle)
 
 void ObLockDiagnose::print()
 {
-  for (int i = 0; i < ARRAYSIZEOF(slots_); i++) {
-    auto& mutex = slots_[i].mutex_;
+  for (int i = 0; i< ARRAYSIZEOF(slots_); i++) {
+    auto &mutex = slots_[i].mutex_;
     mutex.lock();
-    DLIST_FOREACH_NORET(node, slots_[i].node_list_)
-    {
-      COMMON_LOG(INFO, "dump operation", "ptr", node, "tid", node->tid_, "lock_type", node->type_, "lbt", node->lbt_);
+    DLIST_FOREACH_NORET(node, slots_[i].node_list_) {
+      COMMON_LOG(INFO, "dump operation",
+                 "ptr", node,
+                 "tid", node->tid_,
+                 "lock_type", node->type_,
+                 "lbt", node->lbt_);
     }
     mutex.unlock();
   }
 }
 #endif
 
-ObLatch::ObLatch() : lock_(0)
-{}
+ObLatch::ObLatch()
+  : lock_(0)
+    #ifndef PERF_MODE
+    , record_stat_(true)
+    #endif
+{
+}
 
 ObLatch::~ObLatch()
 {
   if (0 != lock_) {
-    COMMON_LOG(DEBUG, "invalid lock,", K(lock_), K(lbt()));
+    COMMON_LOG(DEBUG, "invalid lock,", K(lock_), KCSTRING(lbt()));
   }
 }
 
@@ -566,14 +605,15 @@ int ObLatch::try_rdlock(const uint32_t latch_id)
           break;
         } else {
           if (ObLatchPolicy::LATCH_FIFO == OB_LATCHES[latch_id].policy_) {
-            if (0 != (lock & WAIT_MASK)) {
-              ret = OB_EAGAIN;
-              break;
-            }
+        	if (0 != (lock & WAIT_MASK)) {
+        	  ret = OB_EAGAIN;
+        	  break;
+        	}
           }
           ++i;
           if (ATOMIC_BCAS(&lock_, lock, lock + 1)) {
             ret = OB_SUCCESS;
+            ObLatch::current_lock = (uint32_t*)&lock_;
             break;
           }
         }
@@ -582,44 +622,53 @@ int ObLatch::try_rdlock(const uint32_t latch_id)
       }
       PAUSE();
     } while (true);
-
-    TRY_LOCK_RECORD_STAT(latch_id, i, ret);
+    if (need_record_stat()) {
+      TRY_LOCK_RECORD_STAT(latch_id, i, ret);
+    }
   }
   HOLD_LOCK_INC();
   return ret;
 }
 
-int ObLatch::try_wrlock(const uint32_t latch_id, const uint32_t* puid)
+int ObLatch::try_wrlock(const uint32_t latch_id, const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   uint32_t uid = (NULL == puid) ? static_cast<uint32_t>(GETTID()) : *puid;
-  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END) || OB_UNLIKELY(0 == uid) || OB_UNLIKELY(uid >= WRITE_MASK)) {
+  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END)
+      || OB_UNLIKELY(0 == uid)
+      || OB_UNLIKELY(uid >= WRITE_MASK)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(ret));
+    COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(ret), KCSTRING(lbt()));
   } else {
     if (!ATOMIC_BCAS(&lock_, 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
+    } else {
+      ObLatch::current_lock = (uint32_t*)&lock_;
     }
-
-    TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
+    if (need_record_stat()) {
+      TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
+    }
   }
   HOLD_LOCK_INC();
   return ret;
 }
 
-int ObLatch::rdlock(const uint32_t latch_id, const int64_t abs_timeout_us)
+int ObLatch::rdlock(
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
-  // the uid is unused concurrently
+  //the uid is unused concurrently
   const uint32_t uid = 1;
-  LowTryRDLock low_try_rdlock(false);
-  LowTryRDLock low_try_rdlock_ignore(true);
-  if (OB_FAIL(low_lock(latch_id,
-          abs_timeout_us,
-          uid,
-          ObLatchWaitMode::READ_WAIT,
-          ObLatchPolicy::LATCH_FIFO == OB_LATCHES[latch_id].policy_ ? low_try_rdlock : low_try_rdlock_ignore,
-          low_try_rdlock_ignore))) {
+  static LowTryRDLock low_try_rdlock(false);
+  static LowTryRDLock low_try_rdlock_ignore(true);
+  if (OB_FAIL(low_lock(
+      latch_id,
+      abs_timeout_us,
+      uid,
+      ObLatchWaitMode::READ_WAIT,
+      ObLatchPolicy::LATCH_FIFO == OB_LATCHES[latch_id].policy_ ? low_try_rdlock : low_try_rdlock_ignore,
+      low_try_rdlock_ignore))) {
     if (OB_TIMEOUT != ret) {
       COMMON_LOG(WARN, "Fail to low lock, ", K(ret));
     }
@@ -628,14 +677,23 @@ int ObLatch::rdlock(const uint32_t latch_id, const int64_t abs_timeout_us)
   return ret;
 }
 
-int ObLatch::wrlock(const uint32_t latch_id, const int64_t abs_timeout_us, const uint32_t* puid)
+
+int ObLatch::wrlock(
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us,
+    const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   const uint32_t uid = (NULL == puid) ? static_cast<uint32_t>(GETTID()) : *puid;
   LowTryWRLock low_try_wrlock(false);
   LowTryWRLock low_try_wrlock_ignore(true);
   if (OB_FAIL(low_lock(
-          latch_id, abs_timeout_us, uid, ObLatchWaitMode::WRITE_WAIT, low_try_wrlock, low_try_wrlock_ignore))) {
+      latch_id,
+      abs_timeout_us,
+      uid,
+      ObLatchWaitMode::WRITE_WAIT,
+      low_try_wrlock,
+      low_try_wrlock_ignore))) {
     if (OB_TIMEOUT != ret) {
       COMMON_LOG(WARN, "Fail to low lock, ", K(ret));
     }
@@ -644,7 +702,7 @@ int ObLatch::wrlock(const uint32_t latch_id, const int64_t abs_timeout_us, const
   return ret;
 }
 
-int ObLatch::wr2rdlock(const uint32_t* puid)
+int ObLatch::wr2rdlock(const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   if (!is_wrlocked_by(puid)) {
@@ -656,6 +714,7 @@ int ObLatch::wr2rdlock(const uint32_t* puid)
       lock = lock_;
       PAUSE();
     }
+    ObLatch::current_lock = (uint32_t*)&lock_;
     bool only_rd_wait = true;
     if (OB_FAIL(ObLatchWaitQueue::get_instance().wake_up(*this, only_rd_wait))) {
       COMMON_LOG(ERROR, "Fail to wake up latch wait queue, ", K(this), K(ret));
@@ -664,7 +723,7 @@ int ObLatch::wr2rdlock(const uint32_t* puid)
   return ret;
 }
 
-int ObLatch::unlock(const uint32_t* puid)
+int ObLatch::unlock(const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   uint32_t lock = ATOMIC_LOAD(&lock_);
@@ -674,12 +733,14 @@ int ObLatch::unlock(const uint32_t* puid)
     uint32_t wid = (lock & ~(WAIT_MASK | WRITE_MASK));
     if (NULL != puid && uid != wid) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "The latch is not write locked by the uid, ", K(uid), K(wid), K(lbt()), K(ret));
+      COMMON_LOG(ERROR, "The latch is not write locked by the uid, ", K(uid), K(wid), KCSTRING(lbt()), K(ret));
     } else {
       lock = ATOMIC_ANDF(&lock_, WAIT_MASK);
+      ObLatch::current_lock = nullptr;
     }
   } else if ((lock & (~WAIT_MASK)) > 0) {
     lock = ATOMIC_AAF(&lock_, -1);
+    ObLatch::current_lock = nullptr;
   } else {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid lock,", K(lock), K(ret));
@@ -693,9 +754,14 @@ int ObLatch::unlock(const uint32_t* puid)
   return ret;
 }
 
-template <typename LowTryLock>
-OB_INLINE int ObLatch::low_lock(const uint32_t latch_id, const int64_t abs_timeout_us, const uint32_t uid,
-    const uint32_t wait_mode, LowTryLock& lock_func, LowTryLock& lock_func_ignore)
+template<typename LowTryLock>
+OB_INLINE int ObLatch::low_lock(
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us,
+    const uint32_t uid,
+    const uint32_t wait_mode,
+    LowTryLock &lock_func,
+    LowTryLock &lock_func_ignore)
 {
   int ret = OB_SUCCESS;
   uint64_t i = 0;
@@ -705,20 +771,23 @@ OB_INLINE int ObLatch::low_lock(const uint32_t latch_id, const int64_t abs_timeo
   bool waited = false;
   bool conflict = false;
 
-  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END) || OB_UNLIKELY(abs_timeout_us <= 0) || OB_UNLIKELY(0 == uid) ||
-      OB_UNLIKELY(uid >= WRITE_MASK) ||
-      OB_UNLIKELY(ObLatchWaitMode::READ_WAIT != wait_mode && ObLatchWaitMode::WRITE_WAIT != wait_mode)) {
+  if (OB_UNLIKELY(latch_id >= ObLatchIds::LATCH_END)
+      || OB_UNLIKELY(abs_timeout_us <= 0)
+      || OB_UNLIKELY(0 == uid)
+      || OB_UNLIKELY(uid >= WRITE_MASK)
+      || OB_UNLIKELY(ObLatchWaitMode::READ_WAIT != wait_mode
+          && ObLatchWaitMode::WRITE_WAIT != wait_mode)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(latch_id), K(uid), K(ret));
   } else {
     while (OB_SUCC(ret)) {
-      // spin
+      //spin
       for (i = 0; OB_SUCC(ret) && i < OB_LATCHES[latch_id].max_spin_cnt_; ++i) {
         lock = lock_;
         if (OB_SUCC(lock_func(&lock_, lock, uid, conflict))) {
           break;
         } else if (OB_EAGAIN == ret) {
-          // retry
+          //retry
           ret = OB_SUCCESS;
         }
         PAUSE();
@@ -726,25 +795,33 @@ OB_INLINE int ObLatch::low_lock(const uint32_t latch_id, const int64_t abs_timeo
       spin_cnt += i;
 
       if (OB_FAIL(ret)) {
-        // fail
+        //fail
       } else if (i < OB_LATCHES[latch_id].max_spin_cnt_) {
-        // success lock
+        //success lock
         ++spin_cnt;
         break;
       } else if (yield_cnt < OB_LATCHES[latch_id].max_yield_cnt_) {
-        // yield and retry
+        //yield and retry
         sched_yield();
         ++yield_cnt;
         continue;
       } else {
-        // wait
+        //wait
         waited = true;
-        ObWaitEventGuard wait_guard(
-            OB_LATCHES[latch_id].wait_event_idx_, abs_timeout_us / 1000, reinterpret_cast<uint64_t>(this), lock, 0);
-        // NULL means thread, otherwise coro
-        ObWaitProc proc(*this, USE_CO_LATCH && lib::CO_IS_ENABLED() ? &(lib::CO_CURRENT()) : NULL, wait_mode);
+        ObLatchWaitEventGuard wait_guard(
+          OB_LATCHES[latch_id].wait_event_idx_,
+          abs_timeout_us / 1000,
+          reinterpret_cast<uint64_t>(this),
+          (uint32_t*)&lock_,
+          0);
+        ObWaitProc proc(*this, wait_mode);
         if (OB_FAIL(ObLatchWaitQueue::get_instance().wait(
-                proc, latch_id, uid, lock_func, lock_func_ignore, abs_timeout_us))) {
+            proc,
+            latch_id,
+            uid,
+            lock_func,
+            lock_func_ignore,
+            abs_timeout_us))) {
           if (OB_TIMEOUT != ret) {
             COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
           }
@@ -753,8 +830,9 @@ OB_INLINE int ObLatch::low_lock(const uint32_t latch_id, const int64_t abs_timeo
         }
       }
     }
-
-    LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt);
+    if (need_record_stat()) {
+      LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt);
+    }
   }
   return ret;
 }
@@ -762,21 +840,22 @@ OB_INLINE int ObLatch::low_lock(const uint32_t latch_id, const int64_t abs_timeo
 int64_t ObWaitProc::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  databuff_print_kv(buf, buf_len, pos, KP_(addr), K_(mode), KP_(cr_wait));
+  databuff_print_kv(buf, buf_len, pos, KP_(addr), K_(mode));
   return pos;
 }
 
-int64_t ObLatch::to_string(char* buf, const int64_t buf_len) const
+int64_t ObLatch::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   databuff_print_kv(buf, buf_len, pos, "lock_", static_cast<uint32_t>(lock_));
   return pos;
 }
 
-ObLDLatch::ObLDLatch() : diagnose_(false)
+ObLDLatch::ObLDLatch()
+  : diagnose_(false)
 {}
 
-int ObLDLatch::try_rdlock(ObLDHandle& handle, const uint32_t latch_id)
+int ObLDLatch::try_rdlock(ObLDHandle &handle, const uint32_t latch_id)
 {
   int ret = OB_SUCCESS;
   ret = ObLatch::try_rdlock(latch_id);
@@ -790,7 +869,8 @@ int ObLDLatch::try_rdlock(ObLDHandle& handle, const uint32_t latch_id)
   return ret;
 }
 
-int ObLDLatch::try_wrlock(ObLDHandle& handle, const uint32_t latch_id, const uint32_t* puid)
+int ObLDLatch::try_wrlock(ObLDHandle &handle, const uint32_t latch_id,
+                          const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   ret = ObLatch::try_wrlock(latch_id, puid);
@@ -804,7 +884,10 @@ int ObLDLatch::try_wrlock(ObLDHandle& handle, const uint32_t latch_id, const uin
   return ret;
 }
 
-int ObLDLatch::rdlock(ObLDHandle& handle, const uint32_t latch_id, const int64_t abs_timeout_us)
+int ObLDLatch::rdlock(
+    ObLDHandle &handle,
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   ret = ObLatch::rdlock(latch_id, abs_timeout_us);
@@ -818,7 +901,11 @@ int ObLDLatch::rdlock(ObLDHandle& handle, const uint32_t latch_id, const int64_t
   return ret;
 }
 
-int ObLDLatch::wrlock(ObLDHandle& handle, const uint32_t latch_id, const int64_t abs_timeout_us, const uint32_t* puid)
+int ObLDLatch::wrlock(
+    ObLDHandle &handle,
+    const uint32_t latch_id,
+    const int64_t abs_timeout_us,
+    const uint32_t *puid)
 {
   int ret = OB_SUCCESS;
   ret = ObLatch::wrlock(latch_id, abs_timeout_us, puid);
@@ -832,7 +919,7 @@ int ObLDLatch::wrlock(ObLDHandle& handle, const uint32_t latch_id, const int64_t
   return ret;
 }
 
-int ObLDLatch::unlock(ObLDHandle& handle, const uint32_t* puid)
+int ObLDLatch::unlock(ObLDHandle &handle, const uint32_t *puid)
 {
 #ifdef ENABLE_LATCH_DIAGNOSE
   handle.reset();
@@ -842,5 +929,5 @@ int ObLDLatch::unlock(ObLDHandle& handle, const uint32_t* puid)
   return ObLatch::unlock(puid);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

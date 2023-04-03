@@ -1,0 +1,203 @@
+#owner: link.zt
+#owner group: SQL1
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaochu.yh
+# owner group: SQL1
+# description: OUR GOAL: Make all this simple and effective!
+##test retrun data type of func
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+
+connection default;
+
+--enable_metadata
+--disable_abort_on_error
+--disable_warnings
+
+select repeat('   ',10);
+
+####test:date func return type test
+#extract(unit FROM date)
+select extract(MICROSECOND FROM '2012-09-01 10:35:07:99999') ;
+select extract(SECOND FROM '2012-09-01 10:35:07:99999') ;
+select extract(MINUTE FROM '2012-09-01 10:35:07:99999') ;
+select extract(HOUR FROM '2012-09-01 10:35:07:99999') ;
+select extract(DAY FROM '2012-09-01 10:35:07:99999') ;
+
+#date_format(date, format)
+select date_format('2007-10-04 22:23:10.567', '%H:%i:%s');
+select date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s');
+select date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w');
+select date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%');
+#test week count
+--echo 2007-01-01 year_day=week_day=1
+select date_format('2007-01-01', '%U %u %V-%X %v-%x');
+--echo 2013-01-01 year_day=1, week_day=2 the critical week in this year
+select date_format('2013-01-01', '%U %u %V-%X %v-%x');
+--echo 2015-01-01 year_day=1, week_day=4 the critical week in last year when start with sunday, in this year when start with monday
+select date_format('2015-01-01', '%U %u %V-%X %v-%x');
+--echo 2014-12-31 year_day=365, week_day=3 thi critical week in this year when start with sunday, in next year when start with monday
+select date_format('2014-12-31', '%U %u %V-%X %v-%x');
+select date_format('2014-04-24', '%U %u %V-%X %v-%x');
+select date_format('2014-09-24', NULL);
+select date_format(NULL, '%U %u %V-%X %v-%x');
+#str_to_date(date, format)
+select str_to_date('1970-02-03', '%Y-%m-%d');
+select str_to_date('04/31/2004', '%m/%d/%Y');
+select str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f');
+select str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S');
+select str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T');
+select str_to_date(NULL, '%Y-%m-%d %T');
+select str_to_date('1970-02-03 10:56:56', NULL);
+#all in all test
+
+
+#test date_format
+
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 15:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%r');
+
+
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 23:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%l %p');
+SELECT DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896);
+SELECT DATE_FORMAT('0000-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('0001-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('-0001-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('-4713-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('-4712-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('-4714-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('9999-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('10000-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('0000-02-28','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('0001-02-28','%W %d %M %Y') as valid_date;
+# show that date within the Gregorian range render correct results: (THU)
+SELECT DATE_FORMAT('2009-01-01','%W %d %M %Y') as valid_date;
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS CHAR);
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6));
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DATETIME);
+SELECT DATE_FORMAT(NULL, '%s')+0e0;
+
+
+select  str_to_date('2003-01-02', '%Y-%m-%d') as f3;
+
+select str_to_date('04 /30/2004', '%m /%d/%Y');
+select str_to_date('04/30 /2004', '%m /%d /%Y');
+select str_to_date('04/30/2004 ', '%m/%d/%Y ');
+
+#select cast(1.1234 as decimal(12,2));
+select date_add(str_to_date(substr('2014-06-05 16:24:54.270374',1,8),'%Y%m%d'),interval 2 day);
+select str_to_date('2014-06-','%Y%m%d');
+select '+' + 1;
+select '-' + 1;
+select '.' + 1;
+select '_' + 1;
+select '~' + 1;
+select '@' + 1;
+select '#' + 1;
+select '%' + 1;
+select '^' + 1;
+select '$%%%' + 1;
+select '(' + 1;
+select ')' + 1;
+select '=' + 1;
+select '{' + 1;
+select '}' + 1;
+select '|' + 1;
+select '\'' + 1;
+select '"' + 1;
+select ':' + 1;
+select '<' + 1;
+select '>' + 1;
+select '?' + 1;
+select '/' + 1;
+select '!@##' + 1;
+select '$^^%%^$%(*&^(*^&*^&)' + 1;
+select concat(NULL, 'aaa');
+select concat('aaa', NULL);
+select concat('aaa','');
+select concat('','aaa');
+select 1.1/0.0;
+select __OB__MIN__ > 1;
+select __OB__MIN__ < 1;
+#test dump
+select dump(1.1);
+select dump(1);
+select round(1.1234, 3);
+select round(1.1234);
+select false is true;
+select NULL is true;
+select true is true;
+select true is not  true;
+select NULL is NULL;
+select NULL is not NULL;
+select true is false;
+select -'aaa';
+#test null and time func
+select DATE_ADD(null, INTERVAL 5 DAY);
+select DATE_sub(null, INTERVAL 5 DAY);
+select STR_TO_DATE(null, '%Y-%m-%d');
+select DATE_FORMAT(null, '%Y/%m/%D');
+select time_to_usec(null);
+select usec_to_time(null);
+select EXTRACT(DAY FROM null);
+
+####test abs func
+select abs(10);
+select abs(-10);
+select abs(-0);
+select abs(0);
+select abs(1);
+select abs(-1);
+select abs(-1000000000000);
+select abs(1000000000000);
+select abs(0.1);
+select abs(-0.1);
+select abs(-11.10);
+select abs(null);
+select abs(NULL);
+select abs(Null);
+select abs(5-5);
+select abs(-0.1*3);
+select abs('10');
+select abs('1');
+select abs('100');
+select abs('-100');
+select abs('-100.001');
+select abs(cast(-1.21 as decimal(10,5)));                                                                                                                   
+select abs(cast(-1.21 as char(1024)));
+select abs(cast(-1.21 as decimal(5,3)));
+select abs(cast(-1.21 as numeric));
+
+####test repeat func
+select repeat ('1',10);
+select repeat (1,10);
+select repeat (null,10);
+select repeat ('abc',10);
+
+
+####test cast func
+select cast(repeat('1',5) as signed int);
+select repeat(substr('abcd',2),1);
+
+
+####test length
+select length(repeat(0xa1,215)), length(repeat(0x1a, 310));
+
+select abs(true);
+select floor(1);
+select ceil(1);
+

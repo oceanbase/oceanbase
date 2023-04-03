@@ -18,60 +18,62 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <typename T>
-class ObFixedQueue {
+class ObFixedQueue
+{
 public:
   ObFixedQueue();
   ~ObFixedQueue();
-
 public:
-  int init(const int64_t max_num, char* buf);
-  int init(const int64_t max_num, ObIAllocator* allocator = global_default_allocator,
-      const lib::ObLabel& label = ObModIds::OB_FIXED_QUEUE);
+  int init(const int64_t max_num, char *buf);
+  int init(const int64_t max_num,
+           ObIAllocator *allocator = global_default_allocator,
+           const lib::ObLabel &label = ObModIds::OB_FIXED_QUEUE);
+  int init(const int64_t max_num,
+           ObIAllocator *allocator,
+           const lib::ObMemAttr &attr);
   void destroy();
-
 public:
-  int push(T* ptr);
-  int pop(T*& ptr);
+  int push(T *ptr);
+  int pop(T *&ptr);
+  int head_unsafe(T *&ptr);
   inline int64_t get_total() const;
   inline int64_t get_free() const;
   inline int64_t get_curr_total() const;
-  bool is_inited() const
-  {
-    return is_inited_;
-  };
-  int64_t capacity() const
-  {
-    return max_num_;
-  }
-
+  bool is_inited() const {return is_inited_;};
+  int64_t capacity()const { return max_num_; }
 private:
-  struct ArrayItem {
-    T* data;
+  struct ArrayItem
+  {
+    T *data;
   };
-
 private:
   inline int64_t get_total_(const uint64_t consumer, const uint64_t producer) const;
   inline int64_t get_free_(const uint64_t consumer, const uint64_t producer) const;
-
 private:
   bool is_inited_;
   int64_t max_num_;
-  ArrayItem* array_;
-  ObIAllocator* allocator_;
+  ArrayItem *array_;
+  ObIAllocator *allocator_;
   uint64_t consumer_ CACHE_ALIGNED;
   uint64_t producer_ CACHE_ALIGNED;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFixedQueue);
 };
 
 template <typename T>
-ObFixedQueue<T>::ObFixedQueue()
-    : is_inited_(false), max_num_(0), array_(NULL), allocator_(NULL), consumer_(0), producer_(0)
-{}
+ObFixedQueue<T>::ObFixedQueue() : is_inited_(false),
+                                  max_num_(0),
+                                  array_(NULL),
+                                  allocator_(NULL),
+                                  consumer_(0),
+                                  producer_(0)
+{
+}
 
 template <typename T>
 ObFixedQueue<T>::~ObFixedQueue()
@@ -80,16 +82,23 @@ ObFixedQueue<T>::~ObFixedQueue()
 }
 
 template <typename T>
-int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator* allocator, const lib::ObLabel& label)
+int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObLabel &label)
 {
-  int ret = common::OB_SUCCESS;
   lib::ObMemAttr attr;
   attr.label_ = label;
+  return init(max_num, allocator, attr);
+}
+
+template <typename T>
+int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObMemAttr &attr)
+{
+  int ret = common::OB_SUCCESS;
   if (NULL == allocator || 0 >= max_num) {
     ret = common::OB_INVALID_ARGUMENT;
   } else if (is_inited_) {
     ret = common::OB_INIT_TWICE;
-  } else if (NULL == (array_ = static_cast<ArrayItem*>(allocator->alloc(sizeof(ArrayItem) * max_num, attr)))) {
+  } else if (NULL == (array_ = static_cast<ArrayItem *>(allocator->alloc(
+                                                            sizeof(ArrayItem) * max_num, attr)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
     memset(array_, 0, sizeof(ArrayItem) * max_num);
@@ -103,7 +112,7 @@ int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator* allocator, const 
 }
 
 template <typename T>
-int ObFixedQueue<T>::init(const int64_t max_num, char* buf)
+int ObFixedQueue<T>::init(const int64_t max_num, char *buf)
 {
   int ret = common::OB_SUCCESS;
   if (NULL == buf || 0 >= max_num) {
@@ -111,7 +120,7 @@ int ObFixedQueue<T>::init(const int64_t max_num, char* buf)
   } else if (is_inited_) {
     ret = common::OB_INIT_TWICE;
   } else {
-    array_ = reinterpret_cast<ArrayItem*>(buf);
+    array_ = reinterpret_cast<ArrayItem *>(buf);
     memset(array_, 0, sizeof(ArrayItem) * max_num);
     max_num_ = max_num;
     allocator_ = NULL;
@@ -170,7 +179,7 @@ inline int64_t ObFixedQueue<T>::get_free_(const uint64_t consumer, const uint64_
 }
 
 template <typename T>
-int ObFixedQueue<T>::push(T* ptr)
+int ObFixedQueue<T>::push(T *ptr)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -181,12 +190,12 @@ int ObFixedQueue<T>::push(T* ptr)
     uint64_t push = ATOMIC_LOAD(&producer_);
     uint64_t push_limit = ATOMIC_LOAD(&consumer_) + max_num_;
     uint64_t old_push = 0;
-    while (((old_push = push) < push_limit || push < (push_limit = ATOMIC_LOAD(&consumer_) + max_num_)) &&
-           old_push != (push = ATOMIC_CAS(&producer_, old_push, old_push + 1))) {
+    while (((old_push = push) < push_limit || push < (push_limit = ATOMIC_LOAD(&consumer_) + max_num_))
+           && old_push != (push = ATOMIC_CAS(&producer_, old_push, old_push + 1))) {
       PAUSE();
     }
     if (push < push_limit) {
-      T** pdata = &array_[push % max_num_].data;
+      T **pdata = &array_[push % max_num_].data;
       while (NULL != ATOMIC_CAS(pdata, NULL, ptr)) {
         PAUSE();
       }
@@ -198,7 +207,7 @@ int ObFixedQueue<T>::push(T* ptr)
 }
 
 template <typename T>
-int ObFixedQueue<T>::pop(T*& ptr)
+int ObFixedQueue<T>::pop(T *&ptr)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -207,13 +216,13 @@ int ObFixedQueue<T>::pop(T*& ptr)
     uint64_t pop = ATOMIC_LOAD(&consumer_);
     uint64_t pop_limit = ATOMIC_LOAD(&producer_);
     uint64_t old_pop = 0;
-    while (((old_pop = pop) < pop_limit || pop < (pop_limit = ATOMIC_LOAD(&producer_))) &&
-           old_pop != (pop = ATOMIC_CAS(&consumer_, old_pop, old_pop + 1))) {
+    while (((old_pop = pop) < pop_limit || pop < (pop_limit = ATOMIC_LOAD(&producer_)))
+           && old_pop != (pop = ATOMIC_CAS(&consumer_, old_pop, old_pop + 1))) {
       PAUSE();
     }
     if (pop < pop_limit) {
-      T** pdata = &array_[(pop % max_num_)].data;
-      while (NULL == (ptr = static_cast<T*>(ATOMIC_SET(pdata, NULL)))) {
+      T **pdata = &array_[(pop % max_num_)].data;
+      while (NULL == (ptr = static_cast<T *>(ATOMIC_SET(pdata, NULL)))) {
         PAUSE();
       }
     } else {
@@ -222,6 +231,26 @@ int ObFixedQueue<T>::pop(T*& ptr)
   }
   return ret;
 }
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_COMMON_FIXED_QUEUE_
+
+//not thread safe
+template <typename T>
+int ObFixedQueue<T>::head_unsafe(T *&ptr)
+{
+  int ret = common::OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = common::OB_NOT_INIT;
+  } else {
+    uint64_t head = ATOMIC_LOAD(&consumer_);
+    uint64_t head_limit = ATOMIC_LOAD(&producer_);
+
+    if (head < head_limit) {
+      ptr = array_[(head % max_num_)].data;
+    } else {
+      ret = common::OB_ENTRY_NOT_EXIST;
+    }
+  }
+  return ret;
+}
+} // namespace common
+} // namespace oceanbase
+#endif //OCEANBASE_COMMON_FIXED_QUEUE_

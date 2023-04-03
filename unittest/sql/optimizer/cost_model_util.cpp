@@ -23,7 +23,7 @@
 #include "sql/engine/basic/ob_material.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "lib/time/ob_time_utility.h"
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "sql/engine/join/ob_nested_loop_join.h"
 #include "sql/engine/join/ob_merge_join.h"
 #include "sql/engine/join/ob_hash_join.h"
@@ -45,7 +45,7 @@ using namespace test;
 
 char run_file_name[] = "sort.run";
 
-ObArray<char*> schema_file_names;
+ObArray<char *> schema_file_names;
 ObArray<int64_t> table_sizes;
 ObArray<int64_t> projector_counts;
 ObArray<int64_t> seed_mins;
@@ -57,7 +57,7 @@ ObArray<int64_t> order_columns;
 int64_t limit_count = -1;
 bool use_random = false;
 
-char* op_type = NULL;
+char *op_type = NULL;
 bool print_output = false;
 int64_t sort_column_count = 1;
 int64_t equal_cond_count = 1;
@@ -75,8 +75,7 @@ TestSqlUtils test_util;
 #define FIRST_TABLE_ID 1099511677877
 #define SECOND_TABLE_ID 1099511677878
 
-int setup_env()
-{
+int setup_env() {
   int ret = OB_SUCCESS;
   if (OB_FAIL(oceanbase::sql::init_sql_factories())) {
     SQL_OPT_LOG(ERROR, "failed to init sql factories");
@@ -89,58 +88,56 @@ int setup_env()
   return ret;
 }
 
-void print_obj(const ObObj& obj)
-{
+
+void print_obj(const ObObj &obj) {
   if (obj.get_type_class() == ObIntTC) {
-    cout << obj.get_int() << " | ";
+    cout << obj.get_int() <<" | ";
   } else if (obj.get_type_class() == ObStringTC) {
     int64_t len = obj.get_string().length();
     char buf[len + 1];
     memset(buf, 0, len + 1);
     obj.get_string().to_string(buf, len + 1);
-    cout << buf << " | ";
+    cout << buf <<" | ";
   } else if (obj.get_type_class() == ObNumberTC) {
-    cout << obj.get_number().format() << " | ";
+    cout << obj.get_number().format() <<" | ";
   } else if (obj.get_type_class() == ObDoubleTC) {
-    cout << obj.get_double() << " | ";
+    cout << obj.get_double() <<" | ";
   } else if (obj.get_type_class() == ObUIntTC) {
-    cout << obj.get_uint64() << " | ";
+    cout << obj.get_uint64() <<" | ";
   } else {
-    cout << obj.get_int() << " | ";
+    cout << obj.get_int() <<" | ";
   }
 }
 
-// extern int64_t equal_cond_eval_count;
-// extern int64_t equal_cond_eval_time;
-// extern int64_t other_cond_eval_count;
-// extern int64_t other_cond_eval_time;
-// extern int64_t right_cache_push_count;
-// extern int64_t right_cache_acc_count;
-// extern int64_t match_group_count;
+
+//extern int64_t equal_cond_eval_count;
+//extern int64_t equal_cond_eval_time;
+//extern int64_t other_cond_eval_count;
+//extern int64_t other_cond_eval_time;
+//extern int64_t right_cache_push_count;
+//extern int64_t right_cache_acc_count;
+//extern int64_t match_group_count;
 //
-// extern int64_t equal_cond_pass_count;
-// extern int64_t equal_cond_pass_time;
-// extern int64_t equal_row_count;
-// extern int64_t no_matched_right;
-// extern int64_t no_matched_left;
-// extern int64_t left_rows;
-int join_test(int64_t type)
-{
+//extern int64_t equal_cond_pass_count;
+//extern int64_t equal_cond_pass_time;
+//extern int64_t equal_row_count;
+//extern int64_t no_matched_right;
+//extern int64_t no_matched_left;
+//extern int64_t left_rows;
+int join_test(int64_t type) {
 
   int ret = OB_SUCCESS;
   ObMalloc buf;
   ObStdinIter gens[2](buf);
-  // ObStdinIter *gens = static_cast<ObStdinIter *>(buf.alloc(sizeof(ObStdinIter) * 2));
+  //ObStdinIter *gens = static_cast<ObStdinIter *>(buf.alloc(sizeof(ObStdinIter) * 2));
   ObExprOperatorFactory factory(buf);
-  const ObTableSchema* schemas[2] = {NULL};
+  const ObTableSchema *schemas[2] = {NULL};
 
-  // uint64_t tenant_table_id = combine_id(1, 3101);
   if (OB_FAIL(test_util.get_schema_guard().get_table_schema(FIRST_TABLE_ID, schemas[0]))) {
     SQL_OPT_LOG(WARN, "failed to get table schema");
   } else if (OB_ISNULL(schemas[0])) {
     ret = OB_ERR_TABLE_EXIST;
   } else {
-    // tenant_table_id = combine_id(1, 3102);
     if (OB_FAIL(test_util.get_schema_guard().get_table_schema(SECOND_TABLE_ID, schemas[1]))) {
       SQL_OPT_LOG(WARN, "failed to get table schema");
     } else if (OB_ISNULL(schemas[1])) {
@@ -184,25 +181,25 @@ int join_test(int64_t type)
         }
       }
     }
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000 * 1000 * 1000);
+    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000*1000*1000);
 
     ObPhysicalPlan plan;
     plan.set_stmt_type(stmt::T_SELECT, false);
 
-    int32_t* left_projector = NULL;
+    int32_t *left_projector = NULL;
     int64_t left_projector_count = 0;
-    int32_t* right_projector = NULL;
+    int32_t *right_projector = NULL;
     int64_t right_projector_count = 0;
     if (projector_counts.count() >= 1) {
       left_projector_count = projector_counts.at(0);
-      left_projector = static_cast<int32_t*>(buf.alloc(left_projector_count * sizeof(int32_t)));
+      left_projector = static_cast<int32_t *>(buf.alloc(left_projector_count * sizeof(int32_t)));
       for (int32_t i = 0; i < left_projector_count; ++i) {
         left_projector[i] = i;
       }
     }
     if (projector_counts.count() >= 2) {
       right_projector_count = projector_counts.at(1);
-      right_projector = static_cast<int32_t*>(buf.alloc(right_projector_count * sizeof(int32_t)));
+      right_projector = static_cast<int32_t *>(buf.alloc(right_projector_count * sizeof(int32_t)));
       for (int32_t i = 0; i < right_projector_count; ++i) {
         right_projector[i] = i;
       }
@@ -225,9 +222,10 @@ int join_test(int64_t type)
     if (right_projector_count > 0)
       input_right.set_projector(right_projector, right_projector_count);
 
-    ObSqlExpression* equal_conds[equal_cond_count];
+
+    ObSqlExpression *equal_conds[equal_cond_count];
     ObPostExprItem expr_item;
-    ObExprOperator* op;
+    ObExprOperator *op;
     factory.alloc(T_OP_EQ, op);
     op->set_real_param_num(2);
     for (int64_t i = 0; i < equal_cond_count; ++i) {
@@ -242,56 +240,57 @@ int join_test(int64_t type)
       equal_conds[i]->add_expr_item(item_col_right);
       equal_conds[i]->add_expr_item(item_op);
 
-      // cout << "EQ COND "<< i << endl;
+     // cout << "EQ COND "<< i << endl;
     }
 
-    ObExprOperator* leop;
-    // ObExprOperator *addop;
+    ObExprOperator *leop;
+   // ObExprOperator *addop;
     factory.alloc(T_OP_LE, leop);
-    // factory.alloc(T_OP_ADD, addop);
-    ObSqlExpression* other_conds[other_cond_count];
+   // factory.alloc(T_OP_ADD, addop);
+    ObSqlExpression *other_conds[other_cond_count];
     int64_t rand_val;
     for (int64_t i = 0; i < other_cond_count; ++i) {
       other_conds[i] = new ObSqlExpression(buf, 3);
       ObPostExprItem item_col_left;
-      // ObPostExprItem item_col_right;
+     // ObPostExprItem item_col_right;
       ObPostExprItem item_op_lt;
       ObPostExprItem item_op_int;
-      // ObPostExprItem item_op_add;
+     // ObPostExprItem item_op_add;
 
       item_op_lt.assign(leop);
       item_col_left.set_column(i);
-      // item_col_right.set_column(i + schemas[1]->get_column_count());
-      // rand_val = table_sizes.at(0) > table_sizes.at(1) ? table_sizes.at(0) : table_sizes.at(1);
-      // rand_val = (int64_t)((double)(rand_val * 5) * ((double)rand() / (double)RAND_MAX));
+      //item_col_right.set_column(i + schemas[1]->get_column_count());
+      //rand_val = table_sizes.at(0) > table_sizes.at(1) ? table_sizes.at(0) : table_sizes.at(1);
+      //rand_val = (int64_t)((double)(rand_val * 5) * ((double)rand() / (double)RAND_MAX));
       rand_val = rand() % (table_sizes.at(0) > table_sizes.at(1) ? table_sizes.at(0) : table_sizes.at(1));
       item_op_int.set_int(rand_val);
-      // item_op_add.assign(addop);
+      //item_op_add.assign(addop);
 
       other_conds[i]->add_expr_item(item_col_left);
-      // other_conds[i]->add_expr_item(item_col_right);
-      // other_conds[i]->add_expr_item(item_op_add);
+     // other_conds[i]->add_expr_item(item_col_right);
+     // other_conds[i]->add_expr_item(item_op_add);
       other_conds[i]->add_expr_item(item_op_int);
       other_conds[i]->add_expr_item(item_op_lt);
-      // cout << "OTHER COND "<< i << endl;
+     // cout << "OTHER COND "<< i << endl;
     }
 
-    ObJoin* pjoin = NULL;
+
+    ObJoin *pjoin = NULL;
     if (0 == type) {
-      pjoin = static_cast<ObNestedLoopJoin*>(buf.alloc(sizeof(ObNestedLoopJoin)));
+      pjoin = static_cast<ObNestedLoopJoin *>(buf.alloc(sizeof(ObNestedLoopJoin)));
       new (pjoin) ObNestedLoopJoin(buf);
     } else if (1 == type) {
-      pjoin = static_cast<ObMergeJoin*>(buf.alloc(sizeof(ObMergeJoin)));
+      pjoin = static_cast<ObMergeJoin *>(buf.alloc(sizeof(ObMergeJoin)));
       new (pjoin) ObMergeJoin(buf);
     } else if (2 == type) {
-      pjoin = static_cast<ObHashJoin*>(buf.alloc(sizeof(ObHashJoin)));
+      pjoin = static_cast<ObHashJoin *>(buf.alloc(sizeof(ObHashJoin)));
       new (pjoin) ObHashJoin(buf);
     }
 
     pjoin->set_phy_plan(&plan);
     pjoin->set_id(0);
-    pjoin->set_column_count((left_projector_count > 0 ? left_projector_count : input_left.get_column_count()) +
-                            (right_projector_count > 0 ? right_projector_count : input_right.get_column_count()));
+    pjoin->set_column_count((left_projector_count > 0 ? left_projector_count : input_left.get_column_count())
+                        + (right_projector_count > 0 ? right_projector_count : input_right.get_column_count()));
     input_left.set_rows(table_sizes.at(0));
     input_right.set_rows(table_sizes.at(1));
     pjoin->set_child(0, input_left);
@@ -308,7 +307,7 @@ int join_test(int64_t type)
 
     ObExecContext exec_ctx;
     ObSQLSessionInfo session;
-    // exec_ctx.init(3);
+   // exec_ctx.init(3);
     exec_ctx.set_my_session(&session);
     int64_t row_count = 0;
     int64_t join_begin = 0;
@@ -322,16 +321,15 @@ int join_test(int64_t type)
       SQL_OPT_LOG(WARN, "failed to open join");
     } else {
       join_begin = ObTimeUtility::current_time();
-      //      no_matched_right = 0;
-      //      no_matched_left = 0;
-      //      equal_row_count = 0;
-      const ObNewRow* row = NULL;
+//      no_matched_right = 0;
+//      no_matched_left = 0;
+//      equal_row_count = 0;
+      const ObNewRow *row = NULL;
       while (OB_SUCC(pjoin->get_next_row(exec_ctx, row))) {
         if (print_output) {
-          cout << "Result Row " << row_count << " : "
-               << "| ";
+          cout << "Result Row "<< row_count <<" : " << "| ";
           for (int64_t i = 0; i < row->get_count(); i++) {
-            cout << row->get_cell(i).get_int() << " | ";
+            cout << row->get_cell(i).get_int() <<" | ";
           }
           cout << endl;
         }
@@ -343,45 +341,41 @@ int join_test(int64_t type)
     }
     int64_t join_end = ObTimeUtility::current_time();
 
-    // 2    cout << "row_count : " << row_count << endl
-    // 3        << "total_time : " << join_end - join_begin << endl
-    // 4        << "join_time : " <<join_end - join_begin  - input_left.time_ - input_right.time_ <<endl
-    // 5        << "join_time except conds : " <<join_end - join_begin  - input_left.time_ - input_right.time_ -
-    // equal_cond_eval_time - other_cond_eval_time<<endl 6        << "equal_eval : " << equal_cond_eval_count << endl
-    //  7       << "equal_pass : " << equal_cond_pass_count << endl
-    //  8       << "equal_pass_time : " <<  equal_cond_pass_time << endl
-    //  9       << "equal_time : " << equal_cond_eval_time << endl
-    //   10      << "other_eval : " << other_cond_eval_count << endl
-    //     11    << "other_time : " << other_cond_eval_time << endl
-    //       12  << "right_cache_put : " << right_cache_push_count << endl
-    //        13 << "right_cache_acc : " << right_cache_acc_count << endl
-    //        14 << "match_group_count : " << match_group_count <<endl;
+//2    cout << "row_count : " << row_count << endl
+// 3        << "total_time : " << join_end - join_begin << endl
+// 4        << "join_time : " <<join_end - join_begin  - input_left.time_ - input_right.time_ <<endl
+// 5        << "join_time except conds : " <<join_end - join_begin  - input_left.time_ - input_right.time_ - equal_cond_eval_time - other_cond_eval_time<<endl
+// 6        << "equal_eval : " << equal_cond_eval_count << endl
+//  7       << "equal_pass : " << equal_cond_pass_count << endl
+//  8       << "equal_pass_time : " <<  equal_cond_pass_time << endl
+//  9       << "equal_time : " << equal_cond_eval_time << endl
+//   10      << "other_eval : " << other_cond_eval_count << endl
+//     11    << "other_time : " << other_cond_eval_time << endl
+//       12  << "right_cache_put : " << right_cache_push_count << endl
+//        13 << "right_cache_acc : " << right_cache_acc_count << endl
+//        14 << "match_group_count : " << match_group_count <<endl;
 
-    //
-    //    cout << row_count << ","
-    //        << join_end - join_begin  - input_left.time_ - input_right.time_ - equal_cond_eval_time -
-    //        other_cond_eval_time<<","
-    //        << equal_cond_eval_count << ","
-    //        << other_cond_eval_count << ","
-    //        << right_cache_push_count << ","
-    //        << right_cache_acc_count << ","
-    //        << match_group_count << endl;
-    cout << row_count
-         << ","
-         // << no_matched_right << ", "<< no_matched_left << ", "
-         << join_end - join_begin - input_left.time_ - input_right.time_ << endl;
+//
+//    cout << row_count << ","
+//        << join_end - join_begin  - input_left.time_ - input_right.time_ - equal_cond_eval_time - other_cond_eval_time<<","
+//        << equal_cond_eval_count << ","
+//        << other_cond_eval_count << ","
+//        << right_cache_push_count << ","
+//        << right_cache_acc_count << ","
+//        << match_group_count << endl;
+    cout << row_count << ","
+       // << no_matched_right << ", "<< no_matched_left << ", "
+        << join_end - join_begin  - input_left.time_ - input_right.time_ << endl;
   }
   return ret;
 }
 
-int scan_op(ObPhyOperator& op, ObExecContext& exec_ctx, bool print, int64_t& row_count)
-{
+int scan_op(ObPhyOperator &op, ObExecContext &exec_ctx, bool print, int64_t& row_count) {
   int ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   while (OB_SUCC(op.get_next_row(exec_ctx, row))) {
     if (print) {
-      cout << "Result Row " << row_count << " : "
-           << "| ";
+      cout << "Result Row "<< row_count <<" : " << "| ";
       for (int64_t i = 0; i < row->get_count(); i++) {
         print_obj(row->get_cell(i));
       }
@@ -395,13 +389,11 @@ int scan_op(ObPhyOperator& op, ObExecContext& exec_ctx, bool print, int64_t& row
   return ret;
 }
 
-int scan_sort(ObBaseSort& op, ObNewRow& row, bool print, int64_t& row_count)
-{
+int scan_sort(ObBaseSort &op, ObNewRow &row, bool print, int64_t& row_count) {
   int ret = OB_SUCCESS;
   while (OB_SUCC(op.get_next_row(row))) {
     if (print) {
-      cout << "Result Row " << row_count << " : "
-           << "| ";
+      cout << "Result Row "<< row_count <<" : " << "| ";
       for (int64_t i = 0; i < row.get_count(); i++) {
         print_obj(row.get_cell(i));
       }
@@ -415,16 +407,13 @@ int scan_sort(ObBaseSort& op, ObNewRow& row, bool print, int64_t& row_count)
   return ret;
 }
 
-int group_by_test(int64_t type, int64_t& rc)
-{
+int group_by_test(int64_t type, int64_t &rc) {
 
   int ret = OB_SUCCESS;
   ObMalloc buf;
   rc = 0;
   ObStdinIter gen(buf);
-  // uint64_t tenant_table_id = combine_id(1, 3101);
-  // const ObTableSchema *schema = test_util.get_schema_manager()->get_table_schema(FIRST_TABLE_ID);
-  const ObTableSchema* schema = NULL;
+  const ObTableSchema *schema = NULL;
   if (OB_FAIL(test_util.get_schema_guard().get_table_schema(FIRST_TABLE_ID, schema))) {
     SQL_OPT_LOG(WARN, "fail to get_table_schema");
   } else if (OB_ISNULL(schema)) {
@@ -454,17 +443,19 @@ int group_by_test(int64_t type, int64_t& rc)
     }
   }
 
+
+
   if (OB_SUCC(ret)) {
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000 * 1000 * 1000);
+    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000*1000*1000);
 
     ObPhysicalPlan plan;
     plan.set_stmt_type(stmt::T_SELECT, false);
 
-    int32_t* projector = NULL;
+    int32_t *projector = NULL;
     int64_t projector_count = 0;
     if (projector_counts.count() >= 1) {
       projector_count = projector_counts.at(0);
-      projector = static_cast<int32_t*>(buf.alloc(projector_count * sizeof(int32_t)));
+      projector = static_cast<int32_t *>(buf.alloc(projector_count * sizeof(int32_t)));
       for (int32_t i = 0; i < projector_count; ++i) {
         projector[i] = i;
       }
@@ -490,7 +481,8 @@ int group_by_test(int64_t type, int64_t& rc)
     material.set_child(0, input);
     material.set_phy_plan(&plan);
 
-    ObGroupBy* grp = NULL;
+
+    ObGroupBy *grp = NULL;
     ObMergeGroupBy merge_groupby(plan.get_allocator());
     ObHashGroupBy hash_groupby(plan.get_allocator());
     ObScalarAggregate scalar_groupby(plan.get_allocator());
@@ -505,18 +497,18 @@ int group_by_test(int64_t type, int64_t& rc)
 
     if (OB_SUCC(ret)) {
       if (0 == type || 1 == type) {
-        if (OB_FAIL(grp->init(other_cond_count))) {
+        if(OB_FAIL(grp->init(other_cond_count))) {
           SQL_OPT_LOG(WARN, "fail to init arr");
         }
       }
     }
-    if (OB_SUCC(ret)) {
+     if (OB_SUCC(ret)) {
       grp->set_id(0);
       grp->set_phy_plan(&plan);
       grp->set_column_count((projector_count > 0 ? projector_count : gen.new_row_.count_) + equal_cond_count);
       grp->set_child(0, material);
 
-      ObAggregateExpression* aggr_expr = NULL;
+      ObAggregateExpression *aggr_expr = NULL;
       ObPostExprItem expr_item;
       for (int64_t i = 0; OB_SUCC(ret) && i < equal_cond_count; ++i) {
         if (OB_FAIL(ObSqlExpressionUtil::make_sql_expr(&plan, aggr_expr))) {
@@ -550,6 +542,7 @@ int group_by_test(int64_t type, int64_t& rc)
         }
       }
 
+
       ObExecContext exec_ctx;
       ObSQLSessionInfo session;
 
@@ -561,6 +554,7 @@ int group_by_test(int64_t type, int64_t& rc)
           exec_ctx.set_my_session(&session);
         }
       }
+
 
       ObObj group_concat_max_len;
       group_concat_max_len.set_uint64(123456789);
@@ -575,7 +569,7 @@ int group_by_test(int64_t type, int64_t& rc)
 
       if (OB_SUCC(ret)) {
         int64_t material_begin = 0, material_end = 0, grp_begin = 0, grp_end = 0;
-        // warm up
+        //warm up
         if (OB_FAIL(grp->open(exec_ctx))) {
           SQL_OPT_LOG(WARN, "failed to open group by");
         } else {
@@ -586,8 +580,8 @@ int group_by_test(int64_t type, int64_t& rc)
         }
 
         if (OB_SUCC(ret)) {
-          // get material scan time
-          material_begin = ObTimeUtility::current_time();
+          //get material scan time
+          material_begin  = ObTimeUtility::current_time();
           if (OB_FAIL(material.rescan(exec_ctx))) {
             SQL_OPT_LOG(WARN, "failed to rescan material");
           } else {
@@ -596,12 +590,12 @@ int group_by_test(int64_t type, int64_t& rc)
               SQL_OPT_LOG(WARN, "failed to scan material");
             }
           }
-          material_end = ObTimeUtility::current_time();
+          material_end  = ObTimeUtility::current_time();
         }
-        // get grp scan time
+        //get grp scan time
 
         if (OB_SUCC(ret)) {
-          grp_begin = ObTimeUtility::current_time();
+          grp_begin  = ObTimeUtility::current_time();
           if (OB_FAIL(grp->rescan(exec_ctx))) {
             SQL_OPT_LOG(WARN, "failed to open group by");
           } else {
@@ -610,8 +604,9 @@ int group_by_test(int64_t type, int64_t& rc)
               SQL_OPT_LOG(WARN, "failed to scan group by");
             }
             row_count -= 1;
-            grp_end = ObTimeUtility::current_time();
-            cout << row_count << "," << grp_end - grp_begin - (material_end - material_begin) << endl;
+            grp_end  = ObTimeUtility::current_time();
+            cout << row_count << ","
+                << grp_end - grp_begin  - (material_end - material_begin) << endl;
             rc = row_count;
           }
         }
@@ -622,7 +617,7 @@ int group_by_test(int64_t type, int64_t& rc)
 }
 
 //
-// int material_test() {
+//int material_test() {
 //  int ret = OB_SUCCESS;
 //  ObMalloc buf;
 //  ObStdinIter *gen = static_cast<ObStdinIter *>(buf.alloc(sizeof(ObStdinIter)));
@@ -735,27 +730,24 @@ int group_by_test(int64_t type, int64_t& rc)
 //  return ret;
 //}
 
-int sort_test(int64_t& rc)
-{
+int sort_test(int64_t &rc) {
 
   int ret = OB_SUCCESS;
 
   rc = 0;
   ObStdinIter gen(THIS_WORKER.get_allocator());
-  // uint64_t tenant_table_id = combine_id(1, 3101);
-  // const ObTableSchema *schema = test_util.get_schema_manager()->get_table_schema(FIRST_TABLE_ID);
-  const ObTableSchema* schema = NULL;
+  const ObTableSchema *schema = NULL;
   if (OB_FAIL(test_util.get_schema_guard().get_table_schema(FIRST_TABLE_ID, schema))) {
     SQL_OPT_LOG(WARN, "fail to get_table_schema");
   } else if (OB_ISNULL(schema)) {
     ret = OB_ERR_TABLE_EXIST;
   }
   if (OB_SUCC(ret)) {
-    //    if (use_random) {
-    //      for (int64_t n = 0; n < schema->get_column_count(); ++n) {
-    //        gen.set_random_column(n);
-    //      }
-    //    }
+//    if (use_random) {
+//      for (int64_t n = 0; n < schema->get_column_count(); ++n) {
+//        gen.set_random_column(n);
+//      }
+//    }
     gen.set_pure_random(true);
     gen.set_eof_behavior(ObStdinIter::RANDOM);
     if (seed_mins.count() > 0) {
@@ -780,17 +772,20 @@ int sort_test(int64_t& rc)
     }
   }
 
+
+
   if (OB_SUCC(ret)) {
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000 * 1000 * 1000);
+    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000*1000*1000);
 
     ObPhysicalPlan plan(THIS_WORKER.get_allocator());
     plan.set_stmt_type(stmt::T_SELECT, false);
 
-    int32_t* projector = NULL;
+
+    int32_t *projector = NULL;
     int64_t projector_count = 0;
     if (projector_counts.count() >= 1) {
       projector_count = projector_counts.at(0);
-      projector = static_cast<int32_t*>(THIS_WORKER.get_allocator().alloc(projector_count * sizeof(int32_t)));
+      projector = static_cast<int32_t *>(THIS_WORKER.get_allocator().alloc(projector_count * sizeof(int32_t)));
       for (int32_t i = 0; i < projector_count; ++i) {
         projector[i] = i;
       }
@@ -816,9 +811,10 @@ int sort_test(int64_t& rc)
     material.set_child(0, input);
     material.set_phy_plan(&plan);
 
+
     ObSort sort(plan.get_allocator());
     sort.set_id(0);
-    // sort.set_mem_limit(10L * 1024 * 1024 * 1024); //ensure in-mem sort
+    //sort.set_mem_limit(10L * 1024 * 1024 * 1024); //ensure in-mem sort
     sort.set_run_filename(ObString::make_string(run_file_name));
     if (projector_counts.count() != 0) {
       sort.set_column_count(projector_counts.at(0));
@@ -828,6 +824,7 @@ int sort_test(int64_t& rc)
 
     sort.set_child(0, material);
     sort.set_phy_plan(&plan);
+
 
     if (order_columns.count() > 0) {
       sort.init_sort_columns(order_columns.count());
@@ -857,6 +854,7 @@ int sort_test(int64_t& rc)
       sort.set_topn_expr(&limit_expr);
     }
 
+
     if (OB_SUCC(ret)) {
 
       ObExecContext exec_ctx;
@@ -870,6 +868,7 @@ int sort_test(int64_t& rc)
         }
       }
 
+
       ObObj group_concat_max_len;
       group_concat_max_len.set_uint64(123456789);
 
@@ -882,9 +881,8 @@ int sort_test(int64_t& rc)
       }
 
       if (OB_SUCC(ret)) {
-        int64_t material_begin = 0, material_end = 0, add_begin = 0, add_end = 0, sort_begin = 0, sort_end = 0,
-                get_end = 0;
-        // warm up
+        int64_t material_begin = 0, material_end = 0, add_begin = 0, add_end = 0, sort_begin = 0, sort_end = 0, get_end = 0;
+        //warm up
 
         if (OB_FAIL(sort.open(exec_ctx))) {
           SQL_OPT_LOG(WARN, "failed to open group by");
@@ -896,10 +894,10 @@ int sort_test(int64_t& rc)
         }
 
         if (OB_SUCC(ret)) {
-          // get material scan time
+          //get material scan time
           if (print_output)
             cout << "--- raw data ---" << endl;
-          material_begin = ObTimeUtility::current_time();
+          material_begin  = ObTimeUtility::current_time();
           if (OB_FAIL(material.rescan(exec_ctx))) {
             SQL_OPT_LOG(WARN, "failed to rescan material");
           } else {
@@ -908,9 +906,9 @@ int sort_test(int64_t& rc)
               SQL_OPT_LOG(WARN, "failed to scan material");
             }
           }
-          material_end = ObTimeUtility::current_time();
+          material_end  = ObTimeUtility::current_time();
         }
-        // get grp scan time
+        //get grp scan time
 
         if (OB_SUCC(ret)) {
           usleep(static_cast<int>(time_to_sleep));
@@ -926,17 +924,21 @@ int sort_test(int64_t& rc)
                 SQL_OPT_LOG(WARN, "failed to scan group by");
               } else {
                 get_end = ObTimeUtility::current_time();
-                row_count--;
-                cout << row_count << "," << get_end - add_begin - (material_end - material_begin) << endl;
+                row_count --;
+                cout << row_count << ","
+                     << get_end - add_begin  - (material_end - material_begin) << endl;
               }
 
             } else {
 
-              ObSort::ObSortCtx* sort_ctx = NULL;
+
+              ObSort::ObSortCtx *sort_ctx = NULL;
               sort_ctx = GET_PHY_OPERATOR_CTX(ObSort::ObSortCtx, exec_ctx, 0);
               sort_ctx->is_first_ = false;
 
-              const ObNewRow* row = NULL;
+
+              const ObNewRow *row = NULL;
+
 
               sort_ctx->base_sort_.set_sort_columns(sort.get_sort_columns(), 0);
 
@@ -950,7 +952,7 @@ int sort_test(int64_t& rc)
                 } else if (OB_FAIL(sort_ctx->sort_iter_->add_row(*row, need_sort))) {
                   SQL_OPT_LOG(WARN, "failed to add row", K(ret));
                 }
-              }  // end while
+              } // end while
               if (OB_ITER_END == ret) {
                 ret = OB_SUCCESS;
               }
@@ -959,11 +961,13 @@ int sort_test(int64_t& rc)
               int64_t row_count = 1;
 
               if (4 != info_type && OB_SUCC(ret)) {
-                sort_begin = ObTimeUtility::current_time();
+                sort_begin  = ObTimeUtility::current_time();
                 if (OB_FAIL(sort_ctx->base_sort_.sort_rows())) {
                   SQL_OPT_LOG(WARN, "failed to add row", K(ret));
                 } else {
-                  sort_end = ObTimeUtility::current_time();
+                  sort_end  = ObTimeUtility::current_time();
+
+
 
                   if (0 == info_type || 2 == info_type) {
                     if (print_output)
@@ -971,7 +975,7 @@ int sort_test(int64_t& rc)
                     if (OB_FAIL(scan_sort(sort_ctx->base_sort_, sort_ctx->get_cur_row(), print_output, row_count))) {
                       SQL_OPT_LOG(WARN, "failed to scan sort");
                     }
-                    get_end = ObTimeUtility::current_time();
+                    get_end  = ObTimeUtility::current_time();
                   }
                 }
               }
@@ -979,14 +983,17 @@ int sort_test(int64_t& rc)
               if (OB_SUCC(ret)) {
                 row_count -= 1;
                 if (0 == info_type) {
-                  cout << row_count << "," << get_end - add_begin - (material_end - material_begin) << endl;
+                  cout << row_count << ","
+                      << get_end - add_begin  - (material_end - material_begin) << endl;
                 } else if (1 == info_type) {
-                  cout << row_count << "," << sort_end - sort_begin << endl;
+                  cout << row_count << ","
+                      << sort_end - sort_begin << endl;
                 } else if (2 == info_type) {
-                  cout << row_count << "," << get_end - sort_end << endl;
+                  cout << row_count << ","
+                      << get_end - sort_end << endl;
                 } else if (3 == info_type) {
                   cout << row_count << "," << sort.get_column_count() << "," << sort.get_sort_column_size() << ","
-                       << sort_ctx->base_sort_.get_used_mem_size() << endl;
+                      << sort_ctx->base_sort_.get_used_mem_size()  << endl;
                 } else if (4 == info_type) {
                   cout << row_count << "," << add_end - add_begin - (material_end - material_begin) << endl;
                 }
@@ -1002,17 +1009,17 @@ int sort_test(int64_t& rc)
   return ret;
 }
 
-int ob_array_test()
-{
+
+int ob_array_test() {
   int ret = OB_SUCCESS;
 
-  ObArray<void*> arr;
+  ObArray<void *> arr;
   if (table_sizes.count() < 1) {
     ret = OB_INVALID_ARGUMENT;
     SQL_OPT_LOG(WARN, "not enough table_size");
   } else {
     int64_t rc = table_sizes.at(0);
-    void* ptr = static_cast<void*>(0);
+    void *ptr = static_cast<void *>(0);
     int64_t begin = ObTimeUtility::current_time();
     for (int64_t i = 0; OB_SUCC(ret) && i < rc; ++i) {
       if (OB_FAIL(arr.push_back(ptr))) {
@@ -1027,16 +1034,13 @@ int ob_array_test()
   return ret;
 }
 
-int material_test(int64_t& rc)
-{
+int material_test(int64_t &rc) {
 
   int ret = OB_SUCCESS;
 
   rc = 0;
   ObStdinIter gen(THIS_WORKER.get_allocator());
-  // uint64_t tenant_table_id = combine_id(1, 3101);
-  // const ObTableSchema *schema = test_util.get_schema_manager()->get_table_schema(FIRST_TABLE_ID);
-  const ObTableSchema* schema = NULL;
+  const ObTableSchema *schema = NULL;
   if (OB_FAIL(test_util.get_schema_guard().get_table_schema(FIRST_TABLE_ID, schema))) {
     SQL_OPT_LOG(WARN, "fail to get_table_schema");
   } else if (OB_ISNULL(schema)) {
@@ -1071,17 +1075,20 @@ int material_test(int64_t& rc)
     }
   }
 
+
+
   if (OB_SUCC(ret)) {
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000 * 1000 * 1000);
+    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 1000*1000*1000);
 
     ObPhysicalPlan plan(THIS_WORKER.get_allocator());
     plan.set_stmt_type(stmt::T_SELECT, false);
 
-    int32_t* projector = NULL;
+
+    int32_t *projector = NULL;
     int64_t projector_count = 0;
     if (projector_counts.count() >= 1) {
       projector_count = projector_counts.at(0);
-      projector = static_cast<int32_t*>(THIS_WORKER.get_allocator().alloc(projector_count * sizeof(int32_t)));
+      projector = static_cast<int32_t *>(THIS_WORKER.get_allocator().alloc(projector_count * sizeof(int32_t)));
       for (int32_t i = 0; i < projector_count; ++i) {
         projector[i] = i;
       }
@@ -1106,6 +1113,7 @@ int material_test(int64_t& rc)
     material.set_child(0, input);
     material.set_phy_plan(&plan);
 
+
     if (OB_SUCC(ret)) {
 
       ObExecContext exec_ctx;
@@ -1118,6 +1126,7 @@ int material_test(int64_t& rc)
           exec_ctx.set_my_session(&session);
         }
       }
+
 
       ObObj group_concat_max_len;
       group_concat_max_len.set_uint64(123456789);
@@ -1132,7 +1141,7 @@ int material_test(int64_t& rc)
 
       if (OB_SUCC(ret)) {
         int64_t material_begin = 0, material_end = 0, add_begin = 0, add_end = 0, get_end = 0;
-        // warm up
+        //warm up
 
         if (OB_FAIL(material.open(exec_ctx))) {
           SQL_OPT_LOG(WARN, "failed to open group by");
@@ -1144,10 +1153,10 @@ int material_test(int64_t& rc)
         }
 
         if (OB_SUCC(ret)) {
-          // get material scan time
-          //          if (print_output)
-          //            cout << "--- raw data ---" << endl;
-          material_begin = ObTimeUtility::current_time();
+          //get material scan time
+//          if (print_output)
+//            cout << "--- raw data ---" << endl;
+          material_begin  = ObTimeUtility::current_time();
           if (OB_FAIL(material.rescan(exec_ctx))) {
             SQL_OPT_LOG(WARN, "failed to rescan material");
           } else {
@@ -1156,9 +1165,9 @@ int material_test(int64_t& rc)
               SQL_OPT_LOG(WARN, "failed to scan material");
             }
           }
-          material_end = ObTimeUtility::current_time();
+          material_end  = ObTimeUtility::current_time();
         }
-        // get grp scan time
+        //get grp scan time
 
         if (OB_SUCC(ret)) {
           usleep(static_cast<int>(time_to_sleep));
@@ -1166,10 +1175,10 @@ int material_test(int64_t& rc)
             SQL_OPT_LOG(WARN, "failed to rescan source");
           } else {
             ObRowStore store;
-            const ObRowStore::StoredRow* srow = NULL;
-            const ObNewRow* row = NULL;
+            const ObRowStore::StoredRow *srow = NULL;
+            const ObNewRow *row = NULL;
             ObNewRow newrow;
-            ObArray<const ObRowStore::StoredRow*> arr;
+            ObArray<const ObRowStore::StoredRow *> arr;
             ObObj objs[256];
             newrow.cells_ = objs;
             if (projector_counts.count() != 0) {
@@ -1203,8 +1212,7 @@ int material_test(int64_t& rc)
                 ObRowStore::Iterator iter = store.begin();
                 while (OB_SUCC(iter.get_next_row(newrow))) {
                   if (print_output) {
-                    cout << "Result Row " << row_count << " : "
-                         << "| ";
+                    cout << "Result Row "<< row_count <<" : " << "| ";
                     for (int64_t i = 0; i < newrow.get_count(); i++) {
                       print_obj(newrow.get_cell(i));
                     }
@@ -1219,8 +1227,7 @@ int material_test(int64_t& rc)
                     OB_LOG(WARN, "fail to convert compact row to ObRow", K(ret));
                   } else {
                     if (print_output) {
-                      cout << "Result Row " << row_count << " : "
-                           << "| ";
+                      cout << "Result Row "<< row_count <<" : " << "| ";
                       for (int64_t i = 0; i < newrow.get_count(); i++) {
                         print_obj(newrow.get_cell(i));
                       }
@@ -1237,36 +1244,36 @@ int material_test(int64_t& rc)
                 if (0 == info_type) {
                   cout << row_count << "," << get_end - add_begin - (material_end - material_begin) << endl;
                 } else if (1 == info_type) {
-                  cout << row_count << "," << add_end - add_begin - (material_end - material_begin) << endl;
-                } else if (2 == info_type || 3 == info_type || 4 == info_type) {
+                  cout << row_count << "," << add_end - add_begin - (material_end - material_begin) <<  endl;
+                } else if (2 == info_type || 3 == info_type || 4 == info_type){
                   cout << row_count << "," << get_end - add_end << endl;
                 }
               } else {
                 SQL_OPT_LOG(WARN, "failed to scan row store");
               }
             }
+
           }
-          //          else if (OB_FAIL(material_t.inner_close(exec_ctx))) {
-          //            SQL_OPT_LOG(WARN, "failed to close material");
-          //          } else {
-          //            add_begin = ObTimeUtility::current_time();
-          //            if (OB_FAIL(material_t.inner_open(exec_ctx))) {
-          //              SQL_OPT_LOG(WARN, "failed to open material");
-          //            } else {
-          //              add_end = ObTimeUtility::current_time();
-          //              int64_t row_count = 1;
-          //              if (print_output)
-          //                cout << "--- material data ---" << endl;
-          //              if (OB_FAIL(scan_op(material_t, exec_ctx, print_output, row_count))) {
-          //                SQL_OPT_LOG(WARN, "failed to scan group by");
-          //              } else {
-          //                get_end = ObTimeUtility::current_time();
-          //                row_count -= 1;
-          //                cout << row_count << "," << add_end - add_begin - (material_end - material_begin) << "," <<
-          //                get_end - add_end << endl;
-          //              }
-          //            }
-          //          }
+//          else if (OB_FAIL(material_t.inner_close(exec_ctx))) {
+//            SQL_OPT_LOG(WARN, "failed to close material");
+//          } else {
+//            add_begin = ObTimeUtility::current_time();
+//            if (OB_FAIL(material_t.inner_open(exec_ctx))) {
+//              SQL_OPT_LOG(WARN, "failed to open material");
+//            } else {
+//              add_end = ObTimeUtility::current_time();
+//              int64_t row_count = 1;
+//              if (print_output)
+//                cout << "--- material data ---" << endl;
+//              if (OB_FAIL(scan_op(material_t, exec_ctx, print_output, row_count))) {
+//                SQL_OPT_LOG(WARN, "failed to scan group by");
+//              } else {
+//                get_end = ObTimeUtility::current_time();
+//                row_count -= 1;
+//                cout << row_count << "," << add_end - add_begin - (material_end - material_begin) << "," << get_end - add_end << endl;
+//              }
+//            }
+//          }
         }
       }
     }
@@ -1274,25 +1281,29 @@ int material_test(int64_t& rc)
   return ret;
 }
 
+
+
+
+
 void set_rt_and_bind_cpu()
 {
   cpu_set_t cpu_set;
   struct sched_param param;
   CPU_ZERO(&cpu_set);
   CPU_SET(5, &cpu_set);
-  if (sched_setaffinity(static_cast<pid_t>(gettid()), sizeof(cpu_set), &cpu_set) == -1) {
+  if(sched_setaffinity(static_cast<pid_t>(gettid()), sizeof(cpu_set), &cpu_set) == -1) {
     perror("sched_setaffinity() error!\n");
     exit(1);
   }
   param.sched_priority = 99;
-  if (sched_setscheduler(static_cast<pid_t>(gettid()), SCHED_FIFO, &param) == -1) {
+  if(sched_setscheduler(static_cast<pid_t>(gettid()), SCHED_FIFO, &param) == -1){
     perror("sched_setscheduler() error!\n");
     exit(1);
   }
 }
 
-void print_usage(const char* program_name)
-{
+
+void print_usage(const char *program_name) {
   printf("%s\n", program_name);
   printf("cost model benchmark utility, used to collect statistics of performance\n");
   printf("    -h      need help\n");
@@ -1318,8 +1329,7 @@ void print_usage(const char* program_name)
   printf("    -l      common prefix len \n");
 }
 
-TEST(CostModelUtilityFuncCheck, group_by)
-{
+TEST(CostModelUtilityFuncCheck, group_by) {
   int ret = OB_SUCCESS;
   int64_t row_count = 0;
   ret = group_by_test(0, row_count);
@@ -1333,8 +1343,7 @@ TEST(CostModelUtilityFuncCheck, group_by)
   EXPECT_EQ(row_count, 1);
 }
 
-int main(int argc, char** argv)
-{
+int main (int argc, char **argv) {
 
   int ret = 0;
   system("rm -f cost_model_util.log*");
@@ -1342,249 +1351,252 @@ int main(int argc, char** argv)
   OB_LOGGER.set_log_level(OB_LOG_LEVEL_ERROR);
 
   int param = 0;
-  const char* short_opts = "hs:r:c:t:Bp:Oe:Z:X:C:V:o:GL:RKS:WT:i:l:";
-  char* opt_arg_end = NULL;
+  const char *short_opts = "hs:r:c:t:Bp:Oe:Z:X:C:V:o:GL:RKS:WT:i:l:";
+  char *opt_arg_end = NULL;
   bool need_help = false;
   bool need_bind = false;
 
-  while (OB_SUCCESS == ret && -1 != (param = getopt(argc, argv, short_opts))) {
+  while (OB_SUCCESS == ret && -1 != (param = getopt(argc,argv,short_opts))) {
     switch (param) {
-      case 's': {
-        if (NULL == optarg) {
+    case 's': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        schema_file_names.push_back(optarg);
+      }
+      break;
+    }
+    case 'B': {
+      need_bind = true;
+      break;
+    }
+    case 'r': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t row_count = 0;
+        row_count = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(row_count)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          schema_file_names.push_back(optarg);
+          table_sizes.push_back(row_count);
         }
-        break;
       }
-      case 'B': {
-        need_bind = true;
-        break;
-      }
-      case 'r': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'p': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t proj_count = 0;
+        proj_count = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(proj_count)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t row_count = 0;
-          row_count = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(row_count)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            table_sizes.push_back(row_count);
-          }
+          projector_counts.push_back(proj_count);
         }
-        break;
       }
-      case 'p': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'e': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t equal = 0;
+        equal = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(equal)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t proj_count = 0;
-          proj_count = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(proj_count)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            projector_counts.push_back(proj_count);
-          }
+          equal_cond_count = equal;
         }
-        break;
       }
-      case 'e': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'o': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t other = 0;
+        other = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(other)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t equal = 0;
-          equal = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(equal)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            equal_cond_count = equal;
-          }
+          other_cond_count = other;
         }
-        break;
       }
-      case 'o': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'c': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t column_count = 0;
+        column_count = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(column_count)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t other = 0;
-          other = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(other)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            other_cond_count = other;
-          }
+          sort_column_count = column_count;
         }
-        break;
       }
-      case 'c': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'Z': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t num = 0;
+        num = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(num)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t column_count = 0;
-          column_count = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(column_count)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            sort_column_count = column_count;
-          }
+          seed_mins.push_back(num);
         }
-        break;
       }
-      case 'Z': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'X': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t num = 0;
+        num = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(num)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t num = 0;
-          num = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(num)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            seed_mins.push_back(num);
-          }
+          seed_maxs.push_back(num);
         }
-        break;
       }
-      case 'X': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'C': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t num = 0;
+        num = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(num)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t num = 0;
-          num = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(num)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            seed_maxs.push_back(num);
-          }
+          seed_steps.push_back(num);
         }
-        break;
       }
-      case 'C': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'V': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t num = 0;
+        num = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(num)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t num = 0;
-          num = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(num)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            seed_steps.push_back(num);
-          }
+          seed_step_lengths.push_back(num);
         }
-        break;
       }
-      case 'V': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 't': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        op_type = optarg;
+      }
+      break;
+    }
+    case 'O': {
+      print_output = true;
+      break;
+    }
+    case 'h': {
+      need_help = true;
+      break;
+    }
+    case 'G': {
+      run_as_ut = false;
+      break;
+    }
+    case 'L': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        limit_count = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(limit_count)) {
+          ret = OB_INVALID_ARGUMENT;
+        }
+      }
+      break;
+    }
+    case 'l': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        common_prefix_len = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(common_prefix_len)) {
+          ret = OB_INVALID_ARGUMENT;
+        }
+      }
+      break;
+    }
+    case 'R': {
+      use_random = true;
+      break;
+    }
+    case 'K': {
+      experimental = true;
+      break;
+    }
+    case 'S': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        time_to_sleep = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(time_to_sleep)) {
+          ret = OB_INVALID_ARGUMENT;
+        }
+      }
+      break;
+    }
+    case 'W' : {
+      OB_LOGGER.set_log_level(OB_LOG_LEVEL_WARN);
+      break;
+    }
+    case 'T': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t sort_column = 0;
+        sort_column = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(sort_column)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          int64_t num = 0;
-          num = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(num)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            seed_step_lengths.push_back(num);
-          }
+          order_columns.push_back(sort_column);
         }
-        break;
       }
-      case 't': {
-        if (NULL == optarg) {
+      break;
+    }
+    case 'i': {
+      if (NULL == optarg) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        int64_t num = 0;
+        num = strtol(optarg, &opt_arg_end, 10);
+        if (STRTOL_ERR(num)) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          op_type = optarg;
+          info_type = num;
         }
-        break;
       }
-      case 'O': {
-        print_output = true;
-        break;
-      }
-      case 'h': {
-        need_help = true;
-        break;
-      }
-      case 'G': {
-        run_as_ut = false;
-        break;
-      }
-      case 'L': {
-        if (NULL == optarg) {
-          ret = OB_INVALID_ARGUMENT;
-        } else {
-          limit_count = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(limit_count)) {
-            ret = OB_INVALID_ARGUMENT;
-          }
-        }
-        break;
-      }
-      case 'l': {
-        if (NULL == optarg) {
-          ret = OB_INVALID_ARGUMENT;
-        } else {
-          common_prefix_len = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(common_prefix_len)) {
-            ret = OB_INVALID_ARGUMENT;
-          }
-        }
-        break;
-      }
-      case 'R': {
-        use_random = true;
-        break;
-      }
-      case 'K': {
-        experimental = true;
-        break;
-      }
-      case 'S': {
-        if (NULL == optarg) {
-          ret = OB_INVALID_ARGUMENT;
-        } else {
-          time_to_sleep = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(time_to_sleep)) {
-            ret = OB_INVALID_ARGUMENT;
-          }
-        }
-        break;
-      }
-      case 'W': {
-        OB_LOGGER.set_log_level(OB_LOG_LEVEL_WARN);
-        break;
-      }
-      case 'T': {
-        if (NULL == optarg) {
-          ret = OB_INVALID_ARGUMENT;
-        } else {
-          int64_t sort_column = 0;
-          sort_column = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(sort_column)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            order_columns.push_back(sort_column);
-          }
-        }
-        break;
-      }
-      case 'i': {
-        if (NULL == optarg) {
-          ret = OB_INVALID_ARGUMENT;
-        } else {
-          int64_t num = 0;
-          num = strtol(optarg, &opt_arg_end, 10);
-          if (STRTOL_ERR(num)) {
-            ret = OB_INVALID_ARGUMENT;
-          } else {
-            info_type = num;
-          }
-        }
-        break;
-      }
+      break;
+    }
     }
   }
 
   if (!run_as_ut) {
-    if (need_help || schema_file_names.count() <= 0 || table_sizes.count() <= 0 || NULL == op_type) {
+    if (need_help
+        || schema_file_names.count() <= 0
+        || table_sizes.count() <= 0
+        || NULL == op_type) {
       print_usage(argv[0]);
       ret = OB_INVALID_ARGUMENT;
       exit(ret);
@@ -1610,7 +1622,7 @@ int main(int argc, char** argv)
     if (run_as_ut) {
       int argc_f = 1;
       char arg_f[] = "fake";
-      char* argv[] = {arg_f};
+      char *argv[] = {arg_f};
       testing::InitGoogleTest(&argc_f, argv);
       return RUN_ALL_TESTS();
     } else {
@@ -1619,46 +1631,55 @@ int main(int argc, char** argv)
         if (OB_FAIL(ob_array_test())) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "sort") == 0) {
         if (OB_FAIL(sort_test(rc))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "material") == 0) {
         if (OB_FAIL(material_test(rc))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "nestloop") == 0) {
         if (OB_FAIL(join_test(0))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "merge") == 0) {
         if (OB_FAIL(join_test(1))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "hash") == 0) {
         if (OB_FAIL(join_test(2))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "mg") == 0) {
         if (OB_FAIL(group_by_test(1, rc))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "hg") == 0) {
         if (OB_FAIL(group_by_test(0, rc))) {
 
         } else {
+
         }
       } else if (strcmp(op_type, "scalar") == 0) {
         if (OB_FAIL(group_by_test(2, rc))) {
 
         } else {
+
         }
       }
     }

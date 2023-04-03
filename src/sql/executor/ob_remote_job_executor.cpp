@@ -18,43 +18,57 @@
 #include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_remote_job_executor.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 using namespace oceanbase::common;
 
-ObRemoteJobExecutor::ObRemoteJobExecutor() : job_(NULL), executor_(NULL)
-{}
+ObRemoteJobExecutor::ObRemoteJobExecutor()
+  : job_(NULL),
+    executor_(NULL)
+{
+}
 
 ObRemoteJobExecutor::~ObRemoteJobExecutor()
-{}
+{
+}
 
-int ObRemoteJobExecutor::execute(ObExecContext& query_ctx)
+int ObRemoteJobExecutor::execute(ObExecContext &query_ctx)
 {
   int ret = OB_SUCCESS;
-  ObTaskInfo* task_info = NULL;
+  // ObTask只作为序列化用，故而只需要是一个栈变量即可
+  ObTaskInfo *task_info = NULL;
 
   if (OB_ISNULL(job_) || OB_ISNULL(executor_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job_ or executor_ is NULL", K(ret), K(job_), K(executor_));
-  } else if (OB_FAIL(get_executable_task(query_ctx, task_info))) {  // get task info
+  } else if (OB_FAIL(get_executable_task(query_ctx, task_info))) { // 获得一个task info
     LOG_WARN("fail get a executable task", K(ret));
   } else if (OB_ISNULL(task_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task info is NULL", K(ret));
-  } else if (OB_FAIL(executor_->execute(query_ctx, job_,
-                 task_info))) {  // job_ + task_info as task's frame and param
+  } else if (OB_FAIL(executor_->execute(query_ctx,
+                                        job_,
+                                        task_info))) { // job_ + task_info 作为 task 的骨架和参数
     LOG_WARN("fail execute task", K(ret), K(*task_info));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int ObRemoteJobExecutor::get_executable_task(ObExecContext& ctx, ObTaskInfo*& task_info)
+/**
+ * Task均用于读取单表物理数据, 因此Task的划分规则与LocationCache有关
+ * 获得的Location均保存到Task结构中
+ *
+ * 同时，RemoteJobExecutor所执行的Job只会读取单分区的数据, 所以这里TaskControl还是只会输出一个Task
+ * 如何划分Task，是根据TaskControl中的task_spliter决定
+ */
+int ObRemoteJobExecutor::get_executable_task(ObExecContext &ctx, ObTaskInfo *&task_info)
 {
   int ret = OB_SUCCESS;
-  ObTaskControl* tq = NULL;
-  ObArray<ObTaskInfo*> ready_tasks;
+  ObTaskControl *tq = NULL;
+  ObArray<ObTaskInfo *> ready_tasks;
 
   if (OB_ISNULL(job_) || OB_ISNULL(executor_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -70,10 +84,9 @@ int ObRemoteJobExecutor::get_executable_task(ObExecContext& ctx, ObTaskInfo*& ta
     LOG_WARN("unexpected ready task count", "count", ready_tasks.count());
   } else if (OB_FAIL(ready_tasks.at(0, task_info))) {
     LOG_WARN("fail get task from array", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* ns sql */
+} /* ns oceanbase */

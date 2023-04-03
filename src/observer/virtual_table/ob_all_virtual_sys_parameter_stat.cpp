@@ -13,13 +13,16 @@
 #include "ob_all_virtual_sys_parameter_stat.h"
 #include "observer/ob_server_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
+namespace observer
+{
 ObAllVirtualSysParameterStat::ObAllVirtualSysParameterStat()
     : ObVirtualTableIterator(), sys_iter_(), tenant_config_(), tenant_iter_()
-{}
+{
+}
 
 ObAllVirtualSysParameterStat::~ObAllVirtualSysParameterStat()
 {
@@ -47,11 +50,11 @@ void ObAllVirtualSysParameterStat::reset()
   if (tenant_config_.is_valid()) {
     tenant_iter_ = tenant_config_->get_container().begin();
   } else {
-    SERVER_LOG(ERROR, "failed to get tenant config");
+    SERVER_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to get tenant config");
   }
 }
 
-int ObAllVirtualSysParameterStat::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualSysParameterStat::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(inner_sys_get_next_row(row))) {
@@ -61,14 +64,14 @@ int ObAllVirtualSysParameterStat::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow*& row)
+int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  const ObConfigContainer& container = GCONF.get_container();
+  const ObConfigContainer &container = GCONF.get_container();
   if (sys_iter_ == container.end()) {
     ret = OB_ITER_END;
   } else {
-    ObObj* cells = cur_row_.cells_;
+    ObObj *cells = cur_row_.cells_;
     ObString ipstr;
     if (OB_UNLIKELY(NULL == cells)) {
       ret = OB_ERR_UNEXPECTED;
@@ -79,72 +82,83 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow*& row)
       for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
         const uint64_t col_id = output_column_ids_.at(i);
         switch (col_id) {
-          case ZONE: {
+        case ZONE: {
             cells[i].set_varchar(GCONF.zone);
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_TYPE: {
+        case SERVER_TYPE: {
             cells[i].set_varchar("observer");
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_IP: {
+        case SERVER_IP: {
             cells[i].set_varchar(ipstr);
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_PORT: {
+        case SERVER_PORT: {
             cells[i].set_int(GCONF.self_addr_.get_port());
             break;
           }
-          case NAME: {
+        case NAME: {
             cells[i].set_varchar(sys_iter_->first.str());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case DATA_TYPE: {
+        case DATA_TYPE: {
             cells[i].set_null();
             break;
           }
-          case VALUE: {
+        case VALUE: {
             cells[i].set_varchar(sys_iter_->second->str());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case INFO: {
+        case INFO: {
             cells[i].set_varchar(sys_iter_->second->info());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SECTION: {
+        case SECTION: {
             cells[i].set_varchar(sys_iter_->second->section());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SCOPE: {
+        case SCOPE: {
             cells[i].set_varchar(sys_iter_->second->scope());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SOURCE: {
-            cells[i].set_varchar(sys_iter_->second->source());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            break;
+        case SOURCE: {
+           cells[i].set_varchar(sys_iter_->second->source());
+           cells[i].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+           break;
           }
-          case EDIT_LEVEL: {
-            cells[i].set_varchar(sys_iter_->second->edit_level());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            break;
+        case EDIT_LEVEL: {
+           cells[i].set_varchar(sys_iter_->second->edit_level());
+           cells[i].set_collation_type(
+               ObCharset::get_default_collation(ObCharset::get_default_charset()));
+           break;
           }
-          default: {
+        default : {
+            // TODO: 版本兼容性，多余的列不报错
             // ret = OB_ERR_UNEXPECTED;
             // SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));
-            cells[i].set_null();
+	    cells[i].set_null();
             break;
           }
         }
-      }  // end for
+      } // end for
       if (OB_SUCC(ret)) {
         row = &cur_row_;
         ++sys_iter_;
@@ -154,13 +168,13 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow*& row)
+int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (tenant_iter_ == tenant_config_->get_container().end()) {
     ret = OB_ITER_END;
   } else {
-    ObObj* cells = cur_row_.cells_;
+    ObObj *cells = cur_row_.cells_;
     ObString ipstr;
     if (OB_UNLIKELY(NULL == cells)) {
       ret = OB_ERR_UNEXPECTED;
@@ -171,73 +185,83 @@ int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow*& r
       for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
         const uint64_t col_id = output_column_ids_.at(i);
         switch (col_id) {
-          case ZONE: {
+        case ZONE: {
             cells[i].set_varchar(GCONF.zone);
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_TYPE: {
+        case SERVER_TYPE: {
             cells[i].set_varchar("observer");
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_IP: {
+        case SERVER_IP: {
             cells[i].set_varchar(ipstr);
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SERVER_PORT: {
+        case SERVER_PORT: {
             cells[i].set_int(GCONF.self_addr_.get_port());
             break;
           }
-          case NAME: {
+        case NAME: {
             cells[i].set_varchar(tenant_iter_->first.str());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case DATA_TYPE: {
+        case DATA_TYPE: {
             cells[i].set_null();
             break;
           }
-          case VALUE: {
+        case VALUE: {
             cells[i].set_varchar(tenant_iter_->second->str());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case INFO: {
+        case INFO: {
             cells[i].set_varchar(tenant_iter_->second->info());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SECTION: {
+        case SECTION: {
             cells[i].set_varchar(tenant_iter_->second->section());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SCOPE: {
+        case SCOPE: {
             cells[i].set_varchar(tenant_iter_->second->scope());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
-          case SOURCE: {
-            cells[i].set_varchar(tenant_iter_->second->source());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            break;
+        case SOURCE: {
+          cells[i].set_varchar(tenant_iter_->second->source());
+          cells[i].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
           }
-          case EDIT_LEVEL: {
-            cells[i].set_varchar(tenant_iter_->second->edit_level());
-            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            break;
+        case EDIT_LEVEL: {
+          cells[i].set_varchar(tenant_iter_->second->edit_level());
+          cells[i].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
           }
-          default: {
-            // for compat
+        default : {
+            // 版本兼容性，多余列不报错
             // ret = OB_ERR_UNEXPECTED;
             // SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));
-            cells[i].set_null();
+	    cells[i].set_null();
             break;
           }
         }
-      }  // end for
+      } // end for
       if (OB_SUCC(ret)) {
         row = &cur_row_;
         ++tenant_iter_;
@@ -247,5 +271,5 @@ int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow*& r
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

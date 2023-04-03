@@ -15,40 +15,55 @@
 #include "lib/compress/ob_compressor.h"
 #include "lib/allocator/page_arena.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-namespace zstd {
+namespace zstd
+{
 
-class ObZstdCtxAllocator {
+class ObZstdCtxAllocator
+{
 public:
   ObZstdCtxAllocator();
   virtual ~ObZstdCtxAllocator();
-  void* alloc(size_t size);
-  void free(void* addr);
+  static ObZstdCtxAllocator &get_thread_local_instance()
+  {
+    thread_local ObZstdCtxAllocator allocator;
+    return allocator;
+  }
+  void *alloc(size_t size);
+  void free(void *addr);
   void reuse();
-
+  void reset();
 private:
   ObArenaAllocator allocator_;
 };
 
-class ObZstdCompressor : public ObCompressor {
+class ObZstdCompressor : public ObCompressor
+{
 public:
-  explicit ObZstdCompressor()
-  {}
-  virtual ~ObZstdCompressor()
-  {}
-  int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-  int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-  const char* get_compressor_name() const;
-  int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
+  explicit ObZstdCompressor() {}
+  virtual ~ObZstdCompressor() {}
+  int compress(const char *src_buffer,
+               const int64_t src_data_size,
+               char *dst_buffer,
+               const int64_t dst_buffer_size,
+               int64_t &dst_data_size);
+  int decompress(const char *src_buffer,
+                 const int64_t src_data_size,
+                 char *dst_buffer,
+                 const int64_t dst_buffer_size,
+                 int64_t &dst_data_size);
+  const char *get_compressor_name() const;
+  ObCompressorType get_compressor_type() const;
+  int get_max_overflow_size(const int64_t src_data_size,
+                                   int64_t &max_overflow_size) const;
+  void reset_mem();
 
-private:
-  static const char* compressor_name;
 };
-}  // namespace zstd
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_COMMON_COMPRESS_ZSTD_COMPRESSOR_
+} // namespace zstd
+} //namespace common
+} //namespace oceanbase
+#endif //OCEANBASE_COMMON_COMPRESS_ZSTD_COMPRESSOR_

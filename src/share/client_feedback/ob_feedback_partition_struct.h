@@ -19,28 +19,29 @@
 #include "lib/ob_define.h"
 #include "share/client_feedback/ob_client_feedback_basic.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-class ObFeedbackReplicaLocation : public ObAbstractFeedbackObject<ObFeedbackReplicaLocation> {
+class ObFeedbackReplicaLocation : public ObAbstractFeedbackObject<ObFeedbackReplicaLocation>
+{
 public:
   common::ObAddr server_;
-  common::ObRole role_;  // ip && sql_port
+  common::ObRole role_; // ip && sql_port
   common::ObReplicaType replica_type_;
 
-  ObFeedbackReplicaLocation() : ObAbstractFeedbackObject<ObFeedbackReplicaLocation>(MIN_FB_ELE)
-  {
-    reset();
-  }
-  virtual ~ObFeedbackReplicaLocation()
-  {}
+  ObFeedbackReplicaLocation() : ObAbstractFeedbackObject<ObFeedbackReplicaLocation>(MIN_FB_ELE) { reset(); }
+  virtual ~ObFeedbackReplicaLocation() {}
 
-  bool operator==(const ObFeedbackReplicaLocation& other) const
+  bool operator==(const ObFeedbackReplicaLocation &other) const
   {
-    return (server_ == other.server_) && (role_ == other.role_) && (replica_type_ == other.replica_type_);
+    return (server_ == other.server_)
+           && (role_ == other.role_)
+           && (replica_type_ == other.replica_type_);
   }
 
-  bool operator!=(const ObFeedbackReplicaLocation& other) const
+  bool operator!=(const ObFeedbackReplicaLocation &other) const
   {
     return !(*this == other);
   }
@@ -58,10 +59,13 @@ public:
 
 inline bool ObFeedbackReplicaLocation::is_valid_obj() const
 {
-  return server_.is_valid() && (common::INVALID_ROLE != role_) && (common::REPLICA_TYPE_MAX != replica_type_);
+  return server_.is_valid()
+         && (common::INVALID_ROLE != role_)
+         && (common::REPLICA_TYPE_MAX != replica_type_);
 }
 
-class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPartitionLocation> {
+class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPartitionLocation>
+{
 public:
   typedef common::ObSEArray<ObFeedbackReplicaLocation, 5> ObFeedbackReplicaLocationArray;
 
@@ -69,8 +73,7 @@ public:
   {
     reset();
   }
-  virtual ~ObFeedbackPartitionLocation()
-  {}
+  virtual ~ObFeedbackPartitionLocation() {}
 
   void reset()
   {
@@ -80,46 +83,22 @@ public:
     replicas_.reset();
   }
 
-  TO_STRING_KV(
-      "type", get_feedback_element_type_str(type_), KT_(table_id), K_(partition_id), K_(schema_version), K_(replicas));
+  TO_STRING_KV("type", get_feedback_element_type_str(type_), KT_(table_id), K_(partition_id),
+               K_(schema_version), K_(replicas));
 
-  void set_table_id(const uint64_t table_id)
-  {
-    table_id_ = table_id;
-  }
-  uint64_t get_table_id() const
-  {
-    return table_id_;
-  }
+  void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  uint64_t get_table_id() const { return table_id_; }
 
-  void set_partition_id(const int64_t part_id)
-  {
-    partition_id_ = part_id;
-  }
-  int64_t get_partition_id() const
-  {
-    return partition_id_;
-  }
+  void set_partition_id(const int64_t part_id) { partition_id_ = part_id; }
+  int64_t get_partition_id() const { return partition_id_; }
 
-  void set_schema_version(const int64_t schema_version)
-  {
-    schema_version_ = schema_version;
-  }
-  int64_t get_schema_version() const
-  {
-    return schema_version_;
-  }
+  void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  int64_t get_schema_version() const { return schema_version_; }
 
-  const ObFeedbackReplicaLocationArray* get_replica_array()
-  {
-    return &replicas_;
-  }
-  int64_t get_replica_count() const
-  {
-    return replicas_.count();
-  }
+  const ObFeedbackReplicaLocationArray *get_replica_array() { return &replicas_; }
+  int64_t get_replica_count() const { return replicas_.count(); }
 
-  int add_replica(const ObFeedbackReplicaLocation& replica)
+  int add_replica(const ObFeedbackReplicaLocation &replica)
   {
     INIT_SUCC(ret);
     if (OB_FAIL(replicas_.push_back(replica))) {
@@ -128,12 +107,12 @@ public:
     return ret;
   }
 
-  bool operator==(const ObFeedbackPartitionLocation& other) const
+  bool operator==(const ObFeedbackPartitionLocation &other) const
   {
     bool equal = true;
     if (!is_valid_obj() || !other.is_valid_obj()) {
       equal = false;
-      SHARE_LOG(WARN, "invalid argument", "self", *this, K(other));
+      SHARE_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
     } else if (type_ != other.type_) {
       equal = false;
     } else if (replicas_.count() != other.replicas_.count()) {
@@ -145,37 +124,34 @@ public:
           break;
         }
       }
-      equal = equal && (table_id_ == other.table_id_) && (partition_id_ == other.partition_id_) &&
-              (schema_version_ == other.schema_version_);
+      equal = equal
+              && (table_id_ == other.table_id_)
+              && (partition_id_ == other.partition_id_)
+              && (schema_version_ == other.schema_version_);
     }
     return equal;
   }
 
-  bool operator!=(const ObFeedbackPartitionLocation& other) const
+  bool operator!=(const ObFeedbackPartitionLocation &other) const
   {
     return !(*this == other);
   }
 
   FB_OBJ_DEFINE_METHOD;
-
 protected:
   uint64_t table_id_;
   int64_t partition_id_;
-  int64_t schema_version_;  // table schema version
+  int64_t schema_version_; // table schema version
   ObFeedbackReplicaLocationArray replicas_;
 };
 
-class ObFeedbackRerouteInfo : public ObAbstractFeedbackObject<ObFeedbackRerouteInfo> {
+class ObFeedbackRerouteInfo: public ObAbstractFeedbackObject<ObFeedbackRerouteInfo>
+{
 public:
-  ObFeedbackRerouteInfo() : ObAbstractFeedbackObject<ObFeedbackRerouteInfo>(MIN_FB_ELE)
-  {
-    reset();
-  }
+  ObFeedbackRerouteInfo():
+    ObAbstractFeedbackObject<ObFeedbackRerouteInfo>(MIN_FB_ELE) { reset(); }
 
-  virtual ~ObFeedbackRerouteInfo()
-  {
-    reset();
-  }
+  virtual ~ObFeedbackRerouteInfo() { reset(); }
 
   void reset()
   {
@@ -187,34 +163,38 @@ public:
     tbl_schema_version_ = OB_INVALID_VERSION;
   }
 
-  int set_tbl_name(const common::ObString& table_name);
+  int set_tbl_name(const common::ObString &table_name);
 
-  TO_STRING_KV(K_(server), K_(role), K_(replica_type), "FeedbackTableName", common::ObString(tbl_name_len_, tbl_name_),
-      K_(tbl_schema_version));
+  TO_STRING_KV(K_(server), K_(role), K_(replica_type),
+               "FeedbackTableName", common::ObString(tbl_name_len_, tbl_name_),
+               K_(tbl_schema_version));
   FB_OBJ_DEFINE_METHOD;
-
 public:
   common::ObAddr server_;
-  common::ObRole role_;  // ip && sql_port
+  common::ObRole role_; // ip && sql_port
   common::ObReplicaType replica_type_;
-  char tbl_name_[common::OB_MAX_TABLE_NAME_LENGTH];  // used to store table name in reroute feedback
+  char tbl_name_[common::OB_MAX_TABLE_NAME_LENGTH]; // used to store table name in reroute feedback
   int64_t tbl_name_len_;
   int64_t tbl_schema_version_;
 };
 
 inline bool ObFeedbackPartitionLocation::is_valid_obj() const
 {
-  return (common::OB_INVALID_ID != table_id_) && (common::OB_INVALID_INDEX != partition_id_);
+  return (common::OB_INVALID_ID != table_id_)
+         && (common::OB_INVALID_INDEX != partition_id_);
 }
 
 inline bool ObFeedbackRerouteInfo::is_valid_obj() const
 {
-  return server_.is_valid() && (common::INVALID_ROLE != role_) && (common::REPLICA_TYPE_MAX != replica_type_) &&
-         tbl_name_len_ > 0 && tbl_name_len_ <= common::OB_MAX_TABLE_NAME_LENGTH &&
-         OB_INVALID_VERSION != tbl_schema_version_;
+  return server_.is_valid()
+         && (common::INVALID_ROLE != role_)
+         && (common::REPLICA_TYPE_MAX != replica_type_)
+         && tbl_name_len_ > 0
+         && tbl_name_len_ <= common::OB_MAX_TABLE_NAME_LENGTH
+         && OB_INVALID_VERSION != tbl_schema_version_;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_FEEDBACK_PARTITION_STRUCT_H_
+#endif // OCEANBASE_SHARE_OB_FEEDBACK_PARTITION_STRUCT_H_

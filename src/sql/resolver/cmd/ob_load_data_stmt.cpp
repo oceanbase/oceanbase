@@ -13,8 +13,10 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "ob_load_data_stmt.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 const char* ObDataInFileStruct::DEFAULT_LINE_TERM_STR = "\n";
 const char* ObDataInFileStruct::DEFAULT_LINE_BEGIN_STR = "";
@@ -25,8 +27,52 @@ const int64_t ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR = static_cast<int64
 const int64_t ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR = INT64_MAX;
 const bool ObDataInFileStruct::DEFAULT_OPTIONAL_ENCLOSED = false;
 
-int ObLoadDataStmt::add_column_item(ColumnItem& item)
+void ObLoadFileIterator::reset()
 {
+  files_.reset();
+  pos_ = 0;
+}
+
+int ObLoadFileIterator::add_files(ObString *start, const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(start) || OB_UNLIKELY(count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(start), K(count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      if (OB_FAIL(files_.push_back(start[i]))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadFileIterator::get_next_file(ObString &file)
+{
+  int ret = OB_SUCCESS;
+  if (pos_ >= files_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    file = files_.at(pos_++);
+  }
+  return ret;
+}
+
+int ObLoadFileIterator::copy(const ObLoadFileIterator &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(other));
+  } else if (OB_FAIL(files_.assign(other.files_))) {
+    LOG_WARN("fail to copy array", K(ret));
+  }
+  return ret;
+}
+
+int ObLoadDataStmt::add_column_item(ColumnItem &item) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(column_items_.push_back(item))) {
     LOG_WARN("push column item failed", K(ret));
@@ -34,11 +80,10 @@ int ObLoadDataStmt::add_column_item(ColumnItem& item)
   return ret;
 }
 
-ColumnItem* ObLoadDataStmt::get_column_item_by_idx(uint64_t column_id)
-{
+ColumnItem* ObLoadDataStmt::get_column_item_by_idx(uint64_t column_id) {
   ColumnItem* tar_item = NULL;
   for (int64_t i = 0; i < column_items_.count(); ++i) {
-    ColumnItem& item = column_items_.at(i);
+    ColumnItem &item = column_items_.at(i);
     if (item.column_id_ == column_id) {
       tar_item = &item;
       break;
@@ -47,7 +92,7 @@ ColumnItem* ObLoadDataStmt::get_column_item_by_idx(uint64_t column_id)
   return tar_item;
 }
 
-int ObLoadDataHint::get_value(IntHintItem item, int64_t& value) const
+int ObLoadDataHint::get_value(IntHintItem item, int64_t &value) const
 {
   int ret = OB_SUCCESS;
   if (item >= TOTAL_INT_ITEM || item < 0) {
@@ -69,7 +114,7 @@ int ObLoadDataHint::set_value(IntHintItem item, int64_t value)
   return ret;
 }
 
-int ObLoadDataHint::get_value(StringHintItem item, ObString& value) const
+int ObLoadDataHint::get_value(StringHintItem item, ObString &value) const
 {
   int ret = OB_SUCCESS;
   if (item >= TOTAL_STRING_ITEM || item < 0) {
@@ -80,7 +125,7 @@ int ObLoadDataHint::get_value(StringHintItem item, ObString& value) const
   return ret;
 }
 
-int ObLoadDataHint::set_value(StringHintItem item, const ObString& value)
+int ObLoadDataHint::set_value(StringHintItem item, const ObString &value)
 {
   int ret = OB_SUCCESS;
   if (item >= TOTAL_STRING_ITEM || item < 0) {
@@ -91,5 +136,5 @@ int ObLoadDataHint::set_value(StringHintItem item, const ObString& value)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

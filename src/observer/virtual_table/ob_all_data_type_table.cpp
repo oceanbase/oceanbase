@@ -12,18 +12,23 @@
 
 #include "observer/virtual_table/ob_all_data_type_table.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
+namespace observer
+{
 
-ObAllDataTypeTable::ObAllDataTypeTable() : ObVirtualTableScannerIterator()
-{}
+ObAllDataTypeTable::ObAllDataTypeTable() :
+    ObVirtualTableScannerIterator()
+{
+}
 
 ObAllDataTypeTable::~ObAllDataTypeTable()
-{}
+{
+}
 
-int ObAllDataTypeTable::inner_get_next_row(common::ObNewRow*& row)
+int ObAllDataTypeTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
@@ -32,39 +37,43 @@ int ObAllDataTypeTable::inner_get_next_row(common::ObNewRow*& row)
     SERVER_LOG(WARN, "allocator is NULL", K(ret));
   } else {
     if (!start_to_read_) {
-      ObObj* cells = NULL;
+      ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
       if (OB_ISNULL(cells = cur_row_.cells_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-      } else if (OB_UNLIKELY(col_count < 1 || col_count > DATA_TYPE_COLUMN_COUNT)) {
+      } else if (OB_UNLIKELY(col_count < 0 || col_count > DATA_TYPE_COLUMN_COUNT)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
       } else if (OB_UNLIKELY(col_count > reserved_column_cnt_)) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count), K(reserved_column_cnt_));
+        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count),
+                   K(reserved_column_cnt_));
       } else {
-        for (ObObjType type = ObNullType; OB_SUCC(ret) && type < ObMaxType; type = static_cast<ObObjType>(type + 1)) {
+        for (ObObjType type = ObNullType; OB_SUCC(ret) && type < ObMaxType;
+             type = static_cast<ObObjType>(type + 1)) {
           uint64_t cell_idx = 0;
           for (int64_t k = 0; OB_SUCC(ret) && k < col_count; ++k) {
             uint64_t col_id = output_column_ids_.at(k);
             switch (col_id) {
-              case DATA_TYPE: {
+            case DATA_TYPE: {
                 cells[cell_idx].set_int(type);
                 break;
               }
-              case DATA_TYPE_STR: {
-                cells[cell_idx].set_varchar(ob_obj_type_str(type));
-                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            case DATA_TYPE_STR: {
+                  cells[cell_idx].set_varchar(ob_obj_type_str(type));
+                  cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                         ObCharset::get_default_charset()));
                 break;
               }
-              case DATA_TYPE_CLASS: {
-                cells[cell_idx].set_int(ob_obj_type_class(type));
+            case DATA_TYPE_CLASS: {
+                  cells[cell_idx].set_int(ob_obj_type_class(type));
                 break;
               }
-              default: {
+            default: {
                 ret = OB_ERR_UNEXPECTED;
-                SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+                SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                  K(output_column_ids_), K(col_id));
                 break;
               }
             }
@@ -98,5 +107,5 @@ int ObAllDataTypeTable::inner_get_next_row(common::ObNewRow*& row)
 
   return ret;
 }
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

@@ -18,45 +18,70 @@
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
 
-ObFuseRowCacheKey::ObFuseRowCacheKey() : table_id_(0), rowkey_size_(0), rowkey_()
-{}
-
-ObFuseRowCacheKey::ObFuseRowCacheKey(const uint64_t table_id, const ObStoreRowkey& rowkey) : table_id_(table_id)
+ObFuseRowCacheKey::ObFuseRowCacheKey()
+  : tenant_id_(0), rowkey_size_(0), rowkey_(), tablet_snapshot_version_(0), schema_column_count_(0), datum_utils_(nullptr)
 {
-  rowkey.hash();
+}
+
+ObFuseRowCacheKey::ObFuseRowCacheKey(
+    const uint64_t tenant_id,
+    const ObTabletID &tablet_id,
+    const ObDatumRowkey &rowkey,
+    const int64_t tablet_snapshot_version,
+    const int64_t schema_column_count,
+    const ObStorageDatumUtils &datum_utils)
+{
+  tenant_id_ = tenant_id;
+  tablet_id_ = tablet_id;
   rowkey_ = rowkey;
   rowkey_size_ = rowkey.get_deep_copy_size();
+  tablet_snapshot_version_ = tablet_snapshot_version;
+  schema_column_count_ = schema_column_count;
+  datum_utils_ = &datum_utils;
 }
 
 uint64_t ObFuseRowCacheKey::get_tenant_id() const
 {
-  return extract_tenant_id(table_id_);
+  return tenant_id_;
 }
 
-uint64_t ObFuseRowCacheKey::hash() const
+int ObFuseRowCacheKey::hash(uint64_t &hash_val) const
 {
-  uint64_t hash_val = 0;
-  hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
-  if (nullptr != rowkey_.get_obj_ptr() && 0 < rowkey_.get_obj_cnt()) {
-    hash_val = rowkey_.murmurhash(hash_val);
-  }
-  return hash_val;
-}
-
-bool ObFuseRowCacheKey::operator==(const ObIKVCacheKey& other) const
-{
-  bool bret = true;
-  const ObFuseRowCacheKey& other_key = reinterpret_cast<const ObFuseRowCacheKey&>(other);
-  bret = table_id_ == other_key.table_id_;
-  bret &= (rowkey_size_ == other_key.rowkey_size_);
-  if (bret && rowkey_size_ > 0) {
-    if (nullptr != rowkey_.get_obj_ptr() && nullptr != other_key.rowkey_.get_obj_ptr()) {
-      bret = rowkey_.simple_equal(other_key.rowkey_);
-    } else {
-      bret = false;
+  int ret = OB_SUCCESS;
+  hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+  hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
+  hash_val = common::murmurhash(&tablet_snapshot_version_, sizeof(tablet_snapshot_version_), hash_val);
+  hash_val = common::murmurhash(&schema_column_count_, sizeof(schema_column_count_), hash_val);
+  if (rowkey_.is_valid()) {
+    if (OB_ISNULL(datum_utils_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected error for null datum utils", K(ret), K(*this));
+    } else if (OB_FAIL(rowkey_.hash(*datum_utils_, hash_val))) {
+      STORAGE_LOG(WARN, "Failed to calc hash value for datum rowkey", K(ret), K(rowkey_));
     }
   }
-  return bret;
+  return ret;
+}
+
+int ObFuseRowCacheKey::equal(const ObIKVCacheKey &other, bool &equal) const
+{
+  int ret = OB_SUCCESS;
+  const ObFuseRowCacheKey &other_key = reinterpret_cast<const ObFuseRowCacheKey &>(other);
+  equal = tenant_id_ == other_key.tenant_id_;
+  equal &= tablet_id_ == other_key.tablet_id_;
+  equal &= (rowkey_size_ == other_key.rowkey_size_);
+  equal &= tablet_snapshot_version_ == other_key.tablet_snapshot_version_;
+  equal &= schema_column_count_ == other_key.schema_column_count_;
+  if (equal && rowkey_size_ > 0) {
+    const ObStorageDatumUtils *datum_utils = (nullptr != datum_utils_) ? datum_utils_ : other_key.datum_utils_;
+    if (OB_ISNULL(datum_utils)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid argument to compare row cachekey", K(ret), K(*this), K(other_key));
+    } else if (OB_FAIL(rowkey_.equal(other_key.rowkey_, *datum_utils, equal))) {
+      STORAGE_LOG(WARN, "Failed to check rowkey cache key equal", K(ret), K(rowkey_), K(other_key));
+    }
+  }
+  return ret;
 }
 
 int64_t ObFuseRowCacheKey::size() const
@@ -64,7 +89,7 @@ int64_t ObFuseRowCacheKey::size() const
   return sizeof(*this) + rowkey_size_;
 }
 
-int ObFuseRowCacheKey::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey*& key) const
+int ObFuseRowCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == buf || buf_len < size())) {
@@ -74,9 +99,12 @@ int ObFuseRowCacheKey::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid fuse row cache key", K(ret), K(*this));
   } else {
-    ObFuseRowCacheKey* pfuse_key = new (buf) ObFuseRowCacheKey();
-    pfuse_key->table_id_ = table_id_;
-    if (nullptr != rowkey_.get_obj_ptr() && rowkey_size_ > 0) {
+    ObFuseRowCacheKey *pfuse_key = new (buf) ObFuseRowCacheKey();
+    pfuse_key->tenant_id_ = tenant_id_;
+    pfuse_key->tablet_id_ = tablet_id_;
+    pfuse_key->tablet_snapshot_version_ = tablet_snapshot_version_;
+    pfuse_key->schema_column_count_ = schema_column_count_;
+    if (rowkey_.is_valid() && rowkey_size_ > 0) {
       ObRawBufAllocatorWrapper tmp_buf(buf + sizeof(*this), rowkey_size_);
       if (OB_FAIL(rowkey_.deep_copy(pfuse_key->rowkey_, tmp_buf))) {
         LOG_WARN("fail to deep copy rowkey", K(ret));
@@ -95,43 +123,31 @@ int ObFuseRowCacheKey::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey
 
 bool ObFuseRowCacheKey::is_valid() const
 {
-  return OB_LIKELY(table_id_ != 0 && rowkey_size_ > 0 && nullptr != rowkey_.get_obj_ptr());
+  return OB_LIKELY(tenant_id_ != 0 && tablet_id_.is_valid() && rowkey_size_ > 0 && rowkey_.is_valid() && tablet_snapshot_version_ >= 0 && schema_column_count_ >= 0);
 }
 
 ObFuseRowCacheValue::ObFuseRowCacheValue()
-    : obj_array_(nullptr),
-      size_(0),
-      column_cnt_(0),
-      flag_(-1),
-      schema_version_(0),
-      snapshot_version_(0),
-      partition_id_(0),
-      sstable_end_log_ts_(0)
-{}
+  : datums_(nullptr),
+    size_(0),
+    column_cnt_(0),
+    read_snapshot_version_(0),
+    flag_()
+{
+}
 
-int ObFuseRowCacheValue::init(const ObStoreRow& row, const int64_t schema_version, const int64_t snapshot_version,
-    const int64_t partition_id, const int64_t sstable_end_log_ts)
+int ObFuseRowCacheValue::init(const ObDatumRow &row, const int64_t read_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  if (schema_version < 0 || snapshot_version <= 0 || partition_id < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(schema_version), K(snapshot_version), K(partition_id));
-  } else {
-    column_cnt_ = row.row_val_.count_;
-    obj_array_ = 0 == column_cnt_ ? nullptr : row.row_val_.cells_;
-    schema_version_ = schema_version;
-    flag_ = row.flag_;
-    snapshot_version_ = snapshot_version;
-    partition_id_ = partition_id;
-    sstable_end_log_ts_ = sstable_end_log_ts;
-    size_ = sizeof(ObObj) * column_cnt_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
-      const ObObj& obj = obj_array_[i];
-      if (obj.need_deep_copy()) {
-        size_ += obj.get_deep_copy_size();
-      }
-    }
+
+  column_cnt_ = row.get_column_count();
+  datums_ = 0 == column_cnt_ ? nullptr : row.storage_datums_;
+  flag_ = row.row_flag_;
+  size_ = sizeof(ObStorageDatum) * column_cnt_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+    size_ += datums_[i].get_deep_copy_size();
   }
+  read_snapshot_version_ = read_snapshot_version;
+
   return ret;
 }
 
@@ -140,15 +156,7 @@ int64_t ObFuseRowCacheValue::size() const
   return sizeof(*this) + size_;
 }
 
-void ObFuseRowCacheValue::set_snapshot_version(const int64_t snapshot_version)
-{
-  const int64_t old_snapshot_version = ATOMIC_LOAD(&snapshot_version_);
-  if (snapshot_version > old_snapshot_version) {
-    ATOMIC_VCAS(&snapshot_version_, old_snapshot_version, snapshot_version);
-  }
-}
-
-int ObFuseRowCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const
+int ObFuseRowCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == buf || buf_len < size())) {
@@ -159,29 +167,22 @@ int ObFuseRowCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheV
     LOG_WARN("invalid row cache value", K(ret));
   } else {
     int64_t pos = 0;
-    ObFuseRowCacheValue* pfuse_value = new (buf) ObFuseRowCacheValue();
-    if (nullptr == obj_array_) {
-      pfuse_value->obj_array_ = nullptr;
+    ObFuseRowCacheValue *pfuse_value = new (buf) ObFuseRowCacheValue();
+    if (nullptr == datums_) {
+      pfuse_value->datums_ = nullptr;
     } else {
-      char* tmp_buf = buf + sizeof(*this);
-      MEMCPY(tmp_buf, obj_array_, sizeof(ObObj) * column_cnt_);
-      pfuse_value->obj_array_ = reinterpret_cast<ObObj*>(tmp_buf);
+      char *tmp_buf = buf + sizeof(*this);
+      MEMCPY(tmp_buf, datums_, sizeof(ObStorageDatum) * column_cnt_);
+      pfuse_value->datums_ = reinterpret_cast<ObStorageDatum *>(tmp_buf);
     }
     pfuse_value->column_cnt_ = column_cnt_;
-    pfuse_value->schema_version_ = schema_version_;
     pfuse_value->flag_ = flag_;
-    pfuse_value->snapshot_version_ = snapshot_version_;
-    pfuse_value->partition_id_ = partition_id_;
+    pfuse_value->read_snapshot_version_ = read_snapshot_version_;
     pfuse_value->size_ = size_;
-    pfuse_value->sstable_end_log_ts_ = sstable_end_log_ts_;
-    pos = sizeof(*this) + sizeof(ObObj) * column_cnt_;
+    pos = sizeof(*this) + sizeof(ObStorageDatum) * column_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
-      ObObj& dst_obj = pfuse_value->obj_array_[i];
-      const ObObj& src_obj = obj_array_[i];
-      if (dst_obj.need_deep_copy()) {
-        if (OB_FAIL(dst_obj.deep_copy(src_obj, buf, buf_len, pos))) {
-          LOG_WARN("fail to deep copy obj", K(ret), K(src_obj), K(dst_obj));
-        }
+      if (OB_FAIL(pfuse_value->datums_[i].deep_copy(datums_[i], buf, buf_len, pos))) {
+        STORAGE_LOG(WARN, "Failed to deep copy datum", K(ret), K(i));
       }
     }
 
@@ -195,10 +196,10 @@ int ObFuseRowCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
-int ObFuseRowCache::get_row(const ObFuseRowCacheKey& key, const int64_t partition_id, ObFuseRowValueHandle& handle)
+int ObFuseRowCache::get_row(const ObFuseRowCacheKey &key, ObFuseRowValueHandle &handle)
 {
   int ret = OB_SUCCESS;
-  const ObFuseRowCacheValue* value = nullptr;
+  const ObFuseRowCacheValue *value = nullptr;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key));
@@ -211,24 +212,20 @@ int ObFuseRowCache::get_row(const ObFuseRowCacheKey& key, const int64_t partitio
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, the value must not be NULL", K(ret));
-    } else if (partition_id != value->get_partition_id()) {
-      ret = OB_ENTRY_NOT_EXIST;
-      EVENT_INC(ObStatEventIds::FUSE_ROW_CACHE_MISS);
     } else {
-      handle.value_ = const_cast<ObFuseRowCacheValue*>(value);
-      EVENT_INC(ObStatEventIds::FUSE_ROW_CACHE_HIT);
+      handle.value_ = const_cast<ObFuseRowCacheValue *>(value);
     }
   }
   return ret;
 }
 
-int ObFuseRowCache::put_row(const ObFuseRowCacheKey& key, const ObFuseRowCacheValue& value)
+int ObFuseRowCache::put_row(const ObFuseRowCacheKey &key, const ObFuseRowCacheValue &value)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!key.is_valid() || !value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key), K(value));
-  } else if (OB_FAIL(put(key, value, true /*overwrite*/))) {
+  } else if (OB_FAIL(put(key, value, true/*overwrite*/))) {
     LOG_WARN("fail to put row to row cache", K(ret), K(key), K(value));
   }
   return ret;

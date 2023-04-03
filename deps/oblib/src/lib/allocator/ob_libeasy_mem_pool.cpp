@@ -20,9 +20,9 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 
-void* common::ob_easy_realloc(void* ptr, size_t size)
+void *common::ob_easy_realloc(void *ptr, size_t size)
 {
-  void* ret = NULL;
+  void *ret = NULL;
   if (size != 0) {
     ObMemAttr attr;
     // current_pcode() obtains pcode from thread local, rpc_proxy is responsible for setting thread local pcode
@@ -31,7 +31,7 @@ void* common::ob_easy_realloc(void* ptr, size_t size)
     if (0 == pcode) {
       pcode = obrpc::OB_TEST2_PCODE;
     }
-    auto& set = obrpc::ObRpcPacketSet::instance();
+    auto &set = obrpc::ObRpcPacketSet::instance();
     attr.label_ = set.name_of_idx(set.idx_of_pcode(pcode));
     attr.ctx_id_ = ObCtxIds::LIBEASY;
     attr.tenant_id_ = OB_SERVER_TENANT_ID;
@@ -41,7 +41,7 @@ void* common::ob_easy_realloc(void* ptr, size_t size)
       ret = ob_realloc(ptr, size, attr);
     }
     if (ret == NULL) {
-      _OB_LOG(WARN, "ob_tc_realloc failed, ptr:%p, size:%lu", ptr, size);
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ob_tc_realloc failed, ptr:%p, size:%lu", ptr, size);
     }
   } else if (ptr) {
     ob_free(ptr);

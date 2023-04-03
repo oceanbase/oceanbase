@@ -3,10 +3,10 @@ SQL: select c1 from t1 union select c2 from t2;
 =============================================
 |ID|OPERATOR            |NAME|EST. ROWS|COST|
 ---------------------------------------------
-|0 |MERGE UNION DISTINCT|    |200      |351 |
-|1 | TABLE SCAN         |t1  |100      |88  |
-|2 | SORT               |    |100      |198 |
-|3 |  TABLE SCAN        |t2  |100      |90  |
+|0 |MERGE UNION DISTINCT|    |200      |215 |
+|1 | TABLE SCAN         |t1  |100      |78  |
+|2 | SORT               |    |100      |133 |
+|3 |  TABLE SCAN        |t2  |100      |78  |
 =============================================
 
 Outputs & filters: 
@@ -23,13 +23,13 @@ SQL: select c1 from t1 union select c2 from t2 limit 2;
 ==============================================
 |ID|OPERATOR             |NAME|EST. ROWS|COST|
 ----------------------------------------------
-|0 |LIMIT                |    |2        |78  |
-|1 | MERGE UNION DISTINCT|    |2        |78  |
-|2 |  TABLE SCAN         |t1  |2        |37  |
-|3 |  SORT               |    |2        |40  |
-|4 |   LIMIT             |    |2        |39  |
-|5 |    HASH DISTINCT    |    |2        |39  |
-|6 |     TABLE SCAN      |t2  |2        |37  |
+|0 |LIMIT                |    |2        |93  |
+|1 | MERGE UNION DISTINCT|    |2        |92  |
+|2 |  TABLE SCAN         |t1  |2        |46  |
+|3 |  SORT               |    |2        |47  |
+|4 |   LIMIT             |    |2        |47  |
+|5 |    HASH DISTINCT    |    |2        |47  |
+|6 |     TABLE SCAN      |t2  |2        |46  |
 ==============================================
 
 Outputs & filters: 
@@ -51,11 +51,11 @@ SQL: select c1 from t1 minus select c2 from t2 limit 2;
 ===============================================
 |ID|OPERATOR              |NAME|EST. ROWS|COST|
 -----------------------------------------------
-|0 |LIMIT                 |    |2        |338 |
-|1 | MERGE EXCEPT DISTINCT|    |2        |337 |
-|2 |  TABLE SCAN          |t1  |100      |88  |
-|3 |  SORT                |    |100      |198 |
-|4 |   TABLE SCAN         |t2  |100      |90  |
+|0 |LIMIT                 |    |2        |179 |
+|1 | MERGE EXCEPT DISTINCT|    |2        |179 |
+|2 |  TABLE SCAN          |t1  |2        |46  |
+|3 |  SORT                |    |2        |133 |
+|4 |   TABLE SCAN         |t2  |100      |78  |
 ===============================================
 
 Outputs & filters: 
@@ -73,9 +73,9 @@ SQL: select c1 from t1 limit 2 union select c2 from t2;
 ============================================
 |ID|OPERATOR           |NAME|EST. ROWS|COST|
 --------------------------------------------
-|0 |HASH UNION DISTINCT|    |102      |233 |
-|1 | TABLE SCAN        |t1  |2        |37  |
-|2 | TABLE SCAN        |t2  |100      |90  |
+|0 |HASH UNION DISTINCT|    |102      |169 |
+|1 | TABLE SCAN        |t1  |2        |46  |
+|2 | TABLE SCAN        |t2  |100      |78  |
 ============================================
 
 Outputs & filters: 
@@ -92,10 +92,10 @@ SQL: select c1 from t1 union all select c2 from t2 limit 2;
 =====================================
 |ID|OPERATOR    |NAME|EST. ROWS|COST|
 -------------------------------------
-|0 |LIMIT       |    |2        |74  |
-|1 | UNION ALL  |    |2        |74  |
-|2 |  TABLE SCAN|t1  |2        |37  |
-|3 |  TABLE SCAN|t2  |2        |37  |
+|0 |LIMIT       |    |2        |91  |
+|1 | UNION ALL  |    |2        |91  |
+|2 |  TABLE SCAN|t1  |2        |46  |
+|3 |  TABLE SCAN|t2  |2        |46  |
 =====================================
 
 Outputs & filters: 
@@ -114,10 +114,10 @@ SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2;
 =====================================
 |ID|OPERATOR    |NAME|EST. ROWS|COST|
 -------------------------------------
-|0 |LIMIT       |    |2        |74  |
-|1 | UNION ALL  |    |2        |74  |
-|2 |  TABLE SCAN|t1  |2        |37  |
-|3 |  TABLE SCAN|t2  |2        |37  |
+|0 |LIMIT       |    |2        |91  |
+|1 | UNION ALL  |    |2        |91  |
+|2 |  TABLE SCAN|t1  |2        |46  |
+|3 |  TABLE SCAN|t2  |2        |46  |
 =====================================
 
 Outputs & filters: 
@@ -136,11 +136,11 @@ SQL: select c1 from t1 intersect select c2 from t2 limit 2;
 ==================================================
 |ID|OPERATOR                 |NAME|EST. ROWS|COST|
 --------------------------------------------------
-|0 |LIMIT                    |    |2        |338 |
-|1 | MERGE INTERSECT DISTINCT|    |2        |337 |
-|2 |  TABLE SCAN             |t1  |100      |88  |
-|3 |  SORT                   |    |100      |198 |
-|4 |   TABLE SCAN            |t2  |100      |90  |
+|0 |LIMIT                    |    |2        |179 |
+|1 | MERGE INTERSECT DISTINCT|    |2        |179 |
+|2 |  TABLE SCAN             |t1  |2        |46  |
+|3 |  SORT                   |    |2        |133 |
+|4 |   TABLE SCAN            |t2  |100      |78  |
 ==================================================
 
 Outputs & filters: 
@@ -158,10 +158,10 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1;
 =====================================
 |ID|OPERATOR    |NAME|EST. ROWS|COST|
 -------------------------------------
-|0 |SORT        |    |200      |476 |
-|1 | UNION ALL  |    |200      |244 |
-|2 |  TABLE SCAN|t1  |100      |88  |
-|3 |  TABLE SCAN|t2  |100      |90  |
+|0 |SORT        |    |200      |285 |
+|1 | UNION ALL  |    |200      |159 |
+|2 |  TABLE SCAN|t1  |100      |78  |
+|3 |  TABLE SCAN|t2  |100      |78  |
 =====================================
 
 Outputs & filters: 
@@ -175,76 +175,68 @@ Outputs & filters:
 
 ***************   Case 8   ***************
 SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2; 
-========================================
-|ID|OPERATOR       |NAME|EST. ROWS|COST|
-----------------------------------------
-|0 |LIMIT          |    |2        |161 |
-|1 | SORT          |    |2        |161 |
-|2 |  UNION ALL    |    |4        |159 |
-|3 |   TABLE SCAN  |t1  |2        |37  |
-|4 |   LIMIT       |    |2        |122 |
-|5 |    TOP-N SORT |    |2        |122 |
-|6 |     TABLE SCAN|t2  |100      |90  |
-========================================
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |TOP-N SORT   |    |2        |128 |
+|1 | UNION ALL   |    |4        |128 |
+|2 |  TABLE SCAN |t1  |2        |46  |
+|3 |  TOP-N SORT |    |2        |82  |
+|4 |   TABLE SCAN|t2  |100      |78  |
+======================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
-  2 - output([UNION([1])]), filter(nil)
-  3 - output([t1.c1]), filter(nil), 
+  0 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p0), 
       limit(2), offset(nil)
-  4 - output([t2.c2]), filter(nil), limit(2), offset(nil)
-  5 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
-  6 - output([t2.c2]), filter(nil), 
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
+  4 - output([t2.c2]), filter(nil), 
       access([t2.c2]), partitions(p0)
 
 ***************   Case 9   ***************
 SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by c1 limit 2; 
-======================================
-|ID|OPERATOR     |NAME|EST. ROWS|COST|
---------------------------------------
-|0 |LIMIT        |    |2        |77  |
-|1 | SORT        |    |2        |76  |
-|2 |  UNION ALL  |    |4        |74  |
-|3 |   TABLE SCAN|t1  |2        |37  |
-|4 |   TABLE SCAN|t2  |2        |37  |
-======================================
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |TOP-N SORT  |    |2        |92  |
+|1 | UNION ALL  |    |4        |91  |
+|2 |  TABLE SCAN|t1  |2        |46  |
+|3 |  TABLE SCAN|t2  |2        |46  |
+=====================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
-  2 - output([UNION([1])], [UNION([2])]), filter(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
+  1 - output([UNION([1])], [UNION([2])]), filter(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0), 
       limit(2), offset(nil)
-  4 - output([t2.c1], [t2.c2]), filter(nil), 
+  3 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0), 
       limit(2), offset(nil)
 
 ***************   Case 10   ***************
 SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 limit 2; 
-======================================
-|ID|OPERATOR     |NAME|EST. ROWS|COST|
---------------------------------------
-|0 |LIMIT        |    |2        |79  |
-|1 | SORT        |    |2        |79  |
-|2 |  UNION ALL  |    |7        |76  |
-|3 |   TABLE SCAN|t1  |5        |37  |
-|4 |   TABLE SCAN|t2  |2        |37  |
-======================================
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |TOP-N SORT  |    |2        |92  |
+|1 | UNION ALL  |    |7        |91  |
+|2 |  TABLE SCAN|t1  |5        |46  |
+|3 |  TABLE SCAN|t2  |2        |46  |
+=====================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
-  2 - output([UNION([1])], [UNION([2])]), filter(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
+  1 - output([UNION([1])], [UNION([2])]), filter(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0), 
       limit(5), offset(nil)
-  4 - output([t2.c1], [t2.c2]), filter(nil), 
+  3 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0), 
       limit(2), offset(nil)
 
@@ -253,11 +245,11 @@ SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2;
 ===============================================
 |ID|OPERATOR              |NAME|EST. ROWS|COST|
 -----------------------------------------------
-|0 |LIMIT                 |    |2        |338 |
-|1 | MERGE EXCEPT DISTINCT|    |2        |337 |
-|2 |  TABLE SCAN          |t1  |100      |88  |
-|3 |  SORT                |    |100      |198 |
-|4 |   TABLE SCAN         |t2  |100      |90  |
+|0 |LIMIT                 |    |2        |179 |
+|1 | MERGE EXCEPT DISTINCT|    |2        |179 |
+|2 |  TABLE SCAN          |t1  |2        |46  |
+|3 |  SORT                |    |2        |133 |
+|4 |   TABLE SCAN         |t2  |100      |78  |
 ===============================================
 
 Outputs & filters: 
@@ -275,34 +267,34 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |LIMIT                        |    |10       |281 |
-|1 | MERGE UNION DISTINCT        |    |10       |280 |
-|2 |  LIMIT                      |    |10       |233 |
-|3 |   MERGE UNION DISTINCT      |    |10       |231 |
-|4 |    LIMIT                    |    |10       |185 |
-|5 |     MERGE UNION DISTINCT    |    |10       |183 |
-|6 |      LIMIT                  |    |10       |137 |
-|7 |       MERGE UNION DISTINCT  |    |10       |135 |
-|8 |        LIMIT                |    |10       |89  |
-|9 |         MERGE UNION DISTINCT|    |10       |87  |
-|10|          LIMIT              |    |10       |41  |
-|11|           SUBPLAN SCAN      |v   |10       |39  |
-|12|            TABLE SCAN       |t1  |10       |38  |
-|13|          LIMIT              |    |10       |41  |
-|14|           SUBPLAN SCAN      |v   |10       |39  |
-|15|            TABLE SCAN       |t1  |10       |38  |
-|16|        LIMIT                |    |10       |41  |
-|17|         SUBPLAN SCAN        |v   |10       |39  |
-|18|          TABLE SCAN         |t1  |10       |38  |
-|19|      LIMIT                  |    |10       |41  |
-|20|       SUBPLAN SCAN          |v   |10       |39  |
-|21|        TABLE SCAN           |t1  |10       |38  |
-|22|    LIMIT                    |    |10       |41  |
-|23|     SUBPLAN SCAN            |v   |10       |39  |
-|24|      TABLE SCAN             |t1  |10       |38  |
-|25|  LIMIT                      |    |10       |41  |
-|26|   SUBPLAN SCAN              |v   |10       |39  |
-|27|    TABLE SCAN               |t1  |10       |38  |
+|0 |LIMIT                        |    |10       |279 |
+|1 | MERGE UNION DISTINCT        |    |10       |279 |
+|2 |  LIMIT                      |    |10       |232 |
+|3 |   MERGE UNION DISTINCT      |    |10       |232 |
+|4 |    LIMIT                    |    |10       |186 |
+|5 |     MERGE UNION DISTINCT    |    |10       |186 |
+|6 |      LIMIT                  |    |10       |139 |
+|7 |       MERGE UNION DISTINCT  |    |10       |139 |
+|8 |        LIMIT                |    |10       |93  |
+|9 |         MERGE UNION DISTINCT|    |10       |93  |
+|10|          LIMIT              |    |10       |46  |
+|11|           SUBPLAN SCAN      |v   |10       |46  |
+|12|            TABLE SCAN       |t1  |10       |46  |
+|13|          LIMIT              |    |10       |46  |
+|14|           SUBPLAN SCAN      |v   |10       |46  |
+|15|            TABLE SCAN       |t1  |10       |46  |
+|16|        LIMIT                |    |10       |46  |
+|17|         SUBPLAN SCAN        |v   |10       |46  |
+|18|          TABLE SCAN         |t1  |10       |46  |
+|19|      LIMIT                  |    |10       |46  |
+|20|       SUBPLAN SCAN          |v   |10       |46  |
+|21|        TABLE SCAN           |t1  |10       |46  |
+|22|    LIMIT                    |    |10       |46  |
+|23|     SUBPLAN SCAN            |v   |10       |46  |
+|24|      TABLE SCAN             |t1  |10       |46  |
+|25|  LIMIT                      |    |10       |46  |
+|26|   SUBPLAN SCAN              |v   |10       |46  |
+|27|    TABLE SCAN               |t1  |10       |46  |
 ======================================================
 
 Outputs & filters: 
@@ -353,34 +345,34 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |LIMIT                        |    |10       |281 |
-|1 | MERGE UNION DISTINCT        |    |10       |280 |
-|2 |  LIMIT                      |    |10       |233 |
-|3 |   MERGE UNION DISTINCT      |    |10       |231 |
-|4 |    LIMIT                    |    |10       |185 |
-|5 |     MERGE UNION DISTINCT    |    |10       |183 |
-|6 |      LIMIT                  |    |10       |137 |
-|7 |       MERGE UNION DISTINCT  |    |10       |135 |
-|8 |        LIMIT                |    |10       |89  |
-|9 |         MERGE UNION DISTINCT|    |10       |87  |
-|10|          LIMIT              |    |10       |41  |
-|11|           SUBPLAN SCAN      |v   |10       |39  |
-|12|            TABLE SCAN       |t1  |10       |38  |
-|13|          LIMIT              |    |10       |41  |
-|14|           SUBPLAN SCAN      |v   |10       |39  |
-|15|            TABLE SCAN       |t1  |10       |38  |
-|16|        LIMIT                |    |10       |41  |
-|17|         SUBPLAN SCAN        |v   |10       |39  |
-|18|          TABLE SCAN         |t1  |10       |38  |
-|19|      LIMIT                  |    |10       |41  |
-|20|       SUBPLAN SCAN          |v   |10       |39  |
-|21|        TABLE SCAN           |t1  |10       |38  |
-|22|    LIMIT                    |    |10       |41  |
-|23|     SUBPLAN SCAN            |v   |10       |39  |
-|24|      TABLE SCAN             |t1  |10       |38  |
-|25|  LIMIT                      |    |10       |41  |
-|26|   SUBPLAN SCAN              |v   |10       |39  |
-|27|    TABLE SCAN               |t1  |10       |38  |
+|0 |LIMIT                        |    |10       |279 |
+|1 | MERGE UNION DISTINCT        |    |10       |279 |
+|2 |  LIMIT                      |    |10       |232 |
+|3 |   MERGE UNION DISTINCT      |    |10       |232 |
+|4 |    LIMIT                    |    |10       |186 |
+|5 |     MERGE UNION DISTINCT    |    |10       |186 |
+|6 |      LIMIT                  |    |10       |139 |
+|7 |       MERGE UNION DISTINCT  |    |10       |139 |
+|8 |        LIMIT                |    |10       |93  |
+|9 |         MERGE UNION DISTINCT|    |10       |93  |
+|10|          LIMIT              |    |10       |46  |
+|11|           SUBPLAN SCAN      |v   |10       |46  |
+|12|            TABLE SCAN       |t1  |10       |46  |
+|13|          LIMIT              |    |10       |46  |
+|14|           SUBPLAN SCAN      |v   |10       |46  |
+|15|            TABLE SCAN       |t1  |10       |46  |
+|16|        LIMIT                |    |10       |46  |
+|17|         SUBPLAN SCAN        |v   |10       |46  |
+|18|          TABLE SCAN         |t1  |10       |46  |
+|19|      LIMIT                  |    |10       |46  |
+|20|       SUBPLAN SCAN          |v   |10       |46  |
+|21|        TABLE SCAN           |t1  |10       |46  |
+|22|    LIMIT                    |    |10       |46  |
+|23|     SUBPLAN SCAN            |v   |10       |46  |
+|24|      TABLE SCAN             |t1  |10       |46  |
+|25|  LIMIT                      |    |10       |46  |
+|26|   SUBPLAN SCAN              |v   |10       |46  |
+|27|    TABLE SCAN               |t1  |10       |46  |
 ======================================================
 
 Outputs & filters: 
@@ -431,34 +423,34 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |LIMIT                        |    |10       |281 |
-|1 | MERGE UNION DISTINCT        |    |10       |280 |
-|2 |  LIMIT                      |    |10       |233 |
-|3 |   MERGE UNION DISTINCT      |    |10       |231 |
-|4 |    LIMIT                    |    |10       |185 |
-|5 |     MERGE UNION DISTINCT    |    |10       |183 |
-|6 |      LIMIT                  |    |10       |137 |
-|7 |       MERGE UNION DISTINCT  |    |10       |135 |
-|8 |        LIMIT                |    |10       |89  |
-|9 |         MERGE UNION DISTINCT|    |10       |87  |
-|10|          LIMIT              |    |10       |41  |
-|11|           SUBPLAN SCAN      |v   |10       |39  |
-|12|            TABLE SCAN       |t1  |10       |38  |
-|13|          LIMIT              |    |10       |41  |
-|14|           SUBPLAN SCAN      |v   |10       |39  |
-|15|            TABLE SCAN       |t1  |10       |38  |
-|16|        LIMIT                |    |10       |41  |
-|17|         SUBPLAN SCAN        |v   |10       |39  |
-|18|          TABLE SCAN         |t1  |10       |38  |
-|19|      LIMIT                  |    |10       |41  |
-|20|       SUBPLAN SCAN          |v   |10       |39  |
-|21|        TABLE SCAN           |t1  |10       |38  |
-|22|    LIMIT                    |    |10       |41  |
-|23|     SUBPLAN SCAN            |v   |10       |39  |
-|24|      TABLE SCAN             |t1  |10       |38  |
-|25|  LIMIT                      |    |10       |41  |
-|26|   SUBPLAN SCAN              |v   |10       |39  |
-|27|    TABLE SCAN               |t1  |10       |38  |
+|0 |LIMIT                        |    |10       |279 |
+|1 | MERGE UNION DISTINCT        |    |10       |279 |
+|2 |  LIMIT                      |    |10       |232 |
+|3 |   MERGE UNION DISTINCT      |    |10       |232 |
+|4 |    LIMIT                    |    |10       |186 |
+|5 |     MERGE UNION DISTINCT    |    |10       |186 |
+|6 |      LIMIT                  |    |10       |139 |
+|7 |       MERGE UNION DISTINCT  |    |10       |139 |
+|8 |        LIMIT                |    |10       |93  |
+|9 |         MERGE UNION DISTINCT|    |10       |93  |
+|10|          LIMIT              |    |10       |46  |
+|11|           SUBPLAN SCAN      |v   |10       |46  |
+|12|            TABLE SCAN       |t1  |10       |46  |
+|13|          LIMIT              |    |10       |46  |
+|14|           SUBPLAN SCAN      |v   |10       |46  |
+|15|            TABLE SCAN       |t1  |10       |46  |
+|16|        LIMIT                |    |10       |46  |
+|17|         SUBPLAN SCAN        |v   |10       |46  |
+|18|          TABLE SCAN         |t1  |10       |46  |
+|19|      LIMIT                  |    |10       |46  |
+|20|       SUBPLAN SCAN          |v   |10       |46  |
+|21|        TABLE SCAN           |t1  |10       |46  |
+|22|    LIMIT                    |    |10       |46  |
+|23|     SUBPLAN SCAN            |v   |10       |46  |
+|24|      TABLE SCAN             |t1  |10       |46  |
+|25|  LIMIT                      |    |10       |46  |
+|26|   SUBPLAN SCAN              |v   |10       |46  |
+|27|    TABLE SCAN               |t1  |10       |46  |
 ======================================================
 
 Outputs & filters: 
@@ -509,19 +501,19 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
 ====================================================
 |ID|OPERATOR                   |NAME|EST. ROWS|COST|
 ----------------------------------------------------
-|0 |LIMIT                      |    |3        |595 |
-|1 | MERGE UNION DISTINCT      |    |3        |595 |
-|2 |  LIMIT                    |    |3        |352 |
-|3 |   MERGE INTERSECT DISTINCT|    |3        |351 |
-|4 |    SORT                   |    |100      |198 |
-|5 |     TABLE SCAN            |t1  |100      |90  |
-|6 |    SUBPLAN SCAN           |v   |100      |102 |
-|7 |     TABLE SCAN            |t1  |100      |88  |
-|8 |  LIMIT                    |    |3        |242 |
-|9 |   MERGE EXCEPT DISTINCT   |    |3        |241 |
-|10|    TABLE SCAN             |t1  |100      |88  |
-|11|    SUBPLAN SCAN           |v   |100      |102 |
-|12|     TABLE SCAN            |t1  |100      |88  |
+|0 |LIMIT                      |    |3        |272 |
+|1 | MERGE UNION DISTINCT      |    |3        |272 |
+|2 |  LIMIT                    |    |10       |179 |
+|3 |   MERGE INTERSECT DISTINCT|    |10       |179 |
+|4 |    SORT                   |    |10       |133 |
+|5 |     TABLE SCAN            |t1  |100      |78  |
+|6 |    SUBPLAN SCAN           |v   |10       |46  |
+|7 |     TABLE SCAN            |t1  |10       |46  |
+|8 |  LIMIT                    |    |11       |92  |
+|9 |   MERGE EXCEPT DISTINCT   |    |11       |92  |
+|10|    TABLE SCAN             |t1  |11       |46  |
+|11|    SUBPLAN SCAN           |v   |11       |46  |
+|12|     TABLE SCAN            |t1  |11       |46  |
 ====================================================
 
 Outputs & filters: 

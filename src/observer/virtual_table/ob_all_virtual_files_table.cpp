@@ -12,22 +12,27 @@
 
 #include "observer/virtual_table/ob_all_virtual_files_table.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
+namespace observer
+{
 
-ObAllVirtualFilesTable::ObAllVirtualFilesTable() : ObVirtualTableScannerIterator()
-{}
+ObAllVirtualFilesTable::ObAllVirtualFilesTable() :
+    ObVirtualTableScannerIterator()
+{
+}
 
 ObAllVirtualFilesTable::~ObAllVirtualFilesTable()
-{}
+{
+}
 
-int ObAllVirtualFilesTable::inner_get_next_row(common::ObNewRow*& row)
+int ObAllVirtualFilesTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   UNUSED(row);
   return OB_ITER_END;
 }
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

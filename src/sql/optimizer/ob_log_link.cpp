@@ -12,238 +12,112 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link.h"
-#include "sql/optimizer/ob_log_plan.h"
-//#include "sql/ob_sql_utils.h"
+#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObLogLink::ObLogLink(ObLogPlan& plan)
-    : ObLogicalOperator(plan),
-      allocator_(plan.get_allocator()),
-      link_stmt_(plan.get_allocator(), output_exprs_),
-      stmt_fmt_buf_(NULL),
-      stmt_fmt_buf_len_(0),
-      stmt_fmt_len_(0),
-      param_infos_()
+ObLogLink::ObLogLink(ObLogPlan &plan)
+  : ObLogicalOperator(plan),
+    allocator_(plan.get_allocator()),
+    stmt_fmt_buf_(NULL),
+    stmt_fmt_len_(0),
+    is_reverse_link_(false),
+    tm_dblink_id_(OB_INVALID_ID),
+    param_infos_()
 {}
 
-int ObLogLink::copy_without_child(ObLogicalOperator*& out)
+int ObLogLink::compute_sharding_info()
 {
   int ret = OB_SUCCESS;
-  out = NULL;
-  ObLogicalOperator* op = NULL;
-  ObLogLink* link = NULL;
-  if (OB_FAIL(clone(op))) {
-    LOG_WARN("failed to clone ObLogTableScan", K(ret));
-  } else if (OB_ISNULL(link = static_cast<ObLogLink*>(op))) {
+  ObOptimizerContext *opt_ctx = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to cast ObLogicalOpertor* to ObLogLink*", K(ret));
-  } else if (OB_FAIL(link->assign_stmt_fmt(stmt_fmt_buf_, stmt_fmt_len_))) {
-    LOG_WARN("failed to assign stmt fmt", K(ret));
-  } else if (OB_FAIL(link->assign_param_infos(param_infos_))) {
-    LOG_WARN("failed to assign param infos", K(ret));
+    LOG_WARN("get unexpected null", K(ret));
   } else {
-    out = link;
+    strong_sharding_ = opt_ctx->get_local_sharding();
   }
   return ret;
 }
 
-int ObLogLink::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
+int ObLogLink::compute_op_parallel_and_server_info()
 {
-  UNUSED(type);
   int ret = OB_SUCCESS;
-  int64_t len = 0;
-  if (type != EXPLAIN_BASIC && OB_FAIL(BUF_PRINTF(", dblink_id=%lu,", get_dblink_id()))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      link_stmt="))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if ((len = link_stmt_.to_string(buf + pos, buf_len - pos)) <= 0) {
+  set_parallel(1);
+  set_server_cnt(1);
+  return ret;
+}
+
+int ObLogLink::est_cost()
+{
+  int ret = OB_SUCCESS;
+  card_ = 0;
+  op_cost_ = 0;
+  cost_ = 0;
+  width_ = 0;
+  return ret;
+}
+
+int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  if (stmt_fmt_len_ > buf_len) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("link stmt to string failed", K(ret), K(link_stmt_));
+    LOG_WARN("print link stmt failed", K(ret), K(stmt_fmt_len_), K(buf_len));
   } else {
-    pos += len;
+    MEMCPY(buf, stmt_fmt_buf_, stmt_fmt_len_);
+    char *ch = buf;
+    char *stmt_end = buf + stmt_fmt_len_ - 3;
+    while (ch < stmt_end) {
+      if (0 == ch[0] && 0 == ch[1]) {
+        uint16_t param_idx = *(uint16_t *)(ch + 2);
+        ch[0] = '$';
+        if (param_idx > 999) {
+          ch[1] = 'M';
+          ch[2] = 'A';
+          ch[3] = 'X';
+        } else {
+          ch[3] = static_cast<char>('0' + param_idx % 10);
+          param_idx /= 10;
+          ch[2] = static_cast<char>('0' + param_idx % 10);
+          param_idx /= 10;
+          ch[1] = static_cast<char>('0' + param_idx % 10);
+        }
+        ch += 4;
+      } else {
+        ch++;
+      }
+    }
   }
   return ret;
 }
 
-int ObLogLink::allocate_exchange_post(AllocExchContext* ctx)
+int ObLogLink::get_plan_item_info(PlanText &plan_text,
+                                  ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  return ret;
-}
-
-int ObLogLink::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
-{
-  /**
-   * TODO
-   * add database_name in select_strs, or in from_strs ?
-   * can not use "use db" because two tables in different database can join.
-   */
-
-  /*
-   * OceanBase(ADMIN@TEST)>explain
-   *     -> select (aa + 1) * (aa - 1), xx from (select a aa, x xx from test.t1@my_link1 lt1 union select c, y from
-   * test.t2@my_link1 lt2) tt; | ================================================ |ID|OPERATOR             |NAME|EST.
-   * ROWS|COST  |
-   * ------------------------------------------------
-   * |0 |LINK                 |    |0        |371744|
-   * |1 | SUBPLAN SCAN        |TT  |200000   |371744|
-   * |2 |  HASH UNION DISTINCT|    |200000   |344139|
-   * |3 |   TABLE SCAN        |LT1 |100000   |61860 |
-   * |4 |   TABLE SCAN        |LT2 |100000   |61860 |
-   * ================================================
-   *
-   * Outputs & filters:
-   * -------------------------------------
-   *   0 - output([((TT.AA + 1) * (TT.AA - 1))], [TT.XX]), filter(nil), dblink_id=1100611139403793,
-   *       link_stmt=select ((TT.AA + 1) * (TT.AA - 1)), TT.XX from ((select LT1.A AA, LT1.X XX from T1 LT1) union
-   * (select LT2.C, LT2.Y from T2 LT2)) TT 1 - output([TT.XX], [((TT.AA + 1) * (TT.AA - 1))]), filter(nil),
-   *       access([TT.AA], [TT.XX])
-   *   2 - output([UNION(LT1.A, LT2.C)], [UNION(cast(LT1.X, VARCHAR(10 BYTE)), cast(LT2.Y, VARCHAR(10 BYTE)))]),
-   * filter(nil) 3 - output([LT1.A], [cast(LT1.X, VARCHAR(10 BYTE))]), filter(nil), access([LT1.A], [LT1.X]),
-   * partitions(p0) 4 - output([LT2.C], [cast(LT2.Y, VARCHAR(10 BYTE))]), filter(nil), access([LT2.C], [LT2.Y]),
-   * partitions(p0)
-   *
-   * that is why we must fill select clause in link, even if every log op will fill it if
-   * empty: the output of op 1 'SUBPLAN SCAN' is '[TT.XX], [((TT.AA + 1) * (TT.AA - 1))]',
-   * while we need 'select (TT.AA + 1) * (TT.AA - 1), TT.XX', the sequence of these two
-   * exprs is opposite.
-   * the sequence of output exprs in op 0 'LINK' is correct.
-   *
-   * here is another example, the sequence of op 0 'LINK' and op 1 'SORT' is correct, but
-   * op 2 'TABLE SCAN' is wrong.
-   *
-   * OceanBase(ADMIN@TEST)>explain basic
-   *     -> select mod(a, 3), x from test.t1@my_link1 order by 1, 2;
-   *
-   * | ======================
-   * |ID|OPERATOR    |NAME|
-   * ----------------------
-   * |0 |LINK        |    |
-   * |1 | SORT       |    |
-   * |2 |  TABLE SCAN|T1  |
-   * ======================
-   *
-   * Outputs & filters:
-   * -------------------------------------
-   *   0 - output([(T1.A % 3)], [T1.X]), filter(nil), dblink_id=1100611139403793,
-   *       link_stmt=select T1.X, MOD(T1.A, 3) from T1 order by 1 asc, 2 asc
-   *   1 - output([(T1.A % 3)], [T1.X]), filter(nil), sort_keys([(T1.A % 3), ASC], [T1.X, ASC])
-   *   2 - output([T1.X], [(T1.A % 3)]), filter(nil),
-   *       access([T1.A], [T1.X]), partitions(p0)
-   */
-
-  /*
-   * OceanBase(ADMIN@TEST)>explain
-   *     -> select a - 3, concat(b, x) from t1 union select c, d from t2;
-   *
-   * | ============================================
-   * |ID|OPERATOR           |NAME|EST. ROWS|COST|
-   * --------------------------------------------
-   * |0 |HASH UNION DISTINCT|    |10       |85  |
-   * |1 | TABLE SCAN        |T1  |5        |37  |
-   * |2 | TABLE SCAN        |T2  |5        |37  |
-   * ============================================
-   *
-   * Outputs & filters:
-   * -------------------------------------
-   *   0 - output([UNION((T1.A - 3), cast(T2.C, DECIMAL(-1, -85)))], [UNION(CONCAT(T1.B, T1.X), cast(T2.D, VARCHAR(20
-   * BYTE)))]), filter(nil) 1 - output([(T1.A - 3)], [CONCAT(T1.B, T1.X)]), filter(nil), access([T1.A], [T1.B], [T1.X]),
-   * partitions(p0) 2 - output([cast(T2.C, DECIMAL(-1, -85))], [cast(T2.D, VARCHAR(20 BYTE))]), filter(nil),
-   *   access([T2.C], [T2.D]), partitions(p0)
-   *
-   * OceanBase(ADMIN@TEST)>select T1.A - 3 from (select a - 3, concat(b, x) from t1 union select c, d from t2);
-   * ERROR-00904: invalid identifier 'T1.A' in 'field list'
-   *
-   * that is why we must NOT fill select clause if the child is set, even if we can extract
-   * 'T1.A - 3' from 'UNION((T1.A - 3), cast(T2.C, DECIMAL(-1, -85)))'.
-   * so just keep select clause empty.
-   * ps: set op include union / intersect / except / minus.
-   */
-
-  /*     merge-join
-   *     /        \
-   * table-scan   link
-   *               |
-   *           merge-join
-   *           /        \
-   *         sort      sort
-   *
-   * that is why we must fill order by clause using the op_ordering of link rather
-   * than sort, the top merge-join need the 'op_ordering' of link.
-   */
-
-  /*
-   * OceanBase(ADMIN@TEST)>explain
-   *     -> select a - 3, x from test.t1@my_link1 union select c * 2, y from test.t2@my_link1 order by 1;
-   * | =================================================
-   * |ID|OPERATOR             |NAME|EST. ROWS|COST   |
-   * -------------------------------------------------
-   * |0 |LINK                 |    |0        |1070149|
-   * |1 | MERGE UNION DISTINCT|    |200000   |1070149|
-   * |2 |  SORT               |    |100000   |496872 |
-   * |3 |   TABLE SCAN        |T1  |100000   |61860  |
-   * |4 |  SORT               |    |100000   |496872 |
-   * |5 |   TABLE SCAN        |T2  |100000   |61860  |
-   * =================================================
-   *
-   * Outputs & filters:
-   * -------------------------------------
-   *   0 - output([UNION((T1.A - 3), (T2.C * 2))], [UNION(cast(T1.X, VARCHAR(10 BYTE)), cast(T2.Y, VARCHAR(10 BYTE)))]),
-   * filter(nil), dblink_id=1100611139403793, link_stmt=(select (T1.A - 3), T1.X from (select T1.A, T1.X from T1) T1)
-   * union (select (T2.C * 2), T2.Y from (select T2.C, T2.Y from T2) T2) order by 1 asc, 2 asc 1 - output([UNION((T1.A -
-   * 3), (T2.C * 2))], [UNION(cast(T1.X, VARCHAR(10 BYTE)), cast(T2.Y, VARCHAR(10 BYTE)))]), filter(nil) 2 -
-   * output([(T1.A - 3)], [cast(T1.X, VARCHAR(10 BYTE))]), filter(nil), sort_keys([(T1.A - 3), ASC], [cast(T1.X,
-   * VARCHAR(10 BYTE)), ASC]) 3 - output([(T1.A - 3)], [cast(T1.X, VARCHAR(10 BYTE))]), filter(nil), access([T1.A],
-   * [T1.X]), partitions(p0) 4 - output([(T2.C * 2)], [cast(T2.Y, VARCHAR(10 BYTE))]), filter(nil), sort_keys([(T2.C *
-   * 2), ASC], [cast(T2.Y, VARCHAR(10 BYTE)), ASC]) 5 - output([(T2.C * 2)], [cast(T2.Y, VARCHAR(10 BYTE))]),
-   * filter(nil), access([T2.C], [T2.Y]), partitions(p0)
-   *
-   * another reason that we must fill order by clause using the op_ordering of link
-   * rather than sort, the orig sort above union is pushed down to table scan.
-   */
-
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(link_stmt_.init(&link_ctx))) {
-    LOG_WARN("failed to init link stmt", K(ret), K(dblink_id_));
-  } else if (OB_FAIL(link_stmt_.fill_orderby_strs(get_op_ordering(), output_exprs_))) {
-    LOG_WARN("failed to fill link stmt orderby strs", K(ret), K(get_op_ordering()));
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    link_ctx.dblink_id_ = dblink_id_;
-    link_ctx.link_stmt_ = &link_stmt_;
-  }
-  return ret;
-}
-
-int ObLogLink::gen_link_stmt_fmt()
-{
-  int ret = OB_SUCCESS;
-  if (!link_stmt_.is_inited()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("link stmt is not inited", K(ret));
-  } else if (OB_FAIL(gen_link_stmt_fmt_buf())) {
-    LOG_WARN("failed to gen link stmt fmt buf", K(ret), K(link_stmt_));
-  } else if (OB_FAIL(gen_link_stmt_param_infos())) {
-    LOG_WARN("failed to gen link stmt param infos", K(ret), K(link_stmt_));
-  }
-  return ret;
-}
-
-int ObLogLink::gen_link_stmt_fmt_buf()
-{
-  int ret = OB_SUCCESS;
-  stmt_fmt_buf_len_ = link_stmt_.get_total_size();
-  if (OB_ISNULL(stmt_fmt_buf_ = static_cast<char*>(allocator_.alloc(stmt_fmt_buf_len_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc stmt buf", K(ret), K(stmt_fmt_buf_len_));
-  } else if (OB_FAIL(link_stmt_.gen_stmt_fmt(stmt_fmt_buf_, stmt_fmt_buf_len_, stmt_fmt_len_))) {
-    LOG_WARN("failed to gen link stmt fmt", K(ret));
+    BEGIN_BUF_PRINT;
+    if (false && OB_FAIL(BUF_PRINTF(",dblink_id=%lu,", get_dblink_id()))) { // explain basic will print dlbink id, dblink id will change every time when case run
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("link_stmt="))) {
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(print_link_stmt(buf + pos, buf_len - pos))) {
+      LOG_WARN("failed to print link stmt", K(ret));
+    } else {
+      pos += stmt_fmt_len_;
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -266,8 +140,8 @@ int ObLogLink::gen_link_stmt_param_infos()
       LOG_WARN("failed to read next param", K(ret));
     } else if (param_idx < 0) {
       // skip.
-    } else if (OB_FAIL(param_infos_.push_back(
-                   ObParamPosIdx(static_cast<int32_t>(param_pos), static_cast<int32_t>(param_idx))))) {
+    } else if (OB_FAIL(param_infos_.push_back(ObParamPosIdx(static_cast<int32_t>(param_pos),
+                                                            static_cast<int32_t>(param_idx))))) {
       LOG_WARN("failed to push back param pos idx", K(ret), K(param_pos), K(param_idx));
     } else {
       param_pos += param_len;
@@ -276,34 +150,87 @@ int ObLogLink::gen_link_stmt_param_infos()
   return ret;
 }
 
-int ObLogLink::assign_param_infos(const ObIArray<ObParamPosIdx>& param_infos)
+int ObLogLink::mark_exec_params(ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  param_infos_.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_infos.count(); i++) {
-    if (OB_FAIL(param_infos_.push_back(param_infos.at(i)))) {
-      LOG_WARN("failed to push back param info", K(ret), K(param_infos.at(i)));
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    common::ObIArray<ObQueryRefRawExpr*> &subquery_exprs = stmt->get_subquery_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i ++) {
+      ObQueryRefRawExpr *expr = subquery_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < expr->get_exec_params().count(); j ++) {
+          ObExecParamRawExpr *param_expr = NULL;
+          if (OB_ISNULL(param_expr = expr->get_exec_params().at(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else {
+            param_expr->set_ref_same_dblink(true);
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i ++) {
+      OZ(SMART_CALL(mark_exec_params(child_stmts.at(i))));
     }
   }
   return ret;
 }
 
-int ObLogLink::assign_stmt_fmt(const char* stmt_fmt_buf, int32_t stmt_fmt_len)
+int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt_fmt_buf) || stmt_fmt_len < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("argument is invalid", K(ret), KP(stmt_fmt_buf), K(stmt_fmt_len));
-  } else if (OB_ISNULL(stmt_fmt_buf_ = static_cast<char*>(allocator_.alloc(stmt_fmt_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc stmt buf", K(ret), K(stmt_fmt_len));
+  const ObLogPlan *plan = get_plan();
+  if (NULL == stmt) {
+    stmt = get_stmt();
+  }
+  ObString sql;
+  ObObjPrintParams print_param;
+  print_param.for_dblink_ = 1;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
+  ObSQLSessionInfo *session = NULL;
+  int64_t session_query_timeout_us = 0;
+  int64_t hint_query_timeout_us = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(plan) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(session = opt_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(opt_ctx), KP(stmt), KP(session), KP(plan), K(ret));
+  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(hint_query_timeout_us = query_ctx->get_query_hint_for_update().get_global_hint().query_timeout_)) {
+  } else if (OB_FAIL(session->get_query_timeout(session_query_timeout_us))) {
+    LOG_WARN("failed to get session query timeout", K(ret));
+  } else if (-1 == hint_query_timeout_us &&
+             FALSE_IT(query_ctx->get_query_hint_for_update().get_global_hint().merge_query_timeout_hint(session_query_timeout_us))) {
+    // do nothing
+  } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
+    LOG_WARN("failed to mark exec params", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param))) {
+    LOG_WARN("failed to reconstruct link sql", KP(stmt), KP(plan), K(get_dblink_id()), K(ret));
   } else {
-    MEMCPY(stmt_fmt_buf_, stmt_fmt_buf, stmt_fmt_len);
-    stmt_fmt_buf_len_ = stmt_fmt_len;
-    stmt_fmt_len_ = stmt_fmt_len;
+    stmt_fmt_buf_ = sql.ptr();
+    stmt_fmt_len_ = sql.length();
+    LOG_DEBUG("loglink succ to reconstruct link sql", K(sql));
+  }
+  if (-1 == hint_query_timeout_us) { // restore query_timeout_hint
+    query_ctx->get_query_hint_for_update().get_global_hint().reset_query_timeout_hint();
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

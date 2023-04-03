@@ -22,13 +22,13 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/alloc/alloc_failed_reason.h"
-#include "lib/stat/ob_diagnose_info.h"
+#include "lib/alloc/memory_sanity.h"
 
 using namespace oceanbase::lib;
 
 int ObLargePageHelper::large_page_type_ = INVALID_LARGE_PAGE_TYPE;
 
-void ObLargePageHelper::set_param(const char* param)
+void ObLargePageHelper::set_param(const char *param)
 {
   if (OB_NOT_NULL(param)) {
     if (0 == strcasecmp(param, "false")) {
@@ -44,71 +44,52 @@ void ObLargePageHelper::set_param(const char* param)
 
 int ObLargePageHelper::get_type()
 {
+#ifndef ENABLE_SANITY
   return large_page_type_;
+#else
+  return NO_LARGE_PAGE;
+#endif
 }
 
-AChunkMgr& AChunkMgr::instance()
+AChunkMgr &AChunkMgr::instance()
 {
   static AChunkMgr mgr;
   return mgr;
 }
 
 AChunkMgr::AChunkMgr()
-    : free_list_(),
-      chunk_bitmap_(nullptr),
-      limit_(DEFAULT_LIMIT),
-      urgent_(0),
-      hold_(0),
-      maps_(0),
-      unmaps_(0),
-      large_maps_(0),
-      large_unmaps_(0)
+  : free_list_(), chunk_bitmap_(nullptr), limit_(DEFAULT_LIMIT), urgent_(0), hold_(0),
+    total_hold_(0), maps_(0), unmaps_(0), large_maps_(0), large_unmaps_(0), shadow_hold_(0)
 {
-#if MEMCHK_LEVEL >= 1
-  uint64_t bmsize = sizeof(ChunkBitMap) + ChunkBitMap::buf_len(CHUNK_BITMAP_SIZE);
-  AChunk* chunk = alloc_chunk(bmsize);
-  if (nullptr != chunk) {
-    chunk_bitmap_ = new (chunk->data_) ChunkBitMap(CHUNK_BITMAP_SIZE, chunk->data_ + sizeof(ChunkBitMap));
-    chunk_bitmap_->set((int)((uint64_t)chunk >> MEMCHK_CHUNK_ALIGN_BITS));
-  }
-#endif
 }
 
-void* AChunkMgr::direct_alloc(const uint64_t size)
+void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
-  EVENT_INC(MMAP_COUNT);
-  EVENT_ADD(MMAP_SIZE, size);
 
-  void* ptr = nullptr;
-  ptr = low_alloc(size);
+  void *ptr = nullptr;
+  ptr = low_alloc(size, can_use_huge_page, huge_page_used, alloc_shadow);
   if (nullptr != ptr) {
-#if MEMCHK_LEVEL >= 1
-    if (((uint64_t)ptr & (ALIGN_SIZE - 1)) != 0) {
+    if (((uint64_t)ptr & (INTACT_ACHUNK_SIZE - 1)) != 0) {
       // not aligned
       low_free(ptr, size);
 
-      uint64_t new_size = size + ALIGN_SIZE;
-      ptr = low_alloc(new_size);
+      uint64_t new_size = size + INTACT_ACHUNK_SIZE;
+      ptr = low_alloc(new_size, can_use_huge_page, huge_page_used, alloc_shadow);
       if (nullptr != ptr) {
-        const uint64_t addr = align_up2((uint64_t)ptr, ALIGN_SIZE);
+        const uint64_t addr = align_up2((uint64_t)ptr, INTACT_ACHUNK_SIZE);
         if (addr - (uint64_t)ptr > 0) {
           low_free(ptr, addr - (uint64_t)ptr);
         }
-        if (ALIGN_SIZE - (addr - (uint64_t)ptr) > 0) {
-          low_free((void*)(addr + size), ALIGN_SIZE - (addr - (uint64_t)ptr));
+        if (INTACT_ACHUNK_SIZE - (addr - (uint64_t)ptr) > 0) {
+          low_free((void*)(addr + size), INTACT_ACHUNK_SIZE - (addr - (uint64_t)ptr));
         }
         ptr = (void*)addr;
       }
     } else {
       // aligned address returned
     }
-
-    if (nullptr != chunk_bitmap_ && nullptr != ptr) {
-      chunk_bitmap_->set((int)((uint64_t)ptr >> MEMCHK_CHUNK_ALIGN_BITS));
-    }
-#endif
   }
 
   if (ptr != nullptr) {
@@ -117,8 +98,8 @@ void* AChunkMgr::direct_alloc(const uint64_t size)
       ATOMIC_FAA(&large_maps_, 1);
     }
   } else {
-    LOG_ERROR("low alloc fail", K(size), K(orig_errno), K(errno));
-    auto& afc = g_alloc_failed_ctx();
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "low alloc fail", K(size), K(orig_errno), K(errno));
+    auto &afc = g_alloc_failed_ctx();
     afc.reason_ = PHYSICAL_MEMORY_EXHAUST;
     afc.alloc_size_ = size;
     afc.errno_ = errno;
@@ -127,20 +108,10 @@ void* AChunkMgr::direct_alloc(const uint64_t size)
   return ptr;
 }
 
-void AChunkMgr::direct_free(const void* ptr, const uint64_t size)
+void AChunkMgr::direct_free(const void *ptr, const uint64_t size)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
-  EVENT_INC(MUNMAP_COUNT);
-  EVENT_ADD(MUNMAP_SIZE, size);
-#if MEMCHK_LEVEL >= 1
-  const int idx = (int)((uint64_t)ptr >> MEMCHK_CHUNK_ALIGN_BITS);
 
-  abort_unless(ptr);
-  abort_unless(((uint64_t)ptr & (MEMCHK_CHUNK_ALIGN - 1)) == 0);
-  abort_unless(chunk_bitmap_ != nullptr);
-  abort_unless(chunk_bitmap_->isset(idx));
-  chunk_bitmap_->unset(idx);
-#endif
   ATOMIC_FAA(&unmaps_, 1);
   if (size > INTACT_ACHUNK_SIZE) {
     ATOMIC_FAA(&large_unmaps_, 1);
@@ -148,144 +119,220 @@ void AChunkMgr::direct_free(const void* ptr, const uint64_t size)
   low_free(ptr, size);
 }
 
-void* AChunkMgr::low_alloc(const uint64_t size)
+static int64_t global_canonical_addr = SANITY_MIN_CANONICAL_ADDR;
+
+void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
 {
-  void* ptr = nullptr;
+  void *ptr = nullptr;
+  huge_page_used = false;
   const int prot = PROT_READ | PROT_WRITE;
-  const int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+  int flags = MAP_PRIVATE | MAP_ANONYMOUS | (SANITY_BOOL_EXPR(alloc_shadow) ? MAP_FIXED : 0);
+  int huge_flags = flags;
 #ifdef MAP_HUGETLB
-  const int huge_flags = flags | MAP_HUGETLB;
-#else
-  const int huge_flags = flags;
+  if (OB_LIKELY(can_use_huge_page)) {
+    huge_flags = flags | MAP_HUGETLB;
+  }
 #endif
   const int fd = -1;
   const int offset = 0;
   const int large_page_type = ObLargePageHelper::get_type();
+  if (SANITY_BOOL_EXPR(alloc_shadow)) {
+    int64_t new_addr = ATOMIC_FAA(&global_canonical_addr, size);
+    if (!SANITY_ADDR_IN_RANGE((void*)new_addr)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "sanity address exhausted", K(errno), KP(new_addr));
+      ATOMIC_FAA(&global_canonical_addr, -size);
+      ptr = NULL; // let it goon, it means no shadow, same as out of checker!
+      // in aarch64, mmap will return EPERM error when NULL address and MAP_FIXED are privided at the same time
+      flags &= ~MAP_FIXED;
+    } else {
+      ptr = (void*)new_addr;
+    }
+  }
   if (OB_LIKELY(ObLargePageHelper::PREFER_LARGE_PAGE != large_page_type) &&
       OB_LIKELY(ObLargePageHelper::ONLY_LARGE_PAGE != large_page_type)) {
-    if (MAP_FAILED == (ptr = ::mmap(nullptr, size, prot, flags, fd, offset))) {
+    if (MAP_FAILED == (ptr = ::mmap(ptr, size, prot, flags, fd, offset))) {
       ptr = nullptr;
     }
   } else {
-    if (MAP_FAILED == (ptr = ::mmap(nullptr, size, prot, huge_flags, fd, offset))) {
+    if (MAP_FAILED == (ptr = ::mmap(ptr, size, prot, huge_flags, fd, offset))) {
       ptr = nullptr;
       if (ObLargePageHelper::PREFER_LARGE_PAGE == large_page_type) {
-        if (MAP_FAILED == (ptr = ::mmap(nullptr, size, prot, flags, fd, offset))) {
+        if (MAP_FAILED == (ptr = ::mmap(ptr, size, prot, flags, fd, offset))) {
           ptr = nullptr;
         }
       }
+    } else {
+      huge_page_used = huge_flags != flags;
+    }
+  }
+  if (ptr && SANITY_ADDR_IN_RANGE(ptr)) {
+    void *shad_ptr  = SANITY_TO_SHADOW(ptr);
+    ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
+    if (MAP_FAILED == ::mmap(shad_ptr, shad_size, prot, flags, fd, offset)) {
+      LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "sanity alloc shadow failed", K(errno), KP(shad_ptr));
+      abort();
+    } else {
+      IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
+      //memset(shad_ptr, 0, shad_size);
+      //SANITY_UNPOISON(shad_ptr, shad_size); // maybe no need?
+      //SANITY_UNPOISON(ptr, size); // maybe no need?
     }
   }
   return ptr;
 }
 
-void AChunkMgr::low_free(const void* ptr, const uint64_t size)
+void AChunkMgr::low_free(const void *ptr, const uint64_t size)
 {
+  if (SANITY_ADDR_IN_RANGE(ptr)) {
+    void *shad_ptr  = SANITY_TO_SHADOW((void*)ptr);
+    ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
+    IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, -shad_size);
+    ::munmap(shad_ptr, shad_size);
+  }
   ::munmap((void*)ptr, size);
 }
 
-AChunk* AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
+AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
 {
-  const uint64_t all_size = aligned(size);
-  const uint64_t adj_size = all_size - ACHUNK_HEADER_SIZE;
+  const int64_t hold_size = hold(size);
+  const int64_t all_size = aligned(size);
+  const int64_t achunk_size = INTACT_ACHUNK_SIZE;
+  bool is_allocated = true;
 
-  AChunk* chunk = nullptr;
-  if (INTACT_ACHUNK_SIZE == all_size) {
+  AChunk *chunk = nullptr;
+  if (achunk_size == hold_size) {
+    // TODO by fengshuo.fs: chunk cached by freelist may not use all memory in it,
+    //                      so update_hold can use hold_size too.
     if (free_list_.count() > 0) {
       chunk = free_list_.pop();
     }
     if (OB_ISNULL(chunk)) {
-      if (update_hold(all_size, high_prio)) {
-        void* ptr = direct_alloc(all_size);
+      if (update_hold(hold_size, high_prio)) {
+        bool hugetlb_used = false;
+        void *ptr = direct_alloc(all_size, true, hugetlb_used, SANITY_BOOL_EXPR(true));
         if (ptr != nullptr) {
-          chunk = new (ptr) AChunk(adj_size);
+          chunk = new (ptr) AChunk();
+          chunk->is_hugetlb_ = hugetlb_used;
         } else {
-          IGNORE_RETURN update_hold(-all_size, high_prio);
+          IGNORE_RETURN update_hold(-hold_size, high_prio);
         }
-      }
-    }
-  } else {
-    if (update_hold(all_size, high_prio)) {
-      void* ptr = direct_alloc(all_size);
-      if (ptr != nullptr) {
-        chunk = new (ptr) AChunk(adj_size);
-      } else {
-        IGNORE_RETURN update_hold(-all_size, high_prio);
       }
     } else {
-      int64_t left_size = all_size;
-      while (free_list_.count() > 0 && left_size > 0) {
-        direct_free(free_list_.pop(), INTACT_ACHUNK_SIZE);
-        left_size -= INTACT_ACHUNK_SIZE;
+      is_allocated = false;
+    }
+  } else {
+    bool updated = false;
+    while (!(updated = update_hold(hold_size, high_prio)) && free_list_.count() > 0) {
+      if (OB_NOT_NULL(chunk = free_list_.pop())) {
+        direct_free(chunk, achunk_size);
+        IGNORE_RETURN update_hold(-achunk_size, high_prio);
+        IGNORE_RETURN ATOMIC_FAA(&total_hold_, -achunk_size);
+        chunk = nullptr;
       }
-      if (left_size <= 0) {
-        void* ptr = direct_alloc(all_size);
-        if (ptr != nullptr) {
-          chunk = new (ptr) AChunk(adj_size);
-        }
+    }
+    if (updated) {
+      bool hugetlb_used = false;
+      void *ptr = direct_alloc(all_size, true, hugetlb_used, SANITY_BOOL_EXPR(true));
+      if (ptr != nullptr) {
+        chunk = new (ptr) AChunk();
+        chunk->is_hugetlb_ = hugetlb_used;
       } else {
-        IGNORE_RETURN update_hold(left_size - all_size, high_prio);
-        if (update_hold(all_size, high_prio)) {
-          void* ptr = direct_alloc(all_size);
-          if (ptr != nullptr) {
-            chunk = new (ptr) AChunk(adj_size);
-          } else {
-            IGNORE_RETURN update_hold(-all_size, high_prio);
-          }
-        }
+        IGNORE_RETURN update_hold(-hold_size, high_prio);
       }
     }
   }
 
-  if (chunk != nullptr) {
+  if (OB_NOT_NULL(chunk)) {
     chunk->alloc_bytes_ = size;
-  }
-
-  if (OB_ISNULL(chunk) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    _OB_LOG(WARN, "oops, over total memory limit, hold=%ld limit=%ld", get_hold(), get_limit());
+    if (is_allocated) {
+      IGNORE_RETURN ATOMIC_FAA(&total_hold_, all_size);
+    }
+    SANITY_UNPOISON(chunk, all_size); // maybe no need?
+  } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
+                "hold", get_hold(), "limit", get_limit());
   }
 
   return chunk;
 }
 
-void AChunkMgr::free_chunk(AChunk* chunk)
+void AChunkMgr::free_chunk(AChunk *chunk)
 {
-  if (chunk != nullptr) {
-    const int64_t size = chunk->size_;
-    const uint64_t all_size = aligned(size);
-    if (INTACT_ACHUNK_SIZE == all_size) {
-      bool free = false;
-      if (hold_ + all_size > limit_) {
-        free = true;
-      } else {
-        const bool push_succ = free_list_.push(chunk);
-        free = !push_succ;
+  if (OB_NOT_NULL(chunk)) {
+    const int64_t hold_size = chunk->hold();
+    const uint64_t all_size = chunk->aligned();
+    const int64_t achunk_size = INTACT_ACHUNK_SIZE;
+    bool freed = true;
+    if (achunk_size == hold_size) {
+      if (hold_ + hold_size <= limit_) {
+        freed = !free_list_.push(chunk);
       }
-      if (free) {
-        direct_free(chunk, INTACT_ACHUNK_SIZE);
-        IGNORE_RETURN update_hold(-static_cast<int64_t>(INTACT_ACHUNK_SIZE), false);
+      if (freed) {
+        direct_free(chunk, all_size);
+        IGNORE_RETURN update_hold(-hold_size, false);
       }
     } else {
-      const int64_t large_space = limit_ - hold_;
-      if (large_space < LARGE_CHUNK_FREE_SPACE) {
-        direct_free(chunk, all_size);
-        IGNORE_RETURN update_hold(-all_size, false);
-      } else {
-        char* ptr = (char*)chunk;
-        char* end = (char*)chunk + all_size;
-        while (ptr < end) {
-          AChunk* new_chunk = new (ptr) AChunk(INTACT_ACHUNK_SIZE - ACHUNK_HEADER_SIZE);
-          const bool push_succ = free_list_.push(new_chunk);
-          if (push_succ) {
-            ptr += INTACT_ACHUNK_SIZE;
-          } else {
-            direct_free(ptr, end - ptr);
-            IGNORE_RETURN update_hold(ptr - end, false);
-            ptr = end;
-          }
-        }
-      }
+      direct_free(chunk, all_size);
+      IGNORE_RETURN update_hold(-hold_size, false);
     }
+    if (freed) {
+      IGNORE_RETURN ATOMIC_FAA(&total_hold_, -all_size);
+    }
+  }
+}
+
+AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
+{
+  const int64_t hold_size = hold(size);
+  const int64_t all_size = aligned(size);
+  const int64_t achunk_size = INTACT_ACHUNK_SIZE;
+  bool is_allocated = true;
+
+  AChunk *chunk = nullptr;
+  bool updated = false;
+  while (!(updated = update_hold(hold_size, true)) && free_list_.count() > 0) {
+    if (OB_NOT_NULL(chunk = free_list_.pop())) {
+      direct_free(chunk, achunk_size);
+      IGNORE_RETURN update_hold(-achunk_size, true);
+      IGNORE_RETURN ATOMIC_FAA(&total_hold_, -achunk_size);
+      chunk = nullptr;
+    }
+  }
+  if (updated) {
+    // there is performance drop when thread stack on huge_page memory.
+    bool hugetlb_used = false;
+    void *ptr = direct_alloc(all_size, false, hugetlb_used, SANITY_BOOL_EXPR(false));
+    if (ptr != nullptr) {
+      chunk = new (ptr) AChunk();
+      chunk->is_hugetlb_ = hugetlb_used;
+    } else {
+      IGNORE_RETURN update_hold(-hold_size, true);
+    }
+  }
+
+  if (OB_NOT_NULL(chunk)) {
+    chunk->alloc_bytes_ = size;
+    if (is_allocated) {
+      IGNORE_RETURN ATOMIC_FAA(&total_hold_, all_size);
+    }
+    //SANITY_UNPOISON(chunk, all_size); // maybe no need?
+  } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
+                "hold", get_hold(), "limit", get_limit());
+  }
+
+  return chunk;
+}
+
+void AChunkMgr::free_co_chunk(AChunk *chunk)
+{
+  if (OB_NOT_NULL(chunk)) {
+    const int64_t hold_size = chunk->hold();
+    const uint64_t all_size = chunk->aligned();
+    const int64_t achunk_size = INTACT_ACHUNK_SIZE;
+    direct_free(chunk, all_size);
+    IGNORE_RETURN update_hold(-hold_size, false);
+    IGNORE_RETURN ATOMIC_FAA(&total_hold_, -all_size);
   }
 }
 
@@ -305,7 +352,7 @@ bool AChunkMgr::update_hold(int64_t bytes, bool high_prio)
     bret = false;
   }
   if (!bret) {
-    auto& afc = g_alloc_failed_ctx();
+    auto &afc = g_alloc_failed_ctx();
     afc.reason_ = SERVER_HOLD_REACH_LIMIT;
     afc.alloc_size_ = bytes;
     afc.server_hold_ = hold_;

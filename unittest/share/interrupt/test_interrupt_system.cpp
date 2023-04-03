@@ -15,7 +15,6 @@
 
 #define private public
 
-#include "lib/coro/co.h"
 #include "lib/coro/testing.h"
 #include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
@@ -43,10 +42,10 @@ TEST(ObGlobalInterruptManager, normal)
   ObAddr dst = service.get_dst();
 
   /// Singleton acquisition
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ASSERT_EQ(false, nullptr == manager);
 
-  ObInterruptChecker* checker = nullptr;
+  ObInterruptChecker *checker = nullptr;
   /// Perform various operations without initialization, correct feedback
 
   ret = manager->interrupt(temp_id, icode);
@@ -137,17 +136,19 @@ TEST(ObGlobalInterruptManager, normal)
   r = checker->is_interrupted();
   ASSERT_EQ(true, r);
 
-  // Automatic logout of test destruction
+
+
+  //Automatic logout of test destruction
   delete checker;
 
   ret = manager->map_.get_refactored(temp_id, checker);
   EXPECT_EQ(OB_HASH_NOT_EXIST, ret);
 
   // Test group registration, interruption and deregistration
-  ObInterruptChecker* checker0 = new ObInterruptChecker(true, 1);
-  ObInterruptChecker* checker1 = new ObInterruptChecker(true, 1);
-  ObInterruptChecker* checker2 = new ObInterruptChecker(true, 1);
-  ObInterruptChecker* checker3 = new ObInterruptChecker(true, 1);
+  ObInterruptChecker *checker0 = new ObInterruptChecker(true, 1);
+  ObInterruptChecker *checker1 = new ObInterruptChecker(true, 1);
+  ObInterruptChecker *checker2 = new ObInterruptChecker(true, 1);
+  ObInterruptChecker *checker3 = new ObInterruptChecker(true, 1);
   ret = manager->register_checker(checker0);
   EXPECT_EQ(OB_SUCCESS, ret);
   ret = manager->register_checker(checker1);
@@ -169,6 +170,7 @@ TEST(ObGlobalInterruptManager, normal)
   delete checker2;
   delete checker3;
 
+
   // The following is in coroutine mode
   // Simulate regular usage scenarios
   // And test the use of several global functions
@@ -178,40 +180,39 @@ TEST(ObGlobalInterruptManager, normal)
   int ready = 0;
   uint64_t n[40];
 
-  auto apool =
-      cotesting::FlexPool{[&] {
-                            int idx = ATOMIC_AAF(&total, 1);
-                            uint64_t cid = CO_ID();
-                            n[idx] = cid;
-                            SET_INTERRUPTABLE(cid);
-                            /// The first 39 coroutines are waiting to be terminated
-                            if (idx < 39) {
-                              while (ready == 0) {
-                                this_routine::usleep(1000);
-                              }
-                              if (IS_INTERRUPTED()) {
-                                ASSERT_EQ(idx + 10, GET_INTERRUPT_CODE());
-                                return;
-                              }
-                              fail++;
-                            }
-                            /// The 40th coroutine is responsible for terminating them with three scenarios respectively
-                            else {
-                              for (int i = 0; i < 39; i++) {
-                                int k = i % 3;
-                                if (k == 0)
-                                  manager->interrupt(n[i], i + 10);
-                                else if (k == 1)
-                                  manager->interrupt(local, n[i], i + 10);
-                                else
-                                  manager->interrupt(dst, n[i], i + 10);
-                              }
-                              ASSERT_EQ(false, IS_INTERRUPTED());
-                              ready++;
-                            }
-                          },
-          4,
-          10};
+  auto apool = cotesting::FlexPool {
+      [&] {
+        int idx = ATOMIC_AAF(&total, 1);
+        uint64_t cid = CO_ID();
+        n[idx] = cid;
+        SET_INTERRUPTABLE(cid);
+        /// The first 39 coroutines are waiting to be terminated
+        if (idx < 39) {
+          while (ready == 0) {
+            ::usleep(1000);
+          }
+          if (IS_INTERRUPTED()) {
+            ASSERT_EQ(idx + 10, GET_INTERRUPT_CODE());
+            return;
+          }
+          fail++;
+        }
+        /// The 40th coroutine is responsible for terminating them with three scenarios respectively
+        else {
+          for (int i = 0; i < 39; i++) {
+            int k = i % 3;
+            if (k == 0)
+              manager->interrupt(n[i], i + 10);
+            else if (k == 1)
+              manager->interrupt(local, n[i], i + 10);
+            else
+              manager->interrupt(dst, n[i], i + 10);
+          }
+          ASSERT_EQ(false, IS_INTERRUPTED());
+          ready++;
+        }
+      },
+      4, 10};
   apool.start(true);
   ASSERT_EQ(0, fail);
 
@@ -219,17 +220,17 @@ TEST(ObGlobalInterruptManager, normal)
   // Test group interrupted
   SET_INTERRUPTABLE(10000);
 
-  auto bpool = cotesting::FlexPool{[&] {
-                                     SET_INTERRUPTABLE(10000);
-                                     ATOMIC_INC(&xcnt);
-                                     while (!IS_INTERRUPTED()) {
-                                       CO_YIELD();
-                                     }
-                                     EXPECT_EQ(1, GET_INTERRUPT_CODE());
-                                     ATOMIC_DEC(&xcnt);
-                                   },
-      10,
-      10};
+  auto bpool = cotesting::FlexPool{
+      [&] {
+        SET_INTERRUPTABLE(10000);
+        ATOMIC_INC(&xcnt);
+        while (!IS_INTERRUPTED()) {
+          CO_YIELD();
+        }
+        EXPECT_EQ(1, GET_INTERRUPT_CODE());
+        ATOMIC_DEC(&xcnt);
+      },
+      10, 10};
   bpool.start(false);
   // Wait for all coroutines to execute set_interruptable
   while (xcnt != 100) {};
@@ -244,10 +245,10 @@ TEST(ObGlobalInterruptManager, normal)
   ASSERT_EQ(1, GET_INTERRUPT_CODE());
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   testing::InitGoogleTest(&argc, argv);

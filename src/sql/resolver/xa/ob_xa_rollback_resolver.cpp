@@ -15,20 +15,25 @@
 #include "sql/resolver/xa/ob_xa_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObXaRollBackResolver::ObXaRollBackResolver(ObResolverParams& params) : ObStmtResolver(params)
-{}
+ObXaRollBackResolver::ObXaRollBackResolver(ObResolverParams &params) 
+  : ObStmtResolver(params)
+{
+}
 
 ObXaRollBackResolver::~ObXaRollBackResolver()
-{}
+{
+}
 
-int ObXaRollBackResolver::resolve(const ParseNode& parse_node)
+int ObXaRollBackResolver::resolve(const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
-  ObXaRollBackStmt* xa_rollback_stmt = NULL;
+  ObXaRollBackStmt *xa_rollback_stmt = NULL;
   if (OB_UNLIKELY(T_XA_ROLLBACK != parse_node.type_ || 1 != parse_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse node", K(parse_node.type_), K(parse_node.num_child_));
@@ -47,5 +52,5 @@ int ObXaRollBackResolver::resolve(const ParseNode& parse_node)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end namesapce sql
+} // end namesapce oceanbase

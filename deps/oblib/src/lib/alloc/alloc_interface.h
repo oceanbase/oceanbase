@@ -16,43 +16,52 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <cstddef>
-#include "lib/lock/ob_mutex.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 class ObTenantCtxAllocator;
-class IBlockMgr {
-public:
-  virtual ABlock* alloc_block(uint64_t size, const ObMemAttr& attr) = 0;
-  virtual void free_block(ABlock* block) = 0;
-  virtual ObTenantCtxAllocator& get_tenant_ctx_allocator() = 0;
-};  // end of class IBlockMgr
+struct ABlock;
+struct ObMemAttr;
 
-class ISetLocker {
+class IBlockMgr
+{
+public:
+  IBlockMgr() {}
+  IBlockMgr(int64_t tenant_id, int64_t ctx_id)
+    : tenant_id_(tenant_id), ctx_id_(ctx_id) {}
+  virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) = 0;
+  virtual void free_block(ABlock *block) = 0;
+  virtual int64_t sync_wash(int64_t wash_size) = 0;
+  int64_t tenant_id_;
+  int64_t ctx_id_;
+}; // end of class IBlockMgr
+
+class ISetLocker
+{
 public:
   virtual void lock() = 0;
   virtual void unlock() = 0;
   virtual bool trylock() = 0;
 };
 
-class SetDoNothingLocker : public ISetLocker {
+class SetDoNothingLocker : public ISetLocker
+{
 public:
-  void lock() override
-  {}
-  void unlock() override
-  {}
-  bool trylock() override
-  {
-    return true;
-  }
+  void lock() override {}
+  void unlock() override {}
+  bool trylock() override { return true; }
 };
 
-class SetLocker : public ISetLocker {
+template<typename t_lock>
+class SetLocker : public ISetLocker
+{
 public:
-  SetLocker(lib::ObMutex& mutex) : mutex_(mutex)
-  {}
+  SetLocker(t_lock &mutex)
+    : mutex_(mutex) {}
   void lock() override
   {
     mutex_.lock();
@@ -65,15 +74,16 @@ public:
   {
     return 0 == mutex_.trylock();
   }
-
 private:
-  lib::ObMutex& mutex_;
+  t_lock &mutex_;
 };
 
-class SetLockerForLogger : public ISetLocker {
+template<typename t_lock>
+class SetLockerForLogger : public ISetLocker
+{
 public:
-  SetLockerForLogger(lib::ObMutex& mutex) : mutex_(mutex), is_disable_(false)
-  {}
+  SetLockerForLogger(t_lock &mutex)
+    : mutex_(mutex), is_disable_(false) {}
   void lock() override
   {
     mutex_.lock();
@@ -94,13 +104,12 @@ public:
     }
     return succ;
   }
-
 private:
-  lib::ObMutex& mutex_;
+  t_lock &mutex_;
   bool is_disable_;
 };
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+} // end of namespace lib
+} // end of namespace oceanbase
 
 #endif /* _ALLOC_INTERFACE_H_ */

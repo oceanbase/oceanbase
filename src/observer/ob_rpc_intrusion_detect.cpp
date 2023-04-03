@@ -12,26 +12,18 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_rpc_intrusion_detect.h"
+#include "util/easy_mod_stat.h"
 #include "share/ob_i_server_auth.h"
+#include "lib/utility/utility.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace observer {
+namespace observer
+{
 share::ObIServerAuth* g_server_auth = NULL;
 
-static int ez2ob_addr(ObAddr& addr, easy_addr_t ez_addr)
-{
-  int ret = OB_SUCCESS;
-  addr.reset();
-  if (AF_INET == ez_addr.family) {
-    addr.set_ipv4_addr(ntohl(ez_addr.u.addr), ntohs(ez_addr.port));
-  } else if (AF_INET6 == ez_addr.family) {  // ipv6
-    ret = OB_NOT_SUPPORTED;
-  }
-  return ret;
-}
-
-static int on_connect(easy_connection_t* c)
+static int on_connect(easy_connection_t *c)
 {
   int ret = OB_SUCCESS;
   ObAddr local_addr;
@@ -39,7 +31,8 @@ static int on_connect(easy_connection_t* c)
   if (OB_ISNULL(c) || OB_ISNULL(g_server_auth)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), KP(c), KP(g_server_auth));
-  } else if (OB_FAIL(ez2ob_addr(local_addr, c->addr))) {
+  } else if (!ez2ob_addr(local_addr, c->addr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ez2ob_addr fail", K(ret));
   } else if (OB_FAIL(g_server_auth->check_ssl_invited_nodes(*c))) {
     LOG_WARN("check_ssl_invited_nodes fail", K(ret), K(easy_connection_str(c)));
@@ -47,8 +40,13 @@ static int on_connect(easy_connection_t* c)
     LOG_WARN("check server legitimate fail", K(ret), K(local_addr));
   } else if (!is_valid) {
     LOG_WARN("RPC INTRUSION DETECT: receive TCP connection out of this cluster,"
-             "maybe a new server is just added to this cluster or an 'ob_admin' operation is running",
-        K(local_addr));
+             "may be a new server just add to this cluster or an 'ob_admin' operation happening",
+             K(local_addr));
+  }
+  if (OB_SUCC(ret) && NULL == c->client) {
+    easy_addr_t addr = c->addr;
+    addr.port = 0;
+    c->pool->mod_stat = easy_fetch_mod_stat(*(uint64_t*)&addr);
   }
   return OB_SUCC(ret) ? EASY_OK : EASY_ERROR;
 }
@@ -63,5 +61,5 @@ int ob_rpc_intrusion_detect_patch(easy_io_handler_pt* ez_handler, share::ObIServ
   return ret;
 }
 
-};  // end namespace observer
-};  // end namespace oceanbase
+}; // end namespace observer
+}; // end namespace oceanbase

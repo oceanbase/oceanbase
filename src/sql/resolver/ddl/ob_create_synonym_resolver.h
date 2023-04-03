@@ -18,21 +18,23 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObCreateSynonymStmt;
-class ObCreateSynonymResolver : public ObDDLResolver {
+class ObCreateSynonymResolver: public ObDDLResolver
+{
 public:
-  explicit ObCreateSynonymResolver(ObResolverParams& params);
+  explicit ObCreateSynonymResolver(ObResolverParams &params);
   virtual ~ObCreateSynonymResolver();
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
-  int check_valid(const ObCreateSynonymStmt* synonym_stmt);
+  int check_valid(const ObCreateSynonymStmt *synonym_stmt);
   DISALLOW_COPY_AND_ASSIGN(ObCreateSynonymResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_CREATE_TABLE_RESOLVER_H */

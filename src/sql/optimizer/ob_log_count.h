@@ -15,36 +15,42 @@
 
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObLogCount : public ObLogicalOperator {
+class ObLogCount: public ObLogicalOperator
+{
 public:
-  ObLogCount(ObLogPlan& plan) : ObLogicalOperator(plan), rownum_limit_expr_(NULL)
+	ObLogCount(ObLogPlan &plan)
+    : ObLogicalOperator(plan),
+      rownum_limit_expr_(NULL),
+      rownum_expr_(NULL)
   {}
-  virtual ~ObLogCount()
-  {}
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
-  inline ObRawExpr* get_rownum_limit_expr() const
-  {
-    return rownum_limit_expr_;
-  }
-  inline void set_rownum_limit_expr(ObRawExpr* rownum_limit_expr)
-  {
-    rownum_limit_expr_ = rownum_limit_expr;
-  }
-  int set_limit_size();
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual uint64_t hash(uint64_t seed) const override;
-  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
+  virtual ~ObLogCount() {}
+  inline ObRawExpr *get_rownum_limit_expr() const { return rownum_limit_expr_; }
+  inline void set_rownum_limit_expr(ObRawExpr *rownum_limit_expr) { rownum_limit_expr_ = rownum_limit_expr; }
+  inline ObRawExpr *get_rownum_expr() const { return rownum_expr_; }
+  inline void set_rownum_expr(ObRawExpr *rownum_expr) { rownum_expr_ = rownum_expr; }
+  virtual int est_cost() override;
+  virtual int est_width() override;
+  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  int inner_est_cost(double &child_card, 
+                     double &child_cost, 
+                     bool need_re_est_child_cost, 
+                     double sel, 
+                     double &op_cost);
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
-  ObRawExpr* rownum_limit_expr_;
+  ObRawExpr *rownum_limit_expr_;
+  ObRawExpr *rownum_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogCount);
 };
 

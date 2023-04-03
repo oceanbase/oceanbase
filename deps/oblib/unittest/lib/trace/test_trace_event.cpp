@@ -18,17 +18,16 @@
 #include "lib/coro/testing.h"
 
 using namespace oceanbase::common;
-class TestTraceEvent : public ::testing::Test {
+class TestTraceEvent: public ::testing::Test
+{
 public:
   TestTraceEvent();
   virtual ~TestTraceEvent();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestTraceEvent);
-
 protected:
   // function members
 protected:
@@ -36,21 +35,27 @@ protected:
 };
 
 TestTraceEvent::TestTraceEvent()
-{}
+{
+}
 
 TestTraceEvent::~TestTraceEvent()
-{}
+{
+}
 
 void TestTraceEvent::SetUp()
-{}
+{
+}
 
 void TestTraceEvent::TearDown()
-{}
+{
+}
 
-struct A {
+struct A
+{
   int64_t d1_;
   int64_t d2_;
-  TO_YSON_KV(OB_ID(read_only), d1_, OB_ID(access_mode), d2_);
+  TO_YSON_KV(OB_ID(read_only), d1_,
+             OB_ID(access_mode), d2_);
 };
 
 TEST_F(TestTraceEvent, basic_test)
@@ -82,13 +87,21 @@ TEST_F(TestTraceEvent, NG_trace)
     NG_TRACE(affected_rows);
     NG_TRACE_EXT(id, OB_ID(arg1), a, OB_ID(arg2), b);
     OB_LOG(INFO, "test print trace", "", *THE_TRACE);
-  }  // end for
+  } // end for
 }
 
-struct ClassWithToYson {
-  TO_YSON_KV(0, val1_, 1, val2_, 2, val3_, 3, val4_, 4, val5_);
-  TO_STRING_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
-
+struct ClassWithToYson
+{
+  TO_YSON_KV(0, val1_,
+             1, val2_,
+             2, val3_,
+             3, val4_,
+             4, val5_);
+  TO_STRING_KV("0", val1_,
+               "1", val2_,
+               "2", val3_,
+               "3", val4_,
+               "4", val5_);
 public:
   int64_t val1_;
   int32_t val2_;
@@ -97,12 +110,17 @@ public:
   uint64_t val5_;
 };
 
-struct ClassB {
+struct ClassB
+{
   int32_t arr_[3];
   ClassWithToYson obj1_;
   ObString val1_;
-  TO_YSON_KV(2, ObArrayWrap<int32_t>(arr_, 3), 0, obj1_, 11, val1_);
-  TO_STRING_KV("2", ObArrayWrap<int32_t>(arr_, 3), "0", obj1_, "11", val1_);
+  TO_YSON_KV(2, ObArrayWrap<int32_t>(arr_, 3),
+             0, obj1_,
+             11, val1_);
+  TO_STRING_KV("2", ObArrayWrap<int32_t>(arr_, 3),
+               "0", obj1_,
+               "11", val1_);
 };
 
 TEST_F(TestTraceEvent, overflow)
@@ -118,12 +136,12 @@ TEST_F(TestTraceEvent, overflow)
   b.obj1_.val3_ = false;
   for (int i = 0; i < 5000; ++i) {
     NG_TRACE_EXT(id, OB_ID(arg1), b, OB_ID(arg2), b);
-  }  // end for
+  } // end for
   OB_LOG(INFO, "test print trace", "", *THE_TRACE);
 }
 
 static ObTraceEventRecorder MY_RECORDER(true, ObLatchIds::TRACE_RECORDER_LOCK);
-void* concurrent_add_event(void*)
+void* concurrent_add_event(void *)
 {
   ObString value = ObString::make_string("hello concurrent programming");
   for (int i = 0; i < 200; ++i) {
@@ -137,12 +155,14 @@ void* concurrent_add_event(void*)
 TEST_F(TestTraceEvent, multi_thread)
 {
   static const int N = 4;
-  cotesting::FlexPool([] { concurrent_add_event(nullptr); }, N, 1).start();
+  cotesting::FlexPool([]{
+    concurrent_add_event(nullptr);
+  }, N).start();
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   return RUN_ALL_TESTS();
 }

@@ -19,40 +19,38 @@
 #include "common/ob_range.h"
 #include "common/rowkey/ob_store_rowkey.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // Only used in storage layer.
 // No compare semantics except for the special whole_range is provided.
 // Note that one cannot judge if an ObStoreRange object is empty based on that object alone
 // because the comparison of the start_key_ and end_key_ of the range requires additional
 // (column order) information.
-class ObStoreRange {
+class ObStoreRange
+{
 public:
-  ObStoreRange()
-  {
-    reset();
-  }
-  ~ObStoreRange()
-  {
-    reset();
-  }
+  ObStoreRange() { reset(); }
+  ~ObStoreRange() { }
 
   inline void reset()
   {
     table_id_ = OB_INVALID_ID;
     border_flag_.set_data(0);
-    start_key_.assign(NULL, 0);
-    end_key_.assign(NULL, 0);
+    start_key_.reset();
+    end_key_.reset();
+    group_idx_ = 0;
   }
 
-  inline void assign(const ObNewRange& range)
+  inline void assign(const ObNewRange &range)
   {
     table_id_ = range.table_id_;
     border_flag_ = range.border_flag_;
     start_key_.get_rowkey() = range.start_key_;
     end_key_.get_rowkey() = range.end_key_;
   }
-  inline void to_new_range(ObNewRange& range)
+  inline void to_new_range(ObNewRange &range) const
   {
     range.table_id_ = table_id_;
     range.border_flag_ = border_flag_;
@@ -60,112 +58,67 @@ public:
     range.end_key_ = end_key_.get_rowkey();
   }
 
-  // Only used in the parallel-execution code
-  // Need to be removed after SQL layer optimizes their scan operator to avoid unnecessary conversion
-  int to_new_range(const ObIArrayWrap<ObOrderType>& column_orders, const int64_t rowkey_cnt, ObNewRange& range,
-      ObIAllocator& allocator) const;
+  void change_boundary(const ObStoreRowkey &store_rowkey, bool is_reverse, bool exclusive = false);
+  uint64_t get_table_id() const { return table_id_; }
+  const ObBorderFlag& get_border_flag() const { return border_flag_; }
+  ObBorderFlag& get_border_flag() { return border_flag_; }
+  const ObStoreRowkey& get_start_key() const { return start_key_; }
+  ObStoreRowkey &get_start_key() { return start_key_; }
+  const ObStoreRowkey& get_end_key() const { return end_key_; }
+  ObStoreRowkey &get_end_key() { return end_key_; }
+  void set_table_id(uint64_t table_id) { table_id_ = table_id; }
+  void set_border_flag(ObBorderFlag flag) { border_flag_ = flag; }
+  void set_start_key(const ObStoreRowkey &start_key) { start_key_ = start_key; }
+  void set_end_key(const ObStoreRowkey &end_key) { end_key_ = end_key; }
+  void set_group_idx(const int64_t group_idx) { group_idx_ = group_idx; }
+  int64_t get_group_idx() const { return group_idx_; }
 
-  uint64_t get_table_id() const
-  {
-    return table_id_;
-  }
-  const ObBorderFlag& get_border_flag() const
-  {
-    return border_flag_;
-  }
-  ObBorderFlag& get_border_flag()
-  {
-    return border_flag_;
-  }
-  const ObStoreRowkey& get_start_key() const
-  {
-    return start_key_;
-  }
-  ObStoreRowkey& get_start_key()
-  {
-    return start_key_;
-  }
-  const ObStoreRowkey& get_end_key() const
-  {
-    return end_key_;
-  }
-  ObStoreRowkey& get_end_key()
-  {
-    return end_key_;
-  }
-  void set_table_id(uint64_t table_id)
-  {
-    table_id_ = table_id;
-  }
-  void set_border_flag(ObBorderFlag flag)
-  {
-    border_flag_ = flag;
-  }
-  void set_start_key(const ObStoreRowkey& start_key)
-  {
-    start_key_ = start_key;
-  }
-  void set_end_key(const ObStoreRowkey& end_key)
-  {
-    end_key_ = end_key;
-  }
+  bool is_left_open() const { return !border_flag_.inclusive_start(); }
+  bool is_left_closed() const { return border_flag_.inclusive_start(); }
+  bool is_right_open() const { return !border_flag_.inclusive_end(); }
+  bool is_right_closed() const { return border_flag_.inclusive_end(); }
 
-  void set_left_open()
-  {
-    border_flag_.unset_inclusive_start();
-  }
-  void set_left_closed()
-  {
-    border_flag_.set_inclusive_start();
-  }
-  void set_right_open()
-  {
-    border_flag_.unset_inclusive_end();
-  }
-  void set_right_closed()
-  {
-    border_flag_.set_inclusive_end();
-  }
+  void set_left_open() { border_flag_.unset_inclusive_start(); }
+  void set_left_closed() { border_flag_.set_inclusive_start(); }
+  void set_right_open() { border_flag_.unset_inclusive_end(); }
+  void set_right_closed() { border_flag_.set_inclusive_end(); }
 
   inline int build_range(uint64_t table_id, ObStoreRowkey store_rowkey);
 
   // a valid ObStoreRange need NOT refer to a specific, valid table
   inline bool is_valid() const
   {
-    // return start_key_.is_valid() && end_key_.is_valid();
+    //return start_key_.is_valid() && end_key_.is_valid();
 
-    // FiXME-: temporally using this to preserve semantics with ObNewRange
+    // FiXME-yangsuli: temporally using this to preserve semantics with ObNewRange
     // eventually caller need to call empty() with the column order passed in
     // or a simpler is_valid() check based on there need
     return !empty();
   }
 
-  // from MIN to MAX, complete set.
-  int set_whole_range(const ObIArray<ObOrderType>* column_orders, ObIAllocator& allocator);
-  int is_whole_range(const ObIArrayWrap<ObOrderType>& column_orders, const int64_t rowkey_cnt, bool& is_whole) const;
-
-  inline int compare_with_startkey(const ObStoreRange& r, const ObIArray<ObOrderType>* column_orders, int& cmp) const;
+  inline int compare_with_startkey(const ObStoreRange &r, int &cmp) const;
 
   // return true if the range is a single key value(but not min or max); false otherwise
   inline bool is_single_rowkey() const;
 
-  int64_t to_string(char* buffer, const int64_t length) const;
-  int64_t to_plain_string(char* buffer, const int64_t length) const;
+  int64_t to_plain_string(char *buffer, const int64_t length) const;
 
   NEED_SERIALIZE_AND_DESERIALIZE;
-  int deserialize(ObIAllocator& allocator, const char* buf, const int64_t buf_len, int64_t& pos);
-  int deep_copy(ObIAllocator& allocator, ObStoreRange& dst) const;
+  int deserialize(ObIAllocator &allocator, const char *buf, const int64_t buf_len, int64_t &pos);
+  int deep_copy(ObIAllocator &allocator, ObStoreRange &dst) const;
 
-  inline int get_common_store_rowkey(ObStoreRowkey& store_rowkey) const;
+  inline int get_common_store_rowkey(ObStoreRowkey &store_rowkey) const;
+  TO_STRING_KV(K_(table_id), K_(border_flag), K_(start_key), K_(end_key));
 
 private:
   uint64_t table_id_;
   ObBorderFlag border_flag_;
   ObStoreRowkey start_key_;
   ObStoreRowkey end_key_;
+  int64_t group_idx_;
 
-  // FIXME-: remove interfaces below after changing code that calls below methods
-  // ObStoreRange should NOT provide compare semantics
+  //FIXME-yangsuli: remove interfaces below after changing code that calls below methods
+  //ObStoreRange should NOT provide compare semantics
 public:
   inline void set_whole_range();
   inline bool is_whole_range() const
@@ -173,12 +126,14 @@ public:
     return (start_key_.is_min()) && (end_key_.is_max());
   }
 
-  inline bool include(const ObStoreRange& r) const
+  inline bool include(const ObStoreRange &r) const
   {
-    return (table_id_ == r.table_id_) && (compare_with_startkey2(r) <= 0) && (compare_with_endkey2(r) >= 0);
+    return (table_id_ == r.table_id_)
+        && (compare_with_startkey2(r) <= 0)
+        && (compare_with_endkey2(r) >= 0);
   }
 
-  inline int compare_with_endkey2(const ObStoreRange& r) const
+  inline int compare_with_endkey2(const ObStoreRange &r) const
   {
     int cmp = 0;
     if (end_key_.is_max()) {
@@ -200,7 +155,7 @@ public:
     return cmp;
   }
 
-  inline int compare_with_startkey2(const ObStoreRange& r) const
+  inline int compare_with_startkey2(const ObStoreRange &r) const
   {
     int cmp = 0;
     if (start_key_.is_min()) {
@@ -229,12 +184,17 @@ public:
       ret = false;
     } else {
       const int32_t result = end_key_.compare(start_key_);
-      ret = result < 0 || ((0 == result) && !((border_flag_.inclusive_end()) && border_flag_.inclusive_start()));
+      ret  = result < 0
+             || ((0 == result)
+                 && !((border_flag_.inclusive_end())
+                      && border_flag_.inclusive_start()));
     }
     return ret;
   }
 
-  friend int deep_copy_range(ObIAllocator& allocator, const ObStoreRange& src, ObStoreRange*& dst);
+  friend int deep_copy_range(ObIAllocator &allocator, const ObStoreRange &src, ObStoreRange *&dst);
+
+
 };
 
 int ObStoreRange::build_range(uint64_t table_id, ObStoreRowkey store_rowkey)
@@ -253,26 +213,16 @@ int ObStoreRange::build_range(uint64_t table_id, ObStoreRowkey store_rowkey)
   return ret;
 }
 
-int ObStoreRange::compare_with_startkey(
-    const ObStoreRange& r, const ObIArray<ObOrderType>* column_orders, int& cmp) const
+int ObStoreRange::compare_with_startkey(const ObStoreRange &r, int &cmp) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_LIKELY(NULL == column_orders)) {
-    cmp = start_key_.compare(r.start_key_);
-  } else if (OB_FAIL(start_key_.compare(r.start_key_, *column_orders, cmp))) {
-    COMMON_LOG(WARN, "start key comparison failed.", K(ret), K(start_key_), K(r.start_key_));
+  if (0 != (cmp = start_key_.compare(r.start_key_))) {
+    // do nothing
+  } else if (border_flag_.inclusive_start() && !r.border_flag_.inclusive_start()) {
+    cmp = -1;
+  } else if (!border_flag_.inclusive_start() && r.border_flag_.inclusive_start()) {
+    cmp = 1;
   }
-  if (OB_SUCC(ret)) {
-    if (0 == cmp) {
-      if (border_flag_.inclusive_start() && !r.border_flag_.inclusive_start()) {
-        cmp = -1;
-      } else if (!border_flag_.inclusive_start() && r.border_flag_.inclusive_start()) {
-        cmp = 1;
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -299,28 +249,29 @@ bool ObStoreRange::is_single_rowkey() const
   return ret;
 }
 
-int ObStoreRange::get_common_store_rowkey(ObStoreRowkey& store_rowkey) const
+int ObStoreRange::get_common_store_rowkey(ObStoreRowkey &store_rowkey) const
 {
   int ret = OB_SUCCESS;
   int64_t prefix_len = 0;
   if (OB_FAIL(ObStoreRowkey::get_common_prefix_length(start_key_, end_key_, prefix_len))) {
     COMMON_LOG(WARN, "fail to get common prefix length", K(ret));
-  } else {
-    store_rowkey.assign(const_cast<ObObj*>(start_key_.get_obj_ptr()), prefix_len);
+  } else if (prefix_len > 0) {
+    ret = store_rowkey.assign(const_cast<ObObj *>(start_key_.get_obj_ptr()), prefix_len);
   }
   return ret;
 }
 
-// FIXME-: remove this method later
-inline int deep_copy_range(ObIAllocator& allocator, const ObStoreRange& src, ObStoreRange*& dst)
+
+//FIXME-yangsuli: remove this method later
+inline int deep_copy_range(ObIAllocator &allocator, const ObStoreRange &src, ObStoreRange *&dst)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (NULL == (ptr = allocator.alloc(sizeof(ObStoreRange)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(ERROR, "allocate new range failed", K(ret));
   } else {
-    dst = new (ptr) ObStoreRange();
+    dst = new(ptr) ObStoreRange();
     if (OB_FAIL(src.start_key_.deep_copy(dst->start_key_, allocator))) {
       COMMON_LOG(WARN, "deep copy start key failed.", K(src.start_key_), K(ret));
     } else if (OB_FAIL(src.end_key_.deep_copy(dst->end_key_, allocator))) {
@@ -338,82 +289,25 @@ inline int deep_copy_range(ObIAllocator& allocator, const ObStoreRange& src, ObS
   return ret;
 }
 
-/*
- * Contains some additional fields to cache the collation-free version of range.start_key_ and end_key_
- * for better performance.
- */
-class ObExtStoreRange {
+class ObVersionStoreRangeConversionHelper
+{
 public:
-  ObExtStoreRange();
-  explicit ObExtStoreRange(const ObStoreRange& range);
-
-  const ObStoreRange& get_range() const
-  {
-    return range_;
-  }
-  ObStoreRange& get_range()
-  {
-    return range_;
-  }
-  const ObExtStoreRowkey& get_ext_start_key() const
-  {
-    return ext_start_key_;
-  }
-  ObExtStoreRowkey& get_ext_start_key()
-  {
-    return ext_start_key_;
-  }
-  const ObExtStoreRowkey& get_ext_end_key() const
-  {
-    return ext_end_key_;
-  }
-  ObExtStoreRowkey& get_ext_end_key()
-  {
-    return ext_end_key_;
-  }
-
-  bool is_single_rowkey() const
-  {
-    return range_.is_single_rowkey();
-  }
-  int to_collation_free_range_on_demand_and_cutoff_range(ObIAllocator& allocator);
-  void reset();
-  void change_boundary(const ObStoreRowkey& store_rowkey, bool is_reverse, bool exclusive = false);
-
-  int deep_copy(ObExtStoreRange& ext_range, ObIAllocator& allocator) const;
-  // collation_free_start_key_ and collation_free_end_key_ are NOT serialized or deserialized.
-  // After deserialization, one must perform a to_collation_free_range_on_demand if one wishes to
-  // get these fields
-  int deserialize(ObIAllocator& allocator, const char* buf, const int64_t data_len, int64_t& pos);
-  NEED_SERIALIZE_AND_DESERIALIZE;
-  void set_range_array_idx(const int64_t range_array_idx);
-  int64_t get_range_array_idx() const
-  {
-    return ext_start_key_.get_range_array_idx();
-  }
-
-  TO_STRING_KV(K_(range), K_(ext_start_key), K_(ext_end_key));
-
+  static int store_rowkey_to_multi_version_range(const ObStoreRowkey &src_rowkey,
+                                           const ObVersionRange &version_range,
+                                           ObIAllocator &allocator,
+                                           ObStoreRange &multi_version_range);
+  static int range_to_multi_version_range(const ObStoreRange &src_range,
+                                          const ObVersionRange &version_range,
+                                          ObIAllocator &allocator,
+                                          ObStoreRange &multi_version_range);
 private:
-  ObStoreRange range_;
-  // used for search macro block
-  ObExtStoreRowkey ext_start_key_;
-  ObExtStoreRowkey ext_end_key_;
+  static int build_multi_version_store_rowkey(const ObStoreRowkey &rowkey,
+                                        const bool min_value,
+                                        ObIAllocator &allocator,
+                                        ObStoreRowkey &multi_version_rowkey);
 };
 
-class ObVersionStoreRangeConversionHelper {
-public:
-  static int store_rowkey_to_multi_version_range(const ObExtStoreRowkey& src_rowkey,
-      const ObVersionRange& version_range, ObIAllocator& allocator, ObExtStoreRange& multi_version_range);
-  static int range_to_multi_version_range(const ObExtStoreRange& src_range, const ObVersionRange& version_range,
-      ObIAllocator& allocator, ObExtStoreRange& multi_version_range);
+} //end namespace common
+} //end namespace oceanbase
 
-private:
-  static int build_multi_version_store_rowkey(const ObStoreRowkey& rowkey, const int64_t trans_version,
-      ObIAllocator& allocator, ObStoreRowkey& multi_version_rowkey);
-};
-
-}  // end namespace common
-}  // end namespace oceanbase
-
-#endif  // OCEANBASE_COMMON_OB_STORE_RANGE_H_
+#endif //OCEANBASE_COMMON_OB_STORE_RANGE_H_

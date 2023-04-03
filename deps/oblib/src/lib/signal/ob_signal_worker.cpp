@@ -13,13 +13,17 @@
 #include "lib/signal/ob_signal_worker.h"
 #include <poll.h>
 #include <sys/prctl.h>
+#include "lib/allocator/ob_malloc.h"
 #include "lib/signal/ob_signal_processor.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/utility/ob_defer.h"
+#include "lib/utility/utility.h"
 #include "lib/thread/ob_thread_name.h"
 
 namespace oceanbase
 {
+using namespace lib;
+
 namespace common
 {
 
@@ -29,6 +33,7 @@ bool g_inited = false;
 int send_request_and_wait(ObSigRequestCode code, int exclude_tid)
 {
   int ret = OB_SUCCESS;
+#ifdef __x86_64__
   DTraceId trace_id = DTraceId::gen_trace_id();
   DTraceIdGuard trace_guard(trace_id);
   ObSigRequest req;
@@ -89,11 +94,12 @@ int send_request_and_wait(ObSigRequestCode code, int exclude_tid)
       }
     }
   }
+#endif
   return ret;
 }
 
-typedef void(*task_cb)(int, int, void*, void*);
-void iter_task(task_cb cb, void *data1, void *data2, int64_t exclude_tid)
+template<typename Func, typename ... Args>
+void iter_task(Func &&cb, int exclude_tid, Args && ... args)
 {
   struct linux_dirent64 {
     ino64_t d_ino;
@@ -124,12 +130,15 @@ void iter_task(task_cb cb, void *data1, void *data2, int64_t exclude_tid)
               strcmp(dirent->d_name, "..") != 0 &&
               (tid = atoi(dirent->d_name)) != self_tid &&
               tid != exclude_tid) {
-            cb(tgid, tid, data1, data2);
+            cb(tgid, tid, args...);
           }
           offset += dirent->d_reclen;
         }
       }
     } while (nread > 0);
+  }
+  if (fd >= 0) {
+    ::close(fd);
   }
 }
 
@@ -153,7 +162,7 @@ ObSignalWorker::~ObSignalWorker()
     }                                                            \
   } while (0)
 
-void task_process(int, int, void*, void*);
+void task_process(int, int, ObSigRequest*, ObSigProcessor*);
 void ObSignalWorker::run1()
 {
   lib::set_thread_name("SignalWorker");
@@ -167,6 +176,8 @@ void ObSignalWorker::run1()
   } else {
     g_fd = fd[1];
     g_inited = true;
+    ObSigHandler handler;
+    g_sig_handler_ctx_.handler_ = &handler;
 
     static int64_t n_req = 0;
     while (OB_SUCC(ret) && !has_set_stop()) {
@@ -186,7 +197,7 @@ void ObSignalWorker::run1()
               DLOG(WARN, "read failed, errno=%d", errno);
             }
             break;
-          } else if (n != sizeof(&req)) {
+          } else if (n != sizeof(req)) {
             ret = OB_ERR_UNEXPECTED;
             DLOG(WARN, "unexpected nbytes, n=%ld", n);
             break;
@@ -236,12 +247,8 @@ void ObSignalWorker::run1()
               if (nullptr == processor) {
                 ack = OB_ALLOCATE_MEMORY_FAILED;
               } else {
-                MPHandlerCtx ctx;
-                ctx.trace_id_ = req->trace_id_;
-                ctx.processor_ = processor;
-                ObMPSigHandler handler(ctx);
                 processor->start();
-                iter_task(task_process, &handler, &ctx, req->exclude_tid_);
+                iter_task(task_process, req->exclude_tid_, req, processor);
                 processor->end();
               }
             }
@@ -273,18 +280,22 @@ void ObSignalWorker::wait()
   ThreadPool::wait();
 }
 
-void task_process(int tgid, int tid, void *data1, void *data2)
+void task_process(int tgid, int tid, ObSigRequest *req, ObSigProcessor *processor)
 {
   int ret = OB_SUCCESS;
 
-  ObISigHandler *handler = (ObISigHandler*)data1;
-  MPHandlerCtx *ctx = (MPHandlerCtx*)data2;
+  auto *ctx = &g_sig_handler_ctx_;
+  ctx->trace_id_ = req->trace_id_;
+  ctx->processor_ = processor;
   DEFER(
     CLOSE(ctx->fd_[0]);
     CLOSE(ctx->fd_[1]);
     CLOSE(ctx->fd2_[0]);
     CLOSE(ctx->fd2_[1]);
   );
+  static int64_t req_id = 0;
+  ctx->atomic_set_req_id(ATOMIC_AAF(&req_id, 1));
+  DEFER(ctx->atomic_set_req_id(0));
   // init pipe
   if (0 != pipe2(ctx->fd_, O_CLOEXEC)) {
     ret = OB_ERROR;
@@ -296,7 +307,7 @@ void task_process(int tgid, int tid, void *data1, void *data2)
     siginfo_t si;
     memset(&si, 0, sizeof(si));
     si.si_code = SI_QUEUE;
-    si.si_value.sival_ptr = handler;
+    si.si_value.sival_ptr = (void*)req_id;
     // notify peer to prepare
     int r = syscall(SYS_rt_tgsigqueueinfo, tgid, tid, MP_SIG, &si);
     if (r < 0) {
@@ -304,69 +315,61 @@ void task_process(int tgid, int tid, void *data1, void *data2)
     } else {
       int ack;
       // wait peer prepare done
-      size_t n = read(ctx->fd_[0], &ack, sizeof(ack));
-      if (-1 == n) {
-        ret = OB_ERR_UNEXPECTED;
-        DLOG(WARN, "read failed, errno=%d", errno);
-      } else if (n != sizeof(ack)) {
-        ret = OB_ERR_UNEXPECTED;
-        DLOG(WARN, "unexpected");
-      } else if (OB_FAIL(ack)) {
-        DLOG(WARN, "peer failed, ret=%d", ack);
+      int64_t timeout = 50; // 50ms
+      if (OB_FAIL(wait_readable(ctx->fd_[0], timeout))) {
+        DLOG(WARN, "wait_readable failed, ret=%d", ret);
       } else {
-        DLOG(DEBUG, "process...");
-        /* crash tolerance
-         *   1. The peer may exit early due to timeout, 
-         *   and it is not safe to access the state collected by prepare at this time
-         *   2. There is a bug in the process itself (defense)
-         */
-        {
-          bool has_segv = false;
-          do_with_crash_restore([&](){ack = ctx->processor_->process(); return OB_SUCCESS;},
-                                has_segv, ret);
-          if (has_segv) {
-            ack = OB_ERR_UNEXPECTED;
-            DLOG(WARN, "restore from crash, let's goon~");
-          }
-        }
-        // notify peer to exit
-        write(ctx->fd2_[1], &ack, sizeof(ack));
-        // wait peer exit
-        n = read(ctx->fd_[0], &ack, sizeof(ack));
+        size_t n = read(ctx->fd_[0], &ack, sizeof(ack));
         if (-1 == n) {
+          ret = OB_ERR_UNEXPECTED;
           DLOG(WARN, "read failed, errno=%d", errno);
         } else if (n != sizeof(ack)) {
           ret = OB_ERR_UNEXPECTED;
           DLOG(WARN, "unexpected");
+        } else if (OB_FAIL(ack)) {
+          DLOG(WARN, "peer failed, ret=%d", ack);
         } else {
-          DLOG(DEBUG, "exit, peer ret=%d", ack);
+          DLOG(DEBUG, "process...");
+          ack = ctx->processor_->process();
+          // notify peer to exit
+          write(ctx->fd2_[1], &ack, sizeof(ack));
+          // wait peer exit
+          n = read(ctx->fd_[0], &ack, sizeof(ack));
+          if (-1 == n) {
+            DLOG(WARN, "read failed, errno=%d", errno);
+          } else if (n != sizeof(ack)) {
+            ret = OB_ERR_UNEXPECTED;
+            DLOG(WARN, "unexpected");
+          } else {
+            DLOG(DEBUG, "exit, peer ret=%d", ack);
+          }
         }
       }
     }
   }
 }
 
-void ObMPSigHandler::handle()
+void ObSigHandler::handle(ObSigHandlerCtx &ctx)
 {
   int ret = OB_SUCCESS;
   LoggerSwitchGuard guard(false/*open*/);
-  DTraceIdGuard trace_guard(ctx_.trace_id_);
+  DTraceIdGuard trace_guard(ctx.trace_id_);
 
   DLOG(DEBUG, "prepare...");
-  ret = ctx_.processor_->prepare();
+  ret = ctx.processor_->prepare();
 
   int ack = ret;
   // notify peer prepare done
-  write(ctx_.fd_[1], &ack, sizeof(ack));
+  write(ctx.fd_[1], &ack, sizeof(ack));
 
   // wait peer process done or timeout
   bool go_on = true;
   while (OB_SUCC(ret) && go_on) {
     int64_t timeout = 100; // 100ms
-    if (OB_FAIL(wait_readable(ctx_.fd2_[0], timeout))) {
+    if (OB_FAIL(wait_readable(ctx.fd2_[0], timeout))) {
       DLOG(WARN, "wait_readable failed, ret=%d", ret);
     } else {
-      size_t n = read(ctx_.fd2_[0], &ack, sizeof(ack));
+      size_t n = read(ctx.fd2_[0], &ack, sizeof(ack));
       if (-1 == n) {
         DLOG(WARN, "read failed, errno=%d", errno);
       } else if (n != sizeof(ack)) {
@@ -380,8 +383,8 @@ void ObMPSigHandler::handle()
   }
 
   ack = ret;
-  // notity peer exit done
-  write(ctx_.fd_[1], &ack, sizeof(ack));
+  // notify peer exit done
+  write(ctx.fd_[1], &ack, sizeof(ack));
 }
 
 } // namespace common

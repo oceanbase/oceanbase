@@ -11,7 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB_MYSQLC
-#include <mariadb/mysql.h>
+#include "lib/mysqlclient/ob_isql_connection_pool.h"
+#include <mysql.h>
 #include "lib/ob_define.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
@@ -23,12 +24,21 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/string/ob_hex_utils_base.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
-ObMySQLResultImpl::ObMySQLResultImpl(ObMySQLStatement& stmt)
-    : stmt_(stmt), result_(NULL), cur_row_(NULL), result_column_count_(0), cur_row_result_lengths_(NULL), fields_(NULL)
-{}
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
+ObMySQLResultImpl::ObMySQLResultImpl(ObMySQLStatement &stmt) :
+    stmt_(stmt),
+    result_(NULL),
+    cur_row_(NULL),
+    result_column_count_(0),
+    cur_row_result_lengths_(NULL),
+    fields_(NULL)
+{
+}
 
 ObMySQLResultImpl::~ObMySQLResultImpl()
 {
@@ -36,33 +46,40 @@ ObMySQLResultImpl::~ObMySQLResultImpl()
   // must call close() before destroy
 }
 
-int ObMySQLResultImpl::init()
+int ObMySQLResultImpl::init(bool enable_use_result)
 {
   int ret = OB_SUCCESS;
   int64_t field_count = 0;
-  MYSQL* stmt = NULL;
+  MYSQL *stmt = NULL;
   close();
   if (OB_ISNULL(stmt = stmt_.get_stmt_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt handler is null", K(ret));
-  } else if (OB_ISNULL(result_ = mysql_store_result(stmt))) {
-    ret = -mysql_errno(stmt_.get_conn_handler());
-    LOG_WARN("fail to store mysql result", "err_msg", mysql_error(stmt_.get_conn_handler()), K(ret));
-    if (OB_SUCC(ret)) {
-      // if we execute a ResultSet sql, but observer just return an ok packet(casued by bugs),
-      // we will arrive here.
-      ret = OB_ERR_SQL_CLIENT;
-      LOG_WARN("fail to store mysql result, but can not get mysql errno,"
-               " maybe recieved an ok pkt, covert it to ob err",
-          K(ret));
-    }
   } else {
-    result_column_count_ = static_cast<int>(mysql_num_fields(result_));
+    if (enable_use_result) {
+      result_ = mysql_use_result(stmt);
+      LOG_DEBUG("enabled mysql_use_result", K(enable_use_result), K(result_), K(mysql_get_client_version()), K(mysql_get_client_info()));
+    } else {
+      result_ = mysql_store_result(stmt);
+    }
+    if (OB_ISNULL(result_)) {
+      ret = -mysql_errno(stmt_.get_conn_handler());
+      LOG_WARN("fail to store mysql result", "err_msg", mysql_error(stmt_.get_conn_handler()), K(ret));
+      if (OB_SUCC(ret)) {
+        // if we execute a ResultSet sql, but observer just return an ok packet(casued by bugs),
+        // we will arrive here.
+        ret = OB_ERR_SQL_CLIENT;
+        LOG_WARN("fail to store mysql result, but can not get mysql errno,"
+                      " maybe recieved an ok pkt, covert it to ob err", K(ret));
+      }
+    } else {
+      result_column_count_ = static_cast<int>(mysql_num_fields(result_));
+    }
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(column_map_.create(
-            COLUMN_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_SQL_COLUMN_MAP, ObModIds::OB_HASH_NODE_SQL_COLUMN_MAP))) {
+    if (OB_FAIL(column_map_.create(COLUMN_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_SQL_COLUMN_MAP,
+                                   ObModIds::OB_HASH_NODE_SQL_COLUMN_MAP))) {
       LOG_WARN("init username hash map failed", K(ret));
     } else {
       field_count = mysql_num_fields(result_);
@@ -86,7 +103,7 @@ int ObMySQLResultImpl::init()
               }
             }
           }
-        }  // end for
+        } // end for
       }
     }
   }
@@ -119,7 +136,7 @@ int ObMySQLResultImpl::next()
 {
   int ret = OB_SUCCESS;
 
-  // FIXME: after called mysql_store_result(),
+  // FIXME: [xiaochu] after called mysql_store_result(),
   // calling mysql_fetch_row() should never return CR_SERVER_LOST.
   // Am I right?
   if (OB_ISNULL(result_)) {
@@ -134,7 +151,7 @@ int ObMySQLResultImpl::next()
   return ret;
 }
 
-int ObMySQLResultImpl::get_int(const int64_t col_idx, int64_t& int_val) const
+int ObMySQLResultImpl::get_int(const int64_t col_idx, int64_t &int_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -146,8 +163,8 @@ int ObMySQLResultImpl::get_int(const int64_t col_idx, int64_t& int_val) const
     LOG_WARN("invalid empty value", K(varchar_val), K(ret));
   } else {
     int64_t ret_val;
-    const char* nptr = varchar_val.ptr();
-    char* end_ptr = NULL;
+    const char *nptr = varchar_val.ptr();
+    char *end_ptr = NULL;
     ret_val = strtoll(nptr, &end_ptr, 10);
     if (*nptr != '\0' && *end_ptr == '\0') {
       int_val = ret_val;
@@ -159,7 +176,7 @@ int ObMySQLResultImpl::get_int(const int64_t col_idx, int64_t& int_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_uint(const int64_t col_idx, uint64_t& int_val) const
+int ObMySQLResultImpl::get_uint(const int64_t col_idx, uint64_t &int_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -171,8 +188,8 @@ int ObMySQLResultImpl::get_uint(const int64_t col_idx, uint64_t& int_val) const
     LOG_WARN("invalid empty value", K(varchar_val), K(ret));
   } else {
     uint64_t ret_val;
-    const char* nptr = varchar_val.ptr();
-    char* end_ptr = NULL;
+    const char *nptr = varchar_val.ptr();
+    char *end_ptr = NULL;
     ret_val = strtoull(nptr, &end_ptr, 10);
     if ('\0' != *nptr && '\0' == *end_ptr) {
       int_val = ret_val;
@@ -184,7 +201,7 @@ int ObMySQLResultImpl::get_uint(const int64_t col_idx, uint64_t& int_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_bool(const int64_t col_idx, bool& bool_val) const
+int ObMySQLResultImpl::get_bool(const int64_t col_idx, bool &bool_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -207,7 +224,7 @@ int ObMySQLResultImpl::get_bool(const int64_t col_idx, bool& bool_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_special_value(const common::ObString& varchar_val) const
+int ObMySQLResultImpl::get_special_value(const common::ObString &varchar_val) const
 {
   int ret = OB_SUCCESS;
   static int32_t min_str_len = static_cast<int32_t>(STRLEN(ObObj::MIN_OBJECT_VALUE_STR));
@@ -224,7 +241,7 @@ int ObMySQLResultImpl::get_special_value(const common::ObString& varchar_val) co
   return ret;
 }
 
-int ObMySQLResultImpl::get_varchar(const int64_t col_idx, common::ObString& varchar_val) const
+int ObMySQLResultImpl::get_varchar(const int64_t col_idx, common::ObString &varchar_val) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_row_) || OB_ISNULL(cur_row_result_lengths_)) {
@@ -248,7 +265,7 @@ int ObMySQLResultImpl::get_varchar(const int64_t col_idx, common::ObString& varc
   return ret;
 }
 
-int ObMySQLResultImpl::get_raw(const int64_t col_idx, common::ObString& varchar_val) const
+int ObMySQLResultImpl::get_raw(const int64_t col_idx, common::ObString &varchar_val) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_row_) || OB_ISNULL(cur_row_result_lengths_)) {
@@ -265,18 +282,18 @@ int ObMySQLResultImpl::get_raw(const int64_t col_idx, common::ObString& varchar_
   return ret;
 }
 
-int ObMySQLResultImpl::get_nvarchar2(const int64_t col_idx, ObString& nvarchar2_val) const
+int ObMySQLResultImpl::get_nvarchar2(const int64_t col_idx, ObString &nvarchar2_val) const
 {
   return get_varchar(col_idx, nvarchar2_val);
 }
 
-int ObMySQLResultImpl::get_nchar(const int64_t col_idx, ObString& nchar) const
+int ObMySQLResultImpl::get_nchar(const int64_t col_idx, ObString &nchar) const
 {
   return get_varchar(col_idx, nchar);
 }
 
-int ObMySQLResultImpl::inner_get_number(
-    const int64_t col_idx, common::number::ObNumber& nmb_val, IAllocator& allocator) const
+int ObMySQLResultImpl::inner_get_number(const int64_t col_idx, common::number::ObNumber &nmb_val,
+                                        IAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -293,7 +310,7 @@ int ObMySQLResultImpl::inner_get_number(
   return ret;
 }
 
-int ObMySQLResultImpl::get_float(const int64_t col_idx, float& float_val) const
+int ObMySQLResultImpl::get_float(const int64_t col_idx, float &float_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -305,8 +322,8 @@ int ObMySQLResultImpl::get_float(const int64_t col_idx, float& float_val) const
     LOG_WARN("invalid empty value", K(varchar_val), K(ret));
   } else {
     float ret_val = 0.0;
-    const char* nptr = varchar_val.ptr();
-    char* end_ptr = NULL;
+    const char *nptr = varchar_val.ptr();
+    char *end_ptr = NULL;
     ret_val = strtof(nptr, &end_ptr);
     if ('\0' != *nptr && '\0' == *end_ptr) {
       float_val = ret_val;
@@ -318,7 +335,7 @@ int ObMySQLResultImpl::get_float(const int64_t col_idx, float& float_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_double(const int64_t col_idx, double& double_val) const
+int ObMySQLResultImpl::get_double(const int64_t col_idx, double &double_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -330,8 +347,8 @@ int ObMySQLResultImpl::get_double(const int64_t col_idx, double& double_val) con
     LOG_WARN("invalid empty value", K(varchar_val), K(ret));
   } else {
     double ret_val = 0.0;
-    const char* nptr = varchar_val.ptr();
-    char* end_ptr = NULL;
+    const char *nptr = varchar_val.ptr();
+    char *end_ptr = NULL;
     ret_val = strtod(nptr, &end_ptr);
     if ('\0' != *nptr && '\0' == *end_ptr) {
       double_val = ret_val;
@@ -343,7 +360,7 @@ int ObMySQLResultImpl::get_double(const int64_t col_idx, double& double_val) con
   return ret;
 }
 
-int ObMySQLResultImpl::get_varchar(const char* col_name, common::ObString& varchar_val) const
+int ObMySQLResultImpl::get_varchar(const char *col_name, common::ObString &varchar_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -355,7 +372,8 @@ int ObMySQLResultImpl::get_varchar(const char* col_name, common::ObString& varch
   return ret;
 }
 
-int ObMySQLResultImpl::get_raw(const char* col_name, common::ObString& raw_val) const
+
+int ObMySQLResultImpl::get_raw(const char *col_name, common::ObString &raw_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -367,17 +385,17 @@ int ObMySQLResultImpl::get_raw(const char* col_name, common::ObString& raw_val) 
   return ret;
 }
 
-int ObMySQLResultImpl::get_nvarchar2(const char* col_name, ObString& nvarchar2_val) const
+int ObMySQLResultImpl::get_nvarchar2(const char *col_name, ObString &nvarchar2_val) const
 {
   return get_varchar(col_name, nvarchar2_val);
 }
 
-int ObMySQLResultImpl::get_nchar(const char* col_name, ObString& nchar_val) const
+int ObMySQLResultImpl::get_nchar(const char *col_name, ObString &nchar_val) const
 {
   return get_varchar(col_name, nchar_val);
 }
 
-int ObMySQLResultImpl::get_int(const char* col_name, int64_t& int_val) const
+int ObMySQLResultImpl::get_int(const char *col_name, int64_t &int_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -389,7 +407,7 @@ int ObMySQLResultImpl::get_int(const char* col_name, int64_t& int_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_uint(const char* col_name, uint64_t& int_val) const
+int ObMySQLResultImpl::get_uint(const char *col_name, uint64_t &int_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -401,7 +419,7 @@ int ObMySQLResultImpl::get_uint(const char* col_name, uint64_t& int_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_bool(const char* col_name, bool& bool_val) const
+int ObMySQLResultImpl::get_bool(const char *col_name, bool &bool_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -413,8 +431,8 @@ int ObMySQLResultImpl::get_bool(const char* col_name, bool& bool_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::inner_get_number(
-    const char* col_name, common::number::ObNumber& nmb_val, IAllocator& allocator) const
+int ObMySQLResultImpl::inner_get_number(const char *col_name, common::number::ObNumber &nmb_val,
+                                        IAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -426,7 +444,7 @@ int ObMySQLResultImpl::inner_get_number(
   return ret;
 }
 
-int ObMySQLResultImpl::get_float(const char* col_name, float& float_val) const
+int ObMySQLResultImpl::get_float(const char *col_name, float &float_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -438,7 +456,7 @@ int ObMySQLResultImpl::get_float(const char* col_name, float& float_val) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_double(const char* col_name, double& double_val) const
+int ObMySQLResultImpl::get_double(const char *col_name, double &double_val) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -450,7 +468,7 @@ int ObMySQLResultImpl::get_double(const char* col_name, double& double_val) cons
   return ret;
 }
 
-int ObMySQLResultImpl::get_column_index(const char* col_name, int64_t& index) const
+int ObMySQLResultImpl::get_column_index(const char *col_name, int64_t &index) const
 {
   int ret = OB_SUCCESS;
   index = OB_INVALID_INDEX;
@@ -463,7 +481,7 @@ int ObMySQLResultImpl::get_column_index(const char* col_name, int64_t& index) co
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_ERR_COLUMN_NOT_FOUND;
       }
-      LOG_WARN("fail to get column", K(col_name), K(ret));
+      LOG_WARN("fail to get column", KCSTRING(col_name), K(ret));
     }
   }
   return ret;
@@ -475,14 +493,14 @@ int ObMySQLResultImpl::print_info() const
   if (OB_ISNULL(cur_row_) || OB_ISNULL(cur_row_result_lengths_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("check cur row or length failed", K(ret));
-  } else
-    for (int i = 0; i < result_column_count_; ++i) {
-      LOG_INFO("cell info", "cell index", i, "result length", cur_row_result_lengths_[i], K(cur_row_[i]));
-    }
+  } else for (int i = 0; i < result_column_count_; ++i) {
+    LOG_INFO("cell info", "cell index", i,
+             "result length", cur_row_result_lengths_[i], KCSTRING(cur_row_[i]));
+  }
   return ret;
 }
 
-int ObMySQLResultImpl::get_datetime(const int64_t col_idx, int64_t& datetime) const
+int ObMySQLResultImpl::get_datetime(const int64_t col_idx, int64_t &datetime) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -495,7 +513,7 @@ int ObMySQLResultImpl::get_datetime(const int64_t col_idx, int64_t& datetime) co
   return ret;
 }
 
-int ObMySQLResultImpl::get_date(const int64_t col_idx, int32_t& date) const
+int ObMySQLResultImpl::get_date(const int64_t col_idx, int32_t &date) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -508,7 +526,7 @@ int ObMySQLResultImpl::get_date(const int64_t col_idx, int32_t& date) const
   return ret;
 }
 
-int ObMySQLResultImpl::ObMySQLResultImpl::get_time(const int64_t col_idx, int64_t& time) const
+int ObMySQLResultImpl::ObMySQLResultImpl::get_time(const int64_t col_idx, int64_t &time) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -522,7 +540,7 @@ int ObMySQLResultImpl::ObMySQLResultImpl::get_time(const int64_t col_idx, int64_
   return ret;
 }
 
-int ObMySQLResultImpl::get_year(const int64_t col_idx, uint8_t& year) const
+int ObMySQLResultImpl::get_year(const int64_t col_idx, uint8_t &year) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -535,8 +553,8 @@ int ObMySQLResultImpl::get_year(const int64_t col_idx, uint8_t& year) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_timestamp(
-    const int64_t col_idx, const common::ObTimeZoneInfo* tz_info, int64_t& timestamp) const
+int ObMySQLResultImpl::get_timestamp(const int64_t col_idx, const common::ObTimeZoneInfo *tz_info,
+    int64_t &timestamp) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -550,8 +568,8 @@ int ObMySQLResultImpl::get_timestamp(
   return ret;
 }
 
-int ObMySQLResultImpl::get_otimestamp_value(const int64_t col_idx, const common::ObTimeZoneInfo& tz_info,
-    const common::ObObjType type, ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_otimestamp_value(const int64_t col_idx, const common::ObTimeZoneInfo &tz_info,
+    const common::ObObjType type, ObOTimestampData &otimestamp_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
@@ -560,41 +578,43 @@ int ObMySQLResultImpl::get_otimestamp_value(const int64_t col_idx, const common:
     LOG_WARN("fail to get value", K(col_idx), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(&tz_info, false);
-    //  int8_t scale = -1;
-    //  if (OB_FAIL(ObTimeConverter::decode_otimestamp(type, varchar_val.ptr(),
-    //                                                 varchar_val.length(),
-    //                                                 cvrt_ctx, otimestamp_val, scale))) {
-    //    LOG_WARN("failed to decode_otimestamp", K(varchar_val), K(ret));
-    //  }
+//  int8_t scale = -1;
+//  if (OB_FAIL(ObTimeConverter::decode_otimestamp(type, varchar_val.ptr(),
+//                                                 varchar_val.length(),
+//                                                 cvrt_ctx, otimestamp_val, scale))) {
+//    LOG_WARN("failed to decode_otimestamp", K(varchar_val), K(ret));
+//  }
     ObScale scale = -1;
-    cvrt_ctx.oracle_nls_format_ = (type == ObTimestampTZType) ? ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT
-                                                              : ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
-    if (OB_FAIL(ObTimeConverter::str_to_otimestamp(varchar_val, cvrt_ctx, type, otimestamp_val, scale))) {
+    cvrt_ctx.oracle_nls_format_ = (type == ObTimestampTZType) ?
+                                    ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT :
+                                    ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
+    if (OB_FAIL(ObTimeConverter::str_to_otimestamp(varchar_val, cvrt_ctx,
+                                                   type, otimestamp_val, scale))) {
       LOG_WARN("failed to str_to_otimestamp", K(varchar_val), K(ret));
     }
   }
   return ret;
 }
 
-int ObMySQLResultImpl::get_timestamp_tz(
-    const int64_t col_idx, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_tz(const int64_t col_idx, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_idx, tz_info, ObTimestampTZType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_timestamp_ltz(
-    const int64_t col_idx, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_ltz(const int64_t col_idx, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_idx, tz_info, ObTimestampLTZType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_timestamp_nano(
-    const int64_t col_idx, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_nano(const int64_t col_idx, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_idx, tz_info, ObTimestampNanoType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType mysql_type) const
+int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type) const
 {
   int ret = OB_SUCCESS;
   switch (mysql_type) {
@@ -635,9 +655,11 @@ int ObMySQLResultImpl::get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType 
       ob_type = ObYearType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_VARCHAR:
-    case obmysql::EMySQLFieldType::MYSQL_TYPE_STRING:
     case obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING:
       ob_type = ObVarcharType;
+      break;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_STRING:
+      ob_type = ObCharType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TINY_BLOB:
       ob_type = ObTinyTextType;
@@ -669,6 +691,12 @@ int ObMySQLResultImpl::get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType 
     case obmysql::EMySQLFieldType::MYSQL_TYPE_OB_NUMBER_FLOAT:
       ob_type = ObNumberFloatType;
       break;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_JSON:
+      ob_type = ObJsonType;
+      break;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY:
+      ob_type = ObGeometryType;
+      break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_BIT:
       ob_type = ObBitType;
       break;
@@ -693,6 +721,9 @@ int ObMySQLResultImpl::get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType 
     case obmysql::EMySQLFieldType::MYSQL_TYPE_COMPLEX:
       ob_type = ObExtendType;
       break;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_OB_UROWID:
+      ob_type = ObURowIDType;
+      break;
     default:
       _OB_LOG(WARN, "unsupport MySQL type %d", mysql_type);
       ret = OB_OBJ_TYPE_ERROR;
@@ -700,7 +731,7 @@ int ObMySQLResultImpl::get_ob_type(ObObjType& ob_type, obmysql::EMySQLFieldType 
   return ret;
 }
 
-int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta& type) const
+int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
 {
   int ret = OB_SUCCESS;
   ObObjType ob_type;
@@ -718,9 +749,17 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta& type) const
   }
   return ret;
 }
+int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
+                                    oceanbase::common::ObString &name, ObObjMeta &meta,
+                                    int16_t &precision, int16_t &scale, int32_t &length) const
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
 
-int ObMySQLResultImpl::get_obj(
-    const int64_t col_idx, ObObj& obj, const ObTimeZoneInfo* tz_info, ObIAllocator* allocator) const
+int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
+                               const ObTimeZoneInfo *tz_info,
+                               ObIAllocator *allocator) const
 {
   int ret = OB_SUCCESS;
   ObObjMeta type;
@@ -729,7 +768,7 @@ int ObMySQLResultImpl::get_obj(
   if (OB_FAIL(get_type(col_idx, type))) {
     LOG_WARN("failed to get type");
   } else {
-    switch (type.get_type()) {
+    switch(type.get_type()) {
       case ObNullType:
         obj.set_null();
         break;
@@ -738,7 +777,8 @@ int ObMySQLResultImpl::get_obj(
       case ObMediumIntType:
       case ObInt32Type:
       case ObIntType:
-        if (OB_SUCC(get_int(col_idx, obj_value.int64_))) {
+        if (OB_SUCC(get_int(col_idx, obj_value.int64_)))
+        {
           obj.set_int(obj_value.int64_);
         }
         break;
@@ -747,32 +787,49 @@ int ObMySQLResultImpl::get_obj(
       case ObUMediumIntType:
       case ObUInt32Type:
       case ObUInt64Type:
-        if (OB_SUCC(get_uint(col_idx, obj_value.uint64_))) {
+        if (OB_SUCC(get_uint(col_idx, obj_value.uint64_)))
+        {
           obj.set_uint64(obj_value.uint64_);
         }
         break;
       case ObDoubleType:
       case ObUDoubleType:
-        if (OB_SUCC(get_double(col_idx, obj_value.double_))) {
+        if (OB_SUCC(get_double(col_idx, obj_value.double_)))
+        {
           obj.set_double(obj_value.double_);
         }
         break;
       case ObVarcharType:
-      case ObCharType:
-        if (OB_SUCC(get_varchar(col_idx, obj_str))) {
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
           obj.set_varchar(obj_str);
           obj.set_collation_type(type.get_collation_type());
         }
         break;
+      case ObCharType:
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          obj.set_char(obj_str);
+          obj.set_collation_type(type.get_collation_type());
+        }
+        break;
       case ObNVarchar2Type:
-      case ObNCharType:
-        if (OB_SUCC(get_nvarchar2(col_idx, obj_str))) {
+        if (OB_SUCC(get_nvarchar2(col_idx, obj_str)))
+        {
           obj.set_nvarchar2(obj_str);
           obj.set_collation_type(type.get_collation_type());
         }
         break;
+      case ObNCharType:
+        if (OB_SUCC(get_nvarchar2(col_idx, obj_str)))
+        {
+          obj.set_nchar(obj_str);
+          obj.set_collation_type(type.get_collation_type());
+        }
+        break;
       case ObRawType:
-        if (OB_SUCC(get_raw(col_idx, obj_str))) {
+        if (OB_SUCC(get_raw(col_idx, obj_str)))
+        {
           if (OB_ISNULL(allocator)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("allocator is NULL", K(ret));
@@ -785,18 +842,21 @@ int ObMySQLResultImpl::get_obj(
         break;
       case ObFloatType:
       case ObUFloatType:
-        if (OB_SUCC(get_float(col_idx, obj_value.float_))) {
+        if (OB_SUCC(get_float(col_idx, obj_value.float_)))
+        {
           obj.set_float(obj_value.float_);
         }
         break;
       case ObDateTimeType:
-        if (OB_SUCC(get_datetime(col_idx, obj_value.datetime_))) {
+        if (OB_SUCC(get_datetime(col_idx, obj_value.datetime_)))
+        {
           obj.set_datetime(obj_value.datetime_);
         }
         break;
       case ObTimestampType:
-        // TODO::need fill available timezone here @zhuweng
-        if (OB_SUCC(get_timestamp(col_idx, nullptr, obj_value.datetime_))) {
+        //TODO::need fill available timezone here @zhuweng
+        if (OB_SUCC(get_timestamp(col_idx, nullptr, obj_value.datetime_)))
+        {
           obj.set_timestamp(obj_value.datetime_);
         }
         break;
@@ -840,12 +900,28 @@ int ObMySQLResultImpl::get_obj(
         }
         break;
       }
+      case ObURowIDType: {
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          ObURowIDData rowid_data;
+          if (OB_ISNULL(allocator)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("allocator is NULL", K(ret));
+          } else if (OB_FAIL(ObURowIDData::decode2urowid(obj_str.ptr(), obj_str.length(),
+                                                         *allocator, rowid_data))) {
+            LOG_WARN("fail to decode2urowid", K(ret), K(obj_str));
+          } else {
+            obj.set_urowid(rowid_data);
+          }
+        }
+        break;
+      }
       case ObDateType:
       case ObTimeType:
       case ObYearType:
       default:
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported object type", "obj_type", obj.get_type());
+        LOG_WARN("not supported object type", "obj_type", obj.get_type(), K(ret));
         break;
     }
     if (OB_ERR_NULL_VALUE == ret) {
@@ -856,26 +932,26 @@ int ObMySQLResultImpl::get_obj(
   return ret;
 }
 
-int ObMySQLResultImpl::get_datetime(const char* col_name, int64_t& datetime) const
+int ObMySQLResultImpl::get_datetime(const char *col_name, int64_t &datetime) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ret = varchar2datetime(varchar_val, datetime);
   }
   return ret;
 }
 
-int ObMySQLResultImpl::get_date(const char* col_name, int32_t& date) const
+int ObMySQLResultImpl::get_date(const char *col_name, int32_t &date) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(NULL, false);
     ret = ObTimeConverter::str_to_date(varchar_val, date);
@@ -883,13 +959,13 @@ int ObMySQLResultImpl::get_date(const char* col_name, int32_t& date) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_time(const char* col_name, int64_t& time) const
+int ObMySQLResultImpl::get_time(const char *col_name, int64_t &time) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(NULL, false);
     ObScale res_scale = -1;
@@ -898,13 +974,13 @@ int ObMySQLResultImpl::get_time(const char* col_name, int64_t& time) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_year(const char* col_name, uint8_t& year) const
+int ObMySQLResultImpl::get_year(const char *col_name, uint8_t &year) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(NULL, false);
     ret = ObTimeConverter::str_to_year(varchar_val, year);
@@ -912,14 +988,14 @@ int ObMySQLResultImpl::get_year(const char* col_name, uint8_t& year) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_timestamp(
-    const char* col_name, const common::ObTimeZoneInfo* tz_info, int64_t& timestamp) const
+int ObMySQLResultImpl::get_timestamp(const char *col_name, const common::ObTimeZoneInfo *tz_info,
+    int64_t &timestamp) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(tz_info, true);
     ret = ObTimeConverter::str_to_datetime(varchar_val, cvrt_ctx, timestamp, NULL);
@@ -927,44 +1003,45 @@ int ObMySQLResultImpl::get_timestamp(
   return ret;
 }
 
-int ObMySQLResultImpl::get_otimestamp_value(const char* col_name, const common::ObTimeZoneInfo& tz_info,
-    common::ObObjType type, ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_otimestamp_value(const char *col_name, const common::ObTimeZoneInfo &tz_info,
+    common::ObObjType type, ObOTimestampData &otimestamp_val) const
 {
   int ret = OB_SUCCESS;
   // some type convertion work
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(&tz_info, false);
     int8_t scale = -1;
-    if (OB_FAIL(ObTimeConverter::decode_otimestamp(
-            type, varchar_val.ptr(), varchar_val.length(), cvrt_ctx, otimestamp_val, scale))) {
+    if (OB_FAIL(ObTimeConverter::decode_otimestamp(type, varchar_val.ptr(),
+                                                   varchar_val.length(),
+                                                   cvrt_ctx, otimestamp_val, scale))) {
       LOG_WARN("failed to decode_otimestamp", K(varchar_val), K(ret));
     }
   }
   return ret;
 }
 
-int ObMySQLResultImpl::get_timestamp_tz(
-    const char* col_name, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_tz(const char *col_name, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_name, tz_info, ObTimestampTZType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_timestamp_ltz(
-    const char* col_name, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_ltz(const char *col_name, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_name, tz_info, ObTimestampLTZType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_timestamp_nano(
-    const char* col_name, const common::ObTimeZoneInfo& tz_info, common::ObOTimestampData& otimestamp_val) const
+int ObMySQLResultImpl::get_timestamp_nano(const char *col_name, const common::ObTimeZoneInfo &tz_info,
+    common::ObOTimestampData &otimestamp_val) const
 {
   return get_otimestamp_value(col_name, tz_info, ObTimestampNanoType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_type(const char* col_name, ObObjMeta& type) const
+int ObMySQLResultImpl::get_type(const char* col_name, ObObjMeta &type) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -976,7 +1053,7 @@ int ObMySQLResultImpl::get_type(const char* col_name, ObObjMeta& type) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_obj(const char* col_name, ObObj& obj) const
+int ObMySQLResultImpl::get_obj(const char* col_name, ObObj &obj) const
 {
   int ret = OB_SUCCESS;
   int64_t col_idx = OB_INVALID_INDEX;
@@ -988,7 +1065,7 @@ int ObMySQLResultImpl::get_obj(const char* col_name, ObObj& obj) const
   return ret;
 }
 
-int ObMySQLResultImpl::get_interval_ym(const int64_t col_idx, ObIntervalYMValue& val) const
+int ObMySQLResultImpl::get_interval_ym(const int64_t col_idx, ObIntervalYMValue &val) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -1003,7 +1080,7 @@ int ObMySQLResultImpl::get_interval_ym(const int64_t col_idx, ObIntervalYMValue&
   return ret;
 }
 
-int ObMySQLResultImpl::get_interval_ds(const int64_t col_idx, ObIntervalDSValue& val) const
+int ObMySQLResultImpl::get_interval_ds(const int64_t col_idx, ObIntervalDSValue &val) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -1018,12 +1095,12 @@ int ObMySQLResultImpl::get_interval_ds(const int64_t col_idx, ObIntervalDSValue&
   return ret;
 }
 
-int ObMySQLResultImpl::get_interval_ym(const char* col_name, ObIntervalYMValue& val) const
+int ObMySQLResultImpl::get_interval_ym(const char *col_name, ObIntervalYMValue &val) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObScale scale = -1;
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(varchar_val.ptr(), varchar_val.length(), val, scale))) {
@@ -1033,12 +1110,12 @@ int ObMySQLResultImpl::get_interval_ym(const char* col_name, ObIntervalYMValue& 
   return ret;
 }
 
-int ObMySQLResultImpl::get_interval_ds(const char* col_name, ObIntervalDSValue& val) const
+int ObMySQLResultImpl::get_interval_ds(const char *col_name, ObIntervalDSValue &val) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("fail to get value", K(col_name), K(ret));
+    LOG_WARN("fail to get value", KCSTRING(col_name), K(ret));
   } else {
     ObScale scale = -1;
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(varchar_val.ptr(), varchar_val.length(), val, scale))) {
@@ -1048,8 +1125,8 @@ int ObMySQLResultImpl::get_interval_ds(const char* col_name, ObIntervalDSValue& 
   return ret;
 }
 
-int ObMySQLResultImpl::inner_get_urowid(
-    const int64_t col_idx, common::ObURowIDData& urowid_data, common::ObIAllocator& allocator) const
+int ObMySQLResultImpl::inner_get_urowid(const int64_t col_idx, common::ObURowIDData &urowid_data,
+                                        common::ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
@@ -1058,7 +1135,8 @@ int ObMySQLResultImpl::inner_get_urowid(
   } else if (OB_UNLIKELY(varchar_val.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected length of value", K(ret));
-  } else if (OB_FAIL(ObURowIDData::decode2urowid(varchar_val.ptr(), varchar_val.length(), allocator, urowid_data))) {
+  } else if (OB_FAIL(ObURowIDData::decode2urowid(varchar_val.ptr(), varchar_val.length(),
+                                                 allocator, urowid_data))) {
     LOG_WARN("failed to decode to urowid", K(ret));
   } else {
     // do nothing
@@ -1066,17 +1144,18 @@ int ObMySQLResultImpl::inner_get_urowid(
   return ret;
 }
 
-int ObMySQLResultImpl::inner_get_urowid(
-    const char* col_name, ObURowIDData& urowid_data, common::ObIAllocator& allocator) const
+int ObMySQLResultImpl::inner_get_urowid(const char *col_name, ObURowIDData &urowid_data,
+                                        common::ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("failed to get value", K(ret), K(col_name));
+    LOG_WARN("failed to get value", K(ret), KCSTRING(col_name));
   } else if (OB_UNLIKELY(varchar_val.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected length of value", K(ret));
-  } else if (OB_FAIL(ObURowIDData::decode2urowid(varchar_val.ptr(), varchar_val.length(), allocator, urowid_data))) {
+  } else if (OB_FAIL(ObURowIDData::decode2urowid(varchar_val.ptr(), varchar_val.length(),
+                                                 allocator, urowid_data))) {
     LOG_WARN("failed to decode to urowid", K(ret));
   } else {
     // do nothing
@@ -1084,27 +1163,27 @@ int ObMySQLResultImpl::inner_get_urowid(
   return ret;
 }
 
-int ObMySQLResultImpl::inner_get_lob_locator(
-    const char* col_name, common::ObLobLocator*& lob_locator, common::ObIAllocator& allocator) const
-{
-  UNUSED(allocator);
+int ObMySQLResultImpl::inner_get_lob_locator(const char *col_name,
+                                              common::ObLobLocator *&lob_locator,
+                                              common::ObIAllocator &allocator) const
+{ UNUSED(allocator);
   int ret = OB_SUCCESS;
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_name, varchar_val))) {
-    LOG_WARN("failed to get value", K(ret), K(col_name));
+    LOG_WARN("failed to get value", K(ret), KCSTRING(col_name));
   } else if (OB_UNLIKELY(varchar_val.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected length of value", K(ret));
   } else {
-    lob_locator = static_cast<common::ObLobLocator*>((void*)varchar_val.ptr());
+    lob_locator = static_cast<common::ObLobLocator *>((void *)varchar_val.ptr());
   }
   return ret;
 }
 
-int ObMySQLResultImpl::inner_get_lob_locator(
-    const int64_t col_idx, common::ObLobLocator*& lob_locator, common::ObIAllocator& allocator) const
-{
-  UNUSED(allocator);
+int ObMySQLResultImpl::inner_get_lob_locator(const int64_t col_idx,
+                                              common::ObLobLocator *&lob_locator,
+                                              common::ObIAllocator &allocator) const
+{ UNUSED(allocator);
   int ret = OB_SUCCESS;
   ObString varchar_val;
   if (OB_FAIL(get_varchar(col_idx, varchar_val))) {
@@ -1113,11 +1192,11 @@ int ObMySQLResultImpl::inner_get_lob_locator(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected length of value", K(ret));
   } else {
-    lob_locator = static_cast<common::ObLobLocator*>((void*)varchar_val.ptr());
+    lob_locator = static_cast<common::ObLobLocator *>((void *)varchar_val.ptr());
   }
   return ret;
 }
 
-}  // end namespace sqlclient
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace sqlclient
+} // end namespace common
+} // end namespace oceanbase

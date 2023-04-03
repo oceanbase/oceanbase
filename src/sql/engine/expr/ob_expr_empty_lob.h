@@ -15,38 +15,45 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprEmptyClob : public ObFuncExprOperator {
+class ObExprEmptyClob : public ObFuncExprOperator
+{
 public:
-  explicit ObExprEmptyClob(common::ObIAllocator& alloc);
+  explicit  ObExprEmptyClob(common::ObIAllocator &alloc);
   virtual ~ObExprEmptyClob();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int eval_empty_clob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  static int eval_empty_clob(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEmptyClob);
 };
 
-class ObExprEmptyBlob : public ObFuncExprOperator {
+class ObExprEmptyBlob : public ObFuncExprOperator
+{
 public:
-  explicit ObExprEmptyBlob(common::ObIAllocator& alloc);
+  explicit  ObExprEmptyBlob(common::ObIAllocator &alloc);
   virtual ~ObExprEmptyBlob();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int eval_empty_blob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  static int eval_empty_blob(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEmptyBlob);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_OB_EXPR_EMPTY_LOB_H_
+#endif // OCEANBASE_SQL_OB_EXPR_EMPTY_LOB_H_
+

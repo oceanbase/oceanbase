@@ -19,27 +19,32 @@
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/lock/ob_mutex.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
-class ObDiag {
+class ObDiag
+{
   static const int64_t EXPIRED_TIME = 10 * 1000L * 1000L;  // 10 seconds
 public:
   ObDiag();
 
-  int refresh_passwd(common::ObString& passwd);
-  int check_passwd(const common::ObString& passwd, const common::ObString& scramble_str);
+  int refresh_passwd(common::ObString &passwd);
+  int check_passwd(const common::ObString &passwd, const common::ObString &scramble_str);
 
 private:
   lib::ObMutex lock_;
   char passwd_[64];
   int64_t fresh_timestamp_;
-};  // end of class ObDiag
+}; // end of class ObDiag
 
-inline ObDiag::ObDiag() : lock_(), passwd_(), fresh_timestamp_(0L)
-{}
+inline ObDiag::ObDiag()
+    : lock_(ObLatchIds::DEFAULT_MUTEX), passwd_(), fresh_timestamp_(0L)
+{
+}
 
-inline int ObDiag::refresh_passwd(common::ObString& passwd)
+inline int ObDiag::refresh_passwd(common::ObString &passwd)
 {
   int ret = common::OB_SUCCESS;
   lib::ObMutexGuard guard(lock_);
@@ -47,7 +52,8 @@ inline int ObDiag::refresh_passwd(common::ObString& passwd)
 
   if (fresh_timestamp_ + EXPIRED_TIME < current_ts) {
     int64_t pos = 0;
-    if (OB_FAIL(common::databuff_printf(passwd_, sizeof(passwd_), pos, "%ld", current_ts))) {
+    if (OB_FAIL(common::databuff_printf(
+                    passwd_, sizeof (passwd_), pos, "%ld", current_ts))) {
       RPC_OBMYSQL_LOG(ERROR, "generate passwd fail", K(ret));
     }
   }
@@ -55,14 +61,15 @@ inline int ObDiag::refresh_passwd(common::ObString& passwd)
 
   if (OB_SUCC(ret)) {
     int64_t pos = 0;
-    if (OB_FAIL(common::databuff_printf(passwd.ptr(), passwd.size(), pos, "%s", passwd_))) {
+    if (OB_FAIL(common::databuff_printf(
+                    passwd.ptr(), passwd.size(), pos, "%s", passwd_))) {
       RPC_OBMYSQL_LOG(ERROR, "copy passwd fail", K(ret));
     }
   }
   return ret;
 }
 
-inline int ObDiag::check_passwd(const common::ObString& passwd, const common::ObString& scramble_str)
+inline int ObDiag::check_passwd(const common::ObString &passwd, const common::ObString &scramble_str)
 {
   using common::ObString;
   int ret = common::OB_SUCCESS;
@@ -73,7 +80,11 @@ inline int ObDiag::check_passwd(const common::ObString& passwd, const common::Ob
     char buf[21] = {};
     int64_t pos = 0;
     if (OB_FAIL(common::ObEncryptedHelper::encrypt_password(
-            ObString(STRLEN(passwd_), passwd_), scramble_str, buf, sizeof(buf), pos))) {
+                    ObString(STRLEN (passwd_), passwd_),
+                    scramble_str,
+                    buf,
+                    sizeof(buf),
+                    pos))) {
       RPC_OBMYSQL_LOG(ERROR, "encrypt password fail", K(ret));
     } else if (MEMCMP(passwd.ptr(), buf, passwd.length()) != 0) {
       ret = common::OB_ERR_WRONG_PASSWORD;
@@ -84,7 +95,8 @@ inline int ObDiag::check_passwd(const common::ObString& passwd, const common::Ob
   return ret;
 }
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
+
 
 #endif /* _OB_DIAG_H_ */

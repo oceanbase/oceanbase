@@ -15,16 +15,19 @@
 
 #include "common/row/ob_row_iterator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObIMergeSort {
+class ObIMergeSort
+{
 public:
-  virtual int dump_base_run(common::ObOuterRowIterator& row_iterator, bool build_fragment = true) = 0;
+  virtual int dump_base_run(common::ObOuterRowIterator &row_iterator, bool build_fragment = true) = 0;
   virtual int build_cur_fragment() = 0;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif

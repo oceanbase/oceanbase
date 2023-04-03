@@ -15,23 +15,25 @@
 
 #include "common/ob_timeout_ctx.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 void process_func(const int64_t timeout_us)
 {
-  const ObTimeoutCtx* cc = &ObTimeoutCtx::get_ctx();
+  const ObTimeoutCtx *cc = &ObTimeoutCtx::get_ctx();
   ASSERT_TRUE(cc->is_timeout_set());
   ASSERT_TRUE(cc->get_timeout() > timeout_us - 10000);
   ASSERT_TRUE(cc->get_timeout() < timeout_us + 10000);
 
-  this_routine::usleep((int32_t)timeout_us + 10000);
+  ::usleep((int32_t)timeout_us + 10000);
   ASSERT_TRUE(cc->is_timeouted());
 }
 
 TEST(ObTimeoutCtx, all)
 {
-  const ObTimeoutCtx* cc = &ObTimeoutCtx::get_ctx();
+  const ObTimeoutCtx *cc = &ObTimeoutCtx::get_ctx();
   ASSERT_FALSE(cc->is_timeout_set());
   ASSERT_FALSE(cc->is_timeouted());
   {
@@ -57,11 +59,11 @@ TEST(ObTimeoutCtx, all)
   ASSERT_FALSE(cc->is_timeout_set());
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

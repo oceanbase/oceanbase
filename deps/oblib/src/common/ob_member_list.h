@@ -16,10 +16,13 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "common/ob_member.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <int64_t MAX_MEMBER_NUM>
-class ObMemberListBase {
+class ObMemberListBase
+{
   OB_UNIS_VERSION(1);
 
 public:
@@ -29,38 +32,42 @@ public:
 public:
   void reset();
   bool is_valid() const;
-  int add_member(const common::ObMember& member);
-  int add_server(const common::ObAddr& server);
+  int add_member(const common::ObMember &member);
+  int add_server(const common::ObAddr &server);
   // This function will determine the timestamp corresponding to the server when remove_member
-  int remove_member(const common::ObMember& member);
+  int remove_member(const common::ObMember &member);
   // This function will not determine the timestamp corresponding to the server when removing_server
-  int remove_server(const common::ObAddr& server);
+  int remove_server(const common::ObAddr &server);
   int64_t get_member_number() const;
   uint64_t hash() const;
-  int get_server_by_index(const int64_t index, common::ObAddr& server) const;
-  int get_member_by_index(const int64_t index, common::ObMember& server_ex) const;
-  int get_member_by_addr(const common::ObAddr& server, common::ObMember& member) const;
-  int get_addr_array(ObIArray<common::ObAddr>& addr_array) const;
-  bool contains(const common::ObAddr& server) const;
-  bool contains(const common::ObMember& member) const;
-  int deep_copy(const ObMemberListBase<MAX_MEMBER_NUM>& member_list);
-  ObMemberListBase& operator=(const ObMemberListBase<MAX_MEMBER_NUM>& member_list);
-  bool member_addr_equal(const ObMemberListBase<MAX_MEMBER_NUM>& member_list) const;
+  int get_server_by_index(const int64_t index, common::ObAddr &server) const;
+  int get_member_by_index(const int64_t index, common::ObMember &server_ex) const;
+  int get_member_by_addr(const common::ObAddr &server, common::ObMember &member) const;
+  int get_addr_array(ObIArray<common::ObAddr> &addr_array) const;
+  bool contains(const common::ObAddr &server) const;
+  bool contains(const common::ObMember &member) const;
+  int deep_copy(const ObMemberListBase<MAX_MEMBER_NUM> &member_list);
+  ObMemberListBase &operator=(const ObMemberListBase<MAX_MEMBER_NUM> &member_list);
+  bool member_addr_equal(const ObMemberListBase<MAX_MEMBER_NUM> &member_list) const;
   int truncate(const int64_t count);  // just save [0, count)
 
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
   TO_YSON_KV(OB_ID(member), common::ObArrayWrap<common::ObMember>(member_, member_number_));
-
 private:
   int64_t member_number_;
   common::ObMember member_[MAX_MEMBER_NUM];
 };
 
+inline bool is_valid_replica_num(const int64_t replica_num)
+{
+  return replica_num > 0 && replica_num <= OB_MAX_MEMBER_NUMBER;
+}
+
 typedef ObMemberListBase<OB_MAX_MEMBER_NUMBER> ObMemberList;
 typedef ObSEArray<ObReplicaMember, OB_MAX_CHILD_MEMBER_NUMBER> ObChildReplicaList;
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
 #include "common/ob_member_list.ipp"
-#endif  // OCEANBASE_COMMON_OB_MEMBER_LIST_H_
+#endif // OCEANBASE_COMMON_OB_MEMBER_LIST_H_

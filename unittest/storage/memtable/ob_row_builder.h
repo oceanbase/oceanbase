@@ -18,41 +18,37 @@
 #include "common/object/ob_object.h"
 #include "common/rowkey/ob_rowkey.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
 using namespace oceanbase::storage;
-namespace unittest {
+namespace unittest
+{
 #include "strutils.h"
 typedef ObSEArray<share::schema::ObColDesc, 64> ColDescArray;
-class ColDescBuilder {
+class ColDescBuilder
+{
 public:
-  const ColDescArray& get_columns() const
-  {
-    return columns_;
-  }
-  void add(uint64_t col_id, ObObjType col_type, ObCollationType col_collation)
-  {
+  const ColDescArray& get_columns() const { return columns_; }
+  void add(uint64_t col_id, ObObjType col_type, ObCollationType col_collation) {
     share::schema::ObColDesc col_desc;
     col_desc.col_id_ = col_id;
     col_desc.col_type_.set_type(col_type);
     col_desc.col_type_.set_collation_type(col_collation);
     columns_.push_back(col_desc);
   }
-
 private:
   ColDescArray columns_;
 };
 
-class RowIterBuilder {
+class RowIterBuilder
+{
 public:
   enum { MAX_ROWKEY_OBJ = 64 };
-  RowIterBuilder(const ColDescArray& cols) : cols_(cols)
-  {}
-  ~RowIterBuilder()
-  {}
-  ObMtRowIterator& build(const char* str)
-  {
+  RowIterBuilder(const ColDescArray& cols): cols_(cols) {}
+  ~RowIterBuilder(){}
+  ObMtRowIterator& build(const char* str) {
     ObStoreRow row;
     row.row_val_.cells_ = build_obj_array(str);
     row.row_val_.count_ = cols_.count();
@@ -60,16 +56,14 @@ public:
     iter_.add_row(row);
     return iter_;
   }
-  ObObj* build_obj_array(const char* str)
-  {
+  ObObj* build_obj_array(const char* str) {
     char buf[4096];
     Tokenizer tok(strcpy(buf, str), " ");
-    for (int64_t i = 0; i < cols_.count(); i++) {
+    for(int64_t i = 0; i < cols_.count(); i++) {
       parse_obj(obj_array_[i], tok.next());
     }
     return obj_array_;
   }
-
 private:
   static int parse_obj(ObObj& obj, const char* val)
   {
@@ -77,12 +71,11 @@ private:
     obj.set_int(atoi(val));
     return err;
   }
-
 private:
   const ColDescArray& cols_;
   ObObj obj_array_[MAX_ROWKEY_OBJ];
   ObMtRowIterator iter_;
 };
 
-};  // namespace unittest
-};  // end namespace oceanbase
+}; // end namespace memtable
+}; // end namespace oceanbase

@@ -24,58 +24,60 @@ using namespace common;
 int64_t random_number(int64_t min, int64_t max)
 {
   static int dev_random_fd = -1;
-  char* next_random_byte = NULL;
+  char *next_random_byte = NULL;
   int bytes_to_read = 0;
   int64_t random_value = 0;
 
   assert(max >= min);
 
-  if (dev_random_fd == -1) {
+  if (dev_random_fd == -1)
+  {
     dev_random_fd = open("/dev/urandom", O_RDONLY);
     assert(dev_random_fd != -1);
   }
 
-  next_random_byte = (char*)&random_value;
+  next_random_byte = (char *)&random_value;
   bytes_to_read = sizeof(random_value);
 
-  do {
+  do
+  {
     int bytes_read = 0;
     bytes_read = static_cast<int32_t>(read(dev_random_fd, next_random_byte, bytes_to_read));
     bytes_to_read -= bytes_read;
     next_random_byte += bytes_read;
-  } while (bytes_to_read > 0);
+  } while(bytes_to_read > 0);
 
   return min + (abs(static_cast<int32_t>(random_value)) % (max - min + 1));
 }
 
-typedef int (*MAKE_OBJECT_FUNC)(common::ObIAllocator& allocator, const int64_t seed, ObObj& value);
+typedef int (*MAKE_OBJECT_FUNC)(common::ObIAllocator &allocator, const int64_t seed, ObObj &value);
 
-int make_int(common::ObIAllocator& allocator, const int64_t seed, ObObj& value)
+int make_int(common::ObIAllocator &allocator, const int64_t seed, ObObj &value)
 {
   UNUSED(allocator);
   value.set_int(seed);
   return OB_SUCCESS;
 }
 
-int make_utf8mb4_ci_str(common::ObIAllocator& allocator, const int64_t seed, ObObj& value)
+int make_utf8mb4_ci_str(common::ObIAllocator &allocator, const int64_t seed, ObObj &value)
 {
-  char* str_value = (char*)allocator.alloc(100);
+  char *str_value = (char*)allocator.alloc(100);
   snprintf(str_value, 100, "00000%05ld", seed);
   value.set_varchar(str_value, 10);
   value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
   return OB_SUCCESS;
 }
 
-int make_binary_str(common::ObIAllocator& allocator, const int64_t seed, ObObj& value)
+int make_binary_str(common::ObIAllocator &allocator, const int64_t seed, ObObj &value)
 {
-  char* str_value = (char*)allocator.alloc(100);
+  char *str_value = (char*)allocator.alloc(100);
   snprintf(str_value, 100, "00000%05ld", seed);
   value.set_varchar(str_value, 10);
   value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
   return OB_SUCCESS;
 }
 
-int add_some_values(const int64_t start, const int64_t end, MAKE_OBJECT_FUNC func, ObColumnStat& stat)
+int add_some_values(const int64_t start, const int64_t end, MAKE_OBJECT_FUNC func, ObColumnStat &stat)
 {
   int ret = OB_SUCCESS;
   DefaultPageAllocator arena;
@@ -90,7 +92,7 @@ int add_some_values(const int64_t start, const int64_t end, MAKE_OBJECT_FUNC fun
   return ret;
 }
 
-void test_estimate_ndv(ObColumnStat& stat, const int64_t count, MAKE_OBJECT_FUNC func)
+ void test_estimate_ndv(ObColumnStat &stat, const int64_t count, MAKE_OBJECT_FUNC func)
 {
   int ret = OB_SUCCESS;
   int64_t approximate_lower = count * 90 / 100;
@@ -124,7 +126,7 @@ void test_estimate_ndv(ObColumnStat& stat, const int64_t count, MAKE_OBJECT_FUNC
 TEST(ObColumnStat, deep_copy)
 {
   ObColumnStat stat;
-  ObObj min_value, max_value;
+  ObObj min_value,max_value;
   min_value.set_int(1000);
   max_value.set_int(2000);
   char bitmap[256];
@@ -142,7 +144,7 @@ TEST(ObColumnStat, deep_copy)
   ASSERT_EQ(size, static_cast<int64_t>(sizeof(ObColumnStat) + 256));
 
   DefaultPageAllocator arena;
-  char* buf = (char*)arena.alloc(size);
+  char * buf = (char*)arena.alloc(size);
   int64_t pos = 0;
   ObColumnStat dst;
   int ret = dst.deep_copy(stat, buf, size, pos);
@@ -186,7 +188,7 @@ TEST(ObColumnStat, add_value)
   stat.get_min_value().get_int(min_int);
   stat.get_max_value().get_int(max_int);
   ASSERT_EQ(min_int, 0);
-  ASSERT_EQ(max_int, NDV - 1);
+  ASSERT_EQ(max_int, NDV-1);
   int64_t ndv = stat.get_num_distinct();
   COMMON_LOG(INFO, "print", K(ndv), K(approximate_lower), K(approximate_upper));
   ASSERT_TRUE(ndv >= approximate_lower && ndv <= approximate_upper);
@@ -198,7 +200,7 @@ TEST(ObColumnStat, add_value)
   }
   stat.finish();
   stat.get_max_value().get_int(max_int);
-  ASSERT_EQ(max_int, NDV - 1);
+  ASSERT_EQ(max_int, NDV-1);
   ndv = stat.get_num_distinct();
   approximate_lower = NDV * 90 / 100;
   approximate_upper = NDV * 110 / 100;
@@ -215,9 +217,10 @@ TEST(ObColumnStat, ndv)
   test_estimate_ndv(stat, 20000, make_binary_str);
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

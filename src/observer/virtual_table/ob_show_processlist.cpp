@@ -19,11 +19,17 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-ObShowProcesslist::ObShowProcesslist() : ObVirtualTableScannerIterator(), session_mgr_(NULL), fill_scanner_()
-{}
+ObShowProcesslist::ObShowProcesslist()
+    : ObVirtualTableScannerIterator(),
+      session_mgr_(NULL),
+      fill_scanner_()
+{
+}
 
 ObShowProcesslist::~ObShowProcesslist()
 {
@@ -37,7 +43,7 @@ void ObShowProcesslist::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObShowProcesslist::inner_get_next_row(ObNewRow*& row)
+int ObShowProcesslist::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_mgr_)) {
@@ -45,7 +51,12 @@ int ObShowProcesslist::inner_get_next_row(ObNewRow*& row)
     SERVER_LOG(WARN, "sessionMgr is NULL", K(ret));
   } else {
     if (!start_to_read_) {
-      if (OB_FAIL(fill_scanner_.init(allocator_, &scanner_, session_, &cur_row_, output_column_ids_, schema_guard_))) {
+      if (OB_FAIL(fill_scanner_.init(allocator_,
+                                     &scanner_,
+                                     session_,
+                                     &cur_row_,
+                                     output_column_ids_,
+                                     schema_guard_))) {
         SERVER_LOG(WARN, "init fill_scanner fail", K(ret));
       } else if (OB_FAIL(session_mgr_->for_each_session(fill_scanner_))) {
         SERVER_LOG(WARN, "fill scanner fail", K(ret));
@@ -77,10 +88,11 @@ bool ObShowProcesslist::FillScanner::has_process_privilege()
     }
   } else {
     if (schema_guard_ != NULL && my_session_ != NULL) {
-      if (OB_FAIL(sql::ObOraSysChecker::check_ora_show_process_priv(*schema_guard_,
-              my_session_->get_priv_tenant_id(),
-              my_session_->get_user_id(),
-              my_session_->get_enable_role_array()))) {
+      if (OB_FAIL(sql::ObOraSysChecker::check_ora_show_process_priv(
+                                        *schema_guard_, 
+                                        my_session_->get_priv_tenant_id(),
+                                        my_session_->get_user_id(),
+                                        my_session_->get_enable_role_array()))) {
         if (ret != OB_ERR_NO_PRIVILEGE) {
           SERVER_LOG(WARN, "fail to check_ora_show_process_priv", K(ret));
         }
@@ -92,48 +104,54 @@ bool ObShowProcesslist::FillScanner::has_process_privilege()
   return has_priv;
 }
 
-bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info)
+bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo *sess_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == scanner_ || NULL == allocator_ || NULL == cur_row_ || NULL == cur_row_->cells_ ||
-                  NULL == sess_info || NULL == my_session_)) {
+  if (OB_UNLIKELY(NULL == scanner_
+                  || NULL == allocator_
+                  || NULL == cur_row_
+                  || NULL == cur_row_->cells_
+                  || NULL == sess_info
+                  || NULL == my_session_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN,
-        "parameter or data member is NULL",
-        K(ret),
-        K(scanner_),
-        K(allocator_),
-        K(cur_row_),
-        K(sess_info),
-        K(my_session_));
+               "parameter or data member is NULL",
+               K(ret),
+               K(scanner_),
+               K(allocator_),
+               K(cur_row_),
+               K(sess_info),
+               K(my_session_));
   } else if (OB_UNLIKELY(cur_row_->count_ < output_column_ids_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN,
-        "cells count is less than output column count",
-        K(ret),
-        K(cur_row_->count_),
-        K(output_column_ids_.count()));
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN,
+                   "cells count is less than output column count",
+                   K(ret),
+                   K(cur_row_->count_),
+                   K(output_column_ids_.count()));
   } else {
-    ObServer& server = ObServer::get_instance();
+    ObServer &server = ObServer::get_instance();
     uint64_t cell_idx = 0;
     char ip_buf[common::OB_IP_STR_BUFF];
-    char peer_buf[common::OB_IP_STR_BUFF];
-    // If you are in system tenant, you can see all thread.
-    // Otherwise, you can show only the threads at the same Tenant with you.
-    // If you have the PROCESS privilege, you can show all threads at your Tenant.
-    // Otherwise, you can show only your own threads.
+    char peer_buf[common::OB_IP_PORT_STR_BUFF];
+    char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
+    //If you are in system tenant, you can see all thread.
+    //Otherwise, you can show only the threads at the same Tenant with you.
+    //If you have the PROCESS privilege, you can show all threads at your Tenant.
+    //Otherwise, you can show only your own threads.
     if (sess_info->is_shadow()) {
-      // this session info is logical free, shouldn't be added to scanner
-    } else if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id()) ||
-               (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id() &&
-                   (has_process_privilege() || my_session_->get_user_id() == sess_info->get_user_id()))) {
+      //this session info is logical free, shouldn't be added to scanner
+    } else if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id())
+        || (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id()
+            && (has_process_privilege()
+                || my_session_->get_user_id() == sess_info->get_user_id()))) {
       ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
       const int64_t col_count = output_column_ids_.count();
       ObCharsetType default_charset = ObCharset::get_default_charset();
       ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
-        switch (col_id) {
+        switch(col_id) {
           case ID: {
             cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(key.sessid_));
             break;
@@ -143,6 +161,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               // this is a tmp solution to avoid core when we execute 'show processlist'
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
+              // see
               cur_row_->cells_[cell_idx].set_null();
             } else {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_user_name());
@@ -166,7 +185,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case DB_NAME: {
-            if (0 == sess_info->get_database_name().length()) {  // session don't select database
+            if (0 == sess_info->get_database_name().length()) {//session don't select database
               cur_row_->cells_[cell_idx].set_varchar(ObString::make_string("NULL"));
             } else {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_database_name());
@@ -180,15 +199,20 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case SQL_ID: {
-            const char* sql_id =
-                OB_NOT_NULL(sess_info->get_cur_phy_plan()) ? sess_info->get_cur_phy_plan()->stat_.sql_id_ : "";
+            if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
+              sess_info->get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1);
+            } else {
+              sql_id[0] = '\0';
+            }
             cur_row_->cells_[cell_idx].set_varchar(ObString::make_string(sql_id));
             cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             break;
           }
           case TIME: {
-            int64_t time_sec =
-                (::oceanbase::common::ObTimeUtility::current_time() - sess_info->get_cur_state_start_time()) / 1000000;
+            int64_t time_sec = (::oceanbase::common::ObTimeUtility::current_time() - sess_info->get_cur_state_start_time()) / 1000000;
             cur_row_->cells_[cell_idx].set_int(time_sec);
             break;
           }
@@ -198,9 +222,10 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case INFO: {
-            if (obmysql::OB_MYSQL_COM_QUERY == sess_info->get_mysql_cmd() ||
-                obmysql::OB_MYSQL_COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
-                obmysql::OB_MYSQL_COM_STMT_PREPARE == sess_info->get_mysql_cmd()) {
+            if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_current_query_string());
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
@@ -261,11 +286,13 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case TRANS_ID: {
-            cur_row_->cells_[cell_idx].set_uint64(sess_info->get_trans_desc().get_trans_id().hash());
+            uint64_t tx_id = sess_info->get_tx_id();
+            cur_row_->cells_[cell_idx].set_uint64(tx_id);
             break;
           }
           case THREAD_ID: {
-            cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(sess_info->get_thread_id()));
+            cur_row_->cells_[cell_idx].set_uint64(
+                static_cast<uint64_t>(sess_info->get_thread_id()));
             break;
           }
           case SSL_CIPHER: {
@@ -278,10 +305,11 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case TRACE_ID: {
-            if (obmysql::OB_MYSQL_COM_QUERY == sess_info->get_mysql_cmd() ||
-                obmysql::OB_MYSQL_COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
-                obmysql::OB_MYSQL_COM_STMT_PREPARE == sess_info->get_mysql_cmd()) {
-              int len = sess_info->get_last_trace_id().to_string(trace_id_, sizeof(trace_id_));
+            if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+                obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
+              int len = sess_info->get_current_trace_id().to_string(trace_id_, sizeof(trace_id_));
               cur_row_->cells_[cell_idx].set_varchar(trace_id_, len);
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
@@ -291,16 +319,65 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             }
             break;
           }
+          case TRANS_STATE: {
+            if (sess_info->is_in_transaction()) {
+              cur_row_->cells_[cell_idx].set_varchar(
+                sess_info->get_tx_desc()->get_tx_state_str());
+            } else {
+              cur_row_->cells_[cell_idx].set_varchar("");
+            }
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            break;
+          }
+          case TOTAL_TIME: {
+            if (ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
+              // time_sec = current time - sql packet received from easy time
+              int64_t time_sec = (::oceanbase::common::ObTimeUtility::current_time() - sess_info->get_query_start_time()) / 1000000;
+              cur_row_->cells_[cell_idx].set_int(time_sec);
+            } else {
+              int64_t time_sec = (::oceanbase::common::ObTimeUtility::current_time() - sess_info->get_cur_state_start_time()) / 1000000;
+              cur_row_->cells_[cell_idx].set_int(time_sec);
+            }
+            break;
+          }
+          case RETRY_CNT: {
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_retry_info().get_retry_cnt());
+            break;
+          }
+          case RETRY_INFO: {
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_retry_info().get_last_query_retry_err());
+            break;
+          }
+          case ACTION: {
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_action_name());
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            break;
+          }
+          case MODULE: {
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_module_name());
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            break;
+          }
+          case CLIENT_INFO: {
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_client_info());
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            break;
+          }
+          case SQL_TRACE: {
+            cur_row_->cells_[cell_idx].set_bool(sess_info->get_control_info().is_valid());
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(i), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(i), K(output_column_ids_), K(col_id));
             break;
           }
         }
         if (OB_SUCC(ret)) {
           cell_idx++;
         }
-      }  // for
+      } // for
       if (OB_UNLIKELY(OB_SUCCESS == ret && OB_SUCCESS != (ret = scanner_->add_row(*cur_row_)))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(*cur_row_));
       }
@@ -319,14 +396,21 @@ void ObShowProcesslist::FillScanner::reset()
   output_column_ids_.reset();
 }
 
-int ObShowProcesslist::FillScanner::init(ObIAllocator* allocator, common::ObScanner* scanner,
-    sql::ObSQLSessionInfo* session_info, common::ObNewRow* cur_row, const ObIArray<uint64_t>& column_ids,
-    share::schema::ObSchemaGetterGuard* schema_guard)
+int ObShowProcesslist::FillScanner::init(ObIAllocator *allocator,
+                                         common::ObScanner *scanner,
+                                         sql::ObSQLSessionInfo *session_info,
+                                         common::ObNewRow *cur_row,
+                                         const ObIArray<uint64_t> &column_ids,
+                                         share::schema::ObSchemaGetterGuard* schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == allocator || NULL == scanner || NULL == cur_row || NULL == session_info)) {
+  if (OB_UNLIKELY(NULL == allocator
+                  || NULL == scanner
+                  || NULL == cur_row
+                  || NULL == session_info)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "some parameter is NULL", K(ret), K(allocator), K(scanner), K(cur_row), K(session_info));
+    SERVER_LOG(WARN,
+               "some parameter is NULL", K(ret), K(allocator), K(scanner), K(cur_row), K(session_info));
   } else if (OB_FAIL(output_column_ids_.assign(column_ids))) {
     SQL_ENG_LOG(WARN, "fail to assign output column ids", K(ret), K(column_ids));
   } else {
@@ -335,9 +419,10 @@ int ObShowProcesslist::FillScanner::init(ObIAllocator* allocator, common::ObScan
     cur_row_ = cur_row;
     my_session_ = session_info;
     schema_guard_ = schema_guard;
+
   }
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

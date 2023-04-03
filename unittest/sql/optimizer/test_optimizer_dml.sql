@@ -81,7 +81,7 @@ update t7 set c1=1 where c1 in (select c1 from t8 where t7.c2=c2);
 update t7 set c1=(select c1 from t8);
 update t7 set c1=(select c1 from t8 where t7.c2=c2);
 
-##elimilation of orderby in delete_stmt and update_stmt
+##bug:
 delete from t7 where abs(c1) > 0 order by c1 limit 1;
 update t7 set c1 = 1 where abs(c2) > 0 order by c1 limit 1;
 
@@ -134,6 +134,8 @@ insert into t_u values(1);
 insert into t_u values(2);
 #part p1
 insert into t_u values(9223372036854775807);
+#part p1 这里和MySQL不同,因为该值对应的int64_t为-9223372036854775808(INT64_MIN),在OB内部会先转成INT64_MAX;
+#MySQL是先做%part取余，然后负值取反.OB先负值取反,再取余,INT64_MIN就需要先转成INT64_MAX
 insert into t_u values(9223372036854775808);
 #part p1
 insert into t_u values(9223372036854775809);

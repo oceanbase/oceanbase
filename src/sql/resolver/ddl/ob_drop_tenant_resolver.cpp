@@ -17,28 +17,41 @@
 #include "sql/resolver/ddl/ob_tenant_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
-namespace oceanbase {
+
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
 /**
  *  DROP TENANT tenant_name
  */
 
-ObDropTenantResolver::ObDropTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObDropTenantResolver::ObDropTenantResolver(ObResolverParams &params)
+  : ObDDLResolver(params)
+{
+}
 
 ObDropTenantResolver::~ObDropTenantResolver()
-{}
+{
+}
 
-int ObDropTenantResolver::resolve(const ParseNode& parse_tree)
+int ObDropTenantResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObDropTenantStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObDropTenantStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_DROP_TENANT != node->type_) || OB_UNLIKELY(3 != node->num_child_)) {
+  if (lib::is_oracle_mode()) {
+    // oracle 模式的租户尝试删除租户时直接报错
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dropping tenant in oracle mode is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping tenant in oracle mode is");
+  } else if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_DROP_TENANT != node->type_)
+      || OB_UNLIKELY(3 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret));
   }
@@ -72,11 +85,13 @@ int ObDropTenantResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("invalid node", K(ret));
     } else {
       ObString tenant_name;
-      tenant_name.assign_ptr(
-          (char*)(node->children_[1]->str_value_), static_cast<int32_t>(node->children_[1]->str_len_));
+      tenant_name.assign_ptr((char *)(node->children_[1]->str_value_),
+                             static_cast<int32_t>(node->children_[1]->str_len_));
       mystmt->set_tenant_name(tenant_name);
     }
   }
+
+  
 
   /* resolve force and purge */
   if (OB_SUCC(ret)) {
@@ -88,7 +103,8 @@ int ObDropTenantResolver::resolve(const ParseNode& parse_tree)
         mystmt->set_delay_to_drop(true);
         mystmt->set_open_recyclebin(is_recyclebin_open.get_bool());
       } else {
-        if (OB_UNLIKELY(T_FORCE != node->children_[2]->type_) && OB_UNLIKELY(T_PURGE != node->children_[2]->type_)) {
+        if (OB_UNLIKELY(T_FORCE != node->children_[2]->type_) &&
+            OB_UNLIKELY(T_PURGE != node->children_[2]->type_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("invalid node", K(ret));
         } else if (T_PURGE == node->children_[2]->type_) {
@@ -105,5 +121,5 @@ int ObDropTenantResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* sql */
+} /* oceanbase */

@@ -1,0 +1,10 @@
+obproxy-ce:
+  servers:
+    - 127.0.0.1
+  global:
+    listen_port: {{%% LISTEN_PORT %%}}
+    prometheus_listen_port: {{%% PROMETHEUS_LISTEN_PORT %%}}
+    home_path: {{%% OBPORXY_HOME_PATH %%}}
+  include: obd/obproxy.include.yaml
+  depends:
+    - {{%% COMPONENT %%}}

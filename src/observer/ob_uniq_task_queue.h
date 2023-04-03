@@ -22,81 +22,99 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "share/ob_thread_pool.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 // implement interface of DefaultSimpleAllocerAllocator
-struct ObHighPrioMemAllocator {
+struct ObHighPrioMemAllocator
+{
 public:
-  explicit ObHighPrioMemAllocator(const char* label = common::ObModIds::OB_PARTITION_TABLE_TASK)
+  explicit ObHighPrioMemAllocator(const char *label = common::ObModIds::OB_PARTITION_TABLE_TASK)
   {
     attr_.label_ = label;
     attr_.prio_ = lib::OB_HIGH_ALLOC;
   }
 
-  void* alloc(const int64_t sz);
-  void free(void* p);
-  void set_label(const char* label)
-  {
-    attr_.label_ = label;
-  }
-  void set_attr(const common::ObMemAttr& attr)
-  {
-    attr_ = attr;
-  }
-
+  void *alloc(const int64_t sz);
+  void free(void *p);
+  void set_label(const char *label) { attr_.label_ = label; }
+  void set_attr(const common::ObMemAttr &attr) { attr_ = attr; }
 private:
   common::ObMemAttr attr_;
 };
-template <typename T>
-struct Compare {
+template<typename T>
+struct CompareT
+{
 public:
-  bool operator()(const T& a, const T& b) const
+  bool operator()(const T &a, const T &b) const
   {
     return a.compare_without_version(b);
   }
+};
+
+// The tasks for ObUniqTaskQueue need implement the following interfaces.
+template <typename Task>
+class ObIUniqTaskQueueTask : public common::ObDLinkBase<Task>
+{
+public:
+  virtual ~ObIUniqTaskQueueTask() {}
+  // Barrier task is defined by is_barrier(). It should be processed alone.
+  // Barrier task can be used to monitor queue's running status.
+  virtual bool is_barrier() const = 0;
+  // If need_process_alone() returns false, the task will be processed in batches.
+  virtual bool need_process_alone() const = 0;
+  // The hash() and compare_without_version(...) are used to remove duplication when
+  // adding tasks into queue.
+  virtual int64_t hash() const = 0;
+  virtual bool compare_without_version(const Task &other) const = 0;
+  // The following two interfaces are used to update the waiting tasks with same key.
+  virtual bool need_assign_when_equal() const = 0;
+  virtual int assign_when_equal(const Task &other) = 0;
+  // get_group_id() is used for classifying tasks and batch processing
+  virtual uint64_t get_group_id() const = 0;
+  // Basic interfaces.
+  virtual void reset() = 0;
+  virtual bool is_valid() const = 0;
+  virtual bool operator==(const Task &other) const = 0;
 };
 
 // Unique task queue, like ObDedupQueue but tasks are unique only in queue.
 // If task be poped for processing, same task can be added to queue successfully
 // before process finish.
 template <typename Task, typename Process>
-class ObUniqTaskQueue : public share::ObThreadPool {
+class ObUniqTaskQueue : public share::ObThreadPool
+{
 public:
   friend class TestBatchProcessQueue_test_reput_Test;
   friend class TestBatchProcessQueue_test_eput2_Test;
   friend class TestBatchProcessQueue_test_update_process_Test;
   friend class TestBatchProcessQueue_test_single_update_Test;
-  static const int64_t QUEUE_WAIT_INTERVAL_MS = 200;  // 200ms
-  ObUniqTaskQueue()
-      : inited_(false),
-        queue_size_(0),
-        thread_name_(nullptr),
-        task_map_(),
-        task_count_(0),
-        group_map_(),
-        processing_task_map_(),
-        cur_group_(NULL),
-        processing_thread_count_(0),
-        barrier_task_count_(0),
-        updater_(NULL)
-  {}
-  virtual ~ObUniqTaskQueue()
-  {
-    stop();
-    wait();
-    destroy();
-  }
+  static const int64_t QUEUE_WAIT_INTERVAL_MS = 200; // 200ms
+  ObUniqTaskQueue() : inited_(false), queue_size_(0), thread_name_(nullptr), task_map_(),
+                      task_count_(0), group_map_(), processing_task_map_(), cur_group_(NULL),
+                      processing_thread_count_(0), barrier_task_count_(0),
+  updater_(NULL) {}
+  virtual ~ObUniqTaskQueue() { }
 
-  int init(Process* process, const int64_t thread_num, const int64_t queue_size, const char* thread_name = nullptr);
+  int init(Process *process, const int64_t thread_num, const int64_t queue_size,
+           const char *thread_name = nullptr);
+  // init() will trigger start(), we only want to init and start later in some cases
+  int start() override;
+  int init_only(
+      Process *process,
+      const int64_t thread_num,
+      const int64_t queue_size,
+      const char* thread_name = nullptr);
 
   // Add task to queue, never block
   // return value:
   //      OB_SUCCESS: for success
   //      OB_EAGAIN: same task exist
   //      OB_SIZE_OVERFLOW: queue size overflow
-  virtual int add(const Task& task);
+  virtual int add(const Task &task);
 
-  virtual int check_exist(const Task& task, bool& exist);
+  virtual int check_exist(const Task &task, bool &exist);
 
   virtual void run1();
 
@@ -104,64 +122,79 @@ public:
   {
     return task_count_;
   }
-
 private:
-  struct Group : public common::ObDLinkBase<Group> {
-    Group()
-    {}
-    explicit Group(const Group& group)
-    {
-      UNUSED(group);
-    }
-    virtual ~Group()
-    {}
-    Group& operator=(const Group& group)
-    {
-      UNUSED(group);
-      return *this;
-    }
+  struct Group : public common::ObDLinkBase<Group>
+  {
+    Group() {}
+    explicit Group(const Group &group) { UNUSED(group); }
+    virtual ~Group() {}
+    Group& operator=(const Group &group) { UNUSED(group); return *this; }
     common::ObDList<Task> list_;
   };
-  int get_group(const uint64_t group_id, Group*& group);
-  int get_next_group(Group*& group);
-  int batch_process_tasks(common::ObIArray<Task>& tasks);
-  int process_barrier(Task& task);
-  int try_lock(const Task& tasks);
-  int batch_unlock(const common::ObIArray<Task>& tasks);
+  int get_group(const uint64_t group_id, Group *&group);
+  int get_next_group(Group *&group);
+  int batch_process_tasks(common::ObIArray<Task> &tasks);
+  int process_barrier(Task &task);
+  int try_lock(const Task &tasks);
+  int batch_unlock(const common::ObIArray<Task> &tasks);
 
   bool inited_;
   int64_t queue_size_;
-  const char* thread_name_;
+  const char *thread_name_;
   common::ObThreadCond cond_;
-  // FIXME : half memory wasted here.
-  common::hash::ObHashMap<Task, Task, common::hash::NoPthreadDefendMode, common::hash::hash_func<Task>,
+  // FIXME baihua: half memory wasted here.
+  common::hash::ObHashMap<Task,
+      Task,
+      common::hash::NoPthreadDefendMode,
+      common::hash::hash_func<Task>,
       common::hash::equal_to<Task>,
       common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, Task>::AllocType,
-          common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM, common::hash::NoPthreadDefendMode,
-          ObHighPrioMemAllocator> >
-      task_map_;
+      common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
+      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > task_map_;
   int64_t task_count_;
-  common::hash::ObHashMap<uint64_t, Group, common::hash::NoPthreadDefendMode, common::hash::hash_func<uint64_t>,
+  common::hash::ObHashMap<uint64_t, Group,
+      common::hash::NoPthreadDefendMode,
+      common::hash::hash_func<uint64_t>,
       common::hash::equal_to<uint64_t>,
-      common::hash::SimpleAllocer<typename common::hash::HashMapTypes<uint64_t, Group>::AllocType,
-          common::hash::NodeNumTraits<IS_BIG_OBJ(Group), Group>::NODE_NUM, common::hash::NoPthreadDefendMode,
-          ObHighPrioMemAllocator> >
-      group_map_;
-  common::hash::ObHashMap<Task, int, common::hash::NoPthreadDefendMode, common::hash::hash_func<Task>, Compare<Task>,
+      common::hash::SimpleAllocer<
+          typename common::hash::HashMapTypes<uint64_t, Group>::AllocType,
+      common::hash::NodeNumTraits<IS_BIG_OBJ(Group), Group>::NODE_NUM,
+      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > group_map_;
+  common::hash::ObHashMap<Task,
+      int,
+      common::hash::NoPthreadDefendMode,
+      common::hash::hash_func<Task>,
+      CompareT<Task>,
       common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, int>::AllocType,
-          common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM, common::hash::NoPthreadDefendMode,
-          ObHighPrioMemAllocator> >
-      processing_task_map_;
+      common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
+      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > processing_task_map_;
   common::ObDList<Group> groups_;
-  Group* cur_group_;
+  Group *cur_group_;
   int64_t processing_thread_count_;
   int64_t barrier_task_count_;
-  Process* updater_;
+  Process *updater_;
   DISALLOW_COPY_AND_ASSIGN(ObUniqTaskQueue);
 };
+// TODO: init should not trigger start(), have to remove start() out of init()
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::init(
-    Process* updater, const int64_t thread_num, const int64_t queue_size, const char* thread_name)
+int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_num,
+                                         const int64_t queue_size, const char *thread_name)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(init_only(updater, thread_num, queue_size, thread_name))) {
+    SERVER_LOG(WARN, "fail to init only", K(ret), K(thread_num), K(queue_size));
+  } else if (OB_FAIL(start())) {
+    inited_ = false;
+    SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
+  } else {
+    inited_ = true;
+  }
+  return ret;
+}
+
+template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t thread_num,
+                                              const int64_t queue_size, const char *thread_name)
 {
   int ret = common::OB_SUCCESS;
   const int64_t group_count = 128;
@@ -175,7 +208,8 @@ int ObUniqTaskQueue<Task, Process>::init(
     SERVER_LOG(WARN, "fai to init condition, ", K(ret));
   } else if (OB_FAIL(task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(queue_size));
-  } else if (OB_FAIL(group_map_.create(group_count, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+  } else if (OB_FAIL(group_map_.create(group_count,
+      common::ObModIds::OB_PARTITION_TABLE_TASK))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(group_count));
   } else if (OB_FAIL(processing_task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret));
@@ -189,18 +223,25 @@ int ObUniqTaskQueue<Task, Process>::init(
     updater_ = updater;
     thread_name_ = thread_name;
     inited_ = true;
-    if (OB_FAIL(start())) {
-      SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
-      inited_ = false;
-    } else {
-      inited_ = true;
-    }
   }
   return ret;
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::check_exist(const Task& task, bool& exist)
+int ObUniqTaskQueue<Task, Process>::start()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "ObUniqTaskQueue is not inited", K(ret), K_(inited));
+  } else if (OB_FAIL(share::ObThreadPool::start())) {
+    SERVER_LOG(WARN, "start thread failed", K(ret));
+  }
+  return ret;
+}
+
+template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::check_exist(const Task &task, bool &exist)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -212,7 +253,7 @@ int ObUniqTaskQueue<Task, Process>::check_exist(const Task& task, bool& exist)
   } else {
     exist = false;
     common::ObThreadCondGuard guard(cond_);
-    const Task* stored_task = nullptr;
+    const Task *stored_task = nullptr;
     if (nullptr == (stored_task = task_map_.get(task))) {
       exist = false;
     } else {
@@ -223,7 +264,7 @@ int ObUniqTaskQueue<Task, Process>::check_exist(const Task& task, bool& exist)
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::add(const Task& task)
+int ObUniqTaskQueue<Task, Process>::add(const Task &task)
 {
   int ret = common::OB_SUCCESS;
   if (!inited_) {
@@ -237,17 +278,18 @@ int ObUniqTaskQueue<Task, Process>::add(const Task& task)
     if (task_count_ >= queue_size_) {
       ret = common::OB_SIZE_OVERFLOW;
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        SERVER_LOG(WARN, "task queue size overflow", K(ret), K_(queue_size), K(common::lbt()));
+        SERVER_LOG(WARN, "task queue size overflow",
+                   K(ret), K_(queue_size), K(common::lbt()));
       }
     } else {
-      const Task* stored_task = NULL;
+      const Task *stored_task = NULL;
       if (OB_FAIL(task_map_.set_refactored(task, task))) {
         if (common::OB_HASH_EXIST == ret) {
           if (task.need_assign_when_equal()) {
             if (NULL == (stored_task = task_map_.get(task))) {
               ret = common::OB_ERR_SYS;
               SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
-            } else if (OB_FAIL(const_cast<Task*>(stored_task)->assign_when_equal(task))) {
+            } else if (OB_FAIL(const_cast<Task *>(stored_task)->assign_when_equal(task))) {
               SERVER_LOG(WARN, "assign task failed", K(ret), K(task));
             }
           } else {
@@ -261,14 +303,14 @@ int ObUniqTaskQueue<Task, Process>::add(const Task& task)
         ret = common::OB_ERR_SYS;
         SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
       } else {
-        Group* group = NULL;
+        Group *group = NULL;
         const uint64_t group_id = task.get_group_id();
         if (OB_FAIL(get_group(group_id, group))) {
           SERVER_LOG(WARN, "get group failed", K(group_id), K(ret));
         } else if (NULL == group) {
           ret = common::OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "group is null", K(group_id), K(ret));
-        } else if (!group->list_.add_last(const_cast<Task*>(stored_task))) {
+        } else if (!group->list_.add_last(const_cast<Task *>(stored_task))) {
           ret = common::OB_ERR_SYS;
           SERVER_LOG(WARN, "add task to list failed", K(ret));
         } else {
@@ -295,7 +337,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
 {
   SERVER_LOG(INFO, "UniqTaskQueue thread start");
   int ret = common::OB_SUCCESS;
-  Group* group = NULL;
+  Group *group = NULL;
   const int64_t batch_exec_cnt = common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM;
   common::ObArray<Task> tasks;
   if (thread_name_ != nullptr) {
@@ -305,8 +347,8 @@ void ObUniqTaskQueue<Task, Process>::run1()
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "not init", K(ret));
   } else {
-    while (!lib::this_thread::has_set_stop()) {
-      Task* t = NULL;
+    while (!lib::Thread::current().has_set_stop()) {
+      Task *t = NULL;
       tasks.reuse();
       if (OB_SUCC(tasks.reserve(batch_exec_cnt))) {
         group = NULL;
@@ -318,7 +360,8 @@ void ObUniqTaskQueue<Task, Process>::run1()
             ret = common::OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "group is null or group is empty", K(ret));
           } else {
-            while (common::OB_SUCCESS == ret && tasks.count() < batch_exec_cnt && !group->list_.is_empty()) {
+            while (common::OB_SUCCESS == ret && tasks.count() < batch_exec_cnt
+                && !group->list_.is_empty()) {
               if (tasks.count() > 0 && group->list_.get_first()->need_process_alone()) {
                 break;
               } else if (OB_FAIL(try_lock(*group->list_.get_first()))) {
@@ -338,11 +381,12 @@ void ObUniqTaskQueue<Task, Process>::run1()
                     --task_count_;
                   }
                 }
-                if (OB_SUCC(ret) && tasks.at(tasks.count() - 1).need_process_alone()) {
+                if (OB_SUCC(ret)
+                    && tasks.at(tasks.count() - 1).need_process_alone()) {
                   break;
                 }
               }
-            }  // end while
+            } //end while
             if (common::OB_SUCCESS == ret && tasks.count() > 0) {
               ++processing_thread_count_;
               if (group->list_.get_size() <= 0) {
@@ -354,8 +398,8 @@ void ObUniqTaskQueue<Task, Process>::run1()
                   SERVER_LOG(WARN, "groups remove return null", K(ret));
                 } else {
                   if (OB_FAIL(group_map_.erase_refactored(tasks.at(0).get_group_id()))) {
-                    SERVER_LOG(
-                        WARN, "erase group from group_map failed", K(ret), "group_id", tasks.at(0).get_group_id());
+                    SERVER_LOG(WARN, "erase group from group_map failed",
+                        K(ret), "group_id", tasks.at(0).get_group_id());
                   }
                 }
               } else {
@@ -366,13 +410,12 @@ void ObUniqTaskQueue<Task, Process>::run1()
         } else {
           cond_.wait(QUEUE_WAIT_INTERVAL_MS);
         }
-      } else {  // end cond_
-        usleep(QUEUE_WAIT_INTERVAL_MS * 1000);
+      } else {//end cond_
+        ob_usleep(QUEUE_WAIT_INTERVAL_MS * 1000);
       }
       if (common::OB_SUCCESS == ret && tasks.count() > 0) {
         bool is_batch_execute = false;
-        FOREACH_CNT_X(task, tasks, common::OB_SUCCESS == ret)
-        {
+        FOREACH_CNT_X(task, tasks, common::OB_SUCCESS == ret) {
           if (OB_ISNULL(task)) {
             ret = common::OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "get invalid task", K(ret), K(task));
@@ -400,7 +443,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
           } else {
             is_batch_execute = true;
           }
-        }  // end foreach
+        } //end foreach
         if (OB_SUCC(ret) && is_batch_execute) {
           if (OB_FAIL(batch_process_tasks(tasks))) {
             SERVER_LOG(WARN, "fail to batch execute task", K(ret), K(tasks.count()));
@@ -428,10 +471,10 @@ void ObUniqTaskQueue<Task, Process>::run1()
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::process_barrier(Task& task)
+int ObUniqTaskQueue<Task, Process>::process_barrier(Task &task)
 {
   int ret = common::OB_SUCCESS;
-  bool stopped = lib::this_thread::has_set_stop();
+  bool stopped = lib::Thread::current().has_set_stop();
   if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
@@ -442,12 +485,12 @@ int ObUniqTaskQueue<Task, Process>::process_barrier(Task& task)
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task>& tasks)
+int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task> &tasks)
 {
   int ret = common::OB_SUCCESS;
-  bool stopped = lib::this_thread::has_set_stop();
+  bool stopped = lib::Thread::current().has_set_stop();
   if (0 == tasks.count()) {
-    // nothing todo
+    //nothing todo
   } else if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
@@ -457,8 +500,10 @@ int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task>& 
   return ret;
 }
 
+
+
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::get_group(const uint64_t group_id, Group*& group)
+int ObUniqTaskQueue<Task, Process>::get_group(const uint64_t group_id, Group *&group)
 {
   int ret = common::OB_SUCCESS;
   group = NULL;
@@ -472,7 +517,7 @@ int ObUniqTaskQueue<Task, Process>::get_group(const uint64_t group_id, Group*& g
     Group new_group;
     if (OB_FAIL(group_map_.set_refactored(group_id, new_group)) && common::OB_HASH_EXIST != ret) {
       SERVER_LOG(WARN, "group_map_ set failed", K(group_id), K(ret));
-    } else if (NULL == (group = const_cast<Group*>(group_map_.get(group_id)))) {
+    } else if (NULL == (group = const_cast<Group *>(group_map_.get(group_id)))) {
       ret = common::OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "group_map_ get failed", K(group_id), K(ret));
     } else if (common::OB_SUCCESS == ret) {
@@ -490,7 +535,7 @@ int ObUniqTaskQueue<Task, Process>::get_group(const uint64_t group_id, Group*& g
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::try_lock(const Task& task)
+int ObUniqTaskQueue<Task, Process>::try_lock(const Task &task)
 {
   int ret = common::OB_SUCCESS;
   if (!task.is_valid()) {
@@ -508,12 +553,11 @@ int ObUniqTaskQueue<Task, Process>::try_lock(const Task& task)
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::batch_unlock(const common::ObIArray<Task>& tasks)
+int ObUniqTaskQueue<Task, Process>::batch_unlock(const common::ObIArray<Task> &tasks)
 {
   int tmp_ret = common::OB_SUCCESS;
   int ret = common::OB_SUCCESS;
-  FOREACH_CNT(task, tasks)
-  {
+  FOREACH_CNT(task, tasks) {
     if (OB_ISNULL(task)) {
       tmp_ret = common::OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "get invalid task", K(tmp_ret), K(task));
@@ -527,8 +571,9 @@ int ObUniqTaskQueue<Task, Process>::batch_unlock(const common::ObIArray<Task>& t
   return ret;
 }
 
+
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::get_next_group(Group*& next_group)
+int ObUniqTaskQueue<Task, Process>::get_next_group(Group *&next_group)
 {
   int ret = common::OB_SUCCESS;
   next_group = NULL;
@@ -540,9 +585,9 @@ int ObUniqTaskQueue<Task, Process>::get_next_group(Group*& next_group)
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "group is empty", K(ret));
   } else {
-    Group* start_group = (NULL == cur_group_) ? groups_.get_header() : cur_group_;
-    Group* group = start_group;
-    Group* barrier_group = NULL;
+    Group *start_group = (NULL == cur_group_) ? groups_.get_header() : cur_group_;
+    Group *group = start_group;
+    Group *barrier_group = NULL;
     if (NULL == group) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "null group", K(ret), KP(group));
@@ -581,7 +626,7 @@ int ObUniqTaskQueue<Task, Process>::get_next_group(Group*& next_group)
   return ret;
 }
 
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_OB_UNIQ_TASK_QUEUE_H
+#endif // OCEANBASE_OBSERVER_OB_UNIQ_TASK_QUEUE_H

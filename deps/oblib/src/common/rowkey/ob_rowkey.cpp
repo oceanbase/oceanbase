@@ -18,9 +18,12 @@
 #include "common/rowkey/ob_rowkey_info.h"
 #include "common/object/ob_object.h"
 #include "common/object/ob_obj_type.h"
+#include "common/object/ob_obj_compare.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 using namespace lib;
 
@@ -30,12 +33,12 @@ ObObj ObRowkey::MAX_OBJECT = ObObj::make_max_obj();
 ObRowkey ObRowkey::MIN_ROWKEY(&ObRowkey::MIN_OBJECT, 1);
 ObRowkey ObRowkey::MAX_ROWKEY(&ObRowkey::MAX_OBJECT, 1);
 
-int ObRowkey::to_store_rowkey(ObStoreRowkey& store_rowkey) const
+int ObRowkey::to_store_rowkey(ObStoreRowkey &store_rowkey) const
 {
   int ret = OB_SUCCESS;
   bool contain_min_max = false;
 
-  for (int64_t i = 0; !contain_min_max && i < obj_cnt_; i++) {
+  for(int64_t i = 0; !contain_min_max && i < obj_cnt_; i++) {
     if (obj_ptr_[i].is_min_value() || obj_ptr_[i].is_max_value()) {
       contain_min_max = true;
     }
@@ -44,26 +47,35 @@ int ObRowkey::to_store_rowkey(ObStoreRowkey& store_rowkey) const
   if (contain_min_max) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(ERROR, "cannot convert min/max ObRowkey to ObStoreRowkey!", K(ret), K(*this));
-  } else {
-    store_rowkey.assign(obj_ptr_, obj_cnt_);
+  } else if (OB_FAIL(store_rowkey.assign(obj_ptr_, obj_cnt_))) {
+    COMMON_LOG(ERROR, "Failed to assign store rowkey", K(ret), K(*this));
   }
 
   return ret;
 }
 
-int ObRowkey::equal(const ObRowkey& rhs, bool& is_equal) const
+void ObRowkey::destroy(ObIAllocator &allocator)
+{
+  if (OB_NOT_NULL(obj_ptr_)) {
+    allocator.free(obj_ptr_);
+    obj_ptr_ = nullptr;
+  }
+  obj_cnt_ = 0;
+}
+
+int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
 {
   int ret = OB_SUCCESS;
   is_equal = true;
   if (obj_ptr_ == rhs.obj_ptr_) {
     is_equal = (obj_cnt_ == rhs.obj_cnt_);
-  } else if (obj_cnt_ != rhs.obj_cnt_) {
+  } else if (obj_cnt_ != rhs.obj_cnt_){
     is_equal = false;
   } else {
     ObObjTypeClass tc = ObMaxTC;
     for (int64_t i = 0; is_equal && i < obj_cnt_ && OB_SUCC(ret); ++i) {
-      const ObObj& obj = obj_ptr_[i];
-      const ObObj& rhs_obj = rhs.obj_ptr_[i];
+      const ObObj &obj = obj_ptr_[i];
+      const ObObj &rhs_obj = rhs.obj_ptr_[i];
       tc = obj.get_type_class();
       if (ObMaxTC <= tc) {
         COMMON_LOG(WARN, "invalid type class", K(tc));
@@ -71,73 +83,84 @@ int ObRowkey::equal(const ObRowkey& rhs, bool& is_equal) const
       } else if (tc != rhs_obj.get_type_class()) {
         is_equal = false;
       } else {
-        switch (tc) {
-          case ObNullTC:
-            break;
-          case ObIntTC:
-          case ObUIntTC:
-          case ObDateTimeTC:
-          case ObTimeTC:
-          case ObExtendTC:
-          case ObBitTC:
-          case ObEnumSetTC:
-            is_equal = (obj.v_.int64_ == rhs_obj.v_.int64_);
-            break;
-          case ObDateTC:
-            is_equal = (obj.v_.date_ == rhs_obj.v_.date_);
-            break;
-          case ObYearTC:
-            is_equal = (obj.v_.year_ == rhs_obj.v_.year_);
-            break;
-          case ObFloatTC:
-            is_equal = (obj.v_.float_ == rhs_obj.v_.float_);
-            break;
-          case ObDoubleTC:
-            is_equal = (obj.v_.double_ == rhs_obj.v_.double_);
-            break;
-          case ObOTimestampTC:
-            is_equal = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);
-            break;
-          case ObStringTC:
-          case ObRawTC: {
-            bool cmp_padding_space = false;
-            if (obj.val_len_ != rhs_obj.val_len_ || 0 != MEMCMP(obj.v_.string_, rhs_obj.v_.string_, obj.val_len_)) {
-              if (lib::is_oracle_mode() && (obj.is_varying_len_char_type() || rhs_obj.is_varying_len_char_type())) {
-                cmp_padding_space = true;
-              }
-              is_equal = (ObCharset::strcmpsp(obj.get_collation_type(),
-                              obj.v_.string_,
-                              obj.val_len_,
-                              rhs_obj.v_.string_,
-                              rhs_obj.val_len_,
-                              cmp_padding_space) == 0);
-            }
-          } break;
-          case ObNumberTC:
-            if (obj.nmb_desc_.se_ != rhs_obj.nmb_desc_.se_ || obj.nmb_desc_.len_ != rhs_obj.nmb_desc_.len_ ||
-                (0 != MEMCMP(obj.v_.nmb_digits_, rhs_obj.v_.nmb_digits_, sizeof(uint32_t) * obj.nmb_desc_.len_))) {
-              is_equal = false;
-            }
-            break;
-          case ObIntervalTC:
-            is_equal = obj.is_interval_ym() ? (obj.get_interval_ym() == rhs_obj.get_interval_ym())
-                                            : (obj.get_interval_ds() == rhs_obj.get_interval_ds());
-            break;
-          case ObRowIDTC:
-            if (ob_is_urowid(obj.get_type()) && ob_is_urowid(rhs_obj.get_type())) {
-              is_equal = obj.get_urowid() == rhs_obj.get_urowid();
+        switch(tc) {
+        case ObNullTC:
+          break;
+        case ObIntTC:
+        case ObUIntTC:
+        case ObDateTimeTC:
+        case ObTimeTC:
+        case ObExtendTC:
+        case ObBitTC:
+        case ObEnumSetTC:
+          is_equal = (obj.v_.int64_ == rhs_obj.v_.int64_);
+          break;
+        case ObDateTC:
+          is_equal = (obj.v_.date_ == rhs_obj.v_.date_);
+          break;
+        case ObYearTC:
+          is_equal = (obj.v_.year_ == rhs_obj.v_.year_);
+          break;
+        case ObFloatTC:
+          is_equal = (obj.v_.float_ == rhs_obj.v_.float_);
+          break;
+        case ObDoubleTC:
+          {
+            if (lib::is_mysql_mode() && obj.is_fixed_double() && rhs_obj.is_fixed_double()) {
+              is_equal = ObObjCmpFuncs::fixed_double_cmp(obj, rhs_obj) == 0;
             } else {
-              COMMON_LOG(WARN, "not support rowid type for now", K(obj.get_type()), K(obj.get_type()));
-              ret = OB_ERR_UNEXPECTED;
+              is_equal = (obj.v_.double_ == rhs_obj.v_.double_);
             }
-            break;
-          case ObLobTC:
-            COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
-            break;
-          default:
-            COMMON_LOG(WARN, "not_supported type class", K(tc));
+          }
+          break;
+        case ObOTimestampTC:
+          is_equal = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);
+          break;
+        case ObStringTC:
+        case ObRawTC:
+         {
+          bool cmp_padding_space = false;
+          if (obj.val_len_ != rhs_obj.val_len_
+              || 0 != MEMCMP(obj.v_.string_, rhs_obj.v_.string_, obj.val_len_)) {
+            if (lib::is_oracle_mode() && (obj.is_varying_len_char_type()
+                                          || rhs_obj.is_varying_len_char_type())) {
+              cmp_padding_space = true;
+            }
+            is_equal = (ObCharset::strcmpsp(obj.get_collation_type(), obj.v_.string_, obj.val_len_,
+                rhs_obj.v_.string_, rhs_obj.val_len_, cmp_padding_space) == 0);
+            }
+          }
+          break;
+        case ObNumberTC:
+          if (obj.nmb_desc_.se_ != rhs_obj.nmb_desc_.se_
+              || obj.nmb_desc_.len_ != rhs_obj.nmb_desc_.len_
+              || (0
+                  != MEMCMP(obj.v_.nmb_digits_, rhs_obj.v_.nmb_digits_,
+                      sizeof(uint32_t) * obj.nmb_desc_.len_))) {
+            is_equal = false;
+          }
+          break;
+        case ObIntervalTC:
+          is_equal = obj.is_interval_ym() ? (obj.get_interval_ym() == rhs_obj.get_interval_ym())
+                                     : (obj.get_interval_ds() == rhs_obj.get_interval_ds());
+          break;
+        case ObRowIDTC:
+          if (ob_is_urowid(obj.get_type()) && ob_is_urowid(rhs_obj.get_type())) {
+            is_equal = obj.get_urowid() == rhs_obj.get_urowid();
+          } else {
+            COMMON_LOG(WARN, "not support rowid type for now",
+                       K(obj.get_type()),
+                       K(obj.get_type()));
             ret = OB_ERR_UNEXPECTED;
-            break;
+          }
+          break;
+        case ObLobTC:
+          COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
+          break;
+        default:
+          COMMON_LOG(WARN, "not_supported type class", K(tc));
+          ret = OB_ERR_UNEXPECTED;
+          break;
         }
       }
     }
@@ -145,19 +168,19 @@ int ObRowkey::equal(const ObRowkey& rhs, bool& is_equal) const
   return ret;
 }
 
-// TODO : remove this function
-bool ObRowkey::simple_equal(const ObRowkey& rhs) const
+// TODO by fengshuo.fs: remove this function
+bool ObRowkey::simple_equal(const ObRowkey &rhs) const
 {
   bool ret = true;
   if (obj_ptr_ == rhs.obj_ptr_) {
     ret = (obj_cnt_ == rhs.obj_cnt_);
-  } else if (obj_cnt_ != rhs.obj_cnt_) {
+  } else if (obj_cnt_ != rhs.obj_cnt_){
     ret = false;
   } else {
     ObObjTypeClass tc = ObMaxTC;
     for (int64_t i = 0; ret && i < obj_cnt_; ++i) {
-      const ObObj& obj = obj_ptr_[i];
-      const ObObj& rhs_obj = rhs.obj_ptr_[i];
+      const ObObj &obj = obj_ptr_[i];
+      const ObObj &rhs_obj = rhs.obj_ptr_[i];
       tc = obj.get_type_class();
       if (ObMaxTC <= tc) {
         COMMON_LOG(WARN, "invalid type class", K(tc));
@@ -165,73 +188,84 @@ bool ObRowkey::simple_equal(const ObRowkey& rhs) const
       } else if (tc != rhs_obj.get_type_class()) {
         ret = false;
       } else {
-        switch (tc) {
-          case ObNullTC:
-            break;
-          case ObIntTC:
-          case ObUIntTC:
-          case ObDateTimeTC:
-          case ObTimeTC:
-          case ObExtendTC:
-          case ObBitTC:
-          case ObEnumSetTC:
-            ret = (obj.v_.int64_ == rhs_obj.v_.int64_);
-            break;
-          case ObDateTC:
-            ret = (obj.v_.date_ == rhs_obj.v_.date_);
-            break;
-          case ObYearTC:
-            ret = (obj.v_.year_ == rhs_obj.v_.year_);
-            break;
-          case ObFloatTC:
-            ret = (obj.v_.float_ == rhs_obj.v_.float_);
-            break;
-          case ObDoubleTC:
-            ret = (obj.v_.double_ == rhs_obj.v_.double_);
-            break;
-          case ObOTimestampTC:
-            ret = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);
-            break;
-          case ObStringTC:
-          case ObRawTC: {
-            bool cmp_padding_space = false;
-            if (obj.val_len_ != rhs_obj.val_len_ || 0 != MEMCMP(obj.v_.string_, rhs_obj.v_.string_, obj.val_len_)) {
-              if (lib::is_oracle_mode() && (obj.is_varying_len_char_type() || rhs_obj.is_varying_len_char_type())) {
-                cmp_padding_space = true;
-              }
-              ret = (ObCharset::strcmpsp(obj.get_collation_type(),
-                         obj.v_.string_,
-                         obj.val_len_,
-                         rhs_obj.v_.string_,
-                         rhs_obj.val_len_,
-                         cmp_padding_space) == 0);
-            }
-          } break;
-          case ObNumberTC:
-            if (obj.nmb_desc_.se_ != rhs_obj.nmb_desc_.se_ || obj.nmb_desc_.len_ != rhs_obj.nmb_desc_.len_ ||
-                (0 != MEMCMP(obj.v_.nmb_digits_, rhs_obj.v_.nmb_digits_, sizeof(uint32_t) * obj.nmb_desc_.len_))) {
-              ret = false;
-            }
-            break;
-          case ObIntervalTC:
-            ret = obj.is_interval_ym() ? (obj.get_interval_ym() == rhs_obj.get_interval_ym())
-                                       : (obj.get_interval_ds() == rhs_obj.get_interval_ds());
-            break;
-          case ObRowIDTC:
-            if (ob_is_urowid(obj.get_type()) && ob_is_urowid(rhs_obj.get_type())) {
-              ret = obj.get_urowid() == rhs_obj.get_urowid();
+        switch(tc) {
+        case ObNullTC:
+          break;
+        case ObIntTC:
+        case ObUIntTC:
+        case ObDateTimeTC:
+        case ObTimeTC:
+        case ObExtendTC:
+        case ObBitTC:
+        case ObEnumSetTC:
+          ret = (obj.v_.int64_ == rhs_obj.v_.int64_);
+          break;
+        case ObDateTC:
+          ret = (obj.v_.date_ == rhs_obj.v_.date_);
+          break;
+        case ObYearTC:
+          ret = (obj.v_.year_ == rhs_obj.v_.year_);
+          break;
+        case ObFloatTC:
+          ret = (obj.v_.float_ == rhs_obj.v_.float_);
+          break;
+        case ObDoubleTC:
+          {
+            if (lib::is_mysql_mode() && obj.is_fixed_double() && rhs_obj.is_fixed_double()) {
+              ret = ObObjCmpFuncs::fixed_double_cmp(obj, rhs_obj) == 0;
             } else {
-              COMMON_LOG(WARN, "not support rowid type for now", K(obj.get_type()), K(obj.get_type()));
-              common::right_to_die_or_duty_to_live();
+              ret = (obj.v_.double_ == rhs_obj.v_.double_);
             }
-            break;
-          case ObLobTC:
-            COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
-            break;
-          default:
-            COMMON_LOG(WARN, "not_supported type class", K(tc));
+          }
+          break;
+        case ObOTimestampTC:
+          ret = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);
+          break;
+        case ObStringTC:
+        case ObRawTC:
+         {
+          bool cmp_padding_space = false;
+          if (obj.val_len_ != rhs_obj.val_len_
+              || 0 != MEMCMP(obj.v_.string_, rhs_obj.v_.string_, obj.val_len_)) {
+            if (lib::is_oracle_mode() && (obj.is_varying_len_char_type()
+                                          || rhs_obj.is_varying_len_char_type())) {
+              cmp_padding_space = true;
+            }
+            ret = (ObCharset::strcmpsp(obj.get_collation_type(), obj.v_.string_, obj.val_len_,
+                rhs_obj.v_.string_, rhs_obj.val_len_, cmp_padding_space) == 0);
+            }
+          }
+          break;
+        case ObNumberTC:
+          if (obj.nmb_desc_.se_ != rhs_obj.nmb_desc_.se_
+              || obj.nmb_desc_.len_ != rhs_obj.nmb_desc_.len_
+              || (0
+                  != MEMCMP(obj.v_.nmb_digits_, rhs_obj.v_.nmb_digits_,
+                      sizeof(uint32_t) * obj.nmb_desc_.len_))) {
+            ret = false;
+          }
+          break;
+        case ObIntervalTC:
+          ret = obj.is_interval_ym() ? (obj.get_interval_ym() == rhs_obj.get_interval_ym())
+                                     : (obj.get_interval_ds() == rhs_obj.get_interval_ds());
+          break;
+        case ObRowIDTC:
+          if (ob_is_urowid(obj.get_type()) && ob_is_urowid(rhs_obj.get_type())) {
+            ret = obj.get_urowid() == rhs_obj.get_urowid();
+          } else {
+            COMMON_LOG(WARN, "not support rowid type for now",
+                       K(obj.get_type()),
+                       K(obj.get_type()));
             common::right_to_die_or_duty_to_live();
-            break;
+          }
+          break;
+        case ObLobTC:
+          COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
+          break;
+        default:
+          COMMON_LOG(WARN, "not_supported type class", K(tc));
+          common::right_to_die_or_duty_to_live();
+          break;
         }
       }
     }
@@ -239,39 +273,49 @@ bool ObRowkey::simple_equal(const ObRowkey& rhs) const
   return ret;
 }
 
-int ObRowkey::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObRowkey::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(buf_len), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(buf), K(buf_len), K(ret));
   } else if (OB_UNLIKELY(!is_legal())) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "illegal rowkey.", KP_(obj_ptr), K_(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "illegal rowkey.",
+               KP_(obj_ptr), K_(obj_cnt), K(ret));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, obj_cnt_))) {
-    COMMON_LOG(WARN, "encode object count failed.", KP(buf), K(buf_len), K(pos), K_(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "encode object count failed.",
+               KP(buf), K(buf_len), K(pos), K_(obj_cnt), K(ret));
   } else if (OB_FAIL(serialize_objs(buf, buf_len, pos))) {
-    COMMON_LOG(WARN, "serialize objects failed.", KP(buf), K(buf_len), K(pos), K_(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "serialize objects failed.",
+               KP(buf), K(buf_len), K(pos), K_(obj_cnt), K(ret));
   }
   return ret;
 }
 
-int ObRowkey::deserialize(const char* buf, const int64_t buf_len, int64_t& pos)
+int ObRowkey::deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t obj_cnt = 0;
   if (NULL == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(buf_len), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(buf), K(buf_len), K(ret));
   } else if (OB_FAIL(serialization::decode_vi64(buf, buf_len, pos, &obj_cnt))) {
-    COMMON_LOG(WARN, "decode object count failed.", KP(buf), K(buf_len), K(pos), K(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "decode object count failed.",
+               KP(buf), K(buf_len), K(pos), K(obj_cnt), K(ret));
   } else if (obj_cnt > 0) {
     // If there is no assign external ptr, then dynamically assign
     if (NULL == obj_ptr_) {
-      if (OB_ISNULL(
-              obj_ptr_ = static_cast<ObObj*>(this_worker().get_sql_arena_allocator().alloc(sizeof(ObObj) * obj_cnt)))) {
+      if (OB_ISNULL(obj_ptr_ = static_cast<ObObj *>
+          (this_worker().get_sql_arena_allocator().alloc(sizeof(ObObj) * obj_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(WARN, "failed to allocate memory for decode ObRowKey", K(ret), K(obj_cnt), K(sizeof(ObObj)));
+        COMMON_LOG(WARN,
+            "failed to allocate memory for decode ObRowKey",
+            K(ret),
+            K(obj_cnt),
+            K(sizeof(ObObj)));
       }
     }
     // Otherwise, check whether the number of reserved primary keys meets the requirements
@@ -281,11 +325,12 @@ int ObRowkey::deserialize(const char* buf, const int64_t buf_len, int64_t& pos)
     } else {
       // Use the reserved obj array
     }
-  }
-  if (OB_SUCC(ret)) {
-    obj_cnt_ = obj_cnt;
-    if (OB_FAIL(deserialize_objs(buf, buf_len, pos))) {
-      COMMON_LOG(WARN, "decode objects failed.", KP(buf), K(buf_len), K(pos), K(obj_cnt), K(ret));
+    if (OB_SUCC(ret)) {
+      obj_cnt_ = obj_cnt;
+      if (OB_FAIL(deserialize_objs(buf, buf_len, pos))) {
+        COMMON_LOG(WARN, "decode objects failed.",
+                   KP(buf), K(buf_len), K(pos), K(obj_cnt), K(ret));
+      }
     }
   }
   return ret;
@@ -298,7 +343,7 @@ int64_t ObRowkey::get_serialize_size(void) const
   return size;
 }
 
-int ObRowkey::serialize_objs(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObRowkey::serialize_objs(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (NULL == buf || buf_len <= 0) {
@@ -306,11 +351,13 @@ int ObRowkey::serialize_objs(char* buf, const int64_t buf_len, int64_t& pos) con
     COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(buf_len), K(ret));
   } else if (OB_UNLIKELY(!is_legal())) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "illegal rowkey.", KP_(obj_ptr), K_(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "illegal rowkey.",
+               KP_(obj_ptr), K_(obj_cnt), K(ret));
   }
   for (int64_t i = 0; i < obj_cnt_ && OB_SUCCESS == ret; ++i) {
     if (OB_FAIL(obj_ptr_[i].serialize(buf, buf_len, pos))) {
-      COMMON_LOG(WARN, "serialize object failed.", K(i), KP(buf), K(buf_len), K(pos), K(ret));
+      COMMON_LOG(WARN, "serialize object failed.",
+                 K(i), KP(buf), K(buf_len), K(pos), K(ret));
     }
   }
 
@@ -320,13 +367,13 @@ int ObRowkey::serialize_objs(char* buf, const int64_t buf_len, int64_t& pos) con
 int64_t ObRowkey::get_serialize_objs_size(void) const
 {
   int64_t total_size = 0;
-  for (int64_t i = 0; i < obj_cnt_; ++i) {
+  for (int64_t i = 0; i < obj_cnt_ ; ++i) {
     total_size += obj_ptr_[i].get_serialize_size();
   }
   return total_size;
 }
 
-int ObRowkey::deserialize_objs(const char* buf, const int64_t buf_len, int64_t& pos)
+int ObRowkey::deserialize_objs(const char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj_ptr_) {
@@ -335,14 +382,15 @@ int ObRowkey::deserialize_objs(const char* buf, const int64_t buf_len, int64_t& 
   } else {
     for (int64_t i = 0; i < obj_cnt_ && OB_SUCCESS == ret; ++i) {
       if (OB_FAIL(obj_ptr_[i].deserialize(buf, buf_len, pos))) {
-        COMMON_LOG(WARN, "deserialize object failed.", K(i), KP(buf), K(buf_len), K(pos), K(ret));
+        COMMON_LOG(WARN, "deserialize object failed.",
+                   K(i), KP(buf), K(buf_len), K(pos), K(ret));
       }
     }
   }
   return ret;
 }
 
-int64_t ObRowkey::to_string(char* buffer, const int64_t length) const
+int64_t ObRowkey::to_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
@@ -372,13 +420,13 @@ int64_t ObRowkey::to_string(char* buffer, const int64_t length) const
       }
     }
   }
-  // no way to preserve ret code
+  //no way to preserve ret code
   (void)ret;
   return pos;
 }
 
 // used for log_tool
-int64_t ObRowkey::to_smart_string(char* buffer, const int64_t length) const
+int64_t ObRowkey::to_smart_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
@@ -410,12 +458,12 @@ int64_t ObRowkey::to_smart_string(char* buffer, const int64_t length) const
       }
     }
   }
-  // no way to preserve ret code
+  //no way to preserve ret code
   (void)ret;
   return pos;
 }
 
-int ObRowkey::need_transform_to_collation_free(bool& need_transform) const
+int ObRowkey::need_transform_to_collation_free(bool &need_transform) const
 {
   int ret = OB_SUCCESS;
   need_transform = false;
@@ -433,7 +481,7 @@ int ObRowkey::need_transform_to_collation_free(bool& need_transform) const
 }
 
 // used for log_tool
-int64_t ObRowkey::to_format_string(char* buffer, const int64_t length) const
+int64_t ObRowkey::to_format_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
@@ -464,12 +512,12 @@ int64_t ObRowkey::to_format_string(char* buffer, const int64_t length) const
       COMMON_LOG(WARN, "buf is not enough", K(length), K(pos), K(ret));
     }
   }
-  // no way to preserve ret code
+  //no way to preserve ret code
   (void)ret;
   return pos;
 }
 
-int64_t ObRowkey::to_plain_string(char* buffer, const int64_t length) const
+int64_t ObRowkey::to_plain_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
@@ -499,17 +547,18 @@ int64_t ObRowkey::to_plain_string(char* buffer, const int64_t length) const
       break;
     }
   }
-  // no way to preserve ret code
+  //no way to preserve ret code
   (void)ret;
   return pos;
 }
 
-int ObRowkey::checksum(ObBatchChecksum& bc) const
+int ObRowkey::checksum(ObBatchChecksum &bc) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_legal())) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "illegal rowkey.", KP_(obj_ptr), K_(obj_cnt), K(ret));
+    COMMON_LOG(WARN, "illegal rowkey.",
+               KP_(obj_ptr), K_(obj_cnt), K(ret));
   } else if (0 < obj_cnt_ && NULL != obj_ptr_) {
     for (int64_t i = 0; i < obj_cnt_; i++) {
       obj_ptr_[i].checksum(bc);
@@ -524,7 +573,8 @@ uint64_t ObRowkey::murmurhash(const uint64_t hash) const
   uint64_t ret = hash;
   if (OB_UNLIKELY(!is_legal())) {
     tmp_ret = OB_INVALID_DATA;
-    COMMON_LOG(ERROR, "illegal rowkey.", KP_(obj_ptr), K_(obj_cnt), K(tmp_ret));
+    COMMON_LOG(ERROR, "illegal rowkey.",
+               KP_(obj_ptr), K_(obj_cnt), K(tmp_ret));
   } else if (0 < obj_cnt_ && NULL != obj_ptr_) {
     if (is_min_row() || is_max_row()) {
       ret = obj_ptr_[0].hash(ret);
@@ -537,11 +587,12 @@ uint64_t ObRowkey::murmurhash(const uint64_t hash) const
   return ret;
 }
 
-int ObRowkey::get_common_prefix_length(const ObRowkey& lhs, const ObRowkey& rhs, int64_t& prefix_len)
+int ObRowkey::get_common_prefix_length(
+    const ObRowkey &lhs, const ObRowkey &rhs, int64_t &prefix_len)
 {
   int ret = OB_SUCCESS;
-  const ObObj* lhs_obj = NULL;
-  const ObObj* rhs_obj = NULL;
+  const ObObj *lhs_obj = NULL;
+  const ObObj *rhs_obj = NULL;
   int64_t min_obj_cnt = 0;
   prefix_len = 0;
 
@@ -554,8 +605,9 @@ int ObRowkey::get_common_prefix_length(const ObRowkey& lhs, const ObRowkey& rhs,
   for (int64_t i = 0; OB_SUCC(ret) && i < min_obj_cnt; ++i) {
     lhs_obj = &(lhs.get_obj_ptr()[i]);
     rhs_obj = &(rhs.get_obj_ptr()[i]);
-    if (!lhs_obj->is_max_value() && !lhs_obj->is_min_value() && !rhs_obj->is_max_value() && !rhs_obj->is_min_value() &&
-        *lhs_obj == *rhs_obj) {
+    if (!lhs_obj->is_max_value() && !lhs_obj->is_min_value()
+        && !rhs_obj->is_max_value() && !rhs_obj->is_min_value()
+        && *lhs_obj == *rhs_obj) {
       ++prefix_len;
     } else {
       break;
@@ -565,5 +617,5 @@ int ObRowkey::get_common_prefix_length(const ObRowkey& lhs, const ObRowkey& rhs,
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

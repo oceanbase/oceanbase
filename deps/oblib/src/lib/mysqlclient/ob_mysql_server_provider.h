@@ -14,32 +14,36 @@
 #define __OB_COMMON_SQLCLIENT_MYSQL_SERVER_PROVIDER__
 
 #include "lib/net/ob_addr.h"
+#include "lib/container/ob_iarray.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
-class ObMySQLServerProvider {
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
+class ObMySQLServerProvider
+{
 public:
-  ObMySQLServerProvider(){};
-  virtual ~ObMySQLServerProvider(){};
-  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list) = 0;
-  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server) = 0;
-  virtual int64_t get_cluster_count() const = 0;
+  ObMySQLServerProvider() {};
+  virtual ~ObMySQLServerProvider() {};
+  virtual int get_server(const int64_t svr_idx, common::ObAddr &server) = 0;
   virtual int64_t get_server_count() const = 0;
-  virtual int64_t get_server_count(const int64_t cluster_id) const = 0;
+  // should imply get_tenant_ids/get_tenant_servers
+  // if using MySQLConnectionPool and MySQLConnectionPoolType is TENANT_POOL
+  // MUST contains SYS_TENANT
+  virtual int get_tenant_ids(ObIArray<uint64_t> &tenant_ids) = 0;
+  virtual int get_tenant_servers(const uint64_t tenant_id, ObIArray<ObAddr> &tenant_servers) = 0;
   virtual int refresh_server_list(void) = 0;
   virtual int prepare_refresh() = 0;
-  virtual bool need_refresh()
-  {
-    return true;
-  }
-
+  virtual int end_refresh() = 0;
+  virtual bool need_refresh() { return true; }
 private:
-  ObMySQLServerProvider(const ObMySQLServerProvider&);
-  ObMySQLServerProvider& operator=(const ObMySQLServerProvider&);
+  ObMySQLServerProvider(const ObMySQLServerProvider &);
+  ObMySQLServerProvider &operator=(const ObMySQLServerProvider &);
 };
-}  // namespace sqlclient
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+}
 
 #endif

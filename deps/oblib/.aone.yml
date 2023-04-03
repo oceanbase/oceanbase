@@ -1,0 +1,3 @@
+oceanbase:
+  pkgpara:
+    MULTI_PK: oceanbase-devel,oceanbase-debuginfo

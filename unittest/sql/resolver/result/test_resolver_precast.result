@@ -276,7 +276,7 @@ select * from t3 where c3='2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -352,10 +352,10 @@ select * from t3 where c3='2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -452,7 +452,7 @@ select * from t3 where c3='2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -484,9 +484,9 @@ select * from t3 where c3='2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -792,7 +792,7 @@ select * from t3 where c3>'2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -868,10 +868,10 @@ select * from t3 where c3>'2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -968,7 +968,7 @@ select * from t3 where c3>'2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -1000,9 +1000,9 @@ select * from t3 where c3>'2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -1308,7 +1308,7 @@ select * from t3 where c3<'2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -1384,10 +1384,10 @@ select * from t3 where c3<'2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -1484,7 +1484,7 @@ select * from t3 where c3<'2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -1516,9 +1516,9 @@ select * from t3 where c3<'2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -1824,7 +1824,7 @@ select * from t3 where c3>='2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -1900,10 +1900,10 @@ select * from t3 where c3>='2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -2000,7 +2000,7 @@ select * from t3 where c3>='2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -2032,9 +2032,9 @@ select * from t3 where c3>='2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -2340,7 +2340,7 @@ select * from t3 where c3<='2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -2416,10 +2416,10 @@ select * from t3 where c3<='2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -2516,7 +2516,7 @@ select * from t3 where c3<='2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -2548,9 +2548,9 @@ select * from t3 where c3<='2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -2856,7 +2856,7 @@ select * from t3 where c3!='2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -2931,10 +2931,10 @@ select * from t3 where c3!='2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -3031,7 +3031,7 @@ select * from t3 where c3!='2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -3063,9 +3063,9 @@ select * from t3 where c3!='2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3371,7 +3371,7 @@ select * from t3 where c3<=>'2';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -3447,10 +3447,10 @@ select * from t3 where c3<=>'2';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -3547,7 +3547,7 @@ select * from t3 where c3<=>'2';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -3579,9 +3579,9 @@ select * from t3 where c3<=>'2';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -5291,7 +5291,7 @@ select * from t3 where c3+'2'>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -5323,7 +5323,7 @@ select * from t3 where c3+'2'>'1';
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -5398,10 +5398,10 @@ select * from t3 where c3+'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -5433,10 +5433,10 @@ select * from t3 where c3+'2'>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -5533,7 +5533,7 @@ select * from t3 where c3+'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -5565,9 +5565,9 @@ select * from t3 where c3+'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -5608,7 +5608,7 @@ select * from t3 where c3+'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -5640,9 +5640,9 @@ select * from t3 where c3+'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -5948,7 +5948,7 @@ select * from t3 where c3-'2'>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -5980,7 +5980,7 @@ select * from t3 where c3-'2'>'1';
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -6055,10 +6055,10 @@ select * from t3 where c3-'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6090,10 +6090,10 @@ select * from t3 where c3-'2'>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -6190,7 +6190,7 @@ select * from t3 where c3-'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -6222,9 +6222,9 @@ select * from t3 where c3-'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6265,7 +6265,7 @@ select * from t3 where c3-'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -6297,9 +6297,9 @@ select * from t3 where c3-'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6605,7 +6605,7 @@ select * from t3 where c3*'2'>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -6637,7 +6637,7 @@ select * from t3 where c3*'2'>'1';
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -6712,10 +6712,10 @@ select * from t3 where c3*'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6747,10 +6747,10 @@ select * from t3 where c3*'2'>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -6847,7 +6847,7 @@ select * from t3 where c3*'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -6879,9 +6879,9 @@ select * from t3 where c3*'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -6922,7 +6922,7 @@ select * from t3 where c3*'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -6954,9 +6954,9 @@ select * from t3 where c3*'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -7262,7 +7262,7 @@ select * from t3 where c3/'2'>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
         1
@@ -7294,7 +7294,7 @@ select * from t3 where c3/'2'>'1';
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
             1
@@ -7369,10 +7369,10 @@ select * from t3 where c3/'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -7404,10 +7404,10 @@ select * from t3 where c3/'2'>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -7504,7 +7504,7 @@ select * from t3 where c3/'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -7536,9 +7536,9 @@ select * from t3 where c3/'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -7579,7 +7579,7 @@ select * from t3 where c3/'2'>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -7611,9 +7611,9 @@ select * from t3 where c3/'2'>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -7919,7 +7919,7 @@ select * from t3 where length(concat(c3, '2'))>'1';
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_FUNC"
       ],
       "rel_id": [
@@ -7953,7 +7953,7 @@ select * from t3 where length(concat(c3, '2'))>'1';
             "IS_FUNC",
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC"
           ],
           "rel_id": [
@@ -7988,7 +7988,7 @@ select * from t3 where length(concat(c3, '2'))>'1';
                 "IS_FUNC",
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "CNT_FUNC"
               ],
               "rel_id": [
@@ -8065,9 +8065,9 @@ select * from t3 where length(concat(c3, '2'))>'1';
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -8105,10 +8105,10 @@ select * from t3 where length(concat(c3, '2'))>'1';
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -8205,7 +8205,7 @@ select * from t3 where length(concat(c3, '2'))>'1';
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -8237,9 +8237,9 @@ select * from t3 where length(concat(c3, '2'))>'1';
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],

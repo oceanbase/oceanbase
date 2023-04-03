@@ -14,73 +14,49 @@
 
 #include "sql/engine/join/ob_basic_nested_loop_join_op.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/join/ob_nested_loop_join_op.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-OB_SERIALIZE_MEMBER(
-    (ObBasicNestedLoopJoinSpec, ObJoinSpec), rescan_params_, gi_partition_id_expr_, enable_gi_partition_pruning_);
+OB_SERIALIZE_MEMBER((ObBasicNestedLoopJoinSpec, ObJoinSpec),
+                    rescan_params_,
+                    gi_partition_id_expr_,
+                    enable_gi_partition_pruning_,
+                    enable_px_batch_rescan_);
 
-ObBasicNestedLoopJoinOp::ObBasicNestedLoopJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-    : ObJoinOp(exec_ctx, spec, input), open_right_child_(false)
-{}
+ObBasicNestedLoopJoinOp::ObBasicNestedLoopJoinOp(ObExecContext &exec_ctx,
+                                                 const ObOpSpec &spec,
+                                                 ObOpInput *input)
+  : ObJoinOp(exec_ctx, spec, input)
+  {}
 
 int ObBasicNestedLoopJoinOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  int64_t left_output_cnt = spec_.get_left()->output_.count();
   if (OB_FAIL(ObJoinOp::inner_open())) {
     LOG_WARN("failed to inner open join", K(ret));
-  } else if (OB_FAIL(left_->open())) {
-    LOG_WARN("failed to open left child", K(ret));
   }
-
   return ret;
 }
 
-int ObBasicNestedLoopJoinOp::rescan()
+int ObBasicNestedLoopJoinOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(open_right_child())) {
-    LOG_WARN("failed to open right child", K(ret));
-  } else if (OB_FAIL(ObJoinOp::rescan())) {
+  if (OB_FAIL(ObJoinOp::inner_rescan())) {
     LOG_WARN("failed to call parent rescan", K(ret));
-  }
-
-  return ret;
-}
-
-int ObBasicNestedLoopJoinOp::open_right_child()
-{
-  int ret = OB_SUCCESS;
-  if (!right_->is_opened() && OB_FAIL(right_->open())) {
-    LOG_WARN("failed to open right child", K(ret));
   }
   return ret;
 }
 
 int ObBasicNestedLoopJoinOp::inner_close()
 {
-  int ret = OB_SUCCESS;
-  int left_ret = OB_SUCCESS;
-  int right_ret = OB_SUCCESS;
-  if (OB_ISNULL(left_)) {
-    left_ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K(left_), K(ret));
-  } else if (OB_SUCCESS != (left_ret = left_->close())) {
-    LOG_WARN("Close child operator failed", K(left_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  if (OB_ISNULL(right_)) {
-    right_ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K(right_), K(ret));
-  } else if (OB_SUCCESS != (right_ret = right_->close())) {
-    LOG_WARN("Close child operator failed", K(right_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  ret = (OB_SUCCESS == left_ret) ? right_ret : left_ret;
-
-  return ret;
+  return OB_SUCCESS;
 }
+
 
 int ObBasicNestedLoopJoinOp::get_next_left_row()
 {
@@ -89,13 +65,7 @@ int ObBasicNestedLoopJoinOp::get_next_left_row()
     // to the previous row, when get next left row, it may become wild pointer.
     // The exec parameter may be accessed by the under PX execution by serialization, which
     // serialize whole parameters store.
-    ObPhysicalPlanCtx* plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-    ParamStore& param_store = plan_ctx->get_param_store_for_update();
-    FOREACH_CNT(param, get_spec().rescan_params_)
-    {
-      param_store.at(param->param_idx_).set_null();
-      param->dst_->locate_expr_datum(eval_ctx_).set_null();
-    }
+    set_param_null();
   }
   return ObJoinOp::get_next_left_row();
 }
@@ -104,31 +74,63 @@ int ObBasicNestedLoopJoinOp::prepare_rescan_params(bool is_group)
 {
   int ret = OB_SUCCESS;
   int64_t param_cnt = get_spec().rescan_params_.count();
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  CK(OB_NOT_NULL(plan_ctx));
+  ObObjParam *param = NULL;
+  common::ObSEArray<common::ObObjParam, 8> params;
+  common::ObSArray<int64_t> param_idxs;
+  common::ObSArray<int64_t> param_expr_idxs;
+  ObBatchRescanCtl *batch_rescan_ctl = (get_spec().enable_px_batch_rescan_ && is_group)
+      ? &static_cast<ObNestedLoopJoinOp*>(this)->batch_rescan_ctl_
+      : NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
-    const ObDynamicParamSetter& rescan_param = get_spec().rescan_params_.at(i);
-    if (OB_FAIL(rescan_param.set_dynamic_param(eval_ctx_))) {
+    const ObDynamicParamSetter &rescan_param = get_spec().rescan_params_.at(i);
+    if (OB_FAIL(rescan_param.set_dynamic_param(eval_ctx_, param))) {
       LOG_WARN("fail to set dynamic param", K(ret));
+    } else if (NULL != batch_rescan_ctl) {
+      if (OB_ISNULL(param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param", K(ret));
+      } else {
+        ObObjParam copy_res;
+        int64_t expr_idx = 0;
+        OZ(batch_rescan_ctl->params_.deep_copy_param(*param, copy_res));
+        OZ(params.push_back(copy_res));
+        OZ(param_idxs.push_back(rescan_param.param_idx_));
+        CK(OB_NOT_NULL(plan_ctx->get_phy_plan()));
+        OZ(plan_ctx->get_phy_plan()->get_expr_frame_info().get_expr_idx_in_frame(
+            rescan_param.dst_, expr_idx));
+        OZ(param_expr_idxs.push_back(expr_idx));
+        param = NULL;
+      }
     }
   }
+  if (OB_SUCC(ret) && NULL != batch_rescan_ctl) {
+    batch_rescan_ctl->param_version_ += 1;
+    OZ(batch_rescan_ctl->params_.append_batch_rescan_param(param_idxs, params, param_expr_idxs));
+  }
 
-  if (OB_SUCC(ret) && get_spec().enable_gi_partition_pruning_) {
-    ObDatum* datum = nullptr;
+  // 左边每一行出来后，去通知右侧 GI 实施 part id 过滤，避免 PKEY NLJ 场景下扫不必要分区
+  if (OB_SUCC(ret) && !get_spec().enable_px_batch_rescan_ && get_spec().enable_gi_partition_pruning_) {
+    ObDatum *datum = nullptr;
     if (OB_FAIL(get_spec().gi_partition_id_expr_->eval(eval_ctx_, datum))) {
       LOG_WARN("fail eval value", K(ret));
     } else {
+      // NOTE: 如果右侧对应多张表，这里的逻辑也没有问题
+      // 如 A REPART TO NLJ (B JOIN C) 的场景
+      // 此时 GI 在 B 和 C 的上面
       int64_t part_id = datum->get_int();
       ctx_.get_gi_pruning_info().set_part_id(part_id);
-    }
-  }
-
-  if (OB_SUCC(ret) && !is_group) {
-    if (OB_FAIL(open_right_child())) {
-      LOG_WARN("failed to open right child", K(ret));
     }
   }
 
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+void ObBasicNestedLoopJoinOp::set_param_null()
+{
+  set_pushdown_param_null(get_spec().rescan_params_);
+}
+
+} // end namespace sql
+} // end namespace oceanbase

@@ -23,35 +23,46 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-int ObPCVSet::init(const ObPlanCacheCtx& pc_ctx, const ObCacheObject* cache_obj)
+int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo* sess;
+  ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
+  const ObPlanCacheObject *cache_obj = static_cast<const ObPlanCacheObject*>(obj);
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_ISNULL(plan_cache_) || OB_ISNULL(cache_obj)) {
+  } else if (OB_ISNULL(lib_cache_) || OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (NULL == (pc_alloc_ = plan_cache_->get_pc_allocator())) {
+  } else if (NULL == (sess = pc_ctx.sql_ctx_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_PC_LOG(WARN, "session info is null", K(ret));
+  } else if (NULL == (pc_alloc_ = lib_cache_->get_pc_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid plan cache allocator", K_(pc_alloc), K(ret));
   } else {
-    if (OB_FAIL(pc_key_.deep_copy(*pc_alloc_, pc_ctx.fp_result_.pc_key_))) {
+    if (OB_FAIL(pc_key_.deep_copy(allocator_, pc_ctx.fp_result_.pc_key_))) {
       LOG_WARN("fail to init plan cache key in pcv set", K(ret));
     } else if (OB_FAIL(deep_copy_sql(pc_ctx.raw_sql_))) {
       LOG_WARN("fail to deep_copy_sql", K(ret), K(pc_ctx.raw_sql_));
     } else {
       is_inited_ = true;
-      min_merged_version_ = cache_obj->get_merged_version();
-      min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+      if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+        LOG_DEBUG("Lob Debug, using remote min cluster version",
+                K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+                K(GET_MIN_CLUSTER_VERSION()));
+      }
+      min_cluster_version_ = pc_ctx.exec_ctx_.get_min_cluster_version();
       normal_parse_const_cnt_ = pc_ctx.normal_parse_const_cnt_;
       LOG_DEBUG("inited pcv set", K(pc_key_), K(ObTimeUtility::current_time()));
     }
   }
-
   return ret;
 }
 
@@ -59,30 +70,30 @@ void ObPCVSet::destroy()
 {
   if (is_inited_) {
     while (!pcv_list_.is_empty()) {
-      ObPlanCacheValue* pcv = pcv_list_.get_first();
+      ObPlanCacheValue *pcv= pcv_list_.get_first();
       if (OB_ISNULL(pcv)) {
-        // do nothing;
+        //do nothing;
       } else {
         pcv_list_.remove(pcv);
         free_pcv(pcv);
         pcv = NULL;
       }
     }
-    // free key.
-    if (NULL != pc_alloc_) {
-      pc_key_.destory(*pc_alloc_);
-      pc_key_.reset();
-      if (NULL != sql_.ptr()) {
-        pc_alloc_->free(sql_.ptr());
-      }
+    pc_key_.destory(allocator_);
+    pc_key_.reset();
+    if (NULL != sql_.ptr()) {
+      allocator_.free(sql_.ptr());
     }
 
+    // free sql_id list
+    for (int64_t i = 0; i < sql_ids_.count(); i++) {
+      if (NULL != sql_ids_[i].ptr()) {
+        allocator_.free(sql_ids_[i].ptr());
+      }
+    }
+    sql_ids_.reset();
     sql_.reset();
-    plan_cache_ = NULL;
-    pc_alloc_ = NULL;
-    ref_count_ = 0;
     normal_parse_const_cnt_ = 0;
-    min_merged_version_ = 0;
     min_cluster_version_ = 0;
     plan_num_ = 0;
     need_check_gen_tbl_col_ = false;
@@ -90,77 +101,73 @@ void ObPCVSet::destroy()
   }
 }
 
-// 1. Check whether the number of constants recognized by the fast parser is consistent with the
-//   number of constants recognized by the normal parser
-// 2. Find the corresponding pcv through match db_id, sys_vars, not params in each pcv
-// 3. Get plan in pcv
-int ObPCVSet::get_plan(ObPlanCacheCtx& pc_ctx, ObCacheObject*& plan)
+//1.检查fast parser识别常量个数是否与正常parser识别常量个数一致
+//2.通过match 每个pcv中db_id, sys_vars, not params找到对应的pcv
+//3.在pcv中get plan
+int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
+                                  ObILibCacheKey *key,
+                                  ObILibCacheObject *&cache_obj)
 {
+  UNUSED(key);
   int ret = OB_SUCCESS;
-  if (pc_ctx.is_ps_mode_) {
-    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.ps_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("param num is not equal",
-          K_(normal_parse_const_cnt),
-          "ps_params_count",
-          pc_ctx.fp_result_.ps_params_.count());
+  ObPlanCacheObject *plan = NULL;
+  ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
+  if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.parameterized_params_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param num is not equal", K_(normal_parse_const_cnt),
+               "parameterized_params_count", pc_ctx.fp_result_.parameterized_params_.count());
     }
   } else {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.raw_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
-      SQL_PC_LOG(DEBUG,
-          "const number of fast parse and normal parse is different",
-          "fast_parse_const_num",
-          pc_ctx.fp_result_.raw_params_.count(),
-          K_(normal_parse_const_cnt),
-          K(pc_ctx.fp_result_.raw_params_));
+      ret = OB_ERR_UNEXPECTED;
+      SQL_PC_LOG(DEBUG, "const number of fast parse and normal parse is different",
+                 "fast_parse_const_num", pc_ctx.fp_result_.raw_params_.count(),
+                 K_(normal_parse_const_cnt),
+                 K(pc_ctx.fp_result_.raw_params_));
     }
   }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (min_cluster_version_ != GET_MIN_CLUSTER_VERSION()) {
-    ret = OB_OLD_SCHEMA_VERSION;
+  if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+    LOG_DEBUG("Lob Debug, using remote min cluster version",
+             K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+             K(GET_MIN_CLUSTER_VERSION()));
   }
-  // Check if there is a possibility that the generated table projection column has the same name
-  if (OB_SUCC(ret) && need_check_gen_tbl_col_) {
+  if (OB_FAIL(ret)) {
+  } else if (min_cluster_version_ != pc_ctx.exec_ctx_.get_min_cluster_version()) {
+    ret = OB_OLD_SCHEMA_VERSION;
+  } else if (need_check_gen_tbl_col_) {
+    // 检查是否有generated table投影列同名的可能
     bool contain_dup_col = false;
     if (OB_FAIL(check_raw_param_for_dup_col(pc_ctx, contain_dup_col))) {
       LOG_WARN("failed to check raw param for dup col", K(ret));
     } else if (contain_dup_col) {
       ret = OB_SQL_PC_NOT_EXIST;
-    } else {
-      // do nothing
     }
   }
   if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_) || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+  } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_) ||
+             OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "unexpected null schema guard", K(ret), K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.sql_ctx_.session_info_));
+    LOG_WARN("unexpected null schema guard",
+             K(ret), K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.sql_ctx_.session_info_));
   } else {
-    plan = NULL;
     ObSEArray<PCVSchemaObj, 4> schema_array;
-    // The plan cache matching temporary table should always use the user-created session to ensure semantic correctness
-    // a temporary session object will be created during remote execution, and its session_id is also temporary
-    // so here must use get_sessid_for_table() rule to judge
-    pc_ctx.sql_ctx_.schema_guard_->set_session_id(pc_ctx.sql_ctx_.session_info_->get_sessid_for_table());
-    ObPlanCacheValue* matched_pcv = NULL;
+    //plan cache匹配临时表应该始终使用用户创建的session才能保证语义的正确性
+    //远端执行的时候会创建临时的session对象，其session_id也是临时的，
+    //所以这里必须使用get_sessid_for_table()规则去判断
+    pc_ctx.sql_ctx_.schema_guard_->set_session_id(
+        pc_ctx.sql_ctx_.session_info_->get_sessid_for_table());
+    ObPlanCacheValue *matched_pcv = NULL;
     int64_t new_tenant_schema_version = OB_INVALID_VERSION;
     bool need_check_schema = true;
-    DLIST_FOREACH(pcv, pcv_list_)
-    {
+    DLIST_FOREACH(pcv, pcv_list_) {
       bool is_same = false;
       LOG_DEBUG("get plan, pcv", K(pcv));
-      if (OB_ISNULL(pcv)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(pcv), K(ret));
-      } else if (OB_FAIL(pcv->get_all_dep_schema(pc_ctx,
-                     pc_ctx.sql_ctx_.session_info_->get_database_id(),
-                     new_tenant_schema_version,
-                     need_check_schema,
-                     schema_array))) {
+      if (OB_FAIL(pcv->get_all_dep_schema(pc_ctx,
+                                          pc_ctx.sql_ctx_.session_info_->get_database_id(),
+                                          new_tenant_schema_version,
+                                          need_check_schema,
+                                          schema_array))) {
         if (OB_OLD_SCHEMA_VERSION == ret) {
           LOG_DEBUG("failed to get all table schema", K(ret));
         } else {
@@ -178,7 +185,11 @@ int ObPCVSet::get_plan(ObPlanCacheCtx& pc_ctx, ObCacheObject*& plan)
         }
         break;
       }
-    }  // end foreach
+    } //end foreach
+    // 如果tenant schema变化了, 但table schema没有过期, 则更新tenant schema
+    // plan必须不为NULL，因为下层可能会有覆盖错误码的行为，即使计划没有匹配上，
+    // ret仍然为success，此时tenant schema version又会被推高，可能有正确性问题
+    // bug link：
     if (OB_SUCC(ret) && NULL != matched_pcv && NULL != plan) {
       if (OB_FAIL(matched_pcv->lift_tenant_schema_version(new_tenant_schema_version))) {
         LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
@@ -187,47 +198,56 @@ int ObPCVSet::get_plan(ObPlanCacheCtx& pc_ctx, ObCacheObject*& plan)
       }
     }
   }
-  if (OB_SUCCESS == ret && NULL == plan) {
-    ret = OB_SQL_PC_NOT_EXIST;
+  if (OB_SUCC(ret)) {
+    cache_obj = plan;
+    if (NULL == plan) {
+      ret = OB_SQL_PC_NOT_EXIST;
+    }
   }
-
   return ret;
 }
 
-// 1. find the corresponding pcv through match db_id, sys_vars, not params in each pcv
-// 2. if the matching pcv, add plan in pcv, otherwise regenerate pcv and add plan
-int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
+//1.通过match 每个pcv中db_id, sys_vars, not params找到对应的pcv
+//2.如果匹配的pcv则在pcv中add plan， 否则重新生成pcv并add plan
+int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
+                                  ObILibCacheKey *key,
+                                  ObILibCacheObject *cache_obj)
 {
+  UNUSED(key);
   int ret = OB_SUCCESS;
   bool is_new = true;
+  ObPlanCacheObject *plan = static_cast<ObPlanCacheObject*>(cache_obj);
+  ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   ObSEArray<PCVSchemaObj, 4> schema_array;
-  if (OB_ISNULL(cache_obj) || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_) || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+  if (OB_ISNULL(plan) ||
+      OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_) ||
+      OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "invalid argument", K(ret), K(cache_obj), K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.sql_ctx_.session_info_));
+    LOG_WARN("invalid argument", K(ret), K(plan),
+             K(pc_ctx.sql_ctx_.schema_guard_),
+             K(pc_ctx.sql_ctx_.session_info_));
   } else if (get_plan_num() >= MAX_PCV_SET_PLAN_NUM) {
-    static const int64_t PRINT_PLAN_EXCEEDS_LOG_INTERVAL = 20 * 1000 * 1000;  // 20s
-    ret = OB_NOT_SUPPORTED;
+    static const int64_t PRINT_PLAN_EXCEEDS_LOG_INTERVAL = 20 * 1000 * 1000; // 20s
+    ret = OB_ERR_UNEXPECTED;
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }
-  } else if (OB_FAIL(ObPlanCacheValue::get_all_dep_schema(
-                 *pc_ctx.sql_ctx_.schema_guard_, cache_obj->get_dependency_table(), schema_array))) {
+  } else if (OB_FAIL(ObPlanCacheValue::get_all_dep_schema(*pc_ctx.sql_ctx_.schema_guard_,
+                                                          plan->get_dependency_table(),
+                                                          schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));
   } else {
-    DLIST_FOREACH(pcv, pcv_list_)
-    {
+    DLIST_FOREACH(pcv, pcv_list_) {
       bool is_same = false;
       LOG_DEBUG("add plan, pcv", K(pcv));
-      if (OB_ISNULL(pcv)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(pcv), K(ret));
-      } else if (OB_FAIL(pcv->match(pc_ctx, schema_array, is_same))) {
+      if (OB_FAIL(pcv->match(pc_ctx, schema_array, is_same))) {
         LOG_WARN("fail to match pcv in pcv_set", K(ret));
       } else if (is_same) {
         is_new = false;
-        if (OB_FAIL(pcv->add_plan(*cache_obj, schema_array, pc_ctx))) {
-          if (OB_SQL_PC_PLAN_DUPLICATE == ret || is_not_supported_err(ret)) {
+        LOG_INFO("has identical pcv", K(is_same), K(pcv));
+        if (OB_FAIL(pcv->add_plan(*plan, schema_array, pc_ctx))) {
+          if (OB_SQL_PC_PLAN_DUPLICATE == ret
+              || is_not_supported_err(ret)) {
             LOG_DEBUG("fail to add plan to pcv", K(ret));
           } else {
             LOG_WARN("fail to add plan to pcv", K(ret));
@@ -235,12 +255,14 @@ int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
         }
         break;
       }
-    }  // for end
+    } //for end
   }
-
   if (OB_SUCC(ret) && is_new) {
-    ObPlanCacheValue* pcv = NULL;
-    if (OB_FAIL(create_pcv_and_add_plan(cache_obj, pc_ctx, schema_array, pcv))) {
+    ObPlanCacheValue *pcv = NULL;
+    if (OB_FAIL(create_pcv_and_add_plan(plan,
+                                        pc_ctx,
+                                        schema_array,
+                                        pcv))) {
       if (!is_not_supported_err(ret)) {
         LOG_WARN("fail to create and add pcv", K(ret));
       }
@@ -256,13 +278,9 @@ int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
     }
   }
 
+  //在add plan时维护一个最小的merged version, 用于后台在淘汰时进行检查;
   if (OB_SUCC(ret)) {
-    cache_obj->set_added_pc(true);
-    if (min_merged_version_ > cache_obj->get_merged_version()) {
-      min_merged_version_ = cache_obj->get_merged_version();
-    }
-
-    if (OB_FAIL(set_raw_param_info_if_needed(cache_obj))) {
+    if (OB_FAIL(set_raw_param_info_if_needed(plan))) {
       LOG_WARN("failed to set raw param info", K(ret));
     } else {
       // inc plan num if succeeds
@@ -272,13 +290,19 @@ int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
   return ret;
 }
 
-int ObPCVSet::create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx,
-    const ObIArray<PCVSchemaObj>& schema_array, ObPlanCacheValue*& new_pcv)
+//生成pcv并add plan
+int ObPCVSet::create_pcv_and_add_plan(ObPlanCacheObject *cache_obj,
+                                      ObPlanCacheCtx &pc_ctx,
+                                      const ObIArray<PCVSchemaObj> &schema_array,
+                                      ObPlanCacheValue *&new_pcv)
 {
   int ret = OB_SUCCESS;
   new_pcv = nullptr;
-  // create pcv and init
-  if (OB_ISNULL(cache_obj) || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+  common::ObString sql_id;
+  common::ObString sql_id_org(common::OB_MAX_SQL_ID_LENGTH, (const char*)&pc_ctx.sql_ctx_.sql_id_);
+  //create pcv and init
+  if (OB_ISNULL(cache_obj) ||
+      OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
   } else if (OB_FAIL(create_new_pcv(new_pcv))) {
@@ -288,15 +312,19 @@ int ObPCVSet::create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& 
     LOG_WARN("unexpected null for new_pcv", K(new_pcv));
   } else if (OB_FAIL(new_pcv->init(this, cache_obj, pc_ctx))) {
     SQL_PC_LOG(WARN, "failed to init plan cache value");
+  } else if (OB_FAIL(ob_write_string(allocator_, sql_id_org, sql_id))) {
+    SQL_PC_LOG(WARN, "failed to deep copy sql_id_", K(sql_id_org), K(ret));
+  } else if (OB_FAIL(push_sql_id(sql_id))) {
+    SQL_PC_LOG(WARN, "failed to push sql_id_", K(ret));
   } else {
     // do nothing
   }
 
-  // add plan
+  //add plan
   if (OB_SUCC(ret)) {
     if (OB_FAIL(new_pcv->add_plan(*cache_obj, schema_array, pc_ctx))) {
       if (!is_not_supported_err(ret)) {
-        SQL_PC_LOG(WARN, "failed to add plan to plan cache value", K(ret));
+        SQL_PC_LOG(WARN, "failed to add plan to plan cache value",  K(ret));
       }
     }
   }
@@ -308,97 +336,27 @@ int ObPCVSet::create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& 
   return ret;
 }
 
-int ObPCVSet::deep_copy_sql(const ObString& sql)
+int ObPCVSet::deep_copy_sql(const ObString &sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql.ptr())) {
     SQL_PC_LOG(DEBUG, "sql is empty, ignore copy sql", K(ret), K(lbt()));
-  } else if (OB_FAIL(ob_write_string(*pc_alloc_, sql, sql_))) {
+  } else if (OB_FAIL(ob_write_string(allocator_, sql, sql_))) {
     SQL_PC_LOG(WARN, "deep copy sql into pcv_set failed", K(ret), K(sql));
   }
   return ret;
 }
 
-int64_t ObPCVSet::inc_ref_count(const CacheRefHandleID ref_handle)
+int ObPCVSet::create_new_pcv(ObPlanCacheValue *&new_pcv)
 {
   int ret = OB_SUCCESS;
-  if (GCONF._enable_plan_cache_mem_diagnosis) {
-    if (OB_ISNULL(plan_cache_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("invalid null plan cache", K(ret));
-    } else {
-      plan_cache_->get_ref_handle_mgr().record_ref_op(ref_handle);
-    }
-  }
-  return ATOMIC_AAF(&ref_count_, 1);
-}
-
-int64_t ObPCVSet::dec_ref_count(const CacheRefHandleID ref_handle)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_plan_cache_mem_diagnosis) {
-    if (OB_ISNULL(plan_cache_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("invalid null plan cache", K(ret));
-    } else {
-      plan_cache_->get_ref_handle_mgr().record_deref_op(ref_handle);
-    }
-  }
-  int64_t ref_count = ATOMIC_SAF(&ref_count_, 1);
-  if (ref_count > 0) {
-    /*do nothing*/
-  } else if (0 == ref_count) {
-    LOG_DEBUG("remove pcvset", K(ref_count), K(this), K(pc_key_));
-    if (OB_ISNULL(plan_cache_)) {
-      LOG_ERROR("plan_cache not inited");
-    } else {
-      plan_cache_->dec_mem_used(get_mem_size());
-      ObIAllocator& pc_alloc = plan_cache_->get_pc_allocator_ref();
-      this->~ObPCVSet();
-      pc_alloc.free(this);
-    }
-  } else {
-    LOG_ERROR("invalid pcv_set ref count", K(ref_count));
-  }
-  return ref_count;
-}
-
-int ObPCVSet::update_stmt_stat()
-{
-  int ret = OB_SUCCESS;
-  ATOMIC_STORE(&(stmt_stat_.last_active_timestamp_), ObTimeUtility::current_time());
-  ATOMIC_INC(&(stmt_stat_.execute_count_));
-  return ret;
-}
-
-int64_t ObPCVSet::get_mem_size()
-{
-  int64_t value_mem_size = 0;
-  DLIST_FOREACH_NORET(pcv, pcv_list_)
-  {
-    if (OB_ISNULL(pcv)) {
-      LOG_ERROR("invalid pcv set", K(pcv));
-    } else {
-      value_mem_size += pcv->get_mem_size();
-    }
-  }  // end for
-  return value_mem_size;
-}
-
-int ObPCVSet::create_new_pcv(ObPlanCacheValue*& new_pcv)
-{
-  int ret = OB_SUCCESS;
-  ObIAllocator* pc_alloc = get_pc_allocator();
-  void* buff = nullptr;
+  void *buff = nullptr;
   new_pcv = nullptr;
 
-  if (OB_ISNULL(pc_alloc)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(pc_alloc));
-  } else if (nullptr == (buff = pc_alloc->alloc(sizeof(ObPlanCacheValue)))) {
+  if (nullptr == (buff = allocator_.alloc(sizeof(ObPlanCacheValue)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObPlanCacheValue", K(ret));
-  } else if (nullptr == (new_pcv = new (buff) ObPlanCacheValue())) {
+  } else if (nullptr == (new_pcv = new(buff)ObPlanCacheValue())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to construct ObPlanCacheValue", K(ret));
   } else {
@@ -407,51 +365,51 @@ int ObPCVSet::create_new_pcv(ObPlanCacheValue*& new_pcv)
 
   if (OB_SUCC(ret)) {
     // do nothing
-  } else if (nullptr != new_pcv && nullptr != pc_alloc) {  // cleanup
+  } else if (nullptr != new_pcv) { // cleanup
     new_pcv->~ObPlanCacheValue();
-    pc_alloc->free(new_pcv);
+    allocator_.free(new_pcv);
     new_pcv = nullptr;
   }
 
   return ret;
 }
 
-void ObPCVSet::free_pcv(ObPlanCacheValue* pcv)
+void ObPCVSet::free_pcv(ObPlanCacheValue *pcv)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator* pc_alloc = get_pc_allocator();
-  if (OB_ISNULL(pc_alloc) || OB_ISNULL(pcv)) {
+  if (OB_ISNULL(pcv)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(pc_alloc), K(pcv), K(ret));
+    LOG_WARN("invalid argument", K(pcv), K(ret));
   } else {
     pcv->~ObPlanCacheValue();
-    pc_alloc->free(pcv);
+    allocator_.free(pcv);
     pcv = nullptr;
   }
 }
 
-int ObPCVSet::set_raw_param_info_if_needed(ObCacheObject* cache_obj)
+int ObPCVSet::set_raw_param_info_if_needed(ObPlanCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
-  ObPhysicalPlan* plan = NULL;
+  ObPhysicalPlan *plan = NULL;
   col_field_arr_.reset();
-  col_field_arr_.set_allocator(pc_alloc_);
+  col_field_arr_.set_allocator(&allocator_);
   ObBitSet<> visited_idx;
   PCColStruct col_item;
   if (need_check_gen_tbl_col_) {
     // do nothing
-  } else if (OB_ISNULL(pc_alloc_) || OB_ISNULL(cache_obj)) {
+  } else if (OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(pc_alloc_), K(cache_obj));
-  } else if (OB_ISNULL(plan = dynamic_cast<ObPhysicalPlan*>(cache_obj))) {
+    LOG_WARN("invalid argument", K(cache_obj));
+  } else if (OB_ISNULL(plan = dynamic_cast<ObPhysicalPlan *>(cache_obj))) {
     // do nothing
   } else if (!plan->contain_paramed_column_field()) {
     // do nothing
   } else if (OB_FAIL(col_field_arr_.reserve(plan->get_field_columns().count()))) {
-    LOG_WARN("failed to init fixed array", K(ret), K(plan->get_field_columns().count()));
+    LOG_WARN("failed to init fixed array",
+             K(ret), K(plan->get_field_columns().count()));
   } else {
     for (int64_t i = 0; i < plan->get_field_columns().count(); i++) {
-      const ObField& cur_field = plan->get_field_columns().at(i);
+      const ObField &cur_field = plan->get_field_columns().at(i);
       if (!cur_field.is_paramed_select_item_ || OB_ISNULL(cur_field.paramed_ctx_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Invalid argument", K(ret), K(cur_field.is_paramed_select_item_), K(cur_field.paramed_ctx_));
@@ -469,14 +427,14 @@ int ObPCVSet::set_raw_param_info_if_needed(ObCacheObject* cache_obj)
         }
         col_item.reset();
         for (int64_t j = i + 1; OB_SUCC(ret) && j < plan->get_field_columns().count(); j++) {
-          const ObField& next_field = plan->get_field_columns().at(j);
+          const ObField &next_field = plan->get_field_columns().at(j);
           if (!next_field.is_paramed_select_item_ || OB_ISNULL(next_field.paramed_ctx_)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("Invalid argument", K(ret), K(next_field.is_paramed_select_item_), K(next_field.paramed_ctx_));
           } else if (visited_idx.has_member(j) || !next_field.paramed_ctx_->need_check_dup_name_) {
             // do nothing
-          } else if (ObCharset::case_compat_mode_equal(
-                         cur_field.paramed_ctx_->paramed_cname_, next_field.paramed_ctx_->paramed_cname_)) {
+          } else if (ObCharset::case_compat_mode_equal(cur_field.paramed_ctx_->paramed_cname_,
+                                                       next_field.paramed_ctx_->paramed_cname_)) {
             if (OB_FAIL(visited_idx.add_member(j))) {
               LOG_WARN("failed to add member", K(ret));
             } else if (OB_FAIL(col_item.param_idxs_.assign(next_field.paramed_ctx_->param_idxs_))) {
@@ -489,7 +447,7 @@ int ObPCVSet::set_raw_param_info_if_needed(ObCacheObject* cache_obj)
           } else {
             // do nothing
           }
-        }  // for end
+        } // for end
         if (OB_SUCC(ret)) {
           col_field_arr_.at(col_field_arr_.count() - 1).is_last_ = true;
         }
@@ -502,44 +460,67 @@ int ObPCVSet::set_raw_param_info_if_needed(ObCacheObject* cache_obj)
   return ret;
 }
 
-int ObPCVSet::check_raw_param_for_dup_col(ObPlanCacheCtx& pc_ctx, bool& contain_dup_col)
+int ObPCVSet::check_raw_param_for_dup_col(ObPlanCacheCtx &pc_ctx, bool &contain_dup_col)
 {
   int ret = OB_SUCCESS;
   contain_dup_col = false;
   if (!need_check_gen_tbl_col_) {
     // do nothing
   } else {
-    for (int64_t cur_idx = 0; OB_SUCC(ret) && !contain_dup_col && cur_idx < col_field_arr_.count(); cur_idx++) {
+    for (int64_t cur_idx = 0; OB_SUCC(ret) && !contain_dup_col && cur_idx < col_field_arr_.count();
+         cur_idx++) {
       if (col_field_arr_.at(cur_idx).is_last_) {
         // do nothing
       } else {
-        PCColStruct& left_col_item = col_field_arr_.at(cur_idx);
-        PCColStruct& right_col_item = col_field_arr_.at(cur_idx + 1);
+        PCColStruct &left_col_item = col_field_arr_.at(cur_idx);
+        PCColStruct &right_col_item = col_field_arr_.at(cur_idx + 1);
         bool all_same = true;
-        ObIArray<ObPCParam*>& raw_params = pc_ctx.fp_result_.raw_params_;
+        ObIArray<ObPCParam *> &raw_params = pc_ctx.fp_result_.raw_params_;
         for (int64_t i = 0; OB_SUCC(ret) && all_same && i < left_col_item.param_idxs_.count(); i++) {
           int64_t l_idx = left_col_item.param_idxs_.at(i);
           int64_t r_idx = right_col_item.param_idxs_.at(i);
-          if (OB_ISNULL(raw_params.at(l_idx)) || OB_ISNULL(raw_params.at(r_idx)) ||
-              OB_ISNULL(raw_params.at(l_idx)->node_) || OB_ISNULL(raw_params.at(r_idx)->node_)) {
+          if (OB_ISNULL(raw_params.at(l_idx)) ||
+              OB_ISNULL(raw_params.at(r_idx)) ||
+              OB_ISNULL(raw_params.at(l_idx)->node_) ||
+              OB_ISNULL(raw_params.at(r_idx)->node_)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid argument", K(ret));
           } else {
-            ObString l_tmp_str(raw_params.at(l_idx)->node_->text_len_, raw_params.at(l_idx)->node_->raw_text_);
-            ObString r_tmp_str(raw_params.at(r_idx)->node_->text_len_, raw_params.at(r_idx)->node_->raw_text_);
+            ObString l_tmp_str(raw_params.at(l_idx)->node_->text_len_,
+                               raw_params.at(l_idx)->node_->raw_text_);
+            ObString r_tmp_str(raw_params.at(r_idx)->node_->text_len_,
+                               raw_params.at(r_idx)->node_->raw_text_);
 
             if (0 != l_tmp_str.compare(r_tmp_str)) {
               all_same = false;
               LOG_DEBUG("raw text not matched", K(l_tmp_str), K(r_tmp_str));
             }
           }
-        }  // for end
+        } // for end
         contain_dup_col = all_same;
       }
     }
   }
   return ret;
 }
+int ObPCVSet::check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH(pcv, pcv_list_) {
+    if (OB_ISNULL(pcv)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(pcv), K(ret));
+    } else if (OB_FAIL(pcv->check_contains_table(db_id, tab_name, contains))) {
+      LOG_WARN("fail to check table name", K(ret), K(db_id), K(tab_name));
+    } else if (!contains) {
+      // continue find
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}
+}

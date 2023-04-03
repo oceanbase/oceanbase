@@ -19,12 +19,15 @@
 #include <pthread.h>
 #include "lib/ob_define.h"
 #include "lib/profile/ob_trace_id.h"
-namespace oceanbase {
-namespace common {
-extern const char* const OB_EASY_LOG_LEVEL_STR[];
+namespace oceanbase
+{
+namespace common
+{
+extern const char *const OB_EASY_LOG_LEVEL_STR[];
 
-void ob_easy_log_format(
-    int level, const char* file, int line, const char* function, uint64_t location_hash_val, const char* fmt, ...)
+void ob_easy_log_format(int level, const char *file, int line, const char *function,
+                        uint64_t location_hash_val,
+                        const char *fmt, ...)
 {
   UNUSED(location_hash_val);
   // TODO: use OBLOG interface.
@@ -33,7 +36,7 @@ void ob_easy_log_format(
   ev_tstamp now = 0.0;
   int len = 0;
   int vlen = 0;
-  const int buf_len = 4096;
+  const int buf_len= 4096;
   char buffer[buf_len];
   UNUSED(function);
 
@@ -47,50 +50,29 @@ void ob_easy_log_format(
   {
     time_t t;
     struct tm tm;
-    t = (time_t)now;
-    easy_localtime((const time_t*)&t, &tm);
-    if (OB_UNLIKELY(0 > snprintf(time_str,
-                            time_buf_len,
-                            "[%04d-%02d-%02d %02d:%02d:%02d.%06d]",
-                            tm.tm_year + 1900,
-                            tm.tm_mon + 1,
-                            tm.tm_mday,
-                            tm.tm_hour,
-                            tm.tm_min,
-                            tm.tm_sec,
-                            (int)((now - static_cast<ev_tstamp>(t)) * 1000 * 1000)))) {
-      OB_LOG(ERROR, "fail to snprint timestr to buf", K(time_str));
+    t = (time_t) now;
+    easy_localtime((const time_t *)&t, &tm);
+    if (OB_UNLIKELY(0 > snprintf(time_str, time_buf_len, "[%04d-%02d-%02d %02d:%02d:%02d.%06d]",
+                                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                                 tm.tm_hour, tm.tm_min, tm.tm_sec,
+                                 (int)((now - static_cast<ev_tstamp>(t)) * 1000 * 1000)))) {
+      OB_LOG_RET(ERROR, OB_ERR_SYS, "fail to snprint timestr to buf", KCSTRING(time_str));
     }
   }
 
   // print
-  const uint64_t* trace_id = oceanbase::common::ObCurTraceId::get();
-  if (OB_ISNULL(trace_id)) {
-    OB_LOG(WARN, "fail to get trace id", K(trace_id));
-  } else {
-    len = lnprintf(buffer,
-        256,
-        "%s %-5s %s:%d [%ld][" TRACE_ID_FORMAT "] ",
-        time_str,
-        OB_EASY_LOG_LEVEL_STR[level - EASY_LOG_OFF],
-        file,
-        line,
-        GETTID(),
-        trace_id[0],
-        trace_id[1]);
-  }
+  len = lnprintf(buffer, 256, "%s %-5s %s:%d [%ld][%s] ", time_str,
+                 OB_EASY_LOG_LEVEL_STR[level - EASY_LOG_OFF], file, line, GETTID(), ObCurTraceId::get_trace_id_str());
   va_list args;
   va_start(args, fmt);
-  vlen = vsnprintf(buffer + len, buf_len - len - 1, fmt, args);
+  vlen = vsnprintf(buffer + len, buf_len - len - 1,  fmt, args);
   len += easy_min(vlen, buf_len - len - 2);
   va_end(args);
 
   // Remove the last'\n'
-  while (buffer[len - 1] == '\n') {
-    len--;
-  }
+  while (buffer[len - 1] == '\n') { len --; }
   if (OB_UNLIKELY(len >= buf_len - 1)) {
-    OB_LOG(WARN, "invalid buf len", K(len), K(buf_len));
+    OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid buf len", K(len), K(buf_len));
   } else {
     buffer[len++] = '\n';
     buffer[len] = '\0';
@@ -100,7 +82,6 @@ void ob_easy_log_format(
 }
 
 // @see easy_log_level_t in easy_log.h
-const char* const OB_EASY_LOG_LEVEL_STR[] = {
-    "UNKNOWN", "OFF" /*offset 1*/, "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"};
-}  // namespace common
-}  // namespace oceanbase
+const char *const OB_EASY_LOG_LEVEL_STR[] = {"UNKNOWN", "OFF"/*offset 1*/, "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"};
+} //end common
+} //end oceanbase

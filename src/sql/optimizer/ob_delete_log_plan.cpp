@@ -14,6 +14,7 @@
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
 #include "sql/optimizer/ob_log_group_by.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "ob_log_operator_factory.h"
 #include "ob_log_table_scan.h"
 #include "ob_log_sort.h"
@@ -48,289 +49,330 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObDeleteLogPlan::generate_raw_plan()
+int ObDeleteLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* top = NULL;
-  ObDeleteStmt* delete_stmt = static_cast<ObDeleteStmt*>(get_stmt());
-
-  if (OB_ISNULL(get_stmt())) {
+  const ObDeleteStmt *delete_stmt = get_stmt();
+  if (OB_ISNULL(delete_stmt) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(generate_plan_tree())) {
-    LOG_WARN("failed to generate plan tree for plain select", K(ret));
+    LOG_WARN("get unexpected error", K(delete_stmt), K(ret));
   } else {
-    LOG_TRACE("succ to generate plan tree");
-  }
+    bool need_limit = true;
+    ObSEArray<OrderItem, 4> order_items;
+    LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
+    OPT_TRACE("generate plan for ", get_stmt());
+    if (OB_FAIL(generate_plan_tree())) {
+      LOG_WARN("failed to generate plan tree for plain select", K(ret));
+    } else {
+      LOG_TRACE("succeed to generate plan tree", K(candidates_.candidate_plans_.count()));
+    }
 
-  if (OB_SUCC(ret)) {
-    // allocate subplan filter if needed, mainly for the subquery in where statement
-    if (get_subquery_filters().count() > 0) {
-      LOG_TRACE("start to allocate subplan filter for where statement", K(ret));
+    if (OB_SUCC(ret) && get_subquery_filters().count() > 0) {
       if (OB_FAIL(candi_allocate_subplan_filter_for_where())) {
         LOG_WARN("failed to allocate subplan filter for where statement", K(ret));
       } else {
-        LOG_TRACE("succeed to allocate subplan filter for where statement", K(ret));
+        LOG_TRACE("succeed to allocate subplan filter for where statement",
+            K(candidates_.candidate_plans_.count()));
       }
     }
-  }
 
-  // 1. allocate 'count' for rownum if needed
-  if (OB_SUCC(ret)) {
-    bool has_rownum = false;
-    if (OB_FAIL(get_stmt()->has_rownum(has_rownum))) {
-      LOG_WARN("failed to get rownum info", "sql", get_stmt()->get_sql_stmt(), K(ret));
-    } else if (has_rownum) {
-      LOG_TRACE("SQL has rownum expr", "sql", get_stmt()->get_sql_stmt(), K(ret));
-      if (OB_FAIL(candi_allocate_count())) {
-        LOG_WARN("failed to allocate rownum(count)", "sql", get_stmt()->get_sql_stmt(), K(ret));
+    // 1. allocate 'count' for rownum if needed
+    if(OB_SUCC(ret)) {
+      bool has_rownum = false;
+      if (OB_FAIL(delete_stmt->has_rownum(has_rownum))) {
+        LOG_WARN("failed to check rownum info", K(ret));
+      } else if (!has_rownum) {
+        // do nothing
+      } else if (OB_FAIL(candi_allocate_count())) {
+        LOG_WARN("failed to allocate count operator", K(ret));
       } else {
-        LOG_TRACE("'COUNT' operator is allocated", "sql", get_stmt()->get_sql_stmt(), K(ret));
+        LOG_TRACE("succeed to allocate count operator", K(candidates_.candidate_plans_.count()));
       }
     }
-  }
 
-  // 2 allocate 'order-by' if needed
-  ObSEArray<OrderItem, 4> order_items;
-  if (OB_SUCC(ret) && get_stmt()->has_order_by()) {
-    if (OB_FAIL(candi_allocate_order_by(order_items))) {
-      LOG_WARN("failed to allocate order by operator", "sql", get_stmt()->get_sql_stmt(), K(ret));
-    } else {
-      LOG_TRACE("succeed to allocate order by operator", "sql", get_stmt()->get_sql_stmt(), K(ret));
+    // 2 allocate 'order-by' if needed
+    if (OB_SUCC(ret) && delete_stmt->has_order_by()) {
+      if (OB_FAIL(candi_allocate_order_by(need_limit, order_items))) {
+        LOG_WARN("failed to allocate order by operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate order by operator", K(candidates_.candidate_plans_.count()));
+      }
     }
-  }
 
-  // 3. allocate 'limit' if needed
-  if (OB_SUCC(ret)) {
-    if (get_stmt()->has_limit()) {
-      LOG_TRACE("SQL has limit clause", "sql", get_stmt()->get_sql_stmt(), K(ret));
+    // 3. allocate 'limit' if needed
+    if (OB_SUCC(ret) && delete_stmt->has_limit() && need_limit) {
       if (OB_FAIL(candi_allocate_limit(order_items))) {
-        LOG_WARN("failed to allocate 'LIMIT' operator", "sql", get_stmt()->get_sql_stmt(), K(ret));
-      }
-    } else {
-      LOG_TRACE("SQL has no limit clause", "sql", get_stmt()->get_sql_stmt(), K(ret));
-    }
-  }
-
-  // 2.2 get cheapest path
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_current_best_plan(top))) {
-      LOG_WARN("failed to get best plan", K(ret));
-    } else if (OB_ISNULL(top)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(top), K(ret));
-    } else { /*do nothing*/
-    }
-  }
-
-  // 4. allocate delete operator
-  // there are two type log plan for delete: pdml delete plan and normal delete plan.
-  // there is a table p1, which have a global index i. the diff of two delete plan:
-  // (1) pdml delete plan:
-  //      ....
-  //          DELETE (P1.i)
-  //                EX IN
-  //                  EX OUT
-  //                     DELETE (p1)
-  //                        .....
-  // (2) normal delete plan:
-  //      ....
-  //         MULTI PART DELETE
-  //                 EX IN
-  //                  EX OUT
-  //                    TSC
-  if (OB_SUCC(ret)) {
-    if (optimizer_context_.use_pdml()) {
-      if (OB_FAIL(allocate_pdml_delete_as_top(top))) {
-        LOG_WARN("failed to allocate pdml delete op", K(ret));
-      }
-    } else if (OB_FAIL(allocate_delete_as_top(top))) {
-      LOG_WARN("failed to allocate delete op", K(ret));
-    }
-  }
-
-  // 5. allocate scalar operator, just for agg func returning
-  if (OB_SUCC(ret) && delete_stmt->get_returning_aggr_item_size() > 0) {
-    ObArray<ObRawExpr*> dummy_exprs;
-    ObArray<OrderItem> dummy_ordering;
-    if (OB_FAIL(allocate_group_by_as_top(top,
-            SCALAR_AGGREGATE,
-            dummy_exprs /*group by*/,
-            dummy_exprs /*rollup*/,
-            delete_stmt->get_returning_aggr_items(),
-            dummy_exprs /*having*/,
-            dummy_ordering))) {
-      LOG_WARN("failed to allocate group by as top", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    set_plan_root(top);
-    top->mark_is_plan_root();
-    if (share::is_mysql_mode() && !get_stmt()->has_limit()) {
-      if (OB_FAIL(check_fullfill_safe_update_mode(top))) {
-        LOG_WARN("failed to check fullfill safe update mode", K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(get_plan_root())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the root plan is null", K(ret));
-    } else {
-      if (OB_FAIL(delete_op_->compute_property())) {
-        LOG_WARN("failed to compute equal set", K(ret));
-      } else if (OB_ISNULL(delete_op_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the delete_op_ is null", K(ret));
-      } else if (delete_op_->check_rowkey_distinct()) {
-        LOG_WARN("check rowkey distinct with delete failed", K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObDeleteLogPlan::generate_plan()
-{
-  int ret = OB_SUCCESS;
-  ObDeleteStmt* del_stmt = NULL;
-  if (OB_ISNULL(del_stmt = static_cast<ObDeleteStmt*>(get_stmt())) || OB_UNLIKELY(!get_stmt()->is_delete_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("delete stmt is null", K(ret));
-  } else if (OB_FAIL(generate_raw_plan())) {
-    LOG_WARN("faield to generate raw plan", K(ret));
-  } else if (OB_ISNULL(get_plan_root()) || OB_ISNULL(delete_op_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(get_plan_root()), K(delete_op_));
-  } else if (OB_FAIL(get_plan_root()->adjust_parent_child_relationship())) {
-    LOG_WARN("failed to adjust parent-child relationship", K(ret));
-  } else if (OB_FAIL(plan_traverse_loop(ALLOC_LINK,
-                 ALLOC_EXCH,
-                 ALLOC_GI,
-                 ADJUST_SORT_OPERATOR,
-                 PX_PIPE_BLOCKING,
-                 PX_RESCAN,
-                 RE_CALC_OP_COST,
-                 OPERATOR_NUMBERING,
-                 EXCHANGE_NUMBERING,
-                 ALLOC_EXPR,
-                 PROJECT_PRUNING,
-                 ALLOC_MONITORING_DUMP,
-                 ALLOC_DUMMY_OUTPUT,
-                 CG_PREPARE,
-                 GEN_SIGNATURE,
-                 GEN_LOCATION_CONSTRAINT,
-                 REORDER_PROJECT_COLUMNS,
-                 PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT,
-                 ALLOC_STARTUP_EXPR))) {
-    SQL_OPT_LOG(WARN, "failed to do plan traverse", K(ret));
-  } else {
-    SQL_OPT_LOG(DEBUG, "succ to do all plan traversals");
-    if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
-      location_type_ = phy_plan_type_;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(calc_plan_resource())) {
-      LOG_WARN("fail calc plan resource", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2250 && del_stmt->is_returning()) {
-    // handle upgrade
-    if (get_phy_plan_type() == OB_PHY_PLAN_UNCERTAIN || get_phy_plan_type() == OB_PHY_PLAN_LOCAL) {
-      // the plan is executed on 2260 server if it is a multi part dml or a local plan
-    } else {
-      // distributed exuecution may involve 2250 server
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("returning is not compatible with previous version", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDeleteLogPlan::allocate_delete_as_top(ObLogicalOperator*& top)
-{
-  int ret = OB_SUCCESS;
-  ObDeleteStmt* delete_stmt = static_cast<ObDeleteStmt*>(get_stmt());
-  if (OB_ISNULL(top) || OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_delete_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid stmt or operator", K(ret), K(top), K(get_stmt()));
-  } else if (OB_ISNULL(delete_op_ = static_cast<ObLogDelete*>(get_log_op_factory().allocate(*this, LOG_DELETE)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SQL_OPT_LOG(ERROR, "failed to allocate DELETE operator");
-  } else {
-    delete_op_->set_all_table_columns(&(delete_stmt->get_all_table_columns()));
-    delete_op_->set_child(ObLogicalOperator::first_child, top);
-    delete_op_->set_is_returning(delete_stmt->is_returning());
-    top = delete_op_;
-  }
-  return ret;
-}
-
-int ObDeleteLogPlan::allocate_pdml_delete_as_top(ObLogicalOperator*& top)
-{
-  int ret = OB_SUCCESS;
-  const ObDeleteStmt* delete_stmt = static_cast<const ObDeleteStmt*>(get_stmt());
-  int64_t global_index_cnt = delete_stmt->get_all_table_columns().at(0).index_dml_infos_.count();
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < global_index_cnt; idx++) {
-    const common::ObIArray<TableColumns>* table_column =
-        delete_stmt->get_slice_from_all_table_columns(allocator_, 0, idx);
-    ObLogDelete* temp_delete_op = NULL;
-    temp_delete_op = static_cast<ObLogDelete*>(log_op_factory_.allocate(*this, LOG_DELETE));
-    if (OB_ISNULL(temp_delete_op)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate delete logical operator", K(ret));
-    } else if (OB_ISNULL(table_column)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table columns is null", K(ret));
-    } else if (1 != table_column->count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the size of table colums is error", K(ret), K(table_column->count()));
-    } else if (1 != table_column->at(0).index_dml_infos_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the size of index dml info is error", K(ret), K(table_column->at(0).index_dml_infos_.count()));
-    } else {
-      temp_delete_op->set_is_pdml(true);
-      temp_delete_op->set_first_dml_op(idx == 0);
-      temp_delete_op->set_pdml_is_returning(true);
-      if (idx > 0) {
-        temp_delete_op->set_index_maintenance(true);
-      }
-      temp_delete_op->set_all_table_columns(table_column);
-      if (OB_NOT_NULL(top)) {
-        temp_delete_op->set_child(ObLogicalOperator::first_child, top);
-        double op_cost = top->get_card() * static_cast<double>(DELETE_ONE_ROW_COST);
-        temp_delete_op->set_op_cost(op_cost);
-        temp_delete_op->set_cost(top->get_cost() + op_cost);
-        temp_delete_op->set_card(top->get_card());
+        LOG_WARN("failed to allocate limit operator", K(ret));
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the top operator should not be null", K(ret));
+        LOG_TRACE("succeed to allocate limit operator", K(candidates_.candidate_plans_.count()));
       }
-      if (OB_SUCC(ret)) {
-        if (idx == global_index_cnt - 1) {
-          temp_delete_op->set_pdml_is_returning(delete_stmt->is_returning());
-          temp_delete_op->set_is_returning(delete_stmt->is_returning());
+    }
+    
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && delete_stmt->has_for_update()) {
+      if (OB_FAIL(candi_allocate_for_update())) {
+        LOG_WARN("failed to allocate for update operator", K(ret));
+      }
+    }
+    
+    // 4. allocate delete operator
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(prepare_dml_infos())) {
+        LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (get_optimizer_context().use_pdml()) {
+        if (OB_FAIL(candi_allocate_pdml_delete())) {
+          LOG_WARN("failed to allocate pdml as top", K(ret));
+        } else {
+          LOG_TRACE("succeed to allocate pdml operator", K(candidates_.candidate_plans_.count()));
+        }
+      } else {
+        if (OB_FAIL(candi_allocate_delete())) {
+          LOG_WARN("failed to allocate delete operator", K(ret));
+        } else {
+          LOG_TRACE("succeed to allocate delete operator",
+              K(candidates_.candidate_plans_.count()));
         }
       }
+    }
 
-      if (OB_SUCC(ret)) {
-        top = temp_delete_op;
+    // 5. allocate scalar operator, just for agg func returning
+    if (OB_SUCC(ret) && delete_stmt->get_returning_aggr_item_size() > 0) {
+      if (OB_FAIL(candi_allocate_scala_group_by(delete_stmt->get_returning_aggr_items()))) {
+        LOG_WARN("failed to allocate group by operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate group by operator",
+            K(candidates_.candidate_plans_.count()));
+      }
+    }
+
+    //allocate temp-table transformation if needed.
+    if (OB_SUCC(ret) && !get_optimizer_context().get_temp_table_infos().empty() && is_final_root_plan()) {
+      if (OB_FAIL(candi_allocate_temp_table_transformation())) {
+        LOG_WARN("failed to allocate transformation operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate temp-table transformation",
+            K(candidates_.candidate_plans_.count()));
+      }
+    }
+
+    // allocate root exchange
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(candi_allocate_root_exchange())) {
+        LOG_WARN("failed to allocate root exchange", K(ret));
+      } else if (lib::is_mysql_mode() && !delete_stmt->has_limit() &&
+                 OB_FAIL(check_fullfill_safe_update_mode(get_plan_root()))) {
+        LOG_WARN("failed to check fullfill safe update mode", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+// (2) normal delete plan:
+//      ....
+//         MULTI PART DELETE
+//                 EX IN
+//                  EX OUT
+//                    TSC
+int ObDeleteLogPlan::candi_allocate_delete()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<CandidatePlan, 8> candi_plans;
+  ObSEArray<CandidatePlan, 8> delete_plans;
+  const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
+  const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
+  OPT_TRACE("start generate normal insert plan");
+  OPT_TRACE("force no multi part:", force_no_multi_part);
+  OPT_TRACE("force multi part:", force_multi_part);
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+    LOG_WARN("failed to check table rowkey distinct", K(ret));
+  } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, candi_plans))) {
+    LOG_WARN("failed to get minimal cost candidates", K(ret));
+  } else if (OB_FAIL(create_delete_plans(candi_plans,
+                                         force_no_multi_part,
+                                         force_multi_part,
+                                         delete_plans))) {
+    LOG_WARN("failed to create delete plans", K(ret));
+  } else if (!delete_plans.empty()) {
+    LOG_TRACE("succeed to create delete plan using hint", K(delete_plans.count()));
+  } else if (OB_FAIL(get_log_plan_hint().check_status())) {
+    LOG_WARN("failed to generate plans with hint", K(ret));
+  } else if (OB_FAIL(create_delete_plans(candi_plans, false, false, delete_plans))) {
+    LOG_WARN("failed to create delete plans", K(ret));
+  } else {
+    LOG_TRACE("succeed to create delete plan ignore hint", K(delete_plans.count()));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(prune_and_keep_best_plans(delete_plans))) {
+      LOG_WARN("failed to prune and keep best plans", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObDeleteLogPlan::create_delete_plans(ObIArray<CandidatePlan> &candi_plans,
+                                         const bool force_no_multi_part,
+                                         const bool force_multi_part,
+                                         ObIArray<CandidatePlan> &delete_plans)
+{
+  int ret = OB_SUCCESS;
+  ObExchangeInfo exch_info;
+  CandidatePlan candi_plan;
+  bool is_multi_part_dml = false;
+  bool is_result_local = false;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
+    candi_plan = candi_plans.at(i);
+    is_multi_part_dml = force_multi_part;
+    if (OB_ISNULL(candi_plan.plan_tree_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!force_multi_part &&
+               OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
+                                                      *candi_plan.plan_tree_,
+                                                      index_dml_infos_,
+                                                      is_multi_part_dml,
+                                                      is_result_local))) {
+      LOG_WARN("failed to check need multi-partition dml", K(ret));
+    } else if (is_multi_part_dml && force_no_multi_part) {
+      /*do nothing*/
+    } else if (candi_plan.plan_tree_->is_sharding() && (is_multi_part_dml || is_result_local) &&
+               OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
+      LOG_WARN("failed to allocate exchange as top", K(ret));
+    } else if (OB_FAIL(allocate_delete_as_top(candi_plan.plan_tree_, is_multi_part_dml))) {
+      LOG_WARN("failed to allocate delete as top", K(ret));
+    } else if (OB_FAIL(delete_plans.push_back(candi_plan))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObDeleteLogPlan::allocate_delete_as_top(ObLogicalOperator *&top,
+                                            bool is_multi_part_dml)
+{
+  int ret = OB_SUCCESS;
+  ObLogDelete *delete_op = NULL;
+  const ObDeleteStmt *delete_stmt = NULL;
+  if (OB_ISNULL(top) || OB_ISNULL(delete_stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(top), K(delete_stmt), K(ret));
+  } else if (OB_ISNULL(delete_op = static_cast<ObLogDelete*>(
+                         get_log_op_factory().allocate(*this, LOG_DELETE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate delete operator", K(ret));
+  } else {
+    delete_op->set_child(ObLogicalOperator::first_child, top);
+    delete_op->set_is_returning(delete_stmt->is_returning());
+    delete_op->set_is_multi_part_dml(is_multi_part_dml);
+    delete_op->set_has_instead_of_trigger(delete_stmt->has_instead_of_trigger());
+    if (OB_FAIL(delete_op->assign_dml_infos(index_dml_infos_))) {
+      LOG_WARN("failed to assign dml infos", K(ret));
+    } else if (delete_stmt->is_error_logging() && OB_FAIL(delete_op->extract_err_log_info())) {
+      LOG_WARN("failed to extract error log info", K(ret));
+    } else if (OB_FAIL(delete_op->compute_property())) {
+      LOG_WARN("failed to compute propery", K(ret));
+    } else {
+      top = delete_op;
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLogPlan::candi_allocate_pdml_delete()
+{
+  int ret = OB_SUCCESS;
+  int64_t gidx_cnt = index_dml_infos_.count();
+  OPT_TRACE("start generate pdml delete plan");
+  const bool is_pdml_update_split = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos_.count(); i++) {
+    if (OB_FAIL(candi_allocate_one_pdml_delete(i > 0,
+                                               (i == gidx_cnt - 1),
+                                               is_pdml_update_split,
+                                               index_dml_infos_.at(i)))) {
+      LOG_WARN("failed to allocate one pdml delete", K(ret));
+    } else {
+      LOG_TRACE("succeed to allocate one pdml delete");
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLogPlan::prepare_dml_infos()
+{
+  int ret = OB_SUCCESS;
+  const ObDeleteStmt *delete_stmt = get_stmt();
+  if (OB_ISNULL(delete_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    const ObIArray<ObDeleteTableInfo*>& table_infos = delete_stmt->get_delete_table_info();
+    bool has_tg = delete_stmt->has_instead_of_trigger();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
+      const ObDeleteTableInfo* table_info = table_infos.at(i);
+      IndexDMLInfo* table_dml_info = nullptr;
+      ObSEArray<IndexDMLInfo*, 8> index_dml_infos;
+      if (OB_ISNULL(table_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(prepare_table_dml_info_basic(*table_info,
+                                                      table_dml_info,
+                                                      index_dml_infos,
+                                                      has_tg))) {
+        LOG_WARN("failed to prepare table dml info basic", K(ret));
+      } else if (OB_FAIL(prepare_table_dml_info_special(*table_info,
+                                                        table_dml_info,
+                                                        index_dml_infos,
+                                                        index_dml_infos_))) {
+        LOG_WARN("failed to prepare table dml info special", K(ret));
       }
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(top)) {
-      delete_op_ = static_cast<ObLogDelete*>(top);
-    } else {
+int ObDeleteLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_info,
+                                                    IndexDMLInfo* table_dml_info,
+                                                    ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                                    ObIArray<IndexDMLInfo*> &all_index_dml_infos)
+{
+  int ret = OB_SUCCESS;
+  ObAssignments empty_assignments;
+  ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  const ObTableSchema* index_schema = NULL;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
+    IndexDMLInfo* index_dml_info = index_dml_infos.at(i);
+    if (OB_ISNULL(index_dml_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the top operator should not be null", K(ret));
+      LOG_WARN("get unexpected null", K(i), K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                      index_dml_info->ref_table_id_,
+                                                      index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get table schema", KPC(index_dml_info), K(ret));
+    } else if (OB_FAIL(generate_index_column_exprs(table_info.table_id_,
+                                                   *index_schema,
+                                                   empty_assignments,
+                                                   index_dml_info->column_exprs_))) {
+      LOG_WARN("resolve index related column exprs failed", K(ret), K(table_info));
     }
+  }
+  
+  if (FAILEDx(ObDelUpdLogPlan::prepare_table_dml_info_special(table_info,
+                                                              table_dml_info,
+                                                              index_dml_infos,
+                                                              all_index_dml_infos))) {
+    LOG_WARN("failed to prepare table dml info special", K(ret));
   }
   return ret;
 }

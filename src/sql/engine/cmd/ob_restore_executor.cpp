@@ -15,69 +15,41 @@
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/engine/cmd/ob_restore_executor.h"
 #include "sql/engine/ob_exec_context.h"
-#include "share/backup/ob_multi_backup_dest_util.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "rootserver/restore/ob_restore_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace rootserver;
-namespace sql {
-
-ObRestoreTenantExecutor::ObRestoreTenantExecutor()
-{}
-
-ObRestoreTenantExecutor::~ObRestoreTenantExecutor()
-{}
-
-int ObRestoreTenantExecutor::execute(ObExecContext& ctx, ObRestoreTenantStmt& stmt)
+namespace sql
 {
-  int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObRestoreTenantArg& restore_tenant_arg = stmt.get_rpc_arg();
-  ObString first_stmt;
-  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
-  } else {
-    const_cast<obrpc::ObRestoreTenantArg&>(restore_tenant_arg).sql_text_ = first_stmt;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get task executor context failed", K(ret));
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    LOG_WARN("get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->restore_tenant(restore_tenant_arg))) {
-    LOG_WARN("rpc proxy restore tenant failed", K(ret), "dst", common_rpc_proxy->get_server());
-  }
-  return ret;
-}
 
 ObPhysicalRestoreTenantExecutor::ObPhysicalRestoreTenantExecutor()
-{}
+{
+}
 
 ObPhysicalRestoreTenantExecutor::~ObPhysicalRestoreTenantExecutor()
-{}
+{
+}
 
-int ObPhysicalRestoreTenantExecutor::execute(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt)
+int ObPhysicalRestoreTenantExecutor::execute(
+    ObExecContext &ctx,
+    ObPhysicalRestoreTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  ObSQLSessionInfo* session_info = ctx.get_my_session();
-  const obrpc::ObPhysicalRestoreTenantArg& restore_tenant_arg = stmt.get_rpc_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  ObSQLSessionInfo *session_info = ctx.get_my_session();
+  const obrpc::ObPhysicalRestoreTenantArg &restore_tenant_arg = stmt.get_rpc_arg();
   const bool is_preview = stmt.get_is_preview();
   ObString first_stmt;
   ObObj value;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
+    LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     const_cast<obrpc::ObPhysicalRestoreTenantArg&>(restore_tenant_arg).sql_text_ = first_stmt;
   }
@@ -97,7 +69,7 @@ int ObPhysicalRestoreTenantExecutor::execute(ObExecContext& ctx, ObPhysicalResto
         LOG_WARN("get task executor context failed", K(ret));
       } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
         LOG_WARN("get common rpc proxy failed", K(ret));
-      } else if (OB_ISNULL(common_rpc_proxy)) {
+      } else if (OB_ISNULL(common_rpc_proxy)){
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("common rpc proxy should not be null", K(ret));
       } else if (OB_FAIL(common_rpc_proxy->physical_restore_tenant(restore_tenant_arg))) {
@@ -110,37 +82,118 @@ int ObPhysicalRestoreTenantExecutor::execute(ObExecContext& ctx, ObPhysicalResto
           LOG_WARN("failed to remove user variable", KR(tmp_ret));
         }
       }
-    } else {
-      if (OB_FAIL(physical_restore_preview(ctx, stmt))) {
-        LOG_WARN("failed to do physical restore preview", K(ret));
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sync_wait_tenant_created_(ctx, restore_tenant_arg.tenant_name_))) {
+        LOG_WARN("failed to sync wait tenant created", K(ret));
       }
+
+    } else {
+  // TODO:  fix restore preview later.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("restore preview is not support now", K(ret));
+      // if (OB_FAIL(physical_restore_preview(ctx, stmt))) {
+      //  LOG_WARN("failed to do physical restore preview", K(ret));
+      // }
     }
   }
   return ret;
 }
 
-int ObPhysicalRestoreTenantExecutor::physical_restore_preview(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt)
+int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_ID;
-  ObArray<ObString> uri_list;
-  ObArray<ObSimpleBackupSetPath> set_list;
-  ObArray<ObSimpleBackupPiecePath> piece_list;
-  ObSqlString set_tenant_id_sql;
+  const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
+  const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
+  const int64_t cur_time_us = ObTimeUtility::current_time();
+  ObTimeoutCtx timeout_ctx;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
+  LOG_INFO("sync wait tenant created start", K(timeout), K(abs_timeout), K(tenant_name));
+  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not be null", K(ret));
+  } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    ObSchemaGetterGuard meta_tenant_scheam_guard;
+    uint64_t user_tenant_id = 0;
+    uint64_t meta_tenant_id = 0;
+    while (OB_SUCC(ret)) {
+      schema_guard.reset();
+      meta_tenant_scheam_guard.reset();
+      const ObTenantSchema *tenant_info = nullptr;
+      if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait restore tenant timeout", K(ret), K(tenant_name), K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
+      } else if (OB_FAIL(ctx.check_status())) {
+        LOG_WARN("check exec ctx failed", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+        LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, user_tenant_id))) {
+          LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tenant_name));
+      } else if (!is_user_tenant(user_tenant_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid user tenant id", K(ret), K(user_tenant_id));
+      } else if (OB_FALSE_IT(meta_tenant_id = gen_meta_tenant_id(user_tenant_id))) {
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(meta_tenant_id, meta_tenant_scheam_guard))) {
+        LOG_WARN("failed to get tenant schema guard", K(ret), K(meta_tenant_id));
+      } else if (OB_FAIL(meta_tenant_scheam_guard.get_tenant_info(meta_tenant_id, tenant_info))) {
+        LOG_WARN("failed to get meta tenant schema guard", K(ret), K(meta_tenant_id));
+      } else if (OB_ISNULL(tenant_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant schema must not be null", K(ret), K(meta_tenant_id));
+      } else if (!tenant_info->is_normal()) {
+        ret = OB_EAGAIN;
+        LOG_DEBUG("tenant status not normal, wait later", K(ret), K(meta_tenant_id));
+      } else {
+        break;
+      }
+
+      if (OB_ERR_INVALID_TENANT_NAME == ret || OB_EAGAIN == ret) {
+        bool is_failed = false;
+        bool is_finish = false;
+        if (OB_FAIL(ObRestoreUtil::check_physical_restore_finish(*sql_proxy, user_tenant_id, is_finish, is_failed))) {
+          LOG_WARN("failed to check physical restore finish", K(ret), K(user_tenant_id));
+        } else if (!is_finish) {
+          sleep(1);
+          LOG_DEBUG("restore not finish, wait later", K(ret), K(user_tenant_id));
+        } else if (is_failed) {
+          ret = OB_TASK_STATE_FAILED;
+          LOG_WARN("created tenant failed when restore.", K(ret), K(tenant_name));
+        } else {
+          break;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_INFO("sync wait tenant created finished", K(cost_ts), K(tenant_name));
+    } else {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_WARN("sync wait tenant created failed", K(ret), K(cost_ts), K(tenant_name));
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
+    ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt)
+{
+  int ret = OB_SUCCESS;
   ObSqlString set_backup_dest_sql;
   ObSqlString set_timestamp_sql;
-  ObSqlString set_cluster_name_sql;
-  ObSqlString set_cluster_id_sql;
-  sqlclient::ObISQLConnection* conn = NULL;
-  observer::ObInnerSQLConnectionPool* pool = NULL;
-  ObMySQLProxy* sql_proxy = ctx.get_sql_proxy();
-  ObSQLSessionInfo* session_info = ctx.get_my_session();
-  const obrpc::ObPhysicalRestoreTenantArg& restore_tenant_arg = stmt.get_rpc_arg();
-
+  sqlclient::ObISQLConnection *conn = NULL;
+  observer::ObInnerSQLConnectionPool *pool = NULL;
+  ObMySQLProxy *sql_proxy = ctx.get_sql_proxy();
+  ObSQLSessionInfo *session_info = ctx.get_my_session();
+  const obrpc::ObPhysicalRestoreTenantArg &restore_tenant_arg = stmt.get_rpc_arg();
   int64_t affected_rows = 0;
-
-  const int64_t fake_job_id = 1;
-  ObPhysicalRestoreJob fake_job;
 
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -154,56 +207,24 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(ObExecContext& ctx
   } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pool must not null", K(ret));
-  } else if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(fake_job_id, restore_tenant_arg, fake_job))) {
-    LOG_WARN("failed to fill physical restore job", KR(ret), K(fake_job_id), K(restore_tenant_arg));
-  } else if (OB_FAIL(uri_list.push_back(restore_tenant_arg.uri_))) {
-    LOG_WARN("failed to push back", KR(ret), K(restore_tenant_arg));
-  } else if (OB_FAIL(ObMultiBackupDestUtil::get_backup_tenant_id(uri_list,
-                 BACKUP_PATH_CLUSTER_LEVEL,
-                 fake_job.backup_cluster_name_,
-                 fake_job.cluster_id_,
-                 restore_tenant_arg.backup_tenant_name_,
-                 restore_tenant_arg.restore_timestamp_,
-                 tenant_id))) {
-    LOG_WARN("failed to get backup tenant id", KR(ret), K(uri_list), K(restore_tenant_arg));
-  } else if (OB_FAIL(set_tenant_id_sql.assign_fmt(
-                 "set @%s = '%lu'", OB_RESTORE_PREVIEW_TENANT_ID_SESSION_STR, tenant_id))) {
-    LOG_WARN("failed to set tenant id", KR(ret), K(set_tenant_id_sql));
   } else if (OB_FAIL(set_backup_dest_sql.assign_fmt("set @%s = '%.*s'",
-                 OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR,
-                 restore_tenant_arg.uri_.length(),
-                 restore_tenant_arg.uri_.ptr()))) {
+      OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, restore_tenant_arg.uri_.length(), restore_tenant_arg.uri_.ptr()))) {
     LOG_WARN("failed to set backup dest", KR(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(set_timestamp_sql.assign_fmt(
-                 "set @%s = '%ld'", OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_timestamp_))) {
+  } else if (OB_FAIL(set_timestamp_sql.assign_fmt("set @%s = '%lu'",
+      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to set timestamp", KR(ret), K(set_timestamp_sql));
-  } else if (OB_FAIL(set_cluster_name_sql.assign_fmt("set @%s = '%s'",
-                 OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR,
-                 fake_job.backup_cluster_name_))) {
-    LOG_WARN("failed to set cluster name", KR(ret), K(set_cluster_name_sql));
-  } else if (OB_FAIL(set_cluster_id_sql.assign_fmt(
-                 "set @%s = '%ld'", OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR, fake_job.cluster_id_))) {
-    LOG_WARN("failed to set cluster id", KR(ret), K(set_cluster_id_sql));
   } else if (OB_FAIL(pool->acquire(session_info, conn))) {
     LOG_WARN("failed to get conn", K(ret));
-  } else if (OB_FAIL(conn->execute_write(
-                 session_info->get_effective_tenant_id(), set_tenant_id_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set tenant id", K(ret), K(set_tenant_id_sql));
-  } else if (OB_FAIL(conn->execute_write(
-                 session_info->get_effective_tenant_id(), set_backup_dest_sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
+      set_backup_dest_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to set backup dest", K(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(conn->execute_write(
-                 session_info->get_effective_tenant_id(), set_timestamp_sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
+      set_timestamp_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to set restore timestamp", K(ret), K(set_timestamp_sql));
-  } else if (OB_FAIL(conn->execute_write(
-                 session_info->get_effective_tenant_id(), set_cluster_name_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set cluster name", K(ret), K(set_timestamp_sql));
-  } else if (OB_FAIL(conn->execute_write(
-                 session_info->get_effective_tenant_id(), set_cluster_id_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set cluster id", K(ret), K(set_timestamp_sql));
-  }
+  } 
+
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} //end namespace sql
+} //end namespace oceanbase

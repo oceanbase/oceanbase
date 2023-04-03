@@ -13,11 +13,13 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sort_basic_info.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
 OB_SERIALIZE_MEMBER(ObSortFieldCollation, field_idx_, cs_type_, is_ascending_, null_pos_);
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

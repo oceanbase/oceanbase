@@ -13,14 +13,17 @@
 #ifndef OCEANBASE_RPC_OBRPC_REQ_CONTEXT_
 #define OCEANBASE_RPC_OBRPC_REQ_CONTEXT_
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObRpcStreamCond;
-struct ObRpcReqContext {
-  ObRpcStreamCond* scond_;
+struct ObRpcReqContext
+{
+  ObRpcStreamCond *scond_;
 };
 
-}  // end of namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace obrpc
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_REQ_CONTEXT_
+#endif //OCEANBASE_RPC_OBRPC_REQ_CONTEXT_

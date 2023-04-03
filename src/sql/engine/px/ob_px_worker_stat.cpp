@@ -16,22 +16,16 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObPxWorkerStat::ObPxWorkerStat()
-    : session_id_(0),
-      tenant_id_(0),
-      trace_id_(NULL),
-      qc_id_(0),
-      sqc_id_(0),
-      worker_id_(0),
-      dfo_id_(0),
-      start_time_(0),
-      thread_id_(0)
-{}
+ObPxWorkerStat::ObPxWorkerStat() : session_id_(0), tenant_id_(0), trace_id_(), qc_id_(0), sqc_id_(0), 
+    worker_id_(0), dfo_id_(0), start_time_(0), thread_id_(0)
+{
+}
 ObPxWorkerStat::~ObPxWorkerStat()
-{}
+{
+}
 
-int ObPxWorkerStat::init(uint64_t session_id, uint64_t tenant_id, const uint64_t* trace_id, uint64_t qc_id,
-    int64_t sqc_id, int64_t worker_id, int64_t dfo_id, int64_t start_time, int64_t thread_id)
+int ObPxWorkerStat::init(uint64_t session_id, uint64_t tenant_id, const TraceId& trace_id,
+    uint64_t qc_id, int64_t sqc_id, int64_t worker_id, int64_t dfo_id, int64_t start_time, int64_t thread_id)
 {
   int ret = OB_SUCCESS;
   session_id_ = session_id;
@@ -47,11 +41,13 @@ int ObPxWorkerStat::init(uint64_t session_id, uint64_t tenant_id, const uint64_t
 }
 
 //------------------------------------------------------
-ObPxWorkerStatList::ObPxWorkerStatList()
-{}
+ObPxWorkerStatList::ObPxWorkerStatList() : lock_(common::ObLatchIds::PX_WORKER_STAT_LOCK)
+{
+}
 
 ObPxWorkerStatList::~ObPxWorkerStatList()
-{}
+{
+}
 
 ObPxWorkerStatList& ObPxWorkerStatList::instance()
 {
@@ -59,40 +55,48 @@ ObPxWorkerStatList& ObPxWorkerStatList::instance()
   return the_px_worker_stat_List;
 }
 
-int ObPxWorkerStatList::push(ObPxWorkerStat& stat_value)
+int ObPxWorkerStatList::push(ObPxWorkerStat &stat_value)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  if (!worker_stat_list_.add_last(&stat_value)) {
+  if(!worker_stat_list_.add_last(&stat_value)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to add stat", K(ret));
   }
   return ret;
 }
 
-int ObPxWorkerStatList::remove(ObPxWorkerStat& stat_value)
+int ObPxWorkerStatList::remove(ObPxWorkerStat &stat_value)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  if (NULL == worker_stat_list_.remove(&stat_value)) {
+  if(NULL == worker_stat_list_.remove(&stat_value)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to move stat", K(ret));
   }
   return ret;
 }
 
-int ObPxWorkerStatList::list_to_array(ObArray<ObPxWorkerStat>& stat_array)
+int ObPxWorkerStatList::list_to_array(ObArray<ObPxWorkerStat> &stat_array,
+    const uint64_t target_tenant_id)
 {
   int ret = OB_SUCCESS;
   stat_array.reset();
   ObSpinLockGuard guard(lock_);
   stat_array.reserve(worker_stat_list_.get_size());
-  DLIST_FOREACH(cur, worker_stat_list_)
-  {
-    if (OB_SUCCESS != stat_array.push_back(*cur)) {
+  DLIST_FOREACH(cur,worker_stat_list_) {
+    if (!is_sys_tenant(target_tenant_id) && cur->get_tenant_id() != target_tenant_id) {
+      continue;
+    }
+    // sys tenant list all tenant stat
+    // non-sys tennat list self tenant stat
+    if(OB_SUCCESS != stat_array.push_back(*cur)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to change stat_list to array", K(ret));
     }
   }
   return ret;
 }
+
+
+

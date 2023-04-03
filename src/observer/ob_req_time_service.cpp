@@ -12,9 +12,12 @@
 
 #include "ob_req_time_service.h"
 
-namespace oceanbase {
-namespace observer {
-ObReqTimeInfo::ObReqTimeInfo() : start_time_(0), end_time_(0), reentrant_cnt_(0)
+namespace oceanbase
+{
+namespace observer
+{
+ObReqTimeInfo::ObReqTimeInfo()
+  : start_time_(0), end_time_(0), reentrant_cnt_(0)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(ObGlobalReqTimeService::get_instance().add_req_time_info(this))) {
@@ -39,12 +42,11 @@ ObReqTimeInfo::~ObReqTimeInfo()
 void ObGlobalReqTimeService::check_req_timeinfo()
 {
 #if !defined(NDEBUG)
-  observer::ObReqTimeInfo* req_timeinfo =
-      GET_TSI_MULT(observer::ObReqTimeInfo, observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-  OB_ASSERT(req_timeinfo != NULL);
+  observer::ObReqTimeInfo &req_timeinfo =  observer::ObReqTimeInfo::get_thread_local_instance();
 
-  OB_ASSERT(req_timeinfo->reentrant_cnt_ > 0);
+  OB_ASSERT(req_timeinfo.reentrant_cnt_ > 0);
 #endif
 }
-}  // namespace observer
-}  // namespace oceanbase
+} // end namespace server
+} // end namesapce oceanbase
+

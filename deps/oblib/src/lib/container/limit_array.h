@@ -20,17 +20,24 @@
 
 #include "lib/container/ob_array_helper.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <class T, int64_t N>
-class LimitArray {
+class LimitArray
+{
 public:
-  LimitArray() : holder_index_(0), size_(0), index_(0), tail_holer_index_(0)
-  {}
-  bool expand(ObArrayHelper<T>& new_array)
+  LimitArray()
+      : holder_index_(0), size_(0), index_(0), tail_holer_index_(0)
+  {
+  }
+  bool expand(ObArrayHelper<T> &new_array)
   {
     bool res = true;
-    if (new_array.capacity() <= 0 || new_array.count() != 0 || new_array.get_base_address() == NULL) {
+    if (new_array.capacity() <= 0 ||
+        new_array.count() != 0 ||
+        new_array.get_base_address() == NULL) {
       res = false;
     }
     if (res && holder_index_ >= N) {
@@ -42,12 +49,12 @@ public:
     }
     return res;
   }
-  // bool shrink(int64_t size_)
+  //bool shrink(int64_t size_)
 
-  T* at(const int64_t index_in) const
+  T *at(const int64_t index_in) const
   {
     int64_t index = index_in;
-    T* res = NULL;
+    T *res = NULL;
     if (index < index_) {
       int64_t array_pos = 0;
       while (res == NULL) {
@@ -67,7 +74,7 @@ public:
     return res;
   }
 
-  bool push_back(const T& value)
+  bool push_back(const T &value)
   {
     bool res = true;
     if (index_ >= size_) {
@@ -78,7 +85,8 @@ public:
       _OB_LOG(ERROR, "this can never be reached, bugs!!!");
     }
     if (res) {
-      while (holder[tail_holer_index_].count() == holder[tail_holer_index_].capacity()) {
+      while (holder[tail_holer_index_].count() ==
+             holder[tail_holer_index_].capacity()) {
         tail_holer_index_++;
       }
       if (tail_holer_index_ >= N || tail_holer_index_ < 0) {
@@ -88,14 +96,12 @@ public:
         res = holder[tail_holer_index_].push_back(value);
       }
     }
-    if (res) {
-      index_++;
-    }
+    if (res) { index_++; }
     return res;
   }
-  T* pop()
+  T *pop()
   {
-    T* res = NULL;
+    T *res = NULL;
     if (index_ > 0 && index_ <= size_) {
       if (tail_holer_index_ < 0 || tail_holer_index_ >= N) {
         _OB_LOG(ERROR, "this can never be reached, bugs!!!");
@@ -122,6 +128,7 @@ public:
     return index_;
   }
 
+
 private:
   ObArrayHelper<T> holder[N];
   int64_t holder_index_;
@@ -130,6 +137,6 @@ private:
   int64_t tail_holer_index_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 #endif

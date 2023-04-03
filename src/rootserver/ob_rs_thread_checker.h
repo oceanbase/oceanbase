@@ -16,19 +16,19 @@
 // ObRsReentrantThread
 #include "rootserver/ob_rs_reentrant_thread.h"
 
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 /// thread checker thread.
-class ObRsThreadChecker : public ObRsReentrantThread {
+class ObRsThreadChecker : public ObRsReentrantThread
+{
 public:
   ObRsThreadChecker();
   virtual ~ObRsThreadChecker();
 
   virtual void run3() override;
-  virtual int blocking_run() override
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
+  virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }
 
   int init();
   void check_loop();
@@ -36,7 +36,7 @@ public:
 
 private:
   bool inited_;
-#ifdef ERRSIM  // for obtest
+#ifdef ERRSIM     //for obtest
   static const int64_t CHECK_TIMEVAL_US = 1000LL * 1000LL;
 #else
   static const int64_t CHECK_TIMEVAL_US = 60LL * 1000LL * 1000LL;
@@ -44,7 +44,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRsThreadChecker);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_EMPTY_SERVER_CHECKER_H_
+#endif // OCEANBASE_ROOTSERVER_OB_EMPTY_SERVER_CHECKER_H_

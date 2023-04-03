@@ -12,16 +12,24 @@
 
 #include "lib/task/ob_timer_monitor.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-ObTimerMonitor::ObTimerMonitor() : inited_(false), timer_(), monitor_task_(*this), records_(), tail_(0)
+ObTimerMonitor::ObTimerMonitor()
+  : inited_(false),
+    timer_(),
+    monitor_task_(*this),
+    records_(),
+    tail_(0)
 {
   memset(&records_, 0, sizeof(records_));
 }
 
 ObTimerMonitor::~ObTimerMonitor()
-{}
+{
+}
 
 ObTimerMonitor& ObTimerMonitor::get_instance()
 {
@@ -61,6 +69,7 @@ void ObTimerMonitor::wait()
 {
   timer_.wait();
 }
+
 
 void ObTimerMonitor::stop()
 {
@@ -109,8 +118,10 @@ int64_t ObTimerMonitor::record_new_thread(const int64_t thread_id)
   return pos;
 }
 
-void ObTimerMonitor::start_task(
-    const int64_t thread_id, const int64_t start_time, const int64_t interval, const ObTimerTask* task)
+void ObTimerMonitor::start_task(const int64_t thread_id,
+                                const int64_t start_time,
+                                const int64_t interval,
+                                const ObTimerTask* task)
 {
   int64_t pos = find_pos(thread_id);
   if (pos < 0) {
@@ -157,8 +168,8 @@ void ObTimerMonitor::end_task(const int64_t thread_id, const int64_t end_time)
 
 void ObTimerMonitor::dump(const bool print_trace)
 {
-  static const int64_t TIMER_TIMEOUT_MIN = 1L * 60L * 1000L * 1000L;   // 1 min
-  static const int64_t TIMER_TIMEOUT_MAX = 15L * 60L * 1000L * 1000L;  // 15 mins
+  static const int64_t TIMER_TIMEOUT_MIN = 1L * 60L * 1000L * 1000L; // 1 min
+  static const int64_t TIMER_TIMEOUT_MAX = 15L * 60L * 1000L * 1000L; // 15 mins
 
   int64_t tail = ATOMIC_LOAD(&tail_);
   const int64_t curr_time = ObTimeUtility::current_time();
@@ -174,34 +185,34 @@ void ObTimerMonitor::dump(const bool print_trace)
     } while (seq & 1 || seq != records_[i].seq_);
 
     if (record.task_ != NULL && 0 != record.interval_) {
-      int64_t timeout = max(min(record.interval_ * 100, TIMER_TIMEOUT_MAX), TIMER_TIMEOUT_MIN);
+      int64_t timeout = std::max(std::min(record.interval_ * 100, TIMER_TIMEOUT_MAX), TIMER_TIMEOUT_MIN);
       if (curr_time > record.start_time_ + timeout) {
         // timeout
-        OB_LOG(ERROR, "TIMER TASK TIMEOUT: timer task cost too much time", K(record));
+        OB_LOG_RET(ERROR, OB_ERR_TOO_MUCH_TIME, "TIMER TASK TIMEOUT: timer task cost too much time", K(record));
       }
     }
 
     if (print_trace) {
       int64_t avg_time = 0 == record.task_cnt_ ? 0 : record.cost_time_ / record.task_cnt_;
-      OB_LOG(INFO,
-          "TIMER THREAD STAT: ",
-          "thread_id",
-          record.thread_id_,
-          "task_cnt",
-          record.task_cnt_,
-          "avg_time",
-          avg_time);
+      OB_LOG(INFO, "TIMER THREAD STAT: ",
+             "thread_id", record.thread_id_,
+             "task_cnt", record.task_cnt_,
+             "avg_time", avg_time);
 
       records_[i].task_cnt_ = 0;
     }
   }
 }
 
-ObTimerMonitor::ObTimerMonitorTask::ObTimerMonitorTask(ObTimerMonitor& monitor) : monitor_(monitor), running_cnt_(0)
-{}
+ObTimerMonitor::ObTimerMonitorTask::ObTimerMonitorTask(ObTimerMonitor &monitor)
+  : monitor_(monitor),
+    running_cnt_(0)
+{
+}
 
 ObTimerMonitor::ObTimerMonitorTask::~ObTimerMonitorTask()
-{}
+{
+}
 
 void ObTimerMonitor::ObTimerMonitorTask::runTimerTask()
 {
@@ -213,5 +224,6 @@ void ObTimerMonitor::ObTimerMonitorTask::runTimerTask()
   running_cnt_++;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+
+}
+}

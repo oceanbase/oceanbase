@@ -15,17 +15,22 @@
 #include "observer/ob_rpc_processor.h"
 
 using oceanbase::common::ObNetEasy;
-using oceanbase::common::ObNetOptions;
 using oceanbase::common::ObNetRpcHandler;
+using oceanbase::common::ObNetOptions;
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
 
-namespace oceanbase {
-namespace unittest {
-namespace pub {
+namespace oceanbase
+{
+namespace unittest
+{
+namespace pub
+{
 
 template <PacketCode pcode>
-class MockP : public ObRpcProcessor<pcode> {
+class MockP
+    : public ObRpcProcessor<pcode>
+{
 public:
   int process()
   {
@@ -33,35 +38,37 @@ public:
   }
 };
 
-class MockPacketHandler : public ObNetRpcHandler {
+class MockPacketHandler
+    : public ObNetRpcHandler
+{
 public:
-  int process(easy_request_t* r)
+  int process(easy_request_t *r)
   {
     int ret = EASY_OK;
-    if (NULL == r || NULL == r->ipacket) {
+    if (NULL == r || NULL == r->ipacket)
+    {
       SERVER_LOG(ERROR, "request is empty", K(r), K(r->ipacket));
       ret = EASY_BREAK;
-    } else {
-      ObPacket* pkt = (ObPacket*)r->ipacket;
+    }
+    else
+    {
+      ObPacket *pkt = (ObPacket*) r->ipacket;
       if (NULL == pkt) {
         SERVER_LOG(ERROR, "receive NULL packet");
       } else {
         pkt->set_request(r);
-        easy_request_sleeping(r);  // set alloc lock && inc ref count
+        easy_request_sleeping(r); // set alloc lock && inc ref count
         ret = process_pkt(*pkt);
         if (OB_SUCC(ret)) {
           ret = EASY_AGAIN;
         } else {
           easy_atomic_dec(&r->ms->c->pool->ref);
           easy_atomic_dec(&r->ms->pool->ref);
-          if (OB_QUEUE_OVERFLOW == ret) {
+          if (OB_QUEUE_OVERFLOW == ret)
+          {
             char buffer[32];
-            SERVER_LOG(WARN,
-                "can not push packet to packet queue",
-                "src",
-                inet_ntoa_s(buffer, 32, r->ms->c->addr),
-                "pcode",
-                pkt->get_pcode());
+            SERVER_LOG(WARN, "can not push packet to packet queue",
+                       "src", inet_ntoa_s(buffer, 32, r->ms->c->addr), "pcode", pkt->get_pcode());
           }
           ret = EASY_OK;
         }
@@ -71,25 +78,24 @@ public:
   }
 
 private:
-#define REG_PKT(pcode)      \
-  case pcode: {             \
-    p = new MockP<pcode>(); \
-    break;                  \
-  }
 
-  int process_pkt(ObPacket& pkt)
+#define REG_PKT(pcode)                          \
+  case pcode: {                                 \
+    p = new MockP<pcode>();                     \
+    break;                                      \
+}
+
+  int process_pkt(ObPacket &pkt)
   {
-    ObRequestProcessor* p = NULL;
+    ObRequestProcessor *p = NULL;
     switch (pkt.get_pcode()) {
       REG_PKT(OB_GET_CONFIG);
       REG_PKT(OB_SET_CONFIG);
       REG_PKT(OB_BOOTSTRAP);
       REG_PKT(OB_EXECUTE_BOOTSTRAP);
       REG_PKT(OB_IS_EMPTY_SERVER);
-      REG_PKT(OB_CREATE_PARTITION);
       REG_PKT(OB_FETCH_SCHEMA);
-      default: {
-      }
+      default: { }
     }
     if (NULL != p) {
       ObDataBuffer buf;
@@ -103,21 +109,20 @@ private:
     return OB_SUCCESS;
   }
 
-  void alloc_buffer(ObDataBuffer& buf)
-  {
+  void alloc_buffer(ObDataBuffer &buf) {
     buf.set_data(new char[OB_MAX_PACKET_LENGTH], OB_MAX_PACKET_LENGTH);
   }
 
-  void free_buffer(ObDataBuffer& buf)
-  {
-    delete[] buf.get_data();
+  void free_buffer(ObDataBuffer &buf) {
+    delete [] buf.get_data();
   }
-};  // end of class MockPacketHandler
+}; // end of class MockPacketHandler
 
-class MockServer : public ObNetEasy {
+class MockServer
+    : public ObNetEasy
+{
 public:
-  int init(int port)
-  {
+  int init(int port) {
     int ret = OB_SUCCESS;
     ObNetOptions opts;
     opts.type_ = ObNetOptions::SERVER;
@@ -128,11 +133,10 @@ public:
     }
     return ret;
   }
-
 private:
   MockPacketHandler phandler_;
-};  // end of class MockServer
+}; // end of class MockServer
 
-}  // namespace pub
-}  // end of namespace unittest
-}  // end of namespace oceanbase
+} // end of namespace public
+} // end of namespace unittest
+} // end of namespace oceanbase

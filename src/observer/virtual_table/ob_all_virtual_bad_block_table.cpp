@@ -11,24 +11,30 @@
  */
 
 #include "ob_all_virtual_bad_block_table.h"
-#include "storage/blocksstable/ob_store_file.h"
 
-namespace oceanbase {
+#include "storage/blocksstable/ob_block_manager.h"
+
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 
-namespace observer {
+namespace observer
+{
 
-ObVirtualBadBlockTable::ObVirtualBadBlockTable() : is_inited_(false), cursor_(0), addr_(), bad_block_infos_()
-{}
+ObVirtualBadBlockTable::ObVirtualBadBlockTable()
+  : is_inited_(false), cursor_(0), addr_(), bad_block_infos_()
+{
+}
 
 ObVirtualBadBlockTable::~ObVirtualBadBlockTable()
-{}
+{
+}
 
-int ObVirtualBadBlockTable::inner_get_next_row(common::ObNewRow*& row)
+int ObVirtualBadBlockTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   if (OB_ISNULL(cells) || !is_inited_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "Not inited", KP(cur_row_.cells_), K(is_inited_), K(ret));
@@ -36,10 +42,10 @@ int ObVirtualBadBlockTable::inner_get_next_row(common::ObNewRow*& row)
     row = NULL;
     ret = OB_ITER_END;
   } else {
-    const blocksstable::ObBadBlockInfo& bad_block_info = bad_block_infos_[cursor_];
+    const blocksstable::ObBadBlockInfo &bad_block_info = bad_block_infos_[cursor_];
     for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
       const uint64_t col_id = output_column_ids_.at(i);
-      switch (col_id) {
+      switch (col_id){
         case SVR_IP: {
           cells[i].set_varchar(ip_buf_);
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -80,8 +86,8 @@ int ObVirtualBadBlockTable::inner_get_next_row(common::ObNewRow*& row)
           SERVER_LOG(WARN, "invalid column id, ", K(ret), K(i), K(output_column_ids_), K(col_id));
           break;
         }
-      }  // end switch
-    }    // end for-loop
+      } // end switch
+    } // end for-loop
     if (OB_SUCC(ret)) {
       row = &cur_row_;
     }
@@ -100,13 +106,13 @@ void ObVirtualBadBlockTable::reset()
   MEMSET(ip_buf_, 0, sizeof(ip_buf_));
 }
 
-int ObVirtualBadBlockTable::init(const common::ObAddr& addr)
+int ObVirtualBadBlockTable::init(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
   if (!addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "Invalid argument, ", K(ret), K(addr));
-  } else if (OB_FAIL(OB_FILE_SYSTEM.get_bad_block_infos(bad_block_infos_))) {
+  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_bad_block_infos(bad_block_infos_))) {
     SERVER_LOG(WARN, "Fail to get bad block infos", K(ret));
   } else {
     addr_ = addr;
@@ -121,5 +127,7 @@ int ObVirtualBadBlockTable::init(const common::ObAddr& addr)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}// namespace observer
+}// namespace oceanbase
+
+

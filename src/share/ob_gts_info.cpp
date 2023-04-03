@@ -13,8 +13,10 @@
 #include "ob_gts_info.h"
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ObGtsInfo::ObGtsInfo()
 {
   reset();
@@ -34,11 +36,15 @@ void ObGtsInfo::reset()
 bool ObGtsInfo::is_valid() const
 {
   // standby cluster cannot guarantee that it will always be a valid value
-  return is_valid_gts_id(gts_id_) && !gts_name_.is_empty() && !region_.is_empty() &&
-         (OB_INVALID_TIMESTAMP != epoch_id_) && member_list_.is_valid() && (OB_INVALID_TIMESTAMP != heartbeat_ts_);
+  return is_valid_gts_id(gts_id_)
+         && !gts_name_.is_empty()
+         && !region_.is_empty()
+         && (OB_INVALID_TIMESTAMP != epoch_id_)
+         && member_list_.is_valid()
+         && (OB_INVALID_TIMESTAMP != heartbeat_ts_);
 }
 
-int ObGtsInfo::assign(const ObGtsInfo& that)
+int ObGtsInfo::assign(const ObGtsInfo &that)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!that.is_valid())) {
@@ -70,7 +76,8 @@ void ObGtsTenantInfo::reset()
 
 bool ObGtsTenantInfo::is_valid() const
 {
-  return is_valid_gts_id(gts_id_) && is_valid_no_sys_tenant_id(tenant_id_) && member_list_.is_valid();
+  return is_valid_gts_id(gts_id_) && is_valid_no_sys_tenant_id(tenant_id_)
+         && member_list_.is_valid();
 }
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

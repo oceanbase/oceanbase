@@ -1,0 +1,54 @@
+result_format: 4
+explain_protocol: 0
+
+set @@ob_enable_plan_cache = 0;
+
+// res type is string
+select @@ob_log_level;
++----------------+
+| @@ob_log_level |
++----------------+
+| disabled       |
++----------------+
+set @@ob_log_level='debug';
+select @@ob_log_level;
++----------------+
+| @@ob_log_level |
++----------------+
+| debug          |
++----------------+
+set @@ob_log_level='info';
+
+// res type is bool
+set @@ob_enable_plan_cache = 1;
+select @@ob_enable_plan_cache = 0;
++----------------------------+
+| @@ob_enable_plan_cache = 0 |
++----------------------------+
+|                          0 |
++----------------------------+
+set @@ob_enable_plan_cache = 0;
+select @@ob_enable_plan_cache = 0;
++----------------------------+
+| @@ob_enable_plan_cache = 0 |
++----------------------------+
+|                          1 |
++----------------------------+
+
+// res type is int
+select @@ob_plan_cache_percentage;
++----------------------------+
+| @@ob_plan_cache_percentage |
++----------------------------+
+|                          5 |
++----------------------------+
+
+// test null
+set character_set_results=NULL;
+select @@character_set_results;
++-------------------------+
+| @@character_set_results |
++-------------------------+
+| NULL                    |
++-------------------------+
+

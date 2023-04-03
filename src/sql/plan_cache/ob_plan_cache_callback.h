@@ -15,93 +15,92 @@
 
 #include "ob_pcv_set.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObPlanCacheAtomicOp {
+class ObLibCacheAtomicOp
+{
 protected:
-  typedef common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet*> PlanCacheKV;
+  typedef common::hash::HashMapPair<ObILibCacheKey*, ObILibCacheNode *> LibCacheKV;
 
 public:
-  ObPlanCacheAtomicOp(const CacheRefHandleID ref_handle) : pcv_set_(NULL), ref_handle_(ref_handle)
-  {}
-  virtual ~ObPlanCacheAtomicOp()
-  {}
-  // get pcv_set and lock
-  virtual int get_value(ObPCVSet*& pcv_set);
-  // get pcv_set and increase reference count
-  void operator()(PlanCacheKV& entry);
+  ObLibCacheAtomicOp(const CacheRefHandleID ref_handle)
+    : cache_node_(NULL), ref_handle_(ref_handle)
+  {
+  }
+  virtual ~ObLibCacheAtomicOp() {}
+  // get cache node and lock
+  virtual int get_value(ObILibCacheNode *&cache_node);
+  // get cache node and increase reference count
+  void operator()(LibCacheKV &entry);
 
 protected:
   // when get value, need lock
-  virtual int lock(ObPCVSet& pcv_set) = 0;
-
+  virtual int lock(ObILibCacheNode &cache_node) = 0;
 protected:
   // According to the interface of ObHashTable, all returned values will be passed
   // back to the caller via the callback functor.
-  // pcv_set_ - the plan cache value that is referenced.
-  ObPCVSet* pcv_set_;
+  // cache_node_ - the plan cache value that is referenced.
+  ObILibCacheNode *cache_node_;
   CacheRefHandleID ref_handle_;
-
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObPlanCacheAtomicOp);
+  DISALLOW_COPY_AND_ASSIGN(ObLibCacheAtomicOp);
 };
 
-class ObPlanCacheWlockAndRef : public ObPlanCacheAtomicOp {
+class ObLibCacheWlockAndRef : public ObLibCacheAtomicOp
+{
 public:
-  ObPlanCacheWlockAndRef(const CacheRefHandleID ref_handle) : ObPlanCacheAtomicOp(ref_handle)
-  {}
-  virtual ~ObPlanCacheWlockAndRef()
-  {}
-  int lock(ObPCVSet& pcv_set)
+  ObLibCacheWlockAndRef(const CacheRefHandleID ref_handle)
+    : ObLibCacheAtomicOp(ref_handle)
   {
-    return pcv_set.lock(false /*wlock*/);
-  };
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPlanCacheWlockAndRef);
-};
-
-class ObPlanCacheRlockAndRef : public ObPlanCacheAtomicOp {
-public:
-  ObPlanCacheRlockAndRef(const CacheRefHandleID ref_handle) : ObPlanCacheAtomicOp(ref_handle)
-  {}
-  virtual ~ObPlanCacheRlockAndRef()
-  {}
-  int lock(ObPCVSet& pcvs)
-  {
-    return pcvs.lock(true /*rlock*/);
-  };
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPlanCacheRlockAndRef);
-};
-
-class ObCacheObjAtomicOp {
-protected:
-  typedef common::hash::HashMapPair<ObCacheObjID, ObCacheObject*> ObjKV;
-
-public:
-  ObCacheObjAtomicOp(const CacheRefHandleID ref_handle) : cache_obj_(NULL), ref_handle_(ref_handle)
-  {}
-  virtual ~ObCacheObjAtomicOp()
-  {}
-  // get lock and increase reference count
-  void operator()(ObjKV& entry);
-
-  ObCacheObject* get_value() const
-  {
-    return cache_obj_;
   }
+  virtual ~ObLibCacheWlockAndRef() {}
+  int lock(ObILibCacheNode &cache_node)
+  {
+    return cache_node.lock(false/*wlock*/);
+  };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLibCacheWlockAndRef);
+};
+
+class ObLibCacheRlockAndRef : public ObLibCacheAtomicOp
+{
+public:
+  ObLibCacheRlockAndRef(const CacheRefHandleID ref_handle)
+    : ObLibCacheAtomicOp(ref_handle)
+  {
+  }
+  virtual ~ObLibCacheRlockAndRef() {}
+  int lock(ObILibCacheNode &cache_node)
+  {
+    return cache_node.lock(true/*rlock*/);
+  };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLibCacheRlockAndRef);
+};
+
+class ObCacheObjAtomicOp
+{
+protected:
+  typedef common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> ObjKV;
+
+public:
+  ObCacheObjAtomicOp(const CacheRefHandleID ref_handle): cache_obj_(NULL), ref_handle_(ref_handle) {}
+  virtual ~ObCacheObjAtomicOp() {}
+  // get lock and increase reference count
+  void operator()(ObjKV &entry);
+
+  ObILibCacheObject *get_value() const { return cache_obj_; }
 
 protected:
-  ObCacheObject* cache_obj_;
+  ObILibCacheObject *cache_obj_;
   const CacheRefHandleID ref_handle_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCacheObjAtomicOp);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // _OB_PLAN_CACHE_CALLBACK_H
+}
+}
+#endif // _OB_PLAN_CACHE_CALLBACK_H

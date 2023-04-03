@@ -1,0 +1,23 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: link.zt
+# owner group: SQL1
+# description: 测试虚拟表__all_virtual_sys_parameter_stat
+#tags        : parameter
+
+connect (my_obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection my_obsys;
+
+select tenant_id, table_name from oceanbase.__all_virtual_table where table_name = '__all_virtual_sys_parameter_stat';
+use oceanbase;
+desc __all_virtual_sys_parameter_stat;
+select name from __all_virtual_sys_parameter_stat where name not like "module_test_%" group by name order by name;
+--sorted_result
+select section,info from oceanbase.__all_virtual_sys_parameter_stat where name like '%major%' group by name;
+
+--disable_result_log
+show parameters;
+show parameters like '%log%';
+--enable_result_log
+disconnect my_obsys;

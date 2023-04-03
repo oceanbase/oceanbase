@@ -15,9 +15,11 @@
 #include "common/log/ob_log_entry.h"
 #include "common/log/ob_log_cursor.h"
 
-namespace oceanbase {
-namespace common {
-ObLogCursor::ObLogCursor() : file_id_(0), log_id_(0), offset_(0)
+namespace oceanbase
+{
+namespace common
+{
+ObLogCursor::ObLogCursor(): file_id_(0), log_id_(0), offset_(0)
 {}
 
 ObLogCursor::~ObLogCursor()
@@ -44,26 +46,26 @@ void ObLogCursor::reset()
   offset_ = 0;
 }
 
-int ObLogCursor::serialize(char* buf, int64_t len, int64_t& pos) const
+int ObLogCursor::serialize(char *buf, int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (!(OB_SUCCESS == serialization::encode_i64(buf, len, pos, file_id_) &&
-          OB_SUCCESS == serialization::encode_i64(buf, len, pos, log_id_) &&
-          OB_SUCCESS == serialization::encode_i64(buf, len, pos, offset_))) {
+  if (!(OB_SUCCESS == serialization::encode_i64(buf, len, pos, file_id_)
+        && OB_SUCCESS == serialization::encode_i64(buf, len, pos, log_id_)
+        && OB_SUCCESS == serialization::encode_i64(buf, len, pos, offset_))) {
     ret = OB_SERIALIZE_ERROR;
-    SHARE_LOG(WARN, "ObLogCursor.serialize", K(buf), K(len), K(pos), K(ret));
+    SHARE_LOG(WARN, "ObLogCursor.serialize", KP(buf), K(len), K(pos), K(ret));
   }
   return ret;
 }
 
-int ObLogCursor::deserialize(const char* buf, int64_t len, int64_t& pos) const
+int ObLogCursor::deserialize(const char *buf, int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (!(OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t*)&file_id_) &&
-          OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t*)&log_id_) &&
-          OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t*)&offset_))) {
+  if (!(OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t *)&file_id_)
+        && OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t *)&log_id_)
+        && OB_SUCCESS == serialization::decode_i64(buf, len, pos, (int64_t *)&offset_))) {
     ret = OB_DESERIALIZE_ERROR;
-    SHARE_LOG(WARN, "ObLogCursor.deserialize", K(buf), K(len), K(pos), K(ret));
+    SHARE_LOG(WARN, "ObLogCursor.deserialize", KP(buf), K(len), K(pos), K(ret));
   }
   return ret;
 }
@@ -77,20 +79,22 @@ int64_t ObLogCursor::get_serialize_size() const
   return len;
 }
 
-char* ObLogCursor::to_str() const
+char *ObLogCursor::to_str() const
 {
   static char buf[512];
-  snprintf(buf, sizeof(buf), "ObLogCursor{file_id=%ld, log_id=%ld, offset=%ld}", file_id_, log_id_, offset_);
+  snprintf(buf, sizeof(buf), "ObLogCursor{file_id=%ld, log_id=%ld, offset=%ld}", file_id_, log_id_,
+           offset_);
   buf[sizeof(buf) - 1] = 0;
   return buf;
 }
 
-int64_t ObLogCursor::to_string(char* buf, const int64_t limit) const
+int64_t ObLogCursor::to_string(char *buf, const int64_t limit) const
 {
   return snprintf(buf, limit, "ObLogCursor{file_id=%ld, log_id=%ld, offset=%ld}", file_id_, log_id_, offset_);
 }
 
-int ObLogCursor::next_entry(ObLogEntry& entry, const LogCommand cmd, const char* log_data, const int64_t data_len) const
+int ObLogCursor::next_entry(ObLogEntry &entry, const LogCommand cmd, const char *log_data,
+                            const int64_t data_len) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(entry.set_log_seq(log_id_))) {
@@ -98,12 +102,12 @@ int ObLogCursor::next_entry(ObLogEntry& entry, const LogCommand cmd, const char*
   } else if (OB_FAIL(entry.set_log_command(cmd))) {
     SHARE_LOG(WARN, "set_log_command error", K(cmd), K(ret));
   } else if (OB_FAIL(entry.fill_header(log_data, data_len, 0))) {
-    SHARE_LOG(WARN, "fill_header error", K(log_data), K(data_len), K(ret));
+    SHARE_LOG(WARN, "fill_header error", KP(log_data), K(data_len), K(ret));
   }
   return ret;
 }
 
-int ObLogCursor::advance(LogCommand cmd, int64_t seq, const int64_t data_len)
+int ObLogCursor:: advance(LogCommand cmd, int64_t seq, const int64_t data_len)
 {
   int ret = OB_SUCCESS;
   ObLogEntry entry;
@@ -124,7 +128,7 @@ int ObLogCursor::advance(LogCommand cmd, int64_t seq, const int64_t data_len)
   return ret;
 }
 
-int ObLogCursor::advance(const ObLogEntry& entry)
+int ObLogCursor::advance(const ObLogEntry &entry)
 {
   return advance((LogCommand)entry.cmd_, entry.seq_, entry.get_log_data_len());
 }
@@ -148,17 +152,18 @@ int ObLogCursor::advance(int64_t start_id, int64_t end_id, int64_t len, bool is_
   return ret;
 }
 
-bool ObLogCursor::newer_than(const ObLogCursor& that) const
+bool ObLogCursor::newer_than(const ObLogCursor &that) const
 {
-  return file_id_ > that.file_id_ || (file_id_ == that.file_id_ && log_id_ > that.log_id_);
+  return file_id_ > that.file_id_  || (file_id_ == that.file_id_ && log_id_ > that.log_id_);
 }
 
-bool ObLogCursor::equal(const ObLogCursor& that) const
+bool ObLogCursor::equal(const ObLogCursor &that) const
 {
-  return file_id_ == that.file_id_ && log_id_ == that.log_id_ && offset_ == that.offset_;
+  return file_id_ == that.file_id_  && log_id_ == that.log_id_ && offset_ == that.offset_;
 }
 
-ObLogCursor& set_cursor(ObLogCursor& cursor, const int64_t file_id, const int64_t log_id, const int64_t offset)
+ObLogCursor &set_cursor(ObLogCursor &cursor, const int64_t file_id, const int64_t log_id,
+                        const int64_t offset)
 {
   cursor.file_id_ = file_id;
   cursor.log_id_ = log_id;
@@ -166,7 +171,7 @@ ObLogCursor& set_cursor(ObLogCursor& cursor, const int64_t file_id, const int64_
   return cursor;
 }
 
-int ObAtomicLogCursor::get_cursor(ObLogCursor& cursor) const
+int ObAtomicLogCursor::get_cursor(ObLogCursor &cursor) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(cursor_lock_.rdlock())) {
@@ -180,7 +185,7 @@ int ObAtomicLogCursor::get_cursor(ObLogCursor& cursor) const
   return ret;
 }
 
-int ObAtomicLogCursor::set_cursor(ObLogCursor& cursor)
+int ObAtomicLogCursor::set_cursor(ObLogCursor &cursor)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(cursor_lock_.wrlock())) {
@@ -193,5 +198,5 @@ int ObAtomicLogCursor::set_cursor(ObLogCursor& cursor)
   }
   return ret;
 }
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase

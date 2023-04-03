@@ -1,0 +1,2 @@
+create table t1(c1 bigint,c2 bigint,c3 bigint,c4 bigint,c5 bigint,c6 bigint,c7 bigint,c8 bigint,c9 bigint,c10 bigint,primary key(c1))
+create table t2(c1 bigint,c2 bigint,c3 bigint,c4 bigint,c5 bigint,c6 bigint,c7 bigint,c8 bigint,c9 bigint,c10 bigint,primary key(c1))

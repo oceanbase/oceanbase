@@ -17,23 +17,27 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
-int ObViewTableResolver::do_resolve_set_query(
-    const ParseNode& parse_tree, ObSelectStmt*& child_stmt, const bool is_left_child) /*default false*/
+namespace sql
+{
+int ObViewTableResolver::do_resolve_set_query(const ParseNode &parse_tree,
+                                              ObSelectStmt *&child_stmt,
+                                              const bool is_left_child) /*default false*/
 {
   int ret = OB_SUCCESS;
   child_stmt = NULL;
   ObViewTableResolver child_resolver(params_, view_db_name_, view_name_);
 
   child_resolver.set_current_level(current_level_);
+  child_resolver.set_current_view_level(current_view_level_);
   child_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   child_resolver.set_current_view_item(current_view_item);
   child_resolver.set_parent_view_resolver(parent_view_resolver_);
   child_resolver.set_calc_found_rows(is_left_child && has_calc_found_rows_);
-
+  
   if (OB_FAIL(add_cte_table_to_children(child_resolver))) {
     LOG_WARN("failed to add cte table to children", K(ret));
   } else if (OB_FAIL(child_resolver.resolve_child_stmt(parse_tree))) {
@@ -45,22 +49,28 @@ int ObViewTableResolver::do_resolve_set_query(
   return ret;
 }
 
-int ObViewTableResolver::expand_view(TableItem& view_item)
+int ObViewTableResolver::expand_view(TableItem &view_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(check_view_circular_reference(view_item))) {
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session info is null");
+  } else if (OB_FAIL(check_view_circular_reference(view_item))) {
     LOG_WARN("check view circular reference failed", K(ret));
   } else {
     // expand view as subquery which use view name as alias
-    const ObTableSchema* view_schema = NULL;
+    const ObTableSchema *view_schema = NULL;
 
-    if (OB_FAIL(schema_checker_->get_table_schema(view_item.ref_id_, view_schema))) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), view_item.ref_id_, view_schema))) {
       LOG_WARN("get table schema failed", K(view_item));
     } else {
       ObViewTableResolver view_resolver(params_, view_db_name_, view_name_);
       view_resolver.set_current_level(current_level_);
+      view_resolver.set_current_view_level(current_view_level_ + 1);
+      view_resolver.set_view_ref_id(view_item.ref_id_);
       view_resolver.set_current_view_item(view_item);
       view_resolver.set_parent_view_resolver(this);
+      view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
       if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
         LOG_WARN("do expand view failed", K(ret));
       }
@@ -69,41 +79,54 @@ int ObViewTableResolver::expand_view(TableItem& view_item)
   return ret;
 }
 
-int ObViewTableResolver::check_view_circular_reference(const TableItem& view_item)
+int ObViewTableResolver::check_view_circular_reference(const TableItem &view_item)
 {
   int ret = OB_SUCCESS;
-  ObViewTableResolver* cur_resolver = this;
-  if (OB_UNLIKELY(!view_db_name_.empty() && !view_name_.empty() &&
-                  0 == view_db_name_.compare(view_item.database_name_) &&
-                  0 == view_name_.compare(view_item.table_name_))) {
+  // 检查逻辑 :不断往上走，逐层判断view_item是否相同(db_name && tbl_name)
+  // -- is_view_stmt() : 判断当前stmt是不是view展开的
+  // -- get_view_item() : 展开成当前stmt的view (TableItem)
+  // -- get_view_upper_scope_stmt() : view子查询的uppe_scope_stmt
+  // 如果存在相互引用，mysql的行为是对最上层的view报错, 因此
+  // exist_circular_reference = true 时也会继续循环, 比如：
+  // v3引用v2，而v1<->v2相互引用，select * from v3 结果是对v3报错
+  ObViewTableResolver *cur_resolver = this;
+  if (OB_UNLIKELY(! view_db_name_.empty() && ! view_name_.empty()
+                  && 0 == view_db_name_.compare(view_item.database_name_)
+                  && 0 == view_name_.compare(view_item.table_name_))) {
     if (is_oracle_mode()) {
       ret = OB_ERR_VIEW_RECURSIVE;
     } else {
       ret = OB_ERR_VIEW_RECURSIVE;
-      LOG_USER_ERROR(
-          OB_ERR_VIEW_RECURSIVE, view_db_name_.length(), view_db_name_.ptr(), view_name_.length(), view_name_.ptr());
+      LOG_USER_ERROR(OB_ERR_VIEW_RECURSIVE, view_db_name_.length(), view_db_name_.ptr(),
+                     view_name_.length(), view_name_.ptr());
     }
   } else {
+    // 原来的检测逻辑存在一个问题，对于开头的这个例子，不应该在创建v3时报错，或者说v1和v2相互引用的情况就不应该出现
+    // 而是应该在create or replace v1/v2导致v1和v2相互引用时报错。
+    // 虽然现在加了前面这个检测逻辑，在创建视图v时检查定义展开后没有出现v可以避免出现相互引用，
+    // 但是原来的检测逻辑也要保留。如果升级前创建了存在循环的视图，升级后select from这个视图，在下面报错。
     do {
       if (OB_UNLIKELY(view_item.ref_id_ == cur_resolver->current_view_item.ref_id_)) {
         ret = OB_ERR_VIEW_RECURSIVE;
-        const ObString& db_name = cur_resolver->current_view_item.database_name_;
-        const ObString& tbl_name = cur_resolver->current_view_item.table_name_;
-        LOG_USER_ERROR(OB_ERR_VIEW_RECURSIVE, db_name.length(), db_name.ptr(), tbl_name.length(), tbl_name.ptr());
+        const ObString &db_name = cur_resolver->current_view_item.database_name_;
+        const ObString &tbl_name = cur_resolver->current_view_item.table_name_;
+        LOG_USER_ERROR(OB_ERR_VIEW_RECURSIVE, db_name.length(), db_name.ptr(),
+                       tbl_name.length(), tbl_name.ptr());
       } else {
         cur_resolver = cur_resolver->parent_view_resolver_;
       }
-    } while (OB_SUCC(ret) && cur_resolver != NULL);
+    } while(OB_SUCC(ret) && cur_resolver != NULL);
   }
   return ret;
 }
 
-int ObViewTableResolver::resolve_generate_table(
-    const ParseNode& table_node, const ObString& alias_name, TableItem*& table_item)
+int ObViewTableResolver::resolve_generate_table(const ParseNode &table_node, const ObString &alias_name, TableItem *&table_item)
 {
   int ret = OB_SUCCESS;
   ObViewTableResolver view_table_resolver(params_, view_db_name_, view_name_);
+  //from子查询和当前查询属于平级，因此current level和当前保持一致
   view_table_resolver.set_current_level(current_level_);
+  view_table_resolver.set_current_view_level(current_view_level_);
   view_table_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   view_table_resolver.set_parent_view_resolver(parent_view_resolver_);
   view_table_resolver.set_current_view_item(current_view_item);
@@ -117,11 +140,13 @@ int ObViewTableResolver::resolve_generate_table(
   return ret;
 }
 
-int ObViewTableResolver::check_need_use_sys_tenant(bool& use_sys_tenant) const
+// use_sys_tenant 标记是否需要以系统租户的身份获取schema
+int ObViewTableResolver::check_need_use_sys_tenant(bool &use_sys_tenant) const
 {
   int ret = OB_SUCCESS;
 
-  const ObTableSchema* table_schema = NULL;
+  // 若当前已经是系统租户, 则忽略
+  const ObTableSchema *table_schema = NULL;
   if (OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session info is null");
@@ -131,8 +156,9 @@ int ObViewTableResolver::check_need_use_sys_tenant(bool& use_sys_tenant) const
     use_sys_tenant = true;
   }
 
+  // 若当前stmt不是系统视图展开的, 则忽略
   if (OB_SUCC(ret) && use_sys_tenant) {
-    if (OB_FAIL(schema_checker_->get_table_schema(current_view_item.ref_id_, table_schema))) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), current_view_item.ref_id_, table_schema))) {
       LOG_WARN("fail to get table_schema", K(ret));
     } else if (NULL == table_schema) {
       ret = OB_INVALID_ARGUMENT;
@@ -145,7 +171,7 @@ int ObViewTableResolver::check_need_use_sys_tenant(bool& use_sys_tenant) const
   return ret;
 }
 
-int ObViewTableResolver::check_in_sysview(bool& in_sysview) const
+int ObViewTableResolver::check_in_sysview(bool &in_sysview) const
 {
   int ret = OB_SUCCESS;
   in_sysview = is_sys_view(current_view_item.ref_id_);
@@ -153,11 +179,11 @@ int ObViewTableResolver::check_in_sysview(bool& in_sysview) const
 }
 
 // construct select item from select_expr
-int ObViewTableResolver::set_select_item(SelectItem& select_item, bool is_auto_gen)
+int ObViewTableResolver::set_select_item(SelectItem &select_item, bool is_auto_gen)
 {
   int ret = OB_SUCCESS;
   ObCollationType cs_type = CS_TYPE_INVALID;
-  ObSelectStmt* select_stmt = get_select_stmt();
+  ObSelectStmt *select_stmt = get_select_stmt();
 
   if (OB_ISNULL(select_stmt) || OB_ISNULL(session_info_) || OB_ISNULL(select_item.expr_)) {
     ret = OB_NOT_INIT;
@@ -169,9 +195,10 @@ int ObViewTableResolver::set_select_item(SelectItem& select_item, bool is_auto_g
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else {
-    // create new name
-    if (!is_create_view_ && !select_item.is_real_alias_ && is_auto_gen &&
-        select_item.alias_name_.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
+    // 如果子查询列没有别名，超过 64 的话系统则自动为其会生成一个列别名
+    if (!is_create_view_ && !select_item.is_real_alias_ && is_auto_gen
+        && select_item.alias_name_.length() > static_cast<size_t>(
+        OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
       ObString tmp_col_name;
       ObString col_name;
       char temp_str_buf[number::ObNumber::MAX_PRINTABLE_SIZE];
@@ -198,7 +225,7 @@ int ObViewTableResolver::set_select_item(SelectItem& select_item, bool is_auto_g
   return ret;
 }
 
-int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo>& subquery_info)
+int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquery_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_)) {
@@ -209,21 +236,24 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo>& s
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "too many levels of subqueries");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_info.count(); i++) {
-    const ObSubQueryInfo& info = subquery_info.at(i);
+    const ObSubQueryInfo &info = subquery_info.at(i);
     ObViewTableResolver subquery_resolver(params_, view_db_name_, view_name_);
     subquery_resolver.set_current_level(current_level_ + 1);
+    subquery_resolver.set_current_view_level(current_view_level_);
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_parent_view_resolver(parent_view_resolver_);
     subquery_resolver.set_current_view_item(current_view_item);
+    set_query_ref_expr(info.ref_expr_);
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
-      LOG_WARN("add CTE table to children failed", K(ret));
+            LOG_WARN("add CTE table to children failed", K(ret));
     } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
-      subquery_resolver.set_parent_aggr_level(
-          info.parents_expr_info_.has_member(IS_AGG) ? current_level_ : parent_aggr_level_);
+      subquery_resolver.set_parent_aggr_level(info.parents_expr_info_.has_member(IS_AGG) ?
+          current_level_ : parent_aggr_level_);
     }
     if (OB_FAIL(do_resolve_subquery_info(info, subquery_resolver))) {
       LOG_WARN("do resolve subquery info failed", K(ret));
     }
+    set_query_ref_expr(NULL);
   }
   return ret;
 }

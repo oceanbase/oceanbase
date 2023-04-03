@@ -1,0 +1,382 @@
+result_format: 4
+drop database if exists shaoge;
+drop table if exists t1;
+create database shaoge;
+use shaoge;
+
+create table t1(col_float float, col_char char(100), col_text text);
+insert into t1 values (1.1, '1.1', '1.1');
+insert into t1 values (1.9, '1.9', '1.9');
+insert into t1 values (2.1, '2.1', '2.1');
+insert into t1 values (2.9, '2.9', '2.9');
+insert into t1 values (9223372036854775807, '9223372036854775807', '9223372036854775807');
+insert into t1 values (9223372036854775807.5, '9223372036854775807.5', '9223372036854775807.5');
+insert into t1 values (9223372036854775806.5, '9223372036854775806.5', '9223372036854775806.5');
+insert into t1 values (null, '1234567890123456789012345678901234567890.5', '1234567890123456789012345678901234567890.5');
+
+insert into t1 values (-1.1, '-1.1', '-1.1');
+insert into t1 values (-1.9, '-1.9', '-1.9');
+insert into t1 values (-2.1, '-2.1', '-2.1');
+insert into t1 values (-2.9, '-2.9', '-2.9');
+insert into t1 values (-9223372036854775807, '-9223372036854775808', '-9223372036854775808');
+insert into t1 values (-9223372036854775807.5, '-9223372036854775807.5', '-9223372036854775807.5');
+insert into t1 values (-9223372036854775806.5, '-9223372036854775806.5', '-9223372036854775806.5');
+insert into t1 values (null, '-1234567890123456789012345678901234567890.5', '-1234567890123456789012345678901234567890.5');
+
+create table tbl_check_zerofill(col_zf int(3) zerofill, col_no_zf int(3));
+insert into tbl_check_zerofill values(1, 1);
+
+// sql engine 3.0 test
+// string->int/uint will trunc
+// otherwise will round
+select col_float, cast(col_float as signed) from t1;
++-------------+---------------------------+
+| col_float   | cast(col_float as signed) |
++-------------+---------------------------+
+|         1.1 |                         1 |
+|         1.9 |                         2 |
+|         2.1 |                         2 |
+|         2.9 |                         3 |
+|  9.22337e18 |      -9223372036854775808 |
+|  9.22337e18 |      -9223372036854775808 |
+|  9.22337e18 |      -9223372036854775808 |
+|        NULL |                      NULL |
+|        -1.1 |                        -1 |
+|        -1.9 |                        -2 |
+|        -2.1 |                        -2 |
+|        -2.9 |                        -3 |
+| -9.22337e18 |      -9223372036854775808 |
+| -9.22337e18 |      -9223372036854775808 |
+| -9.22337e18 |      -9223372036854775808 |
+|        NULL |                      NULL |
++-------------+---------------------------+
+select col_char, cast(col_char as signed) from t1;
++---------------------------------------------+--------------------------+
+| col_char                                    | cast(col_char as signed) |
++---------------------------------------------+--------------------------+
+| 1.1                                         |                        1 |
+| 1.9                                         |                        1 |
+| 2.1                                         |                        2 |
+| 2.9                                         |                        2 |
+| 9223372036854775807                         |      9223372036854775807 |
+| 9223372036854775807.5                       |      9223372036854775807 |
+| 9223372036854775806.5                       |      9223372036854775806 |
+| 1234567890123456789012345678901234567890.5  |      9223372036854775807 |
+| -1.1                                        |                       -1 |
+| -1.9                                        |                       -1 |
+| -2.1                                        |                       -2 |
+| -2.9                                        |                       -2 |
+| -9223372036854775808                        |     -9223372036854775808 |
+| -9223372036854775807.5                      |     -9223372036854775807 |
+| -9223372036854775806.5                      |     -9223372036854775806 |
+| -1234567890123456789012345678901234567890.5 |     -9223372036854775808 |
++---------------------------------------------+--------------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.1'
+Warning	1292	Truncated incorrect INTEGER value: '1.9'
+Warning	1292	Truncated incorrect INTEGER value: '2.1'
+Warning	1292	Truncated incorrect INTEGER value: '2.9'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1.1'
+Warning	1292	Truncated incorrect INTEGER value: '-1.9'
+Warning	1292	Truncated incorrect INTEGER value: '-2.1'
+Warning	1292	Truncated incorrect INTEGER value: '-2.9'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775806.5'
+select col_text, cast(col_text as signed) from t1;
++---------------------------------------------+--------------------------+
+| col_text                                    | cast(col_text as signed) |
++---------------------------------------------+--------------------------+
+| 1.1                                         |                        1 |
+| 1.9                                         |                        1 |
+| 2.1                                         |                        2 |
+| 2.9                                         |                        2 |
+| 9223372036854775807                         |      9223372036854775807 |
+| 9223372036854775807.5                       |      9223372036854775807 |
+| 9223372036854775806.5                       |      9223372036854775806 |
+| 1234567890123456789012345678901234567890.5  |      9223372036854775807 |
+| -1.1                                        |                       -1 |
+| -1.9                                        |                       -1 |
+| -2.1                                        |                       -2 |
+| -2.9                                        |                       -2 |
+| -9223372036854775808                        |     -9223372036854775808 |
+| -9223372036854775807.5                      |     -9223372036854775807 |
+| -9223372036854775806.5                      |     -9223372036854775806 |
+| -1234567890123456789012345678901234567890.5 |     -9223372036854775808 |
++---------------------------------------------+--------------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.1'
+Warning	1292	Truncated incorrect INTEGER value: '1.9'
+Warning	1292	Truncated incorrect INTEGER value: '2.1'
+Warning	1292	Truncated incorrect INTEGER value: '2.9'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1.1'
+Warning	1292	Truncated incorrect INTEGER value: '-1.9'
+Warning	1292	Truncated incorrect INTEGER value: '-2.1'
+Warning	1292	Truncated incorrect INTEGER value: '-2.9'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775806.5'
+
+select col_float, cast(col_float as unsigned) from t1;
++-------------+-----------------------------+
+| col_float   | cast(col_float as unsigned) |
++-------------+-----------------------------+
+|         1.1 |                           1 |
+|         1.9 |                           2 |
+|         2.1 |                           2 |
+|         2.9 |                           3 |
+|  9.22337e18 |         9223372036854775808 |
+|  9.22337e18 |         9223372036854775808 |
+|  9.22337e18 |         9223372036854775808 |
+|        NULL |                        NULL |
+|        -1.1 |        18446744073709551615 |
+|        -1.9 |        18446744073709551614 |
+|        -2.1 |        18446744073709551614 |
+|        -2.9 |        18446744073709551613 |
+| -9.22337e18 |         9223372036854775808 |
+| -9.22337e18 |         9223372036854775808 |
+| -9.22337e18 |         9223372036854775808 |
+|        NULL |                        NULL |
++-------------+-----------------------------+
+select col_char, cast(col_char as unsigned) from t1;
++---------------------------------------------+----------------------------+
+| col_char                                    | cast(col_char as unsigned) |
++---------------------------------------------+----------------------------+
+| 1.1                                         |                          1 |
+| 1.9                                         |                          1 |
+| 2.1                                         |                          2 |
+| 2.9                                         |                          2 |
+| 9223372036854775807                         |        9223372036854775807 |
+| 9223372036854775807.5                       |        9223372036854775807 |
+| 9223372036854775806.5                       |        9223372036854775806 |
+| 1234567890123456789012345678901234567890.5  |       18446744073709551615 |
+| -1.1                                        |       18446744073709551615 |
+| -1.9                                        |       18446744073709551615 |
+| -2.1                                        |       18446744073709551614 |
+| -2.9                                        |       18446744073709551614 |
+| -9223372036854775808                        |        9223372036854775808 |
+| -9223372036854775807.5                      |        9223372036854775809 |
+| -9223372036854775806.5                      |        9223372036854775810 |
+| -1234567890123456789012345678901234567890.5 |       18446744073709551615 |
++---------------------------------------------+----------------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.1'
+Warning	1292	Truncated incorrect INTEGER value: '1.9'
+Warning	1292	Truncated incorrect INTEGER value: '2.1'
+Warning	1292	Truncated incorrect INTEGER value: '2.9'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '1234567890123456789012345678901234567890.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1.1'
+Warning	1292	Truncated incorrect INTEGER value: '-1.9'
+Warning	1292	Truncated incorrect INTEGER value: '-2.1'
+Warning	1292	Truncated incorrect INTEGER value: '-2.9'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1234567890123456789012345678901234567890.5'
+select col_text, cast(col_text as unsigned) from t1;
++---------------------------------------------+----------------------------+
+| col_text                                    | cast(col_text as unsigned) |
++---------------------------------------------+----------------------------+
+| 1.1                                         |                          1 |
+| 1.9                                         |                          1 |
+| 2.1                                         |                          2 |
+| 2.9                                         |                          2 |
+| 9223372036854775807                         |        9223372036854775807 |
+| 9223372036854775807.5                       |        9223372036854775807 |
+| 9223372036854775806.5                       |        9223372036854775806 |
+| 1234567890123456789012345678901234567890.5  |       18446744073709551615 |
+| -1.1                                        |       18446744073709551615 |
+| -1.9                                        |       18446744073709551615 |
+| -2.1                                        |       18446744073709551614 |
+| -2.9                                        |       18446744073709551614 |
+| -9223372036854775808                        |        9223372036854775808 |
+| -9223372036854775807.5                      |        9223372036854775809 |
+| -9223372036854775806.5                      |        9223372036854775810 |
+| -1234567890123456789012345678901234567890.5 |       18446744073709551615 |
++---------------------------------------------+----------------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.1'
+Warning	1292	Truncated incorrect INTEGER value: '1.9'
+Warning	1292	Truncated incorrect INTEGER value: '2.1'
+Warning	1292	Truncated incorrect INTEGER value: '2.9'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '1234567890123456789012345678901234567890.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1.1'
+Warning	1292	Truncated incorrect INTEGER value: '-1.9'
+Warning	1292	Truncated incorrect INTEGER value: '-2.1'
+Warning	1292	Truncated incorrect INTEGER value: '-2.9'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775807.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9223372036854775806.5'
+Warning	1292	Truncated incorrect INTEGER value: '-1234567890123456789012345678901234567890.5'
+
+// 测试zerofill
+// 应该有warning: Truncated incorrect CHAR(1) value: '001'
+select cast(col_zf as char(1)) from tbl_check_zerofill;
++-------------------------+
+| cast(col_zf as char(1)) |
++-------------------------+
+| 0                       |
++-------------------------+
+select cast(col_zf as char(2)) from tbl_check_zerofill;
++-------------------------+
+| cast(col_zf as char(2)) |
++-------------------------+
+| 00                      |
++-------------------------+
+select cast(col_zf as char(3)) from tbl_check_zerofill;
++-------------------------+
+| cast(col_zf as char(3)) |
++-------------------------+
+| 001                     |
++-------------------------+
+select cast(col_zf as char(4)) from tbl_check_zerofill;
++-------------------------+
+| cast(col_zf as char(4)) |
++-------------------------+
+| 001                     |
++-------------------------+
+select cast(col_no_zf as char(1)) from tbl_check_zerofill;
++----------------------------+
+| cast(col_no_zf as char(1)) |
++----------------------------+
+| 1                          |
++----------------------------+
+select cast(col_no_zf as char(1)) from tbl_check_zerofill;
++----------------------------+
+| cast(col_no_zf as char(1)) |
++----------------------------+
+| 1                          |
++----------------------------+
+select cast(col_no_zf as char(2)) from tbl_check_zerofill;
++----------------------------+
+| cast(col_no_zf as char(2)) |
++----------------------------+
+| 1                          |
++----------------------------+
+select cast(col_no_zf as char(3)) from tbl_check_zerofill;
++----------------------------+
+| cast(col_no_zf as char(3)) |
++----------------------------+
+| 1                          |
++----------------------------+
+select cast(col_no_zf as char(4)) from tbl_check_zerofill;
++----------------------------+
+| cast(col_no_zf as char(4)) |
++----------------------------+
+| 1                          |
++----------------------------+
+
+drop table t1;
+create table t1(c1 varchar(3));
+insert into t1 values('abc');
+select cast(c1 as char(10)), concat(c1, '123') from t1;
++----------------------+-------------------+
+| cast(c1 as char(10)) | concat(c1, '123') |
++----------------------+-------------------+
+| abc                  | abc123            |
++----------------------+-------------------+
+select cast(c1 as char(1)), concat(c1, '123') from t1;
++---------------------+-------------------+
+| cast(c1 as char(1)) | concat(c1, '123') |
++---------------------+-------------------+
+| a                   | abc123            |
++---------------------+-------------------+
+select concat(cast(c1 as char(10)), '123') from t1;
++-------------------------------------+
+| concat(cast(c1 as char(10)), '123') |
++-------------------------------------+
+| abc123                              |
++-------------------------------------+
+select concat(cast(c1 as char(1)), '123') from t1;
++------------------------------------+
+| concat(cast(c1 as char(1)), '123') |
++------------------------------------+
+| a123                               |
++------------------------------------+
+
+drop table t1;
+create table t1(c1 decimal(10, 3));
+insert into t1 values(1.123);
+select cast(c1 as decimal(10,1)), concat(c1, 'abc') from t1;
++---------------------------+-------------------+
+| cast(c1 as decimal(10,1)) | concat(c1, 'abc') |
++---------------------------+-------------------+
+|                       1.1 | 1.123abc          |
++---------------------------+-------------------+
+select c1, cast(c1 as binary(10)), hex(cast(c1 as binary(10))) from t1;
++-------+------------------------+-----------------------------+
+| c1    | cast(c1 as binary(10)) | hex(cast(c1 as binary(10))) |
++-------+------------------------+-----------------------------+
+| 1.123 | 1.123                  | 312E3132330000000000        |
++-------+------------------------+-----------------------------+
+
+drop table t1;
+create table t1(c1 time(6));
+insert into t1 values('11:11:11.123456');
+select cast(c1 as time), concat(c1, 'abc') from t1;
++------------------+--------------------+
+| cast(c1 as time) | concat(c1, 'abc')  |
++------------------+--------------------+
+| 11:11:11         | 11:11:11.123456abc |
++------------------+--------------------+
+
+drop table t1;
+create table t1(col_utf8  varchar(100) collate utf8_general_ci,
+                col_utf16 varchar(100) collate utf16_bin,
+                col_gbk   varchar(100) collate gbk_chinese_ci);
+insert into t1 values('123.123', '123.123', '123.123');
+select cast(col_utf8 as char(10)), cast(col_utf16 as char(10)), cast(col_gbk as char(10)) from t1;
++----------------------------+-----------------------------+---------------------------+
+| cast(col_utf8 as char(10)) | cast(col_utf16 as char(10)) | cast(col_gbk as char(10)) |
++----------------------------+-----------------------------+---------------------------+
+| 123.123                    | 123.123                     | 123.123                   |
++----------------------------+-----------------------------+---------------------------+
+select length(cast(col_utf8 as char(10))), length(cast(col_utf16 as char(10))), length(cast(col_gbk as char(10))) from t1;
++------------------------------------+-------------------------------------+-----------------------------------+
+| length(cast(col_utf8 as char(10))) | length(cast(col_utf16 as char(10))) | length(cast(col_gbk as char(10))) |
++------------------------------------+-------------------------------------+-----------------------------------+
+|                                  7 |                                   7 |                                 7 |
++------------------------------------+-------------------------------------+-----------------------------------+
+
+select cast(col_utf8 as decimal(10, 1)), cast(col_utf16 as decimal(10, 5)), cast(col_gbk as decimal(10, 1)) from t1;
++----------------------------------+-----------------------------------+---------------------------------+
+| cast(col_utf8 as decimal(10, 1)) | cast(col_utf16 as decimal(10, 5)) | cast(col_gbk as decimal(10, 1)) |
++----------------------------------+-----------------------------------+---------------------------------+
+|                            123.1 |                         123.12300 |                           123.1 |
++----------------------------------+-----------------------------------+---------------------------------+
+
+// binary/varbinary test, check if padding char is ok
+select col_utf16, cast(col_utf16 as binary(20)), hex(cast(col_utf16 as binary(20))) from t1;
++-----------+-------------------------------+------------------------------------------+
+| col_utf16 | cast(col_utf16 as binary(20)) | hex(cast(col_utf16 as binary(20)))       |
++-----------+-------------------------------+------------------------------------------+
+| 123.123   |  1 2 3 . 1 2 3                | 003100320033002E003100320033000000000000 |
++-----------+-------------------------------+------------------------------------------+
+select col_utf8, cast(col_utf8 as binary(20)), hex(cast(col_utf8 as binary(20))) from t1;
++----------+------------------------------+------------------------------------------+
+| col_utf8 | cast(col_utf8 as binary(20)) | hex(cast(col_utf8 as binary(20)))        |
++----------+------------------------------+------------------------------------------+
+| 123.123  | 123.123                      | 3132332E31323300000000000000000000000000 |
++----------+------------------------------+------------------------------------------+
+
+drop table t1;
+create table t1(c1 bigint unsigned);
+insert into t1 values(18446744073709551615);
+select cast(c1 as signed) from t1;
++--------------------+
+| cast(c1 as signed) |
++--------------------+
+|                 -1 |
++--------------------+
+select c1, cast(c1 as binary(30)), hex(cast(c1 as binary(30))) from t1;
++----------------------+--------------------------------+--------------------------------------------------------------+
+| c1                   | cast(c1 as binary(30))         | hex(cast(c1 as binary(30)))                                  |
++----------------------+--------------------------------+--------------------------------------------------------------+
+| 18446744073709551615 | 18446744073709551615           | 313834343637343430373337303935353136313500000000000000000000 |
++----------------------+--------------------------------+--------------------------------------------------------------+
+
+drop table t1;

@@ -18,40 +18,55 @@
 #include "common/row/ob_row.h"
 #include "common/ob_field.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObSchemaGetterGuard;
 }
-}  // namespace share
+}
 
-namespace common {
+namespace common
+{
 
-class ObSMRow : public obmysql::ObMySQLRow {
+class ObSMRow
+    : public obmysql::ObMySQLRow
+{
 public:
-  ObSMRow(obmysql::MYSQL_PROTOCOL_TYPE type, const ObNewRow& obrow, const ObDataTypeCastParams& dtc_params,
-      const ColumnsFieldIArray* fields = NULL, share::schema::ObSchemaGetterGuard* schema_guard = NULL,
-      uint64_t tenant = common::OB_INVALID_ID);
+  ObSMRow(obmysql::MYSQL_PROTOCOL_TYPE type,
+          const ObNewRow &obrow,
+          const ObDataTypeCastParams &dtc_params,
+          const ColumnsFieldIArray *fields = NULL,
+          share::schema::ObSchemaGetterGuard *schema_guard = NULL,
+          uint64_t tenant = common::OB_INVALID_ID);
 
-  virtual ~ObSMRow()
-  {}
+  virtual ~ObSMRow() {}
 
 protected:
-  virtual int64_t get_cells_cnt() const;
-  virtual int encode_cell(int64_t idx, char* buf, int64_t len, int64_t& pos, char* bitmap) const;
+  virtual int64_t get_cells_cnt() const
+  {
+    return NULL == obrow_.projector_
+        ? obrow_.count_
+        : obrow_.projector_size_;
+  }
+  virtual int encode_cell(
+      int64_t idx, char *buf,
+      int64_t len, int64_t &pos, char *bitmap) const;
 
 private:
-  const ObNewRow& obrow_;
+  const ObNewRow &obrow_;
   const ObDataTypeCastParams dtc_params_;
-  const ColumnsFieldIArray* fields_;
-  share::schema::ObSchemaGetterGuard* schema_guard_;
+  const ColumnsFieldIArray *fields_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
   uint64_t tenant_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObSMRow);
-};  // end of class OBMP
+}; // end of class OBMP
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_COMMON_OBSM_ROW_H_ */

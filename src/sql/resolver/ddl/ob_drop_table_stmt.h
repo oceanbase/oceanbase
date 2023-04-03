@@ -16,49 +16,54 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObDropTableStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropTableStmt : public ObDDLStmt
+{
 public:
-  explicit ObDropTableStmt(common::ObIAllocator* name_pool);
+  explicit ObDropTableStmt(common::ObIAllocator *name_pool);
   ObDropTableStmt();
   virtual ~ObDropTableStmt();
 
-  const obrpc::ObDropTableArg& get_drop_table_arg() const
-  {
-    return drop_table_arg_;
-  }
-  obrpc::ObDropTableArg& get_drop_table_arg()
-  {
-    return drop_table_arg_;
-  }
-  virtual bool cause_implicit_commit() const
-  {
+  const obrpc::ObDropTableArg &get_drop_table_arg() const { return drop_table_arg_; }
+  obrpc::ObDropTableArg &get_drop_table_arg() { return drop_table_arg_; }
+  virtual bool cause_implicit_commit() const {
+    //return share::schema::TMP_TABLE != drop_table_arg_.table_type_;
+    /*
+     * Can not handle situation when dropping PTT without committing
+     * current transaction implicitly by the current session.
+     * 
+     * Example:
+     * 
+     * create temporary table ptt1(c1 int);
+     * create table t1(c1 int);
+     *
+     * begin Tx
+     * insert into ptt1 values(1);
+     * insert into t1 values(1);
+     * drop temporary table ptt1;
+     * commit;
+     *
+     * In this case, while replaying log Tx in slave, ptt1 has already been dropped.
+     *
+     */
     return true;
   }
-  int add_table_item(const obrpc::ObTableItem& table_item);
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return drop_table_arg_;
-  }
-  bool is_view_stmt() const
-  {
-    return is_view_stmt_;
-  }
-  void set_is_view_stmt(const bool is_view_stmt)
-  {
-    is_view_stmt_ = is_view_stmt;
-  }
+  int add_table_item(const obrpc::ObTableItem &table_item);
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_table_arg_; }
+  bool is_view_stmt() const { return is_view_stmt_; }
+  void set_is_view_stmt(const bool is_view_stmt) { is_view_stmt_ = is_view_stmt; }
 
-  TO_STRING_KV(K_(stmt_type), K_(drop_table_arg));
-
+  TO_STRING_KV(K_(stmt_type),K_(drop_table_arg));
 private:
   obrpc::ObDropTableArg drop_table_arg_;
   bool is_view_stmt_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTableStmt);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_RESOLVER_DDL_DROP_TABLE_STMT_
+#endif //OCEANBASE_SQL_RESOLVER_DDL_DROP_TABLE_STMT_

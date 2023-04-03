@@ -15,43 +15,32 @@
 
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObAlterUserPrimaryZoneStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObAlterUserPrimaryZoneStmt: public ObDDLStmt
+{
 public:
   ObAlterUserPrimaryZoneStmt();
-  explicit ObAlterUserPrimaryZoneStmt(common::ObIAllocator* name_pool);
+  explicit ObAlterUserPrimaryZoneStmt(common::ObIAllocator *name_pool);
   virtual ~ObAlterUserPrimaryZoneStmt();
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return arg_;
-  }
-  void set_tenant_id(int64_t tenant_id)
-  {
-    arg_.database_schema_.set_tenant_id(tenant_id);
-  }
-  int set_database_name(const ObString& database_name)
-  {
-    return arg_.database_schema_.set_database_name(database_name);
-  }
-  int set_primary_zone(const ObString& primary_zone)
-  {
-    return arg_.database_schema_.set_primary_zone(primary_zone);
-  }
-  int add_primary_zone_option()
-  {
-    return arg_.alter_option_bitset_.add_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE);
-  }
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return arg_; }
+  void set_tenant_id(int64_t tenant_id) { arg_.database_schema_.set_tenant_id(tenant_id); } 
+  int set_database_name(const ObString &database_name) 
+      { return arg_.database_schema_.set_database_name(database_name); }
+  int set_primary_zone(const ObString &primary_zone) 
+      { return OB_SUCCESS; } // not supported
+  int add_primary_zone_option() 
+      { return arg_.alter_option_bitset_.add_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE); }
   TO_STRING_KV(K_(stmt_type), K_(arg));
-
 public:
   // data members
   obrpc::ObAlterDatabaseArg arg_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserPrimaryZoneStmt);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OB_ALTER_USER_PROFILE_STMT_H_
+#endif //OB_ALTER_USER_PROFILE_STMT_H_

@@ -16,26 +16,30 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-// REGISTER_PHY_OPERATOR(ObMergeGroupBy, PHY_MERGE_GROUP_BY);
+namespace sql
+{
+//REGISTER_PHY_OPERATOR(ObMergeGroupBy, PHY_MERGE_GROUP_BY);
 
-class ObMergeGroupBy::ObMergeGroupByCtx : public ObGroupByCtx {
+class ObMergeGroupBy::ObMergeGroupByCtx : public ObGroupByCtx
+{
 public:
-  explicit ObMergeGroupByCtx(ObExecContext& exec_ctx)
-      : ObGroupByCtx(exec_ctx), last_input_row_(NULL), is_end_(false), cur_output_group_id(-1), first_output_group_id(0)
-  {}
-  virtual void destroy()
+  explicit ObMergeGroupByCtx(ObExecContext &exec_ctx)
+      : ObGroupByCtx(exec_ctx),
+        last_input_row_(NULL),
+        is_end_(false),
+        cur_output_group_id (-1),
+        first_output_group_id (0)
   {
-    ObGroupByCtx::destroy();
   }
+  virtual void destroy() { ObGroupByCtx::destroy(); }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeGroupByCtx);
-
 private:
-  const ObNewRow* last_input_row_;
+  const ObNewRow *last_input_row_;
   bool is_end_;
   // added to support groupby with rollup
   int64_t cur_output_group_id;
@@ -44,24 +48,28 @@ private:
   friend class ObMergeGroupBy;
 };
 
-ObMergeGroupBy::ObMergeGroupBy(ObIAllocator& alloc) : ObGroupBy(alloc)
-{}
+ObMergeGroupBy::ObMergeGroupBy(ObIAllocator &alloc)
+  : ObGroupBy(alloc)
+{
+}
 
 ObMergeGroupBy::~ObMergeGroupBy()
-{}
+{
+}
 
-int ObMergeGroupBy::inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const
+int ObMergeGroupBy::inner_create_operator_ctx(ObExecContext &ctx, ObPhyOperatorCtx *&op_ctx) const
 {
   return CREATE_PHY_OPERATOR_CTX(ObMergeGroupByCtx, ctx, get_id(), get_type(), op_ctx);
 }
 
-int ObMergeGroupBy::inner_open(ObExecContext& ctx) const
+
+int ObMergeGroupBy::inner_open(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupBy::init_group_by(ctx))) {
     LOG_WARN("init group by failed", K(ret));
   } else {
-    ObMergeGroupByCtx* groupby_ctx = GET_PHY_OPERATOR_CTX(ObMergeGroupByCtx, ctx, get_id());
+    ObMergeGroupByCtx *groupby_ctx = GET_PHY_OPERATOR_CTX(ObMergeGroupByCtx, ctx, get_id());
     if (OB_ISNULL(groupby_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("group by ctx is NULL", K(ret));
@@ -72,10 +80,10 @@ int ObMergeGroupBy::inner_open(ObExecContext& ctx) const
   return ret;
 }
 
-int ObMergeGroupBy::rescan(ObExecContext& ctx) const
+int ObMergeGroupBy::rescan(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObMergeGroupByCtx* groupby_ctx = NULL;
+  ObMergeGroupByCtx *groupby_ctx = NULL;
   if (OB_FAIL(ObGroupBy::rescan(ctx))) {
     LOG_WARN("rescan child operator failed", K(ret));
   } else if (OB_ISNULL(groupby_ctx = GET_PHY_OPERATOR_CTX(ObMergeGroupByCtx, ctx, get_id()))) {
@@ -91,23 +99,24 @@ int ObMergeGroupBy::rescan(ObExecContext& ctx) const
   return ret;
 }
 
-int ObMergeGroupBy::inner_close(ObExecContext& ctx) const
+int ObMergeGroupBy::inner_close(ObExecContext &ctx) const
 {
   UNUSED(ctx);
   int ret = OB_SUCCESS;
   return ret;
 }
 
-int ObMergeGroupBy::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+int ObMergeGroupBy::inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
 {
   int ret = OB_SUCCESS;
-  ObMergeGroupByCtx* groupby_ctx = NULL;
+  ObMergeGroupByCtx *groupby_ctx = NULL;
   int64_t stop_output_group_id = group_col_idxs_.count();
-  int64_t col_count = group_col_idxs_.count() + rollup_col_idxs_.count();
+  int64_t col_count = group_col_idxs_.count()+rollup_col_idxs_.count();
   if (OB_ISNULL(child_op_) || OB_ISNULL(groupby_ctx = GET_PHY_OPERATOR_CTX(ObMergeGroupByCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get ObMergeGroupByCtx failed", K_(child_op));
-  } else if (has_rollup_ && groupby_ctx->cur_output_group_id >= groupby_ctx->first_output_group_id &&
+  } else if (has_rollup_ &&
+             groupby_ctx->cur_output_group_id >= groupby_ctx->first_output_group_id &&
              groupby_ctx->cur_output_group_id >= stop_output_group_id) {
     // output roll-up results here
     if (OB_FAIL(rollup_and_calc_results(groupby_ctx->cur_output_group_id, groupby_ctx))) {
@@ -142,10 +151,10 @@ int ObMergeGroupBy::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row)
     }
     if (OB_SUCC(ret)) {
       bool same_group = false;
-      const ObNewRow* input_row = NULL;
-      const ObRowStore::StoredRow* stored_row = NULL;
-      ObSQLSessionInfo* my_session = groupby_ctx->exec_ctx_.get_my_session();
-      const ObTimeZoneInfo* tz_info = (my_session != NULL) ? my_session->get_timezone_info() : NULL;
+      const ObNewRow *input_row = NULL;
+      const ObRowStore::StoredRow *stored_row = NULL;
+      ObSQLSessionInfo *my_session = groupby_ctx->exec_ctx_.get_my_session();
+      const ObTimeZoneInfo *tz_info = (my_session != NULL) ? my_session->get_timezone_info() : NULL;
       bool is_break = false;
       int64_t first_diff_pos = 0;
       while (OB_SUCC(ret) && !is_break && OB_SUCC(child_op_->get_next_row(ctx, input_row))) {
@@ -163,29 +172,26 @@ int ObMergeGroupBy::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row)
             LOG_WARN("failed to calc aggr", K(ret));
           } else if (mem_size_limit_ > 0 && mem_size_limit_ < groupby_ctx->aggr_func_.get_used_mem_size()) {
             ret = OB_EXCEED_MEM_LIMIT;
-            LOG_WARN("merge group by has exceeded the mem limit",
-                K_(mem_size_limit),
-                "aggr mem size",
-                groupby_ctx->aggr_func_.get_used_mem_size());
+            LOG_WARN("merge group by has exceeded the mem limit", K_(mem_size_limit),
+                     "aggr mem size", groupby_ctx->aggr_func_.get_used_mem_size());
           }
         } else if (OB_FAIL(rollup_and_calc_results(group_id, groupby_ctx))) {
-          // ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to rollup and calculate results", K(group_id), K(ret));
         } else {
           groupby_ctx->last_input_row_ = input_row;
           is_break = true;
-          if (has_rollup_) {
+          if(has_rollup_) {
             groupby_ctx->first_output_group_id = first_diff_pos + 1;
             groupby_ctx->cur_output_group_id = group_id - 1;
           }
         }
-      }  // end while
+      } // end while
       if (OB_ITER_END == ret) {
         // the last group
         groupby_ctx->is_end_ = true;
         if (OB_FAIL(rollup_and_calc_results(group_id, groupby_ctx))) {
           LOG_WARN("failed to rollup and calculate results", K(group_id), K(ret));
-        } else if (has_rollup_) {
+        } else if(has_rollup_) {
           groupby_ctx->first_output_group_id = 0;
           groupby_ctx->cur_output_group_id = group_id - 1;
         }
@@ -198,17 +204,18 @@ int ObMergeGroupBy::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row)
   return ret;
 }
 
-int ObMergeGroupBy::rollup_and_calc_results(const int64_t group_id, ObMergeGroupByCtx* groupby_ctx) const
+int ObMergeGroupBy::rollup_and_calc_results(const int64_t group_id, ObMergeGroupByCtx *groupby_ctx) const
 {
   int ret = OB_SUCCESS;
-  int64_t col_count = group_col_idxs_.count() + rollup_col_idxs_.count();
+  int64_t col_count = group_col_idxs_.count()+rollup_col_idxs_.count();
   if (OB_UNLIKELY(OB_ISNULL(groupby_ctx) || group_id < 0 || group_id > col_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(group_id), K(ret));
   } else {
-    ObSQLSessionInfo* my_session = groupby_ctx->exec_ctx_.get_my_session();
-    const ObTimeZoneInfo* tz_info = (my_session != NULL) ? my_session->get_timezone_info() : NULL;
-    // for: SELECT GROUPING(z0_test0) FROM Z0CASE GROUP BY z0_test0, ROLLUP(z0_test0);
+    ObSQLSessionInfo *my_session = groupby_ctx->exec_ctx_.get_my_session();
+    const ObTimeZoneInfo *tz_info = (my_session != NULL) ? my_session->get_timezone_info() : NULL;
+    //for: SELECT GROUPING(z0_test0) FROM Z0CASE GROUP BY z0_test0, ROLLUP(z0_test0);
+    //issue:
     bool set_grouping = true;
     if (group_id > group_col_idxs_.count()) {
       int64_t rollup_id = rollup_col_idxs_[group_id - group_col_idxs_.count() - 1].index_;
@@ -219,13 +226,12 @@ int ObMergeGroupBy::rollup_and_calc_results(const int64_t group_id, ObMergeGroup
       }
     }
     if (has_rollup_ && group_id > 0 &&
-        OB_FAIL(groupby_ctx->aggr_func_.rollup_process(tz_info,
-            group_id - 1,
-            group_id,
-            group_id <= group_col_idxs_.count() ? group_col_idxs_[group_id - 1].index_
-                                                : rollup_col_idxs_[group_id - group_col_idxs_.count() - 1].index_,
-            set_grouping))) {
-      // ret = OB_ERR_UNEXPECTED;
+        OB_FAIL(groupby_ctx->aggr_func_.rollup_process(tz_info, group_id - 1, group_id,
+                                    group_id <= group_col_idxs_.count() ?
+                                    group_col_idxs_[group_id - 1].index_ :
+                                    rollup_col_idxs_[group_id - group_col_idxs_.count() - 1].index_,
+                                    set_grouping))) {
+      //ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to rollup aggregation results", K(ret));
     } else if (OB_FAIL(groupby_ctx->aggr_func_.get_result(groupby_ctx->get_cur_row(), tz_info, group_id))) {
       LOG_WARN("failed to get aggr result", K(group_id), K(ret));

@@ -19,19 +19,18 @@
 
 using namespace oceanbase;
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace schema;
-class TestPrimaryZoneUtil : public ::testing::Test {
+class TestPrimaryZoneUtil : public ::testing::Test
+{
 public:
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  static void SetUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
 };
 
 TEST_F(TestPrimaryZoneUtil, single_zone)
@@ -455,14 +454,14 @@ TEST_F(TestPrimaryZoneUtil, multiple_zone11)
   ASSERT_TRUE(ObString("zone4") == primary_zone_util.full_zone_array_.at(2).zone_);
   ASSERT_TRUE(ObString("zone3") == primary_zone_util.full_zone_array_.at(3).zone_);
 }
-}  // namespace share
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int ret = EXIT_SUCCESS;
   system("rm -f test_primary_zone_util.log");
-  ObLogger& logger = ObLogger::get_logger();
+  ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_primary_zone_util.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);
 

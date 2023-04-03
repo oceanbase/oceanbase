@@ -17,91 +17,77 @@
 #include "lib/container/ob_array.h"
 #include "ob_macro_block.h"
 #include "storage/ob_i_store.h"
-#include "storage/ob_pg_mgr.h"
+#include "storage/blocksstable/ob_macro_block_struct.h"
+#include "storage/blocksstable/ob_bloom_filter_cache.h"
 
-namespace oceanbase {
-namespace blocksstable {
+namespace oceanbase
+{
+namespace blocksstable
+{
 
-class ObBloomFilterMicroBlockWriter {
+class ObBloomFilterMicroBlockWriter
+{
 public:
   ObBloomFilterMicroBlockWriter();
   virtual ~ObBloomFilterMicroBlockWriter();
   void reset();
   void reuse();
   int init(const int64_t micro_block_size);
-  int write(const ObBloomFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size);
-
+  int write(const ObBloomFilterCacheValue &bf_cache_value, const char *&block_buf, int64_t &block_size);
 private:
   int build_micro_block_header(const int64_t rowkey_column_count, const int64_t row_count);
-
 private:
-  ObBloomFilterMicroBlockHeader* bf_micro_header_;
+  ObBloomFilterMicroBlockHeader *bf_micro_header_;
   ObSelfBufferWriter data_buffer_;
   bool is_inited_;
 };
 
-class ObBloomFilterMacroBlockWriter {
+class ObBloomFilterMacroBlockWriter
+{
 public:
   ObBloomFilterMacroBlockWriter();
   virtual ~ObBloomFilterMacroBlockWriter();
   void reset();
   void reuse();
-  int init(const ObDataStoreDesc& desc);
-  int write(const ObBloomFilterCacheValue& bf_cache_value);
-  OB_INLINE ObMacroBlocksWriteCtx& get_block_write_ctx()
-  {
-    return block_write_ctx_;
-  }
-
+  int init(const ObDataStoreDesc &desc);
+  int write(const ObBloomFilterCacheValue &bf_cache_value);
+  OB_INLINE ObMacroBlocksWriteCtx &get_block_write_ctx() { return block_write_ctx_; }
 private:
   int init_headers(const int64_t row_count);
-  int write_micro_block(const char* comp_block_buf, const int64_t comp_block_size, const int64_t orig_block_size);
-  int build_macro_meta(ObFullMacroBlockMeta& full_meta);
+  int write_micro_block(const char *comp_block_buf, const int64_t comp_block_size,
+                        const int64_t orig_block_size);
   int flush_macro_block();
-
 private:
   ObSelfBufferWriter data_buffer_;
-  ObBloomFilterMacroBlockHeader* bf_macro_header_;
+  ObBloomFilterMacroBlockHeader *bf_macro_header_;
   ObMacroBlockCommonHeader common_header_;
   ObMicroBlockCompressor compressor_;
   ObBloomFilterMicroBlockWriter bf_micro_writer_;
   ObMacroBlocksWriteCtx block_write_ctx_;
-  const ObDataStoreDesc* desc_;
-  ObStorageFileHandle file_handle_;
+  const ObDataStoreDesc *desc_;
   bool is_inited_;
 };
 
-class ObBloomFilterDataWriter {
+class ObBloomFilterDataWriter
+{
 public:
   ObBloomFilterDataWriter();
   virtual ~ObBloomFilterDataWriter();
-  int init(const ObDataStoreDesc& desc);
+  int init(const ObDataStoreDesc &desc);
   void reset();
   void reuse();
-  int append(const storage::ObStoreRow& row);
-  int append(const common::ObStoreRowkey& rowkey);
-  int append(const ObBloomFilterCacheValue& bf_cache_value);
+  int append(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils);
+  int append(const ObBloomFilterCacheValue &bf_cache_value);
   int flush_bloom_filter();
-  OB_INLINE int32_t get_row_count() const
-  {
-    return bf_cache_value_.get_row_count();
-  }
-  OB_INLINE ObMacroBlocksWriteCtx& get_block_write_ctx()
-  {
-    return bf_macro_writer_.get_block_write_ctx();
-  }
-  OB_INLINE const ObBloomFilterCacheValue& get_bloomfilter_cache_value() const
-  {
-    return bf_cache_value_;
-  }
-
+  OB_INLINE int32_t get_row_count() const { return bf_cache_value_.get_row_count(); }
+  OB_INLINE ObMacroBlocksWriteCtx &get_block_write_ctx() { return bf_macro_writer_.get_block_write_ctx(); }
+  OB_INLINE const ObBloomFilterCacheValue &get_bloomfilter_cache_value() const { return bf_cache_value_; }
 private:
   static const int64_t BLOOM_FILTER_MAX_ROW_COUNT = 1500000L;
   ObBloomFilterCacheValue bf_cache_value_;
   ObBloomFilterMacroBlockWriter bf_macro_writer_;
   int64_t rowkey_column_count_;
   bool is_inited_;
-  ObStorageFileHandle file_handle_;
 };
 
 }  // end namespace blocksstable

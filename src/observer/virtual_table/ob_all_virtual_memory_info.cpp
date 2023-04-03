@@ -16,12 +16,18 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
-ObAllVirtualMemoryInfo::ObAllVirtualMemoryInfo() : ObVirtualTableScannerIterator(), col_count_(0), has_start_(false)
-{}
+namespace observer
+{
+ObAllVirtualMemoryInfo::ObAllVirtualMemoryInfo()
+    : ObVirtualTableScannerIterator(),
+      col_count_(0),
+      has_start_(false)
+{
+}
 
 ObAllVirtualMemoryInfo::~ObAllVirtualMemoryInfo()
 {
@@ -31,7 +37,8 @@ ObAllVirtualMemoryInfo::~ObAllVirtualMemoryInfo()
 int ObAllVirtualMemoryInfo::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObServerConfig::get_instance().self_addr_.ip_to_string(ip_buf_, sizeof(ip_buf_)) == false)) {
+  if (OB_UNLIKELY(ObServerConfig::get_instance().self_addr_.ip_to_string(ip_buf_, sizeof(ip_buf_))
+              == false)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ip_to_string() fail", K(ret));
   }
@@ -44,127 +51,138 @@ void ObAllVirtualMemoryInfo::reset()
   has_start_ = false;
 }
 
-int ObAllVirtualMemoryInfo::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualMemoryInfo::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!has_start_) {
     col_count_ = output_column_ids_.count();
-    ObObj* cells = cur_row_.cells_;
+    ObObj *cells = cur_row_.cells_;
     if (OB_UNLIKELY(NULL == cells)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
     } else {
-      auto add_row =
-          [&](uint64_t tenant_id, int64_t ctx_id, const char* mod_name, int64_t hold, int64_t used, int64_t count) {
-            int ret = OB_SUCCESS;
-            for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
-              const uint64_t col_id = output_column_ids_.at(i);
-              switch (col_id) {
-                case TENANT_ID: {
-                  cells[i].set_int(tenant_id);
-                  break;
-                }
-                case SVR_IP: {
-                  cells[i].set_varchar(ip_buf_);
-                  cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                  break;
-                }
-                case SVR_PORT: {
-                  cells[i].set_int(GCONF.self_addr_.get_port());
-                  break;
-                }
-                case CTX_ID: {
-                  cells[i].set_int(ctx_id);
-                  break;
-                }
-                case CTX_NAME: {
-                  cells[i].set_varchar(get_global_ctx_info().get_ctx_name(ctx_id));
-                  cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                  break;
-                }
-                case MOD_TYPE: {
-                  ObString mod_type;
-                  mod_type = ObString::make_string("user");
-                  cells[i].set_varchar(mod_type);
-                  cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                  break;
-                }
-                case MOD_ID: {
-                  // MOD_ID is obsolete, keep it for tools compatibility
-                  cells[i].set_int(0);
-                  break;
-                }
-                case LABEL:
-                case MOD_NAME: {
-                  cells[i].set_varchar(mod_name);
-                  cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                  break;
-                }
-                case ZONE: {
-                  cells[i].set_varchar(GCONF.zone);
-                  cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                  break;
-                }
-                case HOLD: {
-                  cells[i].set_int(hold);
-                  break;
-                }
-                case USED: {
-                  cells[i].set_int(used);
-                  break;
-                }
-                case COUNT: {
-                  cells[i].set_int(count);
-                  break;
-                }
-                case ALLOC_COUNT: {
-                  cells[i].set_int(0);
-                  break;
-                }
-                case FREE_COUNT: {
-                  cells[i].set_int(0);
-                  break;
-                }
-                default: {
-                  ret = OB_ERR_UNEXPECTED;
-                  SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));
-                  break;
-                }
-              }
-            }  // iter column end
-            if (OB_SUCC(ret)) {
-              // maximum scanner 64M, do not consider overflow for now
-              if (OB_FAIL(scanner_.add_row(cur_row_))) {
-                SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
-                if (OB_SIZE_OVERFLOW == ret) {
-                  ret = OB_SUCCESS;
-                }
-              }
+      auto add_row = [&](uint64_t tenant_id, int64_t ctx_id,
+                         const char *mod_name,
+                         int64_t hold, int64_t used, int64_t count) {
+        int ret = OB_SUCCESS;
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
+          const uint64_t col_id = output_column_ids_.at(i);
+          switch (col_id) {
+          case TENANT_ID: {
+              cells[i].set_int(tenant_id);
+              break;
             }
-            return ret;
-          };
+          case SVR_IP: {
+              cells[i].set_varchar(ip_buf_);
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+          case SVR_PORT: {
+              cells[i].set_int(GCONF.self_addr_.get_port());
+              break;
+            }
+          case CTX_ID: {
+              cells[i].set_int(ctx_id);
+              break;
+            }
+          case CTX_NAME: {
+              cells[i].set_varchar(get_global_ctx_info().get_ctx_name(ctx_id));
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+          case MOD_TYPE: {
+              ObString mod_type;
+              mod_type = ObString::make_string("user");
+              cells[i].set_varchar(mod_type);
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+          case MOD_ID: {
+              // MOD_ID废弃，为兼容工具而保留
+              cells[i].set_int(0);
+              break;
+            }
+          case LABEL:
+          case MOD_NAME: {
+              cells[i].set_varchar(mod_name);
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+          case ZONE: {
+              cells[i].set_varchar(GCONF.zone);
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+          case HOLD: {
+              cells[i].set_int(hold);
+              break;
+            }
+          case USED: {
+              cells[i].set_int(used);
+              break;
+            }
+          case COUNT: {
+              cells[i].set_int(count);
+              break;
+            }
+          case ALLOC_COUNT: {
+              cells[i].set_int(0);
+              break;
+            }
+          case FREE_COUNT: {
+              cells[i].set_int(0);
+              break;
+            }
+          default: {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));
+              break;
+            }
+          }
+        } // iter column end
+        if (OB_SUCC(ret)) {
+          // scanner最大支持64M，因此暂不考虑溢出的情况
+          if (OB_FAIL(scanner_.add_row(cur_row_))) {
+            SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+            if (OB_SIZE_OVERFLOW == ret) {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+        return ret;
+      };
       int tenant_cnt = 0;
-      get_tenant_ids(tenant_ids_, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
-      for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
+
+      // sys tenant show all tenant memory info
+      if (is_sys_tenant(effective_tenant_id_)) {
+        get_tenant_ids(tenant_ids_, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
+      } else {
+        // user tenant show self tenant memory info
+        tenant_ids_[0] = effective_tenant_id_;
+        tenant_cnt = 1;
+      }
+
+      for (int tenant_idx = 0; OB_SUCC(ret) && tenant_idx < tenant_cnt; tenant_idx++) {
         uint64_t tenant_id = tenant_ids_[tenant_idx];
         for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-          auto* ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+          auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+          if (nullptr == ta) {
+            ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                        ctx_id);
+          }
           if (nullptr == ta) {
             continue;
           }
-          if (OB_SERVER_TENANT_ID == tenant_id && ObCtxIds::CO_STACK == ctx_id) {
-            int64_t stack_hold = lib::get_tenant_memory_hold(tenant_id, ctx_id);
-            ret = add_row(tenant_id, ctx_id, "CO_STACK", stack_hold, stack_hold, 1);
-          }
           if (OB_SUCC(ret)) {
-            ret = ta->iter_label([&](lib::ObLabel& label, LabelItem* l_item, ObModItem* m_item) {
-              return add_row(tenant_id,
-                  ctx_id,
-                  label.is_str_ ? label.str_ : ObModSet::instance().get_mod_name(label.mod_id_),
-                  label.is_str_ ? l_item->hold_ : m_item->hold_,
-                  label.is_str_ ? l_item->used_ : m_item->used_,
-                  label.is_str_ ? l_item->count_ : m_item->count_);
-            });
+            ret = ta->iter_label([&](lib::ObLabel &label, LabelItem *l_item)
+              {
+                return add_row(tenant_id, ctx_id, label.str_, l_item->hold_, l_item->used_, l_item->count_);
+              });
           }
         }
       }
@@ -187,5 +205,5 @@ int ObAllVirtualMemoryInfo::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

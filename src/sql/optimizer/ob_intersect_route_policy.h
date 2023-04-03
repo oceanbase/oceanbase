@@ -21,23 +21,27 @@
 #include "common/ob_zone_status.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "share/ob_server_locality_cache.h"
-namespace oceanbase {
-namespace storage {
-class ObPartitionService;
-}
-namespace sql {
-class ObPhyPartitionLocationInfo;
-class ObPhyTableLocationInfo;
-class ObIntersectRoutePolicy : public ObRoutePolicy {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCandiTabletLoc;
+class ObCandiTableLoc;
+class ObIntersectRoutePolicy:public ObRoutePolicy
+{
 public:
   using ObRoutePolicy::ObRoutePolicy;
-  int init_candidate_replicas(const common::ObList<common::ObAddr, common::ObArenaAllocator>& candidate_server_list,
-      common::ObIArray<CandidateReplica>& candi_replicas);
-  int select_replica_with_priority(const ObRoutePolicyCtx& route_policy_ctx,
-      const common::ObIArray<CandidateReplica>& replica_array,
-      common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list);
+  int init_candidate_replicas(const common::ObList<common::ObAddr, common::ObArenaAllocator> &candidate_server_list,
+                              common::ObIArray<CandidateReplica> &candi_replicas);
+  int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
+                                   const common::ObIArray<CandidateReplica> &replica_array,
+                                   common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+
+
+
+
+}//sql
+}//oceanbase
 #endif

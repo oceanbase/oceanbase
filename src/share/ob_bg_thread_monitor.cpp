@@ -13,10 +13,10 @@
 #include "ob_bg_thread_monitor.h"
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/atomic/ob_atomic.h"       // ATOMIC_STORE
-#include "lib/thread/ob_thread_name.h"  // set_thread_name
-#include "common/ob_i_callback.h"       // ObICallback
-#include "common/ob_clock_generator.h"  // ObClockGenerator
+#include "lib/atomic/ob_atomic.h"                 // ATOMIC_STORE
+#include "lib/thread/ob_thread_name.h"            // set_thread_name
+#include "common/ob_i_callback.h"                 // ObICallback
+#include "common/ob_clock_generator.h"            // ObClockGenerator
 
 namespace oceanbase {
 namespace share {
@@ -30,7 +30,8 @@ ObTSIBGMonitorMemory::~ObTSIBGMonitorMemory()
 int ObTSIBGMonitorMemory::pin_memory()
 {
   int ret = OB_SUCCESS;
-  if (NULL == ptr_ && NULL == (ptr_ = static_cast<char*>(ob_malloc(MEMORY_SIZE, "BGMonitor")))) {
+  if (NULL == ptr_
+      && NULL == (ptr_ = static_cast<char *>(ob_malloc(MEMORY_SIZE, "BGMonitor")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   }
   return ret;
@@ -44,11 +45,14 @@ void ObTSIBGMonitorMemory::unpin_memory()
   }
 }
 
-MonitorCallbackWrapper::MonitorCallbackWrapper() : is_idempotent_(false), has_called_(false), callback_(NULL)
-{}
+MonitorCallbackWrapper::MonitorCallbackWrapper() : is_idempotent_(false),
+                                                   has_called_(false),
+                                                   callback_(NULL) {}
 
-MonitorCallbackWrapper::MonitorCallbackWrapper(common::ObICallback* callback, bool is_idempotent)
-    : is_idempotent_(is_idempotent), has_called_(false), callback_(callback)
+MonitorCallbackWrapper::MonitorCallbackWrapper(common::ObICallback *callback,
+                                               bool is_idempotent) : is_idempotent_(is_idempotent),
+                                                                     has_called_(false),
+                                                                     callback_(callback)
 {}
 
 MonitorCallbackWrapper::~MonitorCallbackWrapper()
@@ -63,8 +67,10 @@ int MonitorCallbackWrapper::handle_callback()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(callback_)) {
     // do_nothing
-  } else if (false == is_idempotent_ && true == has_called_) {
-  } else if (!FALSE_IT(has_called_ = true) && OB_FAIL(callback_->callback())) {
+  } else if (false == is_idempotent_
+             && true == has_called_) {
+  } else if (!FALSE_IT(has_called_ = true)
+              && OB_FAIL(callback_->callback())) {
     SHARE_LOG(ERROR, "execute callback failed", K(ret));
   }
   return ret;
@@ -77,15 +83,21 @@ void MonitorCallbackWrapper::reset()
   callback_ = NULL;
 }
 
-MonitorEntry::MonitorEntry()
-    : start_ts_(OB_INVALID_TIMESTAMP), warn_ts_(OB_INVALID_TIMESTAMP), physical_thread_idx_(-1), callback_()
+MonitorEntry::MonitorEntry() : start_ts_(OB_INVALID_TIMESTAMP),
+                               warn_ts_(OB_INVALID_TIMESTAMP),
+                               physical_thread_idx_(-1),
+                               last_handle_callback_ts_(OB_INVALID_TIMESTAMP),
+                               callback_()
 {}
 
-void MonitorEntry::set(const int64_t start_ts, const int64_t warn_ts, const MonitorCallbackWrapper& callback)
+void MonitorEntry::set(const int64_t start_ts,
+                       const int64_t warn_ts,
+                       const MonitorCallbackWrapper &callback)
 {
   start_ts_ = start_ts;
   warn_ts_ = warn_ts;
   physical_thread_idx_ = ob_gettid();
+  last_handle_callback_ts_ = OB_INVALID_TIMESTAMP;
   callback_ = callback;
 }
 
@@ -94,6 +106,7 @@ void MonitorEntry::reset()
   start_ts_ = OB_INVALID_TIMESTAMP;
   warn_ts_ = OB_INVALID_TIMESTAMP;
   physical_thread_idx_ = -1;
+  last_handle_callback_ts_ = OB_INVALID_TIMESTAMP;
   callback_.reset();
 }
 
@@ -105,10 +118,16 @@ MonitorEntry::~MonitorEntry()
 bool MonitorEntry::check_is_cost_too_much_time(const int64_t current_ts) const
 {
   bool bool_ret = false;
-  if (OB_INVALID_TIMESTAMP == start_ts_ || start_ts_ + warn_ts_ > current_ts) {
+  if (OB_INVALID_TIMESTAMP == start_ts_) {
     // do nothing
-  } else {
+  } else if (OB_INVALID_TIMESTAMP == last_handle_callback_ts_
+      && start_ts_ + warn_ts_ <= current_ts) {
     bool_ret = true;
+  } else if (OB_INVALID_TIMESTAMP != last_handle_callback_ts_
+      && last_handle_callback_ts_ + warn_ts_ <= current_ts) {
+    bool_ret = true;
+  } else {
+    bool_ret = false;
   }
   return bool_ret;
 }
@@ -122,13 +141,19 @@ int MonitorEntry::callback()
   return ret;
 }
 
-MonitorEntryStack::MonitorEntryStack() : curr_idx_(0), inner_entry_(), lock_()
-{}
+MonitorEntryStack::MonitorEntryStack() : curr_idx_(0),
+                                         inner_entry_(),
+                                         lock_(ObLatchIds::BG_THREAD_MONITOR_LOCK)
+{
+}
 
 MonitorEntryStack::~MonitorEntryStack()
-{}
+{
+}
 
-int MonitorEntryStack::push(const int64_t start_ts, const int64_t warn_ts, const MonitorCallbackWrapper& callback)
+int MonitorEntryStack::push(const int64_t start_ts,
+                            const int64_t warn_ts,
+                            const MonitorCallbackWrapper &callback)
 {
   int ret = OB_SUCCESS;
   LockGuard guard(lock_);
@@ -146,7 +171,7 @@ void MonitorEntryStack::pop()
 {
   LockGuard guard(lock_);
   if (curr_idx_ <= 0 || curr_idx_ > NEST_LIMIT) {
-    SHARE_LOG(ERROR, "unexpected error, code mustn't go into this branch");
+    SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error, code mustn't go into this branch");
   } else {
     inner_entry_[--curr_idx_].reset();
   }
@@ -156,7 +181,7 @@ void MonitorEntryStack::check_and_handle_timeout_task(const int64_t current_ts)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = NEST_LIMIT - 1; i >= 0; i--) {
-    MonitorEntry& inner_entry = inner_entry_[i];
+    MonitorEntry &inner_entry = inner_entry_[i];
     if (true == inner_entry.check_is_cost_too_much_time(current_ts)) {
       LockGuard guard(lock_);
       if (true == inner_entry.check_is_cost_too_much_time(current_ts)) {
@@ -164,19 +189,25 @@ void MonitorEntryStack::check_and_handle_timeout_task(const int64_t current_ts)
           SHARE_LOG(ERROR, "inner_entry callback failed", K(ret));
         } else {
           const int64_t cost_ts = current_ts - inner_entry.start_ts_;
-          SHARE_LOG(WARN, "timeout entry status", K(inner_entry), K(current_ts), K(cost_ts));
+          // set hanlde callback timestamp
+          inner_entry.last_handle_callback_ts_ = current_ts;
+          SHARE_LOG(WARN, "timeout entry status", K(inner_entry),
+                    K(current_ts), K(cost_ts));
         }
       }
     }
   }
 }
 
-ObBGThreadMonitor::ObBGThreadMonitor()
-    : is_inited_(false), seq_(-1), monitor_entry_stack_(NULL), allocator_("BGTMonitor")
-{}
+ObBGThreadMonitor::ObBGThreadMonitor() : is_inited_(false), seq_(-1),
+                                         monitor_entry_stack_(NULL),
+                                         allocator_("BGTMonitor")
+{
+}
 
 ObBGThreadMonitor::~ObBGThreadMonitor()
-{}
+{
+}
 
 int ObBGThreadMonitor::init()
 {
@@ -185,12 +216,13 @@ int ObBGThreadMonitor::init()
     ret = OB_INIT_TWICE;
     SHARE_LOG(ERROR, "ObBGThreadMonitor is inited twice");
   } else {
-    monitor_entry_stack_ = static_cast<MonitorEntryStack*>(allocator_.alloc(MONITOR_LIMIT * sizeof(MonitorEntryStack)));
+    monitor_entry_stack_ = static_cast<MonitorEntryStack *>(allocator_.alloc(
+                     MONITOR_LIMIT*sizeof(MonitorEntryStack)));
     if (OB_UNLIKELY(OB_ISNULL(monitor_entry_stack_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       for (int64_t i = 0; i < MONITOR_LIMIT; i++) {
-        new (&monitor_entry_stack_[i]) MonitorEntryStack();
+        new(&monitor_entry_stack_[i]) MonitorEntryStack();
       }
       is_inited_ = true;
     }
@@ -211,7 +243,7 @@ int ObBGThreadMonitor::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(share::ObThreadPool::start())) {
-    SHARE_LOG(ERROR, "ObCLogRouter thread failed to start", K(ret));
+    SHARE_LOG(ERROR, "ObBGThreadMonitor thread failed to start", K(ret));
   }
   return ret;
 }
@@ -244,18 +276,22 @@ void ObBGThreadMonitor::destroy()
   is_inited_ = false;
 }
 
-int ObBGThreadMonitor::set(const int64_t start_ts, const int64_t warn_ts, const MonitorCallbackWrapper& callback)
+int ObBGThreadMonitor::set(const int64_t start_ts,
+                           const int64_t warn_ts,
+                           const MonitorCallbackWrapper &callback)
 {
   int ret = OB_SUCCESS;
   int64_t slot_idx = -1;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(get_slot_idx_(slot_idx)) && OB_SIZE_OVERFLOW != ret) {
+  } else if (OB_FAIL(get_slot_idx_(slot_idx))
+             && OB_SIZE_OVERFLOW != ret) {
     SHARE_LOG(ERROR, "get_slot_idx_ failed", K(ret));
     // over monitor limit
   } else if (OB_SIZE_OVERFLOW == ret) {
     SHARE_LOG(INFO, "ObBGThreadMonitor set overflow", K(ret));
-  } else if (OB_FAIL(monitor_entry_stack_[slot_idx].push(start_ts, warn_ts, callback)) && OB_SIZE_OVERFLOW != ret) {
+  } else if (OB_FAIL(monitor_entry_stack_[slot_idx].push(start_ts, warn_ts, callback))
+             && OB_SIZE_OVERFLOW != ret) {
     SHARE_LOG(ERROR, "MonitorEntryStack set failed", K(ret));
   } else if (OB_SIZE_OVERFLOW == ret) {
     SHARE_LOG(INFO, "MonitorEntryStack set overflow", K(ret));
@@ -267,12 +303,13 @@ void ObBGThreadMonitor::reset()
 {
   int ret = OB_SUCCESS;
   int64_t slot_idx = -1;
-  ObTSIBGMonitorSlotInfo* slot_info = GET_TSI(ObTSIBGMonitorSlotInfo);
+  ObTSIBGMonitorSlotInfo *slot_info = GET_TSI(ObTSIBGMonitorSlotInfo);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(OB_ISNULL(slot_info))) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(get_slot_idx_(slot_idx)) && OB_SIZE_OVERFLOW != ret) {
+  } else if (OB_FAIL(get_slot_idx_(slot_idx))
+             && OB_SIZE_OVERFLOW != ret) {
     SHARE_LOG(ERROR, "get_slot_idx_ failed", K(ret));
   } else if (OB_SIZE_OVERFLOW == ret) {
     SHARE_LOG(ERROR, "unexpected error, mustn't go into this branch", K(ret));
@@ -281,7 +318,7 @@ void ObBGThreadMonitor::reset()
   }
 }
 
-ObBGThreadMonitor& ObBGThreadMonitor::get_instance()
+ObBGThreadMonitor &ObBGThreadMonitor::get_instance()
 {
   static ObBGThreadMonitor global_monitor;
   return global_monitor;
@@ -290,35 +327,29 @@ ObBGThreadMonitor& ObBGThreadMonitor::get_instance()
 void ObBGThreadMonitor::run_loop_()
 {
   while (!has_set_stop()) {
-    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+    if (REACH_TIME_INTERVAL(1000*1000)) {
       SHARE_LOG(INFO, "current monitor number", K(seq_));
     }
     int64_t current_ts = common::ObClockGenerator::getClock();
-    int64_t seq = ATOMIC_LOAD(&seq_);
     for (int64_t i = 0; i < MONITOR_LIMIT; i++) {
       monitor_entry_stack_[i].check_and_handle_timeout_task(current_ts);
     }
     int64_t cost_time = common::ObClockGenerator::getClock() - current_ts;
-    if (cost_time > 100 * 1000) {
-      SHARE_LOG(WARN, "ObBGThreadMonitor cost too much time", K(cost_time));
+    if (cost_time > 100*1000) {
+      SHARE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObBGThreadMonitor cost too much time", K(cost_time));
     }
-    int64_t sleep_time = CHECK_INTERVAL - cost_time;
+    int32_t sleep_time = static_cast<int32_t>(CHECK_INTERVAL - cost_time);
     if (sleep_time < 0) {
       sleep_time = 0;
     }
-    // if (OB_CLOG_DISK_MGR.is_disk_space_enough()
-    //    && OB_FAIL(storage::ObPartitionService::get_instance().try_leader_revoke())) {
-    //  SHARE_LOG(WARN, "clog disk is full, but leader revoke failed");
-    //}
-    usleep(sleep_time);
+    ob_usleep(sleep_time);
   }
 }
 
-int ObBGThreadMonitor::register_slot_idx_(ObTSIBGMonitorSlotInfo*& slot_info)
+int ObBGThreadMonitor::register_slot_idx_(ObTSIBGMonitorSlotInfo *&slot_info)
 {
   int ret = OB_SUCCESS;
   int64_t slot_idx = -1;
-  int64_t tid = ob_gettid();
   slot_info = GET_TSI(ObTSIBGMonitorSlotInfo);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -331,10 +362,10 @@ int ObBGThreadMonitor::register_slot_idx_(ObTSIBGMonitorSlotInfo*& slot_info)
   return ret;
 }
 
-int ObBGThreadMonitor::get_slot_idx_(int64_t& slot_idx)
+int ObBGThreadMonitor::get_slot_idx_(int64_t &slot_idx)
 {
   int ret = OB_SUCCESS;
-  ObTSIBGMonitorSlotInfo* slot_info = NULL;
+  ObTSIBGMonitorSlotInfo *slot_info = NULL;
   if (OB_FAIL(register_slot_idx_(slot_info))) {
     SHARE_LOG(ERROR, "register_slot_idx_ failed", K(ret));
   } else if (OB_UNLIKELY(OB_ISNULL(slot_info))) {
@@ -350,7 +381,10 @@ int ObBGThreadMonitor::get_slot_idx_(int64_t& slot_idx)
   return ret;
 }
 
-MonitorGuard::MonitorGuard(const int64_t warn_ts, const char* function_name) : ret_code_(OB_SUCCESS), callback_(NULL)
+MonitorGuard::MonitorGuard(const int64_t warn_ts,
+                           const char *function_name) :
+                           ret_code_(OB_SUCCESS),
+                           callback_(NULL)
 {
   int64_t start_ts = ObClockGenerator::getClock();
   BG_NEW_CALLBACK(callback_, BGDummyCallback, function_name);
@@ -358,8 +392,11 @@ MonitorGuard::MonitorGuard(const int64_t warn_ts, const char* function_name) : r
   ret_code_ = ObBGThreadMonitor::get_instance().set(start_ts, warn_ts, wrapper);
 }
 
-MonitorGuard::MonitorGuard(const int64_t warn_ts, const bool is_idempotent, IBGCallback* callback)
-    : ret_code_(OB_SUCCESS), callback_(callback)
+MonitorGuard::MonitorGuard(const int64_t warn_ts,
+                           const bool is_idempotent,
+                           IBGCallback *callback) :
+                           ret_code_(OB_SUCCESS),
+                           callback_(callback)
 {
   int64_t start_ts = ObClockGenerator::getClock();
   MonitorCallbackWrapper wrapper(callback, is_idempotent);
@@ -376,5 +413,5 @@ MonitorGuard::~MonitorGuard()
     BG_DELETE_CALLBACK(callback_);
   }
 }
-}  // namespace share
-}  // namespace oceanbase
+}
+}

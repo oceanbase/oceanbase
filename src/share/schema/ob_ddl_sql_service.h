@@ -17,64 +17,71 @@
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObISQLClient;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 
 struct ObSchemaOperation;
-class ObDDLSqlService {
+class ObDDLSqlService
+{
 public:
-  ObDDLSqlService(ObSchemaService& schema_service) : schema_service_(schema_service)
-  {}
-  virtual ~ObDDLSqlService()
-  {}
-  int64_t get_last_operation_schema_version() const
-  {
-    return schema_service_.get_last_operation_schema_version();
-  }
-  uint64_t get_last_operation_tenant_id() const
-  {
-    return schema_service_.get_last_operation_tenant_id();
-  }
+  ObDDLSqlService(ObSchemaService &schema_service)
+    : schema_service_(schema_service){}
+  virtual ~ObDDLSqlService() {}
   // Do nothing, simply push the schema version once
-  int log_nop_operation(const ObSchemaOperation& schema_operation, const int64_t new_schema_version,
-      const common::ObString& ddl_sql_str, common::ObISQLClient& sql_client);
-  int finish_schema_split(common::ObISQLClient& sql_client, const uint64_t tenant_id, const int64_t new_schema_version);
-  int finish_schema_split_v2(
-      common::ObISQLClient& sql_client, const uint64_t tenant_id, const int64_t new_schema_version);
+  int log_nop_operation(const ObSchemaOperation &schema_operation,
+                        const int64_t new_schema_version,
+                        const common::ObString &ddl_sql_str,
+                        common::ObISQLClient &sql_client);
 
 protected:
-  virtual int log_operation(ObSchemaOperation& ddl_operation, common::ObISQLClient& sql_client,
-      int64_t sql_exec_tenant_id = OB_INVALID_TENANT_ID, common::ObSqlString* public_sql_string = NULL);
-
+  virtual int log_operation(ObSchemaOperation &ddl_operation,
+                            common::ObISQLClient &sql_client,
+                            int64_t sql_exec_tenant_id = OB_INVALID_TENANT_ID,
+                            common::ObSqlString *public_sql_string = NULL);
 private:
   uint64_t fill_schema_id(const uint64_t exec_tenant_id, const uint64_t schema_id);
 
 protected:
-  ObSchemaService& schema_service_;
-
+  ObSchemaService &schema_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLSqlService);
 };
 
-struct TSIDDLVar {
-  //  In bootstrap or other internal requests, exec_tenant_id_ will be the OB_SYS_TENANT_ID identity,
+struct TSIDDLVar
+{
+  //  In bootstrap or other internal requests, exec_tenant_id_ will be the OB_SYS_TENANT_ID identity, 
   //  so the default value is changed to the system tenant
   //  ddl_id_str_ default value is null
-  //  Before processing the rpc request, exec_tenant_id_/ddl_id_str_ will be set,
+  //  Before processing the rpc request, exec_tenant_id_/ddl_id_str_ will be set, 
   //  and the value is obtained from the arg of the resolver
   //  In log operation, write to __all_ddl_operation
   uint64_t exec_tenant_id_;
-  common::ObString* ddl_id_str_;
-  TSIDDLVar() : exec_tenant_id_(common::OB_SYS_TENANT_ID), ddl_id_str_(NULL)
+  common::ObString *ddl_id_str_;
+  TSIDDLVar() :
+      exec_tenant_id_(common::OB_SYS_TENANT_ID),
+      ddl_id_str_(NULL)
   {}
 };
 
-}  // end of namespace schema
-}  // end of namespace share
-}  // end of namespace oceanbase
+struct TSILastOper {
+  uint64_t last_operation_schema_version_;
+  uint64_t last_operation_tenant_id_;
+  TSILastOper():
+      last_operation_schema_version_(OB_INVALID_VERSION),
+      last_operation_tenant_id_(OB_INVALID_TENANT_ID)
+  {}
+};
 
-#endif  // OCEANBASE_SHARE_SCHEMA_OB_DDL_SQL_SERVICE_H_
+} //end of namespace schema
+} //end of namespace share
+} //end of namespace oceanbase
+
+#endif //OCEANBASE_SHARE_SCHEMA_OB_DDL_SQL_SERVICE_H_

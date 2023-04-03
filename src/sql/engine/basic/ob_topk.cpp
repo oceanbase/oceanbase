@@ -21,28 +21,37 @@
 #include "sql/engine/basic/ob_material.h"
 #include "sql/engine/aggregate/ob_hash_groupby.h"
 #include "sql/engine/ob_exec_context.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-class ObTopK::ObTopKCtx : public ObPhyOperatorCtx {
+class ObTopK::ObTopKCtx : public ObPhyOperatorCtx
+{
 public:
-  explicit ObTopKCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), topk_final_count_(-1), output_count_(0)
-  {}
-  virtual void destroy()
+  explicit ObTopKCtx(ObExecContext &ctx)
+    : ObPhyOperatorCtx(ctx),
+      topk_final_count_(-1),
+      output_count_(0)
   {
-    ObPhyOperatorCtx::destroy_base();
   }
+  virtual void destroy() { ObPhyOperatorCtx::destroy_base(); }
 
 private:
-  int64_t topk_final_count_;  // count of rows that need to be output upforward
+  int64_t topk_final_count_;//count of rows that need to be output upforward
   int64_t output_count_;
   friend class ObTopK;
 };
 
-ObTopK::ObTopK(ObIAllocator& alloc)
-    : ObSingleChildPhyOperator(alloc), minimum_row_count_(-1), topk_precision_(-1), org_limit_(NULL), org_offset_(NULL)
-{}
+ObTopK::ObTopK(ObIAllocator &alloc)
+    : ObSingleChildPhyOperator(alloc),
+      minimum_row_count_(-1),
+      topk_precision_(-1),
+      org_limit_(NULL),
+      org_offset_(NULL)
+{
+}
 
 ObTopK::~ObTopK()
 {
@@ -63,8 +72,8 @@ void ObTopK::reuse()
   reset();
 }
 
-int ObTopK::set_topk_params(
-    ObSqlExpression* limit, ObSqlExpression* offset, int64_t minimum_row_count, int64_t topk_precision)
+int ObTopK::set_topk_params(ObSqlExpression *limit, ObSqlExpression *offset,
+                            int64_t minimum_row_count, int64_t topk_precision)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(limit) || minimum_row_count < 0 || topk_precision < 0) {
@@ -79,8 +88,10 @@ int ObTopK::set_topk_params(
   return ret;
 }
 
-int ObTopK::get_int_value(
-    ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val, bool& is_null_value) const
+int ObTopK::get_int_value(ObExecContext &ctx,
+                          const ObSqlExpression *in_val,
+                          int64_t &out_val,
+                          bool &is_null_value) const
 {
   int ret = OB_SUCCESS;
   ObNewRow input_row;
@@ -110,14 +121,14 @@ int ObTopK::get_int_value(
   return ret;
 }
 
-int ObTopK::get_topk_final_count(ObExecContext& ctx, int64_t& topk_final_count) const
+int ObTopK::get_topk_final_count(ObExecContext &ctx, int64_t &topk_final_count) const
 {
   int ret = OB_SUCCESS;
 
   int64_t limit = -1;
   int64_t offset = 0;
   bool is_null_value = false;
-  ObPhysicalPlanCtx* plan_ctx = ctx.get_physical_plan_ctx();
+  ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid plan ctx is NULL", K(ret));
@@ -129,40 +140,37 @@ int ObTopK::get_topk_final_count(ObExecContext& ctx, int64_t& topk_final_count) 
   } else if (!is_null_value && OB_FAIL(get_int_value(ctx, org_offset_, offset, is_null_value))) {
     LOG_WARN("Get offset value failed", K(ret));
   } else {
-    // revise limit, offset because rownum < -1 is rewritten as limit -1
+    //revise limit, offset because rownum < -1 is rewritten as limit -1
     limit = (is_null_value || limit < 0) ? 0 : limit;
     offset = (is_null_value || offset < 0) ? 0 : offset;
     topk_final_count = std::max(minimum_row_count_, limit + offset);
     int64_t row_count = 0;
     ObPhyOperatorType op_type = child_op_->get_type();
-    // TODO(): may be we should add one func to paremt class
+    //TODO(yaoying.yyy): may be we should add one func to paremt class
     if (PHY_SORT == op_type) {
-      ObSort* sort_op = static_cast<ObSort*>(child_op_);
+      ObSort *sort_op = static_cast<ObSort *>(child_op_);
       if (OB_ISNULL(sort_op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("casted sort_op is NULL", K(ret));
-      } else if (OB_FAIL(sort_op->get_sort_row_count(ctx, row_count))) {
+      } else if (OB_FAIL(sort_op->get_sort_row_count(ctx, row_count))){
         LOG_WARN("failed to get sort row count", K(ret));
-      } else { /*do nothing*/
-      }
+      } else {/*do nothing*/}
     } else if (PHY_MATERIAL == op_type) {
-      ObMaterial* material_op = static_cast<ObMaterial*>(child_op_);
+      ObMaterial *material_op = static_cast<ObMaterial *>(child_op_);
       if (OB_ISNULL(material_op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("casted material_op is NULL", K(ret));
-      } else if (OB_FAIL(material_op->get_material_row_count(ctx, row_count))) {
+      } else if (OB_FAIL(material_op->get_material_row_count(ctx, row_count))){
         LOG_WARN("failed to get material row count", K(ret));
-      } else { /*do nothing*/
-      }
+      } else {/*do nothing*/}
     } else if (PHY_HASH_GROUP_BY == op_type) {
-      ObHashGroupBy* hash_groupby_op = static_cast<ObHashGroupBy*>(child_op_);
+      ObHashGroupBy *hash_groupby_op = static_cast<ObHashGroupBy *>(child_op_);
       if (OB_ISNULL(hash_groupby_op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("casted hash_groupby_op is NULL", K(ret));
-      } else if (OB_FAIL(hash_groupby_op->get_hash_groupby_row_count(ctx, row_count))) {
+      } else if (OB_FAIL(hash_groupby_op->get_hash_groupby_row_count(ctx, row_count))){
         LOG_WARN("failed to get material row count", K(ret));
-      } else { /*do nothing*/
-      }
+      } else {/*do nothing*/}
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid child_op_", K(op_type), K(ret));
@@ -182,10 +190,11 @@ int ObTopK::get_topk_final_count(ObExecContext& ctx, int64_t& topk_final_count) 
 
 bool ObTopK::is_valid() const
 {
-  return (get_column_count() > 0 && (NULL != org_limit_) && (NULL != child_op_) && child_op_->get_column_count() > 0);
+  return (get_column_count() > 0 && (NULL != org_limit_)
+          && (NULL != child_op_) && child_op_->get_column_count() > 0);
 }
 
-int ObTopK::inner_open(ObExecContext& ctx) const
+int ObTopK::inner_open(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -193,15 +202,14 @@ int ObTopK::inner_open(ObExecContext& ctx) const
     LOG_WARN("limit operator is invalid");
   } else if (OB_FAIL(init_op_ctx(ctx))) {
     LOG_WARN("initialize operator context failed", K(ret));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObTopK::rescan(ObExecContext& ctx) const
+int ObTopK::rescan(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObTopKCtx* topk_ctx = NULL;
+  ObTopKCtx *topk_ctx = NULL;
   if (OB_FAIL(ObSingleChildPhyOperator::rescan(ctx))) {
     LOG_WARN("rescan child physical operator failed", K(ret));
   } else if (OB_ISNULL(topk_ctx = GET_PHY_OPERATOR_CTX(ObTopKCtx, ctx, get_id()))) {
@@ -213,17 +221,17 @@ int ObTopK::rescan(ObExecContext& ctx) const
   return ret;
 }
 
-int ObTopK::inner_close(ObExecContext& ctx) const
+int ObTopK::inner_close(ObExecContext &ctx) const
 {
   UNUSED(ctx);
   return OB_SUCCESS;
 }
 
-int ObTopK::init_op_ctx(ObExecContext& ctx) const
+int ObTopK::init_op_ctx(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObPhyOperatorCtx* op_ctx = NULL;
-  if (OB_FAIL(CREATE_PHY_OPERATOR_CTX(ObTopKCtx, ctx, get_id(), get_type(), op_ctx))) {
+  ObPhyOperatorCtx *op_ctx = NULL;
+  if(OB_FAIL(CREATE_PHY_OPERATOR_CTX(ObTopKCtx, ctx, get_id(), get_type(), op_ctx))) {
     LOG_WARN("failed to create TopKCtx", K(ret));
   } else if (OB_ISNULL(op_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -234,14 +242,14 @@ int ObTopK::init_op_ctx(ObExecContext& ctx) const
   return ret;
 }
 
-int ObTopK::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+int ObTopK::inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
 {
   int ret = OB_SUCCESS;
-  ObTopKCtx* topk_ctx = NULL;
-  ObSQLSessionInfo* my_session = NULL;
-  const ObNewRow* input_row = NULL;
+  ObTopKCtx *topk_ctx = NULL;
+  ObSQLSessionInfo *my_session = NULL;
+  const ObNewRow *input_row = NULL;
 
-  if (OB_FAIL(!is_valid())) {
+  if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("limit operator is invalid");
   } else if (OB_ISNULL(topk_ctx = GET_PHY_OPERATOR_CTX(ObTopKCtx, ctx, get_id()))) {
@@ -254,17 +262,17 @@ int ObTopK::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
     if (0 == topk_ctx->output_count_ || topk_ctx->output_count_ < topk_ctx->topk_final_count_) {
       if (OB_FAIL(child_op_->get_next_row(ctx, input_row))) {
         if (OB_ITER_END != ret) {
-          LOG_WARN(
-              "child_op failed to get next row", K_(topk_ctx->topk_final_count), K_(topk_ctx->output_count), K(ret));
+          LOG_WARN("child_op failed to get next row", K_(topk_ctx->topk_final_count),
+                   K_(topk_ctx->output_count), K(ret));
         }
       } else {
         if (0 == topk_ctx->output_count_) {
           if (OB_FAIL(get_topk_final_count(ctx, topk_ctx->topk_final_count_))) {
             LOG_WARN("failed to get_topk_final_count", K(ret));
           } else if (OB_UNLIKELY(0 == topk_ctx->topk_final_count_)) {
+            //结果条数已经满足
             ret = OB_ITER_END;
-          } else { /*do nothing*/
-          }
+          } else {/*do nothing*/}
         }
         if (OB_SUCC(ret)) {
           ++topk_ctx->output_count_;
@@ -277,38 +285,31 @@ int ObTopK::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
         }
       }
     } else {
+      //结果条数已经满足
       ret = OB_ITER_END;
     }
   }
   return ret;
 }
 
-int64_t ObTopK::to_string_kv(char* buf, const int64_t buf_len) const
+int64_t ObTopK::to_string_kv(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  // TODO():macro define N_TOPK_PRECISION
+  //TODO(yaoying.yyy):macro define N_TOPK_PRECISION
   if (org_limit_ && org_offset_) {
-    J_KV(N_LIMIT,
-        org_limit_,
-        N_OFFSET,
-        org_offset_,
-        "minimum_row_count",
-        minimum_row_count_,
-        "topk_precision",
-        topk_precision_);
+    J_KV(N_LIMIT, org_limit_, N_OFFSET, org_offset_, "minimum_row_count", minimum_row_count_, "topk_precision", topk_precision_);
   } else if (NULL != org_limit_) {
     J_KV(N_LIMIT, org_limit_, "minimum_row_count", minimum_row_count_, "topk_precision", topk_precision_);
   } else if (NULL != org_offset_) {
     J_KV(N_OFFSET, org_offset_, "minimum_row_count", minimum_row_count_, "topk_precision", topk_precision_);
-  } else { /*do nothing*/
-  }
+  } else{/*do nothing*/}
   return pos;
 }
 
-int ObTopK::add_filter(ObSqlExpression* expr)
+int ObTopK::add_filter(ObSqlExpression *expr)
 {
   UNUSED(expr);
-  LOG_ERROR("limit operator should have no filter expr");
+  LOG_ERROR_RET(OB_NOT_SUPPORTED, "limit operator should have no filter expr");
   return OB_NOT_SUPPORTED;
 }
 

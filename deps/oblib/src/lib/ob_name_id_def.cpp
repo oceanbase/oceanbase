@@ -13,25 +13,28 @@
 #include "lib/ob_name_id_def.h"
 #include <stdlib.h>
 #include <string.h>
-namespace oceanbase {
-namespace name {
-static const char* ID_NAMES[NAME_COUNT + 1];
-static const char* ID_DESCRIPTIONS[NAME_COUNT + 1];
-struct RuntimeIdNameMapInit {
+namespace oceanbase
+{
+namespace name
+{
+static const char* ID_NAMES[NAME_COUNT+1];
+static const char* ID_DESCRIPTIONS[NAME_COUNT+1];
+struct RuntimeIdNameMapInit
+{
   RuntimeIdNameMapInit()
   {
 #define DEF_NAME(name_sym, description) ID_NAMES[name_sym] = #name_sym;
-#define DEF_NAME_PAIR(name_sym, description)       \
-  DEF_NAME(name_sym##_begin, description " begin") \
-  DEF_NAME(name_sym##_end, description " end")
+#define DEF_NAME_PAIR(name_sym, description) \
+  DEF_NAME(name_sym ## _begin, description " begin")    \
+  DEF_NAME(name_sym ## _end, description " end")
 
 #include "ob_name_id_def.h"
 #undef DEF_NAME
 #undef DEF_NAME_PAIR
 #define DEF_NAME(name_sym, description) ID_DESCRIPTIONS[name_sym] = description;
-#define DEF_NAME_PAIR(name_sym, description)       \
-  DEF_NAME(name_sym##_begin, description " begin") \
-  DEF_NAME(name_sym##_end, description " end")
+#define DEF_NAME_PAIR(name_sym, description) \
+  DEF_NAME(name_sym ## _begin, description " begin")    \
+  DEF_NAME(name_sym ## _end, description " end")
 #include "ob_name_id_def.h"
 #undef DEF_NAME
 #undef DEF_NAME_PAIR
@@ -57,5 +60,5 @@ const char* get_description(int32_t id)
   return ret;
 }
 
-}  // namespace name
-}  // end namespace oceanbase
+} // end namespace name_id_map
+} // end namespace oceanbase

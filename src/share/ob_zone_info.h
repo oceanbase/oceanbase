@@ -24,65 +24,65 @@
 #include "common/ob_zone.h"
 #include "common/ob_region.h"
 #include "common/ob_zone_status.h"
+#include "common/ob_zone_type.h"
 #include "share/ob_replica_info.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
 class ObZoneItemTransUpdater;
 
-struct ObZoneInfoItem : public common::ObDLinkBase<ObZoneInfoItem> {
+struct ObZoneInfoItem : public common::ObDLinkBase<ObZoneInfoItem>
+{
 public:
   typedef common::ObFixedLengthString<common::MAX_ZONE_INFO_LENGTH> Info;
   typedef common::ObDList<ObZoneInfoItem> ItemList;
 
-  ObZoneInfoItem(ItemList& list, const char* name, int64_t value, const char* info);
-  ObZoneInfoItem(const ObZoneInfoItem& item);
-  ObZoneInfoItem& operator=(const ObZoneInfoItem& item);
+  ObZoneInfoItem(ItemList &list, const char *name, int64_t value, const char *info);
+  ObZoneInfoItem(const ObZoneInfoItem &item);
+  ObZoneInfoItem &operator = (const ObZoneInfoItem &item);
 
-  bool is_valid() const
-  {
-    return NULL != name_ && value_ >= 0;
-  }
+  bool is_valid() const { return NULL != name_ && value_ >= 0; }
   TO_STRING_KV(K_(name), K_(value), K_(info));
-  operator int64_t() const
-  {
-    return value_;
-  }
+  operator int64_t() const { return value_; }
 
   // update %value_ and %info_ after execute sql success
-  int update(common::ObISQLClient& sql_client, const common::ObZone& zone, const int64_t value, const Info& info);
+  int update(common::ObISQLClient &sql_client, const common::ObZone &zone,
+             const int64_t value, const Info &info);
   // update %value_ and %info_. (set %info_ to empty)
-  int update(common::ObISQLClient& sql_client, const common::ObZone& zone, const int64_t value);
+  int update(common::ObISQLClient &sql_client, const common::ObZone &zone,
+             const int64_t value);
 
   // update %value_ and %info_ will be rollback if transaction rollback or commit failed.
-  int update(ObZoneItemTransUpdater& updater, const common::ObZone& zone, const int64_t value, const Info& info);
+  int update(ObZoneItemTransUpdater &updater, const common::ObZone &zone,
+             const int64_t value, const Info &info);
   // update %value_ and %info_. (set %info_ to empty)
-  int update(ObZoneItemTransUpdater& updater, const common::ObZone& zone, const int64_t value);
+  int update(ObZoneItemTransUpdater &updater, const common::ObZone &zone,
+             const int64_t value);
 
 public:
-  const char* name_;
+  const char *name_;
   int64_t value_;
   Info info_;
 };
 
 // Update item in transaction, if transaction rollback or commit failed the item value
 // value will be rollback too.
-class ObZoneItemTransUpdater {
+class ObZoneItemTransUpdater
+{
 public:
   ObZoneItemTransUpdater();
   ~ObZoneItemTransUpdater();
 
-  int start(common::ObMySQLProxy& sql_proxy);
-  int update(const common::ObZone& zone, ObZoneInfoItem& item, const int64_t value, const ObZoneInfoItem::Info& info);
+  int start(common::ObMySQLProxy &sql_proxy);
+  int update(const common::ObZone &zone, ObZoneInfoItem &item,
+             const int64_t value, const ObZoneInfoItem::Info &info);
   int end(const bool commit);
-  common::ObMySQLTransaction& get_trans()
-  {
-    return trans_;
-  }
-
+  common::ObMySQLTransaction &get_trans() { return trans_; }
 private:
-  const static int64_t PTR_OFFSET = sizeof(void*);
+  const static int64_t PTR_OFFSET = sizeof(void *);
 
   bool started_;
   bool success_;
@@ -92,110 +92,76 @@ private:
   common::ObMySQLTransaction trans_;
 };
 
-struct ObGlobalInfo {
+struct ObGlobalInfo
+{
 public:
   ObGlobalInfo();
-  ObGlobalInfo(const ObGlobalInfo& other);
-  ObGlobalInfo& operator=(const ObGlobalInfo& other);
+  ObGlobalInfo(const ObGlobalInfo &other);
+  ObGlobalInfo &operator = (const ObGlobalInfo &other);
   void reset();
   bool is_valid() const;
   DECLARE_TO_STRING;
-
 public:
-  const common::ObZone zone_;  // always be default value
+  const common::ObZone zone_; // always be default value
   ObZoneInfoItem::ItemList list_;
 
   ObZoneInfoItem cluster_;
-  ObZoneInfoItem try_frozen_version_;
-  ObZoneInfoItem frozen_version_;
-  ObZoneInfoItem frozen_time_;
-  ObZoneInfoItem global_broadcast_version_;
-  ObZoneInfoItem last_merged_version_;
   ObZoneInfoItem privilege_version_;
   ObZoneInfoItem config_version_;
   ObZoneInfoItem lease_info_version_;
-  ObZoneInfoItem is_merge_error_;
-  ObZoneInfoItem merge_status_;
-  ObZoneInfoItem warm_up_start_time_;
   ObZoneInfoItem time_zone_info_version_;
-  ObZoneInfoItem proposal_frozen_version_;
-  ObZoneInfoItem snapshot_gc_ts_;
-  ObZoneInfoItem gc_schema_version_;
   ObZoneInfoItem storage_format_version_;
 };
 
-struct ObZoneInfo {
+struct ObZoneInfo
+{
 public:
-  enum MergeStatus {
-    MERGE_STATUS_IDLE,
-    MERGE_STATUS_MERGING,
-    MERGE_STATUS_TIMEOUT,
-    MERGE_STATUS_ERROR,
-    MERGE_STATUS_INDEXING,
-    MERGE_STATUS_MOST_MERGED,
-    MERGE_STATUS_MAX
-  };
-  enum RecoveryStatus {
+  enum RecoveryStatus
+  {
     RECOVERY_STATUS_NORMAL = 0,
     RECOVERY_STATUS_SUSPEND,
     RECOVERY_STATUS_MAX,
   };
-  enum StorageType {
+  enum StorageType
+  {
     STORAGE_TYPE_LOCAL = 0,
     STORAGE_TYPE_MAX,
   };
   ObZoneInfo();
-  ObZoneInfo(const ObZoneInfo& other);
-  ObZoneInfo& operator=(const ObZoneInfo& other);
+  ObZoneInfo(const ObZoneInfo &other);
+  ObZoneInfo &operator =(const ObZoneInfo &other);
   void reset();
   bool is_valid() const;
   DECLARE_TO_STRING;
 
-  int get_region(common::ObRegion& region) const;
-  const char* get_status_str() const;
-  static const char* get_merge_status_str(const MergeStatus status);
-  static MergeStatus get_merge_status(const char* merge_status_str);
+  int get_region(common::ObRegion &region) const;
+  const char *get_status_str() const;
 
-  bool is_merged(const int64_t global_broadcast_version) const;
-  inline int64_t get_item_count() const
-  {
-    return list_.get_size();
-  }
-  bool is_in_merge() const;
-  bool need_merge(const int64_t global_broadcast_version) const;
+  inline int64_t get_item_count() const { return list_.get_size(); }
   bool can_switch_to_leader_while_daily_merge() const;
   // recovery status
-  static const char* get_recovery_status_str(const RecoveryStatus status);
+  static const char *get_recovery_status_str(const RecoveryStatus status);
   static RecoveryStatus get_recovery_status(const char* status_str);
   // storage type
-  static const char* get_storage_type_str(const StorageType storage_type);
+  static const char *get_storage_type_str(const StorageType storage_type);
   static StorageType get_storage_type(const char* storage_type_str);
-
+  bool is_encryption() const {
+    return zone_type_.value_ == common::ObZoneType::ZONE_TYPE_ENCRYPTION;
+  }
 public:
   common::ObZone zone_;
   ObZoneInfoItem::ItemList list_;
 
   ObZoneInfoItem status_;
-  // Zone merging flag set by daily merge scheduler.
-  // Set this flag before leader switching to notify leader coordinator the merging zones.
-  ObZoneInfoItem is_merging_;
-  ObZoneInfoItem broadcast_version_;
-  ObZoneInfoItem last_merged_version_;
-  ObZoneInfoItem last_merged_time_;
-  ObZoneInfoItem all_merged_version_;
-  ObZoneInfoItem merge_start_time_;
-  ObZoneInfoItem is_merge_timeout_;
-  ObZoneInfoItem suspend_merging_;
-  ObZoneInfoItem merge_status_;
   ObZoneInfoItem region_;
   ObZoneInfoItem idc_;
   ObZoneInfoItem zone_type_;
   ObZoneInfoItem recovery_status_;
   ObZoneInfoItem storage_type_;
-  int64_t start_merge_fail_times_;
 };
 
-}  // end namespace share
-}  // end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_CLUSTER_INFO_H_
+} // end namespace share
+} // end namespace oceanbase
+
+#endif  //OCEANBASE_SHARE_OB_CLUSTER_INFO_H_

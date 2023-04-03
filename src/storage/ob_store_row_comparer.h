@@ -14,44 +14,49 @@
 #define OB_STORE_ROW_COMPARER_H_
 #include "storage/ob_i_store.h"
 
-namespace oceanbase {
-namespace storage {
+namespace oceanbase
+{
+namespace storage
+{
 
-class ObIComparerCancel {
+class ObIComparerCancel
+{
 public:
   ObIComparerCancel() = default;
   virtual ~ObIComparerCancel() = default;
   virtual bool need_cancel() = 0;
 };
 
-class ObStoreRowComparer {
-public:
-  ObStoreRowComparer(int& comp_ret, const common::ObIArray<int64_t>& sort_column_index)
-      : result_code_(comp_ret), sort_column_index_(sort_column_index), cancel_(NULL), cmp_times_(0)
-  {}
-  virtual ~ObStoreRowComparer()
-  {}
-  OB_INLINE bool operator()(const ObStoreRow* left, const ObStoreRow* right);
-  int& result_code_;
-
+class ObStoreRowComparer
+{
+  public:
+    ObStoreRowComparer(
+        int &comp_ret,
+        const common::ObIArray<int64_t> &sort_column_index)
+    : result_code_(comp_ret),
+      sort_column_index_(sort_column_index)
+    {}
+  virtual ~ObStoreRowComparer() {}
+  OB_INLINE bool operator()(const ObStoreRow *left, const ObStoreRow *right);
+  int &result_code_;
 private:
-  const common::ObIArray<int64_t>& sort_column_index_;
-  ObIComparerCancel* cancel_;
-  int64_t cmp_times_;
+  const common::ObIArray<int64_t> &sort_column_index_;
 };
 
 /**
- * --------------------------------------------------------Inline
- * Function------------------------------------------------------
+ * --------------------------------------------------------Inline Function------------------------------------------------------
  */
-OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObStoreRow* right)
+OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow *left, const ObStoreRow *right)
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(common::OB_SUCCESS != result_code_)) {
-    // do nothing
-  } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right) || OB_UNLIKELY(0 == sort_column_index_.count())) {
+    //do nothing
+  } else if (OB_UNLIKELY(NULL == left)
+      || OB_UNLIKELY(NULL == right)
+      || OB_UNLIKELY(0 == sort_column_index_.count())) {
     result_code_ = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right), K(sort_column_index_.count()), K_(result_code));
+    STORAGE_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invaid argument, ", KP(left), KP(right),
+      K(sort_column_index_.count()), K_(result_code));
   } else {
     for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
       const int64_t index = sort_column_index_.at(i);
@@ -66,8 +71,7 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
         }
       } else {
         result_code_ = common::OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN,
-            "index is out of bound",
+        STORAGE_LOG_RET(WARN, result_code_, "index is out of bound",
             K_(result_code),
             K(index),
             K(left->row_val_.count_),

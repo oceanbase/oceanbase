@@ -14,52 +14,56 @@
 #define OCEANBASE_SRC_SHARE_SCHEMA_OB_ERROR_INFO_H_
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace common {
+namespace common
+{
 class ObISQLClient;
 class ObMySQLTransaction;
 class ObWarningBuffer;
 class ObIAllocator;
-}  // namespace common
+}
 
-namespace share {
+namespace share
+{
 class ObDMLSqlSplicer;
 }
 
-namespace share {
-namespace schema {
-enum ObErrorInfoType {
+namespace share
+{
+namespace schema
+{
+enum ObErrorInfoType 
+{
   ERROR_INFO_ERROR,
   ERROR_INFO_WARNING,
   ERROR_INFO_UNDEFINED,
 };
 
-enum ObErrorInfoStatus {
+enum ObErrorInfoStatus
+{
   ERROR_STATUS_UNDEFINED,
-  ERROR_STATUS_NO_ERROR,   // no error, clean the error entry if __all_error has
-  ERROR_STATUS_HAS_ERROR,  // insert or replace in the __all_error
+  ERROR_STATUS_NO_ERROR,  // no error, clean the error entry if __all_error has
+  ERROR_STATUS_HAS_ERROR, // insert or replace in the __all_error
 };
 
 class ObSchemaService;
 
-class ObErrorInfo : public ObSchema {
+class ObErrorInfo : public ObSchema 
+{
   OB_UNIS_VERSION(1);
-
 public:
   ObErrorInfo();
-  ObErrorInfo(const ObErrorInfo& src_schema);
-  explicit ObErrorInfo(common::ObIAllocator* allocator);
+  ObErrorInfo(const ObErrorInfo &src_schema);
+  explicit ObErrorInfo(common::ObIAllocator *allocator);
   virtual ~ObErrorInfo();
 
-  ObErrorInfo& operator=(const ObErrorInfo& src_schema);
-  int assign(const ObErrorInfo& other);
+  ObErrorInfo &operator=(const ObErrorInfo &src_schema);
+  int assign(const ObErrorInfo &other);
 
-#define DEFINE_GETTER(ret_type, name)   \
-  OB_INLINE ret_type get_##name() const \
-  {                                     \
-    return name##_;                     \
-  }
+#define DEFINE_GETTER(ret_type, name) \
+  OB_INLINE ret_type get_##name() const { return name##_; }
 
   DEFINE_GETTER(uint64_t, tenant_id)
   DEFINE_GETTER(uint64_t, obj_id)
@@ -77,11 +81,8 @@ public:
 
 #undef DEFINE_GETTER
 
-#define DEFINE_SETTER(name, type)      \
-  OB_INLINE void set_##name(type name) \
-  {                                    \
-    name##_ = name;                    \
-  }
+#define DEFINE_SETTER(name, type) \
+  OB_INLINE void set_##name(type name) { name##_ = name; }
 
   DEFINE_SETTER(tenant_id, uint64_t)
   DEFINE_SETTER(obj_id, uint64_t)
@@ -95,10 +96,7 @@ public:
   DEFINE_SETTER(database_id, uint64_t)
   DEFINE_SETTER(schema_version, int64_t)
   DEFINE_SETTER(error_status, ObErrorInfoStatus)
-  OB_INLINE int set_text(common::ObString& text)
-  {
-    return deep_copy_str(text, text_);
-  }
+  OB_INLINE int set_text(common::ObString &text) { return deep_copy_str(text, text_); }
 
 #undef DEFINE_SETTER
 
@@ -106,38 +104,50 @@ public:
   bool is_user_field_valid() const;
   void reset();
   int64_t get_convert_size() const;
-  int collect_error_info(const IObErrorInfo* info);
-  int collect_error_info(const IObErrorInfo* info, const common::ObWarningBuffer* buf, bool fill_info);
-  int update_error_info(const IObErrorInfo* info);
-  int get_error_info_from_table(common::ObISQLClient& sql_client, ObErrorInfo* old_err_info);
-  int handle_error_info(common::ObMySQLTransaction& trans, const IObErrorInfo* info);
-  int del_error(common::ObISQLClient& sql_client);
-  int del_error(common::ObMySQLProxy* sql_proxy);
-  int add_error(common::ObISQLClient& sql_client, bool is_replace, bool only_history);
-  int get_error_obj_seq(common::ObISQLClient& sql_client, bool& exist);
-  int delete_error(const IObErrorInfo* info);
+  int collect_error_info(const IObErrorInfo *info);
+  int collect_error_info(const IObErrorInfo *info, const common::ObWarningBuffer *buf, bool fill_info);
+  int update_error_info(const IObErrorInfo *info);
+  int get_error_info_from_table(common::ObISQLClient &sql_client, ObErrorInfo *old_err_info);
+  int handle_error_info(common::ObMySQLTransaction &trans, const IObErrorInfo *info);
+  int handle_error_info(const IObErrorInfo *info);
+  int del_error(common::ObISQLClient &sql_client);
+  int del_error(common::ObMySQLProxy *sql_proxy);
+  int add_error(common::ObISQLClient & sql_client, bool is_replace, bool only_history);
+  int get_error_obj_seq(common::ObISQLClient &sql_client, bool &exist);
+  int delete_error(const IObErrorInfo *info);
 
-  TO_STRING_KV(K_(tenant_id), K_(obj_id), K_(obj_type), K_(obj_seq), K_(line), K_(position), K_(text_length), K_(text),
-      K_(property), K_(error_number), K_(database_id), K_(schema_version), K_(error_status))
+  TO_STRING_KV(K_(tenant_id),
+               K_(obj_id),
+               K_(obj_type),
+               K_(obj_seq),
+               K_(line),
+               K_(position),
+               K_(text_length),
+               K_(text),
+               K_(property),
+               K_(error_number),
+               K_(database_id),
+               K_(schema_version),
+               K_(error_status))
 private:
-  int gen_error_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer& dml);
+  int gen_error_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer &dml);
   uint64_t extract_tenant_id() const;
   uint64_t extract_obj_id() const;
 
 private:
   uint64_t tenant_id_;
-  uint64_t obj_id_;  // errorinfo from which object. such as package etc.
+  uint64_t obj_id_;                 // errorinfo from which object. such as package etc.
   uint64_t obj_type_;
   uint64_t obj_seq_;
-  uint64_t line_;      // row number
-  uint64_t position_;  // column number
+  uint64_t line_;                   // row number
+  uint64_t position_;               // column number
   uint64_t text_length_;
-  common::ObString text_;  // error text
-  uint64_t property_;      // 0:error, 1:warning, other: undefined
-  uint64_t error_number_;  // pls error number, others is 0;
+  common::ObString text_;           // error text
+  uint64_t property_;               // 0:error, 1:warning, other: undefined
+  uint64_t error_number_;           // pls error number, others is 0;
   uint64_t database_id_;
   int64_t schema_version_;
-  ObErrorInfoStatus error_status_;
+  ObErrorInfoStatus error_status_; 
 };
 
 }  // namespace schema

@@ -16,57 +16,67 @@
 #include "observer/ob_restore_sql_modifier.h"
 #include "share/ob_common_rpc_proxy.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
-namespace common {
+namespace common
+{
 class ObServerConfig;
 class ObMySQLProxy;
-}  // namespace common
-namespace share {
-class ObPartitionTableOperator;
-namespace schema {
+}
+namespace share
+{
+namespace schema
+{
 class ObMultiVersionSchemaService;
 }
-}  // namespace share
-namespace sql {
+}
+namespace sql
+{
 class ObSql;
 }
-namespace observer {
+namespace observer
+{
 class ObVTIterCreator;
 
-class ObRestoreCtx {
+class ObRestoreCtx
+{
 public:
   ObRestoreCtx()
-      : schema_service_(NULL),
-        sql_client_(NULL),
-        ob_sql_(NULL),
-        vt_iter_creator_(NULL),
-        partition_table_operator_(NULL),
-        server_config_(NULL),
-        rs_rpc_proxy_(NULL)
+    : schema_service_(NULL),
+      sql_client_(NULL),
+      ob_sql_(NULL),
+      vt_iter_creator_(NULL),
+      ls_table_operator_(NULL),
+      server_config_(NULL),
+      rs_rpc_proxy_(NULL)
   {}
-  ~ObRestoreCtx()
-  {}
+  ~ObRestoreCtx() {}
   bool is_valid()
   {
-    return NULL != schema_service_ && NULL != sql_client_ && NULL != ob_sql_ && NULL != vt_iter_creator_ &&
-           NULL != partition_table_operator_ && NULL != server_config_ && NULL != rs_rpc_proxy_;
+    return NULL != schema_service_
+        && NULL != sql_client_
+        && NULL != ob_sql_
+        && NULL != vt_iter_creator_
+        && NULL != ls_table_operator_
+        && NULL != server_config_
+        && NULL != rs_rpc_proxy_;
   }
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  common::ObMySQLProxy* sql_client_;
-  sql::ObSql* ob_sql_;
-  ObVTIterCreator* vt_iter_creator_;
-  const share::ObPartitionTableOperator* partition_table_operator_;
-  common::ObServerConfig* server_config_;
-  obrpc::ObCommonRpcProxy* rs_rpc_proxy_;
-
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  common::ObMySQLProxy *sql_client_;
+  sql::ObSql *ob_sql_;
+  ObVTIterCreator *vt_iter_creator_;
+  const share::ObLSTableOperator *ls_table_operator_;
+  common::ObServerConfig *server_config_;
+  obrpc::ObCommonRpcProxy *rs_rpc_proxy_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreCtx);
 };
 
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_OB_RESTORE_CTX_H_
+#endif // OCEANBASE_OBSERVER_OB_RESTORE_CTX_H_

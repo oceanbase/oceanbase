@@ -10,34 +10,36 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/hash/ob_array_hash_map.h"
-#include "lib/hash/ob_cuckoo_hashmap.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
+# include <gtest/gtest.h>
+# include "lib/container/ob_array.h"
+# include "lib/container/ob_array_iterator.h"
+# include "lib/hash/ob_hashmap.h"
+# include "lib/hash/ob_array_hash_map.h"
+# include "lib/hash/ob_cuckoo_hashmap.h"
+# include "lib/alloc/ob_malloc_allocator.h"
+# include "storage/blocksstable/ob_block_sstable_struct.h"
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace unittest {
+namespace oceanbase
+{
+namespace unittest
+{
 
-class SortIndices {
+class SortIndices
+{
 public:
-  SortIndices(const common::ObIArray<blocksstable::MacroBlockId>& block_ids) : block_ids_(block_ids)
+  SortIndices(const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
+    : block_ids_(block_ids)
   {}
   bool operator()(int64_t i, int64_t j) const
-  {
-    return block_ids_.at(i) < block_ids_.at(j);
-  }
-
+  { return block_ids_.at(i) < block_ids_.at(j); }
 private:
-  const common::ObIArray<blocksstable::MacroBlockId>& block_ids_;
+  const common::ObIArray<blocksstable::MacroBlockId> &block_ids_;
 };
 
-class TestHashMapPerformance : public ::testing::Test {
+class TestHashMapPerformance : public ::testing::Test
+{
 public:
   TestHashMapPerformance();
   virtual ~TestHashMapPerformance();
@@ -45,42 +47,37 @@ public:
   int prepare_array_hash_map(const int64_t count, const double load_factor);
   int prepare_cuckoo_hash_map(const int64_t count, const double load_factor);
   int prepare_array(const int64_t count);
-  int load_hash_data(const common::ObIArray<blocksstable::MacroBlockId>& block_ids,
-      const common::ObIArray<int64_t>& sstable_block_idx);
-  int load_array_hash_data(const common::ObIArray<blocksstable::MacroBlockId>& block_ids,
-      const common::ObIArray<int64_t>& sstable_block_idx);
-  int load_array_data(const common::ObIArray<blocksstable::MacroBlockId>& block_ids,
-      const common::ObIArray<int64_t>& sstable_block_idx);
-  int load_cuckoo_hash_data(const common::ObIArray<blocksstable::MacroBlockId>& block_ids,
-      const common::ObIArray<int64_t>& sstable_block_idx);
-  int generate_data(const int64_t count, common::ObArray<blocksstable::MacroBlockId>& block_ids,
-      common::ObArray<int64_t>& sstable_block_idx);
-  int generate_query_data(
-      const int64_t count, const int64_t max_block_id, common::ObArray<blocksstable::MacroBlockId>& block_ids);
-  int test_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
-  int test_array_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
-  int test_array_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
-  int test_cuckoo_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
-
+  int load_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+      const common::ObIArray<int64_t> &sstable_block_idx);
+  int load_array_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+      const common::ObIArray<int64_t> &sstable_block_idx);
+  int load_array_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+      const common::ObIArray<int64_t> &sstable_block_idx);
+  int load_cuckoo_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+      const common::ObIArray<int64_t> &sstable_block_idx);
+  int generate_data(const int64_t count, common::ObArray<blocksstable::MacroBlockId> &block_ids,
+      common::ObArray<int64_t> &sstable_block_idx);
+  int generate_query_data(const int64_t count, const int64_t max_block_id, common::ObArray<blocksstable::MacroBlockId> &block_ids);
+  int test_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids);
+  int test_array_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids);
+  int test_array_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids);
+  int test_cuckoo_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids);
 private:
   common::hash::ObHashMap<blocksstable::MacroBlockId, int64_t, common::hash::NoPthreadDefendMode> hash_map_;
   common::ObArrayHashMap<blocksstable::MacroBlockId, int64_t> array_hash_map_;
   common::hash::ObCuckooHashMap<blocksstable::MacroBlockId, int64_t> cuckoo_hash_map_;
-  blocksstable::MacroBlockId* block_ids_;
-  int64_t* sstable_block_idx_;
+  blocksstable::MacroBlockId *block_ids_;
+  int64_t *sstable_block_idx_;
   int64_t block_count_;
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator cuckoo_allocator_;
 };
 
 TestHashMapPerformance::TestHashMapPerformance()
-    : hash_map_(),
-      block_ids_(NULL),
-      sstable_block_idx_(NULL),
-      block_count_(0),
-      allocator_(ObModIds::OB_SSTABLE),
-      cuckoo_allocator_(ObModIds::OB_SSTABLE_BLOCK_FILE)
-{}
+  : hash_map_(), block_ids_(NULL), sstable_block_idx_(NULL), block_count_(0),
+    allocator_(ObModIds::OB_SSTABLE), cuckoo_allocator_(ObModIds::OB_SSTABLE_BLOCK_FILE)
+{
+}
 
 TestHashMapPerformance::~TestHashMapPerformance()
 {
@@ -119,11 +116,10 @@ int TestHashMapPerformance::prepare_array_hash_map(const int64_t count, const do
 int TestHashMapPerformance::prepare_array(const int64_t count)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(block_ids_ = static_cast<blocksstable::MacroBlockId*>(
-                    allocator_.alloc(sizeof(blocksstable::MacroBlockId) * count)))) {
+  if (OB_ISNULL(block_ids_ = static_cast<blocksstable::MacroBlockId *>(allocator_.alloc(sizeof(blocksstable::MacroBlockId) * count)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory for block ids", K(ret));
-  } else if (OB_ISNULL(sstable_block_idx_ = static_cast<int64_t*>(allocator_.alloc(count * sizeof(int64_t))))) {
+  } else if (OB_ISNULL(sstable_block_idx_ = static_cast<int64_t *>(allocator_.alloc(count * sizeof(int64_t))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory for block ids", K(ret));
   } else {
@@ -144,14 +140,15 @@ int TestHashMapPerformance::prepare_cuckoo_hash_map(const int64_t count, const d
   return ret;
 }
 
-int TestHashMapPerformance::generate_data(const int64_t count, common::ObArray<blocksstable::MacroBlockId>& block_ids,
-    common::ObArray<int64_t>& sstable_block_idx)
+int TestHashMapPerformance::generate_data(const int64_t count,
+    common::ObArray<blocksstable::MacroBlockId> &block_ids,
+    common::ObArray<int64_t> &sstable_block_idx)
 {
   int ret = OB_SUCCESS;
   block_ids.reset();
   sstable_block_idx.reset();
   for (int64_t i = 1; OB_SUCC(ret) && i <= count; ++i) {
-    blocksstable::MacroBlockId block_id(i);
+    blocksstable::MacroBlockId block_id(0, i, 0);
     if (OB_FAIL(block_ids.push_back(block_id))) {
       STORAGE_LOG(WARN, "fail to push back block id", K(ret));
     } else if (OB_FAIL(sstable_block_idx.push_back(i))) {
@@ -163,8 +160,8 @@ int TestHashMapPerformance::generate_data(const int64_t count, common::ObArray<b
   return ret;
 }
 
-int TestHashMapPerformance::load_hash_data(
-    const common::ObIArray<blocksstable::MacroBlockId>& block_ids, const common::ObIArray<int64_t>& sstable_block_idx)
+int TestHashMapPerformance::load_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+    const common::ObIArray<int64_t> &sstable_block_idx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < block_ids.count(); ++i) {
@@ -175,8 +172,8 @@ int TestHashMapPerformance::load_hash_data(
   return ret;
 }
 
-int TestHashMapPerformance::load_array_hash_data(
-    const common::ObIArray<blocksstable::MacroBlockId>& block_ids, const common::ObIArray<int64_t>& sstable_block_idx)
+int TestHashMapPerformance::load_array_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+    const common::ObIArray<int64_t> &sstable_block_idx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < block_ids.count(); ++i) {
@@ -187,8 +184,8 @@ int TestHashMapPerformance::load_array_hash_data(
   return ret;
 }
 
-int TestHashMapPerformance::load_array_data(
-    const common::ObIArray<blocksstable::MacroBlockId>& block_ids, const common::ObIArray<int64_t>& sstable_block_idx)
+int TestHashMapPerformance::load_array_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+    const common::ObIArray<int64_t> &sstable_block_idx)
 {
   int ret = OB_SUCCESS;
   common::ObArray<int64_t> indices;
@@ -202,14 +199,14 @@ int TestHashMapPerformance::load_array_data(
     block_ids_[i] = block_ids.at(indices[i]);
     sstable_block_idx_[i] = sstable_block_idx.at(indices[i]);
     if (i > 0) {
-      ret = block_ids_[i - 1] < block_ids_[i] ? OB_SUCCESS : OB_ERROR;
+      ret = block_ids_[i-1] < block_ids_[i] ? OB_SUCCESS : OB_ERROR;
     }
   }
   return ret;
 }
 
-int TestHashMapPerformance::load_cuckoo_hash_data(
-    const common::ObIArray<blocksstable::MacroBlockId>& block_ids, const common::ObIArray<int64_t>& sstable_block_idx)
+int TestHashMapPerformance::load_cuckoo_hash_data(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
+    const common::ObIArray<int64_t> &sstable_block_idx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < block_ids.count(); ++i) {
@@ -220,21 +217,22 @@ int TestHashMapPerformance::load_cuckoo_hash_data(
   return ret;
 }
 
-int TestHashMapPerformance::generate_query_data(
-    const int64_t count, const int64_t max_block_id, common::ObArray<blocksstable::MacroBlockId>& block_ids)
+int TestHashMapPerformance::generate_query_data(const int64_t count,
+    const int64_t max_block_id,
+    common::ObArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   ObRandom random;
   for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
     const int64_t block_idx = random.get(1, max_block_id);
-    if (OB_FAIL(block_ids.push_back(blocksstable::MacroBlockId(block_idx)))) {
+    if (OB_FAIL(block_ids.push_back(blocksstable::MacroBlockId(0, block_idx, 0)))) {
       STORAGE_LOG(WARN, "fail to push back block idx", K(ret));
     }
   }
   return ret;
 }
 
-int TestHashMapPerformance::test_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids)
+int TestHashMapPerformance::test_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -250,7 +248,7 @@ int TestHashMapPerformance::test_hash_performance(const common::ObIArray<blockss
   return ret;
 }
 
-int TestHashMapPerformance::test_array_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids)
+int TestHashMapPerformance::test_array_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -266,7 +264,7 @@ int TestHashMapPerformance::test_array_hash_performance(const common::ObIArray<b
   return ret;
 }
 
-int TestHashMapPerformance::test_array_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids)
+int TestHashMapPerformance::test_array_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -281,7 +279,7 @@ int TestHashMapPerformance::test_array_performance(const common::ObIArray<blocks
   return ret;
 }
 
-int TestHashMapPerformance::test_cuckoo_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids)
+int TestHashMapPerformance::test_cuckoo_hash_performance(const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
@@ -305,7 +303,6 @@ TEST_F(TestHashMapPerformance, test_performance)
   ObArray<blocksstable::MacroBlockId> block_ids;
   ObArray<int64_t> sstable_block_idx;
   ObArray<blocksstable::MacroBlockId> query_block_ids;
-  ASSERT_EQ(OB_SUCCESS, lib::ObMallocAllocator::get_instance()->init());
   ASSERT_EQ(OB_SUCCESS, generate_data(count, block_ids, sstable_block_idx));
   ASSERT_EQ(OB_SUCCESS, prepare_hash_map(count, 1.0));
   ASSERT_EQ(OB_SUCCESS, prepare_array_hash_map(count, 1.0));
@@ -323,10 +320,10 @@ TEST_F(TestHashMapPerformance, test_performance)
   lib::ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
   lib::ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
 }
-}  // namespace unittest
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -f test_hash_performance.log*");
   OB_LOGGER.set_file_name("test_hash_performance.log", true, true);

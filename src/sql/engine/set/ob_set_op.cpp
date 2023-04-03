@@ -14,15 +14,26 @@
 
 #include "sql/engine/set/ob_set_op.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObSetSpec::ObSetSpec(ObIAllocator& alloc, const ObPhyOperatorType type)
-    : ObOpSpec(alloc, type), is_distinct_(false), set_exprs_(alloc), sort_collations_(alloc), sort_cmp_funs_(alloc)
-{}
+ObSetSpec::ObSetSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+    is_distinct_(false),
+    set_exprs_(alloc),
+    sort_collations_(alloc),
+    sort_cmp_funs_(alloc)
+{
+}
 
-OB_SERIALIZE_MEMBER((ObSetSpec, ObOpSpec), is_distinct_, set_exprs_, sort_collations_, sort_cmp_funs_);
+OB_SERIALIZE_MEMBER((ObSetSpec, ObOpSpec),
+    is_distinct_,
+    set_exprs_,
+    sort_collations_,
+    sort_cmp_funs_);
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

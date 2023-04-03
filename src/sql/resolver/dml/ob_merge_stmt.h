@@ -14,110 +14,86 @@
 #define OCEANBASE_SQL_OB_MERGE_STMT_H_
 #include "lib/container/ob_array.h"
 #include "lib/string/ob_string.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-namespace oceanbase {
-namespace sql {
-class ObMergeStmt : public ObInsertStmt {
-  typedef common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> RawExprArray;
+#include "sql/resolver/dml/ob_del_upd_stmt.h"
+namespace oceanbase
+{
+namespace sql
+{
 
+class ObMergeStmt: public ObDelUpdStmt
+{
 public:
   ObMergeStmt();
-  int deep_copy_stmt_struct(
-      ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObDMLStmt& other) override;
-  int assign(const ObMergeStmt& other);
   virtual ~ObMergeStmt();
-  void set_target_table(uint64_t id)
-  {
-    target_table_id_ = id;
-  }
-  inline uint64_t get_target_table_id() const
-  {
-    return target_table_id_;
-  }
-  void set_source_table(uint64_t id)
-  {
-    source_table_id_ = id;
-  }
-  inline uint64_t get_source_table_id() const
-  {
-    return source_table_id_;
-  }
-  int add_rowkey_column_expr(ObColumnRefRawExpr* column_expr);
-  common::ObIArray<ObRawExpr*>& get_match_condition_exprs()
-  {
-    return match_condition_exprs_;
-  }
-  const common::ObIArray<ObRawExpr*>& get_match_condition_exprs() const
-  {
-    return match_condition_exprs_;
-  }
+  int deep_copy_stmt_struct(ObIAllocator &allocator,
+                            ObRawExprCopier &expr_copier,
+                            const ObDMLStmt &other) override;
+  int assign(const ObMergeStmt &other);
+  virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
+  ObMergeTableInfo &get_merge_table_info() { return table_info_; }
+  const ObMergeTableInfo &get_merge_table_info() const { return table_info_; }
+  void set_target_table_id(uint64_t id) { table_info_.target_table_id_ = id; }
+  inline uint64_t get_target_table_id() const { return table_info_.target_table_id_; }
+  void set_source_table_id(uint64_t id) { table_info_.source_table_id_ = id; }
+  inline uint64_t get_source_table_id() const { return table_info_.source_table_id_; }
+  common::ObIArray<ObRawExpr*> &get_match_condition_exprs() { return table_info_.match_condition_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_match_condition_exprs() const
+  { return table_info_.match_condition_exprs_; }
 
-  common::ObIArray<ObRawExpr*>& get_insert_condition_exprs()
-  {
-    return insert_condition_exprs_;
-  }
-  const common::ObIArray<ObRawExpr*>& get_insert_condition_exprs() const
-  {
-    return insert_condition_exprs_;
-  }
+  common::ObIArray<ObRawExpr*> &get_insert_condition_exprs() { return table_info_.insert_condition_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_insert_condition_exprs() const
+  { return table_info_.insert_condition_exprs_; }
 
-  common::ObIArray<ObRawExpr*>& get_update_condition_exprs()
-  {
-    return update_condition_exprs_;
-  }
-  const common::ObIArray<ObRawExpr*>& get_update_condition_exprs() const
-  {
-    return update_condition_exprs_;
-  }
+  common::ObIArray<ObRawExpr*> &get_update_condition_exprs() { return table_info_.update_condition_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_update_condition_exprs() const
+  { return table_info_.update_condition_exprs_; }
 
-  common::ObIArray<ObRawExpr*>& get_delete_condition_exprs()
-  {
-    return delete_condition_exprs_;
-  }
-  const common::ObIArray<ObRawExpr*>& get_delete_condition_exprs() const
-  {
-    return delete_condition_exprs_;
-  }
+  common::ObIArray<ObRawExpr*> &get_delete_condition_exprs() { return table_info_.delete_condition_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_delete_condition_exprs() const
+  { return table_info_.delete_condition_exprs_; }
 
-  common::ObIArray<ObRawExpr*>& get_rowkey_exprs()
+  virtual uint64_t get_trigger_events() const override
   {
-    return rowkey_exprs_;
+    uint64_t events = 0;
+    if (has_insert_clause()) {
+      events |= ObDmlEventType::DE_INSERTING;
+    }
+    if (has_update_clause()) {
+      events |= ObDmlEventType::DE_UPDATING;
+    }
+    if (has_delete_clause()) {
+      events |= ObDmlEventType::DE_DELETING;
+    }
+    return events;
   }
-  void set_insert_clause(bool has)
-  {
-    has_insert_clause_ = has;
-  }
-  void set_update_clause(bool has)
-  {
-    has_update_clause_ = has;
-  }
-  bool has_insert_clause() const
-  {
-    return has_insert_clause_;
-  }
-  bool has_update_clause() const
-  {
-    return has_update_clause_;
-  }
-  virtual int replace_inner_stmt_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
+  bool has_insert_clause() const { return !table_info_.values_desc_.empty(); }
+  bool has_update_clause() const { return !table_info_.assignments_.empty(); }
+  bool has_delete_clause() const { return !table_info_.delete_condition_exprs_.empty(); }
+  common::ObIArray<ObAssignment> &get_table_assignments() { return table_info_.assignments_; }
+  const common::ObIArray<ObAssignment> &get_table_assignments() const { return table_info_.assignments_; }
+  inline const common::ObIArray<ObColumnRefRawExpr*> &get_values_desc() const { return table_info_.values_desc_;}
+  inline common::ObIArray<ObColumnRefRawExpr*> &get_values_desc() { return table_info_.values_desc_; }
+  inline const common::ObIArray<ObRawExpr*> &get_values_vector() const { return table_info_.values_vector_; }
+  inline common::ObIArray<ObRawExpr*> &get_values_vector() { return table_info_.values_vector_; }
+  common::ObIArray<ObRawExpr*> &get_column_conv_exprs() { return table_info_.column_conv_exprs_;}
+  const common::ObIArray<ObRawExpr*> &get_column_conv_exprs() const
+  { return table_info_.column_conv_exprs_; }
+  virtual int get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const override;
+  virtual int get_assignments_exprs(ObIArray<ObRawExpr*> &exprs) const override;
+  virtual int get_dml_table_infos(ObIArray<ObDmlTableInfo*>& dml_table_info) override;
+  virtual int get_dml_table_infos(ObIArray<const ObDmlTableInfo*>& dml_table_info) const override;
+  virtual int get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const override;
+  bool value_from_select() const { return !from_items_.empty(); }
+  int part_key_is_updated(bool &is_updated) const;
+  int part_key_has_rand_value(bool &has) const;
+  int part_key_has_subquery(bool &has) const ;
+  int part_key_has_auto_inc(bool &has) const;
   DECLARE_VIRTUAL_TO_STRING;
 
-protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker) override;
-
 private:
-  uint64_t source_table_id_;
-  uint64_t target_table_id_;
-  RawExprArray match_condition_exprs_;
-  RawExprArray insert_condition_exprs_;
-  RawExprArray update_condition_exprs_;
-  RawExprArray delete_condition_exprs_;
-  RawExprArray rowkey_exprs_;
-  bool has_insert_clause_;
-  bool has_update_clause_;
+  ObMergeTableInfo table_info_;
+
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_MERGE_STMT_H_
+}//namespace sql
+}//namespace oceanbase
+#endif //OCEANBASE_SQL_OB_MERGE_STMT_H_

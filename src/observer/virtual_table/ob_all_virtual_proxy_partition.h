@@ -13,29 +13,29 @@
 #ifndef OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_PARTITOIN_
 #define OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_PARTITOIN_
 
-#include "ob_all_virtual_proxy_base.h"
+#include "ob_all_virtual_proxy_base.h" // ObAllVirtualProxyBaseIterator
+#include "share/schema/ob_part_mgr_util.h" // ObPartIterator
 
-namespace oceanbase {
-namespace share {
-namespace schema {
-class ObPartition;
-class ObPartIteratorV2;
-}  // namespace schema
-}  // namespace share
-namespace observer {
-class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator {
-  enum ALL_VIRTUAL_PROXY_PARTITOIN_TABLE_COLUMNS {
-    TABLE_ID = oceanbase::common::OB_APP_MIN_COLUMN_ID,
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator
+{
+  enum ALL_VIRTUAL_PROXY_PARTITOIN_TABLE_COLUMNS
+  {
+    TENANT_NAME = oceanbase::common::OB_APP_MIN_COLUMN_ID,
+    TABLE_ID,
     PART_ID,
 
-    TENANT_ID,
     PART_NAME,
     STATUS,
     LOW_BOUND_VAL,
     LOW_BOUND_VAL_BIN,
     HIGH_BOUND_VAL,
     HIGH_BOUND_VAL_BIN,
-    PART_IDX,
+    PART_POSITION,
+    TABLET_ID,
 
     SUB_PART_NUM,
     SUB_PART_SPACE,
@@ -51,8 +51,11 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator {
     SPARE5,
     SPARE6,
   };
-  enum ALL_VIRTUAL_PROXY_PARTITOIN_TABLE_ROWKEY_IDX {
-    TABLE_ID_IDX = 0,
+
+  enum ALL_VIRTUAL_PROXY_PARTITOIN_TABLE_ROWKEY_IDX
+  {
+    TENANT_NAME_IDX = 0,
+    TABLE_ID_IDX,
     PART_ID_IDX,
     ROW_KEY_COUNT,
   };
@@ -60,18 +63,17 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator {
 public:
   ObAllVirtualProxyPartition();
   virtual ~ObAllVirtualProxyPartition();
-
   virtual int inner_open();
   virtual int inner_get_next_row();
-
-  int fill_cells(const share::schema::ObPartition& table_schema);
-
 private:
-  share::schema::ObPartIteratorV2* iter_;
+  int fill_row_(const share::schema::ObPartition &partition);
+
+  bool is_inited_;
+  share::schema::ObPartIterator iter_;
   share::schema::ObPartitionFuncType part_func_type_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualProxyPartition);
 };
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 #endif /* OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_PARTITOIN_ */

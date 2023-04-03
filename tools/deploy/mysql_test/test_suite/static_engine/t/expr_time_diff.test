@@ -1,0 +1,46 @@
+# owner: dachuan.sdc
+# owner group: SQL2
+# tag: expr
+--disable_abort_on_error
+--disable_warnings
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+alter system flush plan cache global;
+--sleep 2
+
+connection default;
+drop table if exists t1;
+create table t1(c1 datetime, c2 timestamp, c3 date, c4 time);
+insert into t1 values('1234-12-12 01:23:45', '2020-01-01 01:23:45', '1234-12-12', '01:23:45');
+insert into t1 values('2000-2-29 01:23:45.678', '2000-2-29 01:23:45.678', '2000-2-29', '01:23:45.678');
+insert into t1 values('2001-12-31 12:00:00', '2001-12-31 12:00:00', '2001-12-31', '12:00:00');
+insert into t1 values(null, null, null, null);
+
+
+connection conn_admin;
+--sleep 2
+connection default;
+select a.c1, b.c1, timediff(a.c1, b.c1) from t1 a, t1 b;
+select a.c2, b.c2, timediff(a.c2, b.c2) from t1 a, t1 b;
+select a.c3, b.c3, timediff(a.c3, b.c3) from t1 a, t1 b;
+select a.c4, b.c4, timediff(a.c4, b.c4) from t1 a, t1 b;
+let $cnt = 4;
+let $idx1 = 1;
+while ($idx1 <= $cnt)
+{
+  let $idx2 = 1;
+  while ($idx2 <= $cnt)
+  {
+    eval select timediff(c$idx1, c$idx2) from t1;
+    inc $idx2;
+  }
+  inc $idx1;
+}
+
+connection conn_admin;
+--sleep 2
+
+--echo bugfix: https://github.com/oceanbase/oceanbase/issues/177
+select timediff("12:34:56.123", "13:33:22.34567");
+select timediff("13:34:23.01","13:34:23.002");
+select timediff("13:34:23.01","13:34:23.02");

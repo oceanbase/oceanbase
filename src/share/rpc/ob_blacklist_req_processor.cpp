@@ -14,10 +14,12 @@
 #include "ob_blacklist_req_processor.h"
 #include "share/ob_server_blacklist.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace obrpc {
+namespace obrpc
+{
 class ObServerBlacklist;
 
 int ObBlacklistReqP::process()
@@ -27,8 +29,9 @@ int ObBlacklistReqP::process()
   if (OB_FAIL(share::ObServerBlacklist::get_instance().handle_req(src_cluster_id, arg_))) {
     RPC_LOG(WARN, "handle_msg failed", K(ret));
   }
+  req_->set_trace_point();
   return ret;
 }
 
-};  // namespace obrpc
-};  // end namespace oceanbase
+}; // end namespace rpc
+}; // end namespace oceanbase

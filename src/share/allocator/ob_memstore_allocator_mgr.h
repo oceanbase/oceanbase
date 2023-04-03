@@ -17,43 +17,41 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/hash/ob_hashmap.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 class ObMallocAllocator;
 }
-namespace common {
+namespace common
+{
 class ObGMemstoreAllocator;
 
-class ObMemstoreAllocatorMgr {
+class ObMemstoreAllocatorMgr
+{
 public:
   typedef ObGMemstoreAllocator TAllocator;
-  typedef common::hash::ObHashMap<uint64_t, TAllocator*> TenantMemostoreAllocatorMap;
+  typedef common::hash::ObHashMap<uint64_t, TAllocator *> TenantMemostoreAllocatorMap;
   ObMemstoreAllocatorMgr();
   virtual ~ObMemstoreAllocatorMgr();
   int init();
-  int get_tenant_memstore_allocator(uint64_t tenant_id, TAllocator*& out_allocator);
+  int get_tenant_memstore_allocator(uint64_t tenant_id, TAllocator *&out_allocator);
   int64_t get_all_tenants_memstore_used();
-  static ObMemstoreAllocatorMgr& get_instance();
-
+  static ObMemstoreAllocatorMgr &get_instance();
 public:
-  void set_malloc_allocator(lib::ObMallocAllocator* malloc_allocator)
-  {
-    malloc_allocator_ = malloc_allocator;
-  }
-
+  void set_malloc_allocator(lib::ObMallocAllocator *malloc_allocator) { malloc_allocator_ = malloc_allocator; }
 private:
   static const uint64_t PRESERVED_TENANT_COUNT = 10000;
   static const uint64_t ALLOCATOR_MAP_BUCKET_NUM = 64;
   bool is_inited_;
-  TAllocator* allocators_[PRESERVED_TENANT_COUNT];
+  TAllocator *allocators_[PRESERVED_TENANT_COUNT];
   TenantMemostoreAllocatorMap allocator_map_;
-  lib::ObMallocAllocator* malloc_allocator_;
+  lib::ObMallocAllocator *malloc_allocator_;
   int64_t all_tenants_memstore_used_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemstoreAllocatorMgr);
-};  // end of class ObMemstoreAllocatorMgr
+}; // end of class ObMemstoreAllocatorMgr
 
-}  // namespace common
-}  // end of namespace oceanbase
+} // end of namespace share
+} // end of namespace oceanbase
 #endif /* _OB_SHARE_MEMSTORE_ALLOCATOR_MGR_H_ */

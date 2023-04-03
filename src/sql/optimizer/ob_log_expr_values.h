@@ -14,56 +14,73 @@
 #define _OB_LOG_EXPR_VALUES_H
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogExprValues : public ObLogicalOperator {
-public:
-  ObLogExprValues(ObLogPlan& plan) : ObLogicalOperator(plan), need_columnlized_(false)
-  {}
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int copy_without_child(ObLogicalOperator*& out) override
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogExprValues : public ObLogicalOperator
   {
-    return clone(out);
-  }
-  void set_need_columnlized(bool need_columnlized)
-  {
-    need_columnlized_ = need_columnlized;
-  }
-  bool is_need_columnlized() const
-  {
-    return need_columnlized_;
-  }
-  int add_values_expr(const common::ObIArray<ObRawExpr*>& value_exprs);
+  public:
+    ObLogExprValues(ObLogPlan &plan)
+        : ObLogicalOperator(plan),
+          err_log_define_()
 
-  const common::ObIArray<ObRawExpr*>& get_value_exprs() const
-  {
-    return value_exprs_;
-  }
-  common::ObIArray<ObRawExpr*>& get_value_exprs()
-  {
-    return value_exprs_;
-  }
-  int check_range_param_continuous(bool& use_range_param) const;
-  int get_value_param_range(int64_t row_index, int64_t& param_idx_start, int64_t& param_idx_end) const;
-  virtual int est_cost() override;
-  virtual int compute_op_ordering() override;
-  virtual int compute_equal_set() override;
-  virtual int compute_table_set() override;
-  virtual int compute_fd_item_set() override;
-  virtual int compute_one_row_info() override;
-  virtual int allocate_dummy_output() override;
-  uint64_t hash(uint64_t seed) const override;
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
+    {}
+    virtual ~ObLogExprValues() {}
+    int add_values_expr(const common::ObIArray<ObRawExpr *> &value_exprs);
+    int add_values_desc(const common::ObIArray<ObColumnRefRawExpr *> &value_desc);
 
-private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+    const common::ObIArray<ObColumnRefRawExpr *> &get_value_desc() const
+    {
+      return value_desc_;
+    }
+    common::ObIArray<ObColumnRefRawExpr *> &get_value_desc()
+    {
+      return value_desc_;
+    }
+    const common::ObIArray<ObRawExpr *> &get_value_exprs() const
+    {
+      return value_exprs_;
+    }
+    common::ObIArray<ObRawExpr *> &get_value_exprs()
+    {
+      return value_exprs_;
+    }
+    bool contain_array_binding_param() const;
+    bool is_ins_values_batch_opt() const;
 
-private:
-  bool need_columnlized_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
-  DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
-};
-}  // namespace sql
-}  // namespace oceanbase
+    // add for error logging
+    ObErrLogDefine &get_err_log_define() { return err_log_define_; }
+    const ObErrLogDefine &get_err_log_define() const { return err_log_define_; }
+
+    virtual int est_cost() override;
+    virtual int compute_op_ordering() override;
+    virtual int compute_equal_set() override;
+    virtual int compute_table_set() override;
+    virtual int compute_fd_item_set() override;
+    virtual int compute_one_row_info() override;
+    virtual int compute_sharding_info() override;
+    virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
+    int extract_err_log_info();
+    int mark_probably_local_exprs();
+    int allocate_dummy_output();
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  private:
+    int construct_array_binding_values();
+    int construct_sequence_values();
+  private:
+    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
+    common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> value_desc_;
+    //add for error_logging
+    ObErrLogDefine err_log_define_;
+
+    DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
+  };
+}
+}
 #endif

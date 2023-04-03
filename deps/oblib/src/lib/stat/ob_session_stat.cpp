@@ -13,30 +13,34 @@
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ob_lib_config.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObSessionDIBuffer::ObSessionDIBuffer()
-    : tenant_cache_(),
-      local_session_collect_(),
-      session_collect_(NULL),
-      sys_tenant_collect_(tenant_cache_.get_sys_tenant_node()),
-      curr_tenant_collect_(sys_tenant_collect_),
-      not_sys_tenant_collect_(sys_tenant_collect_)
-{}
+  : tenant_cache_(),
+    local_session_collect_(),
+    session_collect_(NULL),
+    sys_tenant_collect_(tenant_cache_.get_sys_tenant_node()),
+    curr_tenant_collect_(sys_tenant_collect_),
+    not_sys_tenant_collect_(sys_tenant_collect_)
+{
+}
 
 ObSessionDIBuffer::~ObSessionDIBuffer()
-{}
+{
+}
 
 /**
  *--------------------------------------------------------ObSessionStatEstGuard---------------------------------------------
  */
-ObSessionStatEstGuard::ObSessionStatEstGuard(
-    const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan)
-    : prev_tenant_id_(OB_SYS_TENANT_ID), prev_session_id_(0)
+ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan)
+  : prev_tenant_id_(OB_SYS_TENANT_ID),
+    prev_session_id_(0)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
-    buffer_ = ObDITls<ObSessionDIBuffer>::get_instance();
+    buffer_ = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer_) {
       prev_tenant_id_ = buffer_->get_tenant_id();
       if (NULL != (buffer_->get_curr_session())) {
@@ -63,31 +67,5 @@ ObSessionStatEstGuard::~ObSessionStatEstGuard()
   }
 }
 
-ObTenantStatEstGuard::ObTenantStatEstGuard(uint64_t tenant_id) : prev_tenant_id_(OB_SYS_TENANT_ID)
-{
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    buffer_ = ObDITls<ObSessionDIBuffer>::get_instance();
-    if (NULL != buffer_) {
-      prev_tenant_id_ = buffer_->get_tenant_id();
-      if (0 < tenant_id) {
-        buffer_->switch_tenant(tenant_id);
-      }
-    }
-  } else {
-    buffer_ = nullptr;
-  }
-}
-
-ObTenantStatEstGuard::~ObTenantStatEstGuard()
-{
-  if (NULL != buffer_) {
-    buffer_->switch_tenant(prev_tenant_id_);
-  }
-}
-
-void __attribute__((constructor(101))) init_SessionDIBuffer()
-{
-  oceanbase::common::ObDITls<ObSessionDIBuffer>::get_instance();
-}
 } /* namespace common */
 } /* namespace oceanbase */

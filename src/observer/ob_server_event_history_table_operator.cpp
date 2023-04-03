@@ -12,12 +12,14 @@
 
 #include "ob_server_event_history_table_operator.h"
 #include "share/config/ob_server_config.h"
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 using namespace common;
 using namespace share;
 
-int ObAllServerEventHistoryTableOperator::init(common::ObMySQLProxy& proxy, const common::ObAddr& self_addr)
+int ObAllServerEventHistoryTableOperator::init(common::ObMySQLProxy &proxy, const common::ObAddr &self_addr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObEventHistoryTableOperator::init(proxy))) {
@@ -29,7 +31,7 @@ int ObAllServerEventHistoryTableOperator::init(common::ObMySQLProxy& proxy, cons
   return ret;
 }
 
-ObAllServerEventHistoryTableOperator& ObAllServerEventHistoryTableOperator::get_instance()
+ObAllServerEventHistoryTableOperator &ObAllServerEventHistoryTableOperator::get_instance()
 {
   static ObAllServerEventHistoryTableOperator instance;
   return instance;
@@ -51,17 +53,15 @@ int ObAllServerEventHistoryTableOperator::async_delete()
       for (int64_t i = 0; OB_SUCCESS == ret && i < 16; ++i) {
         sql.reset();
         if (OB_FAIL(sql.assign_fmt("DELETE FROM %s PARTITION(p%ld) WHERE gmt_create < usec_to_time(%ld) LIMIT 1024",
-                share::OB_ALL_SERVER_EVENT_HISTORY_TNAME,
-                i,
-                server_delete_timestap))) {
+                                   share::OB_ALL_SERVER_EVENT_HISTORY_TNAME, i, server_delete_timestap))) {
           SHARE_LOG(WARN, "assign_fmt failed", K(ret));
         } else if (OB_FAIL(add_task(sql, is_delete))) {
           SHARE_LOG(WARN, "add_task failed", K(sql), K(is_delete), K(ret));
         }
-      }  // end for
+      } // end for
     }
   }
   return ret;
 }
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase

@@ -12,23 +12,26 @@
 
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_config.h"
+#include "share/config/ob_server_config.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-#define GET_CONFIG_COLUMN_VALUE(type, name, cmd)                                   \
-  if (OB_SUCC(ret)) {                                                              \
-    if (OB_SUCC(rs->get_##type(#name, val_##type))) {                              \
-      cmd;                                                                         \
-    } else if (OB_ERR_NULL_VALUE == ret) {                                         \
-      SHARE_LOG(DEBUG, "row " #name " :value is null");                            \
-      ret = OB_SUCCESS;                                                            \
-    } else {                                                                       \
-      SHARE_LOG(WARN, "failed to get " #name " from __all_sys_parameter", K(ret)); \
-    }                                                                              \
+#define GET_CONFIG_COLUMN_VALUE(type, name, cmd)\
+  if (OB_SUCC(ret)) {\
+    if (OB_SUCC(rs->get_##type(#name, val_##type))) {\
+      cmd;\
+    } else if (OB_ERR_NULL_VALUE == ret) {\
+      SHARE_LOG(DEBUG, "row " #name " :value is null");\
+      ret = OB_SUCCESS;\
+    } else {\
+      SHARE_LOG(WARN, "failed to get " #name " from __all_sys_parameter", K(ret));\
+    }\
   }
 
-int ObSystemConfig::update(ObMySQLProxy::MySQLResult& result)
+int ObSystemConfig::update(ObMySQLProxy::MySQLResult &result)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(result.get_result())) {
@@ -38,11 +41,10 @@ int ObSystemConfig::update(ObMySQLProxy::MySQLResult& result)
 
   while (OB_SUCC(ret) && OB_SUCC(result.get_result()->next())) {
     ObSystemConfigKey key;
-    SMART_VAR(ObSystemConfigValue, value)
-    {
+    SMART_VAR(ObSystemConfigValue, value) {
       ObString val_varchar;
       int64_t val_int = 0;
-      common::sqlclient::ObMySQLResult* rs = result.get_result();
+      common::sqlclient::ObMySQLResult *rs = result.get_result();
       if (OB_ISNULL(rs)) {
         ret = OB_ERR_UNEXPECTED;
         SHARE_LOG(WARN, "system config result is null", K(ret));
@@ -79,16 +81,7 @@ int ObSystemConfig::update(ObMySQLProxy::MySQLResult& result)
       }
 
       if (OB_SUCC(ret)) {
-        int hash_ret = OB_SUCCESS;
-        hash_ret = map_.set_refactored(key, value);
-        if (OB_SUCCESS != hash_ret) {
-          if (OB_HASH_EXIST == hash_ret) {
-            SHARE_LOG(WARN, "sys config insert repeatly", "name", key.name(), K(hash_ret));
-          } else {
-            ret = hash_ret;
-            SHARE_LOG(WARN, "sys config map set failed", "name", key.name(), K(ret));
-          }
-        }
+        ret = update_value(key, value);
       }
     }
   }
@@ -102,24 +95,9 @@ int ObSystemConfig::update(ObMySQLProxy::MySQLResult& result)
   return ret;
 }
 
-int ObSystemConfig::find_all_matched(const ObSystemConfigKey& key, ObArray<hashmap::const_iterator>& all_config) const
-{
-  int ret = OB_SUCCESS;
-  all_config.reset();
-  hashmap::const_iterator it = map_.begin();
-  hashmap::const_iterator last = map_.end();
-
-  for (; it != last; ++it) {
-    if (it->first.match(key)) {
-      all_config.push_back(it);
-    }
-  }
-
-  return ret;
-}
-
-int ObSystemConfig::find_newest(
-    const ObSystemConfigKey& key, const ObSystemConfigValue*& pvalue, int64_t& max_version) const
+int ObSystemConfig::find_newest(const ObSystemConfigKey &key,
+                                const ObSystemConfigValue *&pvalue,
+                                int64_t &max_version) const
 {
   int ret = OB_SEARCH_NOT_FOUND;
   hashmap::const_iterator it = map_.begin();
@@ -130,7 +108,8 @@ int ObSystemConfig::find_newest(
   for (; it != last; ++it) {
     if (it->first.match(key) && it->first.get_version() > max_version) {
       max_version = it->first.get_version();
-      pvalue = &it->second;
+      pvalue = it->second;
+      // for循环旨在找到最新版本,需要迭代完,不需要OB_SUCC(ret)
       ret = OB_SUCCESS;
     }
   }
@@ -138,7 +117,8 @@ int ObSystemConfig::find_newest(
   return ret;
 }
 
-int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue*& pvalue) const
+int ObSystemConfig::find(const ObSystemConfigKey &key,
+                         const ObSystemConfigValue *&pvalue) const
 {
   int ret = OB_SUCCESS;
 
@@ -150,7 +130,7 @@ int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue
     // check if ip and port both matched
     for (it = map_.begin(); it != last; ++it) {
       if (it->first.match_ip_port(key)) {
-        pvalue = &it->second;
+        pvalue = it->second;
         break;
       }
     }
@@ -159,7 +139,7 @@ int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue
     /* check if server type matched */
     for (it = map_.begin(); it != last; ++it) {
       if (it->first.match_server_type(key)) {
-        pvalue = &it->second;
+        pvalue = it->second;
         break;
       }
     }
@@ -168,7 +148,7 @@ int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue
     /* check if zone matched */
     for (it = map_.begin(); it != last; ++it) {
       if (it->first.match_zone(key)) {
-        pvalue = &it->second;
+        pvalue = it->second;
         break;
       }
     }
@@ -177,7 +157,7 @@ int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue
     /* check if matched */
     for (it = map_.begin(); it != last; ++it) {
       if (it->first.match(key)) {
-        pvalue = &it->second;
+        pvalue = it->second;
         break;
       }
     }
@@ -189,7 +169,42 @@ int ObSystemConfig::find(const ObSystemConfigKey& key, const ObSystemConfigValue
   return ret;
 }
 
-int ObSystemConfig::reload(FILE* fp)
+int ObSystemConfig::update_value(const ObSystemConfigKey &key, const ObSystemConfigValue &value)
+{
+  int ret = OB_SUCCESS;
+  int hash_ret = OB_SUCCESS;
+  ObSystemConfigValue *sys_value = nullptr;
+  hash_ret = map_.get_refactored(key, sys_value);
+  if (OB_SUCCESS != hash_ret) {
+    if (OB_HASH_NOT_EXIST == hash_ret) {
+      void *ptr = allocator_.alloc(sizeof(ObSystemConfigValue));
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_LOG(WARN, "alloc memory failed");
+      } else {
+        sys_value = new (ptr) ObSystemConfigValue();
+        sys_value->set_value(value.value());
+        hash_ret = map_.set_refactored(key, sys_value);
+        if (OB_SUCCESS != hash_ret) {
+          if (OB_HASH_EXIST == hash_ret) {
+            SHARE_LOG(WARN, "sys config insert repeatly", "name", key.name(), K(hash_ret));
+          } else {
+            ret = hash_ret;
+            SHARE_LOG(WARN, "sys config map set failed", "name", key.name(), K(ret));
+          }
+        }
+      }
+    } else {
+      ret = hash_ret;
+      SHARE_LOG(WARN, "sys config map get failed", "name", key.name(), K(ret));
+    }
+  } else {
+    sys_value->set_value(value.value());
+  }
+  return ret;
+}
+
+int ObSystemConfig::reload(FILE *fp)
 {
   int ret = OB_SUCCESS;
   size_t cnt = 0;
@@ -198,9 +213,8 @@ int ObSystemConfig::reload(FILE* fp)
     SHARE_LOG(ERROR, "Got NULL file pointer", K(ret));
   } else {
     ObSystemConfigKey key;
-    SMART_VAR(ObSystemConfigValue, value)
-    {
-      while (1) {  // one config reload failure not effect others, so no OB_SUCC(ret) here.
+    SMART_VAR(ObSystemConfigValue, value) {
+      while (1) { // 设计上单个config reload失败不影响下一个,故未判断OB_SUCC(ret)
         if (1 != (cnt = fread(&key, sizeof(key), 1, fp))) {
           if (0 == cnt) {
             break;
@@ -212,16 +226,7 @@ int ObSystemConfig::reload(FILE* fp)
           ret = OB_ERR_UNEXPECTED;
           SHARE_LOG(WARN, "fail to read config from file", KERRMSG, K(ret));
         } else {
-          int hash_ret = OB_SUCCESS;
-          hash_ret = map_.set_refactored(key, value);
-          if (OB_SUCCESS != hash_ret) {
-            if (OB_HASH_EXIST == hash_ret) {
-              SHARE_LOG(WARN, "system config insert repeatly", "name", key.name());
-            } else {
-              ret = hash_ret;
-              SHARE_LOG(WARN, "system config map set fail", "name", key.name(), K(ret));
-            }
-          }
+          ret = update_value(key, value);
         }
       }
     }
@@ -229,12 +234,14 @@ int ObSystemConfig::reload(FILE* fp)
   return ret;
 }
 
-int ObSystemConfig::read_int32(const ObSystemConfigKey& key, int32_t& value, const int32_t& def) const
+int ObSystemConfig::read_int32(const ObSystemConfigKey &key,
+                               int32_t &value,
+                               const int32_t &def) const
 {
   int ret = OB_SUCCESS;
-  const ObSystemConfigValue* pvalue = NULL;
+  const ObSystemConfigValue *pvalue = NULL;
   int64_t version = 0;
-  char* p = NULL;
+  char *p = NULL;
   if (OB_SUCC(find_newest(key, pvalue, version)) && OB_LIKELY(NULL != pvalue)) {
     value = static_cast<int32_t>(strtol(pvalue->value(), &p, 0));
     if (p == pvalue->value()) {
@@ -252,12 +259,14 @@ int ObSystemConfig::read_int32(const ObSystemConfigKey& key, int32_t& value, con
   return ret;
 }
 
-int ObSystemConfig::read_int64(const ObSystemConfigKey& key, int64_t& value, const int64_t& def) const
+int ObSystemConfig::read_int64(const ObSystemConfigKey &key,
+                               int64_t &value,
+                               const int64_t &def) const
 {
   int ret = OB_SUCCESS;
-  const ObSystemConfigValue* pvalue = NULL;
+  const ObSystemConfigValue *pvalue = NULL;
   int64_t version = 0;
-  char* p = NULL;
+  char *p = NULL;
   if (OB_SUCC(find_newest(key, pvalue, version)) && OB_LIKELY(NULL != pvalue)) {
     value = strtoll(pvalue->value(), &p, 0);
     if (p == pvalue->value()) {
@@ -275,10 +284,12 @@ int ObSystemConfig::read_int64(const ObSystemConfigKey& key, int64_t& value, con
   return ret;
 }
 
-int ObSystemConfig::read_str(const ObSystemConfigKey& key, char buf[], int64_t len, const char* def) const
+int ObSystemConfig::read_str(const ObSystemConfigKey &key,
+                             char buf[], int64_t len,
+                             const char *def) const
 {
   int ret = OB_SUCCESS;
-  const ObSystemConfigValue* pvalue = NULL;
+  const ObSystemConfigValue *pvalue = NULL;
   int64_t version = 0;
   if (OB_SUCC(find_newest(key, pvalue, version)) && OB_LIKELY(NULL != pvalue)) {
     int wlen = 0;
@@ -294,44 +305,59 @@ int ObSystemConfig::read_str(const ObSystemConfigKey& key, char buf[], int64_t l
   } else {
     if (buf != def) {
       int64_t pos = 0;
-      if (OB_FAIL(databuff_printf(buf, len, pos, "%s", def))) {
+      if(OB_FAIL(databuff_printf(buf, len, pos, "%s", def))) {
         SHARE_LOG(WARN, "buf is not long enough", K(key.name()), K(def), K(pvalue), K(ret));
       }
     }
     SHARE_LOG(INFO, "use default config", "name", key.name(), K(def), K(pvalue), K(ret));
-    ret = OB_SUCCESS;  // by design
+    ret = OB_SUCCESS; // by design
   }
   return ret;
 }
 
-int ObSystemConfig::read_config(const ObSystemConfigKey& key, ObConfigItem& item) const
+int ObSystemConfig::read_config(const ObSystemConfigKey &key,
+                                ObConfigItem &item) const
 {
   int ret = OB_SUCCESS;
-  const ObSystemConfigValue* pvalue = NULL;
+  const ObSystemConfigValue *pvalue = NULL;
   int64_t version = 0;
-  // There is version of current item in the key. If all versions of all newest records are not
-  // greater than key version, then find_newest returns OB_SEARCH_NOT_FOUND.
-  // Functino caller will ignore or handle this error.
-
-  // Use of version can avoid write pvalue in item repeatly.
-  // There is no need to update item when version not change.
+  // key 中带上了当前 item 的版本号，如果记录的所有
+  // newest 值的版本都不比 key 中的版本大，那么 find_newest
+  // 直接返回 OB_SEARCH_NOT_FOUND，外部选择忽略该错误或做对应处理
+  //
+  // version 机制的用途之一是避免重复将 pvalue 写到 item 中，
+  // 如果 version 没变，并不需要重复更新 item。
   if (OB_SUCC(find_newest(key, pvalue, version))) {
     if (OB_ISNULL(pvalue)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
       if (item.reboot_effective()) {
-        // Update latest value into reboot_value, for writing spfile.
+        // 每次都要将最新值更新到 reboot_value 中，用于写入 spfile
         if (!item.set_reboot_value(pvalue->value())) {
           ret = OB_ERR_UNEXPECTED;
-          SHARE_LOG(WARN, "set config item reboot value failed", K(ret), K(key.name()), K(pvalue->value()), K(version));
+          SHARE_LOG(WARN, "set config item reboot value failed",
+                    K(ret), K(key.name()), K(pvalue->value()), K(version));
         } else {
           item.set_value_updated();
           item.set_version(version);
         }
       }
 
-      if (item.reboot_effective()) {
-        // An example: stack_size of STATIC_EFFECTIVE :
+      const ObString compatible_cfg(COMPATIBLE);
+      if (compatible_cfg.case_compare(key.name()) == 0) {
+        if (!item.set_dump_value(pvalue->value())) {
+          ret = OB_ERR_UNEXPECTED;
+          SHARE_LOG(WARN, "set config item dump value failed",
+                    K(ret), K(key.name()), K(pvalue->value()), K(version));
+        } else {
+          item.set_value_updated();
+          item.set_dump_value_updated();
+          item.set_version(version);
+          SHARE_LOG(INFO, "set config item dump value success",
+                    K(ret), K(key.name()), K(item.spfile_str()), K(item.str()), K(version));
+        }
+      } else if (item.reboot_effective()) {
+        // 以 STATIC_EFFECTIVE 的 stack_size 举例说明：
         //   > show parameters like 'stack_size'
         //     stack_size = 4M
         //   > alter system set stack_size = '5M'
@@ -340,24 +366,31 @@ int ObSystemConfig::read_config(const ObSystemConfigKey& key, ObConfigItem& item
         //   > obs0.restart
         //   > show parameters like 'stack_size'
         //     stack_size = 5M
-        // Only when call set_value first time after restart, stack_size record value in item.
+        //
+        // 为了实现上述行为，
+        // stack_size 只会在 restart 后首次时调用 set_value 时将 value 保存到 item 中，
+        // 之后无论 stack_size 被用户修改成什么，都不会写入 item，
+        // 通过 show parameter 只能看到旧值 4M ，必须 restart 后才能
+        // 看到更新后的值 5M。
       } else {
+        item.set_version(version);
         if (!item.set_value(pvalue->value())) {
           // without set ret
-          SHARE_LOG(WARN, "set config item value failed", K(key.name()), K(pvalue->value()), K(version));
+          SHARE_LOG(WARN, "set config item value failed",
+                    K(key.name()), K(pvalue->value()), K(version));
         } else {
           item.set_value_updated();
         }
-        item.set_version(version);
       }
 
+      // 双关，既表示 root_value 被设置过 (if any)，也表示 value 被设置过(if any)
       item.initial_value_set();
     }
   }
   return ret;
 }
 
-int64_t ObSystemConfig::to_string(char* buf, const int64_t len) const
+int64_t ObSystemConfig::to_string(char *buf, const int64_t len) const
 {
   int64_t pos = 0;
   hashmap::const_iterator it = map_.begin();
@@ -366,11 +399,12 @@ int64_t ObSystemConfig::to_string(char* buf, const int64_t len) const
   pos += snprintf(buf + pos, len - pos, "total: [%ld]\n", map_.size());
 
   for (; it != last; ++it) {
-    pos += snprintf(buf + pos, len - pos, "name: [%s], value: [%s]\n", it->first.name(), it->second.value());
+    pos += snprintf(buf + pos, len - pos, "name: [%s], value: [%s]\n",
+                    it->first.name(), it->second->value());
   }
 
   return pos;
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

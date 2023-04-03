@@ -1,0 +1,3 @@
+storage_unittest(test_key_wrapper)
+storage_unittest(test_deadlock_utility)
+storage_unittest(test_lcl_message_drop)

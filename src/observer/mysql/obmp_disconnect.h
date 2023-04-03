@@ -15,50 +15,35 @@
 
 #include "rpc/frame/ob_req_processor.h"
 #include "sql/session/ob_sql_session_mgr.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObFreeSessionCtx;
 }
-namespace observer {
+namespace observer
+{
 
 // Before coming into this class, all information about this
 // connection maybe invalid.
-class ObMPDisconnect : public rpc::frame::ObReqProcessor {
+class ObMPDisconnect
+    : public rpc::frame::ObReqProcessor
+{
 public:
-  explicit ObMPDisconnect(const sql::ObFreeSessionCtx& ctx);
+  explicit ObMPDisconnect(const sql::ObFreeSessionCtx &ctx);
   virtual ~ObMPDisconnect();
 
 protected:
-  virtual int deserialize()
-  {
-    return common::OB_SUCCESS;
-  }
-  virtual int serialize()
-  {
-    return common::OB_SUCCESS;
-  }
-  virtual int response(const int retcode)
-  {
-    UNUSED(retcode);
-    return common::OB_SUCCESS;
-  }
-
-  virtual int process();
-  virtual int after_process()
-  {
-    req_has_wokenup_ = true;
-    return common::OB_SUCCESS;
-  }
-
+  int run();
 private:
-  int kill_unfinished_session(uint32_t version, uint32_t sessid);
+  int kill_unfinished_session(uint32_t sessid);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPDisconnect);
   sql::ObFreeSessionCtx ctx_;
-};  // end of class ObMPDisconnect
+}; // end of class ObMPDisconnect
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OBMP_DISCONNECT_H_ */

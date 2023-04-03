@@ -19,12 +19,19 @@ using namespace common;
 using namespace sql;
 using namespace join;
 
-int ObHJPartition::init(int32_t part_level, int32_t part_id, bool is_left, ObHJBufMgr* buf_mgr, ObHJBatchMgr* batch_mgr,
-    ObHJBatch* pre_batch, ObPhyOperator* phy_op, ObSqlMemoryCallback* callback, int64_t dir_id)
+int ObHJPartition::init(
+  int32_t part_level,
+  int64_t part_shift,
+  int32_t part_id,
+  bool is_left,
+  ObHJBufMgr *buf_mgr,
+  ObHJBatchMgr *batch_mgr,
+  ObHJBatch *pre_batch,
+  ObSqlMemoryCallback *callback,
+  int64_t dir_id)
 {
   int ret = OB_SUCCESS;
   UNUSED(pre_batch);
-  UNUSED(phy_op);
   part_level_ = part_level;
   part_id_ = part_id;
   buf_mgr_ = buf_mgr;
@@ -32,7 +39,7 @@ int ObHJPartition::init(int32_t part_level, int32_t part_id, bool is_left, ObHJB
   if (OB_ISNULL(buf_mgr) || OB_ISNULL(batch_mgr)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("buf mgr or batch_mgr is null", K(ret), K(part_level_), K(part_id_), K(is_left), K(buf_mgr), K(batch_mgr));
-  } else if (OB_FAIL(batch_mgr_->get_or_create_batch(part_level_, part_id_, is_left, batch_))) {
+  } else if (OB_FAIL(batch_mgr_->get_or_create_batch(part_level_, part_shift, part_id_, is_left, batch_))) {
     LOG_WARN("fail to get batch", K(ret), K(part_level_), K(part_id_), K(is_left));
   } else if (OB_ISNULL(batch_)) {
     ret = OB_INNER_STAT_ERROR;
@@ -81,22 +88,20 @@ int ObHJPartition::check()
   if (part_level_ == -1 || part_id_ == -1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part_level_ and part_id_ should not be null");
-  } else if (buf_mgr_ == NULL || batch_mgr_ == NULL) {
+  } else if (buf_mgr_ == NULL ||  batch_mgr_ == NULL) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buf_mgr_ and batch_mgr_ should not be null");
   }
   return ret;
 }
 
-void ObHJPartition::reset()
-{
+void ObHJPartition::reset() {
   buf_mgr_ = nullptr;
   batch_mgr_ = nullptr;
   batch_ = nullptr;
 }
 
-int ObHJPartition::add_row(const ObNewRow& row, ObStoredJoinRow*& stored_row)
-{
+int ObHJPartition::add_row(const ObNewRow &row, ObStoredJoinRow *&stored_row) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->add_row(row, stored_row))) {
     LOG_WARN("failed to add row to chunk row store");
@@ -107,14 +112,13 @@ int ObHJPartition::add_row(const ObNewRow& row, ObStoredJoinRow*& stored_row)
 int ObHJPartition::finish_dump(bool memory_need_dump)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(batch_->finish_dump(memory_need_dump))) {
+  if (OB_FAIL(batch_->finish_dump(memory_need_dump))){
     LOG_WARN("fail to finish batch dump", K(ret));
   }
   return ret;
 }
 
-int ObHJPartition::dump(bool all_dump)
-{
+int ObHJPartition::dump(bool all_dump) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->dump(all_dump))) {
     LOG_WARN("failed to dump data to chunk row store", K(ret));
@@ -122,7 +126,7 @@ int ObHJPartition::dump(bool all_dump)
   return ret;
 }
 
-int ObHJPartition::get_next_row(const ObStoredJoinRow*& stored_row)
+int ObHJPartition::get_next_row(const ObStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->get_next_row(stored_row)) && OB_ITER_END != ret) {
@@ -130,3 +134,4 @@ int ObHJPartition::get_next_row(const ObStoredJoinRow*& stored_row)
   }
   return ret;
 }
+

@@ -17,17 +17,22 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprRpcPort::ObExprRpcPort(ObIAllocator& alloc)
+
+ObExprRpcPort::ObExprRpcPort(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_RPC_PORT, N_RPC_PORT, 0, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprRpcPort::~ObExprRpcPort()
-{}
+{
+}
 
-int ObExprRpcPort::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprRpcPort::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
@@ -37,36 +42,25 @@ int ObExprRpcPort::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ct
   return ret;
 }
 
-int ObExprRpcPort::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  ObAddr host_addr = ObCurTraceId::get_addr();
-  if (OB_UNLIKELY(!host_addr.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("host addr is invalid", K(ret), K(host_addr));
-  } else {
-    result.set_int32(host_addr.get_port());
-  }
-  return ret;
-}
-
-int ObExprRpcPort::eval_rpc_port(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprRpcPort::eval_rpc_port(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
   UNUSED(ctx);
+  //see
   ObAddr addr = ObCurTraceId::get_addr();
   expr_datum.set_int32(addr.get_port());
   return ret;
 }
 
-int ObExprRpcPort::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprRpcPort::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
   rt_expr.eval_func_ = ObExprRpcPort::eval_rpc_port;
   return OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

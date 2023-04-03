@@ -5586,7 +5586,7 @@ select * from t1 where c1=? and c2=?;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -5611,9 +5611,9 @@ select * from t1 where c1=? and c2=?;
           "result_type":"",
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -5629,7 +5629,7 @@ select * from t1 where c1=? and c2=?;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -5654,9 +5654,9 @@ select * from t1 where c1=? and c2=?;
           "result_type":"",
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -5723,9 +5723,9 @@ select * from t1 where c1=? and c2=?;
         "result_type":"",
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM"
+          "CNT_STATIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -5753,9 +5753,9 @@ select * from t1 where c1=? and c2=?;
         "result_type":"",
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM"
+          "CNT_STATIC_PARAM"
         ],
         "rel_id": [
         ],

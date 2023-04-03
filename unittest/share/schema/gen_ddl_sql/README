@@ -1,0 +1,3 @@
+trade10.sql : There are 30 create table statements and 29 create index statements.
+
+gen_sql.sh : Call "trade10.sql" repeatedly to generate huge ddl statements. The result is stored in "trade.sql".

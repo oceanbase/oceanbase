@@ -19,11 +19,12 @@ using namespace oceanbase::common;
 using namespace oceanbase::storage;
 
 ObMultiVersionSSTableMergeInfo::ObMultiVersionSSTableMergeInfo()
-    : delete_logic_row_count_(0),
-      update_logic_row_count_(0),
-      insert_logic_row_count_(0),
-      empty_delete_logic_row_count_(0)
-{}
+  : delete_logic_row_count_(0),
+    update_logic_row_count_(0),
+    insert_logic_row_count_(0),
+    empty_delete_logic_row_count_(0)
+{
+}
 
 void ObMultiVersionSSTableMergeInfo::reset()
 {
@@ -33,7 +34,7 @@ void ObMultiVersionSSTableMergeInfo::reset()
   empty_delete_logic_row_count_ = 0;
 }
 
-int ObMultiVersionSSTableMergeInfo::add(const ObMultiVersionSSTableMergeInfo& info)
+int ObMultiVersionSSTableMergeInfo::add(const ObMultiVersionSSTableMergeInfo &info)
 {
   int ret = OB_SUCCESS;
   delete_logic_row_count_ += info.delete_logic_row_count_;
@@ -43,186 +44,183 @@ int ObMultiVersionSSTableMergeInfo::add(const ObMultiVersionSSTableMergeInfo& in
   return ret;
 }
 
+const char * ObParalleMergeInfo::para_info_type_str[] = {
+    "scan_units",
+    "cost_time",
+    "use_old_macro_block_cnt",
+    "incremental_row_count"
+};
+
+const char *ObParalleMergeInfo::get_para_info_str(const int64_t idx) const
+{
+  const char * ret_str = nullptr;
+  STATIC_ASSERT(static_cast<int64_t>(ARRAY_IDX_MAX) == ARRAYSIZEOF(para_info_type_str), "str len is mismatch");
+  if (idx < SCAN_UNITS || idx >= ARRAY_IDX_MAX) {
+    ret_str = "invalid_type";
+  } else {
+    ret_str = para_info_type_str[idx];
+  }
+  return ret_str;
+}
+
+int64_t ObParalleMergeInfo::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
+      J_OBJ_START();
+      J_KV("type", get_para_info_str(i), "info", info_[i]);
+      J_OBJ_END();
+      J_COMMA();
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
+int64_t ObParalleMergeInfo::to_paral_info_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
+      J_OBJ_START();
+      if (0 == info_[i].count_ && 0 == info_[i].sum_value_) {
+        J_KV("type", get_para_info_str(i), "info", "EMPTY");
+      } else {
+        J_KV("type", get_para_info_str(i), "min", info_[i].min_value_, "max", info_[i].max_value_,
+            "avg", info_[i].count_ > 0 ? info_[i].sum_value_ / info_[i].count_ : 0);
+      }
+      J_OBJ_END();
+      J_COMMA();
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
+void ObParalleMergeInfo::reset()
+{
+  for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
+    info_[i].reset();
+  }
+}
+
 ObSSTableMergeInfo::ObSSTableMergeInfo()
-    : table_id_(0),
-      partition_id_(0),
-      version_(0),
-      table_type_(0),
-      major_table_id_(0),
+    : tenant_id_(0),
+      ls_id_(),
+      tablet_id_(),
+      compaction_scn_(0),
+      merge_type_(INVALID_MERGE_TYPE),
       merge_start_time_(0),
       merge_finish_time_(0),
-      merge_cost_time_(0),
-      estimate_cost_time_(0),
+      dag_id_(),
       occupy_size_(0),
+      new_flush_occupy_size_(0),
+      original_size_(0),
+      compressed_size_(0),
       macro_block_count_(0),
-      use_old_macro_block_count_(0),
+      multiplexed_macro_block_count_(0),
+      new_micro_count_in_new_macro_(0),
+      multiplexed_micro_count_in_new_macro_(0),
       total_row_count_(0),
-      delete_row_count_(0),
-      insert_row_count_(0),
-      update_row_count_(0),
-      base_row_count_(0),
-      use_base_row_count_(0),
-      memtable_row_count_(0),
-      output_row_count_(0),
-      purged_row_count_(0),
-      merge_level_(MACRO_BLOCK_MERGE_LEVEL),
-      rewrite_macro_old_micro_block_count_(0),
-      rewrite_macro_total_micro_block_count_(0),
-      error_code_(0),
-      total_child_task_(0),
-      finish_child_task_(0),
-      is_complement_(false),
-      merge_type_(INVALID_MERGE_TYPE),
-      merge_status_(MERGE_STATUS_MAX),
-      step_merge_start_version_(0),
-      step_merge_end_version_(0),
-      snapshot_version_(0),
-      column_cnt_(0),
-      table_count_(0),
-      macro_bloomfilter_count_(0)
-{}
+      incremental_row_count_(0),
+      new_flush_data_rate_(0),
+      is_full_merge_(false),
+      progressive_merge_round_(0),
+      progressive_merge_num_(0),
+      concurrent_cnt_(0),
+      macro_bloomfilter_count_(0),
+      parallel_merge_info_(),
+      filter_statistics_(),
+      participant_table_str_("\0"),
+      macro_id_list_("\0"),
+      comment_("\0")
+{
+}
 
-int ObSSTableMergeInfo::add(const ObSSTableMergeInfo& other)
+bool ObSSTableMergeInfo::is_valid() const
+{
+  bool bret = true;
+  if (OB_UNLIKELY(tenant_id_ <= 0 || !ls_id_.is_valid() || !tablet_id_.is_valid() || compaction_scn_ <= 0)) {
+    bret = false;
+  }
+  return bret;
+}
+
+int ObSSTableMergeInfo::add(const ObSSTableMergeInfo &other)
 {
   int ret = OB_SUCCESS;
-  table_id_ = other.table_id_;
-  table_type_ = other.table_type_;
-  major_table_id_ = other.major_table_id_;
-  if (0 == merge_start_time_) {
-    merge_start_time_ = other.merge_start_time_;
-  } else if (merge_start_time_ > other.merge_start_time_) {
-    merge_start_time_ = other.merge_start_time_;
-  }
   if (merge_finish_time_ < other.merge_finish_time_) {
     merge_finish_time_ = other.merge_finish_time_;
   }
-  merge_cost_time_ = merge_finish_time_ - merge_start_time_;
-  estimate_cost_time_ += other.estimate_cost_time_;
+  new_flush_occupy_size_ += other.new_flush_occupy_size_;
   occupy_size_ += other.occupy_size_;
+  original_size_ += other.original_size_;
+  compressed_size_ += other.compressed_size_;
   macro_block_count_ += other.macro_block_count_;
-  use_old_macro_block_count_ += other.use_old_macro_block_count_;
+  multiplexed_macro_block_count_ += other.multiplexed_macro_block_count_;
   total_row_count_ += other.total_row_count_;
-  delete_row_count_ += other.delete_row_count_;
-  insert_row_count_ += other.insert_row_count_;
-  update_row_count_ += other.update_row_count_;
-  base_row_count_ += other.base_row_count_;
-  use_base_row_count_ += other.use_base_row_count_;
-  memtable_row_count_ += other.memtable_row_count_;
-  output_row_count_ += other.output_row_count_;
-  purged_row_count_ += other.purged_row_count_;
-  merge_level_ = other.merge_level_;
-  rewrite_macro_old_micro_block_count_ += other.rewrite_macro_old_micro_block_count_;
-  rewrite_macro_total_micro_block_count_ += other.rewrite_macro_total_micro_block_count_;
-  total_child_task_ = other.total_child_task_;
-  finish_child_task_ = other.finish_child_task_;
-  partition_id_ = other.partition_id_;
-  error_code_ = other.error_code_;
-  merge_type_ = other.merge_type_;
-  merge_status_ = other.merge_status_;
+  incremental_row_count_ += other.incremental_row_count_;
+  multiplexed_micro_count_in_new_macro_ += other.multiplexed_micro_count_in_new_macro_;
+  new_micro_count_in_new_macro_ += other.new_micro_count_in_new_macro_;
 
-  if (other.version_.is_valid()) {
-    version_ = other.version_.version_;
+  if (1 == concurrent_cnt_) {
+    // do nothing
+  } else {
+    parallel_merge_info_.info_[ObParalleMergeInfo::MERGE_COST_TIME].add(other.merge_finish_time_ - other.merge_start_time_);
+    parallel_merge_info_.info_[ObParalleMergeInfo::USE_OLD_BLK_CNT].add(other.multiplexed_macro_block_count_);
+    parallel_merge_info_.info_[ObParalleMergeInfo::INC_ROW_CNT].add(other.incremental_row_count_);
   }
-  step_merge_start_version_ = other.step_merge_start_version_;
-  step_merge_end_version_ = other.step_merge_end_version_;
-  snapshot_version_ = other.snapshot_version_;
-  table_count_ = other.table_count_;
   macro_bloomfilter_count_ += other.macro_bloomfilter_count_;
+  filter_statistics_.add(other.filter_statistics_);
   return ret;
 }
 
 void ObSSTableMergeInfo::reset()
 {
-  table_id_ = 0;
-  table_type_ = 0;
-  major_table_id_ = 0;
+  tenant_id_ = 0;
+  ls_id_.reset();
+  tablet_id_.reset();
+  compaction_scn_ = 0;
+  merge_type_ = INVALID_MERGE_TYPE;
   merge_start_time_ = 0;
   merge_finish_time_ = 0;
-  merge_cost_time_ = 0;
-  estimate_cost_time_ = 0;
   occupy_size_ = 0;
+  new_flush_occupy_size_ = 0;
+  original_size_ = 0;
+  compressed_size_ = 0;
   macro_block_count_ = 0;
-  use_old_macro_block_count_ = 0;
+  multiplexed_macro_block_count_ = 0;
+  new_micro_count_in_new_macro_ = 0;
+  multiplexed_micro_count_in_new_macro_ = 0;
   total_row_count_ = 0;
-  delete_row_count_ = 0;
-  insert_row_count_ = 0;
-  update_row_count_ = 0;
-  base_row_count_ = 0;
-  use_base_row_count_ = 0;
-  memtable_row_count_ = 0;
-  output_row_count_ = 0;
-  purged_row_count_ = 0;
-  merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-  rewrite_macro_old_micro_block_count_ = 0;
-  rewrite_macro_total_micro_block_count_ = 0;
-  total_child_task_ = 0;
-  finish_child_task_ = 0;
-  partition_id_ = 0;
-  error_code_ = 0;
-  is_complement_ = false;
-  merge_type_ = INVALID_MERGE_TYPE;
-  merge_status_ = MERGE_STATUS_MAX;
-  version_ = 0;
-  step_merge_start_version_ = 0;
-  step_merge_end_version_ = 0;
-  column_cnt_ = 0;
-  table_count_ = 0;
+  incremental_row_count_ = 0;
+  new_flush_data_rate_ = 0;
+  is_full_merge_ = false;
+  progressive_merge_round_ = 0;
+  progressive_merge_num_ = 0;
+  concurrent_cnt_ = 0;
   macro_bloomfilter_count_ = 0;
+  parallel_merge_info_.reset();
+  filter_statistics_.reset();
+  MEMSET(participant_table_str_, '\0', sizeof(participant_table_str_));
+  MEMSET(macro_id_list_, '\0', sizeof(macro_id_list_));
+  MEMSET(comment_, '\0', sizeof(comment_));
 }
 
-void ObSSTableMergeInfo::dump_info(const char* msg)
+void ObSSTableMergeInfo::dump_info(const char *msg)
 {
   int64_t output_row_per_s = 0;
   int64_t new_macro_KB_per_s = 0;
-  if (merge_cost_time_ != 0) {
-    output_row_per_s = (output_row_count_ * 1000 * 1000) / merge_cost_time_;
-    new_macro_KB_per_s = (macro_block_count_ - use_old_macro_block_count_) * 2 * 1024 * 1000 * 1000 / merge_cost_time_;
+  if (merge_finish_time_ > merge_start_time_) {
+    const int64_t merge_cost_time = merge_finish_time_ - merge_start_time_;
+    output_row_per_s = (incremental_row_count_ * 1000 * 1000) / merge_cost_time;
+    new_macro_KB_per_s = (macro_block_count_ - multiplexed_macro_block_count_) * 2 * 1024 * 1000 * 1000 / merge_cost_time;
   }
   FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
 }
 
-ObMergeChecksumInfo::ObMergeChecksumInfo()
-    : column_checksums_(NULL), increment_column_checksums_(NULL), concurrent_cnt_(0), column_count_(0)
-{}
-
-int ObCreateSSTableParam::assign(const ObCreateSSTableParam& other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!other.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(other));
-  } else {
-    table_key_ = other.table_key_;
-    schema_version_ = other.schema_version_;
-    progressive_merge_start_version_ = other.progressive_merge_start_version_;
-    progressive_merge_end_version_ = other.progressive_merge_end_version_;
-    create_snapshot_version_ = other.create_snapshot_version_;
-    create_index_base_version_ = other.create_index_base_version_;
-    checksum_method_ = other.checksum_method_;
-    progressive_merge_round_ = other.progressive_merge_round_;
-    progressive_merge_step_ = other.progressive_merge_step_;
-    pg_key_ = other.pg_key_;
-    logical_data_version_ = other.logical_data_version_;
-    has_compact_row_ = other.has_compact_row_;
-    dump_memtable_timestamp_ = other.dump_memtable_timestamp_;
-  }
-  return ret;
-}
-
-int ObCreateSSTableParamWithPartition::extract_from(
-    const ObCreateSSTableParamWithTable& param, ObCreatePartitionMeta& schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(param));
-  } else if (OB_FAIL(ObCreateSSTableParam::assign(param))) {
-    STORAGE_LOG(WARN, "failed to assign", KR(ret), K(param));
-  } else if (OB_FAIL(schema.extract_from(*param.schema_))) {
-    STORAGE_LOG(WARN, "failed to extract schema", KR(ret), K(param));
-  } else {
-    schema_ = &schema;
-    is_inited_ = true;
-  }
-  return ret;
-}

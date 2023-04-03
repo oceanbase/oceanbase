@@ -13,23 +13,26 @@
 #ifndef SRC_SQL_ENGINE_EXPR_OB_EXPR_TO_DAYS_H_
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_TO_DAYS_H_
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprToDays : public ObFuncExprOperator {
+class ObExprToDays: public ObFuncExprOperator
+{
 public:
   ObExprToDays();
-  explicit ObExprToDays(common::ObIAllocator& alloc);
+  explicit  ObExprToDays(common::ObIAllocator &alloc);
   virtual ~ObExprToDays();
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& date, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &date,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToDays);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR_TO_DAYS_H_ */

@@ -1,0 +1,435 @@
+drop database if exists cte_st;
+create database cte_st;
+use cte_st;
+result_format: 4
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+
+create table DEPT(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC varchar(39)
+) ;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-06-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+
+## =======================================================================
+## Test Case 1:
+## - recursive with RECURSIVE Query: no cycle clause used in query in acyclic data
+## =======================================================================
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+update emp set mgr = 7788 where ename = 'KING';
+
+drop table emp1;
+drop table emp2;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+## =======================================================================
+## Test Case 2:
+## - recursive with RECURSIVE Query(Negative): cycle clause not used in query with RECURSIVE
+##    cyclic data
+## =======================================================================
+/* add loop from scott back to king  in emp */
+update emp set mgr = 7788 where ename = 'KING';
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+ERROR HY000: cycle detected while executing recursive WITH query
+
+drop table emp1;
+drop table emp2;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+update emp2 set mgr = 5001 where ename = 'KING';
+
+## =======================================================================
+## Test Case 3:
+## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+##  Pruning predicate added that results in no cycles e.mgr < e.empno
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and e.mgr < e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++-------+-------+------+
+| ename | empno | mgr  |
++-------+-------+------+
+| KING  | 7839  | 5001 |
++-------+-------+------+
+
+## =======================================================================
+## Test Case 4:
+## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+##  Pruning predicate added that results in no cycles e.mgr > e.empno
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and e.mgr > e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   | 7839  | 5001 |
+| CLARK  | 6003  | 7839 |
+| BLAKE  | 6002  | 7839 |
+| JONES  | 6001  | 7839 |
+| MILLER | 5008  | 6003 |
+| JAMES  | 5007  | 6002 |
+| TURNER | 5006  | 6002 |
+| MARTIN | 5005  | 6002 |
+| WARD   | 5004  | 6002 |
+| ALLEN  | 5003  | 6002 |
+| FORD   | 5002  | 6001 |
+| SCOTT  | 5001  | 6001 |
+| SMITH  | 4002  | 5002 |
+| ADAMS  | 4001  | 5001 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 5:
+## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+##  Pruning predicate added that results in no cycles r.empno < e.empno
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and r.empno < e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++-------+-------+------+
+| ename | empno | mgr  |
++-------+-------+------+
+| KING  | 7839  | 5001 |
++-------+-------+------+
+
+## =======================================================================
+## Test Case 6:
+## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+##  Pruning predicate added that results in no cycles r.empno > e.empno
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and r.empno > e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   | 7839  | 5001 |
+| CLARK  | 6003  | 7839 |
+| BLAKE  | 6002  | 7839 |
+| JONES  | 6001  | 7839 |
+| MILLER | 5008  | 6003 |
+| JAMES  | 5007  | 6002 |
+| TURNER | 5006  | 6002 |
+| MARTIN | 5005  | 6002 |
+| WARD   | 5004  | 6002 |
+| ALLEN  | 5003  | 6002 |
+| FORD   | 5002  | 6001 |
+| SCOTT  | 5001  | 6001 |
+| SMITH  | 4002  | 5002 |
+| ADAMS  | 4001  | 5001 |
++--------+-------+------+
+
+drop database cte_st;
+
+

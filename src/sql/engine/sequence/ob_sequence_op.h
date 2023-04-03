@@ -16,24 +16,36 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObSequenceSpec : public ObOpSpec {
+class ObSequenceSpec : public ObOpSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObSequenceSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
+  ObSequenceSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(nextval_seq_ids));
 
+  /*
+   * 将 nextval sequence id 添加到 ObSequence 中，
+   * 每次迭代一行，对这些 id 取 nextval，保存到 session，
+   * 供 ObSeqNextvalExpr 读取
+   *
+   * 注意：为了避免重复计算，每个 id 只能添加一次。
+   * 例如：查询 select s.nextval as c1, s.nextval as c2 from dual;
+   * 输出的值一定满足 c1 = c2
+   */
   int add_uniq_nextval_sequence_id(uint64_t seq_id);
   common::ObFixedArray<uint64_t, common::ObIAllocator> nextval_seq_ids_;
 };
 
-class ObSequenceOp : public ObOperator {
+class ObSequenceOp : public ObOperator
+{
 public:
-  ObSequenceOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
+  ObSequenceOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   ~ObSequenceOp();
 
   virtual int inner_get_next_row() override;
@@ -52,25 +64,23 @@ public:
     seq_schemas_.reset();
     ObOperator::destroy();
   }
-
 private:
-  bool is_valid();
   int init_op();
   /**
-   * @brief overload add_filter to prevent any filter expression add to sequence
-   * @param expr[in] any expr
-   * @return always return OB_NOT_SUPPORTED
+   * 对于 select、update 语句，sequence 有 child
+   * 对于 insert 语句，sequence 没有 child
+   * 本函数根据 child 个数决定是否从 child 取下一行
    */
-  int add_filter(ObSqlExpression* expr);
-
   int try_get_next_row();
-
 private:
-  share::ObSequenceCache* sequence_cache_;
+  // sequence 暴露给用户层的是一个 cache
+  // cache 底层负责做 sequence 的缓存更新以及全局的协调
+  share::ObSequenceCache *sequence_cache_;
+  // schema 放入 context 中是为了利用它的 cache 能力
   common::ObSEArray<share::schema::ObSequenceSchema, 1> seq_schemas_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _SRC_SQL_ENGINE_SEQENCE_OB_SEQUENCE_OP_H */

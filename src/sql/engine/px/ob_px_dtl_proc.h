@@ -21,117 +21,127 @@
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
 #include "sql/dtl/ob_dtl_processor.h"
 
-namespace oceanbase {
-namespace sql {
+
+namespace oceanbase
+{
+namespace sql
+{
 
 class ObPxCoordMsgProc;
 class ObExecContext;
 
 ////////////////////////////  FOR QC ////////////////////////////
 
-class ObPxFinishSqcResultP : public dtl::ObDtlPacketProc<ObPxFinishSqcResultMsg> {
+class ObPxFinishSqcResultP : public dtl::ObDtlPacketProc<ObPxFinishSqcResultMsg>
+{
 public:
-  ObPxFinishSqcResultP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
-  {}
+  ObPxFinishSqcResultP(ObExecContext &ctx, ObIPxCoordMsgProc &msg_proc)
+      : ctx_(ctx), msg_proc_(msg_proc) {}
   virtual ~ObPxFinishSqcResultP() = default;
-  int process(const ObPxFinishSqcResultMsg& pkt) override;
-
+  int process(const ObPxFinishSqcResultMsg &pkt) override;
 private:
-  ObExecContext& ctx_;
-  ObIPxCoordMsgProc& msg_proc_;
+  ObExecContext &ctx_;
+  ObIPxCoordMsgProc &msg_proc_;
 };
 
-class ObPxInitSqcResultP : public dtl::ObDtlPacketProc<ObPxInitSqcResultMsg> {
+class ObPxInitSqcResultP : public dtl::ObDtlPacketProc<ObPxInitSqcResultMsg>
+{
 public:
-  ObPxInitSqcResultP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
-  {}
+  ObPxInitSqcResultP(ObExecContext &ctx, ObIPxCoordMsgProc &msg_proc)
+      : ctx_(ctx), msg_proc_(msg_proc) {}
   virtual ~ObPxInitSqcResultP() = default;
-  int process(const ObPxInitSqcResultMsg& pkt) override;
-
+  int process(const ObPxInitSqcResultMsg &pkt) override;
 private:
-  ObExecContext& ctx_;
-  ObIPxCoordMsgProc& msg_proc_;
+  ObExecContext &ctx_;
+  ObIPxCoordMsgProc &msg_proc_;
 };
 
-class ObPxQcInterruptedP : public dtl::ObDtlInterruptProc {
+class ObPxQcInterruptedP : public dtl::ObDtlInterruptProc
+{
 public:
-  ObPxQcInterruptedP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
-  {}
+  ObPxQcInterruptedP(ObExecContext &ctx, ObIPxCoordMsgProc &msg_proc)
+      : ctx_(ctx), msg_proc_(msg_proc) {}
   virtual ~ObPxQcInterruptedP() = default;
-  int process(const common::ObInterruptCode& ic) override;
-
+  int process(const common::ObInterruptCode &ic) override;
 private:
-  ObExecContext& ctx_;
-  ObIPxCoordMsgProc& msg_proc_;
+  ObExecContext &ctx_;
+  ObIPxCoordMsgProc &msg_proc_;
 };
+
 
 ////////////////////////////  FOR SQC ////////////////////////////
 
-class ObPxReceiveDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxReceiveDataChannelMsg> {
+class ObPxReceiveDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxReceiveDataChannelMsg>
+{
 public:
-  ObPxReceiveDataChannelMsgP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
-  {}
+  ObPxReceiveDataChannelMsgP(ObIPxSubCoordMsgProc &msg_proc)
+      : msg_proc_(msg_proc) {}
   virtual ~ObPxReceiveDataChannelMsgP() = default;
-  int process(const ObPxReceiveDataChannelMsg& pkt) override;
-
+  int process(const ObPxReceiveDataChannelMsg &pkt) override;
 private:
-  ObIPxSubCoordMsgProc& msg_proc_;
+  ObIPxSubCoordMsgProc &msg_proc_;
 };
 
-class ObPxTransmitDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxTransmitDataChannelMsg> {
+
+class ObPxTransmitDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxTransmitDataChannelMsg>
+{
 public:
-  ObPxTransmitDataChannelMsgP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
-  {}
+  ObPxTransmitDataChannelMsgP(ObIPxSubCoordMsgProc &msg_proc)
+      : msg_proc_(msg_proc) {}
   virtual ~ObPxTransmitDataChannelMsgP() = default;
-  int process(const ObPxTransmitDataChannelMsg& pkt) override;
-
+  int process(const ObPxTransmitDataChannelMsg &pkt) override;
 private:
-  ObIPxSubCoordMsgProc& msg_proc_;
+  ObIPxSubCoordMsgProc &msg_proc_;
 };
 
-class ObPxSqcInterruptedP : public dtl::ObDtlInterruptProc {
+class ObPxCreateBloomFilterChannelMsgP : 
+    public dtl::ObDtlPacketProc<ObPxCreateBloomFilterChannelMsg>
+{
 public:
-  ObPxSqcInterruptedP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
-  {}
+  ObPxCreateBloomFilterChannelMsgP(ObIPxSubCoordMsgProc &msg_proc)
+      : msg_proc_(msg_proc) {}
+  virtual ~ObPxCreateBloomFilterChannelMsgP() = default;
+  int process(const ObPxCreateBloomFilterChannelMsg &pkt) override;
+private:
+  ObIPxSubCoordMsgProc &msg_proc_;
+};
+
+class ObPxSqcInterruptedP : public dtl::ObDtlInterruptProc
+{
+public:
+  ObPxSqcInterruptedP(ObIPxSubCoordMsgProc &msg_proc)
+      : msg_proc_(msg_proc) {}
   virtual ~ObPxSqcInterruptedP() = default;
-  int process(const common::ObInterruptCode& ic) override;
-
+  int process(const common::ObInterruptCode &ic) override;
 private:
-  ObIPxSubCoordMsgProc& msg_proc_;
+  ObIPxSubCoordMsgProc &msg_proc_;
 };
 
-class ObPxReceiveRowP : public dtl::ObDtlPacketProc<ObPxNewRow> {
+class ObPxReceiveRowP : public dtl::ObDtlPacketProcBase
+{
 public:
-  explicit ObPxReceiveRowP(ObPxNewRow& px_row) : row_allocator_(common::ObModIds::OB_SQL_PX), px_row_(px_row)
-  {}
+  explicit ObPxReceiveRowP(ObReceiveRowReader *reader) : reader_(reader) {}
   virtual ~ObPxReceiveRowP() = default;
-  int process(const ObPxNewRow& pkt);
+
+  dtl::ObDtlMsgType get_proc_type() const override { return dtl::PX_NEW_ROW; }
+  int process(const dtl::ObDtlLinkedBuffer &buffer, bool &transferred) override;
+  void set_reader(ObReceiveRowReader *reader) { reader_ = reader; }
   void destroy()
   {
-    row_allocator_.reset();
-  }
-
-  virtual void set_iter(dtl::ObDtlMsgIterator* iter)
-  {
-    px_row_.set_iter(iter);
-  }
-  virtual bool has_iter()
-  {
-    return px_row_.has_iter();
-  }
-
+    // do nothing here, the %reader_ is destroied outside.
+  };
 private:
-  ObArenaAllocator row_allocator_;
-  ObPxNewRow& px_row_;
+  ObReceiveRowReader *reader_;
 };
 
-class ObPxInterruptP : public dtl::ObDtlInterruptProc {
+class ObPxInterruptP : public dtl::ObDtlInterruptProc
+{
 public:
   virtual ~ObPxInterruptP() = default;
-  int process(const common::ObInterruptCode& ic) override;
+  int process(const common::ObInterruptCode &ic) override;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif

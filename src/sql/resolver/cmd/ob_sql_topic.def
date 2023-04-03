@@ -1,0 +1,2655 @@
+DEFINE_SQL_TOPIC(
+1, 
+"BIGINT",
+21, 
+" *   8字节有符号整型。 \n"
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。",
+"", 
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+2, 
+"INT",
+21, 
+" *   8字节有符号整型。 \n"
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+3, 
+"INTEGER",
+21, 
+" *   8字节有符号整型。 \n" 
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+4, 
+"MEDIUMINT",
+21, 
+" *   8字节有符号整型。 \n" 
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+5, 
+"SMALLINT",
+21, 
+" *   8字节有符号整型。 \n"
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+6, 
+"TINYINT",
+21, 
+" *   8字节有符号整型。 \n"
+" *   在OceanBase中，BIGINT, INT, INTEGER, MEDIUMINT, SMALLINT和TINYINT无论语义还是实现都是等价的。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+7, 
+"FLOAT",
+21, 
+" *   表示4字节浮点数。", 
+"", 
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+8, 
+"DOUBLE",
+21, 
+" *   8字节浮点数。\n"
+" *   在OceanBase中，DOUBLE和REAL等价，均存储为DOUBLE类型。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+9, 
+"REAL",
+21, 
+" *   8字节浮点数。\n" 
+" *   在OceanBase中，DOUBLE和REAL等价，均存储为DOUBLE类型。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+10, 
+"DECIMAL",
+21, 
+" *   格式: DECIMAL(p,s)。\n"
+"\n"
+" *   高精度数值类型。\n"
+"\n"
+"在OceanBase中，DECIMAL(p,s)和NUMERIC(p,s)是等价的。"
+"  * p（precision）表示精度，与“s”的差值为整数位数的限制。\n"
+"    ** （p-s）＞0：表示整数部分的位数不能超过“p-s”，否则将报错。\n"
+"    ** （p-s）≤0：表示整数部分必须为“0”，小数点后“-（p-s）”位也必须为“0”，否则将报错。\n"
+"  * s（scale）”表示小数点右边的数字个数。\n"
+"    ** s＞0：表示精度限制在小数点后s位，超过s位后面的小数将被四舍五入。\n"
+"    ** s≤0：小数部分被舍去，且小数点前s位，将被四舍五入。\n"
+"  * 最大取值范围：\n"
+"    ** 正数：1e-135 ~ 9.9...9e+134 （45个9后边带90个0）\n"
+"    ** 0 \n"
+"    ** 负数：-1e-135 ~ -9.9...9e+134 （45个9后边带90个0）\n"
+"  * DECIMAL可以表示的十进制位数最大为45位。\n"
+"  * 计算DECIMAL的位数时，结尾的0不占位数。例如，“102400000”的位数是4。\n"
+"  * 精度溢出后处理方法：\n"
+"    ** 整数部分超过表示范围时，直接报错。\n"
+"    ** 小数部分超过表示范围时，四舍五入。\n"
+"    ** 十进制位数超过表示范围时，四舍五入。\n"
+"  * DECIMAL类型举例：\n"
+"      DECIMAL(3, 2)\n"
+"        1.2345 ==> 1.23   小数部分四舍五入保留2位 \n"
+"        12.3   ==> Error  整数部分大于1位 \n"
+"      DECIMAL(3, -2) \n"
+"        345.6    ==> 300    小数点前2位被四舍五入 \n"
+"        45.6     ==> 0      小数点前2位被四舍五入 \n"
+"        123456.7 ==> Error  整数部分大于5位 \n"
+"      DECIMAL(2, 3) \n"
+"        1.2     ==> Error  整数部分不为0 \n"
+"        0.1     ==> Error  小数部分前1位不为0 \n"
+"        0.02345 ==> 0.023  小数部分超过3位后面的被四舍五入",
+"",  
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+11, 
+"NUMERIC",
+21, 
+"格式: NUMERIC(p,s)。\n"
+"\n"
+" *   高精度数值类型。\n"
+"\n"
+"在OceanBase中，NUMERIC(p,s)和DECIMAL(p,s)是等价的。"
+"  * p（precision）表示精度，与“s”的差值为整数位数的限制。\n"
+"    ** （p-s）＞0：表示整数部分的位数不能超过“p-s”，否则将报错。\n"
+"    ** （p-s）≤0：表示整数部分必须为“0”，小数点后“-（p-s）”位也必须为“0”，否则将报错。\n"
+"  * s（scale）”表示小数点右边的数字个数。\n"
+"    ** s＞0：表示精度限制在小数点后s位，超过s位后面的小数将被四舍五入。\n"
+"    ** s≤0：小数部分被舍去，且小数点前s位，将被四舍五入。\n"
+"  * 最大取值范围：\n"
+"    ** 正数：1e-135 ~ 9.9...9e+134 （45个9后边带90个0）\n"
+"    ** 0 \n"
+"    ** 负数：-1e-135 ~ -9.9...9e+134 （45个9后边带90个0）\n"
+"  * NUMERIC可以表示的十进制位数最大为45位。\n"
+"  * 计算NUMERIC的位数时，结尾的0不占位数。例如，“102400000”的位数是4。\n"
+"  * 精度溢出后处理方法：\n"
+"    ** 整数部分超过表示范围时，直接报错。\n"
+"    ** 小数部分超过表示范围时，四舍五入。\n"
+"    ** 十进制位数超过表示范围时，四舍五入。\n"
+"  * NUMERIC类型举例：\n"
+"      NUMERIC(3, 2)\n"
+"        1.2345 ==> 1.23   小数部分四舍五入保留2位 \n"
+"        12.3   ==> Error  整数部分大于1位 \n"
+"      NUMERIC(3, -2) \n"
+"        345.6    ==> 300    小数点前2位被四舍五入 \n"
+"        45.6     ==> 0      小数点前2位被四舍五入 \n"
+"        123456.7 ==> Error  整数部分大于5位 \n"
+"      NUMERIC(2, 3) \n"
+"        1.2     ==> Error  整数部分不为0 \n"
+"        0.1     ==> Error  小数部分前1位不为0 \n"
+"        0.02345 ==> 0.023  小数部分超过3位后面的被四舍五入",
+"",  
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+12, 
+"CREATETIME",
+22, 
+" *   用于记录本行数据第一次插入时的时间，由系统自动维护，用户不能直接修改。\n"
+" *   OceanBase数据库提供的特殊的数据类型，不能作为主键的组成部分。", 
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+13, 
+"MODIFYTIME",
+22, 
+" *   用于记录本行数据最近一次被修改的时间，由系统自动维护，用户不能直接修改。\n" 
+" *   OceanBase数据库提供的特殊的数据类型，不能作为主键的组成部分。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+14, 
+"DATETIME",
+22, 
+" *   时间戳类型。\n"
+" *   OceanBase的时间戳格式必须为YYYY-MM-DD HH:MI:SS或者YYYY-MM-DD HH:MI:SS.SSSSSS，否则插入的时间戳可能不正确。\n"
+" *   目前DATETIME和TIMESTAMP 是等价的。后续版本要做区分：DATETIME不随时区变化，TIMESTAMP以后能随时区变化。", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+15, 
+"TIMESTAMP",
+22, 
+" *   时间戳类型。\n"
+" *   OceanBase的时间戳格式必须为YYYY-MM-DD HH:MI:SS或者YYYY-MM-DD HH:MI:SS.SSSSSS，否则插入的时间戳可能不正确。\n"
+" *   目前DATETIME和TIMESTAMP 是等价的。后续版本要做区分：DATETIME不随时区变化，TIMESTAMP以后能随时区变化。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+16, 
+"BINARY",
+23, 
+" *   字符串，使用单引号。 \n"
+"     * 在OceanBase中，BINARY, CHAR, VARBINARY和VARCHAR等价，均存储为VARCHAR类型。\n"
+"     * 取值范围：[0,65536]。\n"
+"     * 这种类型的比较使用的是字节序。",
+"", 
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+17, 
+"CHAR",
+23, 
+" *   字符串，使用单引号。 \n" 
+"     * 在OceanBase中，BINARY, CHAR, VARBINARY和VARCHAR等价，均存储为VARCHAR类型。\n"
+"     * 取值范围：[0,65536]。\n"
+"     * 这种类型的比较使用的是字节序。",
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+18, 
+"VARBINARY",
+23, 
+" *   字符串，使用单引号。 \n"
+"     * 在OceanBase中，BINARY, CHAR, VARBINARY和VARCHAR等价，均存储为VARCHAR类型。\n"
+"     * 取值范围：[0,65536]。\n"
+"     * 这种类型的比较使用的是字节序。",
+"", 
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+19, 
+"VARCHAR",
+23, 
+" *   字符串，使用单引号。 \n"
+"     * 在OceanBase中，BINARY, CHAR, VARBINARY和VARCHAR等价，均存储为VARCHAR类型。\n"
+"     * 取值范围：[0,65536]。\n"
+"     * 这种类型的比较使用的是字节序。",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+20, 
+"BOOL",
+24, 
+" *   布尔类型，表示True或者False。", 
+"", 
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+21, 
+"CURRENT_TIME",
+31,
+" *   格式: CURRENT_TIME()  \n"
+"\n"  
+" *   用于获取系统当前时间，精确到微秒。格式为“YYYY-MM-DD HH:MI:SS.SSSSSS”。\n"
+" *   CURRENT_TIME()和CURRENT_TIMESTAMP()这两个函数是等价的\n"
+"\n", 
+"mysql> SELECT CURRENT_TIME(), CURRENT_TIMESTAMP();\n"
+"+----------------------------+----------------------------+ \n"
+"| CURRENT_TIME()             | CURRENT_TIMESTAMP()        | \n"
+"+----------------------------+----------------------------+ \n"
+"| 2014-02-17 10:54:37.660358 | 2014-02-17 10:54:37.660358 | \n"
+"+----------------------------+----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+22, 
+"CURRENT_TIMESTAMP",
+31,
+" *   格式: CURRENT_TIMESTAMP()  \n"
+"\n" 
+" *   用于获取系统当前时间，精确到微秒。格式为“YYYY-MM-DD HH:MI:SS.SSSSSS”。\n"
+" *   CURRENT_TIME()和CURRENT_TIMESTAMP()这两个函数是等价的\n"
+"\n", 
+"mysql> SELECT CURRENT_TIME(), CURRENT_TIMESTAMP();\n"
+"+----------------------------+----------------------------+ \n"
+"| CURRENT_TIME()             | CURRENT_TIMESTAMP()        | \n"
+"+----------------------------+----------------------------+ \n"
+"| 2014-02-17 10:54:37.660358 | 2014-02-17 10:54:37.660358 | \n"
+"+----------------------------+----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+23, 
+"DATE_ADD",
+31,
+" *   格式:  DATE_ADD(date, INTERVAL expr unit)  \n"
+"\n" 
+" *   这个函数用来执行时间的算术计算。将date值作为基数，对expr进行相加计算，expr的值允许为负数。 \n"
+"     * DATE_ADD()计算时间值是否使用夏令时，由操作系统系统根据其内部配置和相应时区设定来决定。\n"
+"     * date参数类型只能为Time类型(DATETIME, TIMESTAMP等)或者代表时间的一个字符串，不接受其它类型。\n"
+"     * date参数的期望日期类型为“YYYY-MM-DD HH:MM:SS.SSSSSS”格式，但OceanBase解析日期类型字符串时允许“不严格”语法。\n"
+"       如果一个字符串中包含数字和非数字， OceanBase将解析出被非数字隔断的数字序列作为时间序列，依次赋给年月日。 \n"
+"       例如“Ywwe1990d07 09,12:45-08&900”该字符串和“1990-07-09 12:45:08.900”在表示时间值上是等价的。\n"
+"     * 在date字符串中，日期部分是必须的，而时间部分是可以缺省的。\n"
+"       例如“1990-07-09”是合法的，这种情况下后面的时间部分将默认填充为0，其等价为“1990-07-09 00:00:00.000000”；而“1990-07”和”1990”这样的格式都是非法的。\n"
+"     * 目前date_add在解析date字符串的时候还不支持例如“990309”这种TIMESTAMP类型字符串。\n"
+"     * OceanBase中的其它系统函数调用结果可以作为的date参数进行计算。\n"
+"     * OceanBase不支持对两位数的年份进行模糊匹配，例如如12年在MySQL中匹配为2012年，而在OceanBase中就代表12年。\n"
+"     * expr的值允许为负，对一个负值相加功能等同于对一个正值相减。允许系统函数的调用结果作为该参数，但是所有结果都将作为字符串结果。\n"
+"     * unit为单位，支持以下单位：\n"
+"                             MICROSECOND\n"
+"                             SECOND \n"
+"                             MINUTE\n"
+"                             HOUR\n"
+"                             DAY\n"
+"                             WEEK\n"
+"                             MONTH\n"
+"                             QUARTER（表示季度）\n"
+"                             YEAR\n"
+"                             SECOND_MICROSECOND\n"
+"                             MINUTE_MICROSECOND\n"
+"                             MINUTE_SECOND\n"
+"                             HOUR_MICROSECOND\n"
+"                             HOUR_SECOND\n"
+"                             HOUR_MINUTE\n"
+"                             DAY_MICROSECOND\n"
+"                             DAY_SECOND\n"
+"                             DAY_MINUTE\n"
+"                             DAY_HOUR\n"
+"                             YEAR_MONTH。\n"
+"  * unit为复合单位时，expr必须加单引号。\n"
+"\n", 
+"mysql> SELECT DATE_ADD(now(), INTERVAL 5 DAY),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 MICROSECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 SECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 MINUTE),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 HOUR),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 DAY),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 WEEK),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 MONTH),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 QUARTER),\n"
+"              DATE_ADD('2014-01-10', INTERVAL 5 YEAR),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '5.000005' SECOND_MICROSECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05.000005' MINUTE_MICROSECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05' MINUTE_SECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05:05.000005' HOUR_MICROSECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05:05' HOUR_SECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05' HOUR_MINUTE),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '01 05:05:05.000005' DAY_MICROSECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '01 05:05:05' DAY_SECOND),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '01 05:05' DAY_MINUTE),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '01 05' DAY_HOUR),\n"
+"              DATE_ADD('2014-01-10', INTERVAL '1-01' YEAR_MONTH) \\G\n"
+"*************************** 1. row ***************************\n"
+"                                      DATE_ADD(now(), INTERVAL 5 DAY): 2014-02-22 10:58:26.056992\n"
+"                       DATE_ADD('2014-01-10', INTERVAL 5 MICROSECOND): 2014-01-10 00:00:00.000005\n"
+"                            DATE_ADD('2014-01-10', INTERVAL 5 SECOND): 2014-01-10 00:00:05\n"
+"                            DATE_ADD('2014-01-10', INTERVAL 5 MINUTE): 2014-01-10 00:05:00\n"
+"                              DATE_ADD('2014-01-10', INTERVAL 5 HOUR): 2014-01-10 05:00:00\n"
+"                               DATE_ADD('2014-01-10', INTERVAL 5 DAY): 2014-01-15 00:00:00\n"
+"                              DATE_ADD('2014-01-10', INTERVAL 5 WEEK): 2014-02-14 00:00:00\n"
+"                             DATE_ADD('2014-01-10', INTERVAL 5 MONTH): 2014-06-10 00:00:00\n"
+"                           DATE_ADD('2014-01-10', INTERVAL 5 QUARTER): 2015-04-10 00:00:00\n"
+"                              DATE_ADD('2014-01-10', INTERVAL 5 YEAR): 2019-01-10 00:00:00\n"
+"       DATE_ADD('2014-01-10', INTERVAL '5.000005' SECOND_MICROSECOND): 2014-01-10 00:00:05.000005\n"
+"   DATE_ADD('2014-01-10', INTERVAL '05:05.000005' MINUTE_MICROSECOND): 2014-01-10 00:05:05.000005\n"
+"               DATE_ADD('2014-01-10', INTERVAL '05:05' MINUTE_SECOND): 2014-01-10 00:05:05\n"
+"  DATE_ADD('2014-01-10', INTERVAL '05:05:05.000005' HOUR_MICROSECOND): 2014-01-10 05:05:05.000005\n"
+"              DATE_ADD('2014-01-10', INTERVAL '05:05:05' HOUR_SECOND): 2014-01-10 05:05:05\n"
+"                 DATE_ADD('2014-01-10', INTERVAL '05:05' HOUR_MINUTE): 2014-01-10 05:05:00\n"
+"DATE_ADD('2014-01-10', INTERVAL '01 05:05:05.000005' DAY_MICROSECOND): 2014-01-11 05:05:05.000005\n"
+"            DATE_ADD('2014-01-10', INTERVAL '01 05:05:05' DAY_SECOND): 2014-01-11 05:05:05\n"
+"               DATE_ADD('2014-01-10', INTERVAL '01 05:05' DAY_MINUTE): 2014-01-11 05:05:00\n"
+"                    DATE_ADD('2014-01-10', INTERVAL '01 05' DAY_HOUR): 2014-01-11 05:00:00\n"
+"                   DATE_ADD('2014-01-10', INTERVAL '1-01' YEAR_MONTH): 2015-02-10 00:00:00\n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+24, 
+"DATE_FORMAT",
+31,
+" *   格式: DATE_FORMAT(date, format)  \n"
+"\n" 
+" *   DATE_FORMAT()是STR_TO_DATE()的逆函数，DATE_FORMAT()接受一个时间值date，将其按format的格式格式化成一个时间字符串。\n"
+"    * date参数给出了被格式化的时间值，date只接受time类型和时间字符串作为参数，其具体描述参考DATE_ADD()的date参数描述。\n"
+"    * format的格式如下：\n"
+"+------------------------------------------------------------------------------------------------------------------------+ \n"
+"|   格式   |     含义                                                                    |      返回格式                 | \n"
+"|    %a    |    星期。                                                                   |      Sun..Sat                 | \n"
+"|    %b    |    月份的缩写名称。                                                         |      Jan，…，Dec              | \n"
+"|    %c    |    月份，数字形式。                                                         |      1，…，12                 | \n"
+"|    %D    |    带有英语后缀的日期。                                                     |      1st，2nd，…，31st        | \n"
+"|    %d    |    日期，数字形式。                                                         |      01，…，31                | \n"
+"|    %e    |    日期，数字形式。                                                         |      1，…，31                 | \n"
+"|    %f    |    微秒。                                                                   |      000000，…，999999        | \n"
+"|    %H    |    小时。                                                                   |      00，…，23                | \n"
+"|    %h    |    小时。                                                                   |      01，…，12                | \n"
+"|    %I    |    小时。                                                                   |      01，…，12                | \n"
+"|    %i    |    分钟。                                                                   |      00，…，59                | \n"
+"|    %j    |    一年中的第几天。                                                         |      000，…，366              | \n"
+"|    %k    |    小时。                                                                   |      0，…，23                 | \n"
+"|    %l    |    小时。                                                                   |      01，…，12                | \n"
+"|    %M    |    月份名称。                                                               |      January，…，December     | \n"
+"|    %m    |    月份，数字形式。                                                         |       01，…，12               | \n"
+"|    %p    |    上午或下午。                                                             |      AM，PM                   | \n"
+"|    %r    |    12小时制时间。                                                           |      hh:mm:ss AM/PM           | \n"
+"|    %S    |    秒。                                                                     |      00，…，59                | \n"
+"|    %s    |    秒。                                                                     |      00，…，59                | \n"
+"|    %T    |    24小时制时间。                                                           |       hh:mm:ss                | \n"
+"|    %U    |    一年中的第几周，其中周日为每周的第一天。                                 |      00，…，53                | \n"
+"|    %u    |    一年中的第几周，其中周一为每周的第一天。                                 |      00，…，53                | \n"
+"|    %V    |    一年中的第几周，其中周日为每周的第一天，和%X同时使用。                   |      01，…，53                | \n"
+"|          |    在一年中的第一周或者最后一周产生跨年时（以2014-01-01 星期三为例），      |                               | \n"
+"|          |    %U和%u时，该天为2014年的第00周，%V和%v时为2013年的第52周。               |                               | \n"
+"|    %v    |    一年中的第几周，其中周一为每周的第一天，和%x同时使用。                   |      01，…，53                | \n"
+"|    %W    |    星期。                                                                   |      Sunday，…，Saturday      | \n"
+"|    %w    |    一周中的第几天。                                                         |      0=Sunday，…，6=Saturday  | \n"
+"|    %X    |    某一周所属的年份，其中周日为每周的第一天，数字形式，4位数，和%V同时使用。|      -                        | \n"
+"|    %x    |    某一周所属的年份，其中周一为每周的第一天，数字形式，4位数，和%v同时使用。|      -                        | \n" 
+"|    %Y    |    年，用四位数字表示。                                                     |      -                        | \n"
+"|    %y    |    年，用两位数字表示。                                                     |      -                        | \n"
+"|    %%    |    文字字符，输出一个%。                                                    |      -                        | \n"
+"+------------------------------------------------------------------------------------------------------------------------+ \n"
+"\n", 
+"mysql> SELECT DATE_FORMAT('2014-01-01', '%Y-%M-%d'),\n"
+"              DATE_FORMAT('2014-01-01', '%X-%V'),\n"
+"              DATE_FORMAT('2014-01-01', '%U') \\G \n"
+"+---------------------------------------+------------------------------------+---------------------------------+ \n"
+"| DATE_FORMAT('2014-01-01', '%Y-%M-%d') | DATE_FORMAT('2014-01-01', '%X-%V') | DATE_FORMAT('2014-01-01', '%U') | \n"
+"+---------------------------------------+------------------------------------+---------------------------------+ \n"
+"| 2014-January-01                       | 2013-52                            | 00                              | \n"
+"+---------------------------------------+------------------------------------+---------------------------------+ \n"
+"1 row in set (0.00 sec) ",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+25, 
+"DATE_SUB",
+31,
+" *   格式: DATE_SUB(date, INTERVAL expr unit)  \n"
+"\n"
+" *   对时间进行算数计算。将date作为基数，对expr进行相减计算，expr允许为负，结果相当于做取反做加法。\n"
+" *   参数说明参考DATE_ADD()。\n"
+"\n", 
+"mysql> SELECT DATE_SUB('2014-01-10', INTERVAL 5 HOUR),\n"
+"              DATE_SUB('2014-01-10', INTERVAL '05:05:05.000005' HOUR_MICROSECOND);\n"
+"+-----------------------------------------+---------------------------------------------------------------------+ \n"
+"| DATE_SUB('2014-01-10', INTERVAL 5 HOUR) | DATE_SUB('2014-01-10', INTERVAL '05:05:05.000005' HOUR_MICROSECOND) | \n"
+"+-----------------------------------------+---------------------------------------------------------------------+ \n"
+"| 2014-01-09 19:00:00                     | 2014-01-09 18:54:54.999995                                          | \n"
+"+-----------------------------------------+---------------------------------------------------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+26, 
+"EXTRACT",
+31,
+" *   格式: EXTRACT(unit FROM date)  \n"
+"\n"
+" *   提取date表达式中被unit指定的时间组成单元的值。 \n"
+"     * 参数参考DATE_ADD()。 \n"
+"     * EXTRACT函数返回的结果类型为ObIntType，即64位int类型。 \n"
+"     * 对于MICROSECOND~YEAR这种Single unit，将直接返回对应的int值。 \n"
+"     unit为WEEK返回的是date表达式中指定的日期在该年所对应的周数，而OceanBase将一年的第一个星期日作为该年第一周的开始，如果某年的第一个星期日不是1月1日，那么该星期日之前的日期处于第0周。 \n"
+"     例如，2013年第一个星期日是1月6日，所以SELECT EXTRACT(WEEK FROM ‘2013-01-01’)返回的结果为0， 而SELECT EXTRACT(WEEK FROM ‘2013-01-06’)返回的结果是1。 \n"
+"     * 对于SECOND_MICROSECOND这种combinative unit，OceanBase将各个值拼接在一起作为返回值。例如，SELECT EXTRACT(YEAR_MONTH FROM '2012-03-09')返回的结果将是“201203”。 \n"
+"\n", 
+"mysql> SELECT EXTRACT(WEEK FROM '2013-01-01'),  \n"
+"              EXTRACT(WEEK FROM '2013-01-06'), \n"
+"              EXTRACT(YEAR_MONTH FROM '2012-03-09'), \n"
+"              EXTRACT(DAY FROM NOW()); \n"
+"+---------------------------------+---------------------------------+---------------------------------------+-------------------------+ \n"
+"| EXTRACT(WEEK FROM '2013-01-01') | EXTRACT(WEEK FROM '2013-01-06') | EXTRACT(YEAR_MONTH FROM '2012-03-09') | EXTRACT(DAY FROM NOW()) | \n"
+"+---------------------------------+---------------------------------+---------------------------------------+-------------------------+ \n"
+"|                               0 |                               1 |                                201203 |                      17 | \n"
+"+---------------------------------+---------------------------------+---------------------------------------+-------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+27, 
+"NOW",
+31,
+" *   格式:  NOW()  \n"
+"\n"
+" *   用于获取系统当前时间，精确到微秒。格式为“YYYY-MM-DD HH:MI:SS.SSSSSS”。\n"
+"\n", 
+"mysql> SELECT NOW();\n"
+"+----------------------------+ \n"
+"| NOW()                      | \n"
+"+----------------------------+ \n"
+"| 2014-02-17 11:46:15.064536 | \n"
+"+----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+28, 
+"STR_TO_DATE",
+31,
+" *   格式: STR_TO_DATE(date, format)  \n"
+"\n"  
+" *   该函数接受一个时间字符串date，将按照format中指定的格式进行扫描，并将扫描结果转换为time类型返回。\n"
+"    * date为字符串类型参数，其它类型将报错；date的格式可以也是一个时间字符串，同样也支持不严格的时间语法，其具体描述参考DATE_ADD()函数中date参数的描述。\n"
+"    * format的格式如下：\n"
+"+-------------------------------------------------------------  --+ \n"
+"|    格式     |       含义            |       返回格式            | \n"
+"|     %b      |  月份的缩写名称。     |   Jan，…，Dec             | \n"
+"|     %c      |  月份，数字形式。     |   1，…，12                | \n" 
+"|     %D      |  带有英语后缀的日期。 |   1st，2nd，…，31st       | \n"
+"|     %d      |  日期，数字形式。     |   01，…，31               | \n"
+"|     %e      |  日期，数字形式。     |   1，…，31                | \n" 
+"|     %f      |  微秒。               |   000000，…，999999       | \n"
+"|     %H      |  小时。               |   00，…，23               | \n"
+"|     %h      |  小时。               |   01，…，12               | \n"
+"|     %I      |  小时。               |   01，…，12               | \n"
+"|     %i      |  分钟。               |   00，…，59               | \n"
+"|     %k      |  小时。               |   0，…，23                | \n"
+"|     %l      |  小时。               |   01，…，12               | \n"
+"|     %M      |  月份名称。           |   January，…，December    | \n"
+"|     %m      |  月份，数字形式。     |   01，…，12               | \n"
+"|     %p      |  上午或下午。         |   AM，PM                  | \n"
+"|     %r      |  12小时制时间。       |   hh:mm:ss AM/PM          | \n"
+"|     %S      |  秒。                 |   00，…，59               | \n"
+"|     %s      |  秒。                 |   00，…，59               | \n"
+"|     %T      |  24小时制时间。       |   hh:mm:ss                | \n" 
+"|     %Y      |  年，用四位数字表示。 |   -                       | \n"
+"+-----------------------------------------------------------------+ \n"
+"\n", 
+"mysql> SELECT STR_TO_DATE('2014-Jan-1st 5:5:5 pm', '%Y-%b-%D %r');\n"
+"+-----------------------------------------------------+ \n"
+"| STR_TO_DATE('2014-Jan-1st 5:5:5 pm', '%Y-%b-%D %r') | \n"
+"+-----------------------------------------------------+ \n"
+"| 2014-01-01 17:05:05                                 | \n"
+"+-----------------------------------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+29, 
+"STRICT_CURRENT_TIMESTAMP",
+31,
+" *   格式: STRICT_CURRENT_TIMESTAMP()  \n"
+"\n" 
+" *   从UpdateServer所在服务器获取时间。 \n"
+"\n", 
+"mysql> select STRICT_CURRENT_TIMESTAMP(); \n"
+"+----------------------------+ \n"
+"| STRICT_CURRENT_TIMESTAMP() | \n"
+"+----------------------------+ \n"
+"| 2014-02-17 13:40:25.539522 | \n"
+"+----------------------------+ \n"
+"1 row in set (0.14 sec)",
+"www.taobao.com")
+
+
+
+
+DEFINE_SQL_TOPIC(
+30, 
+"TIME_TO_USEC",
+31,
+" *   格式: TIME_TO_USEC(date)  \n"
+"\n"  
+" *   将OceanBase的内部时间类型转换成一个微秒数计数。表示date所指的时刻距离“1970-01-01 00:00:00”的微秒数，这是一个UTC时间，不带时区信息。\n"
+"     * date为被计算的时刻，且这个时刻附带时区信息，而时区信息是用户当前系统设置的时区信息。该参数为timestamp类型或者时间格式的字符串。\n"
+"     * TIME_TO_USEC能够接受其它函数的调用结果作为参数，但是其的结果类型必须为timestamp或者时间格式的字符串。\n"
+"     * 该函数返回值为微秒计数，返回类型为int。\n"
+"\n", 
+"mysql> SELECT TIME_TO_USEC('2014-03-25'), TIME_TO_USEC(now());\n"
+"+----------------------------+---------------------+ \n"
+"| TIME_TO_USEC('2014-03-25') | TIME_TO_USEC(now()) | \n"
+"+----------------------------+---------------------+ \n"
+"|           1395676800000000 |    1395735415207794 | \n"
+"+----------------------------+---------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+31, 
+"USEC_TO_TIME",
+31,
+" *   格式: USEC_TO_TIME(usec)  \n"
+"\n"  
+" *   该函数为TIME_TOUSEC(date)的逆函数，表示“1970-01-01 00:00:00”增加usec后的时间，且附带了时区信息。例如在东八区调用该函数“USEC_TO_TIME(1)”，返回值为“1970-01-01 08:00:01”。\n"
+"    * usec为一个微秒计数值。\n"
+"    * 返回值为timestamp类型。\n"
+"\n", 
+"mysql> SELECT USEC_TO_TIME(1);\n"
+"+----------------------------+ \n"
+"| USEC_TO_TIME(1)            | \n"
+"+----------------------------+ \n"
+"| 1970-01-01 08:00:00.000001 | \n"
+"+----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+32, 
+"CONCAT",
+32,
+" *   格式: CONCAT(str1, str2)  \n"
+"\n"
+" *   把两个字符串连接成一个字符串。\n"
+"    * 左右参数都必须是varchar类型或NULL，否则报错。\n"
+"    * 如果执行成功，则返回连接后的字符串；参数中有一个值是NULL结果就是NULL。\n"
+"    * 如果两个字符串连接后的长度大于OB_MAX_VARCHAR_LENGTH，返回错误。\n"
+"\n", 
+"mysql> SELECT CONCAT('hello', 'world');\n"
+"+--------------------------+ \n"
+"| CONCAT('hello', 'world') | \n"
+"+--------------------------+ \n"
+"| helloworld               | \n"
+"+--------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+33, 
+"SUBSTR",
+32,
+" *   格式: SUBSTR(str,pos,len)\n"
+"        或者\n"
+"          SUBSTR(str,pos)\n"
+"        或者\n"
+"          SUBSTR(str FROM pos)  \n"
+"\n" 
+" *   返回一个子字符串，起始于位置pos，长度为len。使用FROM的格式为标准SQL语法。\n"
+"    * str必须是varchar，pos和len必须是整数。任意参数为NULL，结果总为NULL。\n"
+"    * str中的中文字符被当做字节流看待。\n"
+"    * 不带有len参数的时，则返回的子字符串从pos位置开始到原字符串结尾。\n"
+"    * pos值为负数时，pos的位置从字符串的结尾的字符数起；为零0时，可被看做1。\n"
+"    * 当len小于等于0，或者pos指示的字符串位置不存在字符时，返回结果为空字符串。\n"
+"\n", 
+"mysql> SELECT SUBSTR('abcdefg',3),\n"
+"              SUBSTR('abcdefg',3,2),\n"
+"              SUBSTR('abcdefg',-3),\n"
+"              SUBSTR('abcdefg',3,-2);\n"
+"+---------------------+-----------------------+----------------------+------------------------+ \n"
+"| SUBSTR('abcdefg',3) | SUBSTR('abcdefg',3,2) | SUBSTR('abcdefg',-3) | SUBSTR('abcdefg',3,-2) | \n"
+"+---------------------+-----------------------+----------------------+------------------------+ \n"
+"| cdefg               | cd                    | efg                  |                        | \n"
+"+---------------------+-----------------------+----------------------+------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+34, 
+"TRIM",
+32,
+" *   格式:  TRIM([[{BOTH | LEADING | TRAILING}] [remstr] FROM] str) \n"
+"\n"  
+" *   删除字符串所有前缀和（或）后缀。\n"
+"     * remstr和str必须为varchar或NULL类型。当参数中有NULL时结果总为NULL。\n"
+"     * 若未指定BOTH、LEADIN或TRAILING,则默认为BOTH。\n"
+"     * remstr为可选项，在未指定情况下，删除空格。\n"
+"\n", 
+"mysql> SELECT TRIM(' bar '),\n"
+"              TRIM(LEADING 'x' FROM 'xxxbarxxx'),\n"
+"              TRIM(BOTH 'x' FROM 'xxxbarxxx'),\n"
+"              TRIM(TRAILING 'x' FROM 'xxxbarxxx');\n"
+"+---------------+------------------------------------+---------------------------------+-------------------------------------+ \n"
+"| TRIM(' bar ') | TRIM(LEADING 'x' FROM 'xxxbarxxx') | TRIM(BOTH 'x' FROM 'xxxbarxxx') | TRIM(TRAILING 'x' FROM 'xxxbarxxx') | \n"
+"+---------------+------------------------------------+---------------------------------+-------------------------------------+ \n"
+"| bar           | barxxx                             | bar                             | xxxbar                              | \n"
+"+---------------+------------------------------------+---------------------------------+-------------------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+35, 
+"LENGTH",
+32,
+" *   格式: LENGTH(str) \n"
+"\n"  
+" *   返回字符串的长度，单位为字节。参数必须是varchar类型或NULL，否则报错。 如果执行成功，结果是int型整数，表示字符串长度；当参数是NULL结果为NULL。 \n"
+"\n", 
+"mysql> SELECT LENGTH('text'); \n"
+"+----------------+ \n"
+"| LENGTH('text') | \n"
+"+----------------+ \n"
+"|              4 | \n"
+"+----------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+36, 
+"UPPER",
+32,
+" *   格式: UPPER(str)  \n"
+"\n"  
+" *   将字符串转化为大写字母的字符。参数必须是varchar类型。若为NULL，结果总为NULL。 \n"
+" *   由于中文编码的字节区间与ASCII大小写字符不重合，对于中文，UPPER可以很好的兼容。 \n"
+"\n", 
+"mysql> SELECT UPPER('OceanBase您好！'); \n"
+"+-----------------------------+ \n"
+"| UPPER('OceanBase您好！')    | \n"
+"+-----------------------------+ \n"
+"| OCEANBASE您好！             | \n"
+"+-----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+37, 
+"LOWER",
+32,
+" *   格式: LOWER()  \n"
+"\n"
+" *   将字符串转化为小写字母的字符。\n"
+"     * 参数必须是varchar类型。若为NULL，结果总为NULL。\n"
+"     * 由于中文编码的字节区间与ASCII大小写字符不重合，对于中文，UPPER可以很好的兼容。\n"
+"\n", 
+"mysql> SELECT LOWER('OceanBase您好！');\n"
+"+-----------------------------+ \n"
+"| LOWER('OceanBase您好！')    | \n"
+"+-----------------------------+ \n"
+"| oceanbase您好！             | \n"
+"+-----------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+38, 
+"HEX",
+32,
+" *   格式: HEX(str)  \n"
+"\n" 
+" *   将字符串转化为十六进制数显示。\n"
+"     * str必须是整数或者字符串。当输入是整数（进制不限）的时候，输出整数的十六进制表示；当输入是字符串的时候，输出是字符串的字节流的十六进制表示。\n"
+"     * 目前OceanBase中，16进制数两个数位表示一个字符，因此需要用偶数位数来表示，如0x0123正确，0x123失败。\n"
+"\n", 
+"mysql> SELECT HEX('OceanBase'),\n"
+"              HEX(123),\n"
+"              HEX(0x0123);\n"
+"+--------------------+----------+-------------+ \n"
+"| HEX('OceanBase')   | HEX(123) | HEX(0x0123) | \n"
+"+--------------------+----------+-------------+ \n"
+"| 4F6365616E42617365 | 7B       | 0123        | \n"
+"+--------------------+----------+-------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+39, 
+"UNHEX",
+32,
+" *   格式: UNHEX(str)  \n"
+"\n"  
+" *   HEX(str)的反向操作，即将参数中的每一对十六进制数字理解为一个数字，并将其转化为该数字代表的字符。结果字符以二进制字符串的形式返回。\n"
+"     * str必须是varchar或NULL。\n"
+"     * 当str是合法的十六进制值时将按照十六进制到字节流的转换算法进行，当str不是十六进制字符串的时候返回NULL。\n"
+"     * 当str为NULL的时候输出是NULL。\n"
+"\n", 
+"mysql> SELECT HEX('OceanBase'),\n"
+"              UNHEX('4f6365616e42617365'),\n"
+"              UNHEX(HEX('OceanBase')),\n"
+"              UNHEX(NULL);\n"
+"+--------------------+-----------------------------+-------------------------+-------------+ \n"
+"| HEX('OceanBase')   | UNHEX('4f6365616e42617365') | UNHEX(HEX('OceanBase')) | UNHEX(NULL) | \n"
+"+--------------------+-----------------------------+-------------------------+-------------+ \n"
+"| 4F6365616E42617365 | OceanBase                   | OceanBase               | NULL        | \n"
+"+--------------------+-----------------------------+-------------------------+-------------+ \n"
+"1 row in set (0.04 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+40, 
+"INT2IP",
+32,
+" *   格式: INT2IP(int_value) \n"
+"\n"
+" *   将一个整数转换成IP地址。\n"
+"    * 输入数据类型必须为int。若输入为NULL，则输出为NULL。若输入的数字大于MAX_INT32或小于0则输出为NULL。\n"
+"    * int_value的内码格式符合“低高高低”的规则。即高位的数据，出现在结果的低位。\n"
+"\n", 
+"mysql> SELECT INT2IP(16777216),\n"
+"              HEX(16777216),\n"
+"              INT2IP(1);\n"
+"+------------------+---------------+-----------+ \n"
+"| INT2IP(16777216) | HEX(16777216) | INT2IP(1) | \n"
+"+------------------+---------------+-----------+ \n"
+"| 0.0.0.1          | 1000000       | 1.0.0.0   | \n"
+"+------------------+---------------+-----------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+41, 
+"IP2INT",
+32,
+" *   格式: IP2INT('ip_addr')  \n"
+"\n"
+" *   将字符串表示的IP地址转换成整数内码表示。\n"
+"     * 输入数据类型必须为varchar。若输入为NULL，则输出为NULL。若输入的IP地址不是一个正确的IP地址(包含非数字字符，每一个ip segment的数值大小超过256等），则输出为NULL。\n"
+"     * 仅支持ipv4地址，暂不支持ipv6地址。\n"
+"     * 内码格式符合“低高高低”的规则。即高位的数据，出现在结果的低位。\n"
+"\n", 
+"mysql> SELECT IP2INT('0.0.0.1'),\n"
+"              HEX(IP2INT('0.0.0.1')),\n"
+"              HEX(IP2INT('1.0.0.0')),\n"
+"              IP2INT('1.0.0.257');\n"
+"+-------------------+------------------------+------------------------+---------------------+ \n"
+"| IP2INT('0.0.0.1') | HEX(IP2INT('0.0.0.1')) | HEX(IP2INT('1.0.0.0')) | IP2INT('1.0.0.257') | \n"
+"+-------------------+------------------------+------------------------+---------------------+ \n"
+"|          16777216 | 1000000                | 1                      |                NULL | \n"
+"+-------------------+------------------------+------------------------+---------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+42, 
+"LIKE",
+32,
+" *   格式: str1 [NOT] LIKE str2 [ESCAPE str3] \n"
+"\n"  
+" *   字符串通配符匹配。\n"
+"     * 左右参数都必须是varchar类型或NULL，否则报错。如果执行成功，结果是TRUE或者FALSE，或某一个参数是NULL结果就是NULL。\n"
+"     * 通配符包括“%”和“_”：\n"
+"                       “%”表示匹配任何长度的任何字符，且匹配的字符可以不存在。\n"
+"                       “_”表示只匹配单个字符，且匹配的字符必须存在。\n"
+"     * 如果你需要查找“a_c”，而不是“abc”时，可以使用OceanBase的转义字符“\\”，即可以表示为“a\\_c”。\n"
+"     * ESCAPE用于定义转义符，即表示如果str2中包含str3，那么在匹配时，str3后的字符为普通字符处理。\n"
+"        如LIKE 'abc%' ESCAPE 'c'，此时“c”为转义符，而“%”为普通字符，不再作为转义字符，本语句匹配的字符串为“ab%”。\n"
+"\n", 
+"mysql> SELECT 'ab%' LIKE 'abc%' ESCAPE 'c'; \n"
+"+------------------------------+ \n"
+"| 'ab%' LIKE 'abc%' ESCAPE 'c' | \n"
+"+------------------------------+ \n"
+"|                            1 | \n"
+"+------------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+43, 
+"AVG",
+33,
+" *   格式: AVG()\n"
+"\n"
+" *   返回指定组中的平均值，空值被忽略。\n"
+"\n", 
+" *   假设表a有三行数据：id=1，num=10；id=2，num=20；id=3，num=30。\n"
+"mysql> SELECT AVG(num) from a;\n"
+"+----------------+ \n"
+"| AVG(num)       | \n"
+"+----------------+ \n"
+"|             20 | \n"
+"+----------------+ \n"
+"1 row in set (0.01 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+44, 
+"COUNT",
+33,
+" *   格式: COUNT()\n"
+"\n"
+" *   返回指定组中的行数。\n"
+"\n", 
+" *   假设表a有三行数据：id=1，num=10；id=2，num=20；id=3，num=30。\n"
+"mysql> SELECT COUNT(num) FROM a;\n"
+"+-------------------+ \n"
+"| COUNT(num)        | \n"
+"+-------------------+ \n"
+"|                 3 | \n"
+"+-------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+45, 
+"MAX",
+33,
+" *   格式: MAX()\n"
+"\n"
+" *   返回指定数据中的最大值。\n"
+"\n", 
+" *   假设表a有三行数据：id=1，num=10；id=2，num=20；id=3，num=30。\n"
+"mysql> SELECT MAX(num) FROM a;\n"
+"+-----------------+ \n"
+"| MAX(num)        | \n"
+"+-----------------+ \n"
+"|              30 | \n"
+"+-----------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+46, 
+"MIN",
+33,
+" *   格式: MIN()\n"
+"\n" 
+" *   返回指定数据中的最小值。\n"
+"\n", 
+" *   假设表a有三行数据：id=1，num=10；id=2，num=20；id=3，num=30。\n"
+"mysql> SELECT MIN(num) FROM a;\n"
+"+----------------+ \n"
+"| MIN(num)       | \n"
+"+----------------+ \n"
+"|             10 | \n"
+"+----------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+47, 
+"SUM",
+33,
+" *   格式: SUM()  \n"
+"\n"  
+" *   返回指定组中的和。\n"
+"\n", 
+" *   假设表a有三行数据：id=1，num=10；id=2，num=20；id=3，num=30。\n"
+"mysql> SELECT SUM(num) FROM a;\n"
+"+-----------------+ \n"
+"| SUM(num)        | \n"
+"+-----------------+ \n"
+"|              60 | \n"
+"+-----------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+48, 
+"DISTINCT",
+33,
+" *   格式: DISTINCT()  \n"
+"\n"  
+" *   DISTINCT函数对指定的集求值，删除改集中的重复元组，然后返回结果集。\n"
+" *   如果DISTINCT函数在指定的集中找到了重复的元组，则此函数只保留元组中的第一个实例，同时保留该集原来的顺序。\n"
+"\n", 
+"mysql> select * from usertest;\n"
+"+------+-----------+-----------+ \n"
+"| id   | name      | dept      | \n"
+"+------+-----------+-----------+ \n"
+"|    1 | lilei     | research  | \n"
+"|    2 | hanmeimei | sales     | \n"
+"|    3 | lily      | sales     | \n"
+"|    4 | lucy      | research  | \n"
+"|    5 | Mary      | marketing | \n"
+"+------+-----------+-----------+ \n"
+"5 rows in set (0.00 sec)\n"
+"mysql> select distinct(dept) from usertest;\n"
+"+-----------+ \n"
+"| (dept)    | \n"
+"+-----------+ \n"
+"| marketing | \n"
+"| research  | \n"
+"| sales     | \n"
+"+-----------+ \n"
+"3 rows in set (0.00 sec)\n",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+49, 
+"CAST",
+34,
+" *   格式: CAST(expr AS type)\n"
+"\n"
+" *   将expr字段值转换为type数据类型。\n"
+"\n", 
+"mysql> SELECT CAST(123 AS bool);\n"
+"+-------------------+ \n" 
+"| CAST(123 AS bool) | \n"
+"+-------------------+ \n"
+"|                 1 | \n"
+"+-------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+50, 
+"ROUND",
+35,
+" *   格式: ROUND(number, num_digits)\n"
+"\n"
+" *   返回一个数值，四舍五入到指定的长度或精度。\n"
+"\n", 
+"mysql> select round(2.15,2);\n" 
+"+---------------+ \n" 
+"| round(2.15,2) | \n" 
+"+---------------+ \n" 
+"|          2.15 | \n" 
+"+---------------+ \n" 
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+51, 
+"COALESCE",
+36,
+"格式: COALESCE(expr, expr, expr, ...)  \n"
+"\n"  
+"依次参考各参数表达式，遇到非NULL值即停止并返回该值。如果所有的表达式都是空值，最终将返回一个空值。\n"
+"\n", 
+"mysql> SELECT COALESCE(NULL,NULL,3,4,5), COALESCE(NULL,NULL,NULL);\n"
+"+---------------------------+--------------------------+ \n"
+"| COALESCE(NULL,NULL,3,4,5) | COALESCE(NULL,NULL,NULL) | \n"
+"+---------------------------+--------------------------+ \n"
+"|                         3 |                     NULL | \n"
+"+---------------------------+--------------------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+52, 
+"NVL",
+36,
+"格式: NVL(str1,replace_with)  \n"
+"\n"  
+"如果str1为NULL，则替换成replace_with。 \n"
+"\n", 
+"mysql> SELECT NVL(NULL, 0), NVL(NULL, 'a'); \n"
+"+--------------+----------------+ \n"
+"| NVL(NULL, 0) | NVL(NULL, 'a') | \n"
+"+--------------+----------------+ \n"
+"|            0 | a              | \n"
+"+--------------+----------------+ \n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+
+DEFINE_SQL_TOPIC(
+53,
+"CREATE TABLE",
+6,
+" *   格式:  \n"
+"       CREATE TABLE [IF NOT EXISTS] tblname  \n"
+"              (create_definition [, create_definition] ...)  \n"
+"              [table_option [, table_option]...]; \n"
+"\n"
+"       CREATE TABLE [IF NOT EXISTS] tblname \n"
+"              {LIKE oldtblname | (LIKE oldtblname)}; \n"
+"\n" 
+"       create_definition:  \n"
+"              column_definition  \n"
+"              |PRIMARY KEY (index_col_name [, index_col_name]...)  \n"
+"              |{UNIQUE INDEX | INDEX | UNIQUE KEY| KEY} indexname (index_col_name [, index_col_name]...) [STORING(colname [, colname]...)]  \n"
+"\n"
+"       column_definition:  \n"
+"              colname data_type [NOT NULL | NULL] [DEFAULT defaultvalue] [AUTO_INCREMENT] [PARIMARY KEY] [COMMENT ‘string’] \n"
+"\n"
+"       data_type:  \n"
+"              TINYINT \n"
+"              SMALLINT \n"
+"              MEDIUMINT \n"
+"              INTEGER \n"
+"              BIGINT \n"
+"              NUMBER[(num [, num])]  \n"
+"              BOOLEAN \n"
+"              FLOAT \n"
+"              REAL \n"
+"              DOUBLE \n"
+"              TIMESTAMP[(num)]  \n"
+"              DATETIME \n"
+"              CHARACTER[(num)]  \n"
+"              BINARY[(num)]  \n"
+"              VARCHAR[(num)]  \n"
+"              VARBINARY[(num)]  \n"
+"              CREATETIEM \n"
+"              MODIFYTIME \n"
+"              DATE \n"
+"              TIME[(num)] \n"
+"\n"
+"       index_col_name:  \n"
+"              colname [ASC | DESC] \n"
+"\n"
+"       table_options: \n"
+"              table_option [, table_option]... \n"
+"\n"
+"       table_option: \n"
+"              JOIN_INFO [=] ‘string’ \n"
+"              | EXPIRE_INFO [=] expr \n"
+"              | TABLET_MAX_SIZE [=] size \n"
+"              | STEP_MERGE_NUM [=] num  \n"
+"              | ENABLE_TRANSACTION_EXPIRE [=] {TRUE | FALSE} \n"
+"              | COMPRESS_METHOD [=] {NONE | LZ4_1.0 | LZ0_1.0 | SNAPPY_1.0| ZLIB_1.0} \n"
+"              | REPLICA_NUM [=] num \n"
+"              | TABLE_ID [=] id \n"
+"              | TABLET_BLOCK_SIZE [=] size \n"
+"              | USE_BLOOM_FILTER [=] {TRUE | FALSE} \n"
+"              | [DEFAULT] {CHARACTER_SET | CHARSET} [=] value \n"
+"              | COMMENT [=] ’string’ \n"
+"\n"
+"该语句用于在OceanBase数据库中创建新表。\n"
+"  * 使用“IF NOT EXISTS”时，即使创建的表已经存在，也不会报错，如果不指定时，则会报错。\n"
+"  * data_type包括：\n"
+"                  8字节有符号整型:  bigint/int/integer/mediumint/smallint/tinyint \n"
+"                  4字节浮点数:  float  \n"
+"                  8字节浮点数:  double/real  \n"
+"                  字符串:  binary/char/varbinary/varchar  \n"
+"                  布尔类型: bool  \n"
+"                  时间戳: datetime/timestamp  \n"
+"                  行数据被创建/修改的时间: createtime/modifytime, 由系统自动维护, 用户不能直接修改, 不能作为主键的组成部分 \n"
+"  * NOT NULL, DEFAULT用于列的完整性约束。暂时不支持AUTO_INCREMENT。\n"
+"  * COMMENT 'string'增加列注释信息。\n"
+"  * UNIQUE INDEX | INDEX | UNIQUE KEY| KEY 支持创建表的同时，创建索引。单张表的最大索引数为128。\n"
+"  * table_option: \n"
+"+---------------------------------------------------------------------------------------------------------------------------------------------------+ \n"
+"|  CHARACTER SET    |  指定该表所有字符串的编码，用于对外提供元数据信息。目前仅支持UTF-8。                                                          | \n"
+"|  COMMENT          |  添加注释信息。                                                                                                               | \n"
+"|  COMPRESS_METHOD  |  存储数据使用的压缩方法名，目前提供的方法有以下几种：none（默认值不作压缩）、lz4_1.0、lzo_1.0和snappy_1.0,zlib_1.0,zstd_1.0。 | \n"
+"|  EXPIRE_INFO      |  在UpdateServer中的动态数据和ChunkServer中的静态数据合并时，满足表达式的行会自动删除。一般可用于自动删除过期数据。            | \n"
+"|  JOIN_INFO        |  格式为 JOIN_INFO = '[a1$b1]%b:a2$b2'                                                                                         | \n"
+"|                   |  表示在创建表a时JOIN_INFO表b，那么当a.a1=b.b1时，a.a2=b.b2。其中a.a1和b.b1必须为主键列。                                      | \n"
+"|  REPLICA_NUM      |  这个表的tablet复本数，默认值为3。                                                                                            | \n"
+"|  TABLE_ID         |  指定表的ID。如果指定的table_id小于1000，需要打开RootServer的配置项开关ddl_system_table_switch。                              | \n"
+"|  TABLET_BLOCK_SIZE|  设置组成Tablet的宏块的大小。                                                                                                 | \n"
+"|  TABLET_MAX_SIZE  |  这个表的Tablet最大尺寸，单位为字节，默认为256MB。如果一个表的数据超过了该值，则分裂成两个子表。                              | \n"
+"|  USE_BLOOM_FILTER |  对本表读取数据时，是否使用Bloom Filter。 False表示不使用默认值, True表示使用。                                               | \n"
+"|  STEP_MERGE_NUM   |  渐近合并的步数，0和1都都是指一轮合并完成，范围0-64。                                                                         | \n"
+"|  ENABLE_TRANSACTION_EXPIRE | 是否设置为事务过期。即每日合并时候，满足过期条件的数据，通过事务判断删除。                                           | \n"
+"|                            |      解决满足过期条件的数据，在每日合并期间又进行修改，可能带来的数据不一致的问题。                                  | \n"
+"|                            | •	False：默认值；不使用。                                                                                            | \n"
+"|                            | •	True：使用。                                                                                                       | \n"
+"+---------------------------------------------------------------------------------------------------------------------------------------------------+",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+54,
+"CREATE INDEX",
+6,
+" *   格式:  \n"
+"         CREATE [UNIQUE] INDEX indexname  \n"
+"             ON tblname (index_colname_list)  \n"
+"             [STORING (colname [, colname …])]  \n"
+"             [table_option [, table_option]...]; \n"
+"\n"
+"         index_colname_list:  \n"
+"             colname [ASC | DESC] \n"
+"\n"
+"该语句用于在OceanBase数据库中创建新索引。新创建的索引需要等待一次每日合并后才生效。\n"
+"  * index_colname_list中，每个列名后都要制定ASC（升序）或者DESC（降序）。若不指定，默认为升序。\n"
+"  * 本语句建立索引的排列方式为：首先以index_colname_list中第一个列的值排序；该列值相同的记录，按下一列名的值排序；以此类推。\n"
+"  * 执行“SHOW INDEX FROM tblname”可以查看创建的索引。\n"
+"  * 使用可选字段STORING，表示索引表中冗余存储某些列，以提高系统查询系统。",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+55, 
+"ALTER TABLE",
+6,
+"该语句用于修改已存在的表的结构，比如：修改表及表属性、新增列、修改列及属性、删除列等。 \n"
+" *   格式:  \n"
+"       ALTER TABLE tblname  \n"
+"              alter_specification [, alter_specification]… \n"
+"\n"
+"       alter_specification:  \n"
+"              SET table_option  \n"
+"              | ADD [COLUMN] column_definition \n"
+"              | DROP [COLUMN] colname [CASCADE | RESTRICT]  \n"
+"              | ALTER [COLUMN] colname {SET NOT NULL|DROP NOT NULL|SET DEFAULT expr|DROP DEFAULT} \n"
+"              | RENAME [COLUMN] oldcolname TO newcolname  \n"
+"              | MODIFY [COLUMN] column_definition  \n"
+"              | RENAME TO newtblname \n"
+"\n"
+"在以下操作存在多个时，可以通过逗号分隔，合并成一个语句。\n"
+"1. 增加列        \n"                      
+"格式:  \n"
+"       ALTER TABLE tblname\n"
+"            ADD [COLUMN] colname data_type \n"
+"            [NOT NULL | NULL] \n"
+"            [DEFAULT expr] \n"
+"            [PRIMARY KEY] [COMMENT ‘string’] \n"
+"  * 增加列时，如果使用了NOT NULL属性则必须指定DEFAULT。   \n" 
+"  * data_type包括：\n"
+"+-------------------------------------------------------------------------------------------------------------+ \n"
+"|  8字节有符号整型         |  bigint/int/integer/mediumint/smallint/tinyint                                   | \n" 
+"|  4字节浮点数             |  float                                                                           | \n" 
+"|  8字节浮点数             |  double/real                                                                     | \n"
+"|  字符串                  |  binary/char/varbinary/varchar                                                   | \n"
+"|  布尔类型                |  bool                                                                            | \n"
+"|  时间戳                  |  datetime/timestamp                                                              | \n"
+"|  行数据被创建/修改的时间 | createtime/modifytime, 由系统自动维护, 用户不能直接修改, 不能作为主键的组成部分。| \n"
+"+-------------------------------------------------------------------------------------------------------------+ \n"
+"\n"
+"2. 修改列默认值\n"
+"格式: ALTER TABLE tblname\n"
+"            ALTER [COLUMN] colname\n"
+"           [SET NOT NULL | DROP NOT NULL | DROP DEFAULT | SET DEFAULT expr] \n"
+"  * 不允许将某一列的属性从NULL改为NOT NULL。\n"
+"\n"
+"3. 修改列数据类型，属性等信息\n"
+"格式: ALTER TABLE tblname\n"
+"            MODIFY [COLUMN] colname data_type\n"
+"           [NOT NULL | DROP NOT NULL | DROP DEFAULT | DEFAULT expr | AUTO_INCREMENT| PRIMARY KEY | COMMENT 'string'] \n" 
+"           data_type:   \n"
+"                    VARCHAR opt_char_length \n"
+"** AlTER TABLE … MODIFY…语句暂不支持数据类型修改，目前只支持修改varchar数据类型长度。\n"
+"•	Varchar数据类型长度只支持改大，不允许改小  \n"
+"•	如果长度改小，报错“ERROR 1265 (01000): Data truncated for column 'xx'” \n"
+"\n"
+"4. 删除列\n"
+"格式: ALTER TABLE tblname\n"
+"            DROP [COLUMN] colname\n"
+"            [CASCADE | RESTRICT] \n"
+"  * 不允许删除主键列或者包含索引的列。\n"
+"  * 参数CASCADE和RESTRICT，暂时不起作用。\n"
+"\n"
+"5. 表重命名\n"
+"格式: ALTER TABLE tblname\n"
+"            RENAME TO newtblname \n"
+"\n"
+"6. 列重命名\n"
+"格式: ALTER TABLE tblname\n"
+"格式: ALTER TABLE table_name\n"
+"            RENAME [COLUMN] oldcolname TO newcolname \n"
+"\n"
+"7. 设置过期数据删除\n"
+"格式: ALTER TABLE tblname\n"
+"            SET EXPIRE_INFO [ = ] expr \n"
+"  * expire info中的表达式至少需要包含指定表中的一列，否则，ALTER TABLE语句将会报错。 \n"
+"  * 如果一个数据表中包含了若干索引，那么通过expire info指定的列将必须在主表和所有索引表中都存在，不然会导致数据的不一致。\n"
+"    例如：有数据表t1(pk, c1, c2, c3, PK<pk>)，索引表idx1在c2上有索引idx1(c2, pk, PK<c2, pk>)，索引表idx2在c3上有索引idx2(c3, pk, PK<c3, pk>)。\n"
+"    那么ALTER TABLE t1 SET EXPIRE_INFO c2 > 1, 将会失败，因为c2在索引表idx2中不存在。\n"
+"\n"
+"8. 设置该表Tablet最大尺寸 \n"
+"格式: ALTER TABLE tblname \n"
+"            SET TABLET_MAX_SIZE [ = ] size \n"
+"\n"
+"9. 设置组成Tablet的宏块大小\n"
+"格式: ALTER TABLE tblname\n"
+"            SET TABLET_BLOCK_SIZE [ = ] size  \n"
+"\n"
+"10. 设置该表的副本数\n"
+"格式: ALTER TABLE tblname\n"
+"            SET REPLICA_NUM [ = ] num  \n"
+"\n"
+"11. 设置该表的压缩方式\n"
+"格式: ALTER TABLE tblname\n"
+"            SET COMPRESS_METHOD [ = ] {'NONE' | 'LZ4_1.0' | 'LZO_1.0' | 'SNAPPY_1.0'| 'ZLIB_1.0' } \n"
+"\n"
+"12. 设置是否使用BloomFilterset\n"
+"格式: ALTER TABLE tblname\n"
+"            SET USE_BLOOM_FILTER [ = ] {TRUE | FALSE} \n"
+"\n"
+"13. 设置表注释信息\n"
+"格式: ALTER TABLE tblname\n"
+"            SET COMMENT [ = ] 'string'     \n"
+"\n"
+"14. 设置渐进合并步数\n"
+"格式: ALTER TABLE tblname\n"
+"            SET STEP_MERGE_NUM [ = ] num     \n"
+"   * STEP_MERGE_NUM现在在限制是1~64。\n"
+"",
+"   ALTER TABLE  \n"
+"         test_01 \n"
+"         SET REPLICA_NUM=2,\n"
+"         ADD COLUMN c5 INT; ",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+56,
+"DROP TABLE",
+6, 
+" *   格式:   \n"
+"         DROP TABLE [IF EXISTS] table_list \n"
+"\n"
+"         table_list:  \n"
+"             tblname [, tblname …]   \n"
+"\n"
+"该语句用于删除OceanBase数据库中的表。\n"
+"  * 使用“IF EXISTS”时，即使要删除的表不存在，也不会报错，如果不指定时，则会报错。\n"
+"  * 同时删除多个表时，用英文状态的逗号隔开。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+57, 
+"DROP INDEX",
+6, 
+" *   格式: DROP INDEX indexname \n"
+"           ON tblname"
+"\n"
+" *   该语句用于删除不必要的索引。\n",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+58, 
+"INSERT",
+7, 
+" *   格式: \n" 
+"         INSERT INTO tblname [(colname [, colname...])]  \n"
+"             VALUES (colvalue [, colvalue...]) [, (colvalue[, colvalue...])…];  \n"
+"\n"
+" *   该语句用于添加一个或多个记录到表。\n"
+"     * [(colname[, colname...])]用于指定插入数据的列。\n"
+"     * 同时插入多列时，用英文状态的逗号隔开。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+59, 
+"REPLACE",
+7, 
+" *   格式: \n" 
+"         REPLACE INTO tblname [(colname [, colname...])]  \n"
+"             VALUES (colvalue [, colvalue...]) [, (colvalue[, colvalue...])…];  \n"
+"\n"
+" *   REPLACE语句的语法和INSERT相同，语义有别：如果本行已经存在，则修改对应列的值为新值；如果不存在，则插入。\n"
+"     * [(colname[, colname...])]用于指定插入数据的列。\n"
+"     * 同时替换多列时，用英文状态的逗号隔开。 ", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+60, 
+"UPDATE",
+7, 
+"  *   格式:  \n" 
+"         UPDATE tblname    \n"
+"             SET colname=expr [, colname=expr...]    \n"
+"             [WHERE expr]    \n"
+"             [ORDER BY order_key [, order_key...]]     \n"
+"             [select_limit];     \n"
+"\n"
+"         order_key:     \n"
+"             expr [ASC | DESC]    \n"
+
+"         select_limit:     \n"
+"             LIMIT expr OFFSET expr   \n"
+"             OFFSET expr LIMIT expr   \n"
+"             LIMIT expr   \n"
+"             LIMIT expr, expr   \n"
+"\n"
+" *   该语句用于修改表中的字段值。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+61, 
+"DELETE",
+7, 
+" *   格式:   \n"
+"         DELETE FROM tblname \n"
+"             WHERE expr \n"
+"             [ORDER BY order_key [, order_key...] \n"
+"             [select_limit];  \n"  
+"\n"
+"         order_key:  \n"
+"             expr [ASC | DESC] \n"
+
+"         select_limit:   \n"
+"             LIMIT expr OFFSET expr  \n"
+"             OFFSET expr LIMIT expr  \n"
+"             LIMIT expr  \n"
+"             LIMIT expr, expr  \n"
+"\n"
+" *   该语句用于删除表中符合条件的行。", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+62, 
+"SELECT",
+7, 
+" *   基本查询格式:  \n"
+"         SELECT   \n"
+"             [ALL | DISTINCT]   \n"
+"             select_name [, select_name…]    \n"
+"             [FROM tblname [, tblname…]]   \n"
+"             [WHERE expr]   \n"
+"             [GROUP BY expr [, expr …]]   \n"
+"             [HAVING expr]   \n"
+"             [ORDER BY order_name [, order_name…]   \n"
+"             [select_limit]  \n"
+"             [FOR UPDATE];  \n"
+"\n"
+"         select_name:   \n"
+"             expr [AS other_name]    \n"
+"\n"
+"         order_name:    \n"
+"             expr [ASC | DESC]   \n"
+"\n"
+"         select_limit:    \n"
+"             LIMIT expr OFFSET expr   \n"
+"             OFFSET expr LIMIT expr   \n"
+"             LIMIT expr   \n"
+"             LIMIT expr, expr   \n"
+"\n"
+"     * ALL | DISTINCT: 在数据库表中，可能会包含重复值。指定DISTINCT，则在查询结果中相同的行只显示一行；指定ALL，则列出所有的行；不指定时，默认为ALL。\n"
+"     * select_name: 列出要查询的列名，用,隔开。也可以用*表示所有列。\n"
+"     * AS othername: 为输出字段重新命名。\n"
+"     * FROM tblname: 必选项，指名了从哪个表中读取数据。\n"
+"     * WHERE expr: 可选项，WHERE字句用来设置一个筛选条件，查询结果中仅包含满足条件的数据。expr为表达式。\n"
+"     * GROUP BY expr [, expr]: 用于进行分类汇总。\n"
+"     * HAVING expr: HAVING字句与WHERE字句类似，但是HAVING字句可以使用累计函数（如SUM，AVG等）。\n"
+"     * ORDER BY order_name ;order_name: expr [ASC | DESC]: 用来按升序（ASC）或者降序（DESC）显示查询结果。不指定ASC或者DESC时，默认为ASC。\n"
+"     * [LIMIT {[offset,] row_count | row_count OFFSET offset}]: 强制 SELECT 语句返回指定的记录数。LIMIT 接受一个或两个数字参数。参数必须是一个整数常量。\n"
+"                                                             如果给定两个参数，第一个参数指定第一个返回记录行的偏移量，第二个参数指定返回记录行的最大数目。初始偏移量是0。\n"
+"                                                             如果只给定一个参数，它表示返回记录行的最大数目，偏移量为0。\n"
+"\n"
+" *   SELECT … FOR UPDATE \n"
+"                   可以用来对查询结果所有行上排他锁，以阻止其他事务的并发修改，或阻止在某些事务隔离级别时的并发读取。\n"
+"                   即使用FOR UPDATE语句将锁住查询结果中的元组，这些元组将不能被其他事务的UPDATE，DELETE和FOR UPDATE操作，直到本事务提交。\n"
+"  * 必须是单表查询。\n"
+"    例如: SELECT * FROM a FOR UPDATE;\n"
+" \n"
+" *   DUAL \n"
+"      DUAL是一个虚拟的表，可以视为一个一行零列的表。\n"
+"      当我们不需要从具体的表来取得表中数据，而是单纯地为了得到一些我们想得到的信息，并要通过SELECT完成时，就要借助一个对象，这个对象就是DUAL。\n"
+"      一般可以使用这种特殊的SELECT语法获得用户变量或系统变量的值。\n"
+"      当SELECT语句没有FROM子句的时候，语义上相当于FROM DUAL，此时，表达式中只能是常量表达式。\n"
+"    格式: SELECT \n"
+"                [ALL | DISTINCT] \n"
+"              select_list \n"
+"                [FROM DUAL [WHERE where_condition]] \n"
+"                [LIMIT {[offset,] row_count | row_count OFFSET offset}] \n"
+" \n"
+" *   EXCEPT \n"
+"       用于查询第一个集合中存在，但是不存在于第二个集合中的数据。\n"
+"       例如: SELECT * FROM a EXCEPT SELECT * FROM d;\n"
+" \n"
+" *   INTERSECT \n"
+"      INTERSECT用于查询在两个集合中都存在的数据。 \n"
+"      例如: SELECT * FROM a INTERSECT SELECT * FROM d;\n"
+" \n"
+" *   IN/OR \n"
+"      支持逻辑运算“IN”和“OR”，其中IN可以直接定位到查询的数据，而OR需要进行全表扫描，因此我们推荐使用IN语句。 \n"
+"      例如: SELECT * FROM a WHERE id IN (1,2); \n"
+"            SELECT * FROM a WHERE id = 1 OR id = 2; ", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+63, 
+"JOIN",
+7, 
+" *   JOIN连接分为内连接和外连接。外连接又分为左连接、右连接和全连接。两个表联接后，可以使用ON指定条件进行筛选。\n"
+"     * 内连接：结果中只包含两个表中同时满足条件的行。 \n"
+"     * 左连接：结果中包含位于关键字LEFT [OUTER] JION左侧的表中的所有行，以及该关键字右侧的表中满足条件的行。 \n"
+"     * 右连接：结果中包含位与关键字[RIGHT] [OUTER] JOIN右侧的表中的所有行，以及该关键字左侧的表中满足条件的行。 \n"
+"     * 全连接：结果中包含两个表中的所有行。 \n"
+"\n", 
+"     * 内连接\n"
+"       SELECT a.id, a.name, b.colour FROM a INNER JOIN b ON a.id = b.id; \n"
+"     * 左连接 \n"
+"       SELECT a.id, a.name, b.colour FROM a LEFT OUTER JOIN b ON a.id = b.id; \n"
+"     * 右连接 \n"
+"       SELECT a.id, a.name, b.colour FROM a RIGHT OUTER JOIN b ON a.id = b.id;  \n"
+"     * 全连接 \n"
+"       SELECT a.id, a.name, b.colour FROM a FULL OUTER JOIN b ON a.id = b.id; ", 
+"www.taobao.com")
+
+
+
+
+DEFINE_SQL_TOPIC(
+64, 
+"UNION",
+7, 
+" *   UNION用于合并两个或多个SELECT语句的结果集。\n"
+" *   使用UNION需要注意以下几点： \n"
+"     * UNION内部的SELECT 语句必须拥有相同数量的列。列也必须拥有相似的数据类型。同时，每条SELECT语句中的列的顺序必须相同。 \n"
+"     * 默认地，UNION操作符选取不同的值。如果允许重复的值，请使用UNION ALL。 \n"
+"      * UNION 结果集中的列名总是等于UNION中第一个SELECT语句中的列名。\n"
+"\n"
+"举例：SELECT name, num FROM a UNION SELECT mingzi, shumu FROM c;  \n"
+"      SELECT name, num FROM a UNION ALL SELECT mingzi, shumu FROM c; ",
+"", 
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+65,
+"TRANSACTION",
+8,
+" *   事务(Database Transaction)是指作为单个逻辑工作单元执行的一系列操作。\n"
+" *   事务处理可以用来维护数据库的完整性，保证成批的SQL操作全部执行或全部不执行。\n"
+" *   显示事务是用户自定义或用户指定的事务。\n"
+"\n"
+" *   通过BEGIN TRANSACTION，或BEGIN和BEGIN WORK（被作为START TRANSACTION的别名受到支持）语句显示开始，以COMMIT或ROLLBACK语句显示结束。\n"
+" *   格式:START TRANSACTION\n" 
+"              [WITH CONSISTENT SNAPSHOT];\n"
+"          BEGIN [WORK] ; \n"
+"          COMMIT [WORK] ;\n"
+"          ROLLBACK [WORK];",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+66, 
+"BEGIN",
+8, 
+" *   格式: BEGIN [WORK] \n"
+"\n"
+" *   开启事务。BEGIN和BEGIN WORK被作为START TRANSACTION的别名受到支持，用于对事务进行初始化。",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+67, 
+"COMMIT",
+8, 
+" *   格式: COMMIT [WORK] \n"
+"\n"
+" *   提交当前事务。",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+68, 
+"ROLLBACK",
+8, 
+" *   格式: ROLLBACK [WORK]"
+"\n"
+" *   回滚当前事务。 \n",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+69, 
+"START TRANSACTION ",
+8, 
+" *   格式: START TRANSACTION [WITH CONSISTENT SNAPSHOT] \n"
+"\n"
+" *   开启事务。 \n"
+"     * WITH CONSISTENT SNAPSHOT子句用于启动一个一致性的读取。该子句的效果与发布一个START TRANSACTION，后面跟一个来自任何OceanBase表的SELECT的效果一样。",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+70, 
+"PREPARE",
+9, 
+" *   格式: PREPARE stmt_name \n"
+"              FROM preparable_stmt \n"
+"\n"
+" *   OceanBase实现了服务器端的真正的Prepared statement，过程如下：\n"
+"       1 用户先通过客户端发送一个预备语句把要执行的SQL数据操作语句发给服务器。\n"
+"       2 服务器端解析这个语句，产生执行计划并返回给客户端一个句柄（名字或者ID）。\n"
+"       3 用户可以使用返回的句柄和指定的参数反复执行一个预备好的语句，省去了每次执行都解析SQL语句的开销，可以极大地提高性能。 \n"
+"\n"
+"  * preparable_stmt为SQL数据操作语句，预备好的语句在整个SQL会话期间可以使用stmt_name这个名字来执行。\n"
+"  * 数据操作语句（即SELECT, REPLACE, INSERT, UPDATE, DELETE）都可以被预备执行。\n"
+"  * 在被预备的SQL语句中，可以使用问号（?）表明一个之后执行时才绑定的参数。问号只能出现在SQL语句的常量中。一个被预备的语句也可以不包含问号。\n"
+"\n"
+"举例\n"
+"依次使用PREPARE查询表a中id=2的行。\n"
+"PREPARE stmt1 FROM SELECT name FROM a WHERE id=?;\n"
+"SET @id = 2;\n"
+"EXECUTE stmt1 USING @id;\n"
+"DEALLOCATE PREPARE stmt1;",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+71, 
+"EXECUTE",
+9, 
+" *   格式: EXECUTE stmt_name \n"
+"              [USING @var_name [, @var_name] ...] \n"
+"\n"
+" *   执行Prepared的SQL语句。\n"
+"     * 如果预备语句中有问号指明的绑定变量，需要使用USING子句指明相同个数的执行时绑定的值。\n"
+"     * USING子句后只能使用SET语句定义的用户变量。",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+72, 
+"DEALLOCATE",
+9, 
+" *   格式: DEALLOCATE PREPARE stmt_name \n"
+"        或者 \n"
+"      DROP PREPARE stmt_name \n"
+"\n"
+"删除一个指定的预备语句。一旦删除，以后就不能再执行。 ",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+73, 
+"CASE",
+38, 
+" *  CASE函数可以很方便地实现多重选择的情况。\n"
+"格式:\n"
+"CASE case_value\n"
+"    WHEN [compare-value]  THEN result \n" 
+"    [WHEN [compare-value] THEN result ...]\n"
+"    [ELSE result]\n"
+"END  \n"
+"\n"
+" *  Or: \n"
+"\n"
+"CASE \n"
+"    WHEN [condition] THEN result \n"
+"    [WHEN [condition] THEN result ...] \n"
+"    [ELSE result] \n"
+"END \n"
+" 在第一个方案的返回结果中， value=compare-value。而第二个方案的返回结果是第一种情况的真实结果。如果没有匹配的结果值，则返回结果为ELSE后的结果，如果没有ELSE 部分，则返回值为 NULL。 \n"
+
+"举例 \n"
+"mysql> select CASE 'b' when 'a' then 1 when 'b' then 2 END; \n"
+"+----------------------------------------------+ \n"
+"| CASE 'b' when 'a' then 1 when 'b' then 2 END | \n"
+"+----------------------------------------------+ \n"
+"|                                            2 | \n"
+"+----------------------------------------------+ \n"
+"1 row in set (0.00 sec) \n"
+
+"mysql> select CASE concat('a','b') when concat('ab','') then 'a' when 'b' then 'b' end; \n"
+"+--------------------------------------------------------------------------+ \n"
+"| CASE concat('a','b') when concat('ab','') then 'a' when 'b' then 'b' end | \n"
+"+--------------------------------------------------------------------------+ \n"
+"| a                                                                        | \n"
+"+--------------------------------------------------------------------------+ \n"
+"1 row in set (0.00 sec) \n"
+
+"mysql> select case when 1>0 then 'true' else 'false' end; \n"
+"+--------------------------------------------+  \n"
+"| case when 1>0 then 'true' else 'false' end |  \n"
+"+--------------------------------------------+  \n"
+"| true                                       |  \n"
+"+--------------------------------------------+  \n"
+"1 row in set (0.00 sec)",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+74, 
+"CREATE USER",
+111, 
+" *   格式:  CREATE USER user_specification_list ; \n"
+" *              user_specification_list:    \n"
+" *                          user_specification,[user_specification] \n"
+" *              user_specification:  \n"
+" *                          'user' IDENTIFIED BY 'password'  \n"
+"\n"
+" *   创建新的OceanBase用户。创建新用户后，可以使用该用户连接OceanBase。\n"
+"     * 新建用户仅拥有系统表“__all_server”和“__all_cluster”的SELECT权限，以及“__all_client”的REPLACE和SELECT权限。\n"
+"     * 必须拥有全局的CREATE USER权限或对__all_user表的INSERT权限，才可以使用CREATE USER命令。\n"
+"     * 新建用户后，__all_user表会新增一行该用户的表项。如果同名用户已经存在，则报错。\n"
+"     * 使用IDENTIFIED BY子句，为账户给定一个密码。\n"
+"     * 此处密码为明文，存入__all_user表后，服务器端会变为密文存储下来。\n"
+"     * 同时创建多个用户时，用英文状态的逗号隔开。", 
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+75, 
+"DROP USER",
+111, 
+" *   格式: DROP USER 'user' \n"
+"\n" 
+" *   删除一个或多个OceanBase用户。 \n"
+"     * 必须拥有全局的CREATE USER权限或对“__all_user”表的DELETE权限，才可以使用DROP USER命令。\n"
+"     * 成功删除用户后，这个用户的所有权限也会被一同删除。\n"
+"     * 同时删除多个用户时，用英文状态的逗号隔开。", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+76, 
+"SET PASSWORD",
+111,
+" *   格式: SET PASSWORD [FOR 'user' =] 'password' \n" 
+"\n" 
+" *   修改OceanBase登录用户的密码。 \n"
+"     * 如果没有For user子句，则修改当前用户的密码。任何成功登陆的用户都可以修改当前用户的密码。\n"
+"     * 如果有For user子句，则修改指定用户的密码。必须拥有对“__all_user”表的UPDATE权限，才可以修改制定用户的密码。", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+77, 
+"RENAME USER",
+111, 
+" *   格式: RENAME USER 'old_user' \n"
+"             TO 'new_user' \n"
+"\n"
+" *   修改OceanBase登录用户的用户名。 \n"
+"     * 必须拥有全局CREATE USER权限或者对__users表的UPDATE权限，才可以使用本命令。\n"
+"     * 同时修改多个用户名时，用英文状态的逗号隔开。", 
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+78, 
+"ALTER USER",
+111, 
+" *   修改用户密码: ALTER USER 'user' \n"
+"                         IDENTIFIED BY 'password' \n"
+"              * 必须拥有对“__all_user”表的UPDATE权限，才可以修改制定用户的密码。\n"
+"\n" 
+" *   锁定用户：ALTER USER 'user' LOCKED \n"
+"          * 必须拥有对“__users”表的UPDATE权限，才可以执行本命令。\n"
+"          * 被锁定的用户不允许登陆。\n"
+"\n"
+" *   解锁用户：ALTER USER 'user' UNLOCKED \n"
+"          * 必须拥有对“__users”表的UPDATE权限，才可以执行本命令。", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+79, 
+"GRANT",
+111, 
+" *   格式: GRANT priv_type  \n"
+"            ON table_name  \n"
+"            TO 'user' \n"
+"\n"
+" *   用于系统管理员授予OceanBase用户操作权限。 \n"
+"     * 给特定用户授予权限。如果用户不存在则报错。\n"
+"     * 当前用户必须拥有被授予的权限，并且拥有GRANT OPTION权限，才能授予成功。\n"
+"       例如，user1把表t1的SELECT权限授予user2，则user1必须拥有表t1的SELECT的权限。\n"
+"     * 用户授权后，该用户只有重新连接OceanBase，权限才能生效。\n"
+"     * 用*代替table_name，表示赋予全局权限，即对数据库中的所有表赋权。\n"
+"     * 同时把多个权限赋予用户时，权限类型用英文状态的逗号隔开。\n"
+"     * 同时给多个用户授权时，用英文状态的逗号隔开。\n"
+"     * priv_type为权限类型: \n"
+" +----------------------------------------------------------------------------------------- ---+ \n"
+" |  ALL PRIVILEGES | 除GRANT OPTION以外所有权限。                                              | \n"
+" |  ALTER          | ALTER TABLE的权限。                                                       | \n"
+" |  CREATE         | CREATE TABLE的权限。                                                      | \n"
+" |  CREATE USER    | CREATE USER，DROP USER，RENAME USER和REVOKE ALL PRIVILEGES的权限。        | \n"
+" |  DELETE         | DELETE的权限。                                                            | \n"
+" |  DROP           | DROP的权限。                                                              | \n"
+" |  GRANT OPTION   | GRANT OPTION的权限。                                                      | \n"
+" |  INSERT         | INSERT的权限。                                                            | \n"
+" |  REPLACE        | REPLACE的权限。                                                           | \n"
+" |  SELECT         | SELECT的权限。                                                            | \n"    
+" |  UPDATE         | UPDATE的权限。                                                            | \n"
+" +----------------------------------------------------------------------------------------- ---+ \n"
+"     * 本用户自动拥有自己创建的对象（目前基本上只有表）的所有权限。\n"
+"       例如，用户user1创建了表t1和t2，那用户user1应该自动就有对t1和t2的ALL PRIVILEGES及GRANT OPTION权限，不再需要额外去授权。",
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+80, 
+"REVOKE",
+111, 
+" *   格式: REVOKE priv_type \n"
+"             ON table_name \n" 
+"             FROM 'user' \n"
+"\n"
+" *   用于系统管理员撤销OceanBase用户的操作权限。 \n"
+"     * 用户必须拥有被撤销的权限，并且拥有GRANT OPTION权限。\n"
+"       例如，user1要撤销user2对表t1的SELECT权限，则user1必须拥有表t1的SELECT的权限。\n"
+"     * 撤销ALL PRIVILEGES和GRANT OPTION权限时，当前用户必须拥有全局GRANT OPTION权限，或者对权限表的UPDATE及DELETE权限。\n"
+"     * 撤销操作不会级联。例如，用户user1给user2授予了某些权限，撤回user1的权限不会同时也撤回user2的相应权限。\n"
+"     * 用*代替table_name，表示撤销全局权限，即撤销对数据库中所有表的操作权限。\n"
+"     * 同时对用户撤销多个权限时，权限类型用英文状态的逗号隔开。\n"
+"     * 同时撤销多个用户的授权时，用户名用英文状态的逗号隔开。\n"
+"     * priv_type为权限类型: \n"
+" +----------------------------------------------------------------------------------------- ---+ \n"
+" |  ALL PRIVILEGES | 除GRANT OPTION以外所有权限。                                              | \n"
+" |  ALTER          | ALTER TABLE的权限。                                                       | \n"
+" |  CREATE         | CREATE TABLE的权限。                                                      | \n"
+" |  CREATE USER    | CREATE USER，DROP USER，RENAME USER和REVOKE ALL PRIVILEGES的权限。        | \n"
+" |  DELETE         | DELETE的权限。                                                            | \n"
+" |  DROP           | DROP的权限。                                                              | \n"
+" |  GRANT OPTION   | GRANT OPTION的权限。                                                      | \n"
+" |  INSERT         | INSERT的权限。                                                            | \n"
+" |  REPLACE        | REPLACE的权限。                                                           | \n"
+" |  SELECT         | SELECT的权限。                                                            | \n"    
+" |  UPDATE         | UPDATE的权限。                                                            | \n"
+" +----------------------------------------------------------------------------------------- ---+ ",
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+81, 
+"SET",
+112, 
+"1. 修改用户变量\n"
+"  * 用户变量用于保存一个用户自定义的值，以便于在以后引用它，这样可以将该值从一个语句传递到另一个语句。\n"
+"  * 用户变量与连接有关，即一个客户端定义的用户变量不能被其它客户端看到或使用，当客户端退出时，该客户端连接的所有变量将自动释放。\n" 
+"  * 格式: SET @var_name = expr; \n"
+"          * 用户变量的形式为@var_name，其中变量名var_name可以由当前字符集的文字数字字符、“.”、“_”和“$”组成。\n"
+"          * 每个变量的expr可以为整数、实数、字符串或者NULL值。\n"
+"          * 同时定义多个用户变量时，用英文状态的逗号隔开。\n"
+"\n"
+"2. 修改系统变量\n"
+"  * 系统变量和SQL功能相关，存放在“__all_sys_param”表中。\n"
+"  * 系统变量有以下两种: \n"
+"                       * 全局变量 影响OceanBase整体操作。\n"
+"                                  当OceanBase启动时，它将所有全局变量初始化为默认值。\n"
+"                                  修改全局变量，必须具有SUPER权限。\n"
+"                                  全局变量的更改不影响目前已经连接的客户端的会话变量，即使客户端执行SET GLOBAL语句也不影响。\n"
+"                       * 会话变量 影响当前连接到OceanBase的客户端。\n"
+"                                  在客户端连接OceanBase时，使用相应全局变量的当前值对该客户端的会话变量进行初始化。\n"
+"                                  设置会话变量不需要特殊权限，但客户端只能更改自己的会话变量，而不能更改其它客户端的会话变量。\n"
+"3. 设置全局变量的格式: SET GLOBAL system_var_name = expr \n"
+"                       或者 \n"
+"                       SET @@GLOBAL.system_var_name = expr \n"
+"4. 设置会话变量的格式: SET [SESSION | @@SESSION. | LOCAL | LOCAL. | @@]system_var_name = expr ", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+82,
+"ALTER SYSTEM SET",
+112, 
+"格式: ALTER SYSTEM SET param_name=expr [, param_name=expr…] \n"
+"            [COMMENT 'text'] \n"
+"            [SCOPE = conf_scope] \n"
+"            SERVER_TYPE = server_type \n"
+"            [CLUSTER_ID = cluster_id | CLUSTER = cluster_id | SERVER_IP= 'server_ip' SERVER_PORT = server_port | SERVER='ip:port'] \n"
+"\n"
+"修改系统配置项。配置项存放在__all_sys_config表中，一般针对每一类Server进行配置。\n"
+"  * 同时修改多个系统配置项时，用英文状态的逗号隔开。\n"
+"  * 修改系统配置项说明如下: \n"
+" +----------------------------------------------------------------------------------------------------------------------------------------- ---+ \n"
+" | param_name              |配置项的名称和值。                                                                                                 | \n"
+" | COMMENT                 |可选，用于添加关于本次修改的注释。建议不要省略。                                                                   | \n"
+" | SCOPE                   |SCOPE用来指定本次配置项修改的生效范围。                                                                            | \n"
+" |                         |SCOPE的值主要有以下三种：                                                                                          | \n"
+" |                         |MEMORY：表明只修改内存中的配置项，修改立即生效，且本修改在Server重启以后会失效（目前暂时没有配置项支持这种方式）。 | \n"
+" |                         |SPFILE：表明只修改配置表中的配置项值，当Server重启以后才生效。                                                     | \n"
+" |                         |BOTH：表明既修改配置表，又修改内存值，修改立即生效，且Server重启以后配置值仍然生效。                               | \n"
+" |                         |SCOPE默认值为BOTH。对于不能立即生效的配置项，如果SCOPE使用BOTH或MEMORY，会报错。                                   | \n"
+" | SERVER_TYPE             |服务器类型，ROOTSERVER\\UPDATESERVER\\CHUNKSERVER\\MERGESERVER。                                                   | \n"                      
+" | CLUSTER_ID              |表明本配置项的修改正对指定集群的特定Server类型，否则针对所有集群的特定Server类型。                                 | \n"
+" | SERVER_IP&SERVER_PORT   |只修改指定Server实例的某个配置项。                                                                                 | \n"
+"+----------------------------------------------------------------------------------------------------------------------------------------------+ ", 
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+83, 
+"ALTER SYSTEM",
+112,
+"1. 主备RootServer切换\n"
+"格式: ALTER SYSTEM [FORCE] \n"
+"            SWITCH ROOTSERVER {MASTER|SLAVE} \n"
+"            [SERVER='ip:port']  \n"
+"  * 主RootServer切备 \n"
+"    ** 必须指定主RootServe的IP和PORT进行切备。如果不指定，直接报错退出。 \n"
+"    ** 如果集群中不存在主RootServer，则不进行切换。 \n"
+"  * 备RootServer切主 \n"
+"    ** 可以指定备RootServe的IP和PORT进行切主。如果不指定，则从集群中任意选择备RootServer进行切主。\n"
+"    ** 如果集群中不存在备RootServer，则直接报错退出。\n"
+"    ** 如果集群中已经有主RootServer，则须使用FORCE参数进行强制切换，否则将报错退出。\n"
+"\n"
+"2. 主备UpdateServer切换\n"
+"格式: ALTER SYSTEM [FORCE] \n"
+"            SWITCH UPDATESERVER {MASTER|SLAVE} \n"
+"            [SERVER='ip:port']  \n"
+"  * 主UpdateServer切备\n"
+"    不进行任何操作，也不存在什么场景需要使用这个命令。假设集群中存在两个主RootServer和两个主UpdateServerS。只需要将主RootServer设置成备，那么主UpdateServer也会因为Lease失效而变成备UpdateServer。\n"
+"  * 备UpdateServer切主 \n"
+"    ** 集群中存在主UpdateServer \n"
+"       *** 不容许添加FORCE标志符。\n"
+"       *** 可以指定备UpdateServer的IP和PORT进行切主。如果不指定，则从集群中任意选择备UpdateServer进行切主。\n"
+"    ** 集群中不存在主UpdateServer \n"
+"       必须加FORCE标志符，并且必须指定新主UpdateServer的地址。\n"
+"\n"
+"3. 修改集群状态\n"
+"格式: ALTER SYSTEM [FORCE] \n"
+"            {START|STOP|DELETE} CLUSTER \n"
+"            CLUSTER_ID=cluster_id  \n"
+"  * START操作为新添加一个集群，STOP操作为停止一个集群的服务，DELETE为从大集群中删除这个集群。\n"
+"  * 只有集群处于STOP状态时，才允许DELETE操作。\n"
+"  * 修改cluster_id对应的集群的状态，同时通知RootServer重新加载集群信息。主要在新增或者升级的时候需要用到该语法。\n"
+"  * 可以在__all_cluster表中看到集群相应的状态，列名为status，其中0表示启动中，1表示可以提供服务，2表示停止服务，3表示无效集群。\n"
+"  * 当集群中包含主RootServer或者主UpdateServer时，不容许执行STOP命令，用户只能先进行RootServer/UpdateServer的切换以后，再进行STOP。\n"
+"\n"
+"4. 重新加载集群信息和每日合并信息\n"
+"格式: ALTER SYSTEM \n"
+"            RELOAD CLUSTER \n"
+"  * 通知RootServer重新加载集群信息和每日合并信息。 \n"
+"\n"
+"5. 清除每日合并过程报错\n"
+"格式: ALTER SYSTEM \n"
+"            CLEAN MERGE ERROR  \n"
+"  * 通知RootServer清除每日合并过程中产生的错误，否则，RootServer将不断进行每日合并错误的报警提醒。\n"
+"\n"
+"6. 暂停每日合并\n"
+"格式:ALTER SYSTEM \n"
+"           PAUSE MERGE CLUSTER \n"
+"           CLUSTER_ID=cluster_id  \n"
+"  * 暂停指定集群的ChunkServer的每日合并。\n"
+"  * RootServer的每日合并过程不受这个控制。\n"
+"\n"
+"7. 继续每日合并\n"
+"格式: ALTER SYSTEM \n"
+"            RESUME MERGE CLUSTER \n"
+"            CLUSTER_ID=cluster_id  \n"
+"  * 继续指定集群的ChunkServer的每日合并。\n"
+"  * RootServer的每日合并过程不受这个控制。\n"
+"\n"
+"8. 流量配置\n"
+"格式: ALTER SYSTEM [FORCE] \n"
+"            SWITCH FLOW \n"
+"            FLOW_PERCENT=percent \n"
+"            CLUSTER_ID=cluster_id  \n"
+"  * 设置指定集群的流量百分比。\n"
+"  * percent的取值范围[0, 100]。 \n"
+"\n"
+"9. 上下线管理\n"
+"格式: ALTER SYSTEM \n"
+"            [CANCEL] \n"
+"            {SHUTDOWN | RESTART} \n"
+"            SERVER 'ip:port' \n"
+"            [CLUSTER_ID=cluster_id]  \n"
+"  * 通知RootServer指定集群的某个Server上下线。\n"
+"  * 如果SHUTDOWN命令用来通知RootServer某个ChunkServer需要下线，RootServer会尽量把这个ChunkServer上的Tablet迁移到其他机器。是否迁移结束可以在__all_trigger表中查询。\n"
+"  * RESTART命令不常用，实现也很简单，只是通知RootServer修改ChunkServer的一个标志位，不做任何其他工作。\n"
+"\n"
+"10. 创建空Tablet\n"
+"格式: ALTER SYSTEM \n"
+"            CREATE {ROOT|META|NORMAL} TABLET \n"
+"            RANGE 'tablet_range' \n"
+"            VERSION ver_num \n"
+"            {SERVER = 'ip:port' | CLUSTER = cluster_id | SERVER = 'ip:port' CLUSTER = cluster_id}  \n"
+"  * 在ChunkServer上面创建空Tablet，需要指定Tablet的Range和Version。\n"
+"\n"
+"11. 删除Tablet\n"
+"格式: ALTER SYSTEM  \n"
+"            DROP TABLET  \n"
+"            RANGE 'tablet_range'  \n"
+"            VERSION ver_num  \n"
+"            SERVER = 'ip:port'  \n"
+"            [CLUSTER=cluster_id]  \n"
+"  * 删除指定ChunkServer上的Tablet，必须指定Tablet的Range。\n"
+"\n"
+"12. 迁移/复制Tablet\n"
+"格式: ALTER SYSTEM  \n"
+"            {MIGRATE|COPY} TABLET  \n"
+"            RANGE 'tablet_range'  \n"
+"            VERSION ver_num  \n"
+"            SOURCE='ip:port'  \n"
+"            DESTINATION='ip:port'  \n"
+"            [CLUSTER=cluster_id]  \n"
+"  * 迁移或者复制Tablet，需要指定源ChunkServer和目的ChunkServer，以及Tablet的Range和Version。\n"
+"\n"
+"13. 汇报Tablet\n"
+"格式: ALTER SYSTEM  \n"
+"            REPORT TABLET  \n"
+"            {SERVER = 'ip:port' CLUSTER_ID=cluster_id | SERVER = 'ip:port' | CLUSTER_ID=cluster_id}  \n"
+"  * 强制要求某个ChunkServer或者某个集群内的ChunkServer进行Tablet汇报。\n"
+"\n"
+"14. 安装磁盘 \n"
+"格式: ALTER SYSTEM \n"
+"            INSTALL DISK 'disk_mount_point' \n"
+"            SERVER = 'ip:port' \n"
+"            [CLUSTER_ID=cluster_id]  \n"
+"  * 指定ChunkServer安装磁盘。\n"
+"  * disk_mount_point为磁盘挂载点，如“/data/3”。\n"
+"\n"
+"15. 卸载磁盘 \n"
+"格式: ALTER SYSTEM \n"
+"            UNINSTALL DISK disk_no \n"
+"            SERVER='ip:port' \n"
+"            [CLUSTER_ID=cluster_id]  \n"
+"  * 指定ChunkServer和磁盘号，卸载磁盘。\n"
+"  * disk_no为需要卸载的磁盘号。\n"
+"\n"
+"16. 冻结UpdateServer内存表\n"
+"格式: ALTER SYSTEM \n"
+"            {MINOR FREEZE | MAJOR FREEZE}  \n"
+"  * 冻结UpdateServer内存表分大版本冻结和小版本冻结。\n"
+"  * 小版本冻结达到一定次数后会触发大版本冻结。小版本冻结次数由配置项“minor_num_limit”控制。\n"
+"  * 大版本冻结会引起每日合并。\n"
+"\n"
+"17. 删除UpdateServer内存表\n"
+"格式: ALTER SYSTEM \n"
+"            DROP MEMTABLE \n"
+"            SERVER = 'ip:port' \n"
+"            [CLUSTER_ID=cluster_id] \n"
+"\n"
+"18. 清除内存 \n"
+"格式: ALTER SYSTEM \n"
+"            CLEAR ACTIVE MEMTABLE \n"
+"            SERVER = 'ip:port' \n"
+"            [CLUSTER_ID=cluster_id]  \n"
+"  * 清除UpdateServer中活跃内存表所占的内存。\n"
+"\n"
+"19. 添加/删除UpdateServer服务器 \n"
+"格式: ALTER SYSTEM  \n"
+"            {ADD|DELETE} UPDATESERVER  \n"
+"            SERVER='ip:port;ip:port' \n"
+"\n"
+"20. 刷新Schema  \n"
+"格式: ALTER SYSTEM   \n"
+"            REFRESH SCHEMA  \n"           
+"  * 用户用修改核心表内容时，需要刷新Schema。RootServer收到命令后，会从内部表中读出最新的Schema并缓存起来。  \n"
+"\n"
+"21. 打印RootTable内容\n"
+"格式: ALTER SYSTEM \n"
+"            DUMP ROOTTABLE \n"
+"\n"
+"22. CS进行roottable核对删除  \n"
+"格式: ALTER SYSTEM   \n"
+"            CHECK ROOTTABLE  \n"
+"            CHUNKSERVER = 'ip:port'  \n"
+"  * 手动发起CS端roottable核对删除，roottable有CS上没有会从roottable删除副本信息，roottable没有CS上有会往roottable增加副本信息  \n"
+"\n"
+"23. 打印不合要求的Tablet信息\n"
+"格式: ALTER SYSTEM \n"
+"            DUMP UNUSUAL TABLET  \n"
+"  * 打印副本或者版本不满足要求的Tablet信息。\n"
+"\n"
+"24. 清理RootTable上的缓存\n"
+"格式: ALTER SYSTEM  \n"
+"        CLEAN ROOTTABLE \n"
+"\n"
+"25. 系统自举 \n"
+"格式: ALTER SYSTEM  \n"
+"          BOOTSTRAP \n"
+"\n"
+"26. 数据备份恢复指令 \n"
+"* 静态数据备份 \n"
+"格式：ALTER SYSTEM BACKUP \n"
+"* 数据恢复,DATETIME参数表示恢复指定时间之前的最近一次版本。\n"
+"格式：ALTER SYSTEM RESTORE DATETIME=’time’ uri=’path’ \n"
+"\n" 
+"27. SQL限流引流 \n"
+"** 添加SQL限流引流指令 \n"
+"格式： ALTER SYSTEM ADD SQL_FILTER \n"
+"             KEY key_list  \n"
+"             TYPE={SELECT | UPDATE | DELETE}  \n"
+"             MAX_CONCURRENT=num   \n"
+"             [KEY_IN_ORDER] [SLAVE] \n"
+"\n"
+"            key_list: \n"
+"                 (‘key’)[,(‘key’)…] \n"
+"\n"
+"* key_list表示SQL过滤项内容，多个KEY之间用逗号“，”隔开，key可以直接取字符串匹配，如’ a=1’,’a>5’等值，也可以使用’a>?’,1的类型，表示当使用prepare语句中a>?只对a>5的SQL生效，使用’a>??’的类型时，对于a>（任意值）execute的SQL语句都生效。 \n"
+"* TYPE取值范围为SELECT|UPDATE|DELETE其中之一，表示该SQL过滤项对SELECT|UPDATE|DELETE中的某一类SQL语句有效。（OceanBase 0.5.2暂时只支持SELECT） \n"
+"* MAX_CONCURRENT=num表示每个MergeServer能执行符合“SQL过滤项”的SQL的最大并发度，num取值范围为[0,9223372036854775807]的整数 \n"
+"* KEY_IN_ORDER表示是否按SQL过滤项定义的key顺序去匹配，默认为关闭不按key顺序匹配。举例如SQL为SELECT *FROM t1 WHERE a=1，SQL过滤项为'a=1，t1'，不带KEY_IN_ORDER选项为OFF(默认)则SQL与过滤项匹配，带上KEY_IN_ORDER选项为ON则SQL与过滤项不匹配 \n"
+"* SLAVE表示是否把符合“SQL过滤项”的SQL引流到备集群，带上SLAVE选项表示引流，不带SLAVE选项表示限流。（OceanBase 0.5.2暂时未实现引流功能） \n"
+
+"** 删除SQL限流引流指令 \n"
+"格式： ALTER SYSTEM DELETE SQL_FILTER \n"
+"            {ALL | filter_id_list}  \n"
+"\n"
+"       filter_id_list:  \n"
+"            filter_id [,filter_id…] \n"
+"\n"
+"ALL关键字，表示删除所有SQL过滤项；也可以通过查看SQL限流引流信息内部表__all_sql_filter_info，查找SQL过滤项id来删除，多个id通过逗号分隔删除。",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+84, 
+"SHOW",
+112, 
+"1. SHOW CREATE TABLE table_name \n"
+"   * 查看可以用来建立指定表格的建表语句。    \n"
+"\n"
+"2. SHOW COLUMNS {FROM | IN} table_name \n"
+"        [LIKE 'pattern' | WHERE expr] \n"
+"   * 查看指定表的列的信息。    \n"
+"\n"
+"3. SHOW COUNT(*) WARNINGS \n"
+"   * 统计上一条语句执行过程中产生的“Warning”信息。    \n"
+"\n"
+"4. SHOW GRANTS [FOR user] \n"
+"   * 查看OceanBase用户的操作权限。\n"
+"   * 如果不指定用户名，则缺省显示当前用户的权限。对于当前用户，总可以查看自己的权限。\n"
+"   * 如果要查看其他指定用户的权限，必须拥有对__all_user的SELECT权限。\n"
+"\n" 
+"5. SHOW INDEX FROM table_name [WHERE expr]\n"
+"   * 查看某个表的索引。    \n"
+"\n"
+"6. SHOW PARAMETERS [LIKE 'pattern' | WHERE expr] \n"
+"   * 查看各个配置项在各个Server实例上的值。    \n"
+"\n"
+"7. SHOW PROCESSLIST \n"
+"   * 查看所有用户的当前连接。    \n"
+"\n"
+"8. SHOW [ALL] TABLES [LIKE 'pattern' | WHERE expr] \n"
+"   * 查看数据库中存在哪些表。加ALL，则查询所有表，不加ALL，则只查询用户创建的表。    \n"
+"\n"
+"9. SHOW [GLOBAL | SESSION] VARIABLES [LIKE 'system_var_name' | WHERE expr] \n"
+"   * 如果指定GLOBAL或SESSION修饰符，则分别打印全局或当前会话的系统变量值。\n"
+"   * 如果没有修饰符，则显示当前会话值。\n"
+"\n"
+"10. SHOW WARNINGS [LIMIT [offset,] row_count] \n"
+"   * 获得上一条语句执行过程中产生的“Warning”信息，不包含“Error”。   ",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+85, 
+"KILL",
+112, 
+"  * 格式: KILL [CONNECTION | QUERY] thread_id"
+"\n" 
+"  * 终止某个线程。 \n"
+"    * 每个与OceanBase的连接都在一个独立的线程里运行，您可以使用SHOW PROCESSLIST;语句查看哪些线程正在运行，并使用KILL thread_id语句终止一个线程。Index列为thread_id。\n"
+"    * KILL CONNECTION与不含修改符的KILL一样：它会终止与给定的thread_id。\n"
+"    * KILL QUERY会终止连接当前正在执行的语句，但是会保持连接的原状。",
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+86, 
+"DESCRIBE",
+112,
+" *  格式: DESCRIBE table_name [col_name | wild]\n"
+"          或者\n"
+"          DESC table_name [col_name | wild] \n"
+"\n" 
+" *  这个语句等同于SHOW COLUMNS FROM语句。 ",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+87, 
+"EXPLAIN",
+112,
+" *  格式: EXPLAIN [VERBOSE] {select_stmt | insert_stmt | update_stmt | delete_stmt | delete_stmt} \n"
+"\n"  
+" *  输出SELECT, INSERT, UPDATE, DELETE, REPLACE等DML语句内部的物理执行计划。 \n"
+" *  使用系统变量explain_regex提供的正则表达式筛选待打印的执行计划，默认值为default，其等价于：\n"
+"    set @@explain_regex='(/PHY_\\\\w+$)|(/(left_name|right_name|left_id|right_id)$)|(/read_method$)|(/USE_INDEX$)|(/SKIP_SORT$)|(/PHY_TABLE_SCAN_USE_INDEX(/|/.*/)(scan|get)(/|/.*/)DESC$)'",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+88, 
+"WHEN",
+112,
+" *  格式: statement WHEN expr|ROW_COUNT(statement) op expr  \n"
+"\n" 
+" *  WHEN子句是OceanBase扩展的SQL语法。当WHEN子句的条件满足的时候，才执行WHEN前的主句。 \n"
+"      * statement为SELECT、FOR UPDATE、UPDATE 、DELETE、INSERT、REPLACE等语句。\n"
+"      * WHEN子句可以嵌套和组合。",
+"",
+"www.taobao.com")
+
+
+
+
+
+DEFINE_SQL_TOPIC(
+90,
+"Logical Operators",
+41,
+" *  在OceanBase中，逻辑操作符会把左右操作数都转成BOOL类型进行运算。逻辑运算时返回“Error”表示计算错误。\n"
+" *  OceanBase各数据类型转换BOOL类型的规则如下：\n"
+"      • 字符串只有是“True”、“False”、“1”和“0”才能够转换到BOOL类型，其中字符串“True”和“1”为“True”，字符串“False”和“0”为“False”。\n"
+"      • “INT”、“FLOAT”、“DOUBLE”和“DECIMAL”转换BOOL类型时，数值不为零时为“True”，数值为零时为“False”。 \n"
+"\n"
+" *  逻辑操作符： \n"
+"NOT  逻辑非  \n"
+"AND  逻辑与  \n"
+"OR   逻辑或  ",
+"",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+90,
+"Comparison Operators",
+42,
+" *  OceanBase比较的策略是，先将操作数转换为相同的类型，然后进行比较。\n"
+" *  所有比较运算符的返回类型为Bool或者NULL。比较结果为真则返回“1”，为假则返回“0”，不确定则返回“NULL”。\n"
+" *  比较运算符用于比较两个数值的大小。 \n"
+"\n"
+"比较运算符  \n"
+"+-------------------------------------------------------------------------------------+ \n"
+"|  表达式   |   含义       |      举例                                                | \n"
+"|    =      |   等于。     |   SELECT 1=0, 1=1, 1=NULL;                               | \n"
+"|    >=     |   大于等于。 |   SELECT 1>=0, 1>=1, 1>=2, 1>=NULL;                      | \n"
+"|    >      |   大于。     |   SELECT 1>0, 1>1, 1>2, 1>NULL;                          | \n"
+"|    <=     |   小于等于。 |   SELECT 1<=0, 1<=1, 1<=2, 1<=NULL;                      | \n"
+"|    <      |   小于。     |   SELECT 1<0, 1<1, 1<2, 1<NULL;                          | \n"
+"|    !=或<> |   不等于。   |   SELECT 1!=0, 1!=1, 1<>0， 1<>1, 1!=NULL, 1<>NULL;      | \n"
+"+-------------------------------------------------------------------------------------+",
+"",
+"www.taobao.com")
+
+
+
+
+DEFINE_SQL_TOPIC(
+91,
+"Arithmetic Operators",
+43,
+" *  OceanBase中，数值计算只允许在数值类型和VARCHAR直接进行，其它类型直接报错。\n"
+" *  字符串在做算术运算时，如果无法转成DOUBLE类型则报错，比如“'3.4he' + 3”。\n"
+" *  字符串只有在内容全为数字或者开头是“+”或者“-”，且后面跟数字的形式才能转成DOUBLE型。\n"
+"\n"
+"算数运算符\n"
+"+---------------------------------------------------------------------------------------+ \n"
+"|表达式  |  含义                                               |   举例                 | \n"
+"|  +     |  加法。                                             |  SELECT 2+3;           | \n"
+"|  -     |  减法。                                             |  SELECT 2-3;           | \n"
+"|  *     |  乘法。                                             |  SELECT 2*3;           | \n"
+"|  /     |  除法，返回商。如果除数为“0”，则返回结果为“NULL”。  |  SELECT 2/3;           | \n"
+"| %或MOD |  除法，返回余数。如果除数为“0”，则返回结果为“NULL”。|  SELECT 2%3, 2 MOD 3;  | \n"
+"+---------------------------------------------------------------------------------------+",
+"",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+92,
+"Vector Comparison Operators",
+44,
+" *  向量比较运算符对两个向量（ROW）进行比较，支持“<”、“ >”、“=”、“<=”、“>=”、“!=”、“in”和“not in”等8个操作符。 \n"
+" *  这几个操作符都是二元操作符，被比较的两个向量的维度要求相同。\n"
+" *  向量比较操作符和普通操作符相比主要有两点不同：\n"
+"       • 如果两个操作数的第i个标量的比较就决定了比较结果，则不再继续比较后续的数值。\n"
+"       • 在向量比较中，NULL等于NULL，且小于其他普通值。例如NULL = NULL < '' < 'a'。除此以外，标量值之前的比较和类型转换的规则同普通比较操作符相同。\n"
+"\n"
+" *  向量比较操作符需要注意以下几点：\n"
+"       • 多元向量比较，关键字ROW可以省略。例如，ROW(1,2,3) < ROW(1,3,5)等价于(1,2,3) < (1,3,4)。\n"
+"       • 1元向量比较，关键字ROW不能省略。例如，ROW(1) < ROW(2)不等价于(1) < (2)。前者是向量比较操作，后者是普通比较操作。\n"
+"       • in/not in操作一定是向量操作，表示左参数（不）在右集合内，集合用“（）”括起。\n"
+"        例如，Row(1) in (Row(2), Row(3), Row(1))，等价与1 in (2, 3, 1)。\n"
+"       • in/not in操作需要左右操作数对应位置的标量都是可以比较的，否则返回错误。\n"
+"        例如，ROW(1,2) in (ROW(1,2), ROW(2,3), ROW(3,4))成功，ROW(1,2) in (ROW(2,1), ROW(2,3), ROW(1,3,4))失败。",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+93,
+"Splicing Operator",
+45,
+" *  拼接运算符\n"
+"+----------------------------------------------------------+ \n"
+"|表达式 |        含义               |        举例          | \n"
+"|  ||   | 将值联结到一起构成单个值。| SELECT 'a'||'b';     | \n"
+"+----------------------------------------------------------+ \n"
+"mysql> SELECT 'a'||'b';\n"
+"+----------+ \n"
+"| 'a'||'b' | \n"
+"+----------+ \n"
+"| ab       | \n"
+"+----------+ \n"
+"1 row in set (0.00 sec) ",
+"",
+"www.taobao.com")
+
+
+
+
+DEFINE_SQL_TOPIC(
+94,
+"Operator Precedence",
+46,
+" *  OceanBase中操作符的优先级由高到低。\n"
+"优先级\n"
+"+----------------------------------------------------------+ \n"
+"| 优先级 |      运算符                                     | \n"
+"|  1     |     *，/，%，MOD                                | \n"
+"|  2     |     +，-                                        | \n"
+"|  3     |     =，>，>=，<，<=，<>，!=，IS，LIKE，IN       | \n"
+"|  4     |     BETWEEN                                     | \n"
+"|  5     |     NOT                                         | \n"
+"|  6     |     AND                                         | \n"
+"|  7     |     OR                                          | \n"
+"+----------------------------------------------------------+ \n"
+" *  在实际运用的时，我们可以用“()”将需要优先的操作括起，这样既起到优先操作的作用，又使其他用户便于阅读。 ",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+95,
+"help",
+112,
+" *  格式：HELP search_string \n"
+" *  查看所有OceanBase支持的SQL帮助。\n"
+" *  HELP contents查看顶级SQL目录。\n"
+" *  HELP指令跟的查询指令暂不支持模糊查询。\n"
+" *  比如：HELP Comparison operators时，输入help Comparison等查询报错。",
+"",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+96, 
+"CEIL",
+35,
+" *   格式: CEIL(expr)\n"
+"\n"
+" *   返回大于或者等于指定表达式的最小整数。\n"
+" *   还支持比较运算，结果为BOOL值，被转化为数字类型处理，产生的结果为1(TRUE)、0 (FALSE)；\n"
+" *   如果输入NULL，返回值为NULL。\n"
+" *   如果输入纯数字的字符串，支持自动转换成数字类型。\n"
+" *   当整数超过45位时，结果不准确。\n"
+"\n", 
+"mysql> select ceil(1.2), ceil(-1.2), ceil(1+1.5), ceil(1=1),ceil(1<1),ceil(null);\n" 
+"+-----------+------------+-------------+-----------+-----------+------------+\n" 
+"| ceil(1.2) | ceil(-1.2) | ceil(1+1.5) | ceil(1=1) | ceil(1<1) | ceil(null) |\n"
+"+-----------+------------+-------------+-----------+-----------+------------+\n"
+"|         2 |         -1 |           3 |         1 |         0 |       NULL |\n"
+"+-----------+------------+-------------+-----------+-----------+------------+\n" 
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+
+DEFINE_SQL_TOPIC(
+97, 
+"FLOOR",
+35,
+" *   格式: FLOOR(expr)\n"
+"\n"
+" *   和CEIL(expr)函数功能类似，返回小于或者等于指定表达式的最大整数。\n"
+" *   还支持比较运算，结果为BOOL值，被转化为数字类型处理，产生的结果为1(TRUE)、0 (FALSE)；\n"
+" *   如果输入NULL，返回值为NULL。\n"
+" *   如果输入纯数字的字符串，支持自动转换成数字类型。\n"
+" *   当整数超过45位时，结果不准确。\n"
+"\n", 
+"mysql> select floor(1.2), floor(-1.2), floor(1+1.5), floor(1=1),floor(1<1),floor(null);\n" 
+"+------------+-------------+--------------+------------+------------+-------------+\n" 
+"| floor(1.2) | floor(-1.2) | floor(1+1.5) | floor(1=1) | floor(1<1) | floor(null) |\n" 
+"+------------+-------------+--------------+------------+------------+-------------+\n" 
+"|          1 |          -2 |            2 |          1 |          0 |        NULL |\n" 
+"+------------+-------------+--------------+------------+------------+-------------+\n" 
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+98, 
+"ABS",
+35,
+" *   格式: ABS(expr)\n"
+"\n"
+" *   绝对值函数，求表达式绝对值，函数返回值类型与数值表达式的数据类型相同。\n"
+"\n", 
+"mysql> select abs(5),abs(-5.777),abs(0),abs(1/2),abs(1-5);\n" 
+"+--------+-------------+--------+----------+----------+\n"
+"| abs(5) | abs(-5.777) | abs(0) | abs(1/2) | abs(1-5) |\n"
+"+--------+-------------+--------+----------+----------+\n"
+"|      5 |       5.777 |      0 |      0.5 |        4 |\n"
+"+--------+-------------+--------+----------+----------+\n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+99, 
+"NEG",
+35,
+" *   格式: NEG(expr)\n"
+"\n"
+" *   求补函数，对操作数执行求补运算：用零减去操作数，然后结果返回操作数。\n"
+" *   支持比较运算，结果为BOOL值，被转化为数字类型处理，产生的结果为1(TRUE)、0 (FALSE)，再对结果求补。\n"
+"\n", 
+"mysql> select neg(1),neg(1+1),neg(2*3),neg(1=1),neg(5<1);\n"
+"+--------+----------+----------+----------+----------+\n"
+"| neg(1) | neg(1+1) | neg(2*3) | neg(1=1) | neg(5<1) |\n"
+"+--------+----------+----------+----------+----------+\n"
+"|     -1 |       -2 |       -6 |        0 |        1 |\n"
+"+--------+----------+----------+----------+----------+\n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+100, 
+"REPEAT",
+32,
+" *   格式: REPEAT(str, count)\n"
+"\n"
+" *   返回一个字符串组成的字符串STR重复的次数。\n"
+" *   如果计数小于1，则返回一个空字符串。如果str或count是NULL，则返回NULL。\n"
+" *   如果返回的值大于OB默认的varchar最大长度,则返回error。\n"
+" *   如果str不是字符串类型或count不是int64_t类型（超过最高值OB也报错),则参数类型错误，返回error。\n"
+" *****这一点与MySQL不同，MySQL在输入str为纯数字时，能将输入参数转换为需要的参数类型，对于纯数字也可以当成string处理，而OB则执行严格的参数检查。\n"
+"\n", 
+"mysql> select repeat('1',-1),  repeat(null,null),repeat('test',4);\n"
+"+----------------+-------------------+------------------+\n"
+"| repeat('1',-1) | repeat(null,null) | repeat('test',4) |\n"
+"+----------------+-------------------+------------------+\n"
+"|                | NULL              | testtesttesttest |\n"
+"+----------------+-------------------+------------------+\n"
+"1 row in set (0.00 sec)",
+"www.taobao.com")
+
+
+DEFINE_SQL_TOPIC(
+101,
+"GREATEST",
+37,
+" *   格式: GREATEST(value1, ...)  \n"
+"\n"
+" *   返回参数的最大值，和函数LEAST()相对。 \n"
+" *   参数至少为一个；如果参数中有NULL, 返回值为NULL。 \n"
+" *   当参数中同时存在数值和字符时，把字符隐式转换为数值类型处理，不能转换的报错。 \n"
+"\n",
+"mysql> select greatest(2), greatest('2',1,0), greatest('a','b','c'), greatest('a', NULL, 'c'), greatest('2014-05-15','2014-06-01'); \n"
+"*************************** 1. row *************************** \n"
+"                        greatest(2): 2 \n"
+"                  greatest('2',1,0): 2 \n"
+"             greatest('a','b','c'): c \n"
+"           greatest('a', NULL, 'c'): NULL \n"
+"greatest('2014-05-15','2014-06-01'): 2014-06-01 \n"
+"1 row in set (0.00 sec) ",
+"www.taobao.com")
+
+DEFINE_SQL_TOPIC(
+102,
+"LEAST",
+37,
+" *   格式: LEAST(value1, ...)  \n"
+"\n"
+" *   返回参数的最小值，和函数GREATEST()相对。 \n"
+" *   参数至少为一个；如果参数中有NULL, 返回值为NULL。 \n"
+" *   当参数中同时存在数值和字符时，把字符隐式转换为数值类型处理，不能转换的报错。 \n"
+"\n",
+"mysql> select least(2), least('2',4,9), least('a','b','c'), least('a',NULL,'c'), least('2014-05-15','2014-06-01'); \n"
+"*************************** 1. row *************************** \n"
+"                        least(2): 2 \n"
+"                  least('2',4,9): 2 \n"
+"              least('a','b','c'): a \n"
+"             least('a',NULL,'c'): NULL \n"
+"least('2014-05-15','2014-06-01'): 2014-05-15 \n"
+"1 row in set (0.00 sec) ",
+"www.taobao.com")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

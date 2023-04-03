@@ -1,0 +1,456 @@
+##########################################################
+#            OBFlow Secret Scan Ignore List              #
+##########################################################
+# Above the segmentation lines there are suspected privacy information #
+# Please use the file name as the first line and the igored information #
+# should be started with tab. #
+# Under the segmentation lines there are the folders which you need to ignore #
+##########################################################
+**
+  http://license.coscl.org.cn/MulanPubL-2.0*
+  http://license.coscl.org.cn/MulanPubL-1.0
+  license.coscl.org.cn
+  https://open.oceanbase.com*
+  https://www.oceanbase.com*
+  https://github.com/oceanbase/oceanbase*
+  http://mirrors.aliyun.com/oceanbase*
+  https://mirrors.aliyun.com/oceanbase*
+  http://ocelot.ca/blog/blog/2016/04/18/mariadb-10-2-window-functions/
+  https://apod.nasa.gov/apod/astropix.html
+  https://github.com/Cyan4973/*
+  https://groups.google.com/*
+  https://groups.google.com/forum*
+  https://github.com/mcmilk/zstdmt
+  http://www.xxhash.com
+  http://www.example.com*
+
+
+
+
+
+  http://www.python.org/*
+  https://oracle.github.io/*
+  https://en.wikipedia.org/wiki/*
+  http://en.wikipedia.org/wiki/*
+  https://mariadb.com/*
+  https://github.com/akopytov/sysbench*
+  http://foo.bar.com*
+  https://github.com/google/*
+  issue*
+  http://llvm.org/bugs*
+  https://bugs.llvm.org/*
+  http://www.apache.org/licenses/*
+  https://issues.apache.org/*
+  https://github.com/vectorclass*
+  https://github.com/jcn/cowsay-py/blob/master/cowsay.py
+  http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
+  http://www.mjmwired.net/kernel/Documentation/iostats.txt
+  http://127.0.0.1:8658/obconfig/region1
+  http://127.0.0.1:8657/obconfig/region1
+  http://127.127.127.127:1/obconfig/region1
+  http://software.intel.com/en-us/forums/intel-c-compiler/*
+  http://astyle.sourceforge.net
+  http://1.taobao.com/
+  www.mysql.com
+  www.oceanbase.com
+  www.test_url.com/abcdefg/
+  https://www.percona.com/downloads/percona-toolkit/2.2.14/tarball/percona-toolkit-2.2.14.tar.gz
+  https://oapi.dingtalk.com/robot/send?access_token=
+  http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/*
+  http://www.lua.org/*
+  http://www.modelon.com*
+  jcn@pith.org
+  http://dev.mysql.com*
+  https://dev.mysql.com*
+  http://bugs.mysql.com*
+  http://www.opensource.org/licenses*
+  https://connect.microsoft.com/VisualStudio*
+  https://dev.mysql.com/doc/*
+  http://www.openssl.org/docs*
+
+  https://docs.oracle.com/*
+  https://bugzilla.redhat.com/*
+  https://hbase.apache.org/*
+  https://blogs.oracle.com/optimizer/how-does-the-methodopt-parameter-work
+  https://www.gnu.org/software/libiconv/*
+  http://antwrp.gsfc.nasa.gov/apod/astropix.html
+  http://isthe.com/chongo/tech/comp/fnv/#FNV-param
+  http://en.wikipedia.org/wiki/Icelandic_alphabet
+  http://www.omniglot.com/writing/icelandic.htm
+  http://www.evertype.com/alphabets/icelandic.pdf
+  http://cldr.unicode.org/)
+  http://unicode.org/Public/cldr/24/core.zip)
+  www.doxygen.org)
+  www.tcx.se
+  www.google.com
+  www.alipay.com
+  www.b123aidu.com
+  www.host.com
+  www.help.com
+  www.taobao.com
+  http://mysql.taobao.org/*
+  www.baidu.com
+  www.b123aidu.com
+  www.b111aidu.com
+  www.bAAAaidu.com
+  www.baidu12:13:14.com
+  libev@schmorp.de
+  www.baiduwww.com
+  http://www.foo.com
+  *@softstone.com
+  *@alipay.com
+  *@alibaba-inc.com
+  *@alibaba.com
+  *@aliapy.com
+  *@antgroup.com
+  *@ant-group.com
+  *@oceanbase.com
+  *@antfin.com
+  *@ant-fin.com
+  *@anfin.com
+  *@taobao.com
+  *@alibaba.inc.com
+  kaizhan.dkz@antigroup.com
+  bobak@relog.ch
+  emily@163.com
+  mike@sohu.com
+  joey@sina.com
+  wan@google.com
+  jimp03@email.com
+  internals@lists.mysql.com
+  mysql@modernduck.com
+  wawasa@gmail.com
+  http://www.gnu.org/licenses/*
+  http://gcc.gnu.org/bugzilla/show_bug.cgi?id=34772).
+  https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
+  madler@alumni.caltech.edu
+  http://en.wikipedia.org/wiki/X86-64#Linux
+  https://github.com/jsteemann/atoi
+  hewei@mail.ied.ac.cn
+  http://trade.taobao.com/trade/*
+  http://buy.tmall.com/order/*
+  http://unit.buyer.trade.taobao.com/trade/*
+  http://abc.com/*
+  https://oceanbase.slack.com/*
+  https://ask.oceanbase.com/*
+  https://cdn.nlark.com/yuque/*
+  https://h5.dingtalk.com/circle/*
+  https://gw.alipayobjects.com/*
+  http://yum-test.obvos.alibaba-inc.com/*
+  http://yum.tbsite.net/taobao/*
+  https://www.cnblogs.com/*
+  http://murmurhash.googlepages.com/
+  rbrown64@csc.com.au
+  http://bazaar.launchpad.net/*
+  http://stackoverflow.com/*
+  https://stackoverflow.com/*
+  https://cloud.tencent.com/*
+
+
+  libecb@schmorp.de
+  http://software.schmorp.de/*
+  http://www-01.ibm.com/*
+  http://msdn.microsoft.com/*
+  http://www.open-std.org/*
+  http://forums.freebsd.org/*
+  http://www.ussg.indiana.edu/*
+  https://www.qqxiuzi.cn/daohang.htm
+  https://blog.csdn.net/*
+  http://blog.csdn.net/*
+  https://es5.github.io/*
+  http://rapidjson.org/*
+  https://tools.ietf.org/*
+  http://tools.ietf.org/*
+  https://github.com/madler/zlib/*
+  http://www.zlib.net
+  http://www.oberhumer.com/*
+  http://www.quicklz.com/
+  http://www.goof.com/*
+  http://www.fastlz.org/*
+  http://baike.corp.taobao.com/*
+  http://gitlab.alibaba-inc.com/*
+  https://gerry.lamost.org/*
+  https://www.techonthenet.com/oracle/*
+  http://www.techonthenet.com/oracle/*
+  http://review.alibaba-inc.com/*
+
+  http://docs.oracle.com/*
+  https://oracle-base.com/*
+  https://www.kernel.org/doc/*
+
+
+
+  https://community.oracle.com/tech/*
+  https://docs.docker.com/*
+  http://helloworld.com/*
+  http://1.1.1.1:8080/*
+  https://mirrors.aliyun.com/*
+  https://bixense.com/clicolors/
+  martin.gieseking@uos.de
+  jloup@gzip.org
+  http://www.lz4.org
+  https://github.com/lz4/lz4
+  https://www.contributor-covenant.org/*
+  https://github.com/oceanbase/*
+**/Doxyfile
+  www.doxygen.org)
+  https://www.gnu.org/software/libiconv/
+  http://daringfireball.net/projects/markdown/
+  https://www.riverbankcomputing.com/software/sip/intro)
+  https://en.wikipedia.org/wiki/BibTeX
+  https://www.gnu.org/software/libiconv/)
+  https://www.gnu.org/software/global/global.html).
+  https://en.wikipedia.org/wiki/Hue
+  https://developer.apple.com/tools/xcode/)
+  https://developer.apple.com/tools/creatingdocsetswithdoxygen.html
+  http://www.microsoft.com/en-us/download/details.aspx?id=21138)
+  http://doc.qt.io/qt-4.8/qthelpproject.html#namespace).
+  http://doc.qt.io/qt-4.8/qthelpproject.html#virtual-folders).
+  http://doc.qt.io/qt-4.8/qthelpproject.html#custom-filters).
+  http://doc.qt.io/qt-4.8/qthelpproject.html#custom-filters).
+  http://doc.qt.io/qt-4.8/qthelpproject.html#filter-attributes).
+  https://www.mathjax.org)
+  http://docs.mathjax.org/en/latest/output.html)
+  https://www.mathjax.org
+  https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/.
+  https://issues.apache.org/*
+
+**/*.result
+  *
+  http://oracle.chinaitlab.com*
+  http://bugfree.corp.taobao.com*
+  https://www.baidu.com/*
+  http://maven.apache.org/*
+  http://www.w3.org*
+  www.baidu.com*
+  https://dev.mysql.com*
+  https://docs.cts.t.taobao.com*
+  http://www.cmd5.com/*
+
+  https://127.0.0.1*
+  www.360.com
+  www.wangyi.com
+  *@alipaymock.com
+  *@presence-pc.com
+  *@kkdis.com
+  *oracle.com
+  *@soft111.com
+  *@ft111.com
+  *@98765.com
+  *@111.com
+  *@xxx.com
+  *@example.com
+  *@mysql.com
+  *@anyware.co.uk
+  *@bolly.com
+  *@cryo-networks.fr
+  *@@Ovk9KjHH.com
+  *@Hamilton@V.com
+  *@i.org
+  *@Hh.edu
+  *@T3pylZEUQjm.org
+  *@S9KnyEtz9hv.org
+  *@be.org
+  *@Crg5KyP2IxX9C4d6.edu
+  *@62.com
+  *@xRtDqM1eLBVQNoYAJ.com
+  *@cb.edu
+  *@tC8pcU7Lt.edu
+  *@Y3Etqyv3.org
+  *@LM674NrE2.org
+  *@fqKC83UU0f.org
+  *@nAbai.edu
+  *@cTZLGYi1ZJi.org
+  *@DBXgl18FGo.edu
+  *@2T3V3OZOy4KBNAHsT.edu
+  *@a.com
+  Javier.Lewis@VFAxlnZEvOx.org
+  Amy.Moses@Ovk9KjHH.com
+  Latisha.Hamilton@V.com
+  cwx.c.a@qq.com
+  cwx.c_1@qq.com
+  123@qq.com
+  456@qq.com
+  *@email.com
+  emily@163.com
+  12@126.com
+  555@qq.com
+  foo@aol.com
+  bar@aol.com
+  mike@sohu.com
+  joey@sina.com
+  foo@hotmail.com
+  shirish@yahoo.com
+  sansh777@hotmail.com
+  xingxing@163.com
+  xingxing1@163.com
+  xingxing2@163.com
+  xingxing3@163.com
+  xingxing4@163.com
+  xingxing5@163.com
+  14844887@sina.com
+**/*.test
+  http://trade.taobao.com/trade/*
+  *
+  http://oracle.chinaitlab.com*
+  http://bugfree.corp.taobao.com*
+  https://www.baidu.com/*
+  http://maven.apache.org/*
+  http://www.w3.org*
+  www.baidu.com*
+  https://dev.mysql.com*
+  https://docs.cts.t.taobao.com*
+  http://www.cmd5.com/*
+
+  https://127.0.0.1*
+  www.360.com
+  www.wangyi.com
+  *@alipaymock.com
+  *@presence-pc.com
+  *@kkdis.com
+  *oracle.com
+  *@soft111.com
+  *@ft111.com
+  *@98765.com
+  *@111.com
+  *@xxx.com
+  *@example.com
+  *@mysql.com
+  *@anyware.co.uk
+  *@bolly.com
+  *@cryo-networks.fr
+  *@@Ovk9KjHH.com
+  *@Hamilton@V.com
+  *@i.org
+  *@Hh.edu
+  *@T3pylZEUQjm.org
+  *@S9KnyEtz9hv.org
+  *@be.org
+  *@Crg5KyP2IxX9C4d6.edu
+  *@62.com
+  *@xRtDqM1eLBVQNoYAJ.com
+  *@cb.edu
+  *@tC8pcU7Lt.edu
+  *@Y3Etqyv3.org
+  *@LM674NrE2.org
+  *@fqKC83UU0f.org
+  *@nAbai.edu
+  *@cTZLGYi1ZJi.org
+  *@DBXgl18FGo.edu
+  *@2T3V3OZOy4KBNAHsT.edu
+  *@a.com
+  Javier.Lewis@VFAxlnZEvOx.org
+  Amy.Moses@Ovk9KjHH.com
+  Latisha.Hamilton@V.com
+  cwx.c.a@qq.com
+  cwx.c_1@qq.com
+  123@qq.com
+  456@qq.com
+  *@email.com
+  emily@163.com
+  12@126.com
+  555@qq.com
+  foo@aol.com
+  bar@aol.com
+  mike@sohu.com
+  joey@sina.com
+  foo@hotmail.com
+  shirish@yahoo.com
+  sansh777@hotmail.com
+  xingxing@163.com
+  xingxing1@163.com
+  xingxing2@163.com
+  xingxing3@163.com
+  xingxing4@163.com
+  xingxing5@163.com
+  14844887@sina.com
+**/*.inc
+  http://trade.taobao.com/trade/*
+  *
+  http://oracle.chinaitlab.com*
+  http://bugfree.corp.taobao.com*
+  https://www.baidu.com/*
+  http://maven.apache.org/*
+  http://www.w3.org*
+  www.baidu.com*
+  https://dev.mysql.com*
+  https://docs.cts.t.taobao.com*
+  http://www.cmd5.com/*
+
+  https://127.0.0.1*
+  www.360.com
+  www.wangyi.com
+  *@alipaymock.com
+  *@presence-pc.com
+  *@kkdis.com
+  *oracle.com
+  *@soft111.com
+  *@ft111.com
+  *@98765.com
+  *@111.com
+  *@xxx.com
+  *@example.com
+  *@mysql.com
+  *@anyware.co.uk
+  *@bolly.com
+  *@cryo-networks.fr
+  *@@Ovk9KjHH.com
+  *@Hamilton@V.com
+  *@i.org
+  *@Hh.edu
+  *@T3pylZEUQjm.org
+  *@S9KnyEtz9hv.org
+  *@be.org
+  *@Crg5KyP2IxX9C4d6.edu
+  *@62.com
+  *@xRtDqM1eLBVQNoYAJ.com
+  *@cb.edu
+  *@tC8pcU7Lt.edu
+  *@Y3Etqyv3.org
+  *@LM674NrE2.org
+  *@fqKC83UU0f.org
+  *@nAbai.edu
+  *@cTZLGYi1ZJi.org
+  *@DBXgl18FGo.edu
+  *@2T3V3OZOy4KBNAHsT.edu
+  *@a.com
+  Javier.Lewis@VFAxlnZEvOx.org
+  Amy.Moses@Ovk9KjHH.com
+  Latisha.Hamilton@V.com
+  cwx.c.a@qq.com
+  cwx.c_1@qq.com
+  123@qq.com
+  456@qq.com
+  *@email.com
+  emily@163.com
+  12@126.com
+  555@qq.com
+  foo@aol.com
+  bar@aol.com
+  mike@sohu.com
+  joey@sina.com
+  foo@hotmail.com
+  shirish@yahoo.com
+  sansh777@hotmail.com
+  xingxing@163.com
+  xingxing1@163.com
+  xingxing2@163.com
+  xingxing3@163.com
+  xingxing4@163.com
+  xingxing5@163.com
+  14844887@sina.com
+--------------------------------------------------------
+# Should use GLOB wildcard to config and analysis the ignored folder
+# The root patch should start with '/'
+/tools/deploy/**
+/tools/obtest/**
+/tools/codestyle/**
+/src/objit/deps/googletest/**
+/.git/**
+/deps/oblib/src/lib/compress/**
+--------------------------------------------------------
+# Config the ignored fold to escape the Chinese scan by GLOB wildcard
+--------------------------------------------------------
+# Set md5 of pemFile string to filter
+# This section must be end up with '--------------------------------------------------------'!!!
+--------------------------------------------------------

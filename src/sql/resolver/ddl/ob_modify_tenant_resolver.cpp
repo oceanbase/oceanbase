@@ -19,32 +19,39 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
 /**
  *  MODIFY TENANT tenant_name MODIFY
  *      (modify_resource_definition,...)
  *
  *  modify_resource_definition:
- * TODO: () add detail res definition here
+ * TODO: (xiaochu.yh) add detail res definition here
  */
 
-ObModifyTenantResolver::ObModifyTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObModifyTenantResolver::ObModifyTenantResolver(ObResolverParams &params)
+  : ObDDLResolver(params)
+{
+}
 
 ObModifyTenantResolver::~ObModifyTenantResolver()
-{}
+{
+}
 
-int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
+int ObModifyTenantResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObModifyTenantStmt* modify_tenant_stmt = NULL;
+  ObModifyTenantStmt *modify_tenant_stmt = NULL;
 
-  if (OB_UNLIKELY(T_MODIFY_TENANT != parse_tree.type_) || OB_UNLIKELY(4 != parse_tree.num_child_) ||
-      OB_ISNULL(parse_tree.children_) || OB_ISNULL(session_info_)) {
+  if (OB_UNLIKELY(T_MODIFY_TENANT != parse_tree.type_)
+      || OB_UNLIKELY(4 != parse_tree.num_child_)
+      || OB_ISNULL(parse_tree.children_)
+      || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", "num_child", parse_tree.num_child_, "children", parse_tree.children_, K(ret));
   }
@@ -67,13 +74,13 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid parse_tree", K(ret));
     } else {
-      tenant_name.assign_ptr(
-          (char*)(parse_tree.children_[0]->str_value_), static_cast<int32_t>(parse_tree.children_[0]->str_len_));
+      tenant_name.assign_ptr((char *)(parse_tree.children_[0]->str_value_),
+                             static_cast<int32_t>(parse_tree.children_[0]->str_len_));
     }
     if (OB_SUCC(ret)) {
       modify_tenant_stmt->set_tenant_name(tenant_name);
-      modify_tenant_stmt->set_for_current_tenant(
-          0 == session_info_->get_tenant_name().compare(modify_tenant_stmt->get_tenant_name()));
+      modify_tenant_stmt->set_for_current_tenant(0 == session_info_->get_tenant_name().compare(
+              modify_tenant_stmt->get_tenant_name()));
     }
   }
 
@@ -85,8 +92,10 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
         LOG_ERROR("invalid parse_tree", K(ret));
       } else {
         ObTenantResolver<ObModifyTenantStmt> resolver;
-        if (OB_FAIL(resolver.resolve_tenant_options(
-                modify_tenant_stmt, parse_tree.children_[1], session_info_, *allocator_))) {
+        if (OB_FAIL(resolver.resolve_tenant_options(modify_tenant_stmt,
+                                                    parse_tree.children_[1],
+                                                    session_info_,
+                                                    *allocator_))) {
           LOG_WARN("resolve tenant option failed", K(ret));
         } else if (session_info_->get_in_transaction() && resolver.is_modify_read_only()) {
           ret = OB_ERR_LOCK_OR_ACTIVE_TRANSACTION;
@@ -97,10 +106,14 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
           modify_tenant_stmt->set_alter_option_set(resolver.get_alter_option_bitset());
         }
         if (OB_SUCC(ret)) {
-          if (resolver.get_alter_option_bitset().has_member(obrpc::ObModifyTenantArg::PROGRESSIVE_MERGE_NUM) &&
-              resolver.get_alter_option_bitset().num_members() > 1) {
+          if (resolver.get_alter_option_bitset().has_member(obrpc::ObModifyTenantArg::PROGRESSIVE_MERGE_NUM) && resolver.get_alter_option_bitset().num_members() > 1) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("modify progressive merge num must be done seprately", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify both progeressive merge number and alter option");
+          } else if (resolver.get_alter_option_bitset().has_member(obrpc::ObModifyTenantArg::ENABLE_EXTENDED_ROWID) && resolver.get_alter_option_bitset().num_members() > 1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("enable extended rowid must be done seprately", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify both enable extended rowid option and alter option");
           }
         }
       }
@@ -121,7 +134,7 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get_basic_stmt", K(ret));
         } else {
-          ObVariableSetStmt* stmt = static_cast<ObVariableSetStmt*>(var_set_resolver.get_basic_stmt());
+          ObVariableSetStmt *stmt = static_cast<ObVariableSetStmt *>(var_set_resolver.get_basic_stmt());
           if (OB_FAIL(modify_tenant_stmt->assign_variable_nodes(stmt->get_variable_nodes()))) {
             LOG_WARN("failed to assign_variable_nodes", K(ret));
           }
@@ -139,7 +152,8 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
         LOG_WARN("invalid parse_tree", K(ret));
       } else {
         new_tenant_name.assign_ptr(
-            (char*)(parse_tree.children_[3]->str_value_), static_cast<int32_t>(parse_tree.children_[3]->str_len_));
+            (char *)(parse_tree.children_[3]->str_value_),
+            static_cast<int32_t>(parse_tree.children_[3]->str_len_));
       }
     } else {
       new_tenant_name.reset();
@@ -150,5 +164,5 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* sql */
+} /* oceanbase */

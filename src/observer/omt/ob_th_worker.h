@@ -14,131 +14,113 @@
 #define _OCEABASE_OBSERVER_OMT_OB_TH_WORKER_H_
 
 #include <pthread.h>
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "lib/lock/ob_thread_cond.h"
-#include "lib/coro/co.h"
 #include "rpc/ob_request.h"
-#include "lib/coro/co_user_thread.h"
+#include "lib/thread/threads.h"
 #include "lib/thread/ob_thread_name.h"
+#include "observer/omt/ob_worker_processor.h"
+#include "share/rc/ob_tenant_base.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace rpc {
-namespace frame {
-class ObReqTranslator;
-}
-}  // namespace rpc
-namespace omt {
+namespace rpc { namespace frame { class ObReqTranslator; } }
+namespace omt
+{
 
 // Forward declarations
 class ObTenant;
-class ObIWorkerProcessor;
 class ObResourceGroup;
 
 static const int64_t WORKER_CHECK_PERIOD = 500L;
 static const int64_t REQUEST_WAIT_TIME = 10 * 1000L;
 
-class ObThWorker : public share::ObWorker, public lib::CoKThread {
-public:
-  enum RequestType { RT_NOTASK, RT_NEW, RT_OLD };
-  enum class WStatus { STOPPED, IDLE, RUNNING, WAITING, RUNNABLE };
+// Quick Queue Priorities
+enum { QQ_HIGH = 0, QQ_NORMAL, QQ_LOW, QQ_MAX_PRIO };
+// Request queue priorities
+enum { RQ_HIGH = QQ_MAX_PRIO, RQ_NORMAL, RQ_LOW, RQ_MAX_PRIO };
 
+class ObThWorker
+    : public lib::Worker, public lib::Threads
+{
 public:
-  explicit ObThWorker(ObIWorkerProcessor& procor);
+  explicit ObThWorker();
   virtual ~ObThWorker();
+
+  virtual ObThWorker::Status check_wait() override;
+  virtual int check_status() override;
+  virtual int check_large_query_quota() override;
+  // retry relating
+  virtual bool can_retry() const override { return can_retry_; }
+  // Note: you CAN NOT call set_need_retry when can_retry_ == false
+  virtual void set_need_retry() override { need_retry_ = true; }
+  virtual bool need_retry() const override { return need_retry_; }
+  virtual void resume() override;
 
   int init();
   void destroy();
   inline void reset();
 
-  inline void set_tenant(ObTenant* tenant);
+  OB_INLINE void set_tenant(ObTenant *tenant)
+  {
+    tenant_ = tenant;
+    set_run_wrapper(MTL_CTX());
+  }
 
-  void worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t& worker_level);
-  inline void set_group(ObResourceGroup* group);
+  OB_INLINE void set_group(ObResourceGroup *group) { group_ = group; }
 
-  void run(int64_t idx) override;
+  void worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level);
+  void run(int64_t idx);
 
-  void resume() override;
-  void pause();
+  OB_INLINE void pause() { pause_flag_ = true; }
 
   Status check_qtime_throttle();
   Status check_throttle();
   Status check_rate_limiter();
-  virtual ObThWorker::Status check_wait() override;
-  virtual int check_status() override;
-  virtual int check_large_query_quota() override;
 
-  // retry relating
-  virtual bool need_retry() const override;
-  virtual void disable_retry() override;
-  virtual bool set_retry_flag() override;
-  virtual void reset_retry_flag() override;
+  OB_INLINE bool large_query() const { return large_query_; }
+  OB_INLINE void set_large_query(bool v=true) { large_query_ = v; }
 
-  // active relating
-  void wait_active();
-  void activate();
-  void set_inactive();
-  bool is_active()
-  {
-    return active_;
-  }
-  int64_t get_active_inactive_ts() const
-  {
-    return active_inactive_ts_;
-  }
-  bool is_waiting_active()
-  {
-    return ATOMIC_LOAD(&waiting_active_);
-  }
+  OB_INLINE bool is_group_worker() const { return OB_NOT_NULL(group_); }
+  OB_INLINE bool is_level_worker() const { return get_worker_level() > 0; }
+  OB_INLINE uint8_t priority_limit() const { return priority_limit_; }
+  OB_INLINE void set_priority_limit(bool v=true) { priority_limit_ = v; }
+  OB_INLINE bool is_high_priority() const { return priority_limit_ == QQ_HIGH; }
+  OB_INLINE bool is_normal_priority() const { return priority_limit_ == QQ_NORMAL; }
+  OB_INLINE bool is_default_worker() const { return !is_group_worker() &&
+                                                    !is_level_worker() &&
+                                                    priority_limit_ > QQ_NORMAL; }
 
-  bool large_query() const
-  {
-    return large_query_;
-  }
-  void set_large_query(bool v = true)
-  {
-    large_query_ = v;
-  }
-
-  void set_lq_token(bool v = true)
-  {
-    lq_token_ = v;
-  }
-  bool has_lq_token() const
-  {
-    return lq_token_;
-  }
-
-  int64_t get_query_start_time() const;
-  int64_t get_query_enqueue_time() const;
-  ObTenant* get_tenant()
-  {
-    return tenant_;
-  }
-  ObResourceGroup* get_group()
-  {
-    return group_;
-  }
+  OB_INLINE int64_t get_query_start_time() const { return query_start_time_; }
+  OB_INLINE int64_t get_query_enqueue_time() const { return query_enqueue_time_; }
+  OB_INLINE ObTenant* get_tenant() { return tenant_; }
+  OB_INLINE ObResourceGroup* get_group() { return group_; }
+  OB_INLINE bool is_lq_yield() const { return is_lq_yield_; }
+  OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
+  OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
+  OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
 
 private:
   void set_th_worker_thread_name(uint64_t tenant_id);
-  void wait_runnable();
-  void process_request(rpc::ObRequest& req);
+  void process_request(rpc::ObRequest &req);
 
   void th_created();
   void th_destroy();
 
 private:
-  ObIWorkerProcessor& procor_;
+  ObWorkerProcessor procor_;
 
   bool is_inited_;
 
-  ObTenant* tenant_;
-  ObResourceGroup* group_;
+  ObTenant *tenant_;
+  ObResourceGroup *group_;
   common::ObThreadCond run_cond_;
 
   bool pause_flag_;
   bool large_query_;
+  uint8_t priority_limit_;
+  bool is_lq_yield_;
 
   int64_t query_start_time_;
   int64_t query_enqueue_time_;
@@ -148,103 +130,49 @@ private:
   bool can_retry_;
   // if upper scheduler support retry, need this request retry?
   bool need_retry_;
-  // if retry_in_place == true,process again directly when need retry
-  bool retry_in_place_;
 
-  // Used by SchedV2
-  WStatus ws_;
-  // Set by other thread indicating the worker is going to be active
-  // or not. When it is set as false, current worker would be paused
-  // and no longer process request afterward.
-  bool active_;
-  // Flag for whether current worker is paused and waiting to be
-  // active. Worker itself maintain this variable, set true before
-  // wait and set false after. Others need check this variable and
-  // waiting it to be true before resource relating to the worker.
-  bool waiting_active_;
-  int64_t active_inactive_ts_;
-  bool lq_token_;
+  bool has_add_to_cgroup_;
+
+  int64_t last_wakeup_ts_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
-};  // end of class ObThWorker
+}; // end of class ObThWorker
 
 inline void ObThWorker::reset()
 {
-  OB_ASSERT(!pause_flag_ && !active_);
-  OB_ASSERT(!lq_token_);
+  OB_ASSERT(!pause_flag_);
   tenant_ = nullptr;
   group_ = nullptr;
   pause_flag_ = false;
   large_query_ = false;
+  priority_limit_ = RQ_LOW;
   query_start_time_ = 0;
   query_enqueue_time_ = 0;
-  run_status_ = RS_PAUSED;
   can_retry_ = true;
   need_retry_ = false;
-  ws_ = WStatus::STOPPED;
-  active_ = false;
-  unset_tidx();
+  has_add_to_cgroup_ = false;
+  last_wakeup_ts_ = 0;
 }
 
-inline void ObThWorker::set_tenant(ObTenant* tenant)
-{
-  tenant_ = tenant;
-}
+/* create a worker
+worker: save the new ObThWorker,
+tidx: set worker's tidx_, an index of worker
+tenant: set worker's tenant, which the worker belongs to
+group_id: set worker's group_id
+level: set worker's level, in ObResourceGroup level = INT32_MAX, in ObTenant level = 0,
+group: set worker's group, in ObResourceGroup level = this, in ObTenant level = nullptr,
+*/
+int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
+                  int32_t level = INT32_MAX, ObResourceGroup *group = nullptr);
+                    // defalut level=INT32_MAX, group=nullptr
+int destroy_worker(ObThWorker *worker);
 
-inline void ObThWorker::set_group(ObResourceGroup* group)
-{
-  group_ = group;
-}
+#define THIS_THWORKER static_cast<oceanbase::omt::ObThWorker &>(THIS_WORKER)
+#define THIS_THWORKER_SAFE dynamic_cast<oceanbase::omt::ObThWorker *>(&THIS_WORKER)
 
-inline bool ObThWorker::need_retry() const
-{
-  return need_retry_;
-}
+} // end of namespace omt
+} // end of namespace oceanbase
 
-inline void ObThWorker::disable_retry()
-{
-  can_retry_ = false;
-}
-
-inline bool ObThWorker::set_retry_flag()
-{
-  if (can_retry_) {
-    need_retry_ = true;
-  }
-  return need_retry_;
-}
-
-inline void ObThWorker::reset_retry_flag()
-{
-  can_retry_ = true;
-  need_retry_ = false;
-}
-
-inline void ObThWorker::pause()
-{
-  pause_flag_ = true;
-}
-
-inline void ObThWorker::set_inactive()
-{
-  active_inactive_ts_ = common::ObTimeUtility::current_time();
-  active_ = false;
-}
-
-inline int64_t ObThWorker::get_query_start_time() const
-{
-  return query_start_time_;
-}
-
-inline int64_t ObThWorker::get_query_enqueue_time() const
-{
-  return query_enqueue_time_;
-}
-
-#define THIS_THWORKER static_cast<oceanbase::omt::ObThWorker&>(THIS_WORKER)
-
-}  // end of namespace omt
-}  // end of namespace oceanbase
 
 #endif /* _OCEABASE_OBSERVER_OMT_OB_TH_WORKER_H_ */

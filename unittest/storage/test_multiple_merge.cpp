@@ -12,22 +12,25 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "storage/ob_multiple_merge.h"
-#include "storage/ob_sstable.h"
+#include "storage/access/ob_multiple_merge.h"
+#include "storage/blocksstable/ob_sstable.h"
 #undef private
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace storage;
 using namespace blocksstable;
 using namespace ::testing;
 
-namespace unittest {
-class ObMultipleMergeTest : public ::testing::Test {
+namespace unittest
+{
+class ObMultipleMergeTest : public ::testing::Test
+{
 public:
   ObMultipleMergeTest() = default;
   virtual ~ObMultipleMergeTest() = default;
-  bool check_table_continues(const common::ObIArray<ObITable*>& tables);
+  bool check_table_continues(const common::ObIArray<ObITable *> &tables);
 };
 
 TEST_F(ObMultipleMergeTest, test_sort_sstables_overlap)
@@ -39,9 +42,7 @@ TEST_F(ObMultipleMergeTest, test_sort_sstables_overlap)
   ObITable::TableKey table_key;
   int64_t table_id = combine_id(1, 3001);
   table_key.table_type_ = ObITable::MAJOR_SSTABLE;
-  table_key.pkey_ = ObPartitionKey(table_id, 0, 0);
-  table_key.table_id_ = table_id;
-  table_key.version_ = ObVersion(1, 0);
+  table_key.tablet_id_ = table_id;
   table_key.trans_version_range_.multi_version_start_ = 0;
   table_key.trans_version_range_.base_version_ = 0;
   table_key.trans_version_range_.snapshot_version_ = 10;
@@ -64,26 +65,23 @@ TEST_F(ObMultipleMergeTest, test_sort_sstables_overlap)
   }
   ObMultipleMerge::ObTableCompartor compartor(ret);
   std::sort(tables_handle.table_begin(), tables_handle.table_end(), compartor);
-  const ObIArray<ObITable*>& tables = tables_handle.get_tables();
+  const ObIArray<ObITable *> &tables = tables_handle.get_tables();
   int64_t pos = tables.count() - 1;
-  const ObITable* last_table = tables.at(pos--);
-  const ObITable* cur_table = NULL;
+  const ObITable *last_table = tables.at(pos--);
+  const ObITable *cur_table = NULL;
 
   for (; OB_SUCC(ret) && pos >= 0; --pos) {
     cur_table = tables.at(pos);
-    if (OB_ISNULL(cur_table) || OB_ISNULL(last_table)) {
+    if (OB_ISNULL(cur_table)
+        || OB_ISNULL(last_table)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "cur_table or last_table is NULL", K(ret), KP(cur_table), KP(last_table));
     } else if (OB_UNLIKELY(last_table->get_base_version() > cur_table->get_snapshot_version())) {
 
       ret = OB_ERR_SYS;
-      STORAGE_LOG(WARN,
-          "tables' version not match",
-          K(ret),
-          "last table base version",
-          last_table->get_base_version(),
-          "cur table snapshot version",
-          cur_table->get_snapshot_version());
+      STORAGE_LOG(WARN, "tables' version not match", K(ret),
+          "last table base version", last_table->get_base_version(),
+          "cur table snapshot version", cur_table->get_snapshot_version());
     }
     last_table = cur_table;
   }
@@ -93,7 +91,7 @@ TEST_F(ObMultipleMergeTest, test_sort_sstables_overlap)
 }  // end namespace unittest
 }  // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

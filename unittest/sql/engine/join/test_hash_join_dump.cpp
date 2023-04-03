@@ -25,16 +25,21 @@
 #include "sql/ob_sql_init.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 using namespace share;
 using namespace omt;
+static ObSimpleMemLimitGetter getter;
 
-class MockSqlExpression : public ObSqlExpression {
+class MockSqlExpression : public ObSqlExpression
+{
 public:
-  MockSqlExpression(ObIAllocator& alloc) : ObSqlExpression(alloc)
+  MockSqlExpression(ObIAllocator &alloc): ObSqlExpression(alloc)
   {
     set_item_count(10);
   }
@@ -43,23 +48,24 @@ public:
 #define TEST_HJ_DUMP_GET_HASH_AREA_SIZE() (get_hash_area_size())
 #define TEST_HJ_DUMP_SET_HASH_AREA_SIZE(size) (set_hash_area_size(size))
 
-class ObHashJoinDumpTest : public blocksstable::TestDataFilePrepare, public ::testing::WithParamInterface<ObJoinType> {
+class ObHashJoinDumpTest: public blocksstable::TestDataFilePrepare, public ::testing::WithParamInterface<ObJoinType> 
+{
 public:
   ObHashJoinDumpTest()
-      : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 5000),
-        hash_join_(alloc_),
-        merge_join_(alloc_),
-        hash_plan_(hash_join_, alloc_),
-        merge_plan_(merge_join_, alloc_)
-  {}
+    : blocksstable::TestDataFilePrepare(&getter, "TestDiskIR", 2<<20, 5000),
+        hash_join_(alloc_), merge_join_(alloc_),
+        hash_plan_(hash_join_, alloc_), merge_plan_(merge_join_, alloc_)
+  {
+  }
 
   virtual void SetUp() override
   {
     ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
     blocksstable::TestDataFilePrepare::SetUp();
     GCONF.enable_sql_operator_dump.set_value("True");
-    ObHashJoin::HJ_PROCESSOR_ALGO =
-        ObHashJoin::ENABLE_HJ_NEST_LOOP | ObHashJoin::ENABLE_HJ_RECURSIVE | ObHashJoin::ENABLE_HJ_IN_MEMORY;
+    ObHashJoin::HJ_PROCESSOR_ALGO = ObHashJoin::ENABLE_HJ_NEST_LOOP
+                                  | ObHashJoin::ENABLE_HJ_RECURSIVE
+                                  | ObHashJoin::ENABLE_HJ_IN_MEMORY;
   }
   virtual void TearDown() override
   {
@@ -70,7 +76,6 @@ public:
   int init_tenant_mgr();
   void destroy_tenant_mgr()
   {
-    ObTenantManager::get_instance().destroy();
   }
 
   int64_t get_hash_area_size()
@@ -98,24 +103,25 @@ public:
     // ASSERT_EQ(OB_SUCCESS, ret);
   }
 
-  void setup_test(ObJoinType join_type, int32_t string_size, int64_t left_row_count, bool left_reverse,
-      JoinDataGenerator::IdxCntFunc left_func, int64_t right_row_count, bool right_reverse,
-      JoinDataGenerator::IdxCntFunc right_func);
+  void setup_test(ObJoinType join_type, int32_t string_size,
+      int64_t left_row_count, bool left_reverse, JoinDataGenerator::IdxCntFunc left_func,
+      int64_t right_row_count, bool right_reverse, JoinDataGenerator::IdxCntFunc right_func);
 
   // iterate hash join result and verify result with merge join.
   void run_test(int64_t print_row_cnt = 0);
 
 protected:
-  struct JoinPlan {
-    explicit JoinPlan(ObJoin& join, ObIAllocator& alloc) : join_(join), left_(alloc), right_(alloc), expr_(alloc)
-    {}
+  struct JoinPlan
+  {
+    explicit JoinPlan(ObJoin &join, ObIAllocator &alloc)
+        : exec_ctx_(alloc), join_(join), left_(alloc), right_(alloc), expr_(alloc) {}
 
     int setup_plan(ObJoinType join_type);
 
     ObSQLSessionInfo session_;
     ObPhysicalPlan plan_;
     ObExecContext exec_ctx_;
-    ObJoin& join_;
+    ObJoin &join_;
     JoinDataGenerator left_;
     JoinDataGenerator right_;
     MockSqlExpression expr_;
@@ -143,7 +149,8 @@ int ObHashJoinDumpTest::JoinPlan::setup_plan(ObJoinType join_type)
   right_.set_phy_plan(&plan_);
   join_.set_phy_plan(&plan_);
 
-  if (NULL != dynamic_cast<ObMergeJoin*>(&join_) && (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type)) {
+  if (NULL != dynamic_cast<ObMergeJoin *>(&join_)
+      && (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type)) {
     // right semi and right anti join not supported for merge join,
     // convert to left semi/anti join.
     if (OB_FAIL(join_.set_child(0, right_))) {
@@ -191,13 +198,13 @@ int ObHashJoinDumpTest::JoinPlan::setup_plan(ObJoinType join_type)
   return ret;
 }
 
-void ObHashJoinDumpTest::setup_test(ObJoinType join_type, int32_t string_size, int64_t left_row_count,
-    bool left_reverse, JoinDataGenerator::IdxCntFunc left_func, int64_t right_row_count, bool right_reverse,
-    JoinDataGenerator::IdxCntFunc right_func)
+void ObHashJoinDumpTest::setup_test(ObJoinType join_type, int32_t string_size,
+    int64_t left_row_count, bool left_reverse, JoinDataGenerator::IdxCntFunc left_func,
+    int64_t right_row_count, bool right_reverse, JoinDataGenerator::IdxCntFunc right_func)
 {
-  JoinPlan* plans[] = {&hash_plan_, &merge_plan_};
+  JoinPlan *plans[] = { &hash_plan_, &merge_plan_ };
   for (int i = 0; i < 2; i++) {
-    auto& plan = *plans[i];
+    auto &plan = *plans[i];
     ASSERT_EQ(OB_SUCCESS, plan.setup_plan(join_type));
 
     plan.left_.row_cnt_ = left_row_count;
@@ -223,12 +230,13 @@ void ObHashJoinDumpTest::setup_test(ObJoinType join_type, int32_t string_size, i
 void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
 {
   ObArenaAllocator alloc;
-  typedef ObArray<int64_t*> ResArray;
+  typedef ObArray<int64_t *> ResArray;
   int64_t res_cell_cnt = JoinDataGenerator::CELL_CNT * 2;
-  auto fun = [&](JoinPlan& plan, ResArray& res) -> void {
+  auto fun = [&](JoinPlan &plan, ResArray &res)->void
+  {
     ASSERT_EQ(OB_SUCCESS, plan.join_.open(plan.exec_ctx_));
     int ret = OB_SUCCESS;
-    const ObNewRow* row = NULL;
+    const ObNewRow *row = NULL;
     int64_t cnt = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(plan.join_.get_next_row(plan.exec_ctx_, row))) {
@@ -237,10 +245,10 @@ void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
         if (cnt < print_row_cnt) {
           LOG_INFO("join res", K(*row));
         }
-        auto r = static_cast<int64_t*>(alloc.alloc(sizeof(int64_t) * res_cell_cnt));
+        auto r = static_cast<int64_t *>(alloc.alloc(sizeof(int64_t) * res_cell_cnt));
         ASSERT_TRUE(NULL != r);
         for (int64_t i = 0; i < res_cell_cnt; i++) {
-          auto& c = row->cells_[i];
+          auto &c = row->cells_[i];
           if (i < row->count_ && c.get_type() == ObIntType) {
             r[i] = c.get_int();
           } else {
@@ -253,7 +261,8 @@ void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
     }
   };
 
-  auto pfunc = [&](int64_t* r) {
+  auto pfunc = [&](int64_t *r)
+  {
     ObSqlString s;
     for (int64_t i = 0; i < res_cell_cnt; i++) {
       s.append_fmt("%ld, ", r[i]);
@@ -269,7 +278,8 @@ void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
   ASSERT_FALSE(HasFatalFailure());
 
   ASSERT_EQ(hash_res.count(), merge_res.count());
-  auto sort_cmp = [&](int64_t* l, int64_t* r) {
+  auto sort_cmp = [&](int64_t *l, int64_t *r)
+  {
     for (int64_t i = 0; i < res_cell_cnt; i++) {
       if (l[i] != r[i]) {
         return l[i] < r[i];
@@ -280,7 +290,8 @@ void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
   std::sort(&hash_res.at(0), &hash_res.at(0) + hash_res.count(), sort_cmp);
   std::sort(&merge_res.at(0), &merge_res.at(0) + merge_res.count(), sort_cmp);
   for (int64_t i = 0; i < hash_res.count(); i++) {
-    if (sort_cmp(hash_res.at(i), merge_res.at(i)) || sort_cmp(merge_res.at(i), hash_res.at(i))) {
+    if (sort_cmp(hash_res.at(i), merge_res.at(i))
+        || sort_cmp(merge_res.at(i), hash_res.at(i))) {
       pfunc(hash_res.at(i));
       pfunc(merge_res.at(i));
       ASSERT_FALSE(true);
@@ -293,15 +304,9 @@ void ObHashJoinDumpTest::run_test(int64_t print_row_cnt)
 
 TEST_P(ObHashJoinDumpTest, inmemory)
 {
-  setup_test(
-      GetParam(),
-      512,
-      1000,
-      false,
-      [](int64_t id, int64_t) { return id % 3 == 0 ? 1 : 0; },
-      1000,
-      false,
-      [](int64_t id, int64_t) { return id % 5 == 0 ? 1 : 0; });
+  setup_test(GetParam(), 512,
+      1000, false, [](int64_t id, int64_t) { return id % 3 == 0 ? 1 : 0; },
+      1000, false, [](int64_t id, int64_t) { return id % 5 == 0 ? 1 : 0; });
   ASSERT_FALSE(HasFatalFailure());
   run_test();
   ASSERT_FALSE(HasFatalFailure());
@@ -309,15 +314,9 @@ TEST_P(ObHashJoinDumpTest, inmemory)
 
 TEST_P(ObHashJoinDumpTest, disk)
 {
-  setup_test(
-      GetParam(),
-      2000,
-      200000 * 3,
-      false,
-      [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
-      200000 * 5,
-      false,
-      [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
+  setup_test(GetParam(), 2000,
+      200000 * 3, false, [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
+      200000 * 5, false, [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
   ASSERT_FALSE(HasFatalFailure());
   run_test();
   ASSERT_FALSE(HasFatalFailure());
@@ -325,39 +324,33 @@ TEST_P(ObHashJoinDumpTest, disk)
 
 TEST_P(ObHashJoinDumpTest, disk_reverse)
 {
-  setup_test(
-      GetParam(),
-      1999,
-      200000 * 3,
-      true,
-      [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
-      200000 * 5,
-      false,
-      [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
+  setup_test(GetParam(), 1999,
+      200000 * 3, true, [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
+      200000 * 5, false, [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
   ASSERT_FALSE(HasFatalFailure());
   run_test();
   ASSERT_FALSE(HasFatalFailure());
 }
 
-INSTANTIATE_TEST_CASE_P(join, ObHashJoinDumpTest,
-    ::testing::Values(INNER_JOIN, LEFT_OUTER_JOIN, RIGHT_OUTER_JOIN, FULL_OUTER_JOIN, LEFT_SEMI_JOIN, RIGHT_SEMI_JOIN,
-        LEFT_ANTI_JOIN, RIGHT_ANTI_JOIN));
+INSTANTIATE_TEST_CASE_P(join, ObHashJoinDumpTest, ::testing::Values(
+    INNER_JOIN,
+    LEFT_OUTER_JOIN,
+    RIGHT_OUTER_JOIN,
+    FULL_OUTER_JOIN,
+    LEFT_SEMI_JOIN,
+    RIGHT_SEMI_JOIN,
+    LEFT_ANTI_JOIN,
+    RIGHT_ANTI_JOIN));
 
 TEST_F(ObHashJoinDumpTest, test_recursion)
 {
   auto part_cnt_bak = ObHashJoin::PART_COUNT;
   auto page_cnt_bak = ObHashJoin::MAX_PAGE_COUNT;
   ObHashJoin::PART_COUNT = 5;
-  ObHashJoin::MAX_PAGE_COUNT = (20L << 20) / OB_MALLOC_MIDDLE_BLOCK_SIZE;  // 20MB memory
-  setup_test(
-      RIGHT_OUTER_JOIN,
-      2000,
-      200000 * 3,
-      false,
-      [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
-      200000 * 5,
-      false,
-      [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
+  ObHashJoin::MAX_PAGE_COUNT = (20L << 20) / OB_MALLOC_MIDDLE_BLOCK_SIZE; // 20MB memory
+  setup_test(RIGHT_OUTER_JOIN, 2000,
+      200000 * 3, false, [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
+      200000 * 5, false, [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
   ASSERT_FALSE(HasFatalFailure());
   run_test(10);
   ASSERT_FALSE(HasFatalFailure());
@@ -366,6 +359,7 @@ TEST_F(ObHashJoinDumpTest, test_recursion)
   ObHashJoin::MAX_PAGE_COUNT = page_cnt_bak;
 }
 
+//暂时屏蔽掉这些case，否则farm时间太长，但如果修改join，请打开线下跑下这些test case
 // TEST_F(ObHashJoinDumpTest, test_right_outer_recursive)
 // {
 //   int64_t hash_mem = 0;
@@ -444,6 +438,7 @@ TEST_F(ObHashJoinDumpTest, test_recursion)
 //   ObHashJoin::PART_COUNT = part_cnt_bak;
 //   ObHashJoin::MAX_PAGE_COUNT = page_cnt_bak;
 // }
+
 
 // TEST_F(ObHashJoinDumpTest, test_left_anti)
 // {
@@ -724,15 +719,9 @@ TEST_F(ObHashJoinDumpTest, test_recursion)
 
 TEST_F(ObHashJoinDumpTest, test_bad_case)
 {
-  setup_test(
-      INNER_JOIN,
-      2000,
-      1,
-      false,
-      [](int64_t, int64_t) { return 400000; },
-      200000,
-      false,
-      [](int64_t, int64_t) { return 2; });
+  setup_test(INNER_JOIN, 2000,
+      1, false, [](int64_t, int64_t) { return 400000; },
+      200000, false, [](int64_t, int64_t) { return 2; });
   ASSERT_FALSE(HasFatalFailure());
   run_test(10);
   ASSERT_FALSE(HasFatalFailure());
@@ -740,15 +729,9 @@ TEST_F(ObHashJoinDumpTest, test_bad_case)
 
 TEST_F(ObHashJoinDumpTest, test_right_join)
 {
-  setup_test(
-      RIGHT_SEMI_JOIN,
-      2000,
-      1,
-      false,
-      [](int64_t, int64_t) { return 400000; },
-      200000,
-      false,
-      [](int64_t, int64_t) { return 2; });
+  setup_test(RIGHT_SEMI_JOIN, 2000,
+      1, false, [](int64_t, int64_t) { return 400000; },
+      200000, false, [](int64_t, int64_t) { return 2; });
   ASSERT_FALSE(HasFatalFailure());
   run_test(10);
   ASSERT_FALSE(HasFatalFailure());
@@ -756,38 +739,28 @@ TEST_F(ObHashJoinDumpTest, test_right_join)
 
 TEST_F(ObHashJoinDumpTest, test_anti_right_join)
 {
-  setup_test(
-      RIGHT_ANTI_JOIN,
-      2000,
-      1,
-      false,
-      [](int64_t, int64_t) { return 400000; },
-      200000,
-      false,
-      [](int64_t, int64_t) { return 2; });
+  setup_test(RIGHT_ANTI_JOIN, 2000,
+      1, false, [](int64_t, int64_t) { return 400000; },
+      200000, false, [](int64_t, int64_t) { return 2; });
   ASSERT_FALSE(HasFatalFailure());
   run_test(10);
   ASSERT_FALSE(HasFatalFailure());
 }
 
+// see
 TEST_F(ObHashJoinDumpTest, test_file_leak)
 {
   int ret = OB_SUCCESS;
-  setup_test(
-      INNER_JOIN,
-      2000,
-      200000 * 3,
-      false,
-      [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
-      200000 * 5,
-      false,
-      [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
+  setup_test(INNER_JOIN, 2000,
+      200000 * 3, false, [](int64_t id, int64_t) { return id % 3 == 0 ? 2 : 0; },
+      200000 * 5, false, [](int64_t id, int64_t) { return id % 5 == 0 ? 2 : 0; });
   ASSERT_FALSE(HasFatalFailure());
   hash_plan_.left_.iter_end_ret_ = OB_ERR_SYS;
   hash_plan_.right_.iter_end_ret_ = OB_ERR_SYS;
   ASSERT_EQ(OB_SUCCESS, hash_join_.open(hash_plan_.exec_ctx_));
-  const ObNewRow* row = NULL;
-  while (OB_SUCC(hash_join_.get_next_row(hash_plan_.exec_ctx_, row))) {}
+  const ObNewRow *row = NULL;
+  while (OB_SUCC(hash_join_.get_next_row(hash_plan_.exec_ctx_, row))) {
+  }
   ASSERT_EQ(OB_ERR_SYS, ret);
   hash_join_.close(hash_plan_.exec_ctx_);
 }
@@ -806,7 +779,6 @@ TEST_F(ObHashJoinDumpTest, test_conf)
 int ObHashJoinDumpTest::init_tenant_mgr()
 {
   int ret = OB_SUCCESS;
-  ObTenantManager& tm = ObTenantManager::get_instance();
   ObAddr self;
   oceanbase::rpc::frame::ObReqTransport req_transport(NULL, NULL);
   oceanbase::obrpc::ObSrvRpcProxy rpc_proxy;
@@ -816,32 +788,27 @@ int ObHashJoinDumpTest::init_tenant_mgr()
   self.set_ip_addr("127.0.0.1", 8086);
   ret = ObTenantConfigMgr::get_instance().add_tenant_config(tenant_id);
   EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.init(self, rpc_proxy, rs_rpc_proxy, rs_mgr, &req_transport, &ObServerConfig::get_instance());
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(tenant_id);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.set_tenant_mem_limit(tenant_id, 2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SYS_TENANT_ID);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SERVER_TENANT_ID);
+  ret = getter.add_tenant(tenant_id,
+                          2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
   EXPECT_EQ(OB_SUCCESS, ret);
   const int64_t ulmt = 128LL << 30;
   const int64_t llmt = 128LL << 30;
-  ret = tm.set_tenant_mem_limit(OB_SYS_TENANT_ID, ulmt, llmt);
+  ret = getter.add_tenant(OB_SERVER_TENANT_ID,
+                          ulmt,
+                          llmt);
   EXPECT_EQ(OB_SUCCESS, ret);
   oceanbase::lib::set_memory_limit(128LL << 32);
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end sql
+} // end oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::sql::init_sql_factories();
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();
   return ret;

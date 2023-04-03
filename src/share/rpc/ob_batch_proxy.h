@@ -15,13 +15,13 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "lib/utility/ob_unify_serialize.h"
-#include "common/ob_partition_key.h"
-#include "election/ob_election_group_id.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 enum {
   ELECTION_BATCH_REQ = 0,
   ELECTION_GROUP_BATCH_REQ = 1,
@@ -31,58 +31,54 @@ enum {
   SQL_BATCH_REQ_NODELAY1 = 5,
   SQL_BATCH_REQ_NODELAY2 = 6,
   CLOG_BATCH_REQ_NODELAY2 = 7,
-  TRX_BATCH_REQ = 8,
-  BATCH_REQ_TYPE_COUNT = 9
+  BATCH_REQ_TYPE_COUNT = 8
 };
 
 inline int64_t get_batch_delay_us(const int batch_type)
 {
-  int64_t delay[BATCH_REQ_TYPE_COUNT] = {2 * 1000, 2 * 1000, 1 * 1000, 0, 20, 0, 0, 0, 5 * 1000};
-  return (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? delay[batch_type] : 0;
+  int64_t delay[BATCH_REQ_TYPE_COUNT] = {2 * 1000, 2 * 1000, 1 * 1000, 0, 0, 0, 0, 0};
+  return (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? delay[batch_type]: 0;
 }
 
 inline int64_t get_batch_buffer_size(const int batch_type)
 {
-  int64_t batch_buffer_size_k[BATCH_REQ_TYPE_COUNT] = {256, 256, 2048, 2048, 256, 256, 256, 2048, 256};
+  int64_t batch_buffer_size_k[BATCH_REQ_TYPE_COUNT] = {256, 256, 2048, 2048, 256, 256, 256, 2048};
   return batch_buffer_size_k[batch_type] * 1024;
 }
 
 inline bool is_hp_rpc(const int batch_type)
 {
-  static const bool hp_rpc_map[BATCH_REQ_TYPE_COUNT] = {true, true, false, false, false, false, false, false, false};
+  static const bool hp_rpc_map[BATCH_REQ_TYPE_COUNT] = {true, true, false, false, false, false, false, false};
   return (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? hp_rpc_map[batch_type] : false;
 }
 
 inline int get_batch_thread_idx(const int batch_type)
 {
-  static __thread int scount;
+  RLOCAL_INLINE(int, scount);
   int idx = batch_type;
   if (CLOG_BATCH_REQ_NODELAY == idx) {
+    const int64_t total_clog_thread = min(common::get_cpu_num() / 48 + 1, 2);
     scount++;
-    if (1 == scount % 2) {
+    if (1 == scount % total_clog_thread) {
       idx = CLOG_BATCH_REQ_NODELAY2;
     }
   }
   return idx;
 }
 
-class ObIFill {
+class ObIFill
+{
 public:
-  ObIFill()
-  {}
-  virtual ~ObIFill()
-  {}
-  virtual int fill_buffer(char* buf, int64_t size, int64_t& filled_size) const = 0;
+  ObIFill() {}
+  virtual ~ObIFill() {}
+  virtual int fill_buffer(char* buf, int64_t size, int64_t &filled_size) const = 0;
   virtual int64_t get_req_size() const = 0;
-  virtual int64_t get_estimate_size() const
-  {
-    return 0;
-  }
+  virtual int64_t get_estimate_size() const { return 0; }
 };
 
-struct ObSimpleReqHeader {
-  void set(const uint32_t flag, const uint32_t batch_type, const uint32_t sub_type, const int32_t size)
-  {
+struct ObSimpleReqHeader
+{
+  void set(const uint32_t flag, const uint32_t batch_type, const uint32_t sub_type, const int32_t size) {
     type_ = ((flag << 24) & 0xff000000) | ((batch_type << 16) & 0xff0000) | sub_type;
     size_ = size;
   }
@@ -90,20 +86,16 @@ struct ObSimpleReqHeader {
   int32_t size_;
 };
 
-struct ObBatchPacket {
+class ObBatchPacket
+{
   OB_UNIS_VERSION(1);
-
 public:
   typedef ObSimpleReqHeader Req;
-  ObBatchPacket() : size_(0), id_(0), src_(0), buf_(nullptr), src_addr_()
-  {}
+  ObBatchPacket(): size_(0), id_(0), src_(0), buf_(nullptr), src_addr_() {}
   ObBatchPacket(int32_t size, uint64_t src, char* buf)
-      : size_(size), id_(gen_batch_packet_id()), src_(src), buf_(buf), src_addr_()
-  {}
-  ~ObBatchPacket()
-  {}
-  ObBatchPacket* set(int32_t size, const common::ObAddr& src, char* buf)
-  {  // for ipv6 support
+      : size_(size), id_(gen_batch_packet_id()), src_(src), buf_(buf), src_addr_() {}
+  ~ObBatchPacket() {}
+  ObBatchPacket* set(int32_t size, const common::ObAddr &src, char* buf) { // for ipv6 support
     size_ = size;
     id_ = gen_batch_packet_id();
     buf_ = buf;
@@ -114,12 +106,8 @@ public:
     src_addr_ = src;
     return this;
   }
-  uint32_t gen_batch_packet_id()
-  {
-    return 0;
-  }
-  Req* next(int64_t& pos)
-  {
+  uint32_t gen_batch_packet_id() { return 0; }
+  Req* next(int64_t& pos) {
     Req* req = NULL;
     if (pos + sizeof(*req) >= size_) {
     } else {
@@ -133,17 +121,24 @@ public:
   uint32_t id_;
   uint64_t src_;
   char* buf_;
-  common::ObAddr src_addr_;  // for ipv6 support
-  TO_STRING_KV(N_DATA_SIZE, size_, N_ID, id_, N_SERVER, src_, N_BUFFER, ((uint64_t)buf_), N_SERVER_ADDR, src_addr_);
+  common::ObAddr src_addr_; // for ipv6 support
+  TO_STRING_KV(N_DATA_SIZE, size_,
+               N_ID, id_,
+               N_SERVER, src_,
+               N_BUFFER, ((uint64_t)buf_),
+               N_SERVER_ADDR, src_addr_);
 };
 
-class ObBatchRpcProxy : public obrpc::ObRpcProxy {
+class ObBatchRpcProxy : public obrpc::ObRpcProxy
+{
 public:
   DEFINE_TO(ObBatchRpcProxy);
   RPC_AP(PR1 post_packet, OB_BATCH, (ObBatchPacket));
-  int post_batch(uint64_t tenant_id, const common::ObAddr& addr, const int64_t cluster_id, ObBatchPacket& pkt);
+  int post_batch(uint64_t tenant_id, const common::ObAddr& addr, const int64_t cluster_id, int batch_type, ObBatchPacket& pkt);
 };
-};  // namespace obrpc
-};  // namespace oceanbase
+};
+};
+
 
 #endif /* OCEANBASE_RPC_OB_BATCH_PROXY_H_ */
+

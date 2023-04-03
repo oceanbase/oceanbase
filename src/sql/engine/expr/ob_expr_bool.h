@@ -15,24 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprBool : public ObLogicalExprOperator {
+class ObExprBool : public ObLogicalExprOperator
+{
 public:
-  explicit ObExprBool(common::ObIAllocator& alloc);
+  explicit ObExprBool(common::ObIAllocator &alloc);
   virtual ~ObExprBool();
 
-  // bool expr is only for static typing engine, so no calc_result1() here
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBool);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_BOOL_
+#endif // OCEANBASE_SQL_ENGINE_EXPR_BOOL_

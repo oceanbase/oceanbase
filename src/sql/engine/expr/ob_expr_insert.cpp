@@ -14,27 +14,33 @@
 #include "sql/engine/expr/ob_expr_insert.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
+namespace sql
+{
 
-ObExprInsert::ObExprInsert(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_INSERT, N_INSERT, MORE_THAN_TWO)
-{}
+ObExprInsert::ObExprInsert(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INSERT, N_INSERT, MORE_THAN_TWO)
+{
+}
 
 ObExprInsert::~ObExprInsert()
-{}
+{
+}
 
-int ObExprInsert::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types_array, int64_t param_num, ObExprTypeCtx& type_ctx) const
+int ObExprInsert::calc_result_typeN(ObExprResType &type,
+                                    ObExprResType *types_array,
+                                    int64_t param_num,
+                                    ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObObjMeta, 16> coll_types;
-  // The first and fourth parameters of insert need to participate in the calculation of charset
-  ObObjMeta coll0, coll3;
+  ObObjMeta coll0, coll3; // insert 的第一个、第四个参数才需要参与计算 charset
   if (4 != param_num) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("insert should have four arguments", K(ret));
+    LOG_WARN("insert should have four arguments",K(ret));
   } else {
     type.set_varchar();
     type.set_length(types_array[0].get_length() + types_array[3].get_length());
@@ -46,7 +52,8 @@ int ObExprInsert::calc_result_typeN(
       LOG_WARN("fail push col", K(coll0), K(ret));
     } else if (OB_FAIL(coll_types.push_back(coll3))) {
       LOG_WARN("fail push col", K(coll3), K(ret));
-    } else if (OB_FAIL(aggregate_charsets_for_string_result(type, &coll_types.at(0), 2, type_ctx.get_coll_type()))) {
+    } else if (OB_FAIL(aggregate_charsets_for_string_result(
+                type, &coll_types.at(0), 2, type_ctx.get_coll_type()))) {
       LOG_WARN("aggregate cahrset for string result failed", K(ret));
     } else {
       types_array[0].set_calc_type(ObVarcharType);
@@ -60,11 +67,21 @@ int ObExprInsert::calc_result_typeN(
   return ret;
 }
 
-int ObExprInsert::calc_result(ObObj& result, const ObObj& text, const ObObj& start_pos, const ObObj& length,
-    const ObObj& replace_text, ObExprCtx& expr_ctx) const
+int ObExprInsert::calc_result(ObObj &result,
+                               const ObObj &text,
+                               const ObObj &start_pos,
+                               const ObObj &length,
+                               const ObObj &replace_text,
+                               ObExprCtx &expr_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(calc(result, text, start_pos, length, replace_text, expr_ctx, result_type_.get_collation_type()))) {
+  if (OB_FAIL(calc(result,
+                   text,
+                   start_pos,
+                   length,
+                   replace_text,
+                   expr_ctx,
+                   result_type_.get_collation_type()))) {
     OB_LOG(WARN, "fail to calc function concat", K(ret));
   }
   if (OB_SUCC(ret) && OB_LIKELY(!result.is_null())) {
@@ -73,8 +90,13 @@ int ObExprInsert::calc_result(ObObj& result, const ObObj& text, const ObObj& sta
   return ret;
 }
 
-int ObExprInsert::calc(ObObj& result, const ObObj& text, const ObObj& start_pos, const ObObj& length,
-    const ObObj& replace_text, common::ObExprCtx& expr_ctx, ObCollationType cs_type)
+int ObExprInsert::calc(ObObj &result,
+                       const ObObj &text,
+                       const ObObj &start_pos,
+                       const ObObj &length,
+                       const ObObj &replace_text,
+                       common::ObExprCtx &expr_ctx,
+                       ObCollationType cs_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_ctx.calc_buf_)) {
@@ -82,8 +104,8 @@ int ObExprInsert::calc(ObObj& result, const ObObj& text, const ObObj& start_pos,
     LOG_WARN("varchar buffer not init", K(ret));
   } else if (text.is_null() || start_pos.is_null() || length.is_null() || replace_text.is_null()) {
     result.set_null();
-  } else if (!is_type_valid(text.get_type()) || !is_type_valid(start_pos.get_type()) ||
-             !is_type_valid(length.get_type()) || !is_type_valid(replace_text.get_type())) {
+  } else  if (!is_type_valid(text.get_type()) || !is_type_valid(start_pos.get_type())
+              || !is_type_valid(length.get_type()) || !is_type_valid(replace_text.get_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the param is not castable", K(text), K(start_pos), K(length), K(ret));
   } else {
@@ -96,7 +118,8 @@ int ObExprInsert::calc(ObObj& result, const ObObj& text, const ObObj& start_pos,
     int64_t length_val = length.get_int();
     ObString str_rep_val = replace_text.get_string();
     ObString str_res;
-    if (OB_FAIL(calc(str_res, str_val, start_pos_val, length_val, str_rep_val, *expr_ctx.calc_buf_, cs_type))) {
+    if (OB_FAIL(calc(str_res, str_val, start_pos_val, length_val,
+               str_rep_val, *expr_ctx.calc_buf_, cs_type))) {
       LOG_WARN("calc insert expr failed", K(ret));
     } else {
       result.set_varchar(str_res);
@@ -116,8 +139,9 @@ int ObExprInsert::calc(ObObj& result, const ObObj& text, const ObObj& start_pos,
  */
 
 // support multi-bytes 10 Aug 2015
-int ObExprInsert::calc(ObString& result, const ObString& text, const int64_t start_pos,
-    const int64_t expect_length_of_str, const ObString& replace_text, ObIAllocator& allocator, ObCollationType cs_type)
+int ObExprInsert::calc(ObString &result, const ObString &text, const int64_t start_pos,
+                       const int64_t expect_length_of_str, const ObString &replace_text,
+                       ObIAllocator &allocator, ObCollationType cs_type)
 {
   int ret = OB_SUCCESS;
   ObString origin_text = text;
@@ -133,34 +157,48 @@ int ObExprInsert::calc(ObString& result, const ObString& text, const int64_t sta
     int64_t text_len = ObCharset::strlen_char(cs_type, origin_text.ptr(), origin_text.length());
     int64_t rep_text_len = ObCharset::strlen_char(cs_type, rep_text.ptr(), rep_text.length());
     if (OB_UNLIKELY(start < 0 || start >= text_len)) {
-      result.assign(origin_text.ptr(), origin_text.length());
+      result.assign(origin_text.ptr(), origin_text.length());   //返回整个串
     } else {
       if (expect_length < 0 || start + expect_length > text_len || start > INT64_MAX - expect_length) {
         expect_length = text_len - start;
       }
       if ((text_len - expect_length + rep_text_len) > 0) {
-        int64_t start_char = ObCharset::charpos(cs_type, origin_text.ptr(), origin_text.length(), start);
-        int64_t res_length =
-            ObCharset::charpos(cs_type, origin_text.ptr(), origin_text.length(), expect_length + start);
-        int64_t text_len_char = ObCharset::charpos(cs_type, origin_text.ptr(), origin_text.length(), text_len);
-        int64_t rep_text_len_char = ObCharset::charpos(cs_type, rep_text.ptr(), rep_text.length(), rep_text_len);
-        char* buf =
-            reinterpret_cast<char*>(allocator.alloc(text_len_char - res_length + rep_text_len_char + start_char));
+        int64_t start_char = ObCharset::charpos(cs_type, origin_text.ptr(), origin_text.length(), start);  //原始串第一段字节结束位置
+        int64_t res_length = ObCharset::charpos(cs_type,
+                                                origin_text.ptr(),
+                                                origin_text.length(),
+                                                expect_length + start);  //原始串第二个字节开始位置
+        int64_t text_len_char = ObCharset::charpos(cs_type,
+                                                   origin_text.ptr(),
+                                                   origin_text.length(),
+                                                   text_len);  //原始串字节数
+        int64_t rep_text_len_char = ObCharset::charpos(cs_type,
+                                                       rep_text.ptr(),
+                                                       rep_text.length(),
+                                                       rep_text_len);  //替换串字节数
+        char *buf = reinterpret_cast<char *>(allocator.alloc(text_len_char
+                                                             - res_length
+                                                             + rep_text_len_char + start_char));
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          _OB_LOG(ERROR,
-              "alloc memory failed. size=%d",
-              static_cast<int>(text_len_char - res_length + rep_text_len_char + start_char));
+          _OB_LOG(ERROR, "alloc memory failed. size=%d", static_cast<int>(text_len_char
+                                                                         - res_length + rep_text_len_char + start_char));
         } else {
           if (0 == rep_text_len) {
             MEMCPY(buf, origin_text.ptr(), start_char);
-            MEMCPY(buf + start_char + rep_text_len_char, origin_text.ptr() + res_length, text_len_char - res_length);
-            result.assign(buf, static_cast<int32_t>(text_len_char - res_length + rep_text_len_char + start_char));
+            MEMCPY(buf + start_char + rep_text_len_char,
+                   origin_text.ptr() + res_length,
+                   text_len_char - res_length);
+            result.assign(buf, static_cast<int32_t>(text_len_char - res_length
+                                                  + rep_text_len_char + start_char));
           } else {
             MEMCPY(buf, origin_text.ptr(), start_char);
-            MEMCPY(buf + start_char, rep_text.ptr(), rep_text_len_char);
-            MEMCPY(buf + start_char + rep_text_len_char, origin_text.ptr() + res_length, text_len_char - res_length);
-            result.assign(buf, static_cast<int32_t>(text_len_char - res_length + rep_text_len_char + start_char));
+            MEMCPY(buf + start_char , rep_text.ptr(), rep_text_len_char);
+            MEMCPY(buf + start_char + rep_text_len_char,
+                   origin_text.ptr() + res_length,
+                   text_len_char - res_length);
+            result.assign(buf, static_cast<int32_t>(text_len_char - res_length
+                                                  + rep_text_len_char + start_char));
           }
         }
       } else {
@@ -171,25 +209,9 @@ int ObExprInsert::calc(ObString& result, const ObString& text, const int64_t sta
   return ret;
 }
 
-int ObExprInsert::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(objs_array)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("objs_array pointer is null", K(ret));
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_UNLIKELY(4 != param_num)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument number for insert()", K(param_num), K(ret));
-  } else {
-    ret = calc_result(result, objs_array[0], objs_array[1], objs_array[2], objs_array[3], expr_ctx);
-  }
-  return ret;
-}
-
-int ObExprInsert::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprInsert::cg_expr(ObExprCGCtx &op_cg_ctx,
+                          const ObRawExpr &raw_expr,
+                          ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -197,8 +219,11 @@ int ObExprInsert::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
   if (rt_expr.arg_cnt_ != 4) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("insert expr should have 4 params", K(ret), K(rt_expr.arg_cnt_));
-  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1]) ||
-             OB_ISNULL(rt_expr.args_[2]) || OB_ISNULL(rt_expr.args_[3])) {
+  } else if (OB_ISNULL(rt_expr.args_)
+             || OB_ISNULL(rt_expr.args_[0])
+             || OB_ISNULL(rt_expr.args_[1])
+             || OB_ISNULL(rt_expr.args_[2])
+             || OB_ISNULL(rt_expr.args_[3])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of insert expr is null", K(ret), K(rt_expr.args_));
   } else {
@@ -211,16 +236,16 @@ int ObExprInsert::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
   return ret;
 }
 
-int ObExprInsert::calc_expr_insert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprInsert::calc_expr_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
     LOG_WARN("int2ip expr eval param value failed", K(ret));
   } else {
-    ObDatum& text = expr.locate_param_datum(ctx, 0);
-    ObDatum& start_pos = expr.locate_param_datum(ctx, 1);
-    ObDatum& length = expr.locate_param_datum(ctx, 2);
-    ObDatum& replace_text = expr.locate_param_datum(ctx, 3);
+    ObDatum &text = expr.locate_param_datum(ctx, 0);
+    ObDatum &start_pos = expr.locate_param_datum(ctx, 1);
+    ObDatum &length = expr.locate_param_datum(ctx, 2);
+    ObDatum &replace_text =  expr.locate_param_datum(ctx, 3);
     if (text.is_null() || start_pos.is_null() || length.is_null() || replace_text.is_null()) {
       expr_datum.set_null();
     } else {
@@ -230,8 +255,8 @@ int ObExprInsert::calc_expr_insert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
       ObString str_rep_val = replace_text.get_string();
       ObString result;
       ObExprStrResAlloc res_alloc(expr, ctx);
-      if (OB_FAIL(
-              calc(result, str_val, start_pos_val, length_val, str_rep_val, res_alloc, expr.datum_meta_.cs_type_))) {
+      if (OB_FAIL(calc(result, str_val, start_pos_val, length_val,
+                       str_rep_val, res_alloc, expr.datum_meta_.cs_type_))) {
         LOG_WARN("calc insert expr failed", K(ret));
       } else {
         expr_datum.set_string(result);
@@ -241,5 +266,8 @@ int ObExprInsert::calc_expr_insert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+
+    

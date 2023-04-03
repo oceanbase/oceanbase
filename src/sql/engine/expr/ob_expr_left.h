@@ -15,20 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprLeft : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprLeft: public ObStringExprOperator
+{
 public:
-  explicit ObExprLeft(common::ObIAllocator& alloc);
-  virtual ~ObExprLeft();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& type_ctx) const;
-  int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+	explicit ObExprLeft(common::ObIAllocator &alloc);
+	virtual ~ObExprLeft();
+	virtual int calc_result_type2(ObExprResType &type,
+																ObExprResType &type1,
+																ObExprResType &type2,
+																common::ObExprTypeCtx &type_ctx) const;
+  int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprLeft);
+  int cast_param_type(const ObObj& in,
+                      ObExprCtx& expr_ctx,
+                      ObObj& out) const;
+	DISALLOW_COPY_AND_ASSIGN(ObExprLeft);
 };
 } /* namespace sql */
 } /* namespace oceanbase */

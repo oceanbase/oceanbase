@@ -13,29 +13,37 @@
 #ifndef __SQL_ENGINE_PX_SUB_TRANS_UTIL_H__
 #define __SQL_ENGINE_PX_SUB_TRANS_UTIL_H__
 
-#include "common/ob_partition_key.h"
 #include "sql/ob_sql_trans_control.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObPxSqcMeta;
-class ObSubTransCtrl {
+class ObSubTransCtrl
+{
 public:
   ObSubTransCtrl() = default;
   ~ObSubTransCtrl() = default;
-  int start_participants(ObExecContext& ctx, ObPxSqcMeta& sqc);
-  int end_participants(ObExecContext& ctx, bool is_rb);
-
 private:
   /* functions */
-  int get_participants(ObPxSqcMeta& sqc, common::ObPartitionArray& participants) const;
   /* variables */
-  TransState trans_state_;  // Mark whether start_part has been called to determine whether to call end_part
-  common::ObPartitionArray participants_;
   DISALLOW_COPY_AND_ASSIGN(ObSubTransCtrl);
 };
-}  // namespace sql
-}  // namespace oceanbase
+
+class ObDDLCtrl final
+{
+public:
+  ObDDLCtrl() : context_id_(0) {}
+  ~ObDDLCtrl() = default;
+  bool is_valid() const { return context_id_ > 0; }
+  TO_STRING_KV(K_(context_id));
+public:
+  int64_t context_id_;
+};
+}
+}
 #endif /* __SQL_ENGINE_PX_SUB_TRANS_UTIL_H__ */
 //// end of header file
+

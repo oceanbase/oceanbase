@@ -17,30 +17,28 @@
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprRegexpReplace : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprRegexpReplace : public ObStringExprOperator
+{
 public:
-  explicit ObExprRegexpReplace(common::ObIAllocator& alloc);
+  explicit ObExprRegexpReplace(common::ObIAllocator &alloc);
   virtual ~ObExprRegexpReplace();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int eval_regexp_replace(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-private:
-  static int calc(common::ObString& ret_str, const common::ObString& text, const common::ObString& pattern,
-      const common::ObString& replacement_string, int64_t position, int64_t occurrence,
-      const common::ObCollationType cs_type, const common::ObString& match_param, int null_argument_idx,
-      ObExprRegexContext* regexp_ptr, common::ObExprStringBuf& string_buf);
-
+  static int eval_regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpReplace);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_REGEXP_SUBSTR_ */

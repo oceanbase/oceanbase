@@ -16,8 +16,10 @@
 
 #include "rpc/obmysql/ob_mysql_util.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 ObMySQLField::ObMySQLField()
     : catalog_("def"),
       type_(MYSQL_TYPE_NOT_DEFINED),
@@ -26,7 +28,8 @@ ObMySQLField::ObMySQLField()
       charsetnr_(0),
       length_(0),
       inout_mode_(0)
-{}
+{
+}
 
 // Column Definition: https://dev.mysql.com/doc/internals/en/com-query-response.html#column-definition
 //
@@ -44,14 +47,14 @@ ObMySQLField::ObMySQLField()
 //  1              decimals
 //  2              filler [00] [00]
 //
-//    if command was OB_MYSQL_COM_FIELD_LIST {
+//    if command was COM_FIELD_LIST {
 //        lenenc_int     length of default-values
 //        string[$len]   default values
 //    }
-int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) const
+int ObMySQLField::serialize_pro41(char *buf, const int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  uint8_t num_decimals = static_cast<uint8_t>(accuracy_.get_scale());  // decimals_;
+  uint8_t num_decimals = static_cast<uint8_t>(accuracy_.get_scale());  //decimals_;
   uint8_t precision = static_cast<uint8_t>(accuracy_.get_precision());
 
   if (OB_FAIL(ObMySQLUtil::store_str(buf, len, catalog_, pos))) {
@@ -64,23 +67,27 @@ int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) co
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize db failed", K(ret));
     }
-  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, tname_.ptr(), tname_.length(), pos))) {
+  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, tname_.ptr(), tname_.length(),
+                                                           pos))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize tname failed", K(ret));
     }
-  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, org_tname_.ptr(), org_tname_.length(), pos))) {
+  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, org_tname_.ptr(),
+                                                           org_tname_.length(), pos))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize org_tname failed", K(ret));
     }
-  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, cname_.ptr(), cname_.length(), pos))) {
+  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, cname_.ptr(), cname_.length(),
+                                                           pos))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize cname failed", K(ret));
     }
-  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, org_cname_.ptr(), org_cname_.length(), pos))) {
+  } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, org_cname_.ptr(),
+                                                           org_cname_.length(), pos))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize org_cname failed", K(ret));
     }
-  } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, 0xc, pos))) {  // length of belows
+  } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, 0xc, pos))) { // length of belows
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("serialize 0xc failed", K(ret));
     }
@@ -106,8 +113,7 @@ int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) co
     }
   }
   if (OB_SUCC(ret)) {
-    // filler is two bytes, the first byte is used to return the precision field; the second byte is used to return
-    // InOutMode;
+    // filler is two bytes, the first byte is used to return the precision field; the second byte is used to return InOutMode;
     if (lib::is_oracle_mode()) {
       if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, precision, pos))) {
         if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
@@ -129,11 +135,13 @@ int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) co
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type_)) {
-    if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, type_owner_.ptr(), type_owner_.length(), pos))) {
+    if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, type_owner_.ptr(),
+                                         type_owner_.length(), pos))) {
       if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
         LOG_WARN("serialize org_cname failed", K(ret));
       }
-    } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, type_name_.ptr(), type_name_.length(), pos))) {
+    } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, type_name_.ptr(),
+                                                type_name_.length(), pos))) {
       if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
         LOG_WARN("serialize org_cname failed", K(ret));
       }
@@ -141,13 +149,18 @@ int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) co
       if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
         LOG_WARN("serialize length failed", K(ret));
       }
+    } else if (type_name_.empty()
+               && OB_FAIL(ObMySQLUtil::store_int1(buf, len, (int8_t)default_value_, pos))) {
+      if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
+        LOG_WARN("serialize type failed", K(ret));
+      }
     }
   }
-  /*
-   * For the OB_MYSQL_COM_FIELD_LIST command, the related default_values must be serialized,
-   * indicating that this is a return packet from OB_MYSQL_COM_FIELD_LIST
+  /* 针对COM_FIELD_LIST命令,必须将相关的default_values序列化进去，表明这是一个来自于COM_FIELD_LIST的回包
    */
-  if (OB_SUCC(ret) && MYSQL_TYPE_NOT_DEFINED != default_value_) {
+  if (OB_SUCC(ret)
+      && MYSQL_TYPE_NOT_DEFINED != default_value_
+      && MYSQL_TYPE_COMPLEX != type_) {
     common::ObString str;
     if (OB_FAIL(ObMySQLUtil::store_int2(buf, len, 0, pos))) {
       if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
@@ -162,5 +175,5 @@ int ObMySQLField::serialize_pro41(char* buf, const int64_t len, int64_t& pos) co
   return ret;
 }
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase

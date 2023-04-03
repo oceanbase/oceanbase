@@ -13,14 +13,19 @@
 #include "ob_data_buffer.h"
 #include <malloc.h>
 #include "lib/allocator/ob_malloc.h"
-
+#include "share/rc/ob_tenant_base.h"
 using namespace oceanbase;
 using namespace common;
+using namespace share;
 
-namespace oceanbase {
-namespace blocksstable {
-ObSelfBufferWriter::ObSelfBufferWriter(const int64_t size, const char* label, const bool need_align)
-    : ObBufferWriter(NULL, 0, 0), label_(label), is_aligned_(need_align), macro_block_mem_ctx_()
+namespace oceanbase
+{
+namespace blocksstable
+{
+ObSelfBufferWriter::ObSelfBufferWriter(
+    const int64_t size, const char *label, const bool need_align)
+    : ObBufferWriter(NULL, 0, 0), label_(label), is_aligned_(need_align),
+      macro_block_mem_ctx_()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(macro_block_mem_ctx_.init())) {
@@ -39,22 +44,23 @@ ObSelfBufferWriter::~ObSelfBufferWriter()
   macro_block_mem_ctx_.destroy();
 }
 
-char* ObSelfBufferWriter::alloc(const int64_t size)
+char *ObSelfBufferWriter::alloc(const int64_t size)
 {
-  char* data = NULL;
+
+  char *data = NULL;
+#ifndef OB_USE_ASAN
   if (size == macro_block_mem_ctx_.get_block_size()) {
-    data = (char*)macro_block_mem_ctx_.alloc();
+    data = (char *)macro_block_mem_ctx_.alloc();
     if (OB_ISNULL(data)) {
-      STORAGE_LOG(WARN, "fail to alloc buf from mem ctx", K(size));
+      STORAGE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "fail to alloc buf from mem ctx", K(size));
     }
   }
-
-  // alloc from mem ctx fail
+#endif
   if (OB_ISNULL(data)) {
     if (is_aligned_) {
-      data = (char*)ob_malloc_align(BUFFER_ALIGN_SIZE, size, label_);
+      data = (char *)mtl_malloc_align(BUFFER_ALIGN_SIZE, size, label_);
     } else {
-      data = (char*)ob_malloc(size, label_);
+      data = (char *)mtl_malloc(size, label_);
     }
   }
   return data;
@@ -63,7 +69,7 @@ char* ObSelfBufferWriter::alloc(const int64_t size)
 int ObSelfBufferWriter::ensure_space(int64_t size)
 {
   int ret = OB_SUCCESS;
-  // size = upper_align(size, DIO_ALIGN_SIZE);
+  //size = upper_align(size, common::ObLogConstants::LOG_FILE_ALIGN_SIZE);
   if (size <= 0) {
     // do nothing.
   } else if (is_aligned_ && size % BUFFER_ALIGN_SIZE != 0) {
@@ -71,18 +77,18 @@ int ObSelfBufferWriter::ensure_space(int64_t size)
     ret = OB_INVALID_ARGUMENT;
   } else if (NULL == data_) {
     if (NULL == (data_ = alloc(size))) {
-      STORAGE_LOG(WARN, "allocate buffer memory error.", K(size));
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "allocate buffer memory error.", K(ret), K(size));
     } else {
       pos_ = 0;
       capacity_ = size;
     }
   } else if (capacity_ < size) {
     // resize;
-    char* new_data = NULL;
+    char *new_data = NULL;
     if (NULL == (new_data = alloc(size))) {
-      STORAGE_LOG(WARN, "allocate buffer memory error.", K(size));
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "allocate buffer memory error.", K(ret), K(size));
     } else {
       MEMCPY(new_data, data_, pos_);
       free();
@@ -97,17 +103,21 @@ int ObSelfBufferWriter::ensure_space(int64_t size)
 void ObSelfBufferWriter::free()
 {
   if (NULL != data_) {
+#ifndef OB_USE_ASAN
     if (macro_block_mem_ctx_.get_allocator().contains(data_)) {
       macro_block_mem_ctx_.free(data_);
-    } else {
+      data_ = NULL;
+    }
+#endif
+    if(NULL != data_) {
       if (is_aligned_) {
-        ob_free_align(data_);
+        mtl_free_align(data_);
       } else {
-        ob_free(data_);
+        mtl_free(data_);
       }
+      data_ = NULL;
     }
   }
-  data_ = NULL;
 }
-}  // namespace blocksstable
-}  // namespace oceanbase
+}
+}

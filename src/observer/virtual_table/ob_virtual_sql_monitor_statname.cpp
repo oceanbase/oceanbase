@@ -17,8 +17,11 @@ using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObVirtualSqlMonitorStatname::ObVirtualSqlMonitorStatname() : ObVirtualTableScannerIterator(), stat_iter_(1)
-{}
+ObVirtualSqlMonitorStatname::ObVirtualSqlMonitorStatname()
+    : ObVirtualTableScannerIterator(),
+      stat_iter_(1)
+{
+}
 
 ObVirtualSqlMonitorStatname::~ObVirtualSqlMonitorStatname()
 {
@@ -28,13 +31,13 @@ ObVirtualSqlMonitorStatname::~ObVirtualSqlMonitorStatname()
 void ObVirtualSqlMonitorStatname::reset()
 {
   ObVirtualTableScannerIterator::reset();
-  stat_iter_ = 1;  // skip MONITOR_STATNAME_BEGIN
-  for (int64_t i = 0; i < OB_ROW_MAX_COLUMNS_COUNT; i++) {
+  stat_iter_ = 1; // 第一项是 MONITOR_STATNAME_BEGIN，跳过
+  for (int64_t i = 0; i  < OB_ROW_MAX_COLUMNS_COUNT; i++) {
     cells_[i].reset();
   }
 }
 
-int ObVirtualSqlMonitorStatname::inner_get_next_row(ObNewRow*& row)
+int ObVirtualSqlMonitorStatname::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == allocator_)) {
@@ -53,7 +56,7 @@ int ObVirtualSqlMonitorStatname::inner_get_next_row(ObNewRow*& row)
       uint64_t cell_idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
-        switch (col_id) {
+        switch(col_id) {
           case ID: {
             cells_[cell_idx].set_int(stat_iter_);
             break;
@@ -72,9 +75,14 @@ int ObVirtualSqlMonitorStatname::inner_get_next_row(ObNewRow*& row)
             cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
+          case TYPE: {
+            cells_[cell_idx].set_int(OB_MONITOR_STATS[stat_iter_].type_);
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
             break;
           }
         }

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include <string.h>
-#include "sql/parser/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_inet.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -32,7 +31,7 @@ int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool& is_ip_format_i
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ip_str or ipv4addr is null", K(ret), K(str), K(ipv4addr));
   } else {
-    unsigned char byte_addr[4];
+    unsigned char byte_addr[4] = {0};
     int dotcnt = 0, numcnt = 0;
     int byte = 0;
     char c;
@@ -212,7 +211,7 @@ int ObExprInetCommon::ip_to_str(ObString& ip_binary, bool& is_ip_format_invalid,
   int ret = OB_SUCCESS;
   const char *ip = ip_binary.ptr();
   char * result_ptr = ip_str.ptr();
-  char result[common::MAX_IP_ADDR_LENGTH];
+  char result[common::MAX_IP_ADDR_LENGTH] = {0};
   if (OB_UNLIKELY(OB_ISNULL(ip) || OB_ISNULL(result_ptr))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ip or result is null", K(ret), K(ip), K(result));    
@@ -295,49 +294,6 @@ ObExprInetAton::ObExprInetAton(ObIAllocator& alloc)
 
 ObExprInetAton::~ObExprInetAton()
 {}
-
-int ObExprInetAton::calc(ObObj& result, const ObObj& text, uint64_t cast_mode)
-{
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_null();
-  } else {
-    ObString m_text = text.get_string();
-    bool is_ip_format_invalid = false;
-    if (OB_FAIL(ob_inet_aton(result, m_text, is_ip_format_invalid))) {
-      LOG_WARN("fail to excute ob_inet_aton", K(ret));
-    } else if (is_ip_format_invalid) {
-      if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-        result.set_null();
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("ip format invalid", K(ret), K(m_text));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprInetAton::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  uint64_t cast_mode = 0;
-  ObSQLSessionInfo* session = expr_ctx.my_session_;
-  if (OB_UNLIKELY(OB_ISNULL(session))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
-  } else {
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
-    if (OB_FAIL(calc(result, text, cast_mode))) {
-      LOG_WARN("fail to calc", K(ret));
-    } else if (OB_LIKELY(!result.is_null())) {
-      result.set_collation_type(result_type_.get_collation_type());
-      result.set_collation_level(result_type_.get_collation_level());
-    } else {
-    }
-  }
-  return ret;
-}
 
 template <typename T>
 int ObExprInetAton::ob_inet_aton(T& result, const ObString& text, bool& is_ip_format_invalid)
@@ -473,62 +429,6 @@ inline int ObExprInet6Ntoa::calc_result_type1(
   return ret;
 }
 
-int ObExprInet6Ntoa::calc(ObObj& result, const ObObj& text, common::ObExprStringBuf& string_buf, uint64_t cast_mode)
-{
-  int ret = OB_SUCCESS;
-  bool is_ip_format_invalid = false;
-  if (text.is_null()) {
-    result.set_null();
-  } else if (!text.is_varbinary()) {
-    is_ip_format_invalid = true;
-    LOG_WARN("ip is not binary", K(ret), K(text));
-  } else {
-    ObString num_val = text.get_varbinary();
-    char *buf = static_cast<char*>(string_buf.alloc(MAX_IP_ADDR_LENGTH));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory failed", K(ret), K(text));
-    } else {
-      ObString ip_str(MAX_IP_ADDR_LENGTH, 0, buf);
-      ObExprInetCommon::ip_to_str(num_val, is_ip_format_invalid, ip_str);
-      result.set_varchar(ip_str);
-    }
-  }
-  if (OB_SUCC(ret) && is_ip_format_invalid) {
-    if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-      result.set_null();
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("ip format invalid", K(ret), K(text));
-    }
-  }
-  return ret;
-}
-
-int ObExprInet6Ntoa::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  uint64_t cast_mode = 0;
-  ObSQLSessionInfo* session = expr_ctx.my_session_;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_UNLIKELY(OB_ISNULL(session))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
-  } else {
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
-    if (OB_FAIL(calc(result, text, *expr_ctx.calc_buf_, cast_mode))) {
-      LOG_WARN("fail to calc", K(ret));
-    } else if (OB_LIKELY(!result.is_null())) {
-      result.set_collation_type(result_type_.get_collation_type());
-      result.set_collation_level(result_type_.get_collation_level());
-    } else {
-    }
-  }
-  return ret;
-}
-
 int ObExprInet6Ntoa::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
 {
   UNUSED(op_cg_ctx);
@@ -603,62 +503,6 @@ ObExprInet6Aton::ObExprInet6Aton(ObIAllocator& alloc)
 
 ObExprInet6Aton::~ObExprInet6Aton()
 {}
-
-int ObExprInet6Aton::calc(ObObj& result, const ObObj& text, common::ObExprStringBuf& string_buf, uint64_t cast_mode)
-{
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_null();
-  } else {
-    ObString num_val = text.get_varbinary();
-    char *buf = static_cast<char*>(string_buf.alloc(sizeof(in6_addr)));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory failed", K(ret), K(text));
-    } else {
-      bool is_ip_format_invalid = false;
-      ObString m_text = text.get_string();
-      ObString result_buf(sizeof(in6_addr), 0, buf);
-      if (OB_FAIL(inet6_aton(m_text, is_ip_format_invalid, result_buf))) {
-        LOG_WARN("fail to excute inet6_aton");
-      } else if (is_ip_format_invalid) {
-        if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-          result.set_null(); //support no strict mode
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("ip format invalid", K(ret), K(m_text));
-        }
-      } else {
-        result.set_varbinary(result_buf);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprInet6Aton::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  uint64_t cast_mode = 0;
-  ObSQLSessionInfo* session = expr_ctx.my_session_;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_UNLIKELY(OB_ISNULL(session))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
-  } else {
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
-    if (OB_FAIL(calc(result, text, *expr_ctx.calc_buf_, cast_mode))) {
-      LOG_WARN("fail to calc", K(ret));
-    } else if (OB_LIKELY(!result.is_null())) {
-      result.set_collation_type(result_type_.get_collation_type());
-      result.set_collation_level(result_type_.get_collation_level());
-    } else {
-    }
-  }
-  return ret;
-}
 
 int ObExprInet6Aton::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
 {
@@ -747,10 +591,10 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
         } else if (is_ip_format_invalid) {
           LOG_WARN("ip format invalid", K(ip));
         } else {
-          str_result.assign(result_buf, sizeof(in6_addr));
+          str_result.assign(result_buf, static_cast<int32_t>(sizeof(in6_addr)));
         }
       } else {
-        str_result.assign(result_buf, sizeof(in_addr));
+        str_result.assign(result_buf, static_cast<int32_t>(sizeof(in_addr)));
       }
     }
   }
@@ -763,32 +607,6 @@ ObExprIsIpv4::ObExprIsIpv4(ObIAllocator& alloc)
 
 ObExprIsIpv4::~ObExprIsIpv4()
 {}
-
-int ObExprIsIpv4::calc(ObObj& result, const ObObj& text)
-{
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_int(0);
-  } else {
-    ObString m_text = text.get_string();
-    if (OB_FAIL(is_ipv4(result, m_text))) {
-      LOG_WARN("fail to excute is_ipv4", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObExprIsIpv4::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(result, text))) {
-    LOG_WARN("fail to excute calc", K(ret));
-  }
-  return ret;
-}
 
 template <typename T>
 int ObExprIsIpv4::is_ipv4(T& result, const ObString& text)
@@ -856,30 +674,6 @@ ObExprIsIpv4Mapped::ObExprIsIpv4Mapped(ObIAllocator& alloc)
 ObExprIsIpv4Mapped::~ObExprIsIpv4Mapped()
 {}
 
-void ObExprIsIpv4Mapped::calc(ObObj& result, const ObObj& text)
-{
-  if (text.is_null()) {
-    result.set_int(0);
-  } else if (!text.is_varbinary()) {
-    result.set_int(0);
-  } else {
-    ObString m_text = text.get_varbinary();
-    is_ipv4_mapped(result, m_text);
-  }
-}
-
-int ObExprIsIpv4Mapped::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    calc(result, text);
-  }
-  return ret;
-}
-
 int ObExprIsIpv4Mapped::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
 {
   UNUSED(op_cg_ctx);
@@ -937,30 +731,6 @@ ObExprIsIpv4Compat::ObExprIsIpv4Compat(ObIAllocator& alloc)
 ObExprIsIpv4Compat::~ObExprIsIpv4Compat()
 {}
 
-void ObExprIsIpv4Compat::calc(ObObj& result, const ObObj& text)
-{
-  if (text.is_null()) {
-    result.set_int(0);
-  } else if (!text.is_varbinary()) {
-    result.set_int(0);
-  } else {
-    ObString m_text = text.get_varbinary();
-    is_ipv4_compat(result, m_text);
-  }
-}
-
-int ObExprIsIpv4Compat::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    calc(result, text);
-  }
-  return ret;
-}
-
 int ObExprIsIpv4Compat::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
 {
   UNUSED(op_cg_ctx);
@@ -1017,32 +787,6 @@ ObExprIsIpv6::ObExprIsIpv6(ObIAllocator& alloc)
 
 ObExprIsIpv6::~ObExprIsIpv6()
 {}
-
-int ObExprIsIpv6::calc(ObObj& result, const ObObj& text)
-{
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_int(0);
-  } else {
-    ObString m_text = text.get_string();
-    if (OB_FAIL(is_ipv6(result, m_text))) {
-      LOG_WARN("fail to excute is_ipv6", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObExprIsIpv6::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(result, text))) {
-    LOG_WARN("fail to excute calc", K(ret));
-  }
-  return ret;
-}
 
 int ObExprIsIpv6::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
 {

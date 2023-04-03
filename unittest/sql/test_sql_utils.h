@@ -42,9 +42,7 @@
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/ob_sql_context.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "../share/schema/mock_schema_service.h"
-#include "ob_mock_partition_location_cache.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -53,12 +51,14 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
 
-#define CSJ(x) (static_cast<const char*>(SJ((x))))
-namespace test {
-typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> ParamStore;
+#define CSJ(x) (static_cast<const char *>(SJ((x))))
+namespace test
+{
+typedef common::ParamStore ParamStore;
 static const int32_t FILE_PATH_LEN = 512;
 static const int32_t MAX_FILE_NUM = 128;
-struct CmdLineParam {
+struct CmdLineParam
+{
   CmdLineParam()
   {
     file_count = 0;
@@ -77,84 +77,80 @@ struct CmdLineParam {
 };
 extern CmdLineParam clp;
 
-extern bool comparisonFunc(const char* c1, const char* c2);
+
+extern bool comparisonFunc(const char *c1, const char *c2);
 extern void load_sql_file(const char* file_name);
 extern void load_all_sql_files(const char* directory_name);
-extern void print_help_msg(const char* exe_name);
-extern void parse_cmd_line_param(int argc, char* argv[], CmdLineParam& clp);
+extern void print_help_msg (const char* exe_name);
+extern void parse_cmd_line_param(int argc, char *argv[], CmdLineParam &clp);
 
-inline bool casesame_cstr(const char* a, const char* b)
+inline bool casesame_cstr(const char *a, const char *b)
 {
   size_t len1 = strlen(a);
   size_t len2 = strlen(b);
   return (len1 == len2) && (strncasecmp(a, b, len1) == 0);
 }
 
-enum ParserResultFormat { TREE_FORMAT, JSON_FORMAT };
+enum ParserResultFormat
+{
+  TREE_FORMAT,
+  JSON_FORMAT
+};
 
-class TestSqlUtils {
+class TestSqlUtils
+{
 public:
   TestSqlUtils();
-  virtual ~TestSqlUtils()
-  {}
+  virtual ~TestSqlUtils(){}
   virtual void init();
   virtual void destroy();
-
 public:
   static const int64_t MAX_SCHEMA_FILE_PATH = 128 - 1;
-  // function members
-  void load_schema_from_file(const char* file_path);
-  void do_load_sql(const char* query_str, ObStmt*& stmt, bool is_print, ParserResultFormat format = TREE_FORMAT,
-      int64_t expect_error = OB_SUCCESS, int64_t case_line = 0);
-  void do_resolve(const char* query, ObStmt*& stmt, bool is_print = false, ParserResultFormat format = JSON_FORMAT,
-      int64_t expect_error = OB_SUCCESS, bool parameterized = true, bool need_replace_param_expr = true,
-      int64_t case_line = 0);
+// function members
+  void load_schema_from_file(const char *file_path);
+  void do_load_sql(const char *query_str, ObStmt *&stmt, bool is_print,  ParserResultFormat format = TREE_FORMAT, int64_t expect_error = OB_SUCCESS, int64_t case_line = 0);
+  void do_resolve(const char* query, ObStmt *&stmt, bool is_print = false,
+                  ParserResultFormat format = JSON_FORMAT, int64_t expect_error = OB_SUCCESS,
+                  bool parameterized = true, bool need_replace_param_expr = true, int64_t case_line = 0);
   int create_system_table();
   void create_system_db();
-  void do_create_table(const char* query_str);
-  void do_create_table(ObStmt*& stmt);
-  void do_drop_table(ObStmt*& stmt);
-  void do_create_index(ObStmt*& stmt);
-  void do_create_database(ObStmt*& stmt);
-  void do_use_database(ObStmt*& stmt);
-  void do_create_user(ObStmt*& stmt);
-  void generate_index_schema(ObCreateIndexStmt& stmt);
-  void generate_index_column_schema(ObCreateIndexStmt& stmt, ObTableSchema& index_schema);
-  int get_hidden_column_value(ObResolverParams& resolver_ctx, ParamStore& params);
+  void do_create_table(const char *query_str);
+  void do_create_table(ObStmt *&stmt);
+  void do_drop_table(ObStmt *&stmt);
+  void do_create_index(ObStmt *&stmt);
+  void do_create_database(ObStmt *&stmt);
+  void do_use_database(ObStmt *&stmt);
+  void do_create_user(ObStmt *&stmt);
+  void generate_index_schema(ObCreateIndexStmt &stmt);
+  void generate_index_column_schema(ObCreateIndexStmt &stmt, ObTableSchema &index_schema);
+  int get_hidden_column_value(ObResolverParams &resolver_ctx, ParamStore &params);
   void is_equal_content(const char* tmp_file, const char* result_file);
   uint64_t get_next_table_id(const uint64_t user_tenant_id);
-  int add_table_schema(ObTableSchema& table_schema);
-  int add_database_schema(ObDatabaseSchema& database_schema);
-  int drop_table_schema(const ObTableSchema& table_schema);
-  int parse_row_from_json(const ObString& json_str, ObString& table_name, ObIArray<ObSEArray<ObObj, 3> >& row_array);
-  int parse_json_array(json::Value& value, ObIArray<ObSEArray<ObObj, 3> >& row_array);
-  ObSqlSchemaGuard& get_sql_schema_guard()
-  {
-    return sql_schema_guard_;
-  }
-  ObSchemaGetterGuard& get_schema_guard()
-  {
-    return schema_guard_;
-  }
-
+  int add_table_schema(ObTableSchema &table_schema);
+  int add_database_schema(ObDatabaseSchema &database_schema);
+  int drop_table_schema(const ObTableSchema &table_schema);
+  int parse_row_from_json(const ObString &json_str, ObString &table_name, ObIArray<ObSEArray<ObObj, 3> > &row_array);
+  int parse_json_array(json::Value &value, ObIArray<ObSEArray<ObObj, 3> > &row_array);
+  ObSqlSchemaGuard &get_sql_schema_guard() { return sql_schema_guard_; }
+  ObSchemaGetterGuard &get_schema_guard() { return schema_guard_; }
 public:
-  // table id
-  hash::ObHashMap<uint64_t, uint64_t> next_user_table_id_map_;
-  // user_id
+  //table id
+  hash::ObHashMap<uint64_t,uint64_t> next_user_table_id_map_;
+  //user_id
   uint64_t sys_user_id_;
   uint64_t next_user_id_;
-  // database_id
+  //database_id
   uint64_t sys_database_id_;
   uint64_t next_user_database_id_;
-  // tenant_id
+  //tenant_id
   uint64_t sys_tenant_id_;
   ObSEArray<ObObj, 16> sys_view_bigint_param_list_;
   int64_t schema_version_;
   char schema_file_path_[MAX_SCHEMA_FILE_PATH + 1];
   ObSQLSessionInfo session_info_;
   ObSqlSchemaGuard sql_schema_guard_;
-  schema::ObSchemaGetterGuard schema_guard_;
-  MockSchemaService* schema_service_;
+  share::schema::ObSchemaGetterGuard schema_guard_;
+  MockSchemaService *schema_service_;
   ObArenaAllocator allocator_;
   ObRawExprFactory expr_factory_;
   ObStmtFactory stmt_factory_;
@@ -162,11 +158,8 @@ public:
   ObSqlCtx sql_ctx_;
   ObExecContext exec_ctx_;
   ParamStore param_list_;
-  ObPlanCacheManager plan_cache_mgr_;
-  ::test::MockPartitionLocationCache part_cache_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlUtils);
 };
-}  // namespace test
+}
 #endif

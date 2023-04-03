@@ -15,19 +15,18 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/ob_name_def.h"
 #include "share/object/ob_obj_cast.h"
-namespace oceanbase {
-namespace sql {
-class ObExprGreaterEqual : public ObRelationalExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprGreaterEqual: public ObRelationalExprOperator
+{
 public:
   ObExprGreaterEqual();
-  explicit ObExprGreaterEqual(common::ObIAllocator& alloc);
-  virtual ~ObExprGreaterEqual(){};
-  virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      common::ObExprCtx& expr_ctx) const override;
-  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      common::ObExprCtx& expr_ctx) const override;
-
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override
+  explicit  ObExprGreaterEqual(common::ObIAllocator &alloc);
+  virtual ~ObExprGreaterEqual() {};
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+              ObExpr &rt_expr) const override
   {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
@@ -35,7 +34,7 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprGreaterEqual);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_EXPR_GREATER_EQUAL_H_
+#endif //OCEANBASE_SQL_OB_EXPR_GREATER_EQUAL_H_

@@ -15,30 +15,35 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace share {
-class ObLocalityParser {
+namespace oceanbase
+{
+namespace share
+{
+class ObLocalityParser
+{
 public:
-  static int parse_type(const char* str, int64_t len, common::ObReplicaType& type);
-
+  static int parse_type(const char *str, int64_t len, common::ObReplicaType &type);
 private:
   // full replica
-  static const char* FULL_REPLICA_STR;
-  static const char* F_REPLICA_STR;
+  static const char *FULL_REPLICA_STR;
+  static const char *F_REPLICA_STR;
   // logonly replica
-  static const char* LOGONLY_REPLICA_STR;
-  static const char* L_REPLICA_STR;
+  static const char *LOGONLY_REPLICA_STR;
+  static const char *L_REPLICA_STR;
   // backup replica
-  static const char* BACKUP_REPLICA_STR;
-  static const char* B_REPLICA_STR;
+  static const char *BACKUP_REPLICA_STR;
+  static const char *B_REPLICA_STR;
   // readonly replica
-  static const char* READONLY_REPLICA_STR;
-  static const char* R_REPLICA_STR;
+  static const char *READONLY_REPLICA_STR;
+  static const char *R_REPLICA_STR;
   // memonly replica
-  static const char* MEMONLY_REPLICA_STR;
-  static const char* M_REPLICA_STR;
+  static const char *MEMONLY_REPLICA_STR;
+  static const char *M_REPLICA_STR;
+  // encryption logonly replica
+  static const char *ENCRYPTION_LOGONLY_REPLICA_STR;
+  static const char *E_REPLICA_STR;
 };
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 #endif

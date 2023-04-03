@@ -22,37 +22,40 @@
 #include "lib/oblog/ob_log_module.h"
 using namespace oceanbase::common;
 
-class BuddyAllocatorTest : public ::testing::Test {
-public:
-  BuddyAllocatorTest();
-  virtual ~BuddyAllocatorTest();
-  virtual void SetUp();
-  virtual void TearDown();
+class BuddyAllocatorTest : public ::testing::Test
+{
+  public:
+    BuddyAllocatorTest();
+    virtual ~BuddyAllocatorTest();
+    virtual void SetUp();
+    virtual void TearDown();
 
-  void assign_ptr(char* ptr, int64_t ptr_len, int64_t seed);
-  bool is_valid_ptr(const char* ptr, int64_t ptr_len, int64_t seed);
-
-private:
-  // disallow copy
-  BuddyAllocatorTest(const BuddyAllocatorTest& other);
-  BuddyAllocatorTest& operator=(const BuddyAllocatorTest& other);
-
-private:
-  // data members
+    void assign_ptr(char *ptr, int64_t ptr_len, int64_t seed);
+    bool is_valid_ptr(const char *ptr, int64_t ptr_len, int64_t seed);
+  private:
+    // disallow copy
+    BuddyAllocatorTest(const BuddyAllocatorTest &other);
+    BuddyAllocatorTest& operator=(const BuddyAllocatorTest &other);
+  private:
+    // data members
 };
 BuddyAllocatorTest::BuddyAllocatorTest()
-{}
+{
+}
 
 BuddyAllocatorTest::~BuddyAllocatorTest()
-{}
+{
+}
 
 void BuddyAllocatorTest::SetUp()
-{}
+{
+}
 
 void BuddyAllocatorTest::TearDown()
-{}
+{
+}
 
-void BuddyAllocatorTest::assign_ptr(char* ptr, int64_t ptr_len, int64_t seed)
+void BuddyAllocatorTest::assign_ptr(char *ptr, int64_t ptr_len, int64_t seed)
 {
   OB_ASSERT(ptr_len > 0);
   for (int64_t i = 0, j = seed % 255; i < ptr_len - 1; ++i, ++j) {
@@ -61,7 +64,7 @@ void BuddyAllocatorTest::assign_ptr(char* ptr, int64_t ptr_len, int64_t seed)
   ptr[ptr_len - 1] = 0;
 }
 
-bool BuddyAllocatorTest::is_valid_ptr(const char* ptr, int64_t ptr_len, int64_t seed)
+bool BuddyAllocatorTest::is_valid_ptr(const char *ptr, int64_t ptr_len, int64_t seed)
 {
   OB_ASSERT(ptr_len > 0);
   for (int64_t i = 0, j = seed % 255; i < ptr_len - 1; ++i, ++j) {
@@ -82,54 +85,60 @@ bool BuddyAllocatorTest::is_valid_ptr(const char* ptr, int64_t ptr_len, int64_t 
 TEST_F(BuddyAllocatorTest, basic_test)
 {
   ObMalloc a;
-  void* ptr1 = NULL;
-  void* ptr2 = NULL;
-  void* ptr3 = NULL;
-  char* tmp = NULL;
+  void *ptr1 = NULL;
+  void *ptr2 = NULL;
+  void *ptr3 = NULL;
+  char *tmp = NULL;
   int32_t tmp_order = 0;
   int64_t tmp_size = 0;
   const int64_t block_size = 128;
-  // int32_t block_order = 7;
-  void* pointer_array[1000];
+  //int32_t block_order = 7;
+  void * pointer_array[1000];
   ObBuddyAllocator alloc(a);
   alloc.init(block_size);
 
-  // test 1 calloc 1120B
+  //test 1 calloc 1120B
   ASSERT_TRUE(NULL != (ptr1 = alloc.alloc(1120)));
   _OB_LOG(INFO, "alloc 1120,ptr1 point to it");
-  tmp = static_cast<char*>(ptr1);
+  tmp = static_cast<char *>(ptr1);
   tmp--;
   tmp_order = (int)(*tmp);
-  _OB_LOG(INFO, "order you write to memory is %d", tmp_order);
+  _OB_LOG(INFO, "order you write to memory is %d",tmp_order);
   tmp_size = (1 << tmp_order) * block_size;
   _OB_LOG(INFO, "you can use %ldB with pointer ptr1", tmp_size - 1);
-  if (ptr1 != NULL) {
+  if (ptr1 != NULL)
+  {
     alloc.free(ptr1);
   }
-  // test 2
+  //test 2
   _OB_LOG(INFO, "info:test 2 alloc 10^5B");
   ptr2 = alloc.alloc(100000);
-  _OB_LOG(INFO, "alloc 100000 with address is %p", ptr2);
-  if (ptr2 != NULL) {
+  _OB_LOG(INFO, "alloc 100000 with address is %p",ptr2);
+  if (ptr2 != NULL)
+  {
     alloc.free(ptr2);
   }
-  // test 3
+  //test 3
   _OB_LOG(INFO, "info:test 3 alloc 1024B");
   ptr3 = alloc.alloc(1024);
-  _OB_LOG(INFO, "alloc 1024 with address is %p, with %d basic page(128B)", ptr3, 16);
-  if (ptr3 != NULL) {
+  _OB_LOG(INFO, "alloc 1024 with address is %p, with %d basic page(128B)",ptr3,16);
+  if (ptr3 != NULL)
+  {
     alloc.free(ptr3);
   }
-  // test 4:alloc(negative numbaer)
-  for (int i = 0; i < 20; i++) {
-    ASSERT_TRUE(NULL == (pointer_array[i] = alloc.alloc(-(1 << i))));
+  //test 4:alloc(negative numbaer)
+  for (int i = 0; i < 20; i++)
+  {
+    ASSERT_TRUE(NULL == (pointer_array[i] = alloc.alloc(-(1<<i))));
   }
-  for (int i = 0; i < 20; i++) {
-    if (pointer_array[i] != NULL) {
+  for (int i = 0; i < 20; i++)
+  {
+    if(pointer_array[i] != NULL)
+    {
       alloc.free(pointer_array[i]);
     }
   }
-  // test5:alloc(2^i)
+  //test5:alloc(2^i)
   ASSERT_TRUE(NULL == (pointer_array[0] = alloc.alloc(0)));
   for (int i = 1; i < 18; i++) {
     ASSERT_TRUE(NULL != (pointer_array[i] = alloc.alloc((1L << i))));
@@ -141,48 +150,60 @@ TEST_F(BuddyAllocatorTest, basic_test)
   }
   ASSERT_TRUE(NULL == (pointer_array[19] = alloc.alloc((1L << 19))));
   ASSERT_TRUE(NULL == (pointer_array[20] = alloc.alloc((1L << 20))));
-  for (int i = 0; i < 20; i++) {
-    if (pointer_array[i] != NULL) {
+  for (int i = 0; i < 20; i++)
+  {
+    if(pointer_array[i] != NULL)
+    {
       alloc.free(pointer_array[i]);
     }
   }
-  // test6: alloc(2^i - 1)
-  // ASSERT_TRUE(NULL == (pointer_array[0] = alloc.alloc(1L << 0)+1));
-  for (int i = 0; i < 18; i++) {
-    ASSERT_TRUE(NULL != (pointer_array[i] = alloc.alloc((1L << i) + 1)));
-    if (pointer_array[i] != NULL) {
+  //test6: alloc(2^i - 1)
+  //ASSERT_TRUE(NULL == (pointer_array[0] = alloc.alloc(1L << 0)+1));
+  for (int i = 0; i < 18; i++)
+  {
+    ASSERT_TRUE(NULL != (pointer_array[i] = alloc.alloc((1L << i)+1)));
+    if (pointer_array[i] != NULL)
+    {
       _OB_LOG(INFO, "alloc(%ld) succeed", 1L << i);
     }
   }
-  ASSERT_TRUE(NULL == (pointer_array[19] = alloc.alloc((1L << 19) + 1)));
-  ASSERT_TRUE(NULL == (pointer_array[20] = alloc.alloc((1L << 20) + 1)));
-  for (int i = 0; i <= 20; i++) {
-    if (pointer_array[i] != NULL) {
+  ASSERT_TRUE(NULL == (pointer_array[19] = alloc.alloc((1L << 19)+1)));
+  ASSERT_TRUE(NULL == (pointer_array[20] = alloc.alloc((1L << 20)+1)));
+  for (int i = 0; i <= 20; i++)
+  {
+    if(pointer_array[i] != NULL)
+    {
       alloc.free(pointer_array[i]);
     }
   }
-  // test7:alloc(2^[20,30])
-  for (int i = 20; i < 30; i++) {
+  //test7:alloc(2^[20,30])
+  for (int i = 20; i < 30; i++)
+  {
     ASSERT_TRUE(NULL == (pointer_array[i] = alloc.alloc((1L << i))));
-    if (pointer_array[i] != NULL) {
+    if (pointer_array[i] != NULL)
+    {
       _OB_LOG(INFO, "alloc(%ld) succeed", 1L << i);
     }
   }
-  for (int i = 20; i < 30; i++) {
-    if (pointer_array[i] != NULL) {
+  for (int i = 20; i < 30; i++)
+  {
+    if(pointer_array[i] != NULL)
+    {
       alloc.free(pointer_array[i]);
     }
   }
-  // test6: alloc(2^i - 1)
+  //test6: alloc(2^i - 1)
+
 
   _OB_LOG(INFO, "free ptr");
 }
 
-class ObPtrStore {
+class ObPtrStore
+{
 public:
   int64_t seed_;
   int64_t ptr_len_;
-  char* ptr_;
+  char *ptr_;
 };
 
 TEST_F(BuddyAllocatorTest, random_test)
@@ -195,7 +216,7 @@ TEST_F(BuddyAllocatorTest, random_test)
   ObPtrStore ptr_store_arr[MAX_PTR_ARRAY_LEN];
   for (int64_t i = 0; i < MAX_PTR_ARRAY_LEN; ++i) {
     int64_t random_alloc_size = rand() % 511 + 2;
-    char* tmp_ptr = static_cast<char*>(alloc.alloc(random_alloc_size));
+    char *tmp_ptr = static_cast<char *>(alloc.alloc(random_alloc_size));
     ASSERT_TRUE(NULL != tmp_ptr);
     int64_t random_seed = rand();
     assign_ptr(tmp_ptr, random_alloc_size, random_seed);
@@ -236,7 +257,7 @@ TEST_F(BuddyAllocatorTest, random_test)
 
     // Re-alloc a pointer to the last position of the array
     int64_t random_alloc_size = rand() % 511 + 2;
-    char* tmp_ptr = static_cast<char*>(alloc.alloc(random_alloc_size));
+    char *tmp_ptr = static_cast<char *>(alloc.alloc(random_alloc_size));
     ASSERT_TRUE(NULL != tmp_ptr);
     int64_t random_seed = rand();
     assign_ptr(tmp_ptr, random_alloc_size, random_seed);
@@ -255,9 +276,10 @@ TEST_F(BuddyAllocatorTest, random_test)
   _OB_LOG(INFO, "free ptr");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

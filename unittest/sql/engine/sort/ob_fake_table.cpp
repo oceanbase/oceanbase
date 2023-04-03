@@ -14,28 +14,33 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
 #include "sql/engine/ob_exec_context.h"
-// using namespace oceanbase::sql;
-// using namespace oceanbase::sql::test;
-// using namespace oceanbase::common;
+//using namespace oceanbase::sql;
+//using namespace oceanbase::sql::test;
+//using namespace oceanbase::common;
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-namespace test {
-ObFakeTable::ObFakeTable() : ObPhyOperator(alloc_), row_count_(0), n_segments_local_merge_sort_(0)
+namespace sql
+{
+namespace test
+{
+ObFakeTable::ObFakeTable()
+    : ObPhyOperator(alloc_), row_count_(0), n_segments_local_merge_sort_(0)
 {
   set_column_count(COLUMN_COUNT);
 }
 
 ObFakeTable::~ObFakeTable()
-{}
+{
+}
 
 void ObFakeTable::set_row_count(const int64_t count)
 {
   row_count_ = count;
 }
 
-ObPhyOperator* ObFakeTable::get_child(int32_t child_idx) const
+ObPhyOperator *ObFakeTable::get_child(int32_t child_idx) const
 {
   UNUSED(child_idx);
   return NULL;
@@ -46,14 +51,14 @@ int32_t ObFakeTable::get_child_num() const
   return 0;
 }
 
-int ObFakeTable::set_child(int32_t child_idx, ObPhyOperator& child_operator)
+int ObFakeTable::set_child(int32_t child_idx, ObPhyOperator &child_operator)
 {
   UNUSED(child_idx);
   UNUSED(child_operator);
   return OB_SUCCESS;
 }
 
-int ObFakeTable::inner_open(ObExecContext& exec_ctx) const
+int ObFakeTable::inner_open(ObExecContext &exec_ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS != (ret = init_op_ctx(exec_ctx))) {
@@ -62,10 +67,10 @@ int ObFakeTable::inner_open(ObExecContext& exec_ctx) const
   return ret;
 }
 
-int ObFakeTable::inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const
+int ObFakeTable::inner_create_operator_ctx(ObExecContext &exec_ctx, ObPhyOperatorCtx *&op_ctx) const
 {
   int ret = OB_SUCCESS;
-  ObFakeTableCtx* table_ctx = NULL;
+  ObFakeTableCtx *table_ctx = NULL;
   if (OB_FAIL(CREATE_PHY_OPERATOR_CTX(ObFakeTableCtx, exec_ctx, get_id(), get_type(), table_ctx))) {
     _OB_LOG(WARN, "failed to create fake table ctx, ret=%d", ret);
   } else {
@@ -74,10 +79,10 @@ int ObFakeTable::inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperato
   return ret;
 }
 
-int ObFakeTable::init_op_ctx(ObExecContext& ctx) const
+int ObFakeTable::init_op_ctx(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObPhyOperatorCtx* op_ctx = NULL;
+  ObPhyOperatorCtx *op_ctx = NULL;
   if (OB_SUCCESS != (ret = inner_create_operator_ctx(ctx, op_ctx))) {
     _OB_LOG(WARN, "create operator context failed, ret=%d", ret);
   } else if (OB_SUCCESS != (ret = op_ctx->create_cur_row(get_column_count(), projector_, projector_size_))) {
@@ -86,10 +91,11 @@ int ObFakeTable::init_op_ctx(ObExecContext& ctx) const
   return ret;
 }
 
-int ObFakeTable::inner_get_next_row(ObExecContext& exec_ctx, const ObNewRow*& row) const
+
+int ObFakeTable::inner_get_next_row(ObExecContext &exec_ctx, const ObNewRow *&row) const
 {
   int ret = OB_SUCCESS;
-  ObFakeTableCtx* table_ctx = NULL;
+  ObFakeTableCtx *table_ctx = NULL;
   if (NULL == (table_ctx = GET_PHY_OPERATOR_CTX(ObFakeTableCtx, exec_ctx, get_id()))) {
     _OB_LOG(WARN, "failed to get table ctx, ret=%d", ret);
   } else if (table_ctx->get_count_ < row_count_) {
@@ -124,7 +130,7 @@ int ObFakeTable::inner_get_next_row(ObExecContext& exec_ctx, const ObNewRow*& ro
 -----------------------------------------------------------------------------------------------------
   rand str | row_idx | row_idx%2 | row_idx%3 | row_idx/2 | row_idx/3  | c1+c2 |c3+c4 |
 ***************************************************************************************************/
-int ObFakeTable::cons_cur_row(ObFakeTableCtx* table_ctx, const int64_t row_idx) const
+int ObFakeTable::cons_cur_row(ObFakeTableCtx *table_ctx, const int64_t row_idx) const
 {
   int ret = OB_SUCCESS;
   int64_t c2_val = 0, c3_val = 0, c4_val = 0, c5_val = 0, c6_val = 0;
@@ -179,9 +185,9 @@ int ObFakeTable::cons_cur_row(ObFakeTableCtx* table_ctx, const int64_t row_idx) 
   return ret;
 }
 
-#define A_Z_CNT (26)
-#define GER_CNT (4)  // ä, ö, ü, ß.
-int ObFakeTable::cons_varchar_cell(ObFakeTableCtx* table_ctx, ObObj& cell) const
+#define A_Z_CNT   (26)
+#define GER_CNT   (4)   // ä, ö, ü, ß.
+int ObFakeTable::cons_varchar_cell(ObFakeTableCtx *table_ctx, ObObj &cell) const
 {
   int ret = OB_SUCCESS;
   int charnum = rand_int(ObFakeTableCtx::VARCHAR_CELL_BUF_SIZE - 5) + 4;
@@ -194,23 +200,19 @@ int ObFakeTable::cons_varchar_cell(ObFakeTableCtx* table_ctx, ObObj& cell) const
       switch (rand) {
         case 26:
         case 27:
-          table_ctx->buf_[i] = (char)(0xA4);
-          break;  // ä
+          table_ctx->buf_[i] = (char)(0xA4); break; // ä
         case 28:
         case 29:
-          table_ctx->buf_[i] = (char)(0xB6);
-          break;  // ö
+          table_ctx->buf_[i] = (char)(0xB6); break; // ö
         case 30:
         case 31:
-          table_ctx->buf_[i] = (char)(0xBC);
-          break;  // ü
+          table_ctx->buf_[i] = (char)(0xBC); break; // ü
         case 32:
         case 33:
-          table_ctx->buf_[i] = (char)(0x9F);
-          break;  // ß
-        default:
-          break;
+          table_ctx->buf_[i] = (char)(0x9F); break; // ß
+        default: break;
       }
+
     }
   }
   table_ctx->buf_[charnum] = 0;
@@ -218,11 +220,11 @@ int ObFakeTable::cons_varchar_cell(ObFakeTableCtx* table_ctx, ObObj& cell) const
   varchar.assign_ptr(table_ctx->buf_, charnum);
   cell.set_varchar(varchar);
   cell.set_collation_type(common::CS_TYPE_UTF8MB4_BIN);
-  //  printf("**** rand varchar: %s\n", table_ctx->buf_);
+//  printf("**** rand varchar: %s\n", table_ctx->buf_);
   return ret;
 }
 
-int ObFakeTable::cons_random_int_cell(ObObj& cell) const
+int ObFakeTable::cons_random_int_cell(ObObj &cell) const
 {
   int ret = OB_SUCCESS;
   cell.set_int(rand());
@@ -232,7 +234,7 @@ int ObFakeTable::cons_random_int_cell(ObObj& cell) const
 inline int ObFakeTable::rand_int(int max) const
 {
   double fmax = max;
-  int j = (int)(fmax * (rand() / (RAND_MAX + 1.0)));
+  int j = (int) (fmax * (rand() / (RAND_MAX + 1.0)));
   return j;
 }
 
@@ -242,6 +244,6 @@ int64_t ObFakeTable::to_string(char* buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos, "FakeTableForTesting\n");
   return pos;
 }
-}  // end namespace test
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace test
+} // end namespace sql
+} // end namespace oceanbase

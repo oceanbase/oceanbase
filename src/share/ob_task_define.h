@@ -13,15 +13,27 @@
 #ifndef OB_TASK_DEFINE_H
 #define OB_TASK_DEFINE_H
 
+#include <cstdint>
 #include <type_traits>
-#include "lib/utility/ob_rate_limiter.h"
 
 namespace oceanbase {
+namespace lib
+{
+class ObRateLimiter;
+}
 namespace share {
-enum class ObTaskType { GENERIC, USER_REQUEST, DATA_MAINTAIN, ROOT_SERVICE, SCHEMA, MAX };
+enum class ObTaskType {
+  GENERIC,
+  USER_REQUEST,
+  DATA_MAINTAIN,
+  ROOT_SERVICE,
+  SCHEMA,
+  MAX
+};
 
-template <typename E>
-constexpr typename std::underlying_type<E>::type toUType(E enumerator) noexcept
+template<typename E>
+constexpr typename std::underlying_type<E>::type
+toUType(E enumerator) noexcept
 {
   return static_cast<typename std::underlying_type<E>::type>(enumerator);
 }
@@ -39,21 +51,15 @@ public:
   int init();
   void destroy();
   void switch_task(ObTaskType task_id);
-  void allow_next_syslog(int64_t count = 1);
+  void allow_next_syslog(int64_t count=1);
 
   void set_log_rate_limit(int64_t limit);
 
-  static ObTaskController& get();
+  void set_diag_per_error_limit(int64_t cnt);
+
+  static ObTaskController &get();
 
 private:
-  template <ObTaskType id>
-  void set_log_rate(int64_t rate)
-  {
-    if (id != ObTaskType::MAX) {
-      get_limiter(id)->set_rate(rate);
-    }
-  }
-
   template <ObTaskType id>
   void set_log_rate_pctg(double pctg)
   {
@@ -64,20 +70,18 @@ private:
 
   void calc_log_rate();
 
-  RateLimiter* get_limiter(ObTaskType id)
-  {
-    return limiters_[toUType(id)];
-  };
+  RateLimiter *get_limiter(ObTaskType id);
 
 private:
-  RateLimiter* limiters_[MAX_TASK_ID];
+  RateLimiter *limiters_[MAX_TASK_ID];
   double rate_pctgs_[MAX_TASK_ID];
   int64_t log_rate_limit_;
 
   static ObTaskController instance_;
 };
 
-}  // namespace share
-}  // namespace oceanbase
+}  // share
+}  // oceanbase
+
 
 #endif /* OB_TASK_DEFINE_H */

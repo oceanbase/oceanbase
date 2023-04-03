@@ -16,42 +16,33 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprLastExecId::ObExprLastExecId(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_GET_LAST_EXEC_ID, N_LAST_EXECUTION_ID, 0)
-{}
+ObExprLastExecId::ObExprLastExecId(ObIAllocator &alloc)
+  : ObStringExprOperator(alloc, T_FUN_GET_LAST_EXEC_ID, N_LAST_EXECUTION_ID, 0)
+{
+}
 
 ObExprLastExecId::~ObExprLastExecId()
-{}
+{
+}
 
-int ObExprLastExecId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprLastExecId::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_int();
   return OB_SUCCESS;
 }
 
-int ObExprLastExecId::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "session info is null");
-  } else {
-    int64_t last_exec_id = session_info->get_current_execution_id();
-    result.set_int(last_exec_id);
-  }
-  return ret;
-}
-
-int ObExprLastExecId::eval_last_exec_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprLastExecId::eval_last_exec_id(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObSQLSessionInfo* session_info = NULL;
+  const ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session info is null", K(ret));
@@ -61,7 +52,8 @@ int ObExprLastExecId::eval_last_exec_id(const ObExpr& expr, ObEvalCtx& ctx, ObDa
   return ret;
 }
 
-int ObExprLastExecId::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprLastExecId::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -69,5 +61,5 @@ int ObExprLastExecId::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr,
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

@@ -25,6 +25,7 @@
 #include "rpc/frame/ob_req_processor.h"
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_th_worker.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -32,7 +33,9 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::obrpc;
 
-ObWorkerProcessor::ObWorkerProcessor(ObReqTranslator& xlator, const common::ObAddr& myaddr)
+ObWorkerProcessor::ObWorkerProcessor(
+    ObReqTranslator &xlator,
+    const common::ObAddr &myaddr)
     : translator_(xlator), myaddr_(myaddr)
 {}
 
@@ -46,35 +49,33 @@ void ObWorkerProcessor::th_destroy()
   translator_.th_destroy();
 }
 
-inline int ObWorkerProcessor::process_one(rpc::ObRequest& req, int& process_ret)
+inline int ObWorkerProcessor::process_one(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
-  ObReqProcessor* processor = NULL;
+  ObReqProcessor *processor = NULL;
 
   if (OB_FAIL(translator_.translate(req, processor))) {
     LOG_WARN("translate request fail", K(ret));
-    req.disconnect();
-    easy_request_wakeup(req.get_request());
+    on_translate_fail(&req, ret);
   } else if (OB_ISNULL(processor)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected condition", K(ret));
   } else {
     NG_TRACE(before_processor_run);
     req.on_process_begin();
+    req.set_trace_point(ObRequest::OB_EASY_REQUEST_WORKER_PROCESSOR_RUN);
     if (OB_FAIL(processor->run())) {
       LOG_WARN("process request fail", K(ret));
     }
-    process_ret = processor->get_process_ret();
     translator_.release(processor);
   }
 
   return ret;
 }
 
-int ObWorkerProcessor::process(rpc::ObRequest& req)
+int ObWorkerProcessor::process(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
-  int process_ret = OB_SUCCESS;
 
   if (THE_TRACE != nullptr) {
     THE_TRACE->reset();
@@ -84,23 +85,26 @@ int ObWorkerProcessor::process(rpc::ObRequest& req)
   const bool enable_trace_log = lib::is_trace_log_enabled();
   const int64_t q_time = THIS_THWORKER.get_query_start_time() - req.get_receive_timestamp();
   NG_TRACE_EXT(process_begin,
-      OB_ID(in_queue_time),
-      q_time,
-      OB_ID(receive_ts),
-      req.get_receive_timestamp(),
-      OB_ID(enqueue_ts),
-      req.get_enqueue_timestamp());
-  ObRequest::Type req_type = req.get_type();  // bugfix note: must be obtained in advance
+               OB_ID(in_queue_time), q_time,
+               OB_ID(receive_ts), req.get_receive_timestamp(),
+               OB_ID(enqueue_ts), req.get_enqueue_timestamp());
+  ObRequest::Type req_type = req.get_type(); // bugfix note: must be obtained in advance
   if (ObRequest::OB_RPC == req_type) {
     // internal RPC request
-    const obrpc::ObRpcPacket& packet = static_cast<const obrpc::ObRpcPacket&>(req.get_packet());
-    NG_TRACE_EXT(start_rpc, OB_ID(addr), req.get_peer(), OB_ID(pcode), packet.get_pcode());
+    const obrpc::ObRpcPacket &packet
+        = static_cast<const obrpc::ObRpcPacket&>(req.get_packet());
+    NG_TRACE_EXT(start_rpc, OB_ID(addr), RPC_REQ_OP.get_peer(&req), OB_ID(pcode), packet.get_pcode());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
-    if (OB_LOG_LEVEL_NONE != packet.get_log_level() && enable_trace_log) {
-      ObThreadLogLevelUtils::init(packet.get_log_level());
+    // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
+    if (OB_LOGGER.is_info_as_wdiag()) {
+      ObThreadLogLevelUtils::clear();
+    } else {
+      if (enable_trace_log && OB_LOG_LEVEL_NONE != packet.get_log_level()) {
+        ObThreadLogLevelUtils::init(packet.get_log_level());
+      }
     }
   } else if (ObRequest::OB_MYSQL == req_type) {
-    NG_TRACE_EXT(start_sql, OB_ID(addr), req.get_peer());
+    NG_TRACE_EXT(start_sql, OB_ID(addr), SQL_REQ_OP.get_peer(&req));
     // mysql command request
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
   }
@@ -108,7 +112,7 @@ int ObWorkerProcessor::process(rpc::ObRequest& req)
   ObTraceIdAdaptor trace_id_adaptor;
   trace_id_adaptor.set(ObCurTraceId::get());
   NG_TRACE_EXT(query_begin, OB_ID(trace_id), trace_id_adaptor);
-  // NG_TRACE(query_begin);
+  //NG_TRACE(query_begin);
 
   // setup and init warning buffer
   // For general SQL processing, the rpc processing function entry uses set_tsi_warning_buffer to set the session
@@ -118,12 +122,19 @@ int ObWorkerProcessor::process(rpc::ObRequest& req)
   ob_setup_default_tsi_warning_buffer();
   ob_reset_tsi_warning_buffer();
 
-  // Set the chid of the source package to the thread
+  //Set the chid of the source package to the thread
   // int64_t st = ::oceanbase::common::ObTimeUtility::current_time();
   // PROFILE_LOG(DEBUG, HANDLE_PACKET_START_TIME PCODE, st, packet->get_pcode());
   // go!
-  if (OB_FAIL(process_one(req, process_ret))) {
-    LOG_WARN("process request fail", K(ret));
+  try {
+    in_try_stmt = true;
+    if (OB_FAIL(process_one(req))) {
+      LOG_WARN("process request fail", K(ret));
+    }
+    in_try_stmt = false;
+  } catch (OB_BASE_EXCEPTION &except) {
+    _LOG_ERROR("Exception caught!!! errno = %d, exception info = %s", except.get_errno(), except.what());
+    in_try_stmt = false;
   }
 
   // cleanup
@@ -132,7 +143,7 @@ int ObWorkerProcessor::process(rpc::ObRequest& req)
     ObThreadLogLevelUtils::clear();
   }
   PERF_GATHER_DATA();
-  // LOG_INFO("yzf debug", "atomic_op", ATOMIC_EVENT_RECORDER);
+  //LOG_INFO("yzf debug", "atomic_op", ATOMIC_EVENT_RECORDER);
   OB_ATOMIC_EVENT_GATHER_DATA();
   return ret;
 }

@@ -14,22 +14,28 @@
 #define OCEANBASE_BLOCKSSTABLE_OB_SCHEMA_GENERATOR_H_
 
 #include "share/schema/ob_table_schema.h"
-namespace oceanbase {
-namespace blocksstable {
-class ObSchemaGenerator {
+namespace oceanbase
+{
+namespace blocksstable
+{
+class ObSchemaGenerator
+{
 public:
-  static inline int generate_table(const uint64_t table_id, const int64_t column_count, const int64_t rowkey_count,
-      share::schema::ObTableSchema& table_schema);
-
+  static inline int generate_table(
+      const uint64_t table_id, const int64_t column_count,
+      const int64_t rowkey_count,
+      share::schema::ObTableSchema &table_schema);
 private:
-  static void set_column_type(const common::ObObjType obj_type, share::schema::ObColumnSchemaV2& column);
+  static void set_column_type(
+      const common::ObObjType obj_type, share::schema::ObColumnSchemaV2 &column);
 };
 
-int ObSchemaGenerator::generate_table(const uint64_t table_id, const int64_t column_count, const int64_t rowkey_count,
-    share::schema::ObTableSchema& table_schema)
+int ObSchemaGenerator::generate_table(
+    const uint64_t table_id, const int64_t column_count,
+    const int64_t rowkey_count, share::schema::ObTableSchema &table_schema)
 {
   int ret = common::OB_SUCCESS;
-  const uint64_t tenant_id = extract_tenant_id(table_id);
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
   share::schema::ObColumnSchemaV2 column;
   table_schema.reset();
   table_schema.set_table_name("test_table");
@@ -41,11 +47,12 @@ int ObSchemaGenerator::generate_table(const uint64_t table_id, const int64_t col
   table_schema.set_max_used_column_id(column_count);
   table_schema.set_block_size(2L * 1024);
   table_schema.set_compress_func_name("none");
-  // init column
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
   int64_t rowkey_pos = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+  for(int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i){
     ObObjType obj_type = static_cast<ObObjType>(i + 1);
     column.reset();
     column.set_table_id(table_id);
@@ -74,7 +81,7 @@ int ObSchemaGenerator::generate_table(const uint64_t table_id, const int64_t col
   return ret;
 }
 
-void ObSchemaGenerator::set_column_type(const common::ObObjType obj_type, share::schema::ObColumnSchemaV2& column)
+void ObSchemaGenerator::set_column_type(const common::ObObjType obj_type, share::schema::ObColumnSchemaV2 &column)
 {
   ObObjMeta meta_type;
   meta_type.set_type(obj_type);
@@ -86,7 +93,7 @@ void ObSchemaGenerator::set_column_type(const common::ObObjType obj_type, share:
   }
 }
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+}//end namespace blocksstable
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_BLOCKSSTABLE_OB_SCHEMA_GENERATE_H_
+#endif //OCEANBASE_BLOCKSSTABLE_OB_SCHEMA_GENERATE_H_

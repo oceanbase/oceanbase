@@ -18,45 +18,22 @@
 #include "sql/engine/expr/ob_expr_equal.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprSubQueryNSEqual::ObExprSubQueryNSEqual(ObIAllocator& alloc)
-    : ObSubQueryRelationalExpr(alloc, T_OP_SQ_NSEQ, N_SQ_NS_EQUAL, 2, NOT_ROW_DIMENSION)
-{}
+ObExprSubQueryNSEqual::ObExprSubQueryNSEqual(ObIAllocator &alloc)
+  : ObSubQueryRelationalExpr(alloc, T_OP_SQ_NSEQ, N_SQ_NS_EQUAL, 2, NOT_ROW_DIMENSION,
+                             INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprSubQueryNSEqual::~ObExprSubQueryNSEqual()
-{}
-
-int ObExprSubQueryNSEqual::compare_single_row(
-    const ObNewRow& left_row, const ObNewRow& right_row, ObExprCtx& expr_ctx, ObObj& result) const
 {
-  int ret = OB_SUCCESS;
-  const int64_t left_size = left_row.get_count();
-  const int64_t right_size = right_row.get_count();
-  if (left_size != right_size) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("projector size is not equal", K(left_size), K(right_size), K(ret));
-  } else {
-    const ObIArray<ObExprCalcType>& cmp_types = result_type_.get_row_calc_cmp_types();
-    ObCompareCtx cmp_ctx(ObMaxType, CS_TYPE_INVALID, true, expr_ctx.tz_offset_, default_null_pos());
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_WARN_ON_FAIL);
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_size; ++i) {
-      const ObObj& left_param = left_row.get_cell(i);
-      const ObObj& right_param = right_row.get_cell(i);
-      cmp_ctx.cmp_type_ = cmp_types.at(i).get_type();
-      cmp_ctx.cmp_cs_type_ = cmp_types.at(i).get_collation_type();
-      if (OB_FAIL(ObExprEqual::calc(result, left_param, right_param, cmp_ctx, cast_ctx))) {
-        LOG_WARN("Compare expression failed", K(i), K(ret));
-      } else if (result.is_false()) {
-        // when is not equal, should break immediately
-        break;
-      } else {
-      }
-    }
-  }
-  return ret;
 }
+
+
 }  // namespace sql
-}  // namespace oceanbase
+}

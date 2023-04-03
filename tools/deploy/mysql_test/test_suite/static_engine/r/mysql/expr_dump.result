@@ -1,0 +1,29 @@
+result_format: 4
+
+
+
+set @@ob_enable_plan_cache = 0;
+
+select dump(NULL);
++------------+
+| dump(NULL) |
++------------+
+|       NULL |
++------------+
+select dump(0.2);
++---------------------------------------------------+
+| dump(0.2)                                         |
++---------------------------------------------------+
+| "sign=1 exp=63 se=0xbf len=1 digits=[200000000,]" |
++---------------------------------------------------+
+select dump(2);
+ERROR 0A000: The input type of the DUMP function not supported
+select dump('abcdef');
+ERROR 0A000: The input type of the DUMP function not supported
+select dump('abcdef');
+ERROR 0A000: The input type of the DUMP function not supported
+select dump(date'2020-01-01');
+ERROR 0A000: The input type of the DUMP function not supported
+select dump(timestamp'2020-01-01');
+ERROR 0A000: The input type of the DUMP function not supported
+

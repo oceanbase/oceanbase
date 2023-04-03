@@ -23,376 +23,227 @@
 #include "sql/dtl/ob_dtl_channel.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_des_exec_context.h"
-#include "sql/engine/ob_phy_operator.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/px/ob_px_interruption.h"
 #include "sql/engine/px/ob_dfo_mgr.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_px_basic_info.h"
-#include "sql/engine/table/ob_table_scan.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/engine/px/ob_px_bloom_filter.h"
+#include "sql/das/ob_das_define.h"
+namespace oceanbase
+{
+namespace sql
+{
 
-namespace oceanbase {
-namespace sql {
-
-enum class ObDfoState { WAIT, BLOCK, RUNNING, FINISH, FAIL };
+enum class ObDfoState
+{
+  WAIT,
+  BLOCK,
+  RUNNING,
+  FINISH,
+  FAIL
+};
 
 #define SQC_TASK_START (1 << 0)
-#define SQC_TASK_EXIT (1 << 1)
+#define SQC_TASK_EXIT  (1 << 1)
 
-class ObPhyOperator;
 class ObPhysicalPlan;
 class ObSqcTaskMgr;
 class ObPxSqcHandler;
+class ObJoinFilter;
 
-class ObPxTaskMeta {
+// 在 PX 端描述每个 SQC 的 task
+// 通过 exec_addr 区分 SQC
+class ObPxTaskMeta
+{
 public:
-  ObPxTaskMeta()
-      : exec_addr_(),
-        sqc_id_(common::OB_INVALID_INDEX),
-        task_id_(common::OB_INVALID_INDEX),
-        sm_group_id_(common::OB_INVALID_INDEX)
-  {}
+  ObPxTaskMeta() : exec_addr_(), sqc_id_(common::OB_INVALID_INDEX),
+  task_id_(common::OB_INVALID_INDEX), sm_group_id_(common::OB_INVALID_INDEX) {}
   ~ObPxTaskMeta() = default;
-  void set_exec_addr(const common::ObAddr& addr)
-  {
-    exec_addr_ = addr;
-  }
-  const common::ObAddr& get_exec_addr() const
-  {
-    return exec_addr_;
-  }
-  void set_task_id(int64_t task_id)
-  {
-    task_id_ = task_id;
-  }
-  int64_t get_task_id() const
-  {
-    return task_id_;
-  }
-  void set_sqc_id(int64_t sqc_id)
-  {
-    sqc_id_ = sqc_id;
-  }
-  int64_t get_sqc_id() const
-  {
-    return sqc_id_;
-  }
-  void set_sm_group_id(int64_t sm_group_id)
-  {
-    sm_group_id_ = sm_group_id;
-  }
-  int64_t get_sm_group_id() const
-  {
-    return sm_group_id_;
-  }
+  void set_exec_addr(const common::ObAddr &addr) { exec_addr_ = addr; }
+  const common::ObAddr &get_exec_addr() const {   return exec_addr_; }
+  void set_task_id(int64_t task_id) { task_id_ = task_id; }
+  int64_t get_task_id() const { return task_id_; }
+  void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
+  int64_t get_sqc_id() const { return sqc_id_; }
+  void set_sm_group_id(int64_t sm_group_id) { sm_group_id_ = sm_group_id; }
+  int64_t get_sm_group_id() const { return sm_group_id_; }
   TO_STRING_KV(K_(exec_addr), K_(sqc_id), K_(task_id));
-
 private:
   common::ObAddr exec_addr_;
+  // 考虑到容错重试，同一个 addr 上可能有多个 sqc 存在，通过 sqc_id_ 来区分 task 归属为哪个 sqc
   int64_t sqc_id_;
+  // 记录 Task 是 SQC 中的第几个任务，用于 partial partition wise join 场景
+  // ref:
   int64_t task_id_;
   // slave map group id
   int64_t sm_group_id_;
 };
+struct ObSqcTableLocationKey
+{
+ OB_UNIS_VERSION(1);
+public:
+  ObSqcTableLocationKey() : table_location_key_(0),
+      ref_table_id_(OB_INVALID_ID), tablet_id_(),
+      is_dml_(false), is_loc_uncertain_(false) {}
+  ObSqcTableLocationKey(int64_t key, int64_t ref_table_id,
+      common::ObTabletID &tablet_id, bool is_dml, bool is_loc_uncertain) :
+      table_location_key_(key),
+      ref_table_id_(ref_table_id),
+      tablet_id_(tablet_id),
+      is_dml_(is_dml),
+      is_loc_uncertain_(is_loc_uncertain) {}
+  int64_t table_location_key_;
+  int64_t ref_table_id_;
+  common::ObTabletID tablet_id_;
+  bool is_dml_;
+  bool is_loc_uncertain_; // pdml location
+  TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(tablet_id), K_(is_dml), K_(is_loc_uncertain));
+};
 
-class ObPxSqcMeta {
+struct ObSqcTableLocationIndex
+{
+public:
+  ObSqcTableLocationIndex() : table_location_key_(0),
+    location_start_pos_(0), location_end_pos_(0) {}
+  ObSqcTableLocationIndex(int64_t key,
+      int64_t start_pos,
+      int64_t end_pos) :
+      table_location_key_(key),
+      location_start_pos_(start_pos),
+      location_end_pos_(end_pos) {}
+  int64_t table_location_key_;
+  int64_t location_start_pos_;
+  int64_t location_end_pos_;
+  TO_STRING_KV(K_(table_location_key), K_(location_start_pos), K_(location_end_pos));
+};
+// PX 端描述每个 SQC 的数据结构
+class ObPxSqcMeta
+{
   OB_UNIS_VERSION(1);
-
 public:
-  struct PartitionIdValue {
-    OB_UNIS_VERSION(1);
-
-  public:
-    PartitionIdValue() : partition_id_(0), location_idx_(0), value_begin_idx_(0), value_count_(0)
-    {}
-    int64_t partition_id_;
-    int64_t location_idx_;
-    int64_t value_begin_idx_;
-    int64_t value_count_;
-    TO_STRING_KV(K_(partition_id), K_(location_idx), K_(value_begin_idx), K_(value_count));
-  };
-
-public:
-  ObPxSqcMeta()
-      : execution_id_(common::OB_INVALID_ID),
-        qc_id_(common::OB_INVALID_ID),
-        sqc_id_(common::OB_INVALID_ID),
-        dfo_id_(common::OB_INVALID_ID),
-        locations_(),
-        access_table_locations_(),
-        qc_ch_info_(),
-        sqc_ch_info_(),
-        qc_channel_(NULL),
-        sqc_channel_(NULL),
-        exec_addr_(),
-        qc_addr_(),
-        task_count_(0),
-        max_task_count_(3),
-        min_task_count_(1),
-        total_task_count_(1),
-        total_part_count_(1),
-        thread_inited_(false),
-        thread_finish_(false),
-        px_int_id_(),
-        task_monitor_info_array_(),
-        is_fulltree_(false),
-        is_rpc_worker_(false),
-        need_report_(false),
-        qc_server_id_(common::OB_INVALID_ID),
-        parent_dfo_id_(common::OB_INVALID_ID),
-        px_sequence_id_(common::OB_INVALID_ID),
-        transmit_use_interm_result_(false),
-        recieve_use_interm_result_(false),
-        serial_receive_channels_(),
-        interm_result_ids_(),
-        partition_id_values_()
+  ObPxSqcMeta() :
+              execution_id_(common::OB_INVALID_ID),
+              qc_id_(common::OB_INVALID_ID),
+              sqc_id_(common::OB_INVALID_ID),
+              dfo_id_(common::OB_INVALID_ID),
+              access_table_locations_(),
+              qc_ch_info_(),
+              sqc_ch_info_(),
+              qc_channel_(NULL),
+              sqc_channel_(NULL),
+              exec_addr_(),
+              qc_addr_(),
+              task_count_(0),
+              max_task_count_(3),
+              min_task_count_(1),
+              total_task_count_(1),
+              total_part_count_(1),
+              thread_inited_(false),
+              thread_finish_(false),
+              px_int_id_(),
+              is_fulltree_(false),
+              is_rpc_worker_(false),
+              need_report_(false),
+              qc_server_id_(common::OB_INVALID_ID),
+              parent_dfo_id_(common::OB_INVALID_ID),
+              px_sequence_id_(common::OB_INVALID_ID),
+              transmit_use_interm_result_(false),
+              recieve_use_interm_result_(false),
+              serial_receive_channels_(),
+              rescan_batch_params_(),
+              partition_pruning_table_locations_(),
+              temp_table_ctx_(),
+              ignore_vtable_error_(false),
+              access_table_location_keys_(),
+              access_table_location_indexes_(),
+              server_not_alive_(false),
+              adjoining_root_dfo_(false),
+              is_single_tsc_leaf_dfo_(false)
   {}
   ~ObPxSqcMeta() = default;
-  int assign(const ObPxSqcMeta& other);
+  int assign(const ObPxSqcMeta &other);
 
-  dtl::ObDtlChannelInfo& get_qc_channel_info()
-  {
-    return qc_ch_info_;
-  }
-  const dtl::ObDtlChannelInfo& get_qc_channel_info_const() const
-  {
-    return qc_ch_info_;
-  }
-  dtl::ObDtlChannelInfo& get_sqc_channel_info()
-  {
-    return sqc_ch_info_;
-  }
-  const dtl::ObDtlChannelInfo& get_sqc_channel_info_const() const
-  {
-    return sqc_ch_info_;
-  }
-  ObPartitionReplicaLocationIArray& get_locations()
-  {
-    return locations_;
-  }
-  ObPartitionReplicaLocationIArray& get_access_table_locations()
-  {
-    return access_table_locations_;
-  }
-  const ObPartitionReplicaLocationIArray& get_locations() const
-  {
-    return locations_;
-  }
-  void set_execution_id(uint64_t execution_id)
-  {
-    execution_id_ = execution_id;
-  }
-  void set_qc_id(uint64_t qc_id)
-  {
-    qc_id_ = qc_id;
-  }
-  void set_sqc_id(int64_t sqc_id)
-  {
-    sqc_id_ = sqc_id;
-  }
-  void set_dfo_id(int64_t dfo_id)
-  {
-    dfo_id_ = dfo_id;
-  }
-  inline ObPxInterruptID get_interrupt_id()
-  {
-    return px_int_id_;
-  }
-  inline void set_interrupt_id(const ObPxInterruptID& px_int_id)
-  {
-    px_int_id_ = px_int_id;
-  }
-  void set_exec_addr(const common::ObAddr& addr)
-  {
-    exec_addr_ = addr;
-  }
-  void set_qc_addr(const common::ObAddr& addr)
-  {
-    qc_addr_ = addr;
-  }
-  void set_qc_channel(dtl::ObDtlChannel* ch)
-  {
-    qc_channel_ = ch;
-  }
-  void set_sqc_channel(dtl::ObDtlChannel* ch)
-  {
-    sqc_channel_ = ch;
-  }
-  void set_task_count(int64_t task_count)
-  {
-    task_count_ = task_count;
-  }
-  void set_max_task_count(int64_t max_task_count)
-  {
-    max_task_count_ = max_task_count;
-  }
-  void set_min_task_count(int64_t min_task_count)
-  {
-    min_task_count_ = min_task_count;
-  }
-  void set_total_task_count(int64_t total_task_count)
-  {
-    total_task_count_ = total_task_count;
-  }
-  void set_total_part_count(int64_t total_part_count)
-  {
-    total_part_count_ = total_part_count;
-  }
+  // 输入、输出函数
+  /* 获取 qc 端的通信端口，由 qc 端读取并 link */
+  dtl::ObDtlChannelInfo &get_qc_channel_info() { return qc_ch_info_; }
+  const dtl::ObDtlChannelInfo &get_qc_channel_info_const() const { return qc_ch_info_; }
+  /* 获取 sqc 端的通信端口，由 sqc 端读取并 link */
+  dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
+  const dtl::ObDtlChannelInfo &get_sqc_channel_info_const() const { return sqc_ch_info_; }
+  ObIArray<ObSqcTableLocationKey> &get_access_table_location_keys() { return access_table_location_keys_; }
+  ObIArray<ObSqcTableLocationIndex> &get_access_table_location_indexes() { return access_table_location_indexes_; }
+  DASTabletLocIArray &get_access_table_locations_for_update() { return access_table_locations_; }
+  const DASTabletLocIArray &get_access_table_locations() const { return access_table_locations_; }
+  void set_execution_id(uint64_t execution_id) { execution_id_ = execution_id; }
+  void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
+  void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
+  void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
+  inline ObPxInterruptID get_interrupt_id() { return px_int_id_; }
+  inline void set_interrupt_id(const ObPxInterruptID &px_int_id)
+                              { px_int_id_ = px_int_id; }
+  void set_exec_addr(const common::ObAddr &addr) {   exec_addr_ = addr; }
+  void set_qc_addr(const common::ObAddr &addr) {   qc_addr_ = addr; }
+  void set_qc_channel(dtl::ObDtlChannel *ch) {   qc_channel_ = ch; }
+  void set_sqc_channel(dtl::ObDtlChannel *ch) { sqc_channel_ = ch; }
+  void set_task_count(int64_t task_count) {   task_count_ =  task_count; }
+  void set_max_task_count(int64_t max_task_count) {   max_task_count_ =  max_task_count; }
+  void set_min_task_count(int64_t min_task_count) {   min_task_count_ =  min_task_count; }
+  void set_total_task_count(int64_t total_task_count) {   total_task_count_ =  total_task_count; }
+  void set_total_part_count(int64_t total_part_count) {   total_part_count_ =  total_part_count; }
 
-  uint64_t get_execution_id() const
-  {
-    return execution_id_;
-  }
-  uint64_t get_qc_id() const
-  {
-    return qc_id_;
-  }
-  int64_t get_sqc_id() const
-  {
-    return sqc_id_;
-  }
-  int64_t get_dfo_id() const
-  {
-    return dfo_id_;
-  }
-  common::ObIArray<ObPxPartitionInfo>& get_partitions_info()
-  {
-    return partitions_info_;
-  }
-  common::ObIArray<uint64_t>& get_interm_results()
-  {
-    return interm_result_ids_;
-  }
+  uint64_t get_execution_id() const { return execution_id_; }
+  uint64_t get_qc_id() const { return qc_id_; }
+  int64_t get_sqc_id() const { return sqc_id_; }
+  int64_t get_dfo_id() const { return dfo_id_; }
+  common::ObIArray<ObPxTabletInfo> &get_partitions_info() { return partitions_info_; }
+  common::ObIArray<ObSqlTempTableCtx> &get_temp_table_ctx() { return temp_table_ctx_; }
 
-  const common::ObAddr& get_exec_addr() const
-  {
-    return exec_addr_;
-  }
-  const common::ObAddr& get_sqc_addr() const
-  {
-    return exec_addr_;
-  }  // get_exec_addr alias
-  const common::ObAddr& get_qc_addr() const
-  {
-    return qc_addr_;
-  }
-  dtl::ObDtlChannel* get_qc_channel()
-  {
-    return qc_channel_;
-  }
-  dtl::ObDtlChannel* get_sqc_channel()
-  {
-    return sqc_channel_;
-  }
-  dtl::ObDtlChannel* get_sqc_channel() const
-  {
-    return sqc_channel_;
-  }
-  int64_t get_task_count() const
-  {
-    return task_count_;
-  }
-  int64_t get_max_task_count() const
-  {
-    return max_task_count_;
-  }
-  int64_t get_min_task_count() const
-  {
-    return min_task_count_;
-  }
-  int64_t get_total_task_count() const
-  {
-    return total_task_count_;
-  }
-  int64_t get_total_part_count() const
-  {
-    return total_part_count_;
-  }
-  void set_fulltree(bool v)
-  {
-    is_fulltree_ = v;
-  }
-  bool is_fulltree() const
-  {
-    return is_fulltree_;
-  }
-  void set_rpc_worker(bool v)
-  {
-    is_rpc_worker_ = v;
-  }
-  bool is_rpc_worker() const
-  {
-    return is_rpc_worker_;
-  }
-  void set_thread_inited(bool v)
-  {
-    thread_inited_ = v;
-  }
-  bool is_thread_inited() const
-  {
-    return thread_inited_;
-  }
-  void set_thread_finish(bool v)
-  {
-    thread_finish_ = v;
-  }
-  bool is_thread_finish() const
-  {
-    return thread_finish_;
-  }
-  void set_need_report(bool v)
-  {
-    need_report_ = v;
-  }
-  bool need_report()
-  {
-    return need_report_;
-  }
-  void set_qc_server_id(int64_t qc_server_id)
-  {
-    qc_server_id_ = qc_server_id;
-  }
-  int64_t get_qc_server_id()
-  {
-    return qc_server_id_;
-  }
-  void set_parent_dfo_id(int64_t parent_dfo_id)
-  {
-    parent_dfo_id_ = parent_dfo_id;
-  }
-  int64_t get_parent_dfo_id()
-  {
-    return parent_dfo_id_;
-  }
-  void set_px_sequence_id(uint64_t px_sequence_id)
-  {
-    px_sequence_id_ = px_sequence_id;
-  }
-  int64_t get_px_sequence_id()
-  {
-    return px_sequence_id_;
-  }
-  ObPxTransmitDataChannelMsg& get_transmit_channel_msg()
-  {
-    return transmit_channel_;
-  }
-  ObPxReceiveDataChannelMsg& get_receive_channel_msg()
-  {
-    return receive_channel_;
-  }
+  const common::ObAddr &get_exec_addr() const {   return exec_addr_; }
+  const common::ObAddr &get_sqc_addr() const {   return exec_addr_; } // get_exec_addr alias
+  const common::ObAddr &get_qc_addr() const {   return qc_addr_; }
+  dtl::ObDtlChannel *get_qc_channel() {   return qc_channel_; }
+  dtl::ObDtlChannel *get_sqc_channel() { return sqc_channel_; }
+  dtl::ObDtlChannel *get_sqc_channel() const { return sqc_channel_; }
+  int64_t get_task_count() const {   return task_count_; }
+  int64_t get_max_task_count() const {   return max_task_count_; }
+  int64_t get_min_task_count() const {   return min_task_count_; }
+  int64_t get_total_task_count() const { return total_task_count_; }
+  int64_t get_total_part_count() const { return total_part_count_; }
+  void set_fulltree(bool v) { is_fulltree_ = v; }
+  bool is_fulltree() const { return is_fulltree_; }
+  void set_thread_inited(bool v) { thread_inited_ = v; }
+  bool is_thread_inited() const { return thread_inited_; }
+  void set_thread_finish(bool v) { thread_finish_ = v; }
+  bool is_thread_finish() const { return thread_finish_; }
+  void set_need_report(bool v) { need_report_ = v; }
+  bool need_report() { return need_report_; }
+  void set_qc_server_id(int64_t qc_server_id) { qc_server_id_ = qc_server_id; }
+  int64_t get_qc_server_id() { return qc_server_id_; }
+  void set_parent_dfo_id(int64_t parent_dfo_id) { parent_dfo_id_ = parent_dfo_id; }
+  int64_t get_parent_dfo_id() { return parent_dfo_id_; }
+  void set_px_sequence_id(uint64_t px_sequence_id) { px_sequence_id_ = px_sequence_id; }
+  int64_t get_px_sequence_id() { return px_sequence_id_; }
+  void set_ignore_vtable_error(bool flag) { ignore_vtable_error_ = flag; }
+  bool is_ignore_vtable_error() { return ignore_vtable_error_; }
+  void set_server_not_alive(bool not_alive) { server_not_alive_ = not_alive; }
+  bool is_server_not_alive() { return server_not_alive_; }
+  ObPxTransmitDataChannelMsg &get_transmit_channel_msg() { return transmit_channel_; }
+  ObPxReceiveDataChannelMsg &get_receive_channel_msg() { return receive_channel_; }
   common::ObIArray<ObPxReceiveDataChannelMsg>& get_serial_receive_channels()
-  {
-    return serial_receive_channels_;
-  }
+  { return serial_receive_channels_; }
   void reset()
   {
-    locations_.reset();
     access_table_locations_.reset();
     transmit_channel_.reset();
     receive_channel_.reset();
     serial_receive_channels_.reset();
+    rescan_batch_params_.reset();
+    partition_pruning_table_locations_.reset();
   }
+  // SQC 端收到 InitSQC 消息后通过 data_channel 信息是否为空
+  // 来判断 data channel 是否已经预分配好，是否要走轻量调度
   bool is_prealloc_transmit_channel() const
   {
     return transmit_channel_.has_filled_channel();
@@ -401,58 +252,48 @@ public:
   {
     return receive_channel_.has_filled_channel();
   }
-  ObPxTaskMonitorInfoArray& get_task_monitor_info_array()
-  {
-    return task_monitor_info_array_;
-  };
-  int set_task_monitor_info_array(const ObPxTaskMonitorInfoArray& other)
-  {
-    return task_monitor_info_array_.assign(other);
-  }
   void set_transmit_use_interm_result(bool flag)
-  {
-    transmit_use_interm_result_ = flag;
-  }
+  { transmit_use_interm_result_ = flag; }
   void set_recieve_use_interm_result(bool flag)
-  {
-    recieve_use_interm_result_ = flag;
-  }
-  bool transmit_use_interm_result()
-  {
-    return transmit_use_interm_result_;
-  }
-  bool recieve_use_interm_result()
-  {
-    return recieve_use_interm_result_;
-  }
-  int add_serial_recieve_channel(const ObPxReceiveDataChannelMsg& channel);
-  int add_partition_id_values(int64_t partition_id, int64_t value_begin_idx, int64_t location_idx, int64_t value_count);
-  common::ObIArray<PartitionIdValue>& get_partition_id_values()
-  {
-    return partition_id_values_;
-  }
-  int split_values(ObExecContext& ctx);
-  TO_STRING_KV(K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr), K_(qc_ch_info),
-      K_(sqc_ch_info), K_(task_count), K_(max_task_count), K_(min_task_count), K_(thread_inited), K_(thread_finish),
-      K_(px_int_id), K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result), K_(recieve_use_interm_result),
-      K(interm_result_ids_));
-
+  { recieve_use_interm_result_ = flag; }
+  bool transmit_use_interm_result() const { return transmit_use_interm_result_; }
+  bool recieve_use_interm_result() const { return recieve_use_interm_result_; }
+  int add_serial_recieve_channel(const ObPxReceiveDataChannelMsg &channel);
+  int set_rescan_batch_params(ObBatchRescanParams &params) { return rescan_batch_params_.assign(params); }
+  ObBatchRescanParams &get_rescan_batch_params() { return rescan_batch_params_; }
+  common::ObIArray<ObTableLocation> &get_pruning_table_locations()
+  { return partition_pruning_table_locations_; }
+  void set_adjoining_root_dfo(bool flag)
+  { adjoining_root_dfo_ = flag; }
+  bool adjoining_root_dfo() const { return adjoining_root_dfo_; }
+  void set_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
+  bool is_single_tsc_leaf_dfo() { return is_single_tsc_leaf_dfo_; }
+  TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
+               K_(qc_ch_info), K_(sqc_ch_info),
+               K_(task_count), K_(max_task_count), K_(min_task_count),
+               K_(thread_inited), K_(thread_finish), K_(px_int_id),
+               K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result),
+               K_(recieve_use_interm_result), K(temp_table_ctx_), K_(server_not_alive),
+               K_(adjoining_root_dfo), K_(is_single_tsc_leaf_dfo));
 private:
   uint64_t execution_id_;
   uint64_t qc_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
-  ObPartitionReplicaLocationSEArray locations_;
-  ObPartitionReplicaLocationSEArray access_table_locations_;
-  ObPxTransmitDataChannelMsg transmit_channel_;
-  ObPxReceiveDataChannelMsg receive_channel_;
+  // The partition location information of the all table_scan op and dml op
+  // used for px worker execution
+  // no need serialize
+  DASTabletLocSEArray access_table_locations_;
+
+  ObPxTransmitDataChannelMsg transmit_channel_; // 用于快速建立 QC-Task 通道模式
+  ObPxReceiveDataChannelMsg receive_channel_; // 用于快速建立 QC-Task 通道模式
   dtl::ObDtlChannelInfo qc_ch_info_;
   dtl::ObDtlChannelInfo sqc_ch_info_;
-  dtl::ObDtlChannel* qc_channel_;
-  dtl::ObDtlChannel* sqc_channel_;
-  common::ObAddr exec_addr_;
-  common::ObAddr qc_addr_;
-  int64_t task_count_;
+  dtl::ObDtlChannel *qc_channel_; /* 用于 qc 给 sqc 发送数据 */
+  dtl::ObDtlChannel *sqc_channel_; /* 用于 sqc 给 qc 发送数据 */
+  common::ObAddr exec_addr_; /* SQC 的运行地址 */
+  common::ObAddr qc_addr_; /* 记录 QC 的地址，用于 SQC-QC 通信 */
+  int64_t task_count_; /* 每个 DFO 会被拆分成 task-count 个 SQC 并发执行 */
   int64_t max_task_count_;
   int64_t min_task_count_;
   int64_t total_task_count_;
@@ -460,486 +301,338 @@ private:
   bool thread_inited_;
   bool thread_finish_;
   ObPxInterruptID px_int_id_;
-  ObPxTaskMonitorInfoArray task_monitor_info_array_;
   bool is_fulltree_;
   bool is_rpc_worker_;
   // No need to serialize
-  ObSEArray<ObPxPartitionInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
   bool need_report_;
   uint64_t qc_server_id_;
   int64_t parent_dfo_id_;
   uint64_t px_sequence_id_;
+  // 以下两个变量在单层调度dfo场景中会使用
+  // 标记sqc在执行transmit/recieve算子时是否从中间结收/发数据
   bool transmit_use_interm_result_;
   bool recieve_use_interm_result_;
-  common::ObSEArray<ObPxReceiveDataChannelMsg, 1> serial_receive_channels_;
-  ObSEArray<uint64_t, 8> interm_result_ids_;
-  ObSArray<PartitionIdValue> partition_id_values_;
+  // 新增receive_channels, sqc meta中捎带channel
+  // 在串行调度依赖此数组获取receive_channels.
+  common::ObSEArray<ObPxReceiveDataChannelMsg, 1>serial_receive_channels_;
+  // 在NLJ分布式batch rescan场景下使用
+  // 用于存放NLJ条件下推的参数
+  ObBatchRescanParams rescan_batch_params_;
+  // for partition pruning
+  common::ObSEArray<ObTableLocation, 2> partition_pruning_table_locations_;
+  // sqc中需要中间结果文件写的数据块id的数组
+  ObSEArray<ObSqlTempTableCtx, 2> temp_table_ctx_;
+  // all child is virtual table, need ignore error.
+  bool ignore_vtable_error_;
+  ObSEArray<ObSqcTableLocationKey, 2> access_table_location_keys_;
+  ObSEArray<ObSqcTableLocationIndex, 2> access_table_location_indexes_;
+  bool server_not_alive_;
+  /*used for init channel msg, indicate a transmit
+  op is adjoining coodinator, that need not wait that msg*/
+  bool adjoining_root_dfo_;
+  //for auto scale
+  bool is_single_tsc_leaf_dfo_;
 };
 
-class ObDfo {
-  friend class ObDfoTreeNormalizer;
+class ObDfo
+{
+  template <class T>
+  friend class DfoTreeNormalizer;
   friend class ObDfoMgr;
-  using TaskFilterFunc = std::function<bool(const ObPxTaskChSet&)>;
-
+  using TaskFilterFunc = std::function<bool(const ObPxTaskChSet &)>;
 public:
-  static const int64_t MAX_DFO_ID = INT32_MAX;
-
+  static const int64_t MAX_DFO_ID = INT_MAX32;
 public:
-  ObDfo(common::ObIAllocator& allocator)
-      : allocator_(allocator),
-        execution_id_(common::OB_INVALID_ID),
-        qc_id_(common::OB_INVALID_ID),
-        dfo_id_(common::OB_INVALID_ID),
-        px_int_id_(),
-        dop_(0),
-        assigned_worker_cnt_(0),
-        used_worker_cnt_(0),
-        is_single_(false),
-        is_root_dfo_(false),
-        prealloced_receive_channel_(false),
-        prealloced_transmit_channel_(false),
-        phy_plan_(NULL),
-        root_op_(NULL),
-        root_op_spec_(nullptr),
-        child_dfos_(),
-        has_scan_(false),
-        has_dml_op_(false),
-        has_temp_insert_(false),
-        has_temp_scan_(false),
-        is_active_(false),
-        is_scheduled_(false),
-        thread_inited_(false),
-        thread_finish_(false),
-        depend_sibling_(NULL),
-        parent_(NULL),
-        receive_ch_sets_map_(),
-        dfo_ch_infos_(),
-        is_fulltree_(false),
-        is_rpc_worker_(false),
-        qc_server_id_(common::OB_INVALID_ID),
-        parent_dfo_id_(common::OB_INVALID_ID),
-        px_sequence_id_(common::OB_INVALID_ID),
-        temp_table_id_(0),
-        slave_mapping_type_(SlaveMappingType::SM_NONE),
-        part_ch_map_(),
-        total_task_cnt_(0),
-        has_expr_values_(false)
-  {}
+  ObDfo(common::ObIAllocator &allocator) :
+    allocator_(allocator),
+    execution_id_(common::OB_INVALID_ID),
+    qc_id_(common::OB_INVALID_ID),
+    dfo_id_(common::OB_INVALID_ID),
+    px_int_id_(),
+    dop_(0),
+    assigned_worker_cnt_(0),
+    used_worker_cnt_(0),
+    is_single_(false),
+    is_root_dfo_(false),
+    prealloced_receive_channel_(false),
+    prealloced_transmit_channel_(false),
+    phy_plan_(NULL),
+    root_op_spec_(nullptr),
+    child_dfos_(),
+    has_scan_(false),
+    has_dml_op_(false),
+    has_temp_scan_(false),
+    is_active_(false),
+    is_scheduled_(false),
+    thread_inited_(false),
+    thread_finish_(false),
+    depend_sibling_(NULL),
+    has_depend_sibling_(false),
+    parent_(NULL),
+    receive_ch_sets_map_(),
+    dfo_ch_infos_(),
+    is_fulltree_(false),
+    is_rpc_worker_(false),
+    earlier_sched_(false),
+    qc_server_id_(common::OB_INVALID_ID),
+    parent_dfo_id_(common::OB_INVALID_ID),
+    px_sequence_id_(common::OB_INVALID_ID),
+    temp_table_id_(0),
+    slave_mapping_type_(SlaveMappingType::SM_NONE),
+    part_ch_map_(),
+    px_bloom_filter_mode_(JoinFilterMode::NOT_INIT),
+    px_bf_id_(OB_INVALID_ID),
+    use_filter_ch_map_(),
+    total_task_cnt_(0),
+    pkey_table_loc_id_(0),
+    tsc_op_cnt_(0)
+  {
+  }
 
   virtual ~ObDfo() = default;
-  inline void set_has_expr_values(bool flag)
-  {
-    has_expr_values_ = flag;
-  }
-  inline bool has_expr_values()
-  {
-    return has_expr_values_;
-  }
-  inline void set_execution_id(uint64_t execution_id)
-  {
-    execution_id_ = execution_id;
-  }
-  inline uint64_t get_execution_id()
-  {
-    return execution_id_;
-  }
-  inline void set_qc_id(uint64_t qc_id)
-  {
-    qc_id_ = qc_id;
-  }
-  inline uint64_t get_qc_id()
-  {
-    return qc_id_;
-  }
-  inline ObPxInterruptID& get_interrupt_id()
-  {
-    return px_int_id_;
-  }
-  inline void set_interrupt_id(const ObPxInterruptID& px_int_id)
-  {
-    px_int_id_ = px_int_id;
-  }
-  inline void set_dop(const int64_t dop)
-  {
-    dop_ = dop;
-  }
-  inline int64_t get_dop() const
-  {
-    return dop_;
-  }
-  void set_assigned_worker_count(int64_t cnt)
-  {
-    assigned_worker_cnt_ = cnt;
-  }
-  int64_t get_assigned_worker_count() const
-  {
-    return assigned_worker_cnt_;
-  }
-  void set_used_worker_count(int64_t cnt)
-  {
-    used_worker_cnt_ = cnt;
-  }
-  int64_t get_used_worker_count() const
-  {
-    return used_worker_cnt_;
-  }
-  inline void set_single(const bool single)
-  {
-    is_single_ = single;
-  }
-  inline bool is_single() const
-  {
-    return is_single_;
-  }
-  inline void set_root_dfo(bool is_root)
-  {
-    is_root_dfo_ = is_root;
-  }
-  inline bool is_root_dfo() const
-  {
-    return is_root_dfo_;
-  }
-  inline void set_prealloc_receive_channel(const bool v)
-  {
-    prealloced_receive_channel_ = v;
-  }
-  inline bool is_prealloc_receive_channel() const
-  {
-    return prealloced_receive_channel_;
-  }
-  inline void set_prealloc_transmit_channel(const bool v)
-  {
-    prealloced_transmit_channel_ = v;
-  }
-  inline bool is_prealloc_transmit_channel() const
-  {
-    return prealloced_transmit_channel_;
-  }
-  inline void set_phy_plan(const ObPhysicalPlan* phy_plan)
-  {
-    phy_plan_ = phy_plan;
-  }
-  inline const ObPhysicalPlan* get_phy_plan() const
-  {
-    return phy_plan_;
-  }
-  inline void set_root_op(const ObPhyOperator* op)
-  {
-    root_op_ = op;
-  }
-  inline const ObPhyOperator* get_root_op()
-  {
-    return root_op_;
-  }
-  inline void set_root_op_spec(const ObOpSpec* op_spec)
-  {
-    root_op_spec_ = op_spec;
-  }
-  inline const ObOpSpec* get_root_op_spec()
-  {
-    return root_op_spec_;
-  }
-  inline void get_root(const ObPhyOperator*& root) const
-  {
-    root = root_op_;
-  }
-  inline void get_root(const ObOpSpec*& root) const
-  {
-    root = root_op_spec_;
-  }
-  inline void set_scan(bool has_scan)
-  {
-    has_scan_ = has_scan;
-  }
-  inline bool has_scan_op() const
-  {
-    return has_scan_;
-  }
-  inline void set_dml_op(bool has_dml_op)
-  {
-    has_dml_op_ = has_dml_op;
-  }
-  inline bool has_dml_op()
-  {
-    return has_dml_op_;
-  }
-  inline void set_temp_table_insert(bool has_insert)
-  {
-    has_temp_insert_ = has_insert;
-  }
-  inline bool has_temp_table_insert() const
-  {
-    return has_temp_insert_;
-  }
-  inline void set_temp_table_scan(bool has_scan)
-  {
-    has_temp_scan_ = has_scan;
-  }
-  inline bool has_temp_table_scan() const
-  {
-    return has_temp_scan_;
-  }
-  inline void set_rpc_worker(bool v)
-  {
-    is_rpc_worker_ = v;
-  }
-  inline bool is_rpc_worker() const
-  {
-    return is_rpc_worker_;
-  }
-  inline bool is_fast_dfo() const
-  {
-    return is_prealloc_receive_channel() || is_prealloc_transmit_channel();
-  }
-  inline void set_slave_mapping_type(SlaveMappingType v)
-  {
-    slave_mapping_type_ = v;
-  }
-  inline SlaveMappingType get_slave_mapping_type()
-  {
-    return slave_mapping_type_;
-  }
-  inline bool is_slave_mapping()
-  {
-    return SlaveMappingType::SM_NONE != slave_mapping_type_;
-  }
+  inline void set_execution_id(uint64_t execution_id) { execution_id_ = execution_id; }
+  inline uint64_t get_execution_id() { return execution_id_; }
+  inline void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
+  inline uint64_t get_qc_id() { return qc_id_; }
+  inline ObPxInterruptID &get_interrupt_id() { return px_int_id_; }
+  inline void set_interrupt_id(const ObPxInterruptID &px_int_id)
+                              { px_int_id_ = px_int_id; }
+  inline void set_dop(const int64_t dop) { dop_ = dop; }
+  inline int64_t get_dop() const { return dop_; }
+  void set_assigned_worker_count(int64_t cnt) { assigned_worker_cnt_ = cnt; }
+  int64_t get_assigned_worker_count() const { return assigned_worker_cnt_; }
+  void set_used_worker_count(int64_t cnt) { used_worker_cnt_ = cnt; }
+  int64_t get_used_worker_count() const { return used_worker_cnt_; }
+  inline void set_single(const bool single) { is_single_ = single; }
+  inline bool is_single() const { return is_single_; }
+  inline void set_root_dfo(bool is_root) {is_root_dfo_ = is_root;}
+  inline bool is_root_dfo() const {return is_root_dfo_;}
+  // 注意：一个 dfo 可能有多个 receive 算子，和多个 child dfo 通信
+  // 这里仅用于标记和第一个 child dfo 通信的 receive 算子通道分配状态
+  inline void set_prealloc_receive_channel(const bool v) {prealloced_receive_channel_ = v;}
+  inline bool is_prealloc_receive_channel() const {return prealloced_receive_channel_;}
+  inline void set_prealloc_transmit_channel(const bool v) {prealloced_transmit_channel_ = v;}
+  inline bool is_prealloc_transmit_channel() const {return prealloced_transmit_channel_;}
+  inline void set_phy_plan(const ObPhysicalPlan *phy_plan) { phy_plan_ = phy_plan; }
+  inline const ObPhysicalPlan *get_phy_plan() const { return phy_plan_; }
+  inline void set_root_op_spec(const ObOpSpec *op_spec) {root_op_spec_ = op_spec;}
+  inline const ObOpSpec *get_root_op_spec() { return root_op_spec_; }
+  inline void get_root(const ObOpSpec *&root) const { root = root_op_spec_; }
+  inline void set_scan(bool has_scan) { has_scan_ = has_scan; }
+  inline bool has_scan_op() const { return has_scan_; }
+  inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
+  inline bool has_dml_op() { return has_dml_op_; }
+  inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
+  inline bool has_temp_table_scan() const { return has_temp_scan_; }
+  inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
+  inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
+  inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
+  inline bool is_slave_mapping() { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
 
-  ObPxPartChMapArray& get_part_ch_map()
-  {
-    return part_ch_map_;
-  }
+  ObPxPartChMapArray &get_part_ch_map() { return part_ch_map_; }
 
-  int add_sqc(const ObPxSqcMeta& sqc);
-  int get_addrs(common::ObIArray<common::ObAddr>& addrs) const;
-  int get_sqcs(common::ObIArray<ObPxSqcMeta*>& sqcs);
-  int get_sqcs(common::ObIArray<const ObPxSqcMeta*>& sqcs) const;
-  int get_sqc(int64_t idx, ObPxSqcMeta*& sqc);
-  common::ObIArray<ObPxSqcMeta>& get_sqcs()
-  {
-    return sqcs_;
-  }
-  int64_t get_sqcs_count()
-  {
-    return sqcs_.count();
-  }
+  // DFO 分布，DFO 在各个 server 上的任务状态
+  int add_sqc(const ObPxSqcMeta &sqc);
+  int get_addrs(common::ObIArray<common::ObAddr> &addrs) const;
+  int get_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs);
+  int get_sqcs(common::ObIArray<const ObPxSqcMeta *> &sqcs) const;
+  int get_sqc(int64_t idx, ObPxSqcMeta *&sqc);
+  common::ObIArray<ObPxSqcMeta>  &get_sqcs() { return sqcs_; }
+  int64_t get_sqcs_count() { return sqcs_.count(); }
   int build_tasks();
   int alloc_data_xchg_ch();
-  int get_qc_channels(common::ObIArray<dtl::ObDtlChannel*>& sqc_chs);
+  int alloc_bloom_filter_ch();
+  /* 获取 qc 端的 channel 端口 */
+  int get_qc_channels(common::ObIArray<dtl::ObDtlChannel *> &sqc_chs);
 
-  inline int append_child_dfo(ObDfo* dfo)
-  {
-    return child_dfos_.push_back(dfo);
-  }
-  inline int get_child_dfo(int64_t idx, ObDfo*& dfo) const
-  {
-    return child_dfos_.at(idx, dfo);
-  }
-  inline int64_t get_child_count() const
-  {
-    return child_dfos_.count();
-  }
-  ObIArray<ObDfo*>& get_child_dfos()
-  {
-    return child_dfos_;
-  }
-  inline bool has_child_dfo() const
-  {
-    return get_child_count() > 0;
-  }
-  void set_depend_sibling(ObDfo* sibling)
-  {
-    depend_sibling_ = sibling;
-  }
-  bool has_depend_sibling() const
-  {
-    return NULL != depend_sibling_;
-  }
-  ObDfo* depend_sibling() const
-  {
-    return depend_sibling_;
-  }
-  void set_parent(ObDfo* parent)
-  {
-    parent_ = parent;
-  }
-  bool has_parent() const
-  {
-    return NULL != parent_;
-  }
-  ObDfo* parent() const
-  {
-    return parent_;
-  }
 
-  void set_dfo_id(int64_t dfo_id)
-  {
-    dfo_id_ = dfo_id;
-  }
-  int64_t get_dfo_id() const
-  {
-    return dfo_id_;
-  }
+  /* DFO 关系图
 
-  void set_qc_server_id(int64_t qc_server_id)
-  {
-    qc_server_id_ = qc_server_id;
-  }
-  int64_t get_qc_server_id() const
-  {
-    return qc_server_id_;
-  }
-  void set_parent_dfo_id(int64_t parent_dfo_id)
-  {
-    parent_dfo_id_ = parent_dfo_id;
-  }
-  int64_t get_parent_dfo_id() const
-  {
-    return parent_dfo_id_;
-  }
+   假设先调度 dfo3，则 dfo2 称作 dfo3 的 depend sibling，如下图：
 
-  void set_px_sequence_id(uint64_t px_sequence_id)
-  {
-    px_sequence_id_ = px_sequence_id;
-  }
-  int64_t get_px_sequence_id() const
-  {
-    return px_sequence_id_;
-  }
+                                  dfo1
+                                /      \
+        dfo1's 1st child  ---> dfo2    dfo3 <--- dfo1's 2nd child
+                                ^
+                                |
+   dfo3's depend sibling  ------+
+   */
+  inline int append_child_dfo(ObDfo *dfo) { return child_dfos_.push_back(dfo); }
+  inline int get_child_dfo(int64_t idx, ObDfo *&dfo) const { return child_dfos_.at(idx, dfo); }
+  inline int64_t get_child_count() const { return child_dfos_.count(); }
+  ObIArray<ObDfo*> &get_child_dfos() { return child_dfos_; }
+  inline bool has_child_dfo() const { return get_child_count() > 0; }
+  // 本 DFO 即使优先调度，但可能依赖于另外的 DFO 调度才能推进本 DFO
+  // 使用 depend_sibling 记录依赖的 DFO
+  void set_depend_sibling(ObDfo *sibling) { depend_sibling_ = sibling; }
+  void set_has_depend_sibling(bool has_depend_sibling) { has_depend_sibling_ = has_depend_sibling; }
+  bool has_depend_sibling() const { return has_depend_sibling_; }
+  ObDfo *depend_sibling() const { return depend_sibling_; }
+  void set_parent(ObDfo *parent) { parent_ = parent; }
+  bool has_parent() const { return NULL != parent_; }
+  ObDfo *parent() const { return parent_; }
+  // 下面两个函数用于3层DFO 调度，使得HASH JOIN上面无需接MATERIAL算子，
+  // 流式输出结果集，被标记为 earlier_sched_ 的 dfo 被提前调度，直接消费JOIN结果
+  void set_earlier_sched(bool earlier) { earlier_sched_ = earlier; }
+  bool is_earlier_sched() const { return earlier_sched_; }
+  void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
+  int64_t get_dfo_id() const { return dfo_id_; }
 
-  void set_temp_table_id(int64_t temp_table_id)
-  {
-    temp_table_id_ = temp_table_id;
-  }
-  int64_t get_temp_table_id() const
-  {
-    return temp_table_id_;
-  }
+  void set_qc_server_id(int64_t qc_server_id) { qc_server_id_ = qc_server_id; }
+  int64_t get_qc_server_id() const { return qc_server_id_; }
+  void set_parent_dfo_id(int64_t parent_dfo_id) { parent_dfo_id_ = parent_dfo_id; }
+  int64_t get_parent_dfo_id() const { return parent_dfo_id_; }
 
-  void set_active()
-  {
-    is_active_ = true;
-  }
-  bool is_active() const
-  {
-    return is_active_;
-  }
-  void set_scheduled()
-  {
-    is_scheduled_ = true;
-  }
-  bool is_scheduled() const
-  {
-    return is_scheduled_;
-  }
-  void set_thread_inited(bool v)
-  {
-    thread_inited_ = v;
-  }
-  bool is_thread_inited() const
-  {
-    return thread_inited_;
-  }
-  void set_thread_finish(bool v)
-  {
-    thread_finish_ = v;
-  }
-  bool is_thread_finish() const
-  {
-    return thread_finish_;
-  }
-  const common::ObArray<ObPxTaskMeta>& get_tasks() const
-  {
-    return tasks_;
-  }
-  int get_task_receive_chs_for_update(int64_t child_dfo_id, common::ObIArray<ObPxTaskChSet*>& ch_sets);
-  int get_task_transmit_chs_for_update(common::ObIArray<ObPxTaskChSet*>& ch_sets);
-  int get_task_receive_chs(int64_t child_dfo_id, ObPxTaskChSets& ch_sets) const;
-  int get_task_receive_chs(int64_t child_dfo_id, ObPxTaskChSets& ch_sets, TaskFilterFunc filter) const;
-  int get_task_transmit_chs(ObPxTaskChSets& ch_sets, TaskFilterFunc filter) const;
+  void set_px_sequence_id(uint64_t px_sequence_id) { px_sequence_id_ = px_sequence_id; }
+  int64_t get_px_sequence_id() const { return px_sequence_id_; }
 
-  static void reset_resource(ObDfo* dfo);
-  void set_fulltree(bool v)
-  {
-    is_fulltree_ = v;
-  }
-  bool is_fulltree() const
-  {
-    return is_fulltree_;
-  }
+  void set_temp_table_id(uint64_t temp_table_id) { temp_table_id_ = temp_table_id; }
+  uint64_t get_temp_table_id() const { return temp_table_id_; }
+
+  // TODO: 以下四个状态需要重新梳理，太乱了
+  void set_active() { is_active_ = true; }
+  bool is_active() const { return is_active_; }
+  void set_scheduled() { is_scheduled_ = true; }
+  bool is_scheduled() const { return is_scheduled_; }
+  void set_thread_inited(bool v) { thread_inited_ = v; }
+  bool is_thread_inited() const { return thread_inited_; }
+  void set_thread_finish(bool v) { thread_finish_ = v; }
+  bool is_thread_finish() const { return thread_finish_; }
+  const common::ObArray<ObPxTaskMeta> &get_tasks() const { return tasks_; }
+  int get_task_receive_chs_for_update(int64_t child_dfo_id,
+                           common::ObIArray<ObPxTaskChSet *> &ch_sets);
+  int get_task_transmit_chs_for_update(common::ObIArray<ObPxTaskChSet *> &ch_sets);
+  int get_task_receive_chs(int64_t child_dfo_id,
+                           ObPxTaskChSets &ch_sets) const;
+  int get_task_receive_chs(int64_t child_dfo_id,
+                           ObPxTaskChSets &ch_sets,
+                           TaskFilterFunc filter) const;
+  int get_task_transmit_chs(ObPxTaskChSets &ch_sets,
+                            TaskFilterFunc filter) const;
+
+  static void reset_resource(ObDfo *dfo);
+  void set_fulltree(bool v) { is_fulltree_ = v; }
+  bool is_fulltree() const { return is_fulltree_; }
   bool check_root_valid();
   const ObPhysicalPlan* get_plan_by_root();
 
-  void set_dist_method(ObPQDistributeMethod::Type dist_method)
-  {
-    dist_method_ = dist_method;
-  }
-  ObPQDistributeMethod::Type get_dist_method()
-  {
-    return dist_method_;
-  }
+  void set_dist_method(ObPQDistributeMethod::Type dist_method) { dist_method_ = dist_method; }
+  ObPQDistributeMethod::Type get_dist_method() { return dist_method_; }
 
-  ObPxChTotalInfos& get_dfo_ch_total_infos()
-  {
-    return dfo_ch_infos_;
-  }
-  int64_t get_total_task_count()
-  {
-    return total_task_cnt_;
-  }
-  int get_dfo_ch_info(int64_t sqc_idx, dtl::ObDtlChTotalInfo*& ch_info);
+  void set_px_bloom_filter_mode(JoinFilterMode mode) { px_bloom_filter_mode_ = mode; }
+  JoinFilterMode get_is_px_bloom_filter() { return px_bloom_filter_mode_; }
+  bool is_px_use_bloom_filter()
+    { return JoinFilterMode::USE == px_bloom_filter_mode_; }
+  bool is_px_create_bloom_filter()
+    { return JoinFilterMode::CREATE == px_bloom_filter_mode_; }
+  bool have_px_bloom_filter()
+    { return JoinFilterMode::USE == px_bloom_filter_mode_ ||
+             JoinFilterMode::CREATE == px_bloom_filter_mode_; }
+  void set_px_bf_id(int64_t id) { px_bf_id_ = id; }
+  int64_t get_px_bf_id() const { return px_bf_id_; }
+  int get_use_filter_chs(ObPxBloomFilterChInfo &create_filter_ch_map);
+  ObPxBloomFilterChInfo &get_use_filter_ch_info() { return use_filter_ch_map_; }
+
+  ObPxChTotalInfos &get_dfo_ch_total_infos() { return dfo_ch_infos_; }
+  int64_t get_total_task_count() { return total_task_cnt_; }
+  int get_dfo_ch_info(int64_t sqc_idx, dtl::ObDtlChTotalInfo *&ch_info);
   int prepare_channel_info();
-  static int check_dfo_pair(ObDfo& parent, ObDfo& child, int64_t& child_dfo_idx);
-  static int fill_channel_info_by_sqc(dtl::ObDtlExecServer& ch_servers, common::ObIArray<ObPxSqcMeta>& sqcs);
-  static int fill_channel_info_by_sqc(dtl::ObDtlExecServer& ch_servers, ObPxSqcMeta& sqc);
+  static int check_dfo_pair(ObDfo &parent, ObDfo &child, int64_t &child_dfo_idx);
+  static int fill_channel_info_by_sqc(
+              dtl::ObDtlExecServer &ch_servers,
+              common::ObIArray<ObPxSqcMeta> &sqcs);
+  static int fill_channel_info_by_sqc(
+              dtl::ObDtlExecServer &ch_servers,
+              ObPxSqcMeta &sqc);
   static bool is_valid_dfo_id(int64_t dfo_id)
   {
-    return (dfo_id >= 0 && dfo_id <= MAX_DFO_ID) || (dfo_id == MAX_DFO_ID);
+    return (dfo_id >= 0 && dfo_id <= MAX_DFO_ID) ||
+           (dfo_id == MAX_DFO_ID);
   }
-  TO_STRING_KV(K_(execution_id), K_(dfo_id), K_(is_active), K_(is_scheduled), K_(thread_inited), K_(thread_finish),
-      K_(dop), K_(assigned_worker_cnt), K_(used_worker_cnt), K_(is_single), K_(is_root_dfo), K_(is_fulltree),
-      K_(has_scan), K_(sqcs), KP_(depend_sibling), KP_(parent), "child", get_child_count(), K_(slave_mapping_type),
-      K_(dist_method));
+  void set_pkey_table_loc_id(int64_t id) { pkey_table_loc_id_ = id; }
+  int64_t get_pkey_table_loc_id() { return pkey_table_loc_id_; };
+  void inc_tsc_op_cnt() { tsc_op_cnt_++; }
+  bool is_leaf_dfo() { return child_dfos_.empty(); }
+  bool is_single_tsc_leaf_dfo() { return is_leaf_dfo() && 1 == tsc_op_cnt_; }
+  TO_STRING_KV(K_(execution_id),
+               K_(dfo_id),
+               K_(is_active),
+               K_(earlier_sched),
+               K_(is_scheduled),
+               K_(thread_inited),
+               K_(thread_finish),
+               K_(dop),
+               K_(assigned_worker_cnt),
+               K_(used_worker_cnt),
+               K_(is_single),
+               K_(is_root_dfo),
+               K_(is_fulltree),
+               K_(has_scan),
+               K_(sqcs),
+               KP_(depend_sibling),
+               KP_(parent),
+               "child", get_child_count(),
+               K_(slave_mapping_type),
+               K_(dist_method),
+               K_(px_bloom_filter_mode),
+               K_(px_bf_id),
+               K_(pkey_table_loc_id),
+               K_(tsc_op_cnt));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfo);
-
 private:
   int calc_total_task_count();
-
+  int condition_push_back(ObPxBloomFilterChSet &ch_set, ObPxBloomFilterChSets &ch_sets);
 private:
-  common::ObIAllocator& allocator_;
+  common::ObIAllocator &allocator_;
   uint64_t execution_id_;
   uint64_t qc_id_;
   int64_t dfo_id_;
   ObPxInterruptID px_int_id_;
+  // dop 是用户/优化器建议的并发度，为所有 server 上预期分配的 worker 数之和
+  // used_worker_cnt 用于统计当前 dfo 一共消耗了多少个 px worker 才完成
+  // 三者的关系：
+  // 1. 当 dop 较小，且访问的 partition 分布在较多 server 上时，
+  // 为了保证每个 server 至少有一个 px worker 去服务，
+  // used_worker_cnt 比实际 dop 大
+  // 2. 当 server 上线程不足，实际创建的 worker 数可能比预期少（DOP 降级）
+  // userd_worker_cnt 可能比 dop 小
+  // 3. assigned_worker_cnt 是根据 admission 许可的线程数计算出的每个 dfo 可以取得的线程数
   int64_t dop_;
   int64_t assigned_worker_cnt_;
   int64_t used_worker_cnt_;
+  // is_single 用于标记此dfo用一个线程去调度, 既可能在本地, 也可能在远程.
+  // 如果此dfo包含table scan算子, 调度时将跟随table scan location调度
+  // 如果此dfo不包含table scan算子, 调度时理论上可以在任意server去调度,
+  // 但在当前的实现上, 不包含table scan算子时, 会在本地调度
   bool is_single_;
   bool is_root_dfo_;
-  bool prealloced_receive_channel_;
+  /* 数据通道不等 sqc 返回建立了多少个 worker 就预分配好了 */
+  bool prealloced_receive_channel_; // 第一个 receive 算子的通道已经分配好
   bool prealloced_transmit_channel_;
-  const ObPhysicalPlan* phy_plan_;
-  const ObPhyOperator* root_op_;
-  const ObOpSpec* root_op_spec_;
-  common::ObSEArray<ObDfo*, 4> child_dfos_;
-  bool has_scan_;
-  bool has_dml_op_;
-  bool has_temp_insert_;
+  const ObPhysicalPlan *phy_plan_;
+  const ObOpSpec *root_op_spec_;
+  common::ObSEArray<ObDfo *, 4> child_dfos_;
+  bool has_scan_; // DFO 中包含至少一个 scan 算子，或者仅仅包含一个dml
+  bool has_dml_op_; // DFO中可能包含一个dml
   bool has_temp_scan_;
   bool is_active_;
   bool is_scheduled_;
   bool thread_inited_;
   bool thread_finish_;
-  ObDfo* depend_sibling_;
-  ObDfo* parent_;
+  ObDfo *depend_sibling_; // 依赖其它边的调度才能执行完成，目前只支持记录一个依赖
+  bool has_depend_sibling_;
+  ObDfo *parent_; // 依赖其它边的调度才能执行完成，目前只支持记录一个依赖
   ObPxTaskChSets transmit_ch_sets_;
-  common::ObArray<ObPxTaskChSets*> receive_ch_sets_map_;
+  common::ObArray<ObPxTaskChSets *>receive_ch_sets_map_;
   ObPxChTotalInfos dfo_ch_infos_;
-  common::ObArray<ObPxSqcMeta> sqcs_;
-  common::ObArray<ObPxTaskMeta> tasks_;
+  common::ObArray<ObPxSqcMeta> sqcs_; // 所有 server 都分配好后初始化
+  common::ObArray<ObPxTaskMeta> tasks_; // 所有 SQC 都 setup 完成后根据 SQC 记录的实际分配线程数初始化
   bool is_fulltree_;
   bool is_rpc_worker_;
+  bool earlier_sched_; // 标记本 dfo 是否是因为 3 DFO 调度策略而被提前调度起来了
   uint64_t qc_server_id_;
   int64_t parent_dfo_id_;
   uint64_t px_sequence_id_;
@@ -947,79 +640,109 @@ private:
   SlaveMappingType slave_mapping_type_;
   ObPxPartChMapArray part_ch_map_;
   ObPQDistributeMethod::Type dist_method_;
-  int64_t total_task_cnt_;  // the task total count of dfo start worker
-  bool has_expr_values_;
+  JoinFilterMode px_bloom_filter_mode_; //标记dfo中的px bloom filter
+  int64_t px_bf_id_;                    //记录px_bloom_filter_id
+  ObPxBloomFilterChInfo use_filter_ch_map_;   // use and create channel info is same
+  int64_t total_task_cnt_;      // the task total count of dfo start worker
+  int64_t pkey_table_loc_id_; // record pkey table loc id for child dfo
+  int64_t tsc_op_cnt_;
 };
 
-struct ObPxRpcInitSqcArgs {
-  OB_UNIS_VERSION(1);
 
+class ObSqcSerializeCache
+{
+public:
+  ObSqcSerializeCache() :
+      cache_serialized_(false),enable_serialize_cache_(false),
+      len1_(0),len2_(0),buf1_(nullptr),buf2_(nullptr),slen_(0) {}
+  common::ObArenaAllocator allocator_;
+  // after serialized, enable serialize cache to avoid unnecessary serialization
+  bool cache_serialized_;
+  bool enable_serialize_cache_; // disable for 1 sqc per dfo, otherwise enable
+  int64_t len1_;
+  int64_t len2_;
+  void *buf1_;
+  void *buf2_;
+  int64_t slen_; // serialize length cache
+};
+
+class ObPxRpcInitSqcArgs {
+  OB_UNIS_VERSION(1);
 public:
   ObPxRpcInitSqcArgs()
       : sqc_(),
         exec_ctx_(NULL),
         ser_phy_plan_(NULL),
         des_phy_plan_(NULL),
-        op_root_(NULL),
         op_spec_root_(nullptr),
         static_engine_root_(nullptr),
         des_allocator_(NULL),
         sqc_handler_(NULL),
-        scan_ops_(),
         scan_spec_ops_()
   {}
   ~ObPxRpcInitSqcArgs() = default;
 
-  void set_serialize_param(ObExecContext& exec_ctx, ObPhyOperator& op_root, const ObPhysicalPlan& ser_phy_plan);
-  void set_serialize_param(ObExecContext& exec_ctx, ObOpSpec& op_spec_root, const ObPhysicalPlan& ser_phy_plan);
-  void set_deserialize_param(ObExecContext& exec_ctx, ObPhysicalPlan& des_phy_plan, ObIAllocator* des_allocator);
-  int assign(ObPxRpcInitSqcArgs& other);
-  int do_deserialize(int64_t& pos, const char* buf, int64_t data_len);
+  void set_serialize_param(ObExecContext &exec_ctx,
+                           ObOpSpec &op_spec_root,
+                           const ObPhysicalPlan &ser_phy_plan);
+  void set_deserialize_param(ObExecContext &exec_ctx,
+                             ObPhysicalPlan &des_phy_plan,
+                             ObIAllocator *des_allocator);
+  int assign(ObPxRpcInitSqcArgs &other);
+  int do_deserialize(int64_t &pos, const char *buf, int64_t data_len);
 
-  void set_static_engine_root(ObOperator& root)
+  void set_static_engine_root(ObOperator &root)
+  { static_engine_root_ = &root; }
+  void enable_serialize_cache()
   {
-    static_engine_root_ = &root;
+    ser_cache_.enable_serialize_cache_ = true;
   }
   TO_STRING_KV(K_(sqc));
 
+private:
+  int serialize_common_parts_1(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize_common_parts_2(char *buf, const int64_t buf_len, int64_t &pos) const;
 public:
   ObPxSqcMeta sqc_;
-  ObExecContext* exec_ctx_;
-  const ObPhysicalPlan* ser_phy_plan_;
-  ObPhysicalPlan* des_phy_plan_;
-  ObPhyOperator* op_root_;
-  ObOpSpec* op_spec_root_;
-  ObOperator* static_engine_root_;
-  ObIAllocator* des_allocator_;
+  ObExecContext *exec_ctx_;
+  const ObPhysicalPlan *ser_phy_plan_;
+  ObPhysicalPlan *des_phy_plan_;
+  ObOpSpec *op_spec_root_;
+  ObOperator *static_engine_root_;
+  ObIAllocator *des_allocator_;
   // no need to serialize
-  ObPxSqcHandler* sqc_handler_;
-  ObSEArray<const ObTableScan*, 8> scan_ops_;
+  ObPxSqcHandler *sqc_handler_;
   ObSEArray<const ObTableScanSpec*, 8> scan_spec_ops_;
+  ObSqcSerializeCache ser_cache_;
 };
 
-class ObPxTask {
-  OB_UNIS_VERSION(1);
 
+class ObPxTask
+{
+  OB_UNIS_VERSION(1);
 public:
   ObPxTask()
-      : qc_id_(common::OB_INVALID_ID),
-        dfo_id_(0),
-        sqc_id_(0),
-        task_id_(-1),
-        execution_id_(0),
-        task_channel_(NULL),
-        sqc_channel_(NULL),
-        rc_(TASK_DEFAULT_RET_VALUE),  // rc is set if less than 0
-        state_(0),
-        task_co_id_(0),
-        px_int_id_(),
-        task_monitor_info_(),
-        is_fulltree_(false),
-        affected_rows_(0),
-        dml_row_info_()
+    : qc_id_(common::OB_INVALID_ID),
+      dfo_id_(0),
+      sqc_id_(0),
+      task_id_(-1),
+      execution_id_(0),
+      task_channel_(NULL),
+      sqc_channel_(NULL),
+      rc_(TASK_DEFAULT_RET_VALUE), // 小于等于 0 表示设置了 rc 值
+      state_(0),
+      task_co_id_(0),
+      px_int_id_(),
+      is_fulltree_(false),
+      affected_rows_(0),
+      dml_row_info_(),
+      temp_table_id_(common::OB_INVALID_ID),
+      interm_result_ids_(),
+      tx_desc_(NULL),
+      is_use_local_thread_(false)
   {}
   ~ObPxTask() = default;
-  ObPxTask& operator=(const ObPxTask& other)
+  ObPxTask &operator=(const ObPxTask &other)
   {
     qc_id_ = other.qc_id_;
     dfo_id_ = other.dfo_id_;
@@ -1035,174 +758,78 @@ public:
     state_ = other.state_;
     task_co_id_ = other.task_co_id_;
     px_int_id_ = other.px_int_id_;
-    task_monitor_info_ = other.task_monitor_info_;
     is_fulltree_ = other.is_fulltree_;
     affected_rows_ = other.affected_rows_;
     dml_row_info_ = other.dml_row_info_;
+    temp_table_id_ = other.temp_table_id_;
+    interm_result_ids_.assign(other.interm_result_ids_);
+    tx_desc_ = other.tx_desc_;
+    is_use_local_thread_ = other.is_use_local_thread_;
     return *this;
   }
-
 public:
-  TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id), K_(task_id), K_(execution_id), K_(sqc_ch_info), K_(task_ch_info),
-      K_(sqc_addr), K_(exec_addr), K_(qc_addr), K_(rc), K_(task_co_id), K_(px_int_id), K_(is_fulltree),
-      K_(affected_rows), K_(dml_row_info));
-  dtl::ObDtlChannelInfo& get_sqc_channel_info()
-  {
-    return sqc_ch_info_;
-  }
-  dtl::ObDtlChannelInfo& get_task_channel_info()
-  {
-    return task_ch_info_;
-  }
-  void set_task_channel(dtl::ObDtlChannel* ch)
-  {
-    task_channel_ = ch;
-  }
-  dtl::ObDtlChannel* get_task_channel()
-  {
-    return task_channel_;
-  }
-  void set_sqc_channel(dtl::ObDtlChannel* ch)
-  {
-    sqc_channel_ = ch;
-  }
-  dtl::ObDtlChannel* get_sqc_channel()
-  {
-    return sqc_channel_;
-  }
-  inline void set_task_state(int32_t flag)
-  {
-    state_ |= flag;
-  }
-  inline bool is_task_state_set(int32_t flag) const
-  {
-    return 0 != (state_ & flag);
-  }
-  inline void set_task_id(int64_t task_id)
-  {
-    task_id_ = task_id;
-  }
-  inline int64_t get_task_id() const
-  {
-    return task_id_;
-  }
-  inline void set_qc_id(uint64_t qc_id)
-  {
-    qc_id_ = qc_id;
-  }
-  inline int64_t get_qc_id() const
-  {
-    return qc_id_;
-  }
-  inline void set_sqc_id(int64_t sqc_id)
-  {
-    sqc_id_ = sqc_id;
-  }
-  inline int64_t get_sqc_id() const
-  {
-    return sqc_id_;
-  }
-  inline void set_dfo_id(int64_t dfo_id)
-  {
-    dfo_id_ = dfo_id;
-  }
-  inline ObPxInterruptID get_interrupt_id()
-  {
-    return px_int_id_;
-  }
-  inline void set_interrupt_id(const ObPxInterruptID& px_int_id)
-  {
-    px_int_id_ = px_int_id;
-  }
-  inline int64_t get_dfo_id() const
-  {
-    return dfo_id_;
-  }
-  inline void set_execution_id(int64_t execution_id)
-  {
-    execution_id_ = execution_id;
-  }
-  inline int64_t get_execution_id() const
-  {
-    return execution_id_;
-  }
-  inline void set_result(int rc)
-  {
-    rc_ = rc;
-  }
-  inline bool has_result() const
-  {
-    return rc_ <= 0;
-  }
-  inline int get_result() const
-  {
-    return rc_;
-  }
-  void set_exec_addr(const common::ObAddr& addr)
-  {
-    exec_addr_ = addr;
-  }
-  void set_sqc_addr(const common::ObAddr& addr)
-  {
-    sqc_addr_ = addr;
-  }
-  void set_qc_addr(const common::ObAddr& addr)
-  {
-    qc_addr_ = addr;
-  }
-  const common::ObAddr& get_exec_addr() const
-  {
-    return exec_addr_;
-  }
-  const common::ObAddr& get_sqc_addr() const
-  {
-    return sqc_addr_;
-  }
-  const common::ObAddr& get_qc_addr() const
-  {
-    return qc_addr_;
-  }
-  inline void set_task_co_id(const uint64_t& id)
-  {
-    task_co_id_ = id;
-  }
-  inline uint64_t get_task_co_id() const
-  {
-    return task_co_id_;
-  }
-  inline void set_task_monitor_info(const ObPxTaskMonitorInfo& other)
-  {
-    task_monitor_info_ = other;
-  }
-  inline ObPxTaskMonitorInfo get_task_monitor_info() const
-  {
-    return task_monitor_info_;
-  }
-  inline ObPxTaskMonitorInfo& get_task_monitor_info()
-  {
-    return task_monitor_info_;
-  }
-  void set_fulltree(bool v)
-  {
-    is_fulltree_ = v;
-  }
-  bool is_fulltree() const
-  {
-    return is_fulltree_;
-  }
-  inline void set_affected_rows(int64_t v)
-  {
-    affected_rows_ = v;
-  }
-  int64_t get_affected_rows()
-  {
-    return affected_rows_;
-  }
-
+  TO_STRING_KV(K_(qc_id),
+               K_(dfo_id),
+               K_(sqc_id),
+               K_(task_id),
+               K_(execution_id),
+               K_(sqc_ch_info),
+               K_(task_ch_info),
+               K_(sqc_addr),
+               K_(exec_addr),
+               K_(qc_addr),
+               K_(rc),
+               K_(task_co_id),
+               K_(px_int_id),
+               K_(is_fulltree),
+               K_(affected_rows),
+               K_(dml_row_info),
+               K_(temp_table_id),
+               K_(interm_result_ids),
+               K_(tx_desc),
+               K_(is_use_local_thread));
+  dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
+  dtl::ObDtlChannelInfo &get_task_channel_info() { return task_ch_info_; }
+  void set_task_channel(dtl::ObDtlChannel *ch) { task_channel_ = ch; }
+  dtl::ObDtlChannel *get_task_channel() { return task_channel_; }
+  void set_sqc_channel(dtl::ObDtlChannel *ch) { sqc_channel_ = ch; }
+  dtl::ObDtlChannel *get_sqc_channel() { return sqc_channel_; }
+  inline void set_task_state(int32_t flag) { state_ |= flag; }
+  inline bool is_task_state_set(int32_t flag) const { return 0 != (state_ & flag); }
+  inline void set_task_id(int64_t task_id) { task_id_ = task_id; }
+  inline int64_t get_task_id() const { return task_id_; }
+  inline void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
+  inline int64_t get_qc_id() const { return qc_id_; }
+  inline void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
+  inline int64_t get_sqc_id() const { return sqc_id_; }
+  inline void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
+  inline ObPxInterruptID get_interrupt_id() { return px_int_id_; }
+  inline void set_interrupt_id(const ObPxInterruptID &px_int_id)
+                              { px_int_id_ = px_int_id; }
+  inline int64_t get_dfo_id() const { return dfo_id_; }
+  inline void set_execution_id(int64_t execution_id) { execution_id_ = execution_id; }
+  inline int64_t get_execution_id() const { return execution_id_; }
+  inline void set_result(int rc) { rc_ = rc; }
+  inline bool has_result() const { return rc_ <= 0; }
+  inline int get_result() const { return rc_; }
+  void set_exec_addr(const common::ObAddr &addr) {   exec_addr_ = addr; }
+  void set_sqc_addr(const common::ObAddr &addr) {   sqc_addr_ = addr; }
+  void set_qc_addr(const common::ObAddr &addr) {   qc_addr_ = addr; }
+  const common::ObAddr &get_exec_addr() const {   return exec_addr_; }
+  const common::ObAddr &get_sqc_addr() const {   return sqc_addr_; }
+  const common::ObAddr &get_qc_addr() const {   return qc_addr_; }
+  inline void set_task_co_id(const uint64_t &id) { task_co_id_ = id; }
+  inline uint64_t get_task_co_id() const { return task_co_id_; }
+  void set_fulltree(bool v) { is_fulltree_ = v; }
+  bool is_fulltree() const { return is_fulltree_; }
+  inline void set_affected_rows(int64_t v) { affected_rows_ = v; }
+  int64_t get_affected_rows() { return affected_rows_; }
+  transaction::ObTxDesc *&get_tx_desc() { return tx_desc_; }
+  void set_use_local_thread(bool flag) { is_use_local_thread_ = flag; }
+  bool is_use_local_thread() { return is_use_local_thread_; }
 public:
-  // if less than 0, rc is set. task default ret is 1
+  // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
-
 public:
   uint64_t qc_id_;
   int64_t dfo_id_;
@@ -1211,31 +838,33 @@ public:
   int64_t execution_id_;
   dtl::ObDtlChannelInfo sqc_ch_info_;
   dtl::ObDtlChannelInfo task_ch_info_;
-  dtl::ObDtlChannel* task_channel_;
-  dtl::ObDtlChannel* sqc_channel_;
-  common::ObAddr sqc_addr_;
-  common::ObAddr exec_addr_;
-  common::ObAddr qc_addr_;
+  dtl::ObDtlChannel *task_channel_;
+  dtl::ObDtlChannel *sqc_channel_;
+  common::ObAddr sqc_addr_; /* 记录 SQC 的地址，用于 SQC-Task 通信 */
+  common::ObAddr exec_addr_; /* Task 的运行地址 */
+  common::ObAddr qc_addr_;  /*记录 QC 的地址，用于中断*/
   int rc_;
-  volatile int32_t state_;
-  volatile uint64_t task_co_id_;
+  volatile int32_t state_; // 被 task 线程设置
+  volatile uint64_t task_co_id_; /* task 的协程 id */
   ObPxInterruptID px_int_id_;
-  ObPxTaskMonitorInfo task_monitor_info_;
-  bool is_fulltree_;
-  int64_t affected_rows_;
-  ObPxDmlRowInfo dml_row_info_;
+  bool is_fulltree_; // 标记序列化时这个 task 的 op tree 是否包含会被ex 算子截断
+  int64_t affected_rows_; // pdml情况下，每个task涉及到的行
+  ObPxDmlRowInfo dml_row_info_; // DML情况下, 需要统计行相关信息
+  uint64_t temp_table_id_;
+  common::ObSEArray<uint64_t, 8> interm_result_ids_;  //返回每个task生成的结果集
+  transaction::ObTxDesc *tx_desc_; // transcation information
+  bool is_use_local_thread_;
 };
 
-class ObPxRpcInitTaskArgs {
+class ObPxRpcInitTaskArgs
+{
   OB_UNIS_VERSION(1);
-
 public:
   ObPxRpcInitTaskArgs()
       : task_(),
         exec_ctx_(NULL),
         ser_phy_plan_(NULL),
         des_phy_plan_(NULL),
-        op_root_(NULL),
         op_spec_root_(nullptr),
         static_engine_root_(nullptr),
         sqc_task_ptr_(NULL),
@@ -1243,14 +872,20 @@ public:
         sqc_handler_(nullptr)
   {}
 
-  void set_serialize_param(ObExecContext& exec_ctx, ObPhyOperator& op_root, const ObPhysicalPlan& ser_phy_plan);
-  void set_serialize_param(ObExecContext& exec_ctx, ObOpSpec& op_spec_root, const ObPhysicalPlan& ser_phy_plan);
-  void set_deserialize_param(ObExecContext& exec_ctx, ObPhysicalPlan& des_phy_plan, ObIAllocator* des_allocator);
-  int init_deserialize_param(lib::MemoryContext& mem_context, const observer::ObGlobalContext& gctx);
-  int deep_copy_assign(ObPxRpcInitTaskArgs& src, common::ObIAllocator& alloc);
+  void set_serialize_param(ObExecContext &exec_ctx,
+                           ObOpSpec &op_spec_root,
+                           const ObPhysicalPlan &ser_phy_plan);
+  void set_deserialize_param(ObExecContext &exec_ctx,
+                             ObPhysicalPlan &des_phy_plan,
+                             ObIAllocator *des_allocator);
+  int init_deserialize_param(lib::MemoryContext &mem_context,
+                           const observer::ObGlobalContext &gctx);
+  int deep_copy_assign(ObPxRpcInitTaskArgs &src,
+                      common::ObIAllocator &alloc);
 
-  void destroy()
-  {
+  void destroy() {
+    // worker 执行完成后，立即释放当前 worker 持有的 physical plan、 exec ctx 等资源
+    // 内含各种算子的上下文内存等
     if (nullptr != des_phy_plan_) {
       des_phy_plan_->~ObPhysicalPlan();
       des_phy_plan_ = NULL;
@@ -1259,7 +894,6 @@ public:
       exec_ctx_->~ObExecContext();
       exec_ctx_ = NULL;
     }
-    op_root_ = NULL;
     op_spec_root_ = NULL;
     ser_phy_plan_ = NULL;
     sqc_task_ptr_ = NULL;
@@ -1267,19 +901,16 @@ public:
     sqc_handler_ = NULL;
   }
 
-  ObPxSqcHandler* get_sqc_handler()
-  {
+  ObPxSqcHandler *get_sqc_handler() {
     return sqc_handler_;
   }
 
-  ObPxRpcInitTaskArgs& operator=(const ObPxRpcInitTaskArgs& other)
-  {
+  ObPxRpcInitTaskArgs &operator = (const ObPxRpcInitTaskArgs &other) {
     if (&other != this) {
       task_ = other.task_;
       exec_ctx_ = other.exec_ctx_;
       ser_phy_plan_ = other.ser_phy_plan_;
       des_phy_plan_ = other.des_phy_plan_;
-      op_root_ = other.op_root_;
       op_spec_root_ = other.op_spec_root_;
       sqc_task_ptr_ = other.sqc_task_ptr_;
       des_allocator_ = other.des_allocator_;
@@ -1289,65 +920,60 @@ public:
   }
   bool is_invalid()
   {
-    return OB_ISNULL(des_phy_plan_) || (OB_ISNULL(op_root_) && OB_ISNULL(op_spec_root_));
+    return OB_ISNULL(des_phy_plan_) || OB_ISNULL(op_spec_root_);
   }
   TO_STRING_KV(K_(task));
-
 public:
   ObPxTask task_;
-  ObExecContext* exec_ctx_;
-  const ObPhysicalPlan* ser_phy_plan_;
-  ObPhysicalPlan* des_phy_plan_;
-  ObPhyOperator* op_root_;
-  ObOpSpec* op_spec_root_;
-  ObOperator* static_engine_root_;
-  ObPxTask* sqc_task_ptr_;
-  ObIAllocator* des_allocator_;
-  ObPxSqcHandler* sqc_handler_;
+  ObExecContext *exec_ctx_;
+  const ObPhysicalPlan *ser_phy_plan_;
+  ObPhysicalPlan *des_phy_plan_;
+  ObOpSpec *op_spec_root_;
+  ObOperator *static_engine_root_;
+  ObPxTask *sqc_task_ptr_; // 指针指向 SQC SubCoord 中的对应 task 内存
+  ObIAllocator *des_allocator_;
+  ObPxSqcHandler *sqc_handler_; // 指向 SQC Handler 内存
 };
 
-struct ObPxRpcInitTaskResponse {
+struct ObPxRpcInitTaskResponse
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObPxRpcInitTaskResponse() : task_co_id_(0)
+  ObPxRpcInitTaskResponse()
+      : task_co_id_(0)
   {}
   TO_STRING_KV(K_(task_co_id));
-
 public:
   uint64_t task_co_id_;
 };
 
-struct ObPxRpcInitSqcResponse {
+struct ObPxRpcInitSqcResponse
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObPxRpcInitSqcResponse() : rc_(common::OB_NOT_INIT), reserved_thread_count_(0), partitions_info_()
+  ObPxRpcInitSqcResponse()
+      : rc_(common::OB_NOT_INIT),
+        reserved_thread_count_(0),
+        partitions_info_()
   {}
   TO_STRING_KV(K_(rc), K_(reserved_thread_count));
-
 public:
   int rc_;
   int64_t reserved_thread_count_;
-  ObSEArray<ObPxPartitionInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
 };
 
-class ObPxWorkerEnvArgs {
-public:
-  ObPxWorkerEnvArgs()
-      : trace_id_(nullptr),
-        log_level_(OB_LOG_LEVEL_NONE),
-        is_oracle_mode_(false),
-        enqueue_timestamp_(-1),
-        gctx_(nullptr),
-        group_id_(0)
-  {}
+class ObPxWorkerEnvArgs
+{
+public :
+  typedef common::ObCurTraceId::TraceId TraceId;
+  ObPxWorkerEnvArgs () : trace_id_(), log_level_(OB_LOG_LEVEL_NONE),
+  is_oracle_mode_(false), enqueue_timestamp_(-1), gctx_(nullptr),
+  group_id_(0) { }
 
-  virtual ~ObPxWorkerEnvArgs()
-  {}
+  virtual ~ObPxWorkerEnvArgs() { }
 
-  ObPxWorkerEnvArgs& operator=(const ObPxWorkerEnvArgs& other)
-  {
+  ObPxWorkerEnvArgs &operator = (const ObPxWorkerEnvArgs &other) {
     trace_id_ = other.trace_id_;
     log_level_ = other.log_level_;
     is_oracle_mode_ = other.is_oracle_mode_;
@@ -1357,90 +983,29 @@ public:
     return *this;
   }
 
-  void set_trace_id(const uint64_t* trace_id)
-  {
-    trace_id_ = trace_id;
-  }
-  const uint64_t* get_trace_id() const
-  {
-    return trace_id_;
-  }
-  int8_t get_log_level() const
-  {
-    return log_level_;
-  }
-  void set_log_level(const int8_t log_level)
-  {
-    log_level_ = log_level;
-  }
-  void set_is_oracle_mode(bool oracle_mode)
-  {
-    is_oracle_mode_ = oracle_mode;
-  }
-  bool is_oracle_mode() const
-  {
-    return is_oracle_mode_;
-  }
-  void set_enqueue_timestamp(int64_t v)
-  {
-    enqueue_timestamp_ = v;
-  }
-  int64_t get_enqueue_timestamp() const
-  {
-    return enqueue_timestamp_;
-  }
-  void set_gctx(const observer::ObGlobalContext* ctx)
-  {
-    gctx_ = ctx;
-  }
-  const observer::ObGlobalContext* get_gctx()
-  {
-    return gctx_;
-  }
-  void set_group_id(int32_t v)
-  {
-    group_id_ = v;
-  }
-  int32_t get_group_id() const
-  {
-    return group_id_;
-  }
+  void set_trace_id(TraceId& trace_id) { trace_id_ = trace_id; }
+  const TraceId& get_trace_id() const { return trace_id_; }
+  int8_t get_log_level() const { return log_level_; }
+  void set_log_level(const int8_t log_level) { log_level_ = log_level; }
+  void set_is_oracle_mode(bool oracle_mode) { is_oracle_mode_ = oracle_mode; }
+  bool is_oracle_mode() const { return is_oracle_mode_; }
+  void set_enqueue_timestamp(int64_t v) { enqueue_timestamp_ = v; }
+  int64_t get_enqueue_timestamp() const { return enqueue_timestamp_; }
+  void set_gctx(const observer::ObGlobalContext *ctx) { gctx_ = ctx; }
+  const observer::ObGlobalContext *get_gctx() { return gctx_; }
+  void set_group_id(int32_t v) { group_id_ = v; }
+  int32_t get_group_id() const { return group_id_; }
 
 private:
-  const uint64_t* trace_id_;
+  TraceId trace_id_;
   uint8_t log_level_;
   bool is_oracle_mode_;
   int64_t enqueue_timestamp_;
-  const observer::ObGlobalContext* gctx_;
+  const observer::ObGlobalContext *gctx_;
   int32_t group_id_;
 };
 
-class ObExecCtxDfoRootOpGuard {
-public:
-  ObExecCtxDfoRootOpGuard(ObExecContext* exec_ctx, const ObPhyOperator* op)
-  {
-    exec_ctx_ = NULL;
-    op_ = NULL;
-    if (OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(op)) {
-      op_ = exec_ctx->get_root_op();
-      exec_ctx->set_root_op(op);
-      exec_ctx_ = exec_ctx;
-    }
-  }
-  ~ObExecCtxDfoRootOpGuard()
-  {
-    if (OB_NOT_NULL(exec_ctx_)) {
-      exec_ctx_->set_root_op(op_);
-    }
-  }
-
-private:
-  ObExecContext* exec_ctx_;
-  const ObPhyOperator* op_;
-  DISALLOW_COPY_AND_ASSIGN(ObExecCtxDfoRootOpGuard);
-};
-
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* __OCEANBASE_SQL_ENGINE_PX_DFO_H__ */
 //// end of header file

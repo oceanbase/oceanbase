@@ -1,0 +1,14 @@
+use information_schema;
+select count(*) from global_status;
+count(*)
+2
+show create table global_status;
+Table	Create Table
+GLOBAL_STATUS	CREATE TABLE `GLOBAL_STATUS` (
+  `VARIABLE_NAME` varchar(128) NOT NULL DEFAULT '',
+  `VARIABLE_VALUE` varchar(1024) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+desc global_status;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(1024)	YES		NULL	

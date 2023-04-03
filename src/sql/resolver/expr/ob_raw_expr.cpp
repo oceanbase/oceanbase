@@ -17,24 +17,84 @@
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/expr/ob_expr_relation_analyzer.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_raw_expr_pull_up_aggr_expr.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "common/object/ob_object.h"
 #include "common/ob_smart_call.h"
+#include "sql/engine/expr/ob_expr_autoinc_nextval.h"
+#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
+#include "sql/engine/expr/ob_expr_pl_sqlcode_sqlerrm.h"
+#include "sql/engine/expr/ob_expr_plsql_variable.h"
+#include "sql/engine/expr/ob_expr_collection_construct.h"
+#include "sql/engine/expr/ob_expr_object_construct.h"
+#include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "share/config/ob_server_config.h"
+#include "sql/resolver/expr/ob_raw_expr_copier.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::jit::expr;
 
-namespace oceanbase {
-namespace sql {
-ObRawExpr* USELESS_POINTER = NULL;
+namespace oceanbase
+{
+namespace sql
+{
+ObRawExpr *USELESS_POINTER = NULL;
+
+#define GENERATE_CASE(type, class)                                      \
+  case type: {                                                          \
+    class *dst = NULL;                                                  \
+    if (OB_FAIL(create_raw_expr_inner(type, dst))) {                    \
+      SQL_RESV_LOG(WARN, "failed to create raw expr", K(ret), K(type)); \
+    } else {                                                            \
+      raw_expr = dst;                                                   \
+    }                                                                   \
+  } break;
+#define GENERATE_DEFAULT()                                              \
+  default: {                                                            \
+    if (OB_FAIL(create_raw_expr_inner(expr_type, raw_expr))) {          \
+      SQL_RESV_LOG(WARN, "failed to create raw expr", K(ret), K(expr_type)); \
+    }                                                                   \
+  }
+  
+template <>
+int ObRawExprFactory::create_raw_expr<ObSysFunRawExpr>(ObItemType expr_type, ObSysFunRawExpr *&raw_expr)
+{
+  int ret = OB_SUCCESS;
+  switch (expr_type) {
+    GENERATE_CASE(T_FUN_SYS_SEQ_NEXTVAL, ObSequenceRawExpr);
+    GENERATE_CASE(T_FUN_NORMAL_UDF, ObNormalDllUdfRawExpr);
+    GENERATE_CASE(T_FUN_PL_COLLECTION_CONSTRUCT, ObCollectionConstructRawExpr);
+    GENERATE_CASE(T_FUN_UDF, ObUDFRawExpr);
+    GENERATE_CASE(T_FUN_PL_OBJECT_CONSTRUCT, ObObjectConstructRawExpr);
+    GENERATE_CASE(T_FUN_PL_GET_CURSOR_ATTR, ObPLGetCursorAttrRawExpr);
+    GENERATE_CASE(T_FUN_PL_SQLCODE_SQLERRM, ObPLSQLCodeSQLErrmRawExpr);
+    GENERATE_DEFAULT();
+  }
+  return ret;
+}
+template<>
+int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRawExpr *&raw_expr)
+{
+  int ret = OB_SUCCESS;
+  switch (expr_type) {
+    GENERATE_CASE(T_FUN_PL_INTEGER_CHECKER, ObPLIntegerCheckerRawExpr);
+    GENERATE_CASE(T_SP_CPARAM, ObCallParamRawExpr);
+    GENERATE_CASE(T_FUN_PL_ASSOCIATIVE_INDEX, ObPLAssocIndexRawExpr);
+    GENERATE_CASE(T_OBJ_ACCESS_REF, ObObjAccessRawExpr);
+    GENERATE_CASE(T_OP_MULTISET, ObMultiSetRawExpr);
+    GENERATE_DEFAULT();
+  }
+  return ret;
+}
+
+#undef GENERATE_CASE
+#undef GENERATE_DEFAULT
 
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
 {
-  UNUSED(mode);
-  bool maybe_column = !is_sys_func();
+  UNUSED(mode); //TODO: @ryan.ly @yuming.wyc
+  bool maybe_column = !is_sys_func() && !is_pl_udf() && !is_dll_udf() && !is_pl_var();
   for (int64_t i = 0; maybe_column && i < access_idents_.count(); ++i) {
     if (access_idents_.at(i).access_name_.empty() || access_idents_.at(i).access_index_ != OB_INVALID_INDEX) {
       maybe_column = false;
@@ -54,16 +114,16 @@ void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
   }
 }
 
-int ObQualifiedName::replace_access_ident_params(ObRawExpr* from, ObRawExpr* to)
+int ObQualifiedName::replace_access_ident_params(ObRawExpr *from, ObRawExpr *to)
 {
   int ret = common::OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < access_idents_.count(); ++i) {
-    OZ(access_idents_.at(i).replace_params(from, to));
+    OZ (access_idents_.at(i).replace_params(from, to));
   }
   return ret;
 }
 
-int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*>& params) const
+int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const
 {
   int ret = common::OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < params_.count(); ++i) {
@@ -74,21 +134,22 @@ int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*>
   return ret;
 }
 
-int ObObjAccessIdent::replace_params(ObRawExpr* from, ObRawExpr* to)
+int ObObjAccessIdent::replace_params(ObRawExpr *from, ObRawExpr *to)
 {
   int ret = common::OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < params_.count(); ++i) {
-    OZ(ObRawExprUtils::replace_ref_column(params_.at(i).first, from, to));
+    OZ (ObRawExprUtils::replace_ref_column(params_.at(i).first, from, to));
   }
   return ret;
 }
 
-int OrderItem::deep_copy(
-    ObRawExprFactory& expr_factory, const OrderItem& other, const uint64_t copy_types, bool use_new_allocator)
+int OrderItem::deep_copy(ObIRawExprCopier &copier,
+                         const OrderItem &other)
 {
   int ret = common::OB_SUCCESS;
   order_type_ = other.order_type_;
-  if (OB_FAIL(ObRawExprUtils::copy_expr(expr_factory, other.expr_, expr_, copy_types, use_new_allocator))) {
+  expr_ = other.expr_;
+  if (OB_FAIL(copier.copy(expr_))) {
     LOG_WARN("failed to copy expr when copying OrderItem", K(ret));
   }
   return ret;
@@ -96,7 +157,7 @@ int OrderItem::deep_copy(
 
 OB_SERIALIZE_MEMBER(ObVarInfo, type_, name_);
 
-int ObVarInfo::deep_copy(common::ObIAllocator& allocator, ObVarInfo& var_info) const
+int ObVarInfo::deep_copy(common::ObIAllocator &allocator, ObVarInfo &var_info) const
 {
   int ret = OB_SUCCESS;
   ObString clone_name;
@@ -112,29 +173,31 @@ int ObVarInfo::deep_copy(common::ObIAllocator& allocator, ObVarInfo& var_info) c
 ObRawExpr::~ObRawExpr()
 {
   if (0x86427531 == magic_num_) {
-    LOG_ERROR("ObRawExpr maybe double free!");
+    LOG_ERROR_RET(OB_ERROR, "ObRawExpr maybe double free!");
   }
   magic_num_ = 0x86427531;
 }
-
-// This function is used to determine whether the expression itself or the parameter contains a non-constant expression
-// The definition of a constant expression is an expression that requires a specific operator in the plan
-// We agree that ObBinaryRefExpr must be generated by TableScan
-// ObAggFunRawExpr must be generated by Groupby operator
-// ObSetOpRawExpr must be generated by Set operator
-// ObUnaryRefExpr (i.e. subquery ref) must be generated by SubPlanFilter
-// PSEUDO_COLUMN is generally generated by CTE or hierarchical query
-// SYS_CONNECT_BY_PATH,CONNECT_BY_ROOT is generated by cby nestloop join
+//这个函数用来判断这个表达式本身或者参数是否含有非常量表达式
+//常量表达式的定义是在plan中需要特定的operator产生的表达式
+//我们约定ObBinaryRefExpr必须由TableScan产生
+//ObAggFunRawExpr必须由Groupby operator产生
+//ObSetOpRawExpr必须由Set operator产生
+//ObUnaryRefExpr(即subquery ref)必须由SubPlanFilter产生
+//PSEUDO_COLUMN一般是由CTE或者层次查询产生
+//SYS_CONNECT_BY_PATH,CONNECT_BY_ROOT由cby nestloop join产生
 bool ObRawExpr::has_generalized_column() const
 {
-  return has_flag(CNT_COLUMN) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY) ||
-         has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN) || has_flag(CNT_SEQ_EXPR) ||
-         has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT);
+  return has_flag(CNT_COLUMN) || has_flag(CNT_AGG) || has_flag(CNT_SET_OP) || has_flag(CNT_SUB_QUERY)
+         || has_flag(CNT_WINDOW_FUNC) || has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN)
+         || has_flag(CNT_SEQ_EXPR) || has_flag(CNT_SYS_CONNECT_BY_PATH) || has_flag(CNT_CONNECT_BY_ROOT)
+         || has_flag(CNT_OP_PSEUDO_COLUMN);
+
 }
 
+//这个函数是用来判断表达式中是否可能存在enum或者set的列
 bool ObRawExpr::has_enum_set_column() const
 {
-  return has_flag(CNT_ENUM_OR_SET) || has_flag(CNT_SUB_QUERY);
+  return has_flag(CNT_ENUM_OR_SET);
 }
 
 bool ObRawExpr::has_specified_pseudocolumn() const
@@ -142,105 +205,108 @@ bool ObRawExpr::has_specified_pseudocolumn() const
   return has_flag(CNT_ROWNUM) || has_flag(CNT_PSEUDO_COLUMN);
 }
 
-bool ObRawExpr::is_generalized_column() const
+bool ObRawExpr::is_vectorize_result() const
 {
-  return is_aggr_expr() || is_set_op_expr() || is_column_ref_expr() || is_query_ref_expr() || is_win_func_expr() ||
-         has_flag(IS_ROWNUM) || has_flag(IS_PSEUDO_COLUMN);
+  // subset of ObRawExpr::cnt_not_calculable_expr
+  // TODO bin.lb: more sophisticate
+  bool not_pre_calc = has_generalized_column()
+      || has_flag(CNT_STATE_FUNC)
+      || has_flag(CNT_USER_VARIABLE)
+      || has_flag(CNT_ALIAS)
+      || has_flag(CNT_VALUES)
+      || has_flag(CNT_SEQ_EXPR)
+      || has_flag(CNT_SYS_CONNECT_BY_PATH)
+      || has_flag(CNT_RAND_FUNC)
+      || has_flag(CNT_SO_UDF)
+      || has_flag(CNT_PRIOR)
+      || has_flag(CNT_OP_PSEUDO_COLUMN)
+      || has_flag(CNT_VOLATILE_CONST);
+
+  // Cant be const expr, const expr's evaluate flag is not cleared in execution.
+  // E.g.:
+  //  last_insert_id() is not pre-calculable but is const set to vectorize result will
+  //  coredump because evaluate flag not cleared which reset datum's pointers depends.
+  bool is_const = is_const_expr();
+
+  return not_pre_calc && !is_const;
 }
 
-int ObRawExpr::assign(const ObRawExpr& other)
+int ObRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(&other != this)) {
-    type_ = other.type_;
-    expr_class_ = other.expr_class_;
-    result_type_ = other.result_type_;
-    info_ = other.info_;
-    rel_ids_ = other.rel_ids_;
-    expr_levels_ = other.expr_levels_;
-    alias_column_name_ = other.alias_column_name_;
-    expr_name_ = other.expr_name_;
-    expr_level_ = other.expr_level_;
-    ref_count_ = other.ref_count_;
-    is_explicited_reference_ = other.is_explicited_reference_;
-    is_for_generated_column_ = other.is_for_generated_column_;
-    extra_ = other.extra_;
-    is_calculated_ = other.is_calculated_;
-    is_deterministic_ = other.is_deterministic_;
-    if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
-      LOG_WARN("failed to assign enum set values", K(ret));
-    } else { /*do nothing*/
-    }
-    orig_expr_ = other.orig_expr_;
-  }
-  return ret;
-}
-
-int ObRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(expr_factory);
-  UNUSED(copy_types);
-  if (OB_LIKELY(&other != this)) {
-    if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.alias_column_name_, alias_column_name_))) {
-        LOG_WARN("fail to write string", K(other.alias_column_name_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.expr_name_, expr_name_))) {
-        LOG_WARN("fail to write string", K(other.expr_name_), K(ret));
-      } else {
-        result_type_ = other.result_type_;
-        ObObj param;
-        if (OB_FAIL(deep_copy_obj(*inner_alloc_, other.result_type_.get_param(), param))) {
-          LOG_WARN("deep copy error", K(param), K(ret));
-        } else {
-          result_type_.set_param(param);
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < enum_set_values_.count(); i++) {
-          ObString tmp_str;
-          if (OB_FAIL(ob_write_string(*inner_alloc_, other.enum_set_values_.at(i), tmp_str))) {
-            LOG_WARN("fail to write string", K(ret), K(other.enum_set_values_), K(i));
-          } else if (OB_FAIL(enum_set_values_.push_back(tmp_str))) {
-            LOG_WARN("fail to push back str", K(tmp_str), K(ret));
-          }
-        }
-      }
+    if (OB_UNLIKELY(get_expr_type() != other.get_expr_type()) ||
+        OB_UNLIKELY(get_expr_class() != other.get_expr_class())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr type or class does not match", K(ret),
+               K(get_expr_type()), K(other.get_expr_type()),
+               K(get_expr_class()), K(other.get_expr_class()));
     } else {
-      alias_column_name_ = other.alias_column_name_;
-      expr_name_ = other.expr_name_;
       result_type_ = other.result_type_;
+      info_ = other.info_;
+      rel_ids_ = other.rel_ids_;
+      alias_column_name_ = other.alias_column_name_;
+      expr_name_= other.expr_name_;
+      ref_count_ = other.ref_count_;
+      is_explicited_reference_ = other.is_explicited_reference_;
+      is_for_generated_column_ = other.is_for_generated_column_;
+      extra_ = other.extra_;
+      is_called_in_sql_ = other.is_called_in_sql_;
+      is_calculated_ = other.is_calculated_;
+      is_deterministic_ = other.is_deterministic_;
+      partition_id_calc_type_ = other.partition_id_calc_type_;
       if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
         LOG_WARN("failed to assign enum set values", K(ret));
-      } else { /*do nothing*/
-      }
-    }
-    type_ = other.type_;
-    expr_class_ = other.expr_class_;
-    info_ = other.info_;
-    rel_ids_ = other.rel_ids_;
-    expr_levels_ = other.expr_levels_;
-    expr_level_ = other.expr_level_;
-    ref_count_ = other.ref_count_;
-    is_explicited_reference_ = other.is_explicited_reference_;
-    is_for_generated_column_ = other.is_for_generated_column_;
-    extra_ = other.extra_;
-    is_calculated_ = other.is_calculated_;
-    is_deterministic_ = other.is_deterministic_;
-    if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
-      LOG_WARN("failed to assign enum set values", K(ret));
-    } else if (OB_NOT_NULL(other.orig_expr_) &&
-               OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.orig_expr_, orig_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy orig expr", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;
 }
 
-int ObRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObRawExpr::deep_copy(ObIRawExprCopier &copier,
+                         const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(&other != this)) {
+    if (OB_FAIL(assign(other))) {
+      LOG_WARN("failed to assign other expr", K(ret));
+    } else if (OB_FAIL(inner_deep_copy(copier))) {
+      LOG_WARN("failed to deep copy new allocator", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (copier.deep_copy_attributes()) {
+    ObObj param;
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_,
+                                       alias_column_name_,
+                                       alias_column_name_))) {
+      LOG_WARN("fail to write string", K(alias_column_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, expr_name_, expr_name_))) {
+      LOG_WARN("fail to write string", K(expr_name_), K(ret));
+    } else if (OB_FAIL(deep_copy_obj(*inner_alloc_, result_type_.get_param(), param))) {
+      LOG_WARN("failed to deep copy object", K(ret), K(param));
+    } else {
+      result_type_.set_param(param);
+      for (int64_t i = 0; OB_SUCC(ret) && i < enum_set_values_.count(); i++) {
+        if (OB_FAIL(ob_write_string(*inner_alloc_, enum_set_values_.at(i), enum_set_values_.at(i)))) {
+          LOG_WARN("fail to write string", K(ret), K(enum_set_values_), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                            const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   UNUSED(other_exprs);
@@ -254,26 +320,22 @@ void ObRawExpr::reset()
   info_.reset();
   rel_ids_.reset();
   set_data_type(ObMaxType);
-  expr_level_ = -1;
   ref_count_ = 0;
   is_explicited_reference_ = false;
   is_for_generated_column_ = false;
+  is_called_in_sql_ = true;
   is_calculated_ = false;
   is_deterministic_ = true;
 }
 
-int ObRawExpr::get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObRawExpr::get_name(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
   if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
   } else if (is_stack_overflow) {
-    LOG_DEBUG("too deep recursive", K(ret), K(is_stack_overflow)); 
-  } else if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
-    if (OB_FAIL(orig_expr_->get_name(buf, buf_len, pos, type))) {
-      LOG_WARN("fail to get name for orig expr", K(ret));
-    }
+    LOG_DEBUG("too deep recursive", K(ret), K(is_stack_overflow));
   } else {
     if (OB_FAIL(get_name_internal(buf, buf_len, pos, type))) {
       LOG_WARN("fail to get_name", K(buf_len), K(pos), K(ret));
@@ -282,7 +344,7 @@ int ObRawExpr::get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainT
   return ret;
 }
 
-int ObRawExpr::get_type_and_length(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObRawExpr::get_type_and_length(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
   if (EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type) {
@@ -299,70 +361,68 @@ int ObRawExpr::get_type_and_length(char* buf, const int64_t buf_len, int64_t& po
       }
       if (OB_FAIL(BUF_PRINTF(", %.*s, %d", str_length, type_str, out_data))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
-      } else {
-      }
+      }else { }
     }
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
 int ObRawExpr::extract_info()
 {
-  // LOG_DEBUG("extract_info", "usec", ObSQLUtils::get_usec());
-  // scope may be NULL, do not check
+  //LOG_DEBUG("extract_info", "usec", ObSQLUtils::get_usec());
+  //scope may be NULL, do not check
   int ret = OB_SUCCESS;
   ObRawExprInfoExtractor extractor;
   if (OB_FAIL(extractor.analyze(*this))) {
     LOG_WARN("fail to analyze", K(ret));
   }
-  // LOG_DEBUG("extractor_info", "usec", ObSQLUtils::get_usec());
+  //LOG_DEBUG("extractor_info", "usec", ObSQLUtils::get_usec());
   return ret;
 }
 
-int ObRawExpr::deduce_type(const ObSQLSessionInfo* session_info)
+int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
 {
-  // LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
+  //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   int ret = OB_SUCCESS;
   ObRawExprDeduceType expr_deducer(session_info);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
     LOG_WARN("fail to deduce", K(ret));
   }
-  // LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
+  //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   return ret;
 }
 
-int ObRawExpr::formalize(const ObSQLSessionInfo* session_info)
+int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(extract_info())) {
     LOG_WARN("failed to extract info", K(*this));
   } else if (OB_FAIL(deduce_type(session_info))) {
     LOG_WARN("failed to deduce type", K(*this));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int ObRawExpr::pull_relation_id_and_levels(int32_t cur_stmt_level)
+int ObRawExpr::pull_relation_id()
 {
   int ret = OB_SUCCESS;
   ObExprRelationAnalyzer expr_relation_analyzer;
-  if (OB_FAIL(expr_relation_analyzer.pull_expr_relation_id_and_levels(this, cur_stmt_level))) {
-    LOG_WARN("pull expr failed", K(cur_stmt_level), K(ret));
+  if (OB_FAIL(expr_relation_analyzer.pull_expr_relation_id(this))) {
+    LOG_WARN("pull expr failed", K(ret));
   }
   return ret;
 }
 
-int ObRawExpr::add_child_flags(const ObExprInfo& flags)
+int ObRawExpr::add_child_flags(const ObExprInfo &flags)
 {
   int ret = OB_SUCCESS;
   ObExprInfo tmp = flags;
   if (INHERIT_MASK_BEGIN < tmp.bit_count()) {
-    int64_t mask_end =
-        INHERIT_MASK_END < tmp.bit_count() ? static_cast<int64_t>(INHERIT_MASK_END) : tmp.bit_count() - 1;
+    int64_t mask_end = INHERIT_MASK_END < tmp.bit_count() ?
+                       static_cast<int64_t>(INHERIT_MASK_END) : tmp.bit_count() - 1;
     if (tmp.do_mask(INHERIT_MASK_BEGIN, mask_end)) {
       LOG_WARN("failed to do mask", K(ret));
     } else if (OB_FAIL(info_.add_members(tmp))) {
@@ -379,7 +439,7 @@ int ObRawExpr::add_child_flags(const ObExprInfo& flags)
   return ret;
 }
 
-int ObRawExpr::set_expr_name(const common::ObString& expr_name)
+int ObRawExpr::set_expr_name(const common::ObString &expr_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(inner_alloc_)) {
@@ -391,20 +451,22 @@ int ObRawExpr::set_expr_name(const common::ObString& expr_name)
   return ret;
 }
 
-int ObRawExpr::preorder_accept(ObRawExprVisitor& visitor)
+int ObRawExpr::preorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(do_visit(visitor))) {
-    LOG_WARN("visit failed", K(ret), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
+    LOG_WARN("visit failed", K(ret),
+        "type", get_expr_type(), "name", get_type_name(get_expr_type()));
   } else {
     if (!skip_visit_child() && !visitor.skip_child(*this)) {
       const int64_t cnt = get_param_count();
       for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
-        ObRawExpr* e = get_param_expr(i);
+        ObRawExpr *e = get_param_expr(i);
         if (NULL == e) {
           LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
         } else if (OB_FAIL(SMART_CALL(e->preorder_accept(visitor)))) {
-          LOG_WARN("child visit failed", K(ret), K(i), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
+          LOG_WARN("child visit failed", K(ret), K(i),
+              "type", get_expr_type(), "name", get_type_name(get_expr_type()));
         }
       }
     }
@@ -412,63 +474,184 @@ int ObRawExpr::preorder_accept(ObRawExprVisitor& visitor)
   return ret;
 }
 
-int ObRawExpr::postorder_accept(ObRawExprVisitor& visitor)
+int ObRawExpr::postorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
   if (!skip_visit_child() && !visitor.skip_child(*this)) {
     const int64_t cnt = get_param_count();
     for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
-      ObRawExpr* e = get_param_expr(i);
+      ObRawExpr *e = get_param_expr(i);
       if (NULL == e) {
         LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
       } else if (OB_FAIL(SMART_CALL(e->postorder_accept(visitor)))) {
-        LOG_WARN("child visit failed", K(ret), K(i), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
+        LOG_WARN("child visit failed", K(ret), K(i),
+            "type", get_expr_type(), "name", get_type_name(get_expr_type()));
       }
     }
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(do_visit(visitor))) {
-      LOG_WARN("visit failed", K(ret), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
+      LOG_WARN("visit failed", K(ret),
+          "type", get_expr_type(), "name", get_type_name(get_expr_type()));
     }
   }
   return ret;
 }
 
-int ObRawExpr::postorder_replace(ObRawExprVisitor& visitor)
+// Get identify expr for same as check:
+// 1. Original expr of exec param expr
+// 2. Skip the inner added implicit cast expr for none root node, e.g.:
+//    abs(cast(c1)) is same as abs(c1)
+//    but: cast(abs(c1)) is not same as abs(c1)
+const ObRawExpr *ObRawExpr::get_same_identify(const ObRawExpr *e,
+                                              const ObExprEqualCheckContext *check_ctx) const
 {
-  int ret = OB_SUCCESS;
-  ObRawExprPullUpAggrExpr& pull_up_visitor = *static_cast<ObRawExprPullUpAggrExpr*>(&visitor);
-  if (!skip_visit_child() && !visitor.skip_child(*this)) {
-    const int64_t cnt = get_param_count();
-    for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
-      ObRawExpr* e = get_param_expr(i);
-      if (NULL == e) {
-        LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
-      } else if (OB_FAIL(SMART_CALL(e->postorder_replace(visitor)))) {
-        LOG_WARN("child visit failed", K(ret), K(i), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
-      } else {
-        e = pull_up_visitor.get_new_expr();
+  while (NULL != e) {
+    if (e->is_exec_param_expr()) {
+      if (NULL != static_cast<const ObExecParamRawExpr *>(e)->get_ref_expr()) {
+        e = static_cast<const ObExecParamRawExpr *>(e)->get_ref_expr();
       }
+    } else if (NULL != check_ctx && check_ctx->ignore_implicit_cast_
+               && check_ctx->recursion_level_ > 1
+               && T_FUN_SYS_CAST == e->get_expr_type()
+               && e->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+      e = e->get_param_expr(0);
+    } else {
+      break;
     }
   }
+  return e;
+}
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(do_visit(visitor))) {
-      LOG_WARN("visit failed", K(ret), "type", get_expr_type(), "name", get_type_name(get_expr_type()));
+bool ObRawExpr::is_spatial_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_SPATIAL_OP(expr->get_expr_type());
+}
+
+bool ObRawExpr::is_geo_expr() const
+{
+  return IS_GEO_OP(get_expr_type());
+}
+
+bool ObRawExpr::is_mysql_geo_expr() const
+{
+  return IS_MYSQL_GEO_OP(get_expr_type());
+}
+
+bool ObRawExpr::is_priv_geo_expr() const
+{
+  return IS_PRIV_GEO_OP(get_expr_type());
+}
+
+ObGeoType ObRawExpr::get_geo_expr_result_type() const
+{
+  if (!is_geo_expr() && T_FUN_SYS_CAST != this->get_expr_type()) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Expr is not a geo expr");
+    return ObGeoType::GEOTYPEMAX;
+  } else {
+    switch (this->get_expr_type()) {
+      case T_FUN_SYS_CAST: {
+        int ret = OB_SUCCESS;
+        ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
+        if (OB_FAIL(get_geo_cast_result_type(geo_type))) {
+          LOG_WARN("could not get geo type from cast", K(ret));
+        }
+        return geo_type;
+      }
+      case T_FUN_SYS_POINT:
+        return ObGeoType::POINT;
+      case T_FUN_SYS_LINESTRING:
+        return ObGeoType::LINESTRING;
+      case T_FUN_SYS_MULTIPOINT:
+        return ObGeoType::MULTIPOINT;
+      case T_FUN_SYS_MULTILINESTRING:
+        return ObGeoType::MULTILINESTRING;
+      case T_FUN_SYS_POLYGON:
+        return ObGeoType::POLYGON;
+      case T_FUN_SYS_MULTIPOLYGON:
+        return ObGeoType::MULTIPOLYGON;
+      case T_FUN_SYS_GEOMCOLLECTION:
+        return ObGeoType::GEOMETRYCOLLECTION;
+      default:
+        return ObGeoType::GEOMETRY;
+    }
+  }
+}
+
+int ObRawExpr::get_geo_cast_result_type(ObGeoType& geo_type) const
+{
+  int ret = OB_SUCCESS;
+  if (T_FUN_SYS_CAST != get_expr_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should be cast expr", K(ret));
+  } else if (OB_ISNULL(get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast second param expr is NULL", K(ret));
+  } else if (!get_param_expr(1)->is_const_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast second param expr is not const expr", K(ret));
+  } else {
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
+    ObObj value = const_expr->get_value();
+    if (!value.is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value of second param expr is not int", K(value), K(ret));
+    } else {
+      ParseNode parse_node;
+      parse_node.value_ = value.get_int();
+      geo_type = static_cast<ObGeoType>(parse_node.int16_values_[OB_NODE_CAST_GEO_TYPE_IDX]);
     }
   }
   return ret;
+}
+
+bool ObRawExpr::same_as(const ObRawExpr &expr,
+                        ObExprEqualCheckContext *check_context) const
+{
+  bool bret = false;
+  if (this == &expr) {
+    bret = true;
+  } else {
+    if (NULL != check_context) {
+      check_context->recursion_level_ += 1;
+    }
+
+    const ObRawExpr *l = get_same_identify(this, check_context);
+    const ObRawExpr *r = get_same_identify(&expr, check_context);
+    bret = l->inner_same_as(*r, check_context);
+
+    if (NULL != check_context) {
+      check_context->recursion_level_ -= 1;
+    }
+  }
+  return bret;
 }
 
 ////////////////////////////////////////////////////////////////
-ObRawExpr*& ObTerminalRawExpr::get_param_expr(int64_t index)
+ObRawExpr *&ObTerminalRawExpr::get_param_expr(int64_t index)
 {
   UNUSED(index);
   return USELESS_POINTER;
 }
 
-int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString>& values)
+bool ObRawExpr::is_bool_expr() const
+{
+  return IS_BOOL_OP(type_) || (is_const_raw_expr() && static_cast<const ObConstRawExpr*>(this)->is_literal_bool());
+}
+
+bool ObRawExpr::is_json_expr() const
+{
+  return (T_FUN_SYS_JSON_OBJECT <= get_expr_type() && get_expr_type() <= T_FUN_JSON_OBJECTAGG) ? true : false;
+}
+
+bool ObRawExpr::is_multiset_expr() const
+{
+  return is_query_ref_expr() && static_cast<const ObQueryRefRawExpr *>(this)->is_multiset();
+}
+
+int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString> &values)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(enum_set_values_.assign(values))) {
@@ -477,108 +660,257 @@ int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString>& val
   return ret;
 }
 
-bool ObRawExpr::is_non_pure_sys_func_expr() const
+bool ObRawExpr::is_not_calculable_expr() const
 {
-  if (lib::is_oracle_mode()) {
-    if (T_FUN_SYS_LOCALTIMESTAMP == type_ || T_FUN_SYS_SESSIONTIMEZONE == type_ || T_FUN_SYS_DBTIMEZONE == type_ ||
-        T_FUN_SYS_SYSDATE == type_ || T_FUN_SYS_SYSTIMESTAMP == type_ || T_FUN_SYS_UID == type_ ||
-        T_FUN_SYS_USER == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ || T_FUN_SYS_GUID == type_ ||
-        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_USERENV == type_ || T_FUN_SYS_REGEXP_REPLACE == type_) {
-      return true;
-    }
-  } else {
-    if (T_FUN_SYS_CONNECTION_ID == type_ || T_FUN_SYS_VERSION == type_ || T_FUN_SYS_CURRENT_USER == type_ ||
-        T_FUN_SYS_USER == type_ || T_FUN_SYS_DATABASE == type_ || T_FUN_SYS_SYSDATE == type_ ||
-        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_CUR_TIME == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ ||
-        T_FUN_SYS_UNIX_TIMESTAMP == type_ || T_FUN_SYS_UTC_TIMESTAMP == type_ || T_FUN_SYS_RAND == type_ ||
-        T_FUN_SYS_UUID == type_ || T_FUN_SYS_SLEEP == type_ || T_FUN_SYS_LAST_INSERT_ID == type_ ||
-        T_FUN_SYS_ROW_COUNT == type_ || T_FUN_SYS_FOUND_ROWS == type_ || T_FUN_SYS_REGEXP_INSTR == type_ ||
-        T_FUN_SYS_REGEXP_LIKE == type_ || T_FUN_SYS_REGEXP_REPLACE == type_ || T_FUN_SYS_REGEXP_SUBSTR == type_) {
-      return true;
-    }
-  }
-  return false;
+  return is_generalized_column()
+         || has_flag(IS_STATE_FUNC)
+         || has_flag(IS_USER_VARIABLE)
+         || has_flag(IS_ALIAS)
+         || has_flag(IS_VALUES)
+         || has_flag(IS_SEQ_EXPR)
+         || has_flag(IS_SYS_CONNECT_BY_PATH)
+         || has_flag(IS_RAND_FUNC)
+         || has_flag(IS_SO_UDF_EXPR)
+         || has_flag(IS_PRIOR)
+         || has_flag(IS_VOLATILE_CONST)
+         || has_flag(IS_ASSIGN_EXPR);
 }
 
+bool ObRawExpr::cnt_not_calculable_expr() const
+{
+  // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
+  // need add the same rules.
+  return has_generalized_column()
+         || has_flag(CNT_STATE_FUNC)
+         || has_flag(CNT_USER_VARIABLE)
+         || has_flag(CNT_ALIAS)
+         || has_flag(CNT_VALUES)
+         || has_flag(CNT_SEQ_EXPR)
+         || has_flag(CNT_SYS_CONNECT_BY_PATH)
+         || has_flag(CNT_RAND_FUNC)
+         || has_flag(CNT_SO_UDF)
+         || has_flag(CNT_PRIOR)
+         || has_flag(CNT_VOLATILE_CONST)
+         || has_flag(CNT_ASSIGN_EXPR);
+}
+
+/**
+ * @brief check whether an expr is const when all of its param exprs are const expr.
+ * param_need_replace is true when called in ObOptimizerUtil::is_const_expr_recursively
+ * e.g.:
+ *  1 + exists (select 1 > t1) will be const expr after replacing the T_OP_EXISTS with onetime expr,
+ *  we need to treat the expr as const expr without replacement when generate logical plan.
+ *  The param_need_replace flag only disables the shortcut of cnt_not_calculable_expr(),
+ *  the param expr remains non-const if it can not be replaced into exec param
+ */
+int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
+                                     const bool param_need_replace /*=false*/) const
+{
+  int ret = OB_SUCCESS;
+  is_const_inherit = true;
+  if (T_FUN_SYS_RAND == type_
+      || T_FUN_SYS_UUID == type_
+      || T_FUN_SYS_UUID_SHORT == type_
+      || T_FUN_SYS_SEQ_NEXTVAL == type_
+      || T_FUN_SYS_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_ROWNUM == type_
+      || T_FUN_SYS_ROWKEY_TO_ROWID == type_
+      || T_OP_CONNECT_BY_ROOT == type_
+      || T_FUN_SYS_CONNECT_BY_PATH == type_
+      || T_FUN_SYS_GUID == type_
+      || T_FUN_SYS_STMT_ID == type_
+      || T_FUN_SYS_SLEEP == type_
+      || T_OP_PRIOR == type_
+      || T_OP_ASSIGN == type_
+      || T_OP_GET_USER_VAR == type_
+      || T_FUN_NORMAL_UDF == type_
+      || T_FUN_SYS_REMOVE_CONST == type_
+      || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_LAST_INSERT_ID == type_
+      || T_FUN_SYS_TO_BLOB == type_
+      || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
+      || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
+      || (T_FUN_UDF == type_
+          && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
+     is_const_inherit = false;
+  }
+  if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
+    if (get_param_count() != 1 || OB_ISNULL(get_param_expr(0)) ||
+        get_param_expr(0)->type_ != T_USER_VARIABLE_IDENTIFIER) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected expr", K(ret));
+    } else {
+      const ObUserVarIdentRawExpr *var_expr =
+          static_cast<const ObUserVarIdentRawExpr*>(get_param_expr(0));
+      if (var_expr->get_is_contain_assign() || var_expr->get_query_has_udf()) {
+        is_const_inherit = false;
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief 判断Oracle的系统函数是不是pure的，用于创建生成列或函数索引时的检查
+ * @return
+ */
+int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
+{
+  int ret = OB_SUCCESS;
+  is_non_pure = false;
+  if (lib::is_oracle_mode()) {
+    if (T_FUN_SYS_LOCALTIMESTAMP == type_
+          || T_FUN_SYS_SESSIONTIMEZONE == type_
+          || T_FUN_SYS_DBTIMEZONE == type_
+          || T_FUN_SYS_SYSDATE == type_
+          || T_FUN_SYS_SYSTIMESTAMP == type_
+          || T_FUN_SYS_UID == type_
+          || T_FUN_SYS_USER == type_
+          || T_FUN_SYS_CUR_TIMESTAMP == type_
+          || T_FUN_SYS_GUID == type_
+          || T_FUN_SYS_CUR_DATE == type_
+          || T_FUN_SYS_USERENV == type_
+          || T_FUN_SYS_REGEXP_REPLACE == type_
+          || T_FUN_SYS_USER_CAN_ACCESS_OBJ == type_) {
+      is_non_pure = true;
+    } else if (T_FUN_SYS_TO_DATE == type_ || T_FUN_SYS_TO_TIMESTAMP == type_ ||
+               T_FUN_SYS_TO_TIMESTAMP_TZ == type_) {
+      const ObRawExpr *format_expr = NULL;
+      if (get_param_count() < 2) {
+        is_non_pure = true;
+      } else if (OB_ISNULL(format_expr = get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if (!format_expr->is_const_raw_expr()) {
+        is_non_pure = true;
+      } else {
+        const ObConstRawExpr* const_expr = static_cast<const ObConstRawExpr*>(format_expr);
+        const ObObj &value = const_expr->get_value();
+        bool need_tz = T_FUN_SYS_TO_TIMESTAMP_TZ == type_;
+        bool complete = true;
+        if (OB_UNLIKELY(!value.is_string_type())) {
+          // just pass, will report error when calc result type
+        } else if (OB_FAIL(ObTimeConverter::check_dfm_deterministic(value.get_string(),
+                                                      value.get_collation_type(),
+                                                      need_tz, complete))) {
+          LOG_WARN("check datetime format model complete failed", K(ret), K(value));
+        } else {
+          is_non_pure = !complete;
+        }
+      }
+    }
+  } else {
+    if (T_FUN_SYS_CONNECTION_ID == type_
+          || T_FUN_SYS_VERSION == type_
+          || T_FUN_SYS_CURRENT_USER == type_
+          || T_FUN_SYS_USER == type_
+          || T_FUN_SYS_DATABASE == type_
+          || T_FUN_SYS_SYSDATE == type_
+          || T_FUN_SYS_CUR_DATE == type_
+          || T_FUN_SYS_CUR_TIME == type_
+          || T_FUN_SYS_CUR_TIMESTAMP == type_
+          || T_FUN_SYS_UNIX_TIMESTAMP == type_
+          || T_FUN_SYS_UTC_TIME == type_
+          || T_FUN_SYS_UTC_TIMESTAMP == type_
+          || T_FUN_SYS_UTC_DATE == type_
+          || T_FUN_SYS_RAND == type_
+          || T_FUN_SYS_UUID == type_
+          || T_FUN_SYS_UUID_SHORT == type_
+          || T_FUN_SYS_SLEEP == type_
+          || T_FUN_SYS_LAST_INSERT_ID == type_
+          || T_FUN_SYS_ROW_COUNT == type_
+          || T_FUN_SYS_FOUND_ROWS == type_
+          || T_FUN_SYS_REGEXP_INSTR == type_
+          // TODO:@sean.yyj#273971, will sort out exprs not deterministic in mysql mode later,
+          // || T_FUN_SYS_REGEXP_LIKE == type_ // create table t1(c1 int, c2 int generated always as(regexp_like(1, 2))); success in mysql
+          || T_FUN_SYS_REGEXP_REPLACE == type_
+          || T_FUN_SYS_REGEXP_SUBSTR == type_
+          || T_FUN_SYS_CURRENT_USER_PRIV == type_) {
+      is_non_pure = true;
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief 判断Oracle的伪列能否出现在生成列中
+ * @return
+ */
 bool ObRawExpr::is_specified_pseudocolumn_expr() const
 {
-  if (T_FUN_SYS_ROWNUM == type_ || T_LEVEL == type_ || T_CONNECT_BY_ISCYCLE == type_ || T_CONNECT_BY_ISLEAF == type_) {
+  if (T_FUN_SYS_ROWNUM == type_
+      || T_LEVEL == type_
+      || T_CONNECT_BY_ISCYCLE == type_
+      || T_CONNECT_BY_ISLEAF == type_) {
     return true;
   }
   return false;
 }
 
+
 ////////////////////////////////////////////////////////////////
-int ObConstRawExpr::assign(const ObConstRawExpr& other)
+int ObConstRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
     } else {
-      value_ = other.get_value();
-      literal_prefix_ = other.get_literal_prefix();
-      obj_meta_ = other.get_expr_obj_meta();
+      const ObConstRawExpr &const_expr = static_cast<const ObConstRawExpr &>(other);
+      value_ = const_expr.get_value();
+      literal_prefix_ = const_expr.get_literal_prefix();
+      obj_meta_ = const_expr.get_expr_obj_meta();
+      is_date_unit_ = const_expr.is_date_unit_;
+      is_literal_bool_ = const_expr.is_literal_bool();
     }
   }
   return ret;
 }
 
-int ObConstRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObConstRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObConstRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
-    } else if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator is NULL", K(ret));
-      } else if (OB_FAIL(deep_copy_obj(*inner_alloc_, other.value_, value_))) {
-        LOG_WARN("deep copy error", K(value_), K(ret));
-      } else {
-        if (other.literal_prefix_.empty()) {
-          literal_prefix_.reset();
-        } else {
-          char* buf = NULL;
-          if (OB_ISNULL(buf = static_cast<char*>(inner_alloc_->alloc(other.literal_prefix_.length())))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("Fail to allocate memory, ", "size", other.literal_prefix_.length(), K(ret));
-          } else {
-            literal_prefix_.assign_buffer(buf, other.literal_prefix_.length());
-            literal_prefix_.write(other.literal_prefix_.ptr(), other.literal_prefix_.length());
-          }
-        }
-        obj_meta_ = other.get_expr_obj_meta();
-      }
+  if (OB_FAIL(ObTerminalRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    ObObj tmp;
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator is NULL", K(ret));
+    } else if (OB_FAIL(deep_copy_obj(*inner_alloc_, value_, tmp))) {
+      LOG_WARN("deep copy error", K(value_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, literal_prefix_, literal_prefix_))) {
+      LOG_WARN("failed to werite string", K(ret));
     } else {
-      value_ = other.get_value();
-      literal_prefix_ = other.get_literal_prefix();
-      obj_meta_ = other.get_expr_obj_meta();
+      value_ = tmp;
     }
   }
   return ret;
 }
 
-int ObConstRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObConstRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                 const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-void ObConstRawExpr::set_value(const ObObj& val)
+void ObConstRawExpr::set_value(const ObObj &val)
 {
-  set_meta_type(val.get_meta());
+  set_meta_type(val.get_meta()); //让const raw expr的类型和值类型相同
   set_expr_obj_meta(val.get_meta());
   value_ = val;
 }
 
-void ObConstRawExpr::set_literal_prefix(const ObString& name)
+void ObConstRawExpr::set_literal_prefix(const ObString &name)
 {
   literal_prefix_ = name;
 }
@@ -588,6 +920,7 @@ void ObConstRawExpr::reset()
   ObRawExpr::reset();
   value_.reset();
   literal_prefix_.reset();
+  is_literal_bool_ = false;
 }
 
 void ObConstRawExpr::set_is_date_unit()
@@ -605,34 +938,35 @@ uint64_t ObConstRawExpr::hash_internal(uint64_t seed) const
   return value_.hash(seed);
 }
 
-bool ObConstRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObConstRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (check_context != NULL && check_context->override_const_compare_) {
-    if (expr.is_const_expr()) {
+    if (expr.is_const_raw_expr()) {
       bool_ret = check_context->compare_const(*this, static_cast<const ObConstRawExpr&>(expr));
     }
   } else if (get_expr_type() != expr.get_expr_type()) {
-    // what are you doing ?
+    //what are you doing ?
     if (NULL != check_context) {
-      if (expr.is_const_expr()) {
+      if (expr.is_const_raw_expr()) {
         if (T_QUESTIONMARK == expr.get_expr_type()) {
           bool_ret = true;
-          const ObConstRawExpr* c_expr = static_cast<const ObConstRawExpr*>(&expr);
+          const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr *>(&expr);
           int64_t param_idx = -1;
-          int& ret = check_context->err_code_;
+          int &ret = check_context->err_code_;
           if (OB_FAIL(c_expr->get_value().get_unknown(param_idx))) {
             LOG_WARN("Failed to get param", K(ret));
           } else if (OB_FAIL(check_context->param_expr_.push_back(
-                         ObExprEqualCheckContext::ParamExprPair(param_idx, this)))) {
+              ObExprEqualCheckContext::ParamExprPair(param_idx, this)))) {
             LOG_WARN("Failed to add param expr pair", K(ret));
-          } else {
-          }
+          } else { }
         }
       }
     }
   } else {
-    const ObConstRawExpr* c_expr = static_cast<const ObConstRawExpr*>(&expr);
+    const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr *>(&expr);
     if (get_value().get_meta() != c_expr->get_value().get_meta()) {
       bool_ret = false;
     } else if (get_value().is_equal(c_expr->get_value(), CS_TYPE_BINARY)) {
@@ -642,14 +976,21 @@ bool ObConstRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* che
   return bool_ret;
 }
 
-bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr& left, const ObConstRawExpr& right)
+bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,
+                                            const ObConstRawExpr &right)
 {
-  int& ret = err_code_;
+  int &ret = err_code_;
   bool result = false;
   if (left.get_result_type() == right.get_result_type()) {
-    const ObObj& this_value = left.get_value().is_unknown() ? left.get_result_type().get_param() : left.get_value();
-    const ObObj& other_value = right.get_value().is_unknown() ? right.get_result_type().get_param() : right.get_value();
-    result = this_value.is_equal(other_value, CS_TYPE_BINARY);
+    if (ignore_param_ && (left.get_value().is_unknown() || right.get_value().is_unknown())) {
+      result = true;
+    } else {
+      const ObObj &this_value = left.get_value().is_unknown() ?
+          left.get_result_type().get_param() : left.get_value();
+      const ObObj &other_value = right.get_value().is_unknown() ?
+          right.get_result_type().get_param() : right.get_value();
+      result = this_value.is_equal(other_value, CS_TYPE_BINARY);
+    }
   }
   if (OB_SUCC(ret) && result && left.get_value().is_unknown()) {
     if (OB_FAIL(add_param_pair(left.get_value().get_unknown(), NULL))) {
@@ -664,19 +1005,26 @@ bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr& left, const Ob
   return result;
 }
 
-int ObConstRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObConstRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObConstRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObConstRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                      ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(type);
-  if (get_value().is_unknown()) {
+  if (EXPLAIN_HINT_FORMAT == type) {
+    if (OB_FAIL(BUF_PRINTF("?"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (get_value().is_unknown()) { //为explain特殊处理QuestionMark为？，其他地方打印成$IntNum
     if (EXPLAIN_DBLINK_STMT != type) {
-      if (OB_FAIL(get_value().print_plain_str_literal(buf, buf_len, pos))) {
-        LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      // if (OB_FAIL(get_value().print_plain_str_literal(buf, buf_len, pos))) {
+      //   LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      // }
+      if (OB_FAIL(BUF_PRINTF(":%ld", get_value().get_unknown()))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     } else {
       if (OB_FAIL(ObLinkStmtParam::write(buf, buf_len, pos, get_value().get_unknown()))) {
@@ -686,6 +1034,10 @@ int ObConstRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t&
   } else {
     if (OB_FAIL(get_value().print_sql_literal(buf, buf_len, pos))) {
       LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      if (OB_ERR_NULL_VALUE == ret) {
+        //ignore mull time zone info
+        ret = OB_SUCCESS;
+      }
     }
   }
   return ret;
@@ -695,7 +1047,11 @@ int64_t ObConstRawExpr::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE, value_);
+  J_KV(N_ITEM_TYPE, type_,
+      N_RESULT_TYPE, result_type_,
+      N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_,
+      N_VALUE, value_);
   if (!literal_prefix_.empty()) {
     J_COMMA();
     J_KV(K_(literal_prefix));
@@ -705,101 +1061,90 @@ int64_t ObConstRawExpr::to_string(char* buf, const int64_t buf_len) const
 }
 
 ////////////////////////////////////////////////////////////////
-int ObVarRawExpr::assign(const ObVarRawExpr& other)
+int ObVarRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
       LOG_WARN("failed to assign terminal raw expr", K(ret));
     } else {
-      result_type_assigned_ = other.result_type_assigned_;
+      const ObVarRawExpr &var_expr = static_cast<const ObVarRawExpr &>(other);
+      result_type_assigned_ = var_expr.result_type_assigned_;
     }
   }
   return ret;
 }
 
-int ObVarRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObVarRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
-    } else {
-      result_type_assigned_ = other.result_type_assigned_;
-    }
-  }
-  return ret;
-}
-
-int ObVarRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObVarRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                               const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-bool ObVarRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObVarRawExpr::inner_same_as(const ObRawExpr &expr,
+                                 ObExprEqualCheckContext *check_context) const
 {
   UNUSED(check_context);
-  return expr.is_var_expr() && get_expr_type() == expr.get_expr_type() && get_result_type() == expr.get_result_type();
+  return expr.is_var_expr()
+         && get_expr_type() == expr.get_expr_type()
+         && get_result_type() == expr.get_result_type();
 }
 
-int ObVarRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObVarRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                    ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(type);
-  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", get_type_name(type_)))) {
+  if (EXPLAIN_HINT_FORMAT == type) {
+    if (OB_FAIL(BUF_PRINTF("?"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s",
+                                     get_type_name(type_)))) {
     LOG_WARN("databuff print failed", K(ret));
   }
   return ret;
 }
 
-int ObVarRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObVarRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
 ////////////////////////////////////////////////////////////////
-int ObUserVarIdentRawExpr::assign(const ObUserVarIdentRawExpr& other)
+int ObUserVarIdentRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObConstRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObConstRawExpr::assign(other))) {
       LOG_WARN("failed to assign const raw expr", K(ret));
     } else {
-      is_contain_assign_ = other.is_contain_assign_;
-      query_has_udf_ = other.query_has_udf_;
+      const ObUserVarIdentRawExpr &tmp = static_cast<const ObUserVarIdentRawExpr &>(other);
+      is_contain_assign_ = tmp.is_contain_assign_;
+      query_has_udf_ = tmp.query_has_udf_;
     }
   }
   return ret;
 }
 
-int ObUserVarIdentRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObUserVarIdentRawExpr& other,
-    const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObConstRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
-    } else {
-      is_contain_assign_ = other.is_contain_assign_;
-      query_has_udf_ = other.query_has_udf_;
-    }
-  }
-  return ret;
-}
-
-int ObUserVarIdentRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObUserVarIdentRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                        const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -816,12 +1161,13 @@ uint64_t ObUserVarIdentRawExpr::hash_internal(uint64_t seed) const
   return seed;
 }
 
-bool ObUserVarIdentRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObUserVarIdentRawExpr::inner_same_as(const ObRawExpr &expr,
+                                          ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   UNUSED(check_context);
   if (get_expr_type() == expr.get_expr_type()) {
-    const ObUserVarIdentRawExpr* user_var_expr = static_cast<const ObUserVarIdentRawExpr*>(&expr);
+    const ObUserVarIdentRawExpr *user_var_expr = static_cast<const ObUserVarIdentRawExpr *>(&expr);
     if (get_value().get_meta() != user_var_expr->get_value().get_meta()) {
       bool_ret = false;
     } else if (get_value().is_equal(user_var_expr->get_value(), CS_TYPE_BINARY)) {
@@ -831,16 +1177,17 @@ bool ObUserVarIdentRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckConte
   return bool_ret;
 }
 
-bool ObUserVarIdentRawExpr::is_same_variable(const ObObj& obj) const
+bool ObUserVarIdentRawExpr::is_same_variable(const ObObj &obj) const
 {
   bool bool_ret = false;
-  if (get_value().get_meta() == obj.get_meta() && get_value().is_equal(obj, CS_TYPE_BINARY)) {
+  if (get_value().get_meta() == obj.get_meta() &&
+      get_value().is_equal(obj, CS_TYPE_BINARY)) {
     bool_ret = true;
   }
   return bool_ret;
 }
 
-int ObUserVarIdentRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObUserVarIdentRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
@@ -849,143 +1196,203 @@ int64_t ObUserVarIdentRawExpr::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(N_ITEM_TYPE,
-      type_,
-      N_RESULT_TYPE,
-      result_type_,
-      N_EXPR_INFO,
-      info_,
-      N_REL_ID,
-      rel_ids_,
-      N_VALUE,
-      value_,
-      "is_contain_assign",
-      is_contain_assign_,
-      "query_has_udf",
-      query_has_udf_);
+  J_KV(N_ITEM_TYPE, type_,
+       N_RESULT_TYPE, result_type_,
+       N_EXPR_INFO, info_,
+       N_REL_ID, rel_ids_,
+       N_VALUE, value_,
+       "is_contain_assign", is_contain_assign_,
+       "query_has_udf", query_has_udf_);
   J_OBJ_END();
   return pos;
 }
 
 ////////////////////////////////////////////////////////////////
-int ObQueryRefRawExpr::assign(const ObQueryRefRawExpr& other)
+int ObQueryRefRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
-    } else if (OB_FAIL(column_types_.assign(other.column_types_))) {
-      LOG_WARN("failed to copy column types", K(ret));
     } else {
-      ref_id_ = other.ref_id_;
-      if (OB_STMT == other.ref_type_) {
-        set_ref_stmt(other.ref_stmt_);
-      } else if (OB_LOGICAL_OPERATOR == other.ref_type_) {
-        set_ref_operator(other.ref_operator_);
-      } else { /* Do nothing */
+      const ObQueryRefRawExpr &tmp = static_cast<const ObQueryRefRawExpr &>(other);
+      if (OB_FAIL(exec_params_.assign(tmp.exec_params_))) {
+        LOG_WARN("failed to assign exec params", K(ret));
+      } else if (OB_FAIL(column_types_.assign(tmp.column_types_))) {
+        LOG_WARN("failed to copy column types", K(ret));
+      } else {
+        ref_id_ = tmp.ref_id_;
+        ref_stmt_ = tmp.ref_stmt_;
+        output_column_ = tmp.output_column_;
+        is_set_ = tmp.is_set_;
+        is_cursor_ = tmp.is_cursor_;
+        has_nl_param_ = tmp.has_nl_param_;
+        is_multiset_ = tmp.is_multiset_;
+        column_types_ = tmp.column_types_;
       }
-      output_column_ = other.output_column_;
-      is_set_ = other.is_set_;
-      column_types_ = other.column_types_;
     }
   }
   return ret;
 }
 
-int ObQueryRefRawExpr::deep_copy(
-    ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObQueryRefRawExpr& other)
+int ObQueryRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt* temp_ref_stmt = NULL;
-  if (OB_ISNULL(other.get_ref_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null stmt", K(ret));
-  } else if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
-    LOG_WARN("failed to copy row expr", K(ret));
-  } else if (OB_FAIL(stmt_factory.create_stmt(temp_ref_stmt)) || OB_ISNULL(temp_ref_stmt)) {
-    LOG_WARN("failed to create statement", K(ret));
-  } else if (OB_FAIL(temp_ref_stmt->deep_copy(stmt_factory, expr_factory, *other.get_ref_stmt()))) {
-    LOG_WARN("failed to deep copy stmt", K(ret));
-  } else if (OB_FAIL(column_types_.assign(other.column_types_))) {
-    LOG_WARN("failed to assign copy types", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < exec_params_.count(); ++i) {
+    ObRawExpr *exec_param = exec_params_.at(i);
+    ObRawExpr *new_expr = NULL;
+    if (OB_FAIL(copier.do_copy_expr(exec_param, new_expr))) {
+      LOG_WARN("failed to copy exec param", K(ret));
+    } else if (OB_ISNULL(new_expr) ||
+               OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param is invalid", K(ret), K(new_expr));
+    } else {
+      exec_params_.at(i) = static_cast<ObExecParamRawExpr *>(new_expr);
+    }
+  }
+  if (OB_SUCC(ret) && copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner alloc is null", K(ret), K(inner_alloc_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_types_.count(); ++i) {
+      ObObj param;
+      if (OB_FAIL(ob_write_obj(*inner_alloc_, column_types_.at(i).get_param(), param))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else {
+        column_types_.at(i).set_param(param);
+      }
+    }
+  }
+  return ret;
+}
+
+void ObQueryRefRawExpr::clear_child()
+{
+  exec_params_.reset();
+}
+
+int ObQueryRefRawExpr::add_exec_param_expr(ObExecParamRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(exec_params_.push_back(expr))) {
+    LOG_WARN("failed to add param expr", K(ret));
+  }
+  return ret;
+}
+
+int ObQueryRefRawExpr::add_exec_param_exprs(const ObIArray<ObExecParamRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append_array_no_dup(exec_params_, exprs))) {
+    LOG_WARN("failed to append array no dup", K(ret));
+  }
+  return ret;
+}
+
+int64_t ObQueryRefRawExpr::get_param_count() const
+{
+  return exec_params_.count();
+}
+
+const ObRawExpr *ObQueryRefRawExpr::get_param_expr(int64_t index) const
+{
+  const ObRawExpr *expr = NULL;
+  if (index >= 0 && index < exec_params_.count() && NULL != exec_params_.at(index)) {
+    expr = exec_params_.at(index)->get_ref_expr();
+  }
+  return expr;
+}
+
+ObRawExpr *&ObQueryRefRawExpr::get_param_expr(int64_t index)
+{
+  if (index >= 0 && index < exec_params_.count() && NULL != exec_params_.at(index)) {
+    return exec_params_.at(index)->get_ref_expr();
   } else {
-    ref_id_ = other.ref_id_;
-    output_column_ = other.output_column_;
-    is_set_ = other.is_set_;
-    set_ref_stmt(temp_ref_stmt);
+    return USELESS_POINTER;
   }
-  return ret;
 }
 
-int ObQueryRefRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+ObExecParamRawExpr *ObQueryRefRawExpr::get_exec_param(int64_t index)
+{
+  if (index >= 0 && index < exec_params_.count()) {
+    return exec_params_.at(index);
+  } else {
+    return NULL;
+  }
+}
+
+int ObQueryRefRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                    const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
+  if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, exec_params_))) {
+    LOG_WARN("failed to replace exprs", K(ret));
   }
   return ret;
-}
-
-ObSelectStmt* ObQueryRefRawExpr::get_ref_stmt()
-{
-  ObSelectStmt* stmt = NULL;
-  if (is_ref_stmt()) {
-    stmt = ref_stmt_;
-  } else if (is_ref_operator() && NULL != get_ref_operator() && NULL != get_ref_operator()->get_stmt() &&
-             get_ref_operator()->get_stmt()->is_select_stmt()) {
-    stmt = static_cast<ObSelectStmt*>(get_ref_operator()->get_stmt());
-  }
-  return stmt;
-}
-
-const ObSelectStmt* ObQueryRefRawExpr::get_ref_stmt() const
-{
-  const ObSelectStmt* stmt = NULL;
-  if (is_ref_stmt()) {
-    stmt = ref_stmt_;
-  } else if (is_ref_operator() && NULL != get_ref_operator() && NULL != get_ref_operator()->get_stmt() &&
-             get_ref_operator()->get_stmt()->is_select_stmt()) {
-    stmt = static_cast<const ObSelectStmt*>(get_ref_operator()->get_stmt());
-  }
-  return stmt;
 }
 
 void ObQueryRefRawExpr::reset()
 {
-  ObTerminalRawExpr::reset();
+  ObRawExpr::reset();
   ref_id_ = OB_INVALID_ID;
 }
 
-bool ObQueryRefRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObQueryRefRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (get_expr_type() == expr.get_expr_type()) {
-    const ObQueryRefRawExpr& u_expr = static_cast<const ObQueryRefRawExpr&>(expr);
+    const ObQueryRefRawExpr &u_expr = static_cast<const ObQueryRefRawExpr &>(expr);
     if (check_context != NULL && check_context->override_query_compare_) {
       bool_ret = check_context->compare_query(*this, u_expr);
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
-      bool_ret = (get_ref_id() == u_expr.get_ref_id() && ref_stmt_ == u_expr.ref_stmt_);
+      bool_ret = (get_ref_id() == u_expr.get_ref_id() &&
+                  ref_stmt_ == u_expr.ref_stmt_ &&
+                  is_multiset_ == is_multiset_);
     }
   }
   return bool_ret;
 }
 
-bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr& left, const ObQueryRefRawExpr& right)
+bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,
+                                            const ObQueryRefRawExpr &right)
 {
-  return left.get_ref_id() == right.get_ref_id() && left.get_ref_stmt() == right.get_ref_stmt();
+  return left.get_ref_id() == right.get_ref_id() &&
+      left.get_ref_stmt() == right.get_ref_stmt();
 }
 
-int ObQueryRefRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObQueryRefRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObQueryRefRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObQueryRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                         ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF("subquery(%lu)", ref_id_))) {
+  if (EXPLAIN_HINT_FORMAT == type) {
+    ObString qb_name;
+    if (OB_ISNULL(ref_stmt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(ref_stmt_));
+    } else if (OB_FAIL(ref_stmt_->get_qb_name(qb_name))) {
+      LOG_WARN("failed to get qb name", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("SQ(%.*s)", qb_name.length(), qb_name.ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (is_multiset() && OB_FAIL(BUF_PRINTF("multiset("))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("subquery(%lu)", ref_id_))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (is_multiset() && OB_FAIL(BUF_PRINTF(")"))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
@@ -994,124 +1401,226 @@ int ObQueryRefRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {}
+  }
+  return ret;
+}
+
+void ObExecParamRawExpr::set_param_index(int64_t index)
+{
+  ObObjParam val;
+  val.set_unknown(index);
+  val.set_param_meta();
+  set_value(val);
+  set_result_type(outer_expr_->get_result_type());
+}
+
+int64_t ObExecParamRawExpr::get_param_index() const
+{
+  int64_t param_index = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(get_value().is_unknown())) {
+    param_index = get_value().get_unknown();
+  }
+  return param_index;
+}
+
+int ObExecParamRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObConstRawExpr::assign(other))) {
+      LOG_WARN("failed to copy exec param expr", K(ret));
     } else {
+      const ObExecParamRawExpr &tmp = static_cast<const ObExecParamRawExpr &>(other);
+      outer_expr_ = tmp.outer_expr_;
+      is_onetime_ = tmp.is_onetime_;
+      ref_same_dblink_ = tmp.ref_same_dblink_;
     }
   }
   return ret;
 }
 
+int ObExecParamRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObConstRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to inner deep copy", K(ret));
+  } else if (!is_onetime()) {
+    // do nothing
+  } else if (OB_FAIL(copier.copy(outer_expr_))) {
+    LOG_WARN("failed to copy outer expr", K(ret));
+  }
+  return ret;
+}
+
+int ObExecParamRawExpr::replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                                     const common::ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                             new_exprs,
+                                             outer_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  }
+  return ret;
+}
+
+bool ObExecParamRawExpr::inner_same_as(const ObRawExpr &expr,
+                                       ObExprEqualCheckContext *check_context) const
+{
+  bool bret = false;
+  if (this == &expr) {
+    bret = true;
+  } else if (expr.is_exec_param_expr()) {
+    const ObRawExpr *ref_expr = get_ref_expr();
+    const ObRawExpr *other_ref_expr =  static_cast<const ObExecParamRawExpr &>(expr).get_ref_expr();
+    if (NULL != ref_expr && NULL != other_ref_expr) {
+      bret = ref_expr->same_as(*other_ref_expr, check_context);
+    }
+  }
+  return bret;
+}
+
+int ObExecParamRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+uint64_t ObExecParamRawExpr::hash_internal(uint64_t seed) const
+{
+  if (NULL == outer_expr_) {
+    // do nothing
+  } else {
+    seed = outer_expr_->hash(seed);
+  }
+  return seed;
+}
+
+int ObExecParamRawExpr::get_name_internal(char *buf,
+                                          const int64_t buf_len,
+                                          int64_t &pos,
+                                          ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+  if (EXPLAIN_DBLINK_STMT != type) {
+    if (OB_FAIL(ObConstRawExpr::get_name_internal(buf, buf_len, pos, type))) {
+      LOG_WARN("failed to print const raw expr", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObLinkStmtParam::write(buf, buf_len, pos, get_value().get_unknown()))) {
+      LOG_WARN("failed to write param to buf", K(ret));
+    }
+  }
+  return ret;
+}
+
+int64_t ObExecParamRawExpr::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ITEM_TYPE, type_,
+       N_RESULT_TYPE, result_type_,
+       N_EXPR_INFO, info_,
+       N_VALUE, value_,
+       K_(outer_expr),
+       K_(is_onetime));
+  J_OBJ_END();
+  return pos;
+}
+
 ////////////////////////////////////////////////////////////////
-void ObColumnRefRawExpr::set_column_attr(const ObString& table_name, const ObString& column_name)
+void ObColumnRefRawExpr::set_column_attr(const ObString &table_name,
+                                         const ObString &column_name)
 {
   /* NOTE: we just point to the buffer without owning it. */
   table_name_.assign_ptr(table_name.ptr(), table_name.length());
   column_name_.assign_ptr(column_name.ptr(), column_name.length());
 }
 
-int ObColumnRefRawExpr::assign(const ObColumnRefRawExpr& other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
-      LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
-    } else {
-      table_id_ = other.table_id_;
-      column_id_ = other.column_id_;
-      database_name_ = other.database_name_;
-      table_name_ = other.table_name_;
-      column_name_ = other.column_name_;
-      expr_level_ = other.expr_level_;
-      column_flags_ = other.column_flags_;
-      dependant_expr_ = other.dependant_expr_;
-      real_expr_ = other.real_expr_;
-      is_unpivot_mocked_column_ = other.is_unpivot_mocked_column_;
-      is_hidden_ = other.is_hidden_;
-    }
-  }
-  return ret;
-}
-
 uint64_t ObColumnRefRawExpr::hash_internal(uint64_t seed) const
 {
   seed = common::do_hash(table_id_, seed);
   seed = common::do_hash(column_id_, seed);
-
   return seed;
 }
 
-int ObColumnRefRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObColumnRefRawExpr& other, bool use_new_allocator)
+int ObColumnRefRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::deep_copy(expr_factory, other, COPY_REF_DEFAULT, use_new_allocator))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
     } else {
-      table_id_ = other.table_id_;
-      column_id_ = other.column_id_;
-      expr_level_ = other.expr_level_;
-      column_flags_ = other.column_flags_;
-      is_unpivot_mocked_column_ = other.is_unpivot_mocked_column_;
-      is_hidden_ = other.is_hidden_;
-      is_lob_column_ = other.is_lob_column_;
-      if (use_new_allocator) {
-        if (OB_ISNULL(inner_alloc_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
-        } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.database_name_, database_name_))) {
-          LOG_WARN("fail to write string", K(other.database_name_), K(ret));
-        } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.table_name_, table_name_))) {
-          LOG_WARN("fail to write string", K(other.table_name_), K(ret));
-        } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.synonym_name_, synonym_name_))) {
-          LOG_WARN("fail to write string", K(other.synonym_name_), K(ret));
-        } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.synonym_db_name_, synonym_db_name_))) {
-          LOG_WARN("fail to write string", K(other.synonym_name_), K(ret));
-        } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.column_name_, column_name_))) {
-          LOG_WARN("fail to write string", K(other.column_name_), K(ret));
-        } else { /*do nothing*/
-        }
-      } else {
-        database_name_ = other.database_name_;
-        table_name_ = other.table_name_;
-        synonym_name_ = other.synonym_name_;
-        synonym_db_name_ = other.synonym_db_name_;
-        column_name_ = other.column_name_;
-      }
-      if (OB_SUCC(ret) && other.dependant_expr_ != NULL) {
-        ObRawExpr* temp_expr = NULL;
-        if (OB_FAIL(ObRawExprUtils::copy_expr(
-                expr_factory, other.get_dependant_expr(), temp_expr, COPY_REF_DEFAULT, use_new_allocator))) {
-          LOG_WARN("failed to deep copy expr", K(ret));
-        } else {
-          dependant_expr_ = temp_expr;
-        }
-      }
-      if (OB_SUCC(ret) && other.real_expr_ != NULL) {
-        ObRawExpr* temp_expr = NULL;
-        if (OB_FAIL(ObRawExprUtils::copy_expr(
-                expr_factory, other.real_expr_, temp_expr, COPY_REF_DEFAULT, use_new_allocator))) {
-          LOG_WARN("failed to deep copy expr", K(ret));
-        } else {
-          real_expr_ = temp_expr;
-        }
-      }
+      const ObColumnRefRawExpr &tmp =
+          static_cast<const ObColumnRefRawExpr &>(other);
+      table_id_ = tmp.table_id_;
+      column_id_ = tmp.column_id_;
+      database_name_ = tmp.database_name_;
+      table_name_ = tmp.table_name_;
+      column_name_ = tmp.column_name_;
+      column_flags_ = tmp.column_flags_;
+      dependant_expr_ = tmp.dependant_expr_;
+      is_unpivot_mocked_column_ = tmp.is_unpivot_mocked_column_;
+      is_hidden_ = tmp.is_hidden_;
+      is_lob_column_ = tmp.is_lob_column_;
+      is_joined_dup_column_ = tmp.is_joined_dup_column_;
+      from_alias_table_ = tmp.from_alias_table_;
+      is_rowkey_column_ = tmp.is_rowkey_column_;
+      is_unique_key_column_ = tmp.is_unique_key_column_;
+      is_mul_key_column_ = tmp.is_mul_key_column_;
+      is_strict_json_column_ = tmp.is_strict_json_column_;
     }
   }
   return ret;
 }
 
-int ObColumnRefRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObColumnRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTerminalRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
+  } else if (OB_FAIL(copier.copy(dependant_expr_))) {
+    LOG_WARN("failed to copy dependant expr", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, database_name_, database_name_))) {
+      LOG_WARN("fail to write string", K(database_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, table_name_, table_name_))) {
+      LOG_WARN("fail to write string", K(table_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, synonym_name_, synonym_name_))) {
+      LOG_WARN("fail to write string", K(synonym_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, synonym_db_name_,
+                                       synonym_db_name_))) {
+      LOG_WARN("fail to write string", K(synonym_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, column_name_, column_name_))) {
+      LOG_WARN("fail to write string", K(column_name_), K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObColumnRefRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                     const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else if (NULL != dependant_expr_ &&
-             OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, dependant_expr_))) {
+             OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    dependant_expr_))) {
     LOG_WARN("failed to replace dependant exprs", K(ret));
-  } else if (NULL != real_expr_ && OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, real_expr_))) {
-    LOG_WARN("failed to replace dependant exprs", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -1125,45 +1634,52 @@ void ObColumnRefRawExpr::reset()
   column_name_.reset();
 }
 
-bool ObColumnRefRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObColumnRefRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   UNUSED(check_context);
   bool bool_ret = false;
-  if (get_expr_type() != expr.get_expr_type()) {
-  } else if (OB_UNLIKELY(check_context != NULL) && OB_UNLIKELY(check_context->override_column_compare_)) {
+
+  if (OB_UNLIKELY(check_context != NULL) && OB_UNLIKELY(check_context->override_column_compare_)) {
     // use new column compare method
-    bool_ret = check_context->compare_column(*this, static_cast<const ObColumnRefRawExpr&>(expr));
+    bool_ret = check_context->compare_column(*this,
+                                             static_cast<const ObColumnRefRawExpr &>(expr));
+  } else if (get_expr_type() != expr.get_expr_type()) {
   } else {
-    const ObColumnRefRawExpr* b_expr = static_cast<const ObColumnRefRawExpr*>(&expr);
-    if (this->get_table_id() == b_expr->get_table_id() && this->get_column_id() == b_expr->get_column_id()) {
+    const ObColumnRefRawExpr *b_expr = static_cast<const ObColumnRefRawExpr *>(&expr);
+    if (this->get_table_id() == b_expr->get_table_id()
+        && this->get_column_id() == b_expr->get_column_id()) {
       bool_ret = true;
     }
   }
   return bool_ret;
 }
 
-bool ObExprEqualCheckContext::compare_column(const ObColumnRefRawExpr& left, const ObColumnRefRawExpr& right)
+bool ObExprEqualCheckContext::compare_column(const ObColumnRefRawExpr &left, const ObColumnRefRawExpr &right)
 {
   return left.get_result_type() == right.get_result_type();
 }
 
-int ObColumnRefRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObColumnRefRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObColumnRefRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObColumnRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                          ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (EXPLAIN_DBLINK_STMT == type) {
-    if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
+  if (EXPLAIN_DBLINK_STMT == type || EXPLAIN_HINT_FORMAT == type) {
+    if (!table_name_.empty() &&
+        OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("%.*s", column_name_.length(), column_name_.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
   } else {
-    if (OB_FAIL(BUF_PRINTF(
-            "%.*s.%.*s", table_name_.length(), table_name_.ptr(), column_name_.length(), column_name_.ptr()))) {
+    if (OB_FAIL(BUF_PRINTF("%.*s.%.*s", table_name_.length(), table_name_.ptr(),
+                           column_name_.length(), column_name_.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
       if (EXPLAIN_EXTENDED == type) {
@@ -1173,24 +1689,24 @@ int ObColumnRefRawExpr::get_name_internal(char* buf, const int64_t buf_len, int6
           LOG_WARN("fail to BUF_PRINTF", K(ret));
         } else if (OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else {
-        }
+        } else {}
       }
     }
   }
   return ret;
 }
 
-const ObRawExpr* ObAliasRefRawExpr::get_ref_expr() const
+const ObRawExpr *ObAliasRefRawExpr::get_ref_expr() const
 {
-  const ObRawExpr* ret = NULL;
+  const ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
     ret = ref_expr_;
   } else if (ref_expr_->is_query_ref_expr()) {
-    ObQueryRefRawExpr* subquery = static_cast<ObQueryRefRawExpr*>(ref_expr_);
-    ObSelectStmt* stmt = NULL;
+    ObQueryRefRawExpr *subquery = static_cast<ObQueryRefRawExpr *>(ref_expr_);
+    ObSelectStmt *stmt = NULL;
     if (OB_ISNULL(stmt = subquery->get_ref_stmt()) ||
-        OB_UNLIKELY(project_index_ < 0 || project_index_ >= stmt->get_select_item_size())) {
+        OB_UNLIKELY(project_index_ < 0 ||
+                    project_index_ >= stmt->get_select_item_size())) {
       // do nothing
     } else {
       ret = stmt->get_select_item(project_index_).expr_;
@@ -1199,16 +1715,17 @@ const ObRawExpr* ObAliasRefRawExpr::get_ref_expr() const
   return ret;
 }
 
-ObRawExpr* ObAliasRefRawExpr::get_ref_expr()
+ObRawExpr *ObAliasRefRawExpr::get_ref_expr()
 {
-  ObRawExpr* ret = NULL;
+  ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
     ret = ref_expr_;
   } else if (ref_expr_->is_query_ref_expr()) {
-    ObQueryRefRawExpr* subquery = static_cast<ObQueryRefRawExpr*>(ref_expr_);
-    ObSelectStmt* stmt = NULL;
+    ObQueryRefRawExpr *subquery = static_cast<ObQueryRefRawExpr *>(ref_expr_);
+    ObSelectStmt *stmt = NULL;
     if (OB_ISNULL(stmt = subquery->get_ref_stmt()) ||
-        OB_UNLIKELY(project_index_ < 0 || project_index_ >= stmt->get_select_item_size())) {
+        OB_UNLIKELY(project_index_ < 0 ||
+                    project_index_ >= stmt->get_select_item_size())) {
       // do nothing
     } else {
       ret = stmt->get_select_item(project_index_).expr_;
@@ -1217,72 +1734,74 @@ ObRawExpr* ObAliasRefRawExpr::get_ref_expr()
   return ret;
 }
 
-int ObAliasRefRawExpr::assign(const ObAliasRefRawExpr& other)
+int ObAliasRefRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
     } else {
-      ref_expr_ = other.ref_expr_;
-      project_index_ = other.project_index_;
+      const ObAliasRefRawExpr &alias_expr =
+          static_cast<const ObAliasRefRawExpr &>(other);
+      ref_expr_ = alias_expr.ref_expr_;
+      project_index_ = alias_expr.project_index_;
     }
   }
   return ret;
 }
 
-int ObAliasRefRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObAliasRefRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObAliasRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.ref_expr_, ref_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy ref expr", K(ret));
-    } else {
-      project_index_ = other.project_index_;
-    }
+  if (OB_FAIL(ObRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to deep copy attributes", K(ret));
+  } else if (OB_FAIL(copier.copy(ref_expr_))) {
+    LOG_WARN("failed to copy ref expr", K(ret));
   }
   return ret;
 }
 
-int ObAliasRefRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObAliasRefRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                    const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_ERR_UNEXPECTED;
   if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, ref_expr_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    ref_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-const ObRawExpr* ObAliasRefRawExpr::get_param_expr(int64_t index) const
+const ObRawExpr *ObAliasRefRawExpr::get_param_expr(int64_t index) const
 {
-  ObRawExpr* expr = NULL;
+  ObRawExpr *expr = NULL;
   if (index < 0 || index > 1) {
-    LOG_WARN("index out of range", K(index));
+    LOG_WARN_RET(OB_ERROR, "index out of range", K(index));
   } else {
     expr = ref_expr_;
   }
   return expr;
 }
 
-ObRawExpr*& ObAliasRefRawExpr::get_param_expr(int64_t index)
+ObRawExpr *&ObAliasRefRawExpr::get_param_expr(int64_t index)
 {
-  ObRawExpr** expr = &USELESS_POINTER;
+  ObRawExpr **expr = &USELESS_POINTER;
   if (index < 0 || index >= 1) {
-    LOG_WARN("index out of range", K(index));
+    LOG_WARN_RET(OB_ERROR, "index out of range", K(index));
   } else {
     expr = &ref_expr_;
   }
   return *expr;
 }
 
-int ObAliasRefRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObAliasRefRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
@@ -1291,50 +1810,49 @@ uint64_t ObAliasRefRawExpr::hash_internal(uint64_t seed) const
 {
   uint64_t hash_code = 0;
   if (ref_expr_ != NULL) {
-    hash_code = ref_expr_->hash(seed);
+   hash_code = ref_expr_->hash(seed);
   }
   return hash_code;
 }
 
-int ObAliasRefRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObAliasRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                         ExplainType type) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ref_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Ref expr is NULL", K(ret));
   } else if (OB_FAIL(ref_expr_->get_name(buf, buf_len, pos, type))) {
-  } else {
-  }  // do nothing
+  } else { }//do nothing
   return ret;
 }
 
-bool ObAliasRefRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
+                                      ObExprEqualCheckContext *check_context) const
 {
   UNUSED(check_context);
   bool bret = false;
   if (OB_ISNULL(ref_expr_)) {
-    LOG_WARN("ref_expr_ is null");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "ref_expr_ is null");
   } else if (expr.get_expr_type() == get_expr_type()) {
-    const ObAliasRefRawExpr& alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
-    if (alias_ref.get_expr_level() == get_expr_level()) {
-      bret = (alias_ref.get_ref_expr() == get_ref_expr());
-    }
+    const ObAliasRefRawExpr &alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
+    bret = (alias_ref.get_ref_expr() == get_ref_expr());
   }
   return bret;
 }
 
 ////////////////////////////////////////////////////////////////
-ObExprOperator* ObNonTerminalRawExpr::get_op()
+ObExprOperator *ObNonTerminalRawExpr::get_op()
 {
   if (NULL == op_) {
     if (OB_ISNULL(inner_alloc_)) {
-      LOG_WARN("invalid inner alloc", K(inner_alloc_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid inner alloc", K(inner_alloc_));
     } else if (type_ != T_OP_ROW) {
       ObExprOperatorFactory factory(*inner_alloc_);
       if (OB_SUCCESS != factory.alloc(type_, op_)) {
-        LOG_WARN("Can not malloc expression operator", "expr_type", get_type_name(type_), K(lbt()));
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "Can not malloc expression operator", "expr_type", get_type_name(type_), K(lbt()));
       } else if (OB_ISNULL(op_)) {
-        LOG_ERROR("alloc a null expr_op", K(op_));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "alloc a null expr_op", K(op_));
       }
     }
   }
@@ -1344,77 +1862,88 @@ ObExprOperator* ObNonTerminalRawExpr::get_op()
 void ObNonTerminalRawExpr::free_op()
 {
   if (NULL != op_) {
+    //等待inner_alloc统一释放
     op_ = NULL;
   }
 }
 
-int ObNonTerminalRawExpr::assign(const ObNonTerminalRawExpr& other)
+int ObNonTerminalRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
-    } else if (OB_FAIL(this->input_types_.assign(other.input_types_))) {
-      LOG_WARN("copy input types failed", K(ret));
-    } else if (other.op_ != NULL) {
-      ObExprOperator* this_op = get_op();
-      if (OB_ISNULL(this_op)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocated memory for expr operator failed", K_(type));
-      } else if (OB_FAIL(this_op->assign(*other.op_))) {
-        LOG_WARN("assign this operator failed", K(ret));
+    } else {
+      const ObNonTerminalRawExpr &tmp = static_cast<const ObNonTerminalRawExpr &>(other);
+      if (OB_FAIL(this->set_input_types(tmp.input_types_))) {
+        LOG_WARN("copy input types failed", K(ret));
+      } else if (tmp.op_ != NULL) {
+        ObExprOperator *this_op = get_op();
+        if (OB_ISNULL(this_op)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocated memory for expr operator failed", K_(type));
+        } else if (OB_FAIL(this_op->assign(*tmp.op_))) {
+          LOG_WARN("assign this operator failed", K(ret));
+        }
       }
     }
   }
   return ret;
 }
 
-int ObNonTerminalRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObNonTerminalRawExpr& other,
-    const uint64_t copy_types, bool use_new_allocator)
+int ObNonTerminalRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
-    } else if (OB_FAIL(this->input_types_.assign(other.input_types_))) {
-      LOG_WARN("copy input types failed", K(ret));
-    } else if (other.op_ != NULL) {
-      ObExprOperator* this_op = get_op();
-      if (OB_ISNULL(this_op)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocated memory for expr operator failed", K_(type));
-      } else if (OB_FAIL(this_op->assign(*other.op_))) {
-        LOG_WARN("assign this operator failed", K(ret));
+  if (OB_FAIL(ObRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret), K(inner_alloc_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_types_.count(); ++i) {
+      ObObj param;
+      if (OB_FAIL(ob_write_obj(*inner_alloc_, input_types_.at(i).get_param(), param))) {
+        LOG_WARN("failed to write object", K(ret));
+      } else {
+        input_types_.at(i).set_param(param);
       }
     }
   }
   return ret;
 }
 
-int ObNonTerminalRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObNonTerminalRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                       const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr for base class ObRawExpr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
+
 ////////////////////////////////////////////////////////////////
-ObOpRawExpr::ObOpRawExpr(ObRawExpr* first_expr, ObRawExpr* second_expr, ObItemType type)
-    : ObExpr(),
-      ObNonTerminalRawExpr(),
-      jit::expr::ObOpExpr(),
-      subquery_key_(T_WITH_NONE),
-      deduce_type_adding_implicit_cast_(true)
+ObOpRawExpr::ObOpRawExpr(ObRawExpr *first_expr,
+                         ObRawExpr *second_expr,
+                         ObItemType type)
+  : ObIRawExpr(),
+    ObNonTerminalRawExpr(),
+    jit::expr::ObOpExpr(),
+    subquery_key_(T_WITH_NONE),
+    deduce_type_adding_implicit_cast_(true)
 {
   set_param_exprs(first_expr, second_expr);
   set_expr_type(type);
   set_expr_class(EXPR_OPERATOR);
 }
 
-int ObOpRawExpr::set_param_expr(ObRawExpr* expr)
+int ObOpRawExpr::set_param_expr(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(0 == exprs_.count())) {
@@ -1428,7 +1957,7 @@ int ObOpRawExpr::set_param_expr(ObRawExpr* expr)
   return ret;
 }
 
-int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr, ObRawExpr* third_expr)
+int ObOpRawExpr::set_param_exprs(ObRawExpr *first_expr, ObRawExpr *second_expr, ObRawExpr *third_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(0 == exprs_.count())) {
@@ -1438,8 +1967,7 @@ int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr, 
       LOG_WARN("failed to set param", K(ret));
     } else if (OB_FAIL(exprs_.push_back(third_expr))) {
       LOG_WARN("failed to set param", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not be set twice", K(ret));
@@ -1447,7 +1975,7 @@ int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr, 
   return ret;
 }
 
-int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr)
+int ObOpRawExpr::set_param_exprs(ObRawExpr *first_expr, ObRawExpr *second_expr)
 {
   int ret = OB_SUCCESS;
   ObItemType exchange_type = T_MIN_OP;
@@ -1473,10 +2001,10 @@ int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr)
       exchange_type = T_MIN_OP;
       break;
   }
-  if (T_MIN_OP != exchange_type && first_expr && first_expr->has_flag(IS_CONST) && second_expr &&
-      second_expr->has_flag(IS_COLUMN)) {
+  if (T_MIN_OP != exchange_type && first_expr && first_expr->has_flag(IS_CONST)
+      && second_expr && second_expr->has_flag(IS_COLUMN)) {
     set_expr_type(exchange_type);
-    ObRawExpr* tmp_expr = second_expr;
+    ObRawExpr *tmp_expr = second_expr;
     second_expr = first_expr;
     first_expr = tmp_expr;
   }
@@ -1489,8 +2017,7 @@ int ObOpRawExpr::set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr)
       LOG_WARN("failed to push back first_expr", K(ret));
     } else if (OB_FAIL(exprs_.push_back(second_expr))) {
       LOG_WARN("failed to push back gc_expr", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not be set twice", K(ret));
@@ -1505,66 +2032,58 @@ void ObOpRawExpr::reset()
   deduce_type_adding_implicit_cast_ = true;
 }
 
-// used for jit expr
-// Initialize when jit_exprs_ is obtained, not when initializing exprs_.Reason:
-// Resolving ObColumnRefRawExpr in the resolver is just an uninitialized ObColumnRefRawExpr
-// Push the object into exprs_, and the object will be replaced later, so exprs_ is not initialized
-// together here.
+//used for jit expr
+//在获取jit_exprs_时才初始化，而不是在初始化exprs_时一起初始化原因:
+//在resolver时解析ObColumnRefRawExpr只是将一个未初始化的ObColumnRefRawExpr
+//对象push到exprs_中, 在后面会再进行该对象的替换, 所以此处没有一起初始化exprs_。
+//
 
-int ObOpRawExpr::get_children(ExprArray& jit_exprs) const
+int ObOpRawExpr::get_children(ExprArray &jit_exprs) const
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCCESS == ret && i < exprs_.count(); i++) {
-    if (OB_FAIL(jit_exprs.push_back(static_cast<ObExpr*>(exprs_.at(i))))) {
-      LOG_WARN("fail to gen ObExpr Array", K(ret));
+    if (OB_FAIL(jit_exprs.push_back(static_cast<ObIRawExpr *>(exprs_.at(i))))) {
+      LOG_WARN("fail to gen ObIRawExpr Array", K(ret));
     }
   }
 
   return ret;
 }
 
-int ObOpRawExpr::assign(const ObOpRawExpr& other)
+int ObOpRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObNonTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObNonTerminalRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObNonTerminalRawExpr failed", K(ret));
-    } else if (OB_FAIL(exprs_.assign(other.exprs_))) {
-      LOG_WARN("failed to assign exprs", K(ret));
     } else {
-      subquery_key_ = other.subquery_key_;
-      deduce_type_adding_implicit_cast_ = other.deduce_type_adding_implicit_cast_;
+      const ObOpRawExpr &tmp = static_cast<const ObOpRawExpr &>(other);
+      if (OB_FAIL(exprs_.assign(tmp.exprs_))) {
+        LOG_WARN("failed to assign exprs", K(ret));
+      } else {
+        subquery_key_ = tmp.subquery_key_;
+        deduce_type_adding_implicit_cast_ = tmp.deduce_type_adding_implicit_cast_;
+      }
     }
   }
   return ret;
 }
 
-int ObOpRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObOpRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObNonTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObNonTerminalRawExpr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(expr_factory, other.exprs_, exprs_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to assign exprs", K(ret));
-    } else {
-      subquery_key_ = other.subquery_key_;
-      deduce_type_adding_implicit_cast_ = other.deduce_type_adding_implicit_cast_;
-    }
-  }
-  return ret;
-}
-
-int ObOpRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObOpRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                              const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObNonTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, exprs_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     exprs_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -1573,16 +2092,26 @@ void ObOpRawExpr::clear_child()
   exprs_.reset();
 }
 
-bool ObOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObOpRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   bool need_cmp = true;
 
-  enum { REGULAR_CMP = 1, REVERSE_CMP = 2, BOTH_CMP = 3 } cmp_type;
+  enum {
+    REGULAR_CMP = 1,
+    REVERSE_CMP = 2,
+    BOTH_CMP = 3
+  }cmp_type;
 
   cmp_type = REGULAR_CMP;
 
-  if (T_OP_EQ == get_expr_type() || T_OP_NSEQ == get_expr_type() || T_OP_NE == get_expr_type()) {
+  if (get_expr_type() == T_OP_ASSIGN) {
+    need_cmp = false;
+  } else if (T_OP_EQ == get_expr_type()
+             || T_OP_NSEQ == get_expr_type()
+             || T_OP_NE == get_expr_type()) {
     if (expr.get_expr_type() == get_expr_type()) {
       cmp_type = BOTH_CMP;
     } else {
@@ -1592,10 +2121,10 @@ bool ObOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_
     // GE, GT, LE, LT
     if (expr.get_expr_type() == get_expr_type()) {
       cmp_type = REGULAR_CMP;
-    } else if ((T_OP_GE == expr.get_expr_type() && T_OP_LE == get_expr_type()) ||
-               (T_OP_GT == expr.get_expr_type() && T_OP_LT == get_expr_type()) ||
-               (T_OP_GE == get_expr_type() && T_OP_LE == expr.get_expr_type()) ||
-               (T_OP_GT == get_expr_type() && T_OP_LT == expr.get_expr_type())) {
+    } else if ((T_OP_GE == expr.get_expr_type() && T_OP_LE == get_expr_type())
+               || (T_OP_GT == expr.get_expr_type() && T_OP_LT == get_expr_type())
+               || (T_OP_GE == get_expr_type() && T_OP_LE == expr.get_expr_type())
+               || (T_OP_GT == get_expr_type() && T_OP_LT == expr.get_expr_type())) {
       cmp_type = REVERSE_CMP;
     } else {
       need_cmp = false;
@@ -1603,40 +2132,38 @@ bool ObOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_
   } else if (expr.get_expr_type() != get_expr_type()) {
     need_cmp = false;
   }
-
   if (need_cmp) {
-    const ObOpRawExpr* m_expr = static_cast<const ObOpRawExpr*>(&expr);
     if (BOTH_CMP == cmp_type || REGULAR_CMP == cmp_type) {
-      if (this->get_param_count() == m_expr->get_param_count()) {
+      if (this->get_param_count() == expr.get_param_count()) {
         bool_ret = true;
-        for (int64_t i = 0; bool_ret && i < m_expr->get_param_count(); ++i) {
-          if (NULL == this->get_param_expr(i) || NULL == m_expr->get_param_expr(i) ||
-              !(this->get_param_expr(i)->same_as(*m_expr->get_param_expr(i), check_context))) {
+        for (int64_t i = 0; bool_ret && i < expr.get_param_count(); ++i) {
+          if (NULL == this->get_param_expr(i) || NULL == expr.get_param_expr(i)
+              || !(this->get_param_expr(i)->same_as(*expr.get_param_expr(i), check_context))) {
             bool_ret = false;
           }
         }
       }
     }
     if (!bool_ret && (BOTH_CMP == cmp_type || REVERSE_CMP == cmp_type)) {
-      if (NULL == this->get_param_expr(0) || NULL == m_expr->get_param_expr(0) || NULL == this->get_param_expr(1) ||
-          NULL == m_expr->get_param_expr(1)) {
+      if (NULL == this->get_param_expr(0) || NULL == expr.get_param_expr(0)
+          || NULL == this->get_param_expr(1) || NULL == expr.get_param_expr(1)) {
         /* bool_ret = false; */
       } else {
-        bool_ret = this->get_param_expr(0)->same_as(*m_expr->get_param_expr(1), check_context) &&
-                   this->get_param_expr(1)->same_as(*m_expr->get_param_expr(0), check_context);
+        bool_ret = this->get_param_expr(0)->same_as(*expr.get_param_expr(1), check_context)
+            && this->get_param_expr(1)->same_as(*expr.get_param_expr(0), check_context);
       }
     }
   }
   return bool_ret;
 }
 
-int ObOpRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObOpRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
-{
+int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                   ExplainType type) const {
   int ret = OB_SUCCESS;
   ObString symbol;
   switch (get_expr_type()) {
@@ -1727,8 +2254,7 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
     if (OB_FAIL(get_subquery_comparison_name(symbol, buf, buf_len, pos, type))) {
       LOG_WARN("get subquery comparison name failed", K(ret));
     }
-  } else if ((!symbol.empty() && 2 == get_param_count()) ||
-             (EXPLAIN_DBLINK_STMT == type && (T_OP_IS == get_expr_type() || T_OP_IS_NOT == get_expr_type()))) {
+  } else if ((!symbol.empty() && 2 == get_param_count())) {
     if (OB_ISNULL(get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first param expr is NULL", K(ret));
@@ -1770,7 +2296,7 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
     if (OB_FAIL(BUF_PRINTF("("))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
         if (OB_ISNULL(get_param_expr(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param expr is NULL", K(i), K(ret));
@@ -1780,15 +2306,15 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
           if (OB_FAIL(BUF_PRINTF(", "))) {
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           }
-        } else {
-        }
+        } else {}
       }
       if (OB_SUCCESS == ret && OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
   } else if (T_OP_ORACLE_OUTER_JOIN_SYMBOL == get_expr_type()) {
-    if (OB_UNLIKELY(1 != get_param_count()) || OB_ISNULL(get_param_expr(0))) {
+    if (OB_UNLIKELY(1 != get_param_count())
+        || OB_ISNULL(get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first param expr is NULL", K(ret), K(get_param_count()));
     } else if (OB_FAIL(get_param_expr(0)->get_name(buf, buf_len, pos, type))) {
@@ -1796,10 +2322,12 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
     } else if (OB_FAIL(BUF_PRINTF("(+)"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
-  } else if (has_flag(IS_INNER_ADDED_EXPR) && (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type) &&
-             T_OP_BOOL == get_expr_type()) {
+  } else if (has_flag(IS_INNER_ADDED_EXPR)
+             && (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type)
+             && T_OP_BOOL == get_expr_type()) {
     CK(1 == get_param_count());
     OZ(get_param_expr(0)->get_name(buf, buf_len, pos, type));
+    LOG_DEBUG("debug print wrapper inner", K(ret), K(lbt()));
   } else if (T_OP_BOOL == get_expr_type()) {
     if (OB_UNLIKELY(1 != get_param_count())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1816,11 +2344,11 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
-  } else if (T_OP_TO_OUTFILE_ROW == get_expr_type()) {
-    if (OB_FAIL(BUF_PRINTF("SYS_OP_TO_OUTFILE_ROW("))) {
+  } else if (T_OP_JOIN_BLOOM_FILTER == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("SYS_OP_BLOOM_FILTER("))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
         if (OB_ISNULL(get_param_expr(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param_expr is NULL", K(i), K(ret));
@@ -1835,11 +2363,68 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
         }
       }
     }
+  } else if (T_OP_TO_OUTFILE_ROW == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("SYS_OP_TO_OUTFILE_ROW("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+        if (OB_ISNULL(get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (i < get_param_count() - 1) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+          }
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+        }
+      }
+    }
+  } else if (T_OP_OUTPUT_PACK == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("INTERNAL_FUNCTION("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      for (int64_t i = 1; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+        if (OB_ISNULL(get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (i < get_param_count() - 1) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+          }
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        }
+      }
+    }
+  } else if (T_FUN_SYS_HASH == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("HASH("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+        if (OB_ISNULL(get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (i < get_param_count() - 1) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+          }
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        }
+      }
+    }
   } else {
     if (OB_FAIL(BUF_PRINTF("(%s", get_type_name(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
         if (OB_ISNULL(get_param_expr(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param_expr is NULL", K(i), K(ret));
@@ -1847,11 +2432,10 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
           LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
         } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
           LOG_WARN("fail to get_name", K(i), K(ret));
-        } else {
-        }
+        } else {}
       }
       if (OB_SUCCESS == ret && OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
   }
@@ -1863,19 +2447,21 @@ int ObOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& po
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       } else if (OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
-      } else {
-      }
+      } else {}
     }
   }
   return ret;
 }
 
-int ObOpRawExpr::get_subquery_comparison_name(
-    const ObString& symbol, char* buf, int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObOpRawExpr::get_subquery_comparison_name(const ObString &symbol,
+                                              char *buf,
+                                              int64_t buf_len,
+                                              int64_t &pos,
+                                              ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  const ObRawExpr* param1 = NULL;
-  const ObRawExpr* param2 = NULL;
+  const ObRawExpr *param1 = NULL;
+  const ObRawExpr *param2 = NULL;
   ObString subquery_keyname = "";
   if (has_flag(IS_WITH_ANY)) {
     subquery_keyname = "ANY";
@@ -1893,8 +2479,8 @@ int ObOpRawExpr::get_subquery_comparison_name(
     LOG_WARN("param is null", K(param1), K(param2));
   } else if (OB_FAIL(param1->get_name(buf, buf_len, pos, type))) {
     LOG_WARN("get param name failed", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF(
-                 " %.*s %.*s", symbol.length(), symbol.ptr(), subquery_keyname.length(), subquery_keyname.ptr()))) {
+  } else if (OB_FAIL(BUF_PRINTF(" %.*s %.*s", symbol.length(), symbol.ptr(),
+                                subquery_keyname.length(), subquery_keyname.ptr()))) {
     LOG_WARN("print symbol name failed", K(ret));
   } else if (!subquery_keyname.empty() && OB_FAIL(BUF_PRINTF("("))) {
     LOG_WARN("print paren failed", K(ret));
@@ -1909,77 +2495,240 @@ int ObOpRawExpr::get_subquery_comparison_name(
 void ObOpRawExpr::set_expr_type(ObItemType type)
 {
   type_ = type;
-  if ((T_OP_IN == type_ || T_OP_NOT_IN == type_) && GCONF.enable_static_engine_for_query()) {
+  if ((T_OP_IN == type_  || T_OP_NOT_IN == type_)) {
     set_deduce_type_adding_implicit_cast(false);
   }
 }
 
 ////////////////////////////////////////////////////////////////
 
-int ObObjAccessRawExpr::assign(const ObObjAccessRawExpr& other)
+int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObOpRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
-    } else if (OB_FAIL(append(var_indexs_, other.var_indexs_))) {
-      LOG_WARN("append error", K(ret));
     } else {
-      get_attr_func_ = other.get_attr_func_;
-      func_name_ = other.func_name_;
-      for_write_ = other.for_write_;
+      const ObPLAssocIndexRawExpr &tmp =
+          static_cast<const ObPLAssocIndexRawExpr &>(other);
+      for_write_ = tmp.for_write_;
+      out_of_range_set_err_ = tmp.out_of_range_set_err_;
+      parent_type_ = tmp.parent_type_;
     }
   }
   return ret;
 }
 
-int ObObjAccessRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObObjAccessRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObObjAccessRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObOpRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
-    } else if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator is NULL", K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.func_name_, func_name_))) {
-        LOG_WARN("Failed to write string", K(other.func_name_), K(ret));
-      } else {
-      }
     } else {
-      func_name_ = other.func_name_;
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(append(var_indexs_, other.var_indexs_))) {
+      const ObObjAccessRawExpr &tmp =
+          static_cast<const ObObjAccessRawExpr &>(other);
+      if (OB_FAIL(append(access_indexs_, tmp.access_indexs_))) {
+        LOG_WARN("append error", K(ret));
+      } else if (OB_FAIL(append(var_indexs_, tmp.var_indexs_))) {
         LOG_WARN("append error", K(ret));
       } else {
-        get_attr_func_ = other.get_attr_func_;
-        for_write_ = other.for_write_;
+        get_attr_func_ = tmp.get_attr_func_;
+        func_name_ = tmp.func_name_;
+        for_write_ = tmp.for_write_;
+        property_type_ = tmp.property_type_;
       }
     }
   }
   return ret;
 }
 
-bool ObObjAccessRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+int ObObjAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObOpRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to inner deep copy raw expr", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator is NULL", K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, func_name_, func_name_))) {
+      LOG_WARN("Failed to write string", K(func_name_), K(ret));
+    } else {
+      pl::ObObjAccessIdx access;
+      common::ObSEArray<pl::ObObjAccessIdx, 4> access_array;
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_indexs_.count(); ++i) {
+        access.reset();
+        if (OB_FAIL(access.deep_copy(*inner_alloc_, copier.get_expr_factory(), access_indexs_.at(i)))) {
+          LOG_WARN("Failed to deep copy ObObjAccessIdx", K(i), K(access_indexs_.at(i)), K(ret));
+        } else if (OB_FAIL(access_array.push_back(access))) {
+          LOG_WARN("push back error", K(i), K(access_indexs_.at(i)), K(access), K(ret));
+        } else { /*do nothing*/ }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(access_indexs_.assign(access_array))) {
+        LOG_WARN("assign array error", K(access_array), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObObjAccessRawExpr::inner_same_as(const ObRawExpr &expr,
+                                       ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-  } else if (ObOpRawExpr::same_as(expr, check_context)) {
-    const ObObjAccessRawExpr& obj_access_expr = static_cast<const ObObjAccessRawExpr&>(expr);
-    bool_ret = get_attr_func_ == obj_access_expr.get_attr_func_ &&
-               0 == func_name_.case_compare(obj_access_expr.func_name_) &&
-               is_array_equal(var_indexs_, obj_access_expr.var_indexs_) && for_write_ == obj_access_expr.for_write_;
-  } else { /*do nothing*/
-  }
+  } else if (ObOpRawExpr::inner_same_as(expr, check_context)) {
+    const ObObjAccessRawExpr &obj_access_expr = static_cast<const ObObjAccessRawExpr &>(expr);
+    bool_ret = get_attr_func_ == obj_access_expr.get_attr_func_
+        && 0 == func_name_.case_compare(obj_access_expr.func_name_)
+        && is_array_equal(access_indexs_, obj_access_expr.access_indexs_)
+        && is_array_equal(var_indexs_, obj_access_expr.var_indexs_)
+        && for_write_ == obj_access_expr.for_write_
+        && property_type_ == obj_access_expr.property_type_;
+  } else { /*do nothing*/ }
   return bool_ret;
 }
 
-int ObNonTerminalRawExpr::set_input_types(const ObIExprResTypes& input_types)
+int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &access_idxs)
 {
   int ret = OB_SUCCESS;
+  common::ObSEArray<pl::ObObjAccessIdx, 4> expr_access;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
+    const pl::ObObjAccessIdx &access_idx = access_idxs.at(i);
+    switch (access_idx.access_type_) {
+    case pl::ObObjAccessIdx::IS_LOCAL: {
+      //obj access是变量，access index是变量的下标，
+      //但是obj access expr中变量只能通过参数来传递，所以把变量记录下来
+      pl::ObObjAccessIdx tmp_idx = access_idxs.at(i);
+      tmp_idx.var_index_ = var_indexs_.count();
+      if (OB_FAIL(expr_access.push_back(tmp_idx))) {
+        LOG_WARN("store access index failed", K(ret));
+      } else if (OB_FAIL(var_indexs_.push_back(access_idx.var_index_))) {
+        LOG_WARN("store var index failed", K(ret));
+      } else { /*do nothing*/ }
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_DB_NS: //fallthrough
+    case pl::ObObjAccessIdx::IS_PKG_NS: {
+      //skip
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_PKG: //fallthrough
+    case pl::ObObjAccessIdx::IS_USER: //fallthrough
+    case pl::ObObjAccessIdx::IS_SESSION: //fallthrough
+    case pl::ObObjAccessIdx::IS_GLOBAL:
+    case pl::ObObjAccessIdx::IS_SUBPROGRAM_VAR: {
+      //do nothing
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_EXPR: {
+      //do nothing
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_UDF_NS: {
+      //do nothing
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_CONST:
+    case pl::ObObjAccessIdx::IS_PROPERTY: {
+      if (OB_FAIL(expr_access.push_back(access_idx))) {
+        LOG_WARN("store access index failed", K(ret));
+      } else { /*do nothing*/ }
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_INTERNAL_PROC:
+    case pl::ObObjAccessIdx::IS_EXTERNAL_PROC:
+    case pl::ObObjAccessIdx::IS_TYPE_METHOD: {
+      //do nothing
+    }
+    break;
+    case pl::ObObjAccessIdx::IS_LABEL_NS: {
+      //do nothing
+    }
+    break;
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid access type", K(i), K(access_idx), K(ret));
+    }
+    break;
+    }
+  }
+
+  /*
+   * 把外部表达式作为ObObjAccessRawExpr的child，在后缀表达式计算框架里会被首先计算出来，然后压入param_array供get_attr_func使用。
+   * 所有外部表达式压在var_indexs_的后面，所以在上一轮for循环不处理，而放在这一轮循环处理。
+   * 所以会有ObExprObjAccess::init_param_array的时候压完param_store里的变量之后要压入obj_stack.
+   * */
+  for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
+    const pl::ObObjAccessIdx &access_idx = access_idxs.at(i);
+    if (access_idx.is_external() || access_idx.is_udf_type()) {
+      pl::ObObjAccessIdx tmp_idx = access_idx;
+      tmp_idx.var_index_ = get_param_count() + var_indexs_.count(); //外部变量的下标排在
+      if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
+        LOG_WARN("store access index failed", K(ret));
+      } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
+        LOG_WARN("Failed to add param expr", K(ret));
+      } else { /*do nothing*/ }
+    } else if ( pl::ObObjAccessIdx::AccessType::IS_EXPR == access_idx.access_type_) {
+      pl::ObObjAccessIdx tmp_idx = access_idx;
+      tmp_idx.var_index_ = get_param_count() + var_indexs_.count(); //外部变量的下标排在
+      if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
+        LOG_WARN("store access index failed", K(ret));
+      } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
+        LOG_WARN("Failed to add param expr", K(ret));
+      } else { /*do nothing*/ }
+    } else if (pl::ObObjAccessIdx::AccessType::IS_PROPERTY == access_idx.access_type_
+              && ((0 == access_idx.var_name_.case_compare("prior"))
+              || (0 == access_idx.var_name_.case_compare("next"))
+              || (0 == access_idx.var_name_.case_compare("exists")))) {
+      pl::ObObjAccessIdx tmp_idx = access_idx;
+      tmp_idx.var_index_ = get_param_count() + var_indexs_.count(); //外部变量的下标排在
+      if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
+        LOG_WARN("store access index failed", K(ret));
+      } else if (OB_ISNULL(access_idx.get_sysfunc_)) {
+        LOG_WARN("null param function", K(ret), K(access_idx.var_name_));
+      } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
+        LOG_WARN("Failed to add param expr", K(ret));
+      } else { /*do nothing*/ }
+    } else if (access_idx.is_ns()
+              || access_idx.is_procedure()
+              || access_idx.is_type_method()
+              || access_idx.is_label()) {
+      //skip
+    } else {
+      if (OB_FAIL(access_indexs_.push_back(expr_access.at(j++)))) {
+        LOG_WARN("store access index failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObObjAccessRawExpr::get_final_type(pl::ObPLDataType &type) const
+{
+  int ret = OB_SUCCESS;
+  if (access_indexs_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Invalid obj access expr, indexs is empty", K(ret));
+  } else {
+    type = access_indexs_.at(access_indexs_.count() - 1).elem_type_;
+  }
+  return ret;
+}
+
+int ObNonTerminalRawExpr::set_input_types(const ObIExprResTypes &input_types)
+{
+  int ret = OB_SUCCESS;
+  // 如果原来有数据，立即清除。防御性代码。
   input_types_.reset();
   if (OB_ISNULL(inner_alloc_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1997,93 +2746,90 @@ int ObNonTerminalRawExpr::set_input_types(const ObIExprResTypes& input_types)
 }
 
 ////////////////////////////////////////////////////////////////
-int ObCaseOpRawExpr::assign(const ObCaseOpRawExpr& other)
+int ObCaseOpRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObNonTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObNonTerminalRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObNonTerminalRawExpr failed", K(ret));
     } else {
-      arg_expr_ = other.arg_expr_;
-      when_exprs_ = other.when_exprs_;
-      then_exprs_ = other.then_exprs_;
-      default_expr_ = other.default_expr_;
-      is_decode_func_ = other.is_decode_func_;
+      const ObCaseOpRawExpr &tmp =
+          static_cast<const ObCaseOpRawExpr &>(other);
+      arg_expr_ = tmp.arg_expr_;
+      default_expr_ = tmp.default_expr_;
+      is_decode_func_ = tmp.is_decode_func_;
+      if (OB_FAIL(when_exprs_.assign(tmp.when_exprs_))) {
+        LOG_WARN("failed to assign when exprs", K(ret));
+      } else if (OB_FAIL(then_exprs_.assign(tmp.then_exprs_))) {
+        LOG_WARN("failed to assign then exprs", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObCaseOpRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObCaseOpRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObCaseOpRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                  const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObNonTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObNonTerminalRawExpr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.arg_expr_, arg_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy argument expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                   expr_factory, other.when_exprs_, when_exprs_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy when expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                   expr_factory, other.then_exprs_, then_exprs_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy then exprs", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.default_expr_, default_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy default expr", K(ret));
-    } else {
-      is_decode_func_ = other.is_decode_func_;
-    }
-  }
+  if (OB_FAIL(ObNonTerminalRawExpr::replace_expr(other_exprs,
+                                                 new_exprs))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    arg_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    default_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     when_exprs_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     then_exprs_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObCaseOpRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObNonTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, arg_expr_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, default_expr_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, when_exprs_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, then_exprs_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
-// jit exprs gen order:
+//jit exprs存储顺序：
 //[arg_expr], when_expr, then_expr, [when_expr, then_expr,]...[default_expr]
-int ObCaseOpRawExpr::get_children(ExprArray& jit_exprs) const
+int ObCaseOpRawExpr::get_children(ExprArray &jit_exprs) const
 {
   int ret = OB_SUCCESS;
   if (arg_expr_ != NULL) {
-    if (OB_FAIL(jit_exprs.push_back(static_cast<ObExpr*>(arg_expr_)))) {
+    if (OB_FAIL(jit_exprs.push_back(static_cast<ObIRawExpr *>(arg_expr_)))) {
       LOG_WARN("fail to push arg_expr_", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (when_exprs_.count() != then_exprs_.count()) {
-      LOG_WARN("when_exprs count is not equal to then_exprs count", K(when_exprs_.count()), K(then_exprs_.count()));
+      LOG_WARN("when_exprs count is not equal to then_exprs count",
+          K(when_exprs_.count()), K(then_exprs_.count()));
     }
-    for (int64_t i = 0; OB_SUCCESS == ret && i < when_exprs_.count(); i++) {
-      if (OB_FAIL(jit_exprs.push_back(static_cast<ObExpr*>(when_exprs_.at(i))))) {
+    for (int64_t i = 0;
+         OB_SUCCESS == ret && i < when_exprs_.count();
+         i++) {
+      if (OB_FAIL(jit_exprs.push_back(
+                  static_cast<ObIRawExpr *>(when_exprs_.at(i))))) {
         LOG_WARN("fail to push when_expr_", K(ret));
-      } else if (OB_FAIL(jit_exprs.push_back(static_cast<ObExpr*>(then_exprs_.at(i))))) {
+      } else if (OB_FAIL(jit_exprs.push_back(
+                  static_cast<ObIRawExpr *>(then_exprs_.at(i))))) {
         LOG_WARN("fail to push then_expr_", K(ret));
       }
     }
   }
 
   if (OB_SUCC(ret) && NULL != default_expr_) {
-    if (OB_FAIL(jit_exprs.push_back(static_cast<ObExpr*>(default_expr_)))) {
+    if (OB_FAIL(jit_exprs.push_back(static_cast<ObIRawExpr *>(default_expr_)))) {
       LOG_WARN("fail to push arg_expr_", K(ret));
     }
   }
@@ -2104,20 +2850,20 @@ void ObCaseOpRawExpr::reset()
   clear_child();
 }
 
-const ObRawExpr* ObCaseOpRawExpr::get_param_expr(int64_t index) const
+const ObRawExpr *ObCaseOpRawExpr::get_param_expr(int64_t index) const
 {
-  ObRawExpr* expr = const_cast<ObCaseOpRawExpr*>(this)->get_param_expr(index);
+  ObRawExpr *expr = const_cast<ObCaseOpRawExpr *>(this)->get_param_expr(index);
   return &expr == &USELESS_POINTER ? NULL : expr;
 }
 
-int ObCaseOpRawExpr::replace_param_expr(int64_t index, ObRawExpr* new_expr)
+int ObCaseOpRawExpr::replace_param_expr(int64_t index, ObRawExpr *new_expr)
 {
   int ret = common::OB_SUCCESS;
-  ObRawExpr*& old_expr = this->get_param_expr(index);
+  ObRawExpr *&old_expr = this->get_param_expr(index);
   if (OB_ISNULL(old_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN(
-        "replace_param_expr for case expr failed", K(ret), K(index), K(get_when_expr_size()), K(get_then_expr_size()));
+    LOG_WARN("replace_param_expr for case expr failed", K(ret), K(index),
+        K(get_when_expr_size()), K(get_then_expr_size()));
   } else {
     old_expr = new_expr;
   }
@@ -2126,14 +2872,15 @@ int ObCaseOpRawExpr::replace_param_expr(int64_t index, ObRawExpr* new_expr)
 
 // return child expr in visitor order:
 //    arg expr, when expr, then expr, when expr, then expr ..., default expr
-ObRawExpr*& ObCaseOpRawExpr::get_param_expr(int64_t index)
+ObRawExpr *&ObCaseOpRawExpr::get_param_expr(int64_t index)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr** expr = &USELESS_POINTER;
+  ObRawExpr **expr = &USELESS_POINTER;
   if (index < 0 || index >= get_param_count()) {
     LOG_WARN("invalid index", K(index), K(get_param_count()));
   } else if (when_exprs_.count() != then_exprs_.count()) {
-    LOG_WARN("when and then expr count mismatch", K(ret), K(when_exprs_.count()), K(then_exprs_.count()));
+    LOG_WARN("when and then expr count mismatch",
+        K(ret), K(when_exprs_.count()), K(then_exprs_.count()));
   } else {
     if (NULL != arg_expr_ && 0 == index) {
       expr = &arg_expr_;
@@ -2151,24 +2898,25 @@ ObRawExpr*& ObCaseOpRawExpr::get_param_expr(int64_t index)
   return *expr;
 }
 
-bool ObCaseOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObCaseOpRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
   } else {
-    const ObCaseOpRawExpr* c_expr = static_cast<const ObCaseOpRawExpr*>(&expr);
-    if (((NULL == arg_expr_ && NULL == c_expr->arg_expr_) ||
-            (NULL != arg_expr_ && c_expr->arg_expr_ && arg_expr_->same_as(*c_expr->arg_expr_, check_context))) &&
-        ((NULL == default_expr_ && NULL == c_expr->default_expr_) ||
-            (NULL != default_expr_ && c_expr->default_expr_ &&
-                default_expr_->same_as(*c_expr->default_expr_, check_context))) &&
-        this->get_when_expr_size() == c_expr->get_when_expr_size()) {
+    const ObCaseOpRawExpr *c_expr = static_cast<const ObCaseOpRawExpr *>(&expr);
+    if (((NULL == arg_expr_ && NULL == c_expr->arg_expr_)
+         || (NULL != arg_expr_ && c_expr->arg_expr_ && arg_expr_->same_as(*c_expr->arg_expr_, check_context)))
+        && ((NULL == default_expr_ && NULL == c_expr->default_expr_)
+            || (NULL != default_expr_ && c_expr->default_expr_ && default_expr_->same_as(*c_expr->default_expr_, check_context)))
+        && this->get_when_expr_size() == c_expr->get_when_expr_size()) {
       bool_ret = true;
       for (int64_t i = 0; bool_ret && i < c_expr->get_when_expr_size(); ++i) {
-        if (OB_ISNULL(this->get_when_param_expr(i)) || OB_ISNULL(c_expr->get_when_param_expr(i)) ||
-            OB_ISNULL(this->get_then_param_expr(i)) || OB_ISNULL(c_expr->get_then_param_expr(i)) ||
-            !this->get_when_param_expr(i)->same_as(*c_expr->get_when_param_expr(i), check_context) ||
-            !this->get_then_param_expr(i)->same_as(*c_expr->get_then_param_expr(i), check_context)) {
+        if (OB_ISNULL(this->get_when_param_expr(i)) || OB_ISNULL(c_expr->get_when_param_expr(i))
+            || OB_ISNULL(this->get_then_param_expr(i)) || OB_ISNULL(c_expr->get_then_param_expr(i))
+            || !this->get_when_param_expr(i)->same_as(*c_expr->get_when_param_expr(i), check_context)
+            || !this->get_then_param_expr(i)->same_as(*c_expr->get_then_param_expr(i), check_context)) {
           bool_ret = false;
         }
       }
@@ -2177,12 +2925,162 @@ bool ObCaseOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
   return bool_ret;
 }
 
-int ObCaseOpRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObCaseOpRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+/***
+ * replace by common implement which use get_param_count() && get_param_expr()
+ *
+int ObCaseOpRawExpr::preorder_accept(ObRawExprVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  int64_t when_count = when_exprs_.count();
+  int64_t then_count = then_exprs_.count();
+  if (OB_UNLIKELY(when_count != then_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of when_exprs_ is not equal to count of then_exprs", K(when_count),
+             K(then_count), K(ret));
+  } else if (OB_FAIL(visitor.visit(*this))) {
+    LOG_WARN("failed to visit this", K(ret));
+  } else if (!visitor.skip_child(*this)) {
+    if (arg_expr_) {
+      if (OB_FAIL(arg_expr_->preorder_accept(visitor))) {
+        LOG_WARN("failed to accept arg_expr", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < when_count; ++i) {
+      if (OB_ISNULL(when_exprs_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("when_expr is NULL", K(i), K(ret));
+      } else if (OB_ISNULL(then_exprs_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("then_expr is NULL", K(i), K(ret));
+      } else if (OB_FAIL(when_exprs_[i]->preorder_accept(visitor))) {
+        LOG_WARN("failed to accept when", K(i), K(ret));
+      } else if (OB_FAIL(then_exprs_[i]->preorder_accept(visitor))) {
+        LOG_WARN("failed to accept then", K(i), K(ret));
+      } else {}
+    } // end for
+
+    if (OB_SUCCESS == ret && NULL != default_expr_) {
+      if (OB_FAIL(default_expr_->preorder_accept(visitor))) {
+        LOG_WARN("failed to accept default", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCaseOpRawExpr::postorder_accept(ObRawExprVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  int64_t when_count = when_exprs_.count();
+  int64_t then_count = then_exprs_.count();
+  if (OB_UNLIKELY(when_count != then_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of when_exprs_ is not equal to count of then_exprs", K(when_count),
+             K(then_count), K(ret));
+  } else {
+    if (!visitor.skip_child(*this)) {
+      if (arg_expr_) {
+        if (OB_FAIL(arg_expr_->postorder_accept(visitor))) {
+          LOG_WARN("failed to accept arg_expr", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < when_count; ++i) {
+        if (OB_ISNULL(when_exprs_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("when_expr is NULL", K(i), K(ret));
+        } else if (OB_ISNULL(then_exprs_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("then_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(when_exprs_[i]->postorder_accept(visitor))) {
+          LOG_WARN("failed to accept when", K(i), K(ret));
+        } else if (OB_FAIL(then_exprs_[i]->postorder_accept(visitor))) {
+          LOG_WARN("failed to accept then", K(i), K(ret));
+        } else {}
+      } // end for
+      if (OB_SUCCESS == ret && default_expr_) {
+        if (OB_FAIL(default_expr_->postorder_accept(visitor))) {
+          LOG_WARN("failed to accept default", K(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(visitor.visit(*this))) {
+        LOG_WARN("failed to visit this", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCaseOpRawExpr::postorder_replace(ObRawExprVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  int64_t when_count = when_exprs_.count();
+  int64_t then_count = then_exprs_.count();
+  if (OB_UNLIKELY(when_count != then_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of when_exprs_ is not equal to count of then_exprs", K(when_count),
+             K(then_count), K(ret));
+  } else {
+    ObRawExprPullUpAggrExpr &pull_up_visitor = reinterpret_cast<ObRawExprPullUpAggrExpr &>(visitor);
+    if (arg_expr_) {
+      if (OB_FAIL(arg_expr_->postorder_replace(visitor))) {
+        LOG_WARN("failed to accept arg_expr", K(ret));
+      } else {
+        // replace the child expr
+        arg_expr_ = pull_up_visitor.get_new_expr();
+      }
+    }
+
+    for (int32_t i = 0; OB_SUCC(ret) && i < when_count; ++i) {
+      if (OB_ISNULL(when_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("when_expr is NULL", K(i), K(ret));
+      } else if (OB_ISNULL(then_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("then_expr is NULL", K(i), K(ret));
+      } else if (OB_FAIL(when_exprs_.at(i)->postorder_replace(visitor))) {
+        LOG_WARN("failed to accept when expr", K(i), K(ret));
+      } else {
+        // replace the child expr
+        when_exprs_.at(i) = pull_up_visitor.get_new_expr();
+        if (OB_FAIL(then_exprs_.at(i)->postorder_replace(visitor))) {
+          LOG_WARN("failed to accept then expr", K(i), K(ret));
+        } else {
+          // replace the child expr
+          then_exprs_.at(i) = pull_up_visitor.get_new_expr();
+        }
+      }
+    } // end for
+
+    if (OB_SUCCESS == ret && default_expr_) {
+      if (OB_FAIL(default_expr_->postorder_replace(visitor))) {
+        LOG_WARN("failed to accept default", K(ret));
+      } else {
+        // replace the child expr
+        default_expr_ = pull_up_visitor.get_new_expr();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(visitor.visit(*this))) {
+        LOG_WARN("failed to visit this", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+*/
+
+int ObCaseOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                       ExplainType type) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(BUF_PRINTF("CASE"))) {
@@ -2192,10 +3090,8 @@ int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(arg_expr_->get_name(buf, buf_len, pos, type))) {
       LOG_WARN("fail to get_name", K(ret));
-    } else {
-    }
-  } else {
-  }
+    } else {}
+  } else {}
 
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_when_expr_size(); ++i) {
@@ -2221,8 +3117,7 @@ int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       } else if (OB_FAIL(get_then_param_expr(i)->get_name(buf, buf_len, pos, type))) {
         LOG_WARN("fail to get_name", K(i), K(ret));
-      } else {
-      }
+      } else {}
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(BUF_PRINTF(" "))) {
@@ -2235,8 +3130,7 @@ int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           } else if (OB_FAIL(default_expr_->get_name(buf, buf_len, pos, type))) {
             LOG_WARN("fail to get_name", K(ret));
-          } else {
-          }
+          } else {}
         }
       }
     }
@@ -2247,8 +3141,7 @@ int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("END"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   if (OB_SUCCESS == ret && EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
@@ -2257,99 +3150,81 @@ int ObCaseOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////
-int ObAggFunRawExpr::assign(const ObAggFunRawExpr& other)
+int ObAggFunRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
     } else {
-      real_param_exprs_ = other.real_param_exprs_;
-      push_down_sum_expr_ = other.push_down_sum_expr_;
-      push_down_count_expr_ = other.push_down_count_expr_;
-      push_down_synopsis_expr_ = other.push_down_synopsis_expr_;
-      distinct_ = other.distinct_;
-      order_items_ = other.order_items_;
-      separator_param_expr_ = other.separator_param_expr_;
-      linear_inter_expr_ = other.linear_inter_expr_;
-      is_nested_aggr_ = other.is_nested_aggr_;
-      udf_meta_.assign(other.udf_meta_);
-    }
-  }
-  return ret;
-}
-
-int ObAggFunRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObAggFunRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr* temp_expr = NULL;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.push_down_sum_expr_, push_down_sum_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy push down sum expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.push_down_count_expr_, push_down_count_expr_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy push down count expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(expr_factory,
-                   other.push_down_synopsis_expr_,
-                   push_down_synopsis_expr_,
-                   copy_types,
-                   use_new_allocator))) {
-      LOG_WARN("failed to copy push down sysnopsis expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.separator_param_expr_, temp_expr, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy separator param expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                   expr_factory, other.real_param_exprs_, real_param_exprs_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy real param exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::deep_copy_order_items(
-                   expr_factory, other.order_items_, order_items_, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy order item", K(ret));
-    } else {
-      distinct_ = other.distinct_;
-      udf_meta_ = other.udf_meta_;
-      is_nested_aggr_ = other.is_nested_aggr_;
-      linear_inter_expr_ = other.linear_inter_expr_;
-      if (NULL != temp_expr) {
-        separator_param_expr_ = temp_expr;
-      }
-      if (OB_FAIL(common::ob_write_string(expr_factory.get_allocator(), other.udf_meta_.name_, udf_meta_.name_))) {
-        LOG_WARN("failed to write string", K(ret));
-      } else if (OB_FAIL(common::ob_write_string(expr_factory.get_allocator(), other.udf_meta_.dl_, udf_meta_.dl_))) {
-        LOG_WARN("failed to write string", K(ret));
+      const ObAggFunRawExpr &tmp =
+          static_cast<const ObAggFunRawExpr &>(other);
+      if (OB_FAIL(real_param_exprs_.assign(tmp.real_param_exprs_))) {
+        LOG_WARN("faile to assign real param expr", K(ret));
+      } else if (OB_FAIL(order_items_.assign(tmp.order_items_))) {
+        LOG_WARN("failed to assign order items", K(ret));
+      } else {
+        distinct_ = tmp.distinct_;
+        separator_param_expr_ = tmp.separator_param_expr_;
+        is_nested_aggr_ = tmp.is_nested_aggr_;
+        pl_agg_udf_expr_ = tmp.pl_agg_udf_expr_;
+        udf_meta_.assign(tmp.udf_meta_);
+        is_need_deserialize_row_ = tmp.is_need_deserialize_row_;
       }
     }
   }
   return ret;
 }
 
-int ObAggFunRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObAggFunRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attribute", K(ret));
+  } else if (OB_FAIL(copier.copy(pl_agg_udf_expr_))) {
+    LOG_WARN("failed to copy pl agg udf expr", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner alloc is null", K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf_meta_.name_, udf_meta_.name_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf_meta_.dl_, udf_meta_.dl_))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAggFunRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                  const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, push_down_count_expr_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     real_param_exprs_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, push_down_sum_expr_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr_for_order_item(other_exprs,
+                                                                   new_exprs,
+                                                                   order_items_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, push_down_synopsis_expr_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    pl_agg_udf_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, real_param_exprs_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr_for_order_item(other_exprs, new_exprs, order_items_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -2365,22 +3240,25 @@ void ObAggFunRawExpr::reset()
   clear_child();
   order_items_.reset();
   separator_param_expr_ = NULL;
-  linear_inter_expr_ = NULL;
   is_nested_aggr_ = false;
+  is_need_deserialize_row_ = false;
+  pl_agg_udf_expr_ = NULL;
 }
 
-bool ObAggFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObAggFunRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-  } else {
-    const ObAggFunRawExpr* a_expr = static_cast<const ObAggFunRawExpr*>(&expr);
+  } else  {
+    const ObAggFunRawExpr *a_expr = static_cast<const ObAggFunRawExpr *>(&expr);
     if (is_nested_aggr_ != a_expr->is_nested_aggr()) {
-      // do nothing.
+      //do nothing.
     } else if (distinct_ == a_expr->is_param_distinct()) {
-      if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_) ||
-          (NULL != separator_param_expr_ && NULL != a_expr->separator_param_expr_ &&
-              separator_param_expr_->same_as(*(a_expr->separator_param_expr_), check_context))) {
+      if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_)
+          || (NULL != separator_param_expr_ && NULL != a_expr->separator_param_expr_
+              && separator_param_expr_->same_as(*(a_expr->separator_param_expr_), check_context))) {
         if (real_param_exprs_.count() == a_expr->real_param_exprs_.count()) {
           bool_ret = true;
           for (int64_t i = 0; bool_ret && i < real_param_exprs_.count(); ++i) {
@@ -2393,8 +3271,8 @@ bool ObAggFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
           if (bool_ret) {
             if (order_items_.count() == a_expr->order_items_.count()) {
               for (int64_t i = 0; bool_ret && i < order_items_.count(); ++i) {
-                if (OB_ISNULL(order_items_.at(i).expr_) || OB_ISNULL(a_expr->order_items_.at(i).expr_) ||
-                    !order_items_.at(i).expr_->same_as(*(a_expr->order_items_.at(i).expr_), check_context)) {
+                if(OB_ISNULL(order_items_.at(i).expr_) || OB_ISNULL(a_expr->order_items_.at(i).expr_)
+                   || !order_items_.at(i).expr_->same_as(*(a_expr->order_items_.at(i).expr_), check_context)) {
                   bool_ret = false;
                 }
               }
@@ -2403,9 +3281,12 @@ bool ObAggFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
             }
           }
           if (bool_ret) {
-            if ((NULL == linear_inter_expr_ && NULL == a_expr->linear_inter_expr_) ||
-                (NULL != linear_inter_expr_ && NULL != a_expr->linear_inter_expr_ &&
-                    linear_inter_expr_->same_as(*(a_expr->linear_inter_expr_), check_context))) {
+            bool_ret = is_need_deserialize_row_ == a_expr->is_need_deserialize_row();
+          }
+          if (bool_ret) {
+            if ((NULL == pl_agg_udf_expr_ && NULL == a_expr->pl_agg_udf_expr_) ||
+                (NULL != pl_agg_udf_expr_ && NULL != a_expr->pl_agg_udf_expr_ &&
+                 pl_agg_udf_expr_->same_as(*(a_expr->pl_agg_udf_expr_), check_context))) {
               bool_ret = true;
             } else {
               bool_ret = false;
@@ -2418,41 +3299,73 @@ bool ObAggFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
   return bool_ret;
 }
 
-const ObRawExpr* ObAggFunRawExpr::get_param_expr(int64_t index) const
+
+int64_t ObAggFunRawExpr::get_param_count() const
 {
-  const ObRawExpr* ptr_ret = NULL;
+  int64_t param_count = real_param_exprs_.count() + order_items_.count();
+  if (NULL != separator_param_expr_) {
+    param_count++;
+  }
+  return param_count;
+}
+
+const ObRawExpr *ObAggFunRawExpr::get_param_expr(int64_t index) const
+{
+  const ObRawExpr *ptr_ret = NULL;
   if (0 <= index && index < real_param_exprs_.count()) {
     ptr_ret = real_param_exprs_.at(index);
-  } else if ((0 <= index - real_param_exprs_.count()) && (index - real_param_exprs_.count() < order_items_.count())) {
+  } else if ((0 <= index - real_param_exprs_.count())
+             && (index - real_param_exprs_.count() < order_items_.count())) {
     ptr_ret = order_items_.at(index - real_param_exprs_.count()).expr_;
-  } else {
+  } else if (index == real_param_exprs_.count() + order_items_.count()) {
+    if (NULL != separator_param_expr_) {
+      ptr_ret = separator_param_expr_;
+    } else { /*do nothing*/ }
   }
   return ptr_ret;
 }
 
-ObRawExpr*& ObAggFunRawExpr::get_param_expr(int64_t index)
+ObRawExpr *&ObAggFunRawExpr::get_param_expr(int64_t index)
 {
   if (0 <= index && index < real_param_exprs_.count()) {
     return real_param_exprs_.at(index);
-  } else if ((0 <= index - real_param_exprs_.count()) && (index - real_param_exprs_.count() < order_items_.count())) {
+  } else if ((0 <= index - real_param_exprs_.count())
+             && (index - real_param_exprs_.count() < order_items_.count())) {
     return order_items_.at(index - real_param_exprs_.count()).expr_;
+  } else if (index == real_param_exprs_.count() + order_items_.count()) {
+    if (NULL != separator_param_expr_) {
+      return separator_param_expr_;
+    } else {
+      return USELESS_POINTER;
+    }
   } else {
     return USELESS_POINTER;
   }
 }
 
-int ObAggFunRawExpr::do_visit(ObRawExprVisitor& visitor)
+
+int ObAggFunRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                       ExplainType type) const
 {
   int ret = OB_SUCCESS;
   if (T_FUN_AGG_UDF == get_expr_type()) {
     if (OB_FAIL(BUF_PRINTF("%.*s(", udf_meta_.name_.length(), udf_meta_.name_.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  } else if (T_FUN_PL_AGG_UDF == get_expr_type()) {
+    if (OB_ISNULL(pl_agg_udf_expr_) || OB_UNLIKELY(!pl_agg_udf_expr_->is_udf_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(pl_agg_udf_expr_));
+    } else if (OB_FAIL(BUF_PRINTF("%.*s(",
+                            static_cast<ObUDFRawExpr*>(pl_agg_udf_expr_)->get_func_name().length(),
+                            static_cast<ObUDFRawExpr*>(pl_agg_udf_expr_)->get_func_name().ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {/*do nothing*/}
   } else if (EXPLAIN_DBLINK_STMT == type) {
     if (OB_FAIL(BUF_PRINTF("%s(", get_name_dblink(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -2469,14 +3382,14 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       }
     }
     int64_t i = 0;
-    if (T_FUN_MEDIAN == get_expr_type() || T_FUN_GROUP_PERCENTILE_CONT == get_expr_type()) {
+    if (T_FUN_MEDIAN == get_expr_type() ||
+        T_FUN_GROUP_PERCENTILE_CONT == get_expr_type()) {
       if (1 > get_real_param_count()) {
         ret = OB_ERR_PARAM_SIZE;
         LOG_WARN("invalid number of arguments", K(ret), K(get_expr_type()));
       } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
-        LOG_WARN("fail to get_name", K(i), K(ret));
-      } else {
-      }
+          LOG_WARN("fail to get_name", K(i), K(ret));
+      } else {}
     } else {
       for (; OB_SUCC(ret) && i < get_real_param_count() - 1; ++i) {
         if (OB_ISNULL(get_real_param_exprs().at(i))) {
@@ -2486,8 +3399,7 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
           LOG_WARN("fail to get_name", K(i), K(ret));
         } else if (OB_FAIL(BUF_PRINTF(", "))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else {
-        }
+        } else {}
       }
       if (OB_SUCC(ret)) {
         if (0 == get_real_param_count()) {
@@ -2499,8 +3411,7 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
           LOG_WARN("param expr is NULL", K(i), K(ret));
         } else if (OB_FAIL(get_real_param_exprs().at(i)->get_name(buf, buf_len, pos, type))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else {
-        }
+        } else {}
       }
     }
 
@@ -2508,12 +3419,18 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
     if (OB_SUCCESS == ret &&
-        (T_FUN_GROUP_CONCAT == get_expr_type() || T_FUN_GROUP_RANK == get_expr_type() ||
-            T_FUN_GROUP_DENSE_RANK == get_expr_type() || T_FUN_GROUP_PERCENT_RANK == get_expr_type() ||
-            T_FUN_GROUP_CUME_DIST == get_expr_type() || T_FUN_GROUP_PERCENTILE_CONT == get_expr_type() ||
-            T_FUN_GROUP_PERCENTILE_DISC == get_expr_type() || T_FUN_KEEP_MAX == get_expr_type() ||
-            T_FUN_KEEP_MIN == get_expr_type() || T_FUN_KEEP_SUM == get_expr_type() ||
-            T_FUN_KEEP_COUNT == get_expr_type() || T_FUN_KEEP_WM_CONCAT == get_expr_type())) {
+        (T_FUN_GROUP_CONCAT == get_expr_type() ||
+         T_FUN_GROUP_RANK == get_expr_type() ||
+         T_FUN_GROUP_DENSE_RANK == get_expr_type() ||
+         T_FUN_GROUP_PERCENT_RANK == get_expr_type() ||
+         T_FUN_GROUP_CUME_DIST == get_expr_type() ||
+         T_FUN_GROUP_PERCENTILE_CONT == get_expr_type() ||
+         T_FUN_GROUP_PERCENTILE_DISC == get_expr_type() ||
+         T_FUN_KEEP_MAX == get_expr_type() ||
+         T_FUN_KEEP_MIN == get_expr_type() ||
+         T_FUN_KEEP_SUM == get_expr_type() ||
+         T_FUN_KEEP_COUNT == get_expr_type() ||
+         T_FUN_KEEP_WM_CONCAT == get_expr_type())) {
       if (order_items_.count() > 0) {
         if (OB_FAIL(BUF_PRINTF(" order_items("))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -2525,13 +3442,12 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
             }
           }
           if (OB_FAIL(ret)) {
-            // do nothing
+            //do nothing
           } else if (OB_ISNULL(order_items_.at(i).expr_)) {
             LOG_WARN("expr is NULL", K(i), K(ret));
           } else if (OB_FAIL(order_items_.at(i).expr_->get_name(buf, buf_len, pos, type))) {
             LOG_WARN("fail to get_name", K(i), K(ret));
-          } else {
-          }
+          } else {}
         }
         if (OB_SUCCESS == ret && OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -2544,8 +3460,7 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
           LOG_WARN("fail to get_name", K(ret));
         } else if (OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else {
-        }
+        } else {}
       }
     }
     if (OB_SUCCESS == ret && EXPLAIN_EXTENDED == type) {
@@ -2555,40 +3470,39 @@ int ObAggFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       } else if (OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
-      } else {
-      }
+      } else {}
     }
   }
   return ret;
 }
 
-const char* ObAggFunRawExpr::get_name_dblink(ObItemType expr_type) const
+const char *ObAggFunRawExpr::get_name_dblink(ObItemType expr_type) const
 {
-  const char* name = NULL;
-  switch (expr_type) {
-    case T_FUN_MAX:
-      name = "max";
-      break;
-    case T_FUN_MIN:
-      name = "min";
-      break;
-    case T_FUN_SUM:
-      name = "sum";
-      break;
-    case T_FUN_COUNT:
-      name = "count";
-      break;
-    case T_FUN_AVG:
-      name = "avg";
-      break;
-    default:
-      name = "UNKNOWN";
-      break;
+  const char *name = NULL;
+  switch(expr_type){
+  case T_FUN_MAX :
+    name = "max";
+    break;
+  case T_FUN_MIN :
+    name = "min";
+    break;
+  case T_FUN_SUM :
+    name = "sum";
+    break;
+  case T_FUN_COUNT :
+    name = "count";
+    break;
+  case T_FUN_AVG :
+    name = "avg";
+    break;
+  default:
+    name = "UNKNOWN";
+    break;
   }
   return name;
 }
 
-int ObAggFunRawExpr::set_udf_meta(const share::schema::ObUDF& udf)
+int ObAggFunRawExpr::set_udf_meta(const share::schema::ObUDF &udf)
 {
   int ret = OB_SUCCESS;
   udf_meta_.tenant_id_ = udf.get_tenant_id();
@@ -2602,43 +3516,42 @@ int ObAggFunRawExpr::set_udf_meta(const share::schema::ObUDF& udf)
     LOG_WARN("fail to write string", K(udf.get_name_str()), K(ret));
   } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf.get_dl_str(), udf_meta_.dl_))) {
     LOG_WARN("fail to write string", K(udf.get_name_str()), K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////
-int ObSysFunRawExpr::assign(const ObSysFunRawExpr& other)
+int ObSysFunRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObOpRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
     } else {
-      func_name_ = other.func_name_;
-      operator_id_ = other.operator_id_;
+      const ObSysFunRawExpr &tmp =
+          static_cast<const ObSysFunRawExpr &>(other);
+      func_name_ = tmp.func_name_;
+      operator_id_ = tmp.operator_id_;
     }
   }
   return ret;
 }
 
-int ObSysFunRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObSysFunRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObSysFunRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObOpRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
-    } else if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.func_name_, func_name_))) {
-        LOG_WARN("fail to write string", K(other.func_name_), K(ret));
-      }
-    } else {
-      func_name_ = other.func_name_;
-      operator_id_ = other.operator_id_;
+  if (OB_FAIL(ObOpRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, func_name_, func_name_))) {
+      LOG_WARN("fail to write string", K(func_name_), K(ret));
     }
   }
   return ret;
@@ -2656,20 +3569,50 @@ void ObSysFunRawExpr::reset()
   clear_child();
 }
 
-bool ObSysFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObSysFunRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
-  const ObSysFunRawExpr* s_expr = static_cast<const ObSysFunRawExpr*>(&expr);
   if (get_expr_type() != expr.get_expr_type()) {
-  } else if (T_FUN_SYS_RAND == get_expr_type() || T_FUN_SYS_GUID == get_expr_type()) {
-  } else {
-    if (ObCharset::case_insensitive_equal(func_name_, s_expr->get_func_name()) &&
-        this->get_param_count() == s_expr->get_param_count()) {
+  } else if (T_FUN_SYS_RAND == get_expr_type() ||
+             T_FUN_SYS_GUID == get_expr_type() ||
+             T_OP_GET_USER_VAR == get_expr_type() ||
+             T_OP_GET_SYS_VAR == get_expr_type()) {
+  } else if (get_expr_class() == expr.get_expr_class()) {
+    //for EXPR_UDF and EXPR_SYS_FUNC
+    const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
+    if (ObCharset::case_insensitive_equal(func_name_, s_expr->get_func_name())
+        && this->get_param_count() == s_expr->get_param_count()) {
       bool_ret = true;
       for (int64_t i = 0; bool_ret && i < s_expr->get_param_count(); i++) {
-        if (OB_ISNULL(get_param_expr(i)) || OB_ISNULL(s_expr->get_param_expr(i)) ||
-            !this->get_param_expr(i)->same_as(*s_expr->get_param_expr(i), check_context)) {
+        if (OB_ISNULL(get_param_expr(i)) || OB_ISNULL(s_expr->get_param_expr(i))) {
           bool_ret = false;
+        } else {
+          // get package has 3 params
+          // 0 : package_id
+          // 1 : var_idx
+          // 2 : the point of result_type. result_type need compare with type ObExprResType
+          if (T_OP_GET_PACKAGE_VAR == get_expr_type() && 2 == i) {
+            if (T_INT == get_param_expr(i)->get_expr_type()
+                && T_INT == s_expr->get_param_expr(i)->get_expr_type()) {
+              const ObConstRawExpr* val1 = static_cast<const ObConstRawExpr*>(get_param_expr(i));
+              const ObConstRawExpr* val2 =
+                static_cast<const ObConstRawExpr*>(s_expr->get_param_expr(i));
+              ObExprResType* res_type1 =
+                reinterpret_cast<ObExprResType*>(val1->get_value().get_int());
+              ObExprResType* res_type2 =
+                reinterpret_cast<ObExprResType*>(val2->get_value().get_int());
+              if (NULL == res_type1 || NULL == res_type2 || *res_type1 != *res_type2) {
+                bool_ret = false;
+              }
+            } else {
+              bool_ret = false;
+            }
+          } else if (!this->get_param_expr(i)->same_as(*s_expr->get_param_expr(i),
+                      check_context)) {
+            bool_ret = false;
+          } else {}
         }
       }
       if (0 == get_param_count()
@@ -2680,117 +3623,147 @@ bool ObSysFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
               || T_FUN_SYS_UTC_TIME == get_expr_type())) {
         bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
       }
+      if ((T_FUN_SYS == get_expr_type() ||
+           T_FUN_SYS_CALC_TABLET_ID == get_expr_type() ||
+           T_FUN_SYS_CALC_PARTITION_ID == get_expr_type() ||
+           T_FUN_SYS_CALC_PARTITION_TABLET_ID == get_expr_type()) &&
+          get_extra() != expr.get_extra()) { // for calc_partition_id
+        bool_ret = false;
+      }
+    }
+  } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
+    //for cases which compares concat('xxx','xxx') with 'xxx'||'xxx'
+    const ObOpRawExpr *m_expr = static_cast<const ObOpRawExpr *>(&expr);
+    if (this->get_param_count() == m_expr->get_param_count()) {
+      bool_ret = true;
+      for (int64_t i = 0; bool_ret && i < m_expr->get_param_count(); ++i) {
+        if (NULL == this->get_param_expr(i) || NULL == m_expr->get_param_expr(i)
+            || !(this->get_param_expr(i)->same_as(*m_expr->get_param_expr(i), check_context))) {
+          bool_ret = false;
+        }
+      }
     }
   }
   return bool_ret;
 }
 
-ObExprOperator* ObSysFunRawExpr::get_op()
+ObExprOperator *ObSysFunRawExpr::get_op()
 {
-  ObExprOperator* op = NULL;
+  ObExprOperator *op = NULL;
   if (get_expr_type() == T_FUN_SYS) {
     free_op();
     ObExprOperatorType type;
     if (T_INVALID != (type = ObExprOperatorFactory::get_type_by_name(func_name_))) {
       set_expr_type(type);
     } else {
-      LOG_ERROR("invalid func name", K_(func_name));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid func name", K_(func_name));
     }
   }
   if (OB_UNLIKELY(NULL == (op = ObOpRawExpr::get_op()))) {
-    LOG_ERROR("make function failed", K_(func_name));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "make function failed", K_(func_name));
   }
   return op;
+}
+
+int ObSysFunRawExpr::check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type)
+{
+  int ret = OB_SUCCESS;
+  switch (param_num) {
+    case ObExprOperator::MORE_THAN_ZERO: {
+      if (param_count <= 0) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function can not be 0", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::MORE_THAN_ONE: {
+      if (param_count <= 1) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be more than 1", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::MORE_THAN_TWO: {
+      if (param_count <= 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be more than 2", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::ZERO_OR_ONE: {
+      if (0 != param_count && 1 != param_count) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 0 or 1", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::ONE_OR_TWO: {
+      if (param_count != 1 && param_count != 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 1 or 2", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::TWO_OR_THREE: {
+      if (param_count != 2 && param_count != 3) {
+        if (lib::is_oracle_mode() && (T_FUN_SYS_RPAD == type || T_FUN_SYS_LPAD == type)) {
+          if (param_count > 3) {
+            ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
+            LOG_WARN("param count larger than 3", K(ret), K(func_name_), K(param_count));
+          } else {
+            ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
+            LOG_WARN("param count less than 2", K(ret), K(func_name_), K(param_count));
+          }
+        } else {
+          ret = OB_ERR_PARAM_SIZE;
+          LOG_WARN("Param num of function should be 2 or 3", K(func_name_), K(ret), K(param_count));
+        }
+      } else if (!lib::is_oracle_mode() && T_FUN_SYS_REPLACE == type && param_count != 3) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 3", K(func_name_), K(ret), K(lib::is_oracle_mode()));
+      }
+      break;
+    }
+    case ObExprOperator::OCCUR_AS_PAIR: {
+      if (param_count % 2 != 0) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be even", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::PARAM_NUM_UNKNOWN: {
+      // nothing
+      break;
+    }
+    default: {
+      if (param_count != param_num) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid Param num of function", K(func_name_), K(param_num),
+                  K(param_count), K(ret));
+      }
+      break;
+    }
+  }
+  return ret;
 }
 
 int ObSysFunRawExpr::check_param_num()
 {
   int ret = OB_SUCCESS;
-  ObExprOperator* op = NULL;
+  ObExprOperator *op = NULL;
   ObExprOperatorType type;
   if (OB_UNLIKELY(T_INVALID == (type = ObExprOperatorFactory::get_type_by_name(func_name_)))) {
     ret = OB_ERR_FUNCTION_UNKNOWN;
+    // 不向USER报错，外部会根据这个错误码继续尝试解析为UDF
     LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
+    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
   } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to make function", K(func_name_), K(ret));
   } else {
     int32_t param_num = op->get_param_num();
-    switch (param_num) {
-      case ObExprOperator::MORE_THAN_ZERO: {
-        if (get_param_count() <= 0) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function can not be 0", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::MORE_THAN_ONE: {
-        if (get_param_count() <= 1) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be more than 1", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::MORE_THAN_TWO: {
-        if (get_param_count() <= 2) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be more than 2", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::ZERO_OR_ONE: {
-        if (0 != get_param_count() && 1 != get_param_count()) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 0 or 1", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::ONE_OR_TWO: {
-        if (get_param_count() != 1 && get_param_count() != 2) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 1 or 2", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::TWO_OR_THREE: {
-        if (get_param_count() != 2 && get_param_count() != 3) {
-          if (share::is_oracle_mode() && (T_FUN_SYS_RPAD == type || T_FUN_SYS_LPAD == type)) {
-            if (get_param_count() > 3) {
-              ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
-              LOG_WARN("param count larger than 3", K(ret), K(func_name_), K(get_param_count()));
-            } else {
-              ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
-              LOG_WARN("param count less than 2", K(ret), K(func_name_), K(get_param_count()));
-            }
-          } else {
-            ret = OB_ERR_PARAM_SIZE;
-            LOG_WARN("Param num of function should be 2 or 3", K(func_name_), K(ret), K(get_param_count()));
-          }
-        } else if (!share::is_oracle_mode() && T_FUN_SYS_REPLACE == type && get_param_count() != 3) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 3", K(func_name_), K(ret), K(share::is_oracle_mode()));
-        }
-        break;
-      }
-      case ObExprOperator::OCCUR_AS_PAIR: {
-        if (get_param_count() % 2 != 0) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be even", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::PARAM_NUM_UNKNOWN: {
-        // nothing
-        break;
-      }
-      default: {
-        if (get_param_count() != param_num) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("invalid Param num of function", K(func_name_), K(param_num), K(get_param_count()), K(ret));
-        }
-        break;
-      }
-    }
+    int32_t param_count = get_param_count();
+    ret = check_param_num_internal(param_num, param_count, type);
     if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
       LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
     }
@@ -2798,39 +3771,59 @@ int ObSysFunRawExpr::check_param_num()
   return ret;
 }
 
-int ObSysFunRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObSysFunRawExpr::check_param_num(int32_t param_count)
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *op = NULL;
+  ObExprOperatorType type;
+  if (OB_UNLIKELY(T_INVALID == (type = ObExprOperatorFactory::get_type_by_name(func_name_)))) {
+    ret = OB_ERR_FUNCTION_UNKNOWN;
+    // 不向USER报错，外部会根据这个错误码继续尝试解析为UDF
+    LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
+    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
+  } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to make function", K(func_name_), K(ret));
+  } else {
+    int32_t param_num = op->get_param_num();
+    ret = check_param_num_internal(param_num, param_count, type);
+    if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
+      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
+    }
+  }
+  return ret;
+}
+
+int ObSysFunRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
 
-int ObSysFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                       ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (has_flag(IS_INNER_ADDED_EXPR) && (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type) &&
-      T_FUN_SYS_REMOVE_CONST == get_expr_type()) {
+  if (has_flag(IS_INNER_ADDED_EXPR)
+      && (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type)
+      && (T_FUN_SYS_REMOVE_CONST == get_expr_type() || T_FUN_SYS_WRAPPER_INNER == get_expr_type())) {
     CK(1 == get_param_count());
     OZ(get_param_expr(0)->get_name(buf, buf_len, pos, type));
-  } else if (OB_FAIL(BUF_PRINTF("%.*s(", get_func_name().length(), get_func_name().ptr()))) {
-    LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else {
-    if (T_FUN_COLUMN_CONV == get_expr_type()) {
+    if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
+        OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
+      LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%.*s(", get_func_name().length(), get_func_name().ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (T_FUN_COLUMN_CONV == get_expr_type()) {
       if (OB_FAIL(get_column_conv_name(buf, buf_len, pos, type))) {
         LOG_WARN("fail to get_column_conv_name", K(ret));
       }
     } else if (T_FUN_SYS_PART_ID == get_expr_type()) {
-      // ignore the print of T_FUN_SYS_PART_ID expr
+      //ignore the print of T_FUN_SYS_PART_ID expr
     } else {
       int64_t i = 0;
       if (get_param_count() > 1) {
-        int64_t real_param_count = get_param_count();
-        if (T_FUN_SYS_FROM_UNIX_TIME == get_expr_type() && 3 == real_param_count) {
-          real_param_count = 2;
-        } else if ((T_FUN_SYS_LEAST_INNER == get_expr_type() || T_FUN_SYS_GREATEST_INNER == get_expr_type())) {
-          real_param_count /= 3;
-        } else if (T_FUN_SYS_NULLIF == get_expr_type() && 6 == real_param_count) {
-          real_param_count = 2;
-        }
-        for (; OB_SUCC(ret) && i < real_param_count - 1; ++i) {
+        for (; OB_SUCC(ret) && i < get_param_count() - 1; ++i) {
           if (OB_ISNULL(get_param_expr(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("param_expr is NULL", K(i), K(ret));
@@ -2838,8 +3831,7 @@ int ObSysFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
             LOG_WARN("fail to get_name", K(i), K(ret));
           } else if (OB_FAIL(BUF_PRINTF(", "))) {
             LOG_WARN("fail to BUF_PRINTF", K(ret));
-          } else {
-          }
+          } else {}
         }
       }
       if (OB_SUCC(ret)) {
@@ -2850,8 +3842,7 @@ int ObSysFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
               LOG_WARN("poram expr is NULL", K(i), K(ret));
             } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
               LOG_WARN("fail to get_name", K(ret));
-            } else {
-            }
+            } else {}
           }
         } else {
           if (OB_FAIL(get_cast_type_name(buf, buf_len, pos))) {
@@ -2870,26 +3861,24 @@ int ObSysFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
           LOG_WARN("fail to BUF_PRINTF", K(ret));
         } else if (OB_FAIL(BUF_PRINTF(")"))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
-        } else {
-        }
-      } else {
-      }
+        } else {}
+      } else {}
     }
   }
   return ret;
 }
 
-int ObSysFunRawExpr::get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos) const
+int ObSysFunRawExpr::get_cast_type_name(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_param_expr(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("second param expr is NULL", K(ret));
-  } else if (!get_param_expr(1)->is_const_expr()) {
+  } else if (!get_param_expr(1)->is_const_raw_expr()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("second param expr is not const expr", K(ret));
   } else {
-    const ObConstRawExpr* const_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
     ObObj value = const_expr->get_value();
     if (!value.is_int()) {
       ret = OB_ERR_UNEXPECTED;
@@ -2902,12 +3891,15 @@ int ObSysFunRawExpr::get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos
       int32_t length = 0;
       int16_t precision = 0;
       int16_t scale = 0;
-      const char* type_str = ob_obj_type_str(dest_type);
+      const char *type_str = ob_obj_type_str(dest_type);
       if (ob_is_string_tc(dest_type)) {
-        length = node.int32_values_[1] < 0 ? static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH) : node.int32_values_[1];
-        if (share::is_oracle_mode()) {
+        length = node.int32_values_[1] < 0 ?
+            static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH) : node.int32_values_[1];
+        if (lib::is_oracle_mode()) {
           ObLengthSemantics length_semantics = const_expr->get_accuracy().get_length_semantics();
-          if (OB_FAIL(BUF_PRINTF("%s(%d %s)", type_str, length, get_length_semantics_str(length_semantics)))) {
+          const char* length_semantics_str = ob_is_nstring(dest_type) ?
+                            "" : get_length_semantics_str(length_semantics);
+          if (OB_FAIL(BUF_PRINTF("%s(%d %s)", type_str, length, length_semantics_str))) {
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           }
         } else {
@@ -2915,14 +3907,14 @@ int ObSysFunRawExpr::get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           }
         }
-      } else if (ob_is_text_tc(dest_type)) {
-        // TODO texttc should use default length
+      } else if(ob_is_text_tc(dest_type) || ob_is_json_tc(dest_type) || ob_is_geometry_tc(dest_type)) {
+        // TODO@hanhui texttc should use default length
         length = ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length();
         if (OB_FAIL(BUF_PRINTF("%s(%d)", type_str, length))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
         }
       } else if (ob_is_lob_tc(dest_type)) {
-        const char* dest_type_str = CS_TYPE_BINARY == coll_type ? "blob" : "clob";
+        const char *dest_type_str = CS_TYPE_BINARY == coll_type ? "blob" : "clob";
         if (OB_FAIL(BUF_PRINTF(dest_type_str, type_str, length))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
         }
@@ -2938,48 +3930,39 @@ int ObSysFunRawExpr::get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos
   return ret;
 }
 
-int ObSysFunRawExpr::get_column_conv_name(char* buf, int64_t buf_len, int64_t& pos, ExplainType explain_type) const
+int ObSysFunRawExpr::get_column_conv_name(char *buf, int64_t buf_len, int64_t &pos,
+                                          ExplainType explain_type) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || T_FUN_COLUMN_CONV != get_expr_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(buf), K(get_expr_type()), K(ret));
-  } else if (OB_ISNULL(get_param_expr(0)) || OB_ISNULL(get_param_expr(1)) || OB_ISNULL(get_param_expr(2)) ||
-             OB_ISNULL(get_param_expr(3)) || OB_ISNULL(get_param_expr(4))) {
+  } else if (OB_ISNULL(get_param_expr(0)) || OB_ISNULL(get_param_expr(1))
+             || OB_ISNULL(get_param_expr(2)) || OB_ISNULL(get_param_expr(3))
+             || OB_ISNULL(get_param_expr(4))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parm expr is NULL",
-        K(get_param_expr(0)),
-        K(get_param_expr(1)),
-        K(get_param_expr(2)),
-        K(get_param_expr(3)),
-        K(get_param_expr(4)),
-        K(ret));
+    LOG_WARN("parm expr is NULL", K(get_param_expr(0)), K(get_param_expr(1)),
+             K(get_param_expr(2)), K(get_param_expr(3)), K(get_param_expr(4)), K(ret));
   } else {
-    const ObConstRawExpr* type_expr = static_cast<const ObConstRawExpr*>(get_param_expr(0));
+    const ObConstRawExpr *type_expr = static_cast<const ObConstRawExpr*>(get_param_expr(0));
     ObObjType type = static_cast<ObObjType>(type_expr->get_value().get_int());
-    const ObConstRawExpr* collation_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
+    const ObConstRawExpr *collation_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
     common::ObCollationType cs_type = static_cast<common::ObCollationType>(collation_expr->get_value().get_int());
-    const ObConstRawExpr* accuracy_expr = static_cast<const ObConstRawExpr*>(get_param_expr(2));
+    const ObConstRawExpr *accuracy_expr = static_cast<const ObConstRawExpr*>(get_param_expr(2));
     int64_t accuray_value = accuracy_expr->get_value().get_int();
     ObAccuracy accuracy;
     accuracy.set_accuracy(accuray_value);
-    const ObConstRawExpr* bool_expr = static_cast<const ObConstRawExpr*>(get_param_expr(3));
+    const ObConstRawExpr *bool_expr = static_cast<const ObConstRawExpr*>(get_param_expr(3));
     bool is_nullable = bool_expr->get_value().get_bool();
-    const char* type_str = ob_obj_type_str(type);
+    const char *type_str = ob_obj_type_str(type);
     if (ob_is_string_type(type)) {
-      if (OB_FAIL(BUF_PRINTF("%s,%s,length:%d,%s,",
-              type_str,
-              ObCharset::collation_name(cs_type),
-              accuracy.get_length(),
-              is_nullable ? "NULL" : "NOT NULL"))) {
+      if (OB_FAIL(BUF_PRINTF("%s,%s,length:%d,%s,", type_str, ObCharset::collation_name(cs_type),
+                             accuracy.get_length(), is_nullable ? "NULL" : "NOT NULL"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     } else {
-      if (OB_FAIL(BUF_PRINTF("%s,PS:(%d,%d),%s,",
-              type_str,
-              accuracy.get_precision(),
-              accuracy.get_scale(),
-              is_nullable ? "NULL" : "NOT NULL"))) {
+      if (OB_FAIL(BUF_PRINTF("%s,PS:(%d,%d),%s,", type_str, accuracy.get_precision(),
+                             accuracy.get_scale(), is_nullable ? "NULL" : "NOT NULL"))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
@@ -2990,49 +3973,80 @@ int ObSysFunRawExpr::get_column_conv_name(char* buf, int64_t buf_len, int64_t& p
   return ret;
 }
 
-int ObSequenceRawExpr::assign(const ObSequenceRawExpr& other)
+int ObSysFunRawExpr::get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObAutoincNextvalExtra *autoinc_table_extra = NULL;
+  if (OB_ISNULL(buf) || T_FUN_SYS_AUTOINC_NEXTVAL != get_expr_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(buf), K(get_expr_type()), K(ret));
+  } else if (OB_ISNULL((autoinc_table_extra =
+          reinterpret_cast<ObAutoincNextvalExtra *>(extra_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra_ is null", K(ret));
+  } else {
+    ObString autoinc_table_name = autoinc_table_extra->autoinc_table_name_;
+    ObString autoinc_column_name = autoinc_table_extra->autoinc_column_name_;
+    ObString autoinc_qualified_name =
+            concat_qualified_name("", autoinc_table_name, autoinc_column_name);
+    if (OB_FAIL(BUF_PRINTF("%s.", autoinc_qualified_name.ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSequenceRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
       LOG_WARN("failed to assign sys raw expr");
     } else {
-      name_ = other.name_;
-      action_ = other.action_;
+      const ObSequenceRawExpr &tmp =
+          static_cast<const ObSequenceRawExpr &>(other);
+      database_name_ = tmp.database_name_;
+      name_ = tmp.name_;
+      action_ = tmp.action_;
+      sequence_id_ = tmp.sequence_id_;
     }
   }
   return ret;
 }
 
-int ObSequenceRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObSequenceRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObSequenceRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObSysFunRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObSysRawExpr failed", K(ret));
-    } else if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.name_, name_))) {
-        LOG_WARN("fail to write string", K(other.name_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.action_, action_))) {
-        LOG_WARN("fail to write string", K(other.action_), K(ret));
-      }
-    } else {
-      name_ = other.name_;
-      action_ = other.action_;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, database_name_, database_name_))) {
+      LOG_WARN("fail to write string", K(database_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, name_, name_))) {
+      LOG_WARN("fail to write string", K(name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, action_, action_))) {
+      LOG_WARN("fail to write string", K(action_), K(ret));
     }
   }
   return ret;
 }
 
-int ObSequenceRawExpr::set_sequence_meta(
-    const common::ObString& name, const common::ObString& action, uint64_t sequence_id)
+int ObSequenceRawExpr::set_sequence_meta(const common::ObString &database_name,
+                                         const common::ObString &name,
+                                         const common::ObString &action,
+                                         uint64_t sequence_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_write_string(*inner_alloc_, name, name_))) {
+  if (OB_FAIL(ob_write_string(*inner_alloc_, database_name, database_name_))) {
+    LOG_WARN("fail to write string", K(name), K(ret));
+  } else if (OB_FAIL(ob_write_string(*inner_alloc_, name, name_))) {
     LOG_WARN("fail to write string", K(name), K(ret));
   } else if (OB_FAIL(ob_write_string(*inner_alloc_, action, action_))) {
     LOG_WARN("fail to write string", K(action), K(ret));
@@ -3042,17 +4056,21 @@ int ObSequenceRawExpr::set_sequence_meta(
   return ret;
 }
 
-bool ObSequenceRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObSequenceRawExpr::inner_same_as(const ObRawExpr &expr,
+                                      ObExprEqualCheckContext *check_context) const
 {
   UNUSED(expr);
   UNUSED(check_context);
   return false;
 }
 
-int ObSequenceRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObSequenceRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                         ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF("%.*s.%.*s", name_.length(), name_.ptr(), action_.length(), action_.ptr()))) {
+  if (OB_FAIL(BUF_PRINTF("%.*s.%.*s",
+                         name_.length(), name_.ptr(),
+                         action_.length(), action_.ptr()))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
@@ -3061,13 +4079,12 @@ int ObSequenceRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
-int ObNormalDllUdfRawExpr::set_udf_meta(const share::schema::ObUDF& udf)
+int ObNormalDllUdfRawExpr::set_udf_meta(const share::schema::ObUDF &udf)
 {
   int ret = OB_SUCCESS;
   udf_meta_.tenant_id_ = udf.get_tenant_id();
@@ -3082,25 +4099,24 @@ int ObNormalDllUdfRawExpr::set_udf_meta(const share::schema::ObUDF& udf)
     LOG_WARN("fail to write string", K(udf.get_name_str()), K(ret));
   } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf.get_dl_str(), udf_meta_.dl_))) {
     LOG_WARN("fail to write string", K(udf.get_name_str()), K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObNormalDllUdfRawExpr::add_udf_attribute_name(const common::ObString& name)
+int ObNormalDllUdfRawExpr::add_udf_attribute_name(const common::ObString &name)
 {
   return udf_attributes_.push_back(name);
 }
 
-int ObNormalDllUdfRawExpr::add_udf_attribute(const ObRawExpr* expr, const ParseNode* node)
+int ObNormalDllUdfRawExpr::add_udf_attribute(const ObRawExpr* expr, const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the expr is null", K(ret), K(expr), K(node));
   } else if (expr->is_column_ref_expr()) {
-    const ObColumnRefRawExpr* col_expr = static_cast<const ObColumnRefRawExpr*>(expr);
-    const ObString& column_name = col_expr->get_column_name();
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+    const ObString &column_name = col_expr->get_column_name();
     if (OB_FAIL(add_udf_attribute_name(column_name))) {
       LOG_WARN("failed to udf's attribute name", K(ret));
     }
@@ -3113,135 +4129,732 @@ int ObNormalDllUdfRawExpr::add_udf_attribute(const ObRawExpr* expr, const ParseN
   return ret;
 }
 
-bool ObNormalDllUdfRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObNormalDllUdfRawExpr::inner_same_as(const ObRawExpr &expr,
+                                          ObExprEqualCheckContext *check_context) const
 {
+  //FIXME muhang 不太清楚这个same as的作用，先全部置为false
   UNUSED(expr);
   UNUSED(check_context);
   return false;
 }
 
-int ObNormalDllUdfRawExpr::assign(const ObNormalDllUdfRawExpr& other)
+int ObNormalDllUdfRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
       LOG_WARN("failed to assign sys raw expr");
     } else {
-      IGNORE_RETURN udf_meta_.assign(other.get_udf_meta());
+      const ObNormalDllUdfRawExpr &tmp =
+          static_cast<const ObNormalDllUdfRawExpr &>(other);
+      IGNORE_RETURN udf_meta_.assign(tmp.get_udf_meta());
     }
   }
   return ret;
 }
 
-int ObNormalDllUdfRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObNormalDllUdfRawExpr& other,
-    const uint64_t copy_types, bool use_new_allocator)
+int ObNormalDllUdfRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObSysFunRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObSysRawExpr failed", K(ret));
-    } else if (use_new_allocator) {
-      if (OB_ISNULL(inner_alloc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.udf_meta_.name_, udf_meta_.name_))) {
-        LOG_WARN("fail to write string", K(other.udf_meta_.name_), K(ret));
-      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.udf_meta_.dl_, udf_meta_.dl_))) {
-        LOG_WARN("fail to write string", K(other.udf_meta_.name_), K(ret));
-      } else {
-        udf_meta_.ret_ = other.udf_meta_.ret_;
-        udf_meta_.tenant_id_ = other.udf_meta_.tenant_id_;
-        udf_meta_.type_ = other.udf_meta_.type_;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("copy in Base class ObSysRawExpr failed", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf_meta_.name_, udf_meta_.name_))) {
+      LOG_WARN("fail to write string", K(udf_meta_.name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, udf_meta_.dl_, udf_meta_.dl_))) {
+      LOG_WARN("fail to write string", K(udf_meta_.name_), K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < udf_attributes_.count(); ++i) {
+      if (OB_FAIL(ob_write_string(*inner_alloc_,
+                                  udf_attributes_.at(i),
+                                  udf_attributes_.at(i)))) {
+        LOG_WARN("failed to write string", K(ret));
       }
-    } else {
-      IGNORE_RETURN udf_meta_.assign(other.get_udf_meta());
     }
   }
   return ret;
 }
 
-int ObPLSQLCodeSQLErrmRawExpr::assign(const ObPLSQLCodeSQLErrmRawExpr& other)
+int ObCollectionConstructRawExpr::set_access_names(
+  const common::ObIArray<ObObjAccessIdent> &access_idents)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idents.count(); ++i) {
+    OZ (access_names_.push_back(access_idents.at(i).access_name_));
+  }
+  return ret;
+}
+
+int ObCollectionConstructRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    OZ(ObSysFunRawExpr::assign(other));
-    OX(is_sqlcode_ = other.is_sqlcode_);
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObCollectionConstructRawExpr &tmp =
+          static_cast<const ObCollectionConstructRawExpr &>(other);
+      type_ = tmp.type_;
+      capacity_ = tmp.capacity_;
+      udt_id_ = tmp.udt_id_;
+      elem_type_ = tmp.elem_type_;
+      if (OB_FAIL(access_names_.assign(tmp.access_names_))) {
+        LOG_WARN("failed to assign access names", K(ret));
+      }
+    }
   }
   return ret;
 }
 
-int ObPLSQLCodeSQLErrmRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObPLSQLCodeSQLErrmRawExpr& other,
-    const uint64_t copy_types, bool use_new_allocator)
+int ObCollectionConstructRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    pl::ObPLDataType new_elem_type_;
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(new_elem_type_.deep_copy(*inner_alloc_, elem_type_))) {
+      LOG_WARN("faile to copy elem type", K(ret));
+    } else {
+      elem_type_ = new_elem_type_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_names_.count(); ++i) {
+        if (OB_FAIL(ob_write_string(*inner_alloc_,
+                                    access_names_.at(i),
+                                    access_names_.at(i)))) {
+          LOG_WARN("failed to copy string", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObCollectionConstructRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprCollectionConstruct *coll_op = NULL;
+  if (T_FUN_PL_COLLECTION_CONSTRUCT == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make collection construct operator failed", K(ret));
+    }
+    CK (OB_NOT_NULL(coll_op = static_cast<ObExprCollectionConstruct *>(expr_op)));
+    OX (coll_op->set_type(type_));
+    OX (coll_op->set_capacity(capacity_));
+    OX (coll_op->set_udt_id(udt_id_));
+    if (OB_SUCC(ret)) {
+      if (elem_type_.is_obj_type()) {
+        CK (OB_NOT_NULL(elem_type_.get_data_type()));
+        OX (coll_op->set_elem_type(*(elem_type_.get_data_type())));
+      } else {
+        ObDataType data_type;
+        data_type.set_obj_type(ObExtendType);
+        OX (coll_op->set_elem_type(data_type));
+      }
+    }
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObObjectConstructRawExpr::set_access_names(
+  const common::ObIArray<ObObjAccessIdent> &access_idents)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idents.count(); ++i) {
+    OZ (access_names_.push_back(access_idents.at(i).access_name_));
+  }
+  return ret;
+}
+
+int ObObjectConstructRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    OZ(ObSysFunRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator));
-    OX(is_sqlcode_ = other.is_sqlcode_);
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObObjectConstructRawExpr &tmp =
+          static_cast<const ObObjectConstructRawExpr &>(other);
+      rowsize_ = tmp.rowsize_;
+      udt_id_ = tmp.udt_id_;
+      if (OB_FAIL(elem_types_.assign(tmp.elem_types_))) {
+        LOG_WARN("failed to assign elem types", K(ret));
+      } else if (OB_FAIL(access_names_.assign(tmp.access_names_))) {
+        LOG_WARN("failed to assgin access names", K(ret));
+      }
+    }
   }
   return ret;
 }
 
-ObExprOperator* ObPLSQLCodeSQLErrmRawExpr::get_op()
-{
-  return NULL;
-}
-
-int ObSetOpRawExpr::do_visit(ObRawExprVisitor& visitor)
-{
-  return visitor.visit(*this);
-}
-
-int ObSetOpRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObObjectConstructRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    CK (OB_NOT_NULL(inner_alloc_));
+    for (int64_t i = 0; OB_SUCC(ret) && i < elem_types_.count(); ++i) {
+      ObObj param;
+      OZ (deep_copy_obj(*inner_alloc_, elem_types_.at(i).get_param(), param));
+      OX (elem_types_.at(i).set_param(param));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_names_.count(); ++i) {
+      OZ (ob_write_string(*inner_alloc_, access_names_.at(i), access_names_.at(i)));
+    }
   }
   return ret;
 }
 
-bool ObSetOpRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+ObExprOperator *ObObjectConstructRawExpr::get_op()
 {
-  bool bool_ret = false;
-  UNUSED(check_context);
-  if (&expr == this) {
-    bool_ret = true;
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprObjectConstruct *object_op = NULL;
+  if (T_FUN_PL_OBJECT_CONSTRUCT == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make object construct operator failed", K(ret));
+    }
+    CK (OB_NOT_NULL(object_op = static_cast<ObExprObjectConstruct *>(expr_op)));
+    OZ (object_op->set_elem_types(elem_types_));
+    OX (object_op->set_rowsize(rowsize_));
+    OX (object_op->set_udt_id(udt_id_));
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObPlQueryRefRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
+      LOG_WARN("failed to assign raw expr", K(ret));
+    } else {
+      const ObPlQueryRefRawExpr &tmp = static_cast<const ObPlQueryRefRawExpr &>(other);
+      OZ (exprs_.assign(tmp.exprs_));
+      OX (ps_sql_ = tmp.ps_sql_);
+      OX (type_ = tmp.type_);
+      OX (route_sql_ = tmp.route_sql_);
+      OX (subquery_result_type_ = tmp.subquery_result_type_);
+    }
+  }
+  return ret;
+}
+
+DEFINE_SERIALIZE(ObUDFParamDesc)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(type_);
+  OB_UNIS_ENCODE(id1_);
+  OB_UNIS_ENCODE(id2_);
+  OB_UNIS_ENCODE(id3_);
+  return ret;
+}
+
+DEFINE_DESERIALIZE(ObUDFParamDesc)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(type_);
+  OB_UNIS_DECODE(id1_);
+  OB_UNIS_DECODE(id2_);
+  OB_UNIS_DECODE(id3_);
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObUDFParamDesc)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(type_);
+  OB_UNIS_ADD_LEN(id1_);
+  OB_UNIS_ADD_LEN(id2_);
+  OB_UNIS_ADD_LEN(id3_);
+  return len;
+}
+
+int ObPlQueryRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to deep copy raw expr fileds", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    CK (OB_NOT_NULL(inner_alloc_));
+    OZ (ob_write_string(*inner_alloc_, route_sql_, route_sql_));
+  }
+  return ret;
+}
+
+int ObUDFRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
+    } else {
+      const ObUDFRawExpr &tmp =
+          static_cast<const ObUDFRawExpr &>(other);
+      udf_id_ = tmp.udf_id_;
+      pkg_id_ = tmp.pkg_id_;
+      type_id_ = tmp.type_id_;
+      subprogram_path_ = tmp.subprogram_path_;
+      udf_schema_version_ = tmp.udf_schema_version_;
+      pkg_schema_version_ = tmp.pkg_schema_version_;
+      pls_type_ = tmp.pls_type_;
+      params_type_ = tmp.params_type_;
+      database_name_ = tmp.database_name_;
+      package_name_ = tmp.package_name_;
+      is_parallel_enable_ = tmp.is_parallel_enable_;
+      is_udt_udf_ = tmp.is_udt_udf_;
+      is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
+      is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
+      is_aggregate_udf_ = tmp.is_aggregate_udf_;
+      is_aggr_udf_distinct_ = tmp.is_aggr_udf_distinct_;
+      nocopy_params_ = tmp.nocopy_params_;
+      loc_ = tmp.loc_;
+      is_udt_cons_ = tmp.is_udt_cons_;
+      params_name_ = tmp.params_name_;
+      params_desc_v2_ = tmp.params_desc_v2_;
+      result_type_ = tmp.result_type_;
+    }
+  }
+  return ret;
+}
+
+int ObUDFRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("copy in Base class ObOpRawExpr failed", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    CK (OB_NOT_NULL(inner_alloc_));
+    OZ (ob_write_string(*inner_alloc_, database_name_, database_name_));
+    OZ (ob_write_string(*inner_alloc_, package_name_, package_name_));
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_type_.count(); ++i) {
+      ObExprResType &param_type = params_type_.at(i);
+      ObObj param;
+      OZ (deep_copy_obj(*inner_alloc_, param_type.get_param(), param));
+      OX (param_type.set_param(param));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_name_.count(); ++i) {
+      CK (OB_NOT_NULL(inner_alloc_));
+      OZ (ob_write_string(*inner_alloc_, params_name_.at(i), params_name_.at(i)));
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObUDFRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprUDF *udf_op = NULL;
+  if (T_FUN_UDF == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+	    ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make user defined function operator failed", K(ret));
+    } else if (OB_ISNULL(udf_op = static_cast<ObExprUDF*>(expr_op))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast expr to udf", K(ret));
+    } else {
+      udf_op->set_udf_id(udf_id_);
+      udf_op->set_udf_package_id(pkg_id_);
+      udf_op->set_result_type(result_type_);
+      OZ (udf_op->set_subprogram_path(subprogram_path_));
+      OZ (udf_op->set_params_type(params_type_));
+      OZ (udf_op->set_params_desc(params_desc_v2_));
+      OZ (udf_op->set_nocopy_params(nocopy_params_));
+    }
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObUDFRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                    ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+  if (!get_database_name().empty()) {
+    OZ (BUF_PRINTF("%.*s.", get_database_name().length(), get_database_name().ptr()));
+  }
+  if (!get_package_name().empty()) {
+    OZ (BUF_PRINTF("%.*s.", get_package_name().length(), get_package_name().ptr()));
+  }
+  OZ (ObSysFunRawExpr::get_name_internal(buf, buf_len, pos, type));
+  return ret;
+}
+
+bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
+                                 ObExprEqualCheckContext *check_context) const
+
+{
+  bool bool_ret = true;
+  if (this == &expr) {
+    // do nothing
+  } else if (!is_deterministic() && (NULL == check_context ||
+                                     (NULL != check_context && check_context->need_check_deterministic_))) {
+    bool_ret = false;
+  } else if (!ObSysFunRawExpr::inner_same_as(expr, check_context)) {
+    bool_ret = false;
+  } else {
+    const ObUDFRawExpr *other = static_cast<const ObUDFRawExpr *>(&expr);
+    bool_ret = udf_id_ == other->get_udf_id() &&
+                pkg_id_ == other->get_pkg_id() &&
+                type_id_ == other->get_type_id() &&
+                pls_type_ == other->get_pls_type() &&
+                database_name_.compare(other->get_database_name()) == 0 &&
+                package_name_.compare(other->get_package_name()) == 0 &&
+                is_deterministic() == other->is_deterministic() &&
+                is_parallel_enable_ == other->is_parallel_enable() &&
+                is_udt_udf_ == other->get_is_udt_udf() &&
+                is_pkg_body_udf_ == other->is_pkg_body_udf() &&
+                is_return_sys_cursor_ == other->get_is_return_sys_cursor() &&
+                is_aggregate_udf_ == other->get_is_aggregate_udf() &&
+                is_aggr_udf_distinct_ == other->get_is_aggr_udf_distinct() &&
+                loc_ == other->get_loc() &&
+                is_udt_cons_ == other->get_is_udt_cons() &&
+                subprogram_path_.count() == other->get_subprogram_path().count() &&
+                params_type_.count() == other->get_params_type().count() &&
+                nocopy_params_.count() == other->get_nocopy_params().count() &&
+                params_name_.count() == other->get_params_name().count() &&
+                params_desc_v2_.count() == other->get_params_desc().count();
+    for (int64_t i = 0; bool_ret && i < subprogram_path_.count(); ++i) {
+      bool_ret = subprogram_path_.at(i) == other->get_subprogram_path().at(i);
+    }
+    for (int64_t i = 0; bool_ret && i < params_type_.count(); ++i) {
+      bool_ret = params_type_.at(i) == other->get_params_type().at(i);
+    }
+    for (int64_t i = 0; bool_ret && i < nocopy_params_.count(); ++i) {
+      bool_ret = nocopy_params_.at(i) == other->get_nocopy_params().at(i);
+    }
+    for (int64_t i = 0; bool_ret && i < params_name_.count(); ++i) {
+      bool_ret = params_name_.at(i).compare(other->get_params_name().at(i)) == 0;
+    }
+    for (int64_t i = 0; bool_ret && i < params_desc_v2_.count(); ++i) {
+      bool_ret = params_desc_v2_.at(i) == other->get_params_desc().at(i);
+    }
   }
   return bool_ret;
 }
 
-int ObSetOpRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObSetOpRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+{
+  int ret = OB_SUCCESS;
+  /*!
+   * schema_version will be set when call ObRawExprUtils::resolve_udf_common_info
+   *
+   * udf_schema_version != OB_INVALID_VERSION && pkg_schema_version != OB_INVALID_VERSION :
+   *  NOTICE : UNEXPECTED!!!
+   * udf_schema_version != OB_INVALID_VERSION : standalone function call , add udf dependency
+   * pkg_schema_version != OB_INVALID_VERSION : package function call, add package dependency
+   * udf_schema_version == OB_INVALID_VERSION && pkg_schema_version == OB_INVALID_VERSION :
+   *  subprogram function call, do not need add dependency
+   */
+  CK (!(udf_schema_version_ != OB_INVALID_VERSION && pkg_schema_version_ != OB_INVALID_VERSION));
+  if (OB_FAIL(ret)) {
+  } else if (udf_schema_version_ != common::OB_INVALID_VERSION) {
+    CK (udf_id_ != common::OB_INVALID_ID);
+    OX (obj_version.object_id_ = udf_id_);
+    OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+    OX (obj_version.version_ = udf_schema_version_);
+  } else if (pkg_schema_version_ != common::OB_INVALID_VERSION) {
+    CK (pkg_id_ != common::OB_INVALID_ID);
+    OX (obj_version.object_id_ = pkg_id_);
+    if (!is_udt_udf_) {
+      OX (obj_version.object_type_ =
+      is_pkg_body_udf_ ? share::schema::DEPENDENCY_PACKAGE_BODY
+                         : share::schema::DEPENDENCY_PACKAGE);
+    } else {
+      OX (obj_version.object_type_ =
+      is_pkg_body_udf_ ? share::schema::DEPENDENCY_TYPE_BODY
+                         : share::schema::DEPENDENCY_TYPE);
+    }
+    OX (obj_version.version_ = pkg_schema_version_);
+  } else {
+    CK (udf_schema_version_ == OB_INVALID_VERSION && pkg_schema_version_ == OB_INVALID_VERSION);
+    // do nothing ...
+  }
+  return ret;
+}
+
+int ObPLIntegerCheckerRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("copy in Base class ObTerminalRawExpr failed", K(ret));
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
     } else {
-      idx_ = other.idx_;
+      const ObPLIntegerCheckerRawExpr &tmp =
+          static_cast<const ObPLIntegerCheckerRawExpr &>(other);
+      pl_integer_type_ = tmp.pl_integer_type_;
+      pl_integer_range_ = tmp.pl_integer_range_;
     }
   }
   return ret;
 }
 
-int ObSetOpRawExpr::assign(const ObSetOpRawExpr& other)
+int ObPLGetCursorAttrRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObPLGetCursorAttrRawExpr &tmp =
+          static_cast<const ObPLGetCursorAttrRawExpr &>(other);
+      cursor_info_ = tmp.cursor_info_;
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObPLGetCursorAttrRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprPLGetCursorAttr *op = NULL;
+  if (T_FUN_PL_GET_CURSOR_ATTR == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObSysFunRawExpr::get_op())) {
+	    ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make user defined function operator failed", K(ret));
+    } else if (OB_ISNULL(op = static_cast<ObExprPLGetCursorAttr*>(expr_op))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast expr to udf", K(ret));
+    } else {
+      OX (op->set_pl_get_cursor_attr_info(get_pl_get_cursor_attr_info()));
+    }
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObPLSQLCodeSQLErrmRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObPLSQLCodeSQLErrmRawExpr &tmp =
+          static_cast<const ObPLSQLCodeSQLErrmRawExpr &>(other);
+      is_sqlcode_ = tmp.is_sqlcode_;
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObPLSQLCodeSQLErrmRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprPLSQLCodeSQLErrm *op = NULL;
+  if (T_FUN_PL_SQLCODE_SQLERRM == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+	    ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make user defined function operator failed", K(ret));
+    } else if (OB_ISNULL(op = static_cast<ObExprPLSQLCodeSQLErrm*>(expr_op))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast expr to udf", K(ret));
+    } else {
+      op->set_is_sqlcode(get_is_sqlcode());
+    }
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObPLSQLVariableRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObPLSQLVariableRawExpr &tmp =
+          static_cast<const ObPLSQLVariableRawExpr &>(other);
+      plsql_line_ = tmp.plsql_line_;
+      plsql_variable_ = tmp.plsql_variable_;
+    }
+  }
+  return ret;
+}
+
+int ObPLSQLVariableRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, plsql_variable_, plsql_variable_))) {
+      LOG_WARN("failed to copy plsql variable", K(ret));
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObPLSQLVariableRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprPLSQLVariable *op = NULL;
+  if (T_FUN_PLSQL_VARIABLE == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make plsql variable operator failed", K(ret));
+    } else if (OB_ISNULL(op = static_cast<ObExprPLSQLVariable *>(expr_op))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to cast expr to ObExprPLSQLVariable", K(ret));
+    } else {
+      op->set_plsql_line(get_plsql_line());
+      op->deep_copy_plsql_variable(get_plsql_variable());
+    }
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+int ObCallParamRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObCallParamRawExpr &tmp =
+          static_cast<const ObCallParamRawExpr &>(other);
+      name_ = tmp.name_;
+      expr_ = tmp.expr_;
+    }
+  }
+  return ret;
+}
+
+int ObCallParamRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObOpRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (OB_FAIL(copier.copy(expr_))) {
+    LOG_WARN("failed to copy expr", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    CK (OB_NOT_NULL(inner_alloc_));
+    OZ (ob_write_string(*inner_alloc_, name_, name_));
+  }
+  return ret;
+}
+
+int ObSetOpRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+int ObSetOpRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                 const ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+bool ObSetOpRawExpr::inner_same_as(const ObRawExpr &expr,
+                             ObExprEqualCheckContext *check_context) const
+{
+  bool bool_ret = false;
+  UNUSED(check_context);
+  if (get_expr_type() != expr.get_expr_type()) {
+  } else if (&expr == this) {
+    bool_ret = true;
+  } else if (OB_UNLIKELY(check_context != NULL) &&
+             OB_UNLIKELY(check_context->override_set_op_compare_)) {
+    bool_ret = check_context->compare_set_op_expr(*this,
+                                                  static_cast<const ObSetOpRawExpr &>(expr));
+  }
+  return bool_ret;
+}
+
+bool ObExprEqualCheckContext::compare_set_op_expr(const ObSetOpRawExpr& left,
+                                                  const ObSetOpRawExpr& right)
+{
+  return &left == &right;
+}
+
+int ObSetOpRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
     } else {
-      idx_ = other.idx_;
+      const ObSetOpRawExpr &tmp =
+          static_cast<const ObSetOpRawExpr &>(other);
+      idx_ = tmp.idx_;
     }
   }
   return ret;
 }
 
-int ObSetOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObSetOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                      ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  const char* op_name = "UNKNOWN";
+  const char *op_name = "UNKNOWN";
   switch (get_expr_type()) {
     case T_OP_UNION:
       op_name = "UNION";
@@ -3260,11 +4873,10 @@ int ObSetOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t&
       break;
   }
   if (OB_FAIL(ret)) {
-    // do nothing
+    //do nothing
   } else if (OB_FAIL(BUF_PRINTF("%s([%ld])", op_name, idx_ + 1))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
-  } else {
-  }
+  } else {}
   if (OB_SUCCESS == ret && EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -3272,197 +4884,50 @@ int ObSetOpRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t&
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
-const ObRawExpr* ObFunMatchAgainst::get_param_expr(int64_t index) const
-{
-  const ObRawExpr* ret = NULL;
-  if (index < 0 || index >= 2) {
-    // do nothing
-  } else if (0 == index) {
-    ret = match_columns_;
-  } else if (1 == index) {
-    ret = search_key_;
-  }
-  return ret;
-}
-
-ObRawExpr*& ObFunMatchAgainst::get_param_expr(int64_t index)
-{
-  ObRawExpr** ret = &USELESS_POINTER;
-  if (index < 0 || index >= 2) {
-    // do nothing
-  } else if (0 == index) {
-    ret = &match_columns_;
-  } else if (1 == index) {
-    ret = &search_key_;
-  }
-  return *ret;
-}
-
-void ObFunMatchAgainst::clear_child()
-{
-  match_columns_ = NULL;
-  search_key_ = NULL;
-  real_column_ = NULL;
-  //  search_tree_ = NULL;
-  mode_flag_ = NATURAL_LANGUAGE_MODE;
-}
-
-int ObFunMatchAgainst::replace_expr(
-    const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, match_columns_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, search_key_))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
-int ObFunMatchAgainst::do_visit(ObRawExprVisitor& visitor)
-{
-  return visitor.visit(*this);
-}
-
-bool ObFunMatchAgainst::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
-{
-  bool bret = false;
-  if (expr.is_domain_index_func()) {
-    bret = true;
-    const ObFunMatchAgainst& other_ma = static_cast<const ObFunMatchAgainst&>(expr);
-    for (int64_t i = 0; bret && i < other_ma.get_param_count(); ++i) {
-      if (OB_ISNULL(other_ma.get_param_expr(i)) || OB_ISNULL(get_param_expr(i))) {
-        bret = false;
-      } else {
-        bret = get_param_expr(i)->same_as(*(other_ma.get_param_expr(i)), check_context);
-      }
-    }
-    if (bret) {
-      bret = (mode_flag_ == other_ma.mode_flag_);
-    }
-  }
-  return bret;
-}
-
-uint64_t ObFunMatchAgainst::hash_internal(uint64_t seed) const
-{
-  uint64_t hash_value = seed;
-  for (int64_t i = 0; i < get_param_count(); ++i) {
-    if (NULL != get_param_expr(i)) {
-      hash_value = do_hash(*get_param_expr(i), hash_value);
-    }
-  }
-  return hash_value;
-}
-
-int ObFunMatchAgainst::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
-{
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
-int ObSetIterRawExpr::do_visit(ObRawExprVisitor& visitor)
-{
-  return visitor.visit(*this);
-}
-
-int ObSetIterRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
-{
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
-ObRawExpr*& ObSetIterRawExpr::get_param_expr(int64_t index)
-{
-  ObRawExpr** expr = &USELESS_POINTER;
-  if (0 == index) {
-    expr = &left_iter_;
-  } else if (1 == index) {
-    expr = &right_iter_;
-  }
-  return *expr;
-}
-
-const ObRawExpr* ObSetIterRawExpr::get_param_expr(int64_t index) const
-{
-  const ObRawExpr* ret = NULL;
-  if (0 == index) {
-    ret = left_iter_;
-  } else if (1 == index) {
-    ret = right_iter_;
-  }
-  return ret;
-}
-
-int ObRowIterRawExpr::do_visit(ObRawExprVisitor& visitor)
-{
-  return visitor.visit(*this);
-}
-
-int ObRowIterRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
-{
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
-int Bound::deep_copy(
-    ObRawExprFactory& expr_factory, const Bound& other, const uint64_t copy_types, bool use_new_allocator /*= false*/)
+int Bound::assign(const Bound &other)
 {
   int ret = OB_SUCCESS;
   type_ = other.type_;
   is_preceding_ = other.is_preceding_;
   is_nmb_literal_ = other.is_nmb_literal_;
-  if (OB_FAIL(ObRawExprUtils::copy_expr(
-          expr_factory, other.interval_expr_, interval_expr_, copy_types, use_new_allocator))) {
-    LOG_WARN("failed to copy bound", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                 expr_factory, other.date_unit_expr_, date_unit_expr_, copy_types, use_new_allocator))) {
-    LOG_WARN("failed to copy bound", K(ret));
-  }
-  for (int i = 0; OB_SUCC(ret) && i < BOUND_EXPR_MAX; ++i) {
-    if (OB_ISNULL(other.exprs_[i])) {
-      // do nothing
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                   expr_factory, other.exprs_[i], exprs_[i], copy_types, use_new_allocator))) {
-      LOG_WARN("failed to copy bound expr", K(ret));
-    }
+  interval_expr_ = other.interval_expr_;
+  date_unit_expr_ = other.date_unit_expr_;
+  for (int64_t i = 0; i < BOUND_EXPR_MAX; ++i) {
+    exprs_[i] = other.exprs_[i];
   }
   return ret;
 }
 
-int Bound::replace_expr(const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs)
+int Bound::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, interval_expr_))) {
+  if (OB_FAIL(copier.copy(date_unit_expr_))) {
+    LOG_WARN("failed to copy date unit expr", K(ret));
+  }
+  return ret;
+}
+
+int Bound::replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                        const common::ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::replace_expr(
+                other_exprs, new_exprs, interval_expr_))) {
     LOG_WARN("failed to repalce exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, date_unit_expr_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(
+                other_exprs, new_exprs, date_unit_expr_))) {
     LOG_WARN("failed to repalce exprs", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < BOUND_EXPR_MAX; ++i) {
     if (OB_ISNULL(exprs_[i])) {
       // do nothing
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs, exprs_[i]))) {
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(
+                         other_exprs, new_exprs, exprs_[i]))) {
       LOG_WARN("failed to replace bound expr", K(ret));
     }
   }
@@ -3519,7 +4984,7 @@ int ObFrame::assign(const ObFrame &other)
   return ret;
 }
 
-int ObWindow::assign(const ObWindow& other)
+int ObWindow::assign(const ObWindow &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
@@ -3543,164 +5008,191 @@ void ObWinFunRawExpr::clear_child()
   order_items_.reset();
 }
 
-int ObWinFunRawExpr::assign(const ObWinFunRawExpr& other)
+int ObWinFunRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
       LOG_WARN("failed to assign raw expr", K(ret));
-    } else if (OB_FAIL(ObWindow::assign(other))) {
-      LOG_WARN("failed to assign window", K(ret));
-    } else if (OB_FAIL(func_params_.assign(other.func_params_))) {
-      LOG_WARN("failed to assign func params", K(ret));
     } else {
-      func_type_ = other.func_type_;
-      is_distinct_ = other.is_distinct_;
-      is_ignore_null_ = other.is_ignore_null_;
-      is_from_first_ = other.is_from_first_;
-      agg_expr_ = other.agg_expr_;
-      sort_str_ = other.sort_str_;
-      MEMCPY(upper_.exprs_, other.upper_.exprs_, BOUND_EXPR_MAX);
-      MEMCPY(lower_.exprs_, other.lower_.exprs_, BOUND_EXPR_MAX);
+      const ObWinFunRawExpr &tmp =
+          static_cast<const ObWinFunRawExpr &>(other);
+      if (OB_FAIL(ObWindow::assign(tmp))) {
+        LOG_WARN("failed to assign window", K(ret));
+      } else if (OB_FAIL(func_params_.assign(tmp.func_params_))) {
+        LOG_WARN("failed to assign func params", K(ret));
+      } else if (OB_FAIL(upper_.assign(tmp.upper_))) {
+        LOG_WARN("failed to assign upper bound", K(ret));
+      } else if (OB_FAIL(lower_.assign(tmp.lower_))) {
+        LOG_WARN("failed to assign lower bound", K(ret));
+      } else {
+        func_type_ = tmp.func_type_;
+        is_distinct_ = tmp.is_distinct_;
+        is_ignore_null_ = tmp.is_ignore_null_;
+        is_from_first_ = tmp.is_from_first_;
+        agg_expr_ = tmp.agg_expr_;
+        sort_str_ = tmp.sort_str_;
+        pl_agg_udf_expr_ = tmp.pl_agg_udf_expr_;
+      }
     }
   }
   return ret;
 }
 
-int ObWinFunRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObWinFunRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+/**
+ * @brief ObWinFunRawExpr::inner_deep_copy
+ * A winfun expr contains a aggr expr as its first param.
+ * The aggr expr is owned by the winfunc expr.
+ * Hence, copying the winfunc expr always results in copying the aggr expr.
+ * @return
+ */
+int ObWinFunRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("failed to assign raw expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_expr(expr_factory,
-                   other.agg_expr_,
-                   reinterpret_cast<ObRawExpr*&>(agg_expr_),
-                   COPY_REF_SHARED,
-                   use_new_allocator))) {
-      LOG_WARN("failed to copy win func", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                   expr_factory, other.func_params_, func_params_, COPY_REF_DEFAULT, use_new_allocator))) {
-      LOG_WARN("failed to copy func params", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                   expr_factory, other.partition_exprs_, partition_exprs_, COPY_REF_DEFAULT, use_new_allocator))) {
-      LOG_WARN("failed to copy partition exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::deep_copy_order_items(
-                   expr_factory, other.order_items_, order_items_, COPY_REF_DEFAULT, use_new_allocator))) {
-      LOG_WARN("failed to copy order item", K(ret));
-    } else if (OB_FAIL(upper_.deep_copy(expr_factory, other.upper_, COPY_REF_DEFAULT, use_new_allocator))) {
-      LOG_WARN("failed to copy upper bound", K(ret));
-    } else if (OB_FAIL(lower_.deep_copy(expr_factory, other.lower_, COPY_REF_DEFAULT, use_new_allocator))) {
-      LOG_WARN("failed to copy lower bound", K(ret));
+  ObRawExpr *new_agg_expr = NULL;
+  if (OB_FAIL(ObRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (OB_FAIL(copier.copy(pl_agg_udf_expr_))) {
+    LOG_WARN("failed to copy partition exprs", K(ret));
+  } else if (OB_FAIL(upper_.inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy upper bound", K(ret));
+  } else if (OB_FAIL(lower_.inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy lower bound", K(ret));
+  } else if (NULL != agg_expr_) {
+    if (OB_FAIL(copier.do_copy_expr(agg_expr_, new_agg_expr))) {
+      LOG_WARN("failed to create and copy expr", K(ret), K(agg_expr_));
+    } else if (OB_ISNULL(new_agg_expr) || OB_UNLIKELY(!new_agg_expr->is_aggr_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new aggregation expr is invalid", K(ret), K(new_agg_expr));
     } else {
-      func_type_ = other.func_type_;
-      is_distinct_ = other.is_distinct_;
-      is_from_first_ = other.is_from_first_;
-      is_ignore_null_ = other.is_ignore_null_;
-      win_type_ = other.win_type_;
-      is_between_ = other.is_between_;
+      agg_expr_ = static_cast<ObAggFunRawExpr *>(new_agg_expr);
+    }
+  }
+  if (OB_SUCC(ret) && copier.deep_copy_attributes()) {
+    if (OB_ISNULL(inner_alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner alloc is null", K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, sort_str_, sort_str_))) {
+      LOG_WARN("failed to copy string", K(ret));
     }
   }
   return ret;
 }
 
-int ObWinFunRawExpr::replace_param_expr(int64_t index, ObRawExpr* expr)
+int64_t ObWinFunRawExpr::get_partition_param_index(int64_t index)
+{
+  int64_t count = agg_expr_ != NULL ? agg_expr_->get_param_count() : 0;
+  count = pl_agg_udf_expr_ != NULL ? count + 1 : count;
+  count += func_params_.count();
+  count += index;
+  return count;
+}
+
+int ObWinFunRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
-  int64_t count = agg_expr_ != NULL ? agg_expr_->get_param_count() : 0;
-  count += func_params_.count();
+  int64_t count = get_partition_param_index(0);
   if (index < count || index >= count + partition_exprs_.count()) {
     ret = common::OB_INVALID_ARGUMENT;
     LOG_WARN("only replace partition expr supported", K(ret), K(index), K(*this));
   } else {
-    ObRawExpr*& target_expr = partition_exprs_.at(index - count);
-    if (OB_NOT_NULL(expr) && expr != target_expr) {
-      expr->set_orig_expr(target_expr);
-    }
+    ObRawExpr *&target_expr = partition_exprs_.at(index - count);
     target_expr = expr;
   }
   return ret;
 }
 
-int ObWinFunRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObWinFunRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                  const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(
-                 ObTransformUtils::replace_expr(other_exprs, new_exprs, reinterpret_cast<ObRawExpr*&>(agg_expr_)))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(
+                       other_exprs, new_exprs,
+                       reinterpret_cast<ObRawExpr *&>(agg_expr_)))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, func_params_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     func_params_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, partition_exprs_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     partition_exprs_))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr_for_order_item(other_exprs, new_exprs, order_items_))) {
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    pl_agg_udf_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr_for_order_item(other_exprs,
+                                                                   new_exprs,
+                                                                   order_items_))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else if (OB_FAIL(upper_.replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr in upper bound", K(ret));
   } else if (OB_FAIL(lower_.replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr in lower bound", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-bool ObWinFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObWinFunRawExpr::inner_same_as(const ObRawExpr &expr,
+                                    ObExprEqualCheckContext *check_context) const
 {
   bool bret = false;
   if (expr.is_win_func_expr()) {
     bret = true;
     const ObWinFunRawExpr &other_ma = static_cast<const ObWinFunRawExpr&>(expr);
+    //对窗口函数的类型做检查，如果类型不同即不同
     if (other_ma.get_func_type() != get_func_type() ||
         other_ma.get_window_type() != get_window_type() ||
         other_ma.is_between() != is_between()) {
       bret = false;
-      // Because name window will construct a window function of count(1) over,
-      // here we need to compare the name of name Windows
-      // If it is in mysql mode, the name is sensitive,
-      // and there is no need to de-duplicate when generating count(1) over.
-      // The oracle mode is true.
+    //由于name window会构造一个count(1) over的窗口函数，这里我们需要比较的是name Windows的名称
+    //如果是mysql模式下，名称是敏感的，在生成count(1) over的时候不需要去重。oracle模式为true.
     } else if (0 != other_ma.win_name_.case_compare(win_name_)) {
       bret = false;
-    } else if (T_WIN_FUN_NTH_VALUE == other_ma.get_func_type() &&
-               (other_ma.is_from_first_ != is_from_first_ || other_ma.is_ignore_null_ != is_ignore_null_)) {
+    //如果是nth_value，有可能是first_value或者last_value转换成的，故需要检查is_from_first_字段
+    //和is_ignore_null_两个字段。
+    } else if (T_WIN_FUN_NTH_VALUE == other_ma.get_func_type()
+        && (other_ma.is_from_first_ != is_from_first_
+        || other_ma.is_ignore_null_ != is_ignore_null_)) {
       bret = false;
-    } else if ((T_WIN_FUN_LAG == other_ma.get_func_type() || T_WIN_FUN_LEAD == other_ma.get_func_type()) &&
-               other_ma.is_ignore_null_ != is_ignore_null_) {
+    //对于lead和lag两个函数也需要检查is_ignore_null_这个字段
+    } else if ((T_WIN_FUN_LAG == other_ma.get_func_type()
+        || T_WIN_FUN_LEAD == other_ma.get_func_type())
+        && other_ma.is_ignore_null_ != is_ignore_null_) {
       bret = false;
+    //如果是聚集函数的窗口函数，需要比较聚集函数。
     } else if (agg_expr_ != NULL && other_ma.agg_expr_ != NULL) {
       bret = agg_expr_->same_as(*(other_ma.agg_expr_), check_context) ? true : false;
-    } else { /* do nothing. */
-    }
+    } else if (pl_agg_udf_expr_ != NULL && other_ma.pl_agg_udf_expr_ != NULL) {
+      bret = pl_agg_udf_expr_->same_as(*(other_ma.pl_agg_udf_expr_), check_context) ? true : false;
+    } else { /* do nothing. */ }
 
+    //如果之上都是相同的，需要比较窗口属性
     if (!bret) {
     } else if (other_ma.get_param_count() != get_param_count()
                || other_ma.func_params_.count() != func_params_.count()
                || other_ma.partition_exprs_.count() != partition_exprs_.count()
                || other_ma.order_items_.count() != order_items_.count()
-               || !other_ma.upper_.same_as(upper_, check_context)
-               || !other_ma.lower_.same_as(lower_, check_context)) {
+               || !upper_.same_as(other_ma.upper_, check_context)
+               || !lower_.same_as(other_ma.lower_, check_context)) {
       bret = false;
     } else {
-      if (bret) {
-        if ((agg_expr_ == NULL && other_ma.agg_expr_ == NULL) ||
-            (agg_expr_ != NULL && other_ma.agg_expr_ != NULL &&
-            agg_expr_->same_as(*other_ma.agg_expr_, check_context))) {
-          bret = true;
-        } else {
-          bret = false;
-        }
-      }
       for (int64_t i = 0; bret && i < other_ma.func_params_.count(); ++i) {
         if (other_ma.func_params_.at(i) == NULL || func_params_.at(i) == NULL ||
-            !other_ma.func_params_.at(i)->same_as(*func_params_.at(i), check_context)) {
+            !func_params_.at(i)->same_as(*other_ma.func_params_.at(i), check_context)) {
           bret = false;
         }
       }
       for (int64_t i = 0; bret && i < other_ma.partition_exprs_.count(); ++i) {
         if (other_ma.partition_exprs_.at(i) == NULL || partition_exprs_.at(i) == NULL ||
-            !other_ma.partition_exprs_.at(i)->same_as(*partition_exprs_.at(i), check_context)) {
+            !partition_exprs_.at(i)->same_as(*other_ma.partition_exprs_.at(i), check_context)) {
           bret = false;
         }
       }
@@ -3708,8 +5200,8 @@ bool ObWinFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
         if (other_ma.order_items_.at(i).order_type_ != order_items_.at(i).order_type_) {
           bret = false;
         } else if (other_ma.order_items_.at(i).expr_ == NULL || order_items_.at(i).expr_ == NULL ||
-                   !other_ma.order_items_.at(i).expr_->same_as(*order_items_.at(i).expr_,
-                                                               check_context)) {
+                   !order_items_.at(i).expr_->same_as(*other_ma.order_items_.at(i).expr_,
+                                                      check_context)) {
           bret = false;
         }
       }
@@ -3718,10 +5210,15 @@ bool ObWinFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
   return bret;
 }
 
-const ObRawExpr* ObWinFunRawExpr::get_param_expr(int64_t index) const
+const ObRawExpr *ObWinFunRawExpr::get_param_expr(int64_t index) const
 {
   int i = 0;
-  ObRawExpr* expr = NULL;
+  ObRawExpr *expr = NULL;
+  if (pl_agg_udf_expr_ != NULL) {
+    if (i++ == index) {
+      expr = pl_agg_udf_expr_;
+    }
+  }
   for (int64_t j = 0; NULL == expr && agg_expr_ != NULL && j < agg_expr_->get_param_count(); ++j) {
     if (i++ == index) {
       expr = agg_expr_->get_param_expr(j);
@@ -3757,7 +5254,7 @@ const ObRawExpr* ObWinFunRawExpr::get_param_expr(int64_t index) const
     }
   }
   for (int64_t j = 0; j < 2 && NULL == expr; ++j) {
-    const Bound* bound = 0 == j ? &upper_ : &lower_;
+    const Bound *bound = 0 == j ? &upper_ : &lower_;
     for (int64_t k = 0; k < BOUND_EXPR_MAX && NULL == expr; ++k) {
       if (NULL != bound->exprs_[k]) {
         if (i++ == index) {
@@ -3769,9 +5266,14 @@ const ObRawExpr* ObWinFunRawExpr::get_param_expr(int64_t index) const
   return expr;
 }
 
-ObRawExpr*& ObWinFunRawExpr::get_param_expr(int64_t index)
+ObRawExpr *&ObWinFunRawExpr::get_param_expr(int64_t index)
 {
   int i = 0;
+  if (pl_agg_udf_expr_ != NULL) {
+    if (i++ == index) {
+      return pl_agg_udf_expr_;
+    }
+  }
   for (int64_t j = 0; agg_expr_ != NULL && j < agg_expr_->get_param_count(); ++j) {
     if (i++ == index) {
       return agg_expr_->get_param_expr(j);
@@ -3802,8 +5304,8 @@ ObRawExpr*& ObWinFunRawExpr::get_param_expr(int64_t index)
       return lower_.interval_expr_;
     }
   }
-  for (int64_t j = 0; j < 2; ++j) {
-    Bound* bound = 0 == j ? &upper_ : &lower_;
+  for (int64_t j  = 0; j < 2; ++j) {
+    Bound *bound = 0 == j ? &upper_ : &lower_;
     for (int64_t k = 0; k < BOUND_EXPR_MAX; ++k) {
       if (NULL != bound->exprs_[k]) {
         if (i++ == index) {
@@ -3815,7 +5317,7 @@ ObRawExpr*& ObWinFunRawExpr::get_param_expr(int64_t index)
   return USELESS_POINTER;
 }
 
-int ObWinFunRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObWinFunRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
@@ -3831,7 +5333,8 @@ uint64_t ObWinFunRawExpr::hash_internal(uint64_t seed) const
   return hash_value;
 }
 
-int ObWinFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObWinFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                       ExplainType type) const
 {
   int ret = OB_SUCCESS;
 
@@ -3843,7 +5346,7 @@ int ObWinFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
     }
     // partition_by && order_by will be printed in ObLogWindowFunction operator
     for (int64_t i = 0; OB_SUCC(ret) && i < func_params_.count(); ++i) {
-      ObRawExpr* func_param;
+      ObRawExpr *func_param;
       if (0 != i) {
         if (OB_FAIL(BUF_PRINTF(","))) {
           LOG_WARN("Failed to add comma", K(ret));
@@ -3868,62 +5371,53 @@ int ObWinFunRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(Bound, type_, is_preceding_, is_nmb_literal_);
 
-int ObPseudoColumnRawExpr::assign(const ObPseudoColumnRawExpr& other)
+int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObTerminalRawExpr::assign(other))) {
       LOG_WARN("fail to assign", K(ret));
     } else {
-      cte_cycle_value_ = other.cte_cycle_value_;
-      cte_cycle_default_value_ = other.cte_cycle_default_value_;
-      table_id_ = other.table_id_;
+      const ObPseudoColumnRawExpr &tmp =
+          static_cast<const ObPseudoColumnRawExpr &>(other);
+      cte_cycle_value_ = tmp.cte_cycle_value_;
+      cte_cycle_default_value_ = tmp.cte_cycle_default_value_;
+      table_id_ = tmp.table_id_;
     }
   }
   return ret;
 }
 
-int ObPseudoColumnRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObPseudoColumnRawExpr& other,
-    const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(this != &other)) {
-    if (OB_FAIL(ObTerminalRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-      LOG_WARN("fail to assign", K(ret));
-    } else {
-      cte_cycle_value_ = other.cte_cycle_value_;
-      cte_cycle_default_value_ = other.cte_cycle_default_value_;
-      table_id_ = other.table_id_;
-    }
-  }
-  return ret;
-}
-
-int ObPseudoColumnRawExpr::replace_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs)
+int ObPseudoColumnRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                                        const ObIArray<ObRawExpr *> &new_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTerminalRawExpr::replace_expr(other_exprs, new_exprs))) {
     LOG_WARN("failed to replace expr", K(ret));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-bool ObPseudoColumnRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context /* = NULL*/) const
+bool ObPseudoColumnRawExpr::inner_same_as(const ObRawExpr &expr,
+                                          ObExprEqualCheckContext *check_context/* = NULL*/) const
 {
   UNUSED(check_context);
-  return type_ == expr.get_expr_type();
+  return type_ == expr.get_expr_type() &&
+         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id();
 }
 
-int ObPseudoColumnRawExpr::do_visit(ObRawExprVisitor& visitor)
+int ObPseudoColumnRawExpr::do_visit(ObRawExprVisitor &visitor)
 {
   return visitor.visit(*this);
 }
@@ -3933,7 +5427,8 @@ uint64_t ObPseudoColumnRawExpr::hash_internal(uint64_t seed) const
   return do_hash(get_expr_type(), seed);
 }
 
-int ObPseudoColumnRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                             ExplainType type) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type);
@@ -3968,8 +5463,15 @@ int ObPseudoColumnRawExpr::get_name_internal(char* buf, const int64_t buf_len, i
         LOG_WARN("failed to print", K(ret));
       }
       break;
-    case T_PDML_PARTITION_ID:
-      if (OB_FAIL(BUF_PRINTF("PARTITION_ID"))) {
+    case T_PSEUDO_GROUP_ID:
+    case T_PSEUDO_STMT_ID:
+    case T_PSEUDO_GROUP_PARAM:
+      if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
+        LOG_WARN("failed to print expr name", K(ret));
+      }
+      break;
+    case T_TABLET_AUTOINC_NEXTVAL:
+      if (OB_FAIL(BUF_PRINTF("T_HIDDEN_PK"))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;
@@ -3984,22 +5486,107 @@ int ObPseudoColumnRawExpr::get_name_internal(char* buf, const int64_t buf_len, i
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(")"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
-ObRawExprPointer::ObRawExprPointer() : expr_group_()
-{}
+ObOpPseudoColumnRawExpr::ObOpPseudoColumnRawExpr()
+  : name_("")
+{
+  set_expr_class(EXPR_OP_PSEUDO_COLUMN);
+}
 
-ObRawExprPointer::~ObRawExprPointer()
-{}
+ObOpPseudoColumnRawExpr::ObOpPseudoColumnRawExpr(ObItemType expr_type /* = T_INVALID */)
+  : ObIRawExpr(expr_type),
+    ObTerminalRawExpr(expr_type),
+    name_("")
+{
+  set_expr_class(EXPR_OP_PSEUDO_COLUMN);
+}
 
-int ObRawExprPointer::get(ObRawExpr*& expr)
+ObOpPseudoColumnRawExpr::ObOpPseudoColumnRawExpr(ObIAllocator &alloc)
+  : ObIRawExpr(alloc),
+    ObTerminalRawExpr(alloc),
+    name_("")
+{
+  set_expr_class(EXPR_OP_PSEUDO_COLUMN);
+}
+
+ObOpPseudoColumnRawExpr::~ObOpPseudoColumnRawExpr()
+{
+}
+
+
+int ObOpPseudoColumnRawExpr::assign(const ObOpPseudoColumnRawExpr &other)
 {
   int ret = OB_SUCCESS;
-  if (expr_group_.count() <= 0 || OB_ISNULL(expr_group_.at(0))) {
+  if (this != &other) {
+    name_ = other.name_;
+    set_result_type(other.get_result_type());
+    OZ(ObTerminalRawExpr::assign(other));
+  }
+  return ret;
+}
+
+int ObOpPseudoColumnRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTerminalRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to inner deep copy terminal expr", K(ret));
+  }
+  return ret;
+}
+
+int ObOpPseudoColumnRawExpr::replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                                          const common::ObIArray<ObRawExpr *> &new_exprs)
+{
+  return ObTerminalRawExpr::replace_expr(other_exprs, new_exprs);
+}
+
+bool ObOpPseudoColumnRawExpr::inner_same_as(
+    const ObRawExpr &expr, ObExprEqualCheckContext *) const
+{
+  return get_expr_type() == expr.get_expr_type()
+      && strcmp(name_, static_cast<const ObOpPseudoColumnRawExpr &>(expr).name_) == 0;
+}
+
+int ObOpPseudoColumnRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+int ObOpPseudoColumnRawExpr::get_name_internal(char *buf,
+                                               const int64_t buf_len,
+                                               int64_t &pos,
+                                               ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+  OZ(BUF_PRINTF("%s", name_));
+  if (OB_FAIL(ret)) {
+  } else if (EXPLAIN_EXTENDED == type) {
+    if (OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {}
+  }
+  return ret;
+}
+
+ObRawExprPointer::ObRawExprPointer() : expr_group_() {
+}
+
+ObRawExprPointer::~ObRawExprPointer() {
+}
+
+int ObRawExprPointer::get(ObRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+  if (expr_group_.count() <= 0
+      || OB_ISNULL(expr_group_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr pointer is not set", K(ret));
   } else {
@@ -4008,7 +5595,7 @@ int ObRawExprPointer::get(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprPointer::set(ObRawExpr* expr)
+int ObRawExprPointer::set(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < expr_group_.count(); ++i) {
@@ -4025,93 +5612,85 @@ int ObRawExprPointer::set(ObRawExpr* expr)
   return ret;
 }
 
-int ObRawExprPointer::add_ref(ObRawExpr** expr)
+int ObRawExprPointer::add_ref(ObRawExpr **expr)
 {
   return expr_group_.push_back(expr);
 }
 
-int ObMultiSetRawExpr::assign(const ObMultiSetRawExpr& other)
+int ObRawExprPointer::assign(const ObRawExprPointer &other)
+{
+  return expr_group_.assign(other.expr_group_);
+}
+
+int ObMultiSetRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOpRawExpr::assign(other))) {
-    LOG_WARN("failed to assign multiset expr", K(ret));
-  } else {
-    ms_type_ = other.ms_type_;
-    ms_modifier_ = other.ms_modifier_;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObOpRawExpr::assign(other))) {
+      LOG_WARN("failed to assign multiset expr", K(ret));
+    } else {
+      const ObMultiSetRawExpr &tmp =
+          static_cast<const ObMultiSetRawExpr &>(other);
+      ms_type_ = tmp.ms_type_;
+      ms_modifier_ = tmp.ms_modifier_;
+    }
   }
   return ret;
 }
 
-int ObMultiSetRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObMultiSetRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+bool ObMultiSetRawExpr::inner_same_as(const ObRawExpr &expr,
+                                      ObExprEqualCheckContext *check_context) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOpRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-    LOG_WARN("failed to deep copy multiset op", K(ret));
-  } else {
-    ms_type_ = other.ms_type_;
-    ms_modifier_ = other.ms_modifier_;
+  return ObOpRawExpr::inner_same_as(expr, check_context);
+}
+
+bool ObCollPredRawExpr::inner_same_as(const ObRawExpr &expr,
+                                      ObExprEqualCheckContext *check_context) const
+{
+  return ObMultiSetRawExpr::inner_same_as(expr, check_context);
+}
+
+void ObExprParamCheckContext::init(const ObIArray<ObHiddenColumnItem> *calculable_items,
+                                   const ObIArray<ObPCParamEqualInfo> *equal_param_constraints,
+                                   EqualSets *equal_sets)
+
+{
+  calculable_items_ = calculable_items;
+  equal_param_constraints_ = equal_param_constraints;
+  equal_sets_ = equal_sets;
+}
+
+bool ObExprParamCheckContext::compare_column(const ObColumnRefRawExpr &left,
+                                             const ObColumnRefRawExpr &right)
+{
+  bool b_ret = false;
+  if (&left == &right) {
+    b_ret = true;
+  } else if (left.get_expr_type() != right.get_expr_type()) {
+  } else if (left.get_table_id() == right.get_table_id() &&
+             left.get_column_id() == right.get_column_id()) {
+    b_ret = true;
+  } else if (NULL != equal_sets_) {
+    b_ret = ObOptimizerUtil::is_expr_equivalent(&left, &right, *equal_sets_);
   }
-  return ret;
+  return b_ret;
 }
 
-bool ObMultiSetRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+bool ObExprParamCheckContext::compare_const(const ObConstRawExpr &left, const ObConstRawExpr &right)
 {
-  return ObOpRawExpr::same_as(expr, check_context);
-}
-
-int ObCollPredRawExpr::assign(const ObCollPredRawExpr& other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMultiSetRawExpr::assign(other))) {
-    LOG_WARN("failed to assign multiset expr", K(ret));
-  } else {
-  }
-  return ret;
-}
-
-int ObCollPredRawExpr::deep_copy(
-    ObRawExprFactory& expr_factory, const ObCollPredRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMultiSetRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
-    LOG_WARN("failed to deep copy multiset op", K(ret));
-  } else {
-  }
-  return ret;
-}
-
-bool ObCollPredRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
-{
-  return ObMultiSetRawExpr::same_as(expr, check_context);
-}
-
-int ObExprParamCheckContext::init(const ObQueryCtx* context)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(context)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else {
-    context_ = context;
-  }
-  return ret;
-}
-
-bool ObExprParamCheckContext::compare_const(const ObConstRawExpr& left, const ObConstRawExpr& right)
-{
-  int& ret = err_code_;
+  int &ret = err_code_;
   bool bret = false;
   if (OB_FAIL(ret)) {
     /*do nothing*/
-  } else if (OB_ISNULL(context_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("context is null", K(ret));
   } else if (&left == &right) {
     bret = true;
   } else if (left.get_result_type() != right.get_result_type()) {
     /*do thing*/
-  } else if (left.has_flag(IS_PARAM) && right.has_flag(IS_PARAM)) {
+  } else if (left.is_param_expr() && right.is_param_expr()) {
     bool is_left_calc_item = false;
     bool is_right_calc_item = false;
     if (OB_FAIL(is_pre_calc_item(left, is_left_calc_item))) {
@@ -4119,8 +5698,8 @@ bool ObExprParamCheckContext::compare_const(const ObConstRawExpr& left, const Ob
     } else if (OB_FAIL(is_pre_calc_item(right, is_right_calc_item))) {
       LOG_WARN("failed to is pre calc item", K(ret));
     } else if (is_left_calc_item && is_right_calc_item) {
-      const ObRawExpr* left_param = NULL;
-      const ObRawExpr* right_param = NULL;
+      const ObRawExpr *left_param = NULL;
+      const ObRawExpr *right_param = NULL;
       if (OB_FAIL(get_calc_expr(left.get_value().get_unknown(), left_param))) {
         LOG_WARN("faield to get calculable expr", K(ret));
       } else if (OB_FAIL(get_calc_expr(right.get_value().get_unknown(), right_param))) {
@@ -4132,27 +5711,26 @@ bool ObExprParamCheckContext::compare_const(const ObConstRawExpr& left, const Ob
         bret = left_param->same_as(*right_param, this);
       }
     } else if (is_left_calc_item || is_right_calc_item) {
-      bret = false;
+        bret = false;
     } else {
       ObPCParamEqualInfo info;
-      info.first_param_idx_ = left.get_value().get_unknown();
-      info.second_param_idx_ = right.get_value().get_unknown();
-      if (info.first_param_idx_ == info.second_param_idx_) {
+      const int64_t l_param_idx = left.get_value().get_unknown();
+      const int64_t r_param_idx = right.get_value().get_unknown();
+      if (l_param_idx == r_param_idx) {
         bret = true;
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && !bret && i < context_->all_equal_param_constraints_.count(); ++i) {
-          if (context_->all_equal_param_constraints_.at(i).first_param_idx_ == info.first_param_idx_ &&
-              context_->all_equal_param_constraints_.at(i).second_param_idx_ == info.second_param_idx_) {
+      } else if (NULL != equal_param_constraints_) {
+        for (int64_t i = 0; OB_SUCC(ret) && !bret && i < equal_param_constraints_->count(); ++i) {
+          if (equal_param_constraints_->at(i).first_param_idx_ == l_param_idx &&
+              equal_param_constraints_->at(i).second_param_idx_ == r_param_idx) {
             bret = true;
-          } else if (context_->all_equal_param_constraints_.at(i).first_param_idx_ == info.second_param_idx_ &&
-                     context_->all_equal_param_constraints_.at(i).second_param_idx_ == info.first_param_idx_) {
+          } else if (equal_param_constraints_->at(i).first_param_idx_ == r_param_idx &&
+                     equal_param_constraints_->at(i).second_param_idx_ == l_param_idx) {
             bret = true;
-          } else { /*do nothing*/
           }
         }
-      }
+      } else {/*do nothing*/}
     }
-  } else if (left.has_flag(IS_PARAM) || right.has_flag(IS_PARAM)) {
+  } else if (left.is_param_expr() || right.is_param_expr()) {
     /*do nothing*/
   } else {
     bret = left.get_value().is_equal(right.get_value(), CS_TYPE_BINARY);
@@ -4160,49 +5738,410 @@ bool ObExprParamCheckContext::compare_const(const ObConstRawExpr& left, const Ob
   return bret;
 }
 
-int ObExprParamCheckContext::is_pre_calc_item(const ObConstRawExpr& const_expr, bool& is_calc)
+int ObExprParamCheckContext::is_pre_calc_item(const ObConstRawExpr &const_expr, bool &is_calc)
 {
   int ret = OB_SUCCESS;
   int64_t calc_count = 0;
   is_calc = false;
-  if (OB_ISNULL(context_) || OB_UNLIKELY((calc_count = context_->calculable_items_.count()) < 0 ||
-                                         const_expr.get_expr_type() != T_QUESTIONMARK)) {
+  if (OB_ISNULL(calculable_items_) || OB_UNLIKELY((calc_count = calculable_items_->count()) < 0
+      || const_expr.get_expr_type() != T_QUESTIONMARK)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(context_), K(const_expr.get_expr_type()), K(calc_count));
-  } else if (const_expr.has_flag(IS_EXEC_PARAM)) {
+    LOG_WARN("get unexpected error", K(ret), K(calculable_items_), K(const_expr.get_expr_type()),
+                                     K(calc_count));
+  } else if (const_expr.has_flag(IS_DYNAMIC_PARAM)) {
     is_calc = true;
   } else if (calc_count > 0) {
     int64_t q_idx = const_expr.get_value().get_unknown();
-    int64_t min_calc_index = context_->calculable_items_.at(0).hidden_idx_;
+    int64_t min_calc_index = calculable_items_->at(0).hidden_idx_;
     if (OB_UNLIKELY(q_idx < 0 || min_calc_index < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid argument", K(q_idx), K(min_calc_index));
     } else if (q_idx - min_calc_index >= 0 && q_idx - min_calc_index < calc_count) {
       is_calc = true;
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
-int ObExprParamCheckContext::get_calc_expr(const int64_t param_idx, const ObRawExpr*& expr)
+int ObExprParamCheckContext::get_calc_expr(const int64_t param_idx, const ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(context_) || context_->calculable_items_.count() <= 0) {
+  if (OB_ISNULL(calculable_items_) || calculable_items_->count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query context is null", K(ret));
+    LOG_WARN("calculable_items_ is null", K(ret));
   } else {
-    int64_t offset = param_idx - context_->calculable_items_.at(0).hidden_idx_;
-    if (offset < 0 || offset >= context_->calculable_items_.count() ||
-        param_idx != context_->calculable_items_.at(offset).hidden_idx_) {
+    int64_t offset = param_idx - calculable_items_->at(0).hidden_idx_;
+    if (offset < 0 || offset >= calculable_items_->count() ||
+        param_idx != calculable_items_->at(offset).hidden_idx_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param index", K(ret), K(param_idx), K(offset));
     } else {
-      expr = context_->calculable_items_.at(offset).expr_;
+      expr = calculable_items_->at(offset).expr_;
     }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObPlQueryRefRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
+                              const ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs, new_exprs, exprs_))) {
+    LOG_WARN("failed to replace exprs", K(ret));
+  }
+  return ret;
+}
+
+void ObPlQueryRefRawExpr::clear_child()
+{
+  exprs_.reset();
+}
+
+bool ObPlQueryRefRawExpr::inner_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
+{
+  bool bool_ret = false;
+  if (get_expr_type() == expr.get_expr_type()) {
+    const ObPlQueryRefRawExpr &u_expr = static_cast<const ObPlQueryRefRawExpr &>(expr);
+    if (check_context != NULL && check_context->override_query_compare_) {
+      bool_ret = check_context->compare_query(*this, u_expr);
+    } else {
+      // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
+      bool_ret = (get_ps_sql() == u_expr.get_ps_sql() &&
+                  get_stmt_type() == u_expr.get_stmt_type() &&
+                  get_route_sql() == u_expr.get_route_sql() &&
+                  get_subquery_result_type() == u_expr.get_subquery_result_type());
+    }
+  }
+  return bool_ret;
+}
+
+bool ObExprEqualCheckContext::compare_query(const ObPlQueryRefRawExpr &left,
+                                            const ObPlQueryRefRawExpr &right)
+{
+  return left.get_ps_sql() == right.get_ps_sql() &&
+         left.get_stmt_type() == right.get_stmt_type() &&
+         left.get_route_sql() == right.get_route_sql() &&
+         left.get_subquery_result_type() == right.get_subquery_result_type();
+}
+
+int ObPlQueryRefRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+int ObPlQueryRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos,
+                                         ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+  if (EXPLAIN_HINT_FORMAT == type) {
+    if (OB_FAIL(BUF_PRINTF("PL_SQ"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  } else if (OB_FAIL(BUF_PRINTF("subquery(%.*s)", ps_sql_.length(), ps_sql_.ptr()))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (EXPLAIN_EXTENDED == type) {
+    if (OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {}
+  }
+  return ret;
+}
+
+int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
+                                      ObItemType expr_type,
+                                      ObRawExpr *&dest)
+{
+  int ret = OB_SUCCESS;
+  switch (expr_class) {
+  case ObRawExpr::EXPR_QUERY_REF: {
+    ObQueryRefRawExpr *dest_query_ref = NULL;
+    if (OB_FAIL(create_raw_expr(T_REF_QUERY, dest_query_ref)) ||
+        OB_ISNULL(dest_query_ref)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_query_ref), K(ret));
+    } else {
+      dest = dest_query_ref;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_COLUMN_REF: {
+    ObColumnRefRawExpr *dest_column_ref = NULL;
+    if (OB_FAIL(create_raw_expr(T_REF_COLUMN, dest_column_ref)) ||
+        OB_ISNULL(dest_column_ref)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_column_ref), K(ret));
+    } else {
+      dest = dest_column_ref;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_AGGR: {
+    ObAggFunRawExpr *dest_agg = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_agg)) ||
+        OB_ISNULL(dest_agg)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_agg), K(ret));
+    } else {
+      dest = dest_agg;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_CONST: {
+    if (T_USER_VARIABLE_IDENTIFIER == expr_type) {
+      ObUserVarIdentRawExpr *dest_var = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_var)) ||
+          OB_ISNULL(dest_var)) {
+        LOG_WARN("failed to allocate user var expr", K(ret));
+      } else {
+        dest = dest_var;
+      }
+    } else {
+      ObConstRawExpr *dest_const = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_const)) ||
+          OB_ISNULL(dest_const)) {
+        LOG_WARN("failed to allocate raw expr", K(dest_const), K(ret));
+      } else {
+        dest = dest_const;
+      }
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_EXEC_PARAM: {
+    ObExecParamRawExpr *dest_exec_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_exec_expr)) ||
+        OB_ISNULL(dest_exec_expr)) {
+      LOG_WARN("failed to allocate new expr", K(dest_exec_expr), K(ret));
+    } else {
+      dest = dest_exec_expr;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_OPERATOR: {
+    if (T_OBJ_ACCESS_REF == expr_type) {
+      ObObjAccessRawExpr *dest_oa = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_oa))) {
+        LOG_WARN("failed to allocate raw expr", K(ret));
+      } else if (OB_ISNULL(dest_oa)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_oa), K(ret));
+      } else {
+        dest = dest_oa;
+      }
+    } else if (T_FUN_PL_ASSOCIATIVE_INDEX == expr_type) {
+      ObPLAssocIndexRawExpr *dest_ai = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_ai))) {
+        LOG_WARN("failed to allocate raw expr", K(ret));
+      } else if (OB_ISNULL(dest_ai)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_ai), K(ret));
+      } else {
+        dest = dest_ai;
+      }
+    } else if (T_SP_CPARAM == expr_type) {
+      ObCallParamRawExpr *dest_cp = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_cp))) {
+        LOG_WARN("failed to allocate raw expr", K(ret));
+      } else if (OB_ISNULL(dest_cp)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_cp), K(ret));
+      } else {
+        dest = dest_cp;
+      }
+    } else if (T_FUN_PL_INTEGER_CHECKER == expr_type) {
+      ObPLIntegerCheckerRawExpr *dest_oa = NULL;
+      OZ (create_raw_expr(expr_type, dest_oa));
+      CK (OB_NOT_NULL(dest_oa));
+      OX (dest = dest_oa);
+    } else {
+      ObOpRawExpr *dest_op = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_op)) ||
+          OB_ISNULL(dest_op)) {
+        LOG_WARN("failed to allocate raw expr", K(dest_op), K(ret));
+      } else {
+        dest = dest_op;
+      }
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_CASE_OPERATOR: {
+    ObCaseOpRawExpr *dest_case = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_case)) ||
+        OB_ISNULL(dest_case)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_case), K(ret));
+    } else {
+      dest = dest_case;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_SYS_FUNC: {
+    if (T_FUN_SYS_SEQ_NEXTVAL == expr_type) {
+      ObSequenceRawExpr *dest_seq = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_seq))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_seq), K(ret));
+      } else if (OB_ISNULL(dest_seq)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_seq), K(ret));
+      } else {
+        dest = dest_seq;
+      }
+    } else if (T_FUN_NORMAL_UDF == expr_type) {
+      ObNormalDllUdfRawExpr *dest_nudf = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_nudf))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_nudf), K(ret));
+      } else if (OB_ISNULL(dest_nudf)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_nudf), K(ret));
+      } else {
+        dest = dest_nudf;
+      }
+    } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr_type) {
+      ObCollectionConstructRawExpr *dest_cc = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_cc))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_cc), K(ret));
+      } else if (OB_ISNULL(dest_cc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_cc), K(ret));
+      } else {
+        dest = dest_cc;
+      }
+    } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr_type) {
+      ObObjectConstructRawExpr *dest_oc = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_oc))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_oc), K(ret));
+      } else if (OB_ISNULL(dest_oc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_oc), K(ret));
+      } else {
+        dest = dest_oc;
+      }
+    } else if (T_FUN_PL_GET_CURSOR_ATTR == expr_type) {
+      ObPLGetCursorAttrRawExpr *dest_oa = NULL;
+      OZ (create_raw_expr(expr_type, dest_oa));
+      CK (OB_NOT_NULL(dest_oa));
+      OX (dest = dest_oa);
+    } else if (T_FUN_PL_SQLCODE_SQLERRM == expr_type) {
+      ObPLSQLCodeSQLErrmRawExpr *dest_scse = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_scse))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_scse), K(ret));
+      } else if (OB_ISNULL(dest_scse)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_scse), K(ret));
+      } else {
+        dest = dest_scse;
+      }
+    } else if (T_FUN_PLSQL_VARIABLE == expr_type) {
+      ObPLSQLVariableRawExpr *dest_scse = nullptr;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_scse))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_scse), K(ret));
+      } else if (OB_ISNULL(dest_scse)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_scse), K(ret));
+      } else {
+        dest = dest_scse;
+      }
+    } else {
+      ObSysFunRawExpr *dest_sys = NULL;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_sys))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_sys), K(ret));
+      } else if (OB_ISNULL(dest_sys)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_sys), K(ret));
+      } else {
+        dest = dest_sys;
+      }
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_UDF: {
+    ObUDFRawExpr *dest_udf = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_udf))) {
+      LOG_WARN("failed to allocate raw expr", K(dest_udf), K(ret));
+    } else {
+      dest = dest_udf;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_ALIAS_REF: {
+    ObAliasRefRawExpr *dest_alias = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_alias))
+        || OB_ISNULL(dest_alias)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_alias), K(ret));
+    } else {
+      dest = dest_alias;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_PSEUDO_COLUMN: {
+    ObPseudoColumnRawExpr *dest_pseudo_column = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_pseudo_column))
+        || OB_ISNULL(dest_pseudo_column)) {
+      LOG_WARN("failed to alocate raw expr", K(ret));
+    } else {
+      dest = dest_pseudo_column;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_WINDOW: {
+    ObWinFunRawExpr *dest_win_fun = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_win_fun))
+        || OB_ISNULL(dest_win_fun)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_win_fun), K(ret));
+    } else {
+      dest = dest_win_fun;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_VAR: {
+    ObVarRawExpr *dest_var_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_var_expr))
+        || OB_ISNULL(dest_var_expr)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_var_expr), K(ret));
+    } else {
+      dest = dest_var_expr;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_SET_OP: {
+    ObSetOpRawExpr *dest_set_op_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_set_op_expr))
+        || OB_ISNULL(dest_set_op_expr)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_set_op_expr), K(ret));
+    } else {
+      dest = dest_set_op_expr;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_OP_PSEUDO_COLUMN: {
+    ObOpPseudoColumnRawExpr *dest_op_pseduo_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_op_pseduo_expr))
+        || OB_ISNULL(dest_op_pseduo_expr)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_op_pseduo_expr), K(ret));
+    } else {
+      dest = dest_op_pseduo_expr;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_PL_QUERY_REF: {
+    ObPlQueryRefRawExpr *dest_pl_query_ref = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_pl_query_ref)) ||
+        OB_ISNULL(dest_pl_query_ref)) {
+      LOG_WARN("failed to allocate raw expr", K(dest_pl_query_ref), K(ret));
+    } else {
+      dest = dest_pl_query_ref;
+    }
+    break;
+  }
+  case ObRawExpr::EXPR_INVALID_CLASS: {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("does not implement expr type copy", K(ret), K(expr_type), K(expr_class));
+    break;
+  }
+  }
+  return ret;
+}
+
+}//namespace sql
+}//namespace oceanbase

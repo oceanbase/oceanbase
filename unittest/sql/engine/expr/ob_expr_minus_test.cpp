@@ -19,55 +19,60 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprMinusTest : public ::testing::Test {
-public:
-  ObExprMinusTest();
-  virtual ~ObExprMinusTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprMinusTest(const ObExprMinusTest& other);
-  ObExprMinusTest& operator=(const ObExprMinusTest& other);
-
-protected:
-  // data members
+class ObExprMinusTest: public ::testing::Test
+{
+  public:
+    ObExprMinusTest();
+    virtual ~ObExprMinusTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprMinusTest(const ObExprMinusTest &other);
+    ObExprMinusTest& operator=(const ObExprMinusTest &other);
+  protected:
+    // data members
 };
 
 ObExprMinusTest::ObExprMinusTest()
-{}
+{
+}
 
 ObExprMinusTest::~ObExprMinusTest()
-{}
+{
+}
 
 void ObExprMinusTest::SetUp()
-{}
+{
+}
 
 void ObExprMinusTest::TearDown()
-{}
+{
+}
+
 
 #define R(t1, v1, t2, v2, rt, res) ARITH_EXPECT_OBJ(ObExprMinus, &buf, calc, t1, v1, t2, v2, rt, res)
 #define FE(t1, v1, t2, v2) ARITH_EXPECT_ERROR(ObExprMinus, &buf, calc, t1, v1, t2, v2)
 #define RD(t1, v1, t2, v2, res, p) ARITH_EXPECT_OBJ_DOUBLE(ObExprMinus, &buf, calc, t1, v1, t2, v2, res, p)
-#define RN1(v1, t2, v2, res)               \
-  do {                                     \
-    num1.from(#v1, buf);                   \
-    num3.from(#res, buf);                  \
-    R(number, num1, t2, v2, number, num3); \
-  } while (0)
+#define RN1(v1, t2, v2, res) \
+do {   \
+  num1.from(#v1, buf);  \
+  num3.from(#res, buf); \
+  R(number, num1, t2, v2, number, num3); \
+} while(0)
 
-#define RN2(t1, v1, v2, res)               \
-  do {                                     \
-    num2.from(#v2, buf);                   \
-    num3.from(#res, buf);                  \
-    R(t1, v1, number, num2, number, num3); \
-  } while (0)
+#define RN2(t1, v1, v2, res) \
+do {   \
+  num2.from(#v2, buf);  \
+  num3.from(#res, buf); \
+  R(t1, v1, number, num2, number, num3); \
+} while(0)
+
 
 TEST_F(ObExprMinusTest, tiny_utiny)
 {
   ObMalloc buf;
-  // tiny vs utiny
+  //tiny vs utiny
   FE(tinyint, -128, utinyint, 0);
   FE(tinyint, -128, utinyint, 64);
   FE(tinyint, -128, utinyint, 128);
@@ -94,7 +99,7 @@ TEST_F(ObExprMinusTest, tiny_utiny)
   R(tinyint, 64, utinyint, 64, uint64, 0);
   R(tinyint, 127, utinyint, 0, uint64, 127);
   R(tinyint, 127, utinyint, 64, uint64, 63);
-  // utiny vs tiny
+  //utiny vs tiny
   R(utinyint, 0, tinyint, -128, uint64, 128);
   R(utinyint, 64, tinyint, -128, uint64, 192);
   R(utinyint, 128, tinyint, -128, uint64, 256);
@@ -123,10 +128,11 @@ TEST_F(ObExprMinusTest, tiny_utiny)
   FE(utinyint, 64, tinyint, 127);
 }
 
+
 TEST_F(ObExprMinusTest, tiny_small)
 {
   ObMalloc buf;
-  // tinyint smallint
+  //tinyint smallint
   R(tinyint, -128, smallint, -32768, int, 32640);
   R(tinyint, -128, smallint, -16384, int, 16256);
   R(tinyint, -128, smallint, 0, int, -128);
@@ -172,7 +178,7 @@ TEST_F(ObExprMinusTest, tiny_small)
   R(tinyint, 127, smallint, -64, int, 191);
   R(tinyint, 127, smallint, 64, int, 63);
   R(tinyint, 127, smallint, 127, int, 0);
-  // smallint tinyint
+  //smallint tinyint
   R(smallint, -32768, tinyint, -128, int, -32640);
   R(smallint, -16384, tinyint, -128, int, -16256);
   R(smallint, 0, tinyint, -128, int, 128);
@@ -220,10 +226,11 @@ TEST_F(ObExprMinusTest, tiny_small)
   R(smallint, 127, tinyint, 127, int, 0);
 }
 
+
 TEST_F(ObExprMinusTest, tiny_usmall)
 {
   ObMalloc buf;
-  // tinyint - usmallint
+  //tinyint - usmallint
   FE(tinyint, -128, usmallint, 0);
   FE(tinyint, -128, usmallint, 16384);
   FE(tinyint, -128, usmallint, 32768);
@@ -270,7 +277,7 @@ TEST_F(ObExprMinusTest, tiny_usmall)
   FE(tinyint, 127, usmallint, 192);
   FE(tinyint, 127, usmallint, 255);
 
-  // usmallint  tinyint
+  //usmallint  tinyint
   R(usmallint, 0, tinyint, -128, uint64, 128);
   R(usmallint, 16384, tinyint, -128, uint64, 16512);
   R(usmallint, 32768, tinyint, -128, uint64, 32896);
@@ -321,7 +328,7 @@ TEST_F(ObExprMinusTest, tiny_usmall)
 TEST_F(ObExprMinusTest, tiny_int32)
 {
   ObMalloc buf;
-  // tiny  int32
+  //tiny  int32
   R(tinyint, -128, int32, -2147483648, int, 2147483520);
   R(tinyint, -128, int32, 0, int, -128);
   R(tinyint, -128, int32, 2147483647, int, -2147483775);
@@ -368,7 +375,7 @@ TEST_F(ObExprMinusTest, tiny_int32)
   R(tinyint, 127, int32, 64, int, 63);
   R(tinyint, 127, int32, 127, int, 0);
 
-  // int32  tiny
+  //int32  tiny
   R(int32, -2147483648, tinyint, -128, int, -2147483520);
   R(int32, 0, tinyint, -128, int, 128);
   R(int32, 2147483647, tinyint, -128, int, 2147483775);
@@ -419,7 +426,7 @@ TEST_F(ObExprMinusTest, tiny_int32)
 TEST_F(ObExprMinusTest, tiny_uint32)
 {
   ObMalloc buf;
-  // tiny  uint32
+  //tiny  uint32
   FE(tinyint, -128, uint32, 0);
   FE(tinyint, -128, uint32, 2147483648);
   FE(tinyint, -128, uint32, 4294967295);
@@ -451,7 +458,8 @@ TEST_F(ObExprMinusTest, tiny_uint32)
   R(tinyint, 127, uint32, 64, uint64, 63);
   FE(tinyint, 127, uint32, 255);
 
-  // uint32  tiny
+
+  //uint32  tiny
   R(uint32, 0, tinyint, -128, uint64, 128);
   R(uint32, 2147483648, tinyint, -128, uint64, 2147483776);
   R(uint32, 4294967295, tinyint, -128, uint64, 4294967423);
@@ -487,7 +495,7 @@ TEST_F(ObExprMinusTest, tiny_uint32)
 TEST_F(ObExprMinusTest, tiny_int64)
 {
   ObMalloc buf;
-  // tiny  int64
+  //tiny  int64
   R(tinyint, -128, int, -2147483648, int, 2147483520);
   R(tinyint, -128, int, 0, int, -128);
   R(tinyint, -128, int, 2147483647, int, -2147483775);
@@ -524,7 +532,7 @@ TEST_F(ObExprMinusTest, tiny_int64)
   R(tinyint, 127, int, -128, int, 255);
   R(tinyint, 127, int, 127, int, 0);
 
-  // int64  tiny
+  //int64  tiny
   R(int, -2147483648, tinyint, -128, int, -2147483520);
   R(int, 0, tinyint, -128, int, 128);
   R(int, 2147483647, tinyint, -128, int, 2147483775);
@@ -561,7 +569,7 @@ TEST_F(ObExprMinusTest, tiny_int64)
   R(int, -128, tinyint, 127, int, -255);
   R(int, 127, tinyint, 127, int, 0);
 
-  // edge
+  //edge
   FE(tinyint, -128, int, INT64_MAX);
   FE(int, INT64_MIN, tinyint, 127);
 }
@@ -569,7 +577,7 @@ TEST_F(ObExprMinusTest, tiny_int64)
 TEST_F(ObExprMinusTest, tiny_uint64)
 {
   ObMalloc buf;
-  // tiny uint64
+  //tiny uint64
   FE(tinyint, -128, uint64, 0);
   FE(tinyint, -128, uint64, 4294967295);
   FE(tinyint, -128, uint64, 32768);
@@ -587,7 +595,7 @@ TEST_F(ObExprMinusTest, tiny_uint64)
   FE(tinyint, 127, uint64, 32768);
   R(tinyint, 127, uint64, 64, uint64, 63);
 
-  // uint64 tiny
+  //uint64 tiny
   R(uint64, 0, tinyint, -128, uint64, 128);
   R(uint64, 4294967295, tinyint, -128, uint64, 4294967423);
   R(uint64, 32768, tinyint, -128, uint64, 32896);
@@ -605,7 +613,7 @@ TEST_F(ObExprMinusTest, tiny_uint64)
   R(uint64, 32768, tinyint, 127, uint64, 32641);
   FE(uint64, 64, tinyint, 127);
 
-  // edge
+  //edge
   FE(tinyint, 127, uint64, UINT64_MAX);
   FE(tinyint, -128, uint64, UINT64_MAX);
   FE(uint64, 0, tinyint, 1);
@@ -614,7 +622,7 @@ TEST_F(ObExprMinusTest, tiny_uint64)
 TEST_F(ObExprMinusTest, utiny_small)
 {
   ObMalloc buf;
-  // utiny small
+  //utiny small
   R(utinyint, 0, smallint, -32768, uint64, 32768);
   R(utinyint, 0, smallint, 0, uint64, 0);
   FE(utinyint, 0, smallint, 32767);
@@ -631,7 +639,7 @@ TEST_F(ObExprMinusTest, utiny_small)
   R(utinyint, 255, smallint, -64, uint64, 319);
   R(utinyint, 255, smallint, 64, uint64, 191);
 
-  // small utiny
+  //small utiny
   FE(smallint, -32768, utinyint, 0);
   R(smallint, 0, utinyint, 0, uint64, 0);
   R(smallint, 32767, utinyint, 0, uint64, 32767);
@@ -652,7 +660,7 @@ TEST_F(ObExprMinusTest, utiny_small)
 TEST_F(ObExprMinusTest, utiny_usmall)
 {
   ObMalloc buf;
-  // utiny usmall
+  //utiny usmall
   R(utinyint, 0, usmallint, 0, uint64, 0);
   FE(utinyint, 0, usmallint, 32768);
   FE(utinyint, 0, usmallint, 65535);
@@ -669,7 +677,7 @@ TEST_F(ObExprMinusTest, utiny_usmall)
   R(utinyint, 255, usmallint, 64, uint64, 191);
   R(utinyint, 255, usmallint, 255, uint64, 0);
 
-  // usmall utiny
+  //usmall utiny
   R(usmallint, 0, utinyint, 0, uint64, 0);
   R(usmallint, 32768, utinyint, 0, uint64, 32768);
   R(usmallint, 65535, utinyint, 0, uint64, 65535);
@@ -690,7 +698,7 @@ TEST_F(ObExprMinusTest, utiny_usmall)
 TEST_F(ObExprMinusTest, utiny_int32)
 {
   ObMalloc buf;
-  // utiny int32
+  //utiny int32
   R(utinyint, 0, int32, -2147483648, uint64, 2147483648);
   R(utinyint, 0, int32, 0, uint64, 0);
   FE(utinyint, 0, int32, 2147483647);
@@ -707,7 +715,7 @@ TEST_F(ObExprMinusTest, utiny_int32)
   R(utinyint, 255, int32, 255, uint64, 0);
   R(utinyint, 255, int32, -64, uint64, 319);
 
-  // int32 utiny
+  //int32 utiny
   FE(int32, -2147483648, utinyint, 0);
   R(int32, 0, utinyint, 0, uint64, 0);
   R(int32, 2147483647, utinyint, 0, uint64, 2147483647);
@@ -728,7 +736,7 @@ TEST_F(ObExprMinusTest, utiny_int32)
 TEST_F(ObExprMinusTest, utiny_uint32)
 {
   ObMalloc buf;
-  // utiny uint32
+  //utiny uint32
   R(utinyint, 0, uint32, 0, uint64, 0);
   FE(utinyint, 0, uint32, 4294967295);
   FE(utinyint, 0, uint32, 65535);
@@ -745,7 +753,7 @@ TEST_F(ObExprMinusTest, utiny_uint32)
   R(utinyint, 255, uint32, 64, uint64, 191);
   R(utinyint, 255, uint32, 255, uint64, 0);
 
-  // uint32 utiny
+  //uint32 utiny
   R(uint32, 0, utinyint, 0, uint64, 0);
   R(uint32, 4294967295, utinyint, 0, uint64, 4294967295);
   R(uint32, 65535, utinyint, 0, uint64, 65535);
@@ -761,12 +769,13 @@ TEST_F(ObExprMinusTest, utiny_uint32)
   R(uint32, 65535, utinyint, 255, uint64, 65280);
   FE(uint32, 64, utinyint, 255);
   R(uint32, 255, utinyint, 255, uint64, 0);
+
 }
 
 TEST_F(ObExprMinusTest, utiny_int64)
 {
   ObMalloc buf;
-  // utiny int64
+  //utiny int64
   R(utinyint, 0, int, -2147483648, uint64, 2147483648);
   R(utinyint, 0, int, 0, uint64, 0);
   FE(utinyint, 0, int, 2147483647);
@@ -782,7 +791,7 @@ TEST_F(ObExprMinusTest, utiny_int64)
   FE(utinyint, 255, int, 2147483647);
   R(utinyint, 255, int, 255, uint64, 0);
   R(utinyint, 255, int, -64, uint64, 319);
-  // int64 utiny
+  //int64 utiny
   FE(int, -2147483648, utinyint, 0);
   R(int, 0, utinyint, 0, uint64, 0);
   R(int, 2147483647, utinyint, 0, uint64, 2147483647);
@@ -799,7 +808,7 @@ TEST_F(ObExprMinusTest, utiny_int64)
   R(int, 255, utinyint, 255, uint64, 0);
   FE(int, -64, utinyint, 255);
 
-  // edge
+  //edge
   FE(int, INT64_MIN, utinyint, 1);
   FE(utinyint, 255, int, INT64_MAX);
 }
@@ -807,7 +816,7 @@ TEST_F(ObExprMinusTest, utiny_int64)
 TEST_F(ObExprMinusTest, utiny_uint64)
 {
   ObMalloc buf;
-  // utiny uint64
+  //utiny uint64
   R(utinyint, 0, uint64, 0, uint64, 0);
   FE(utinyint, 0, uint64, 4294967295);
   FE(utinyint, 0, uint64, 255);
@@ -824,7 +833,7 @@ TEST_F(ObExprMinusTest, utiny_uint64)
   R(utinyint, 255, uint64, 64, uint64, 191);
   R(utinyint, 255, uint64, 0, uint64, 255);
 
-  // uint64 utiny
+  //uint64 utiny
   R(uint64, 0, utinyint, 0, uint64, 0);
   R(uint64, 4294967295, utinyint, 0, uint64, 4294967295);
   R(uint64, 255, utinyint, 0, uint64, 255);
@@ -841,7 +850,7 @@ TEST_F(ObExprMinusTest, utiny_uint64)
   FE(uint64, 64, utinyint, 255);
   FE(uint64, 0, utinyint, 255);
 
-  // edge
+  //edge
   FE(utinyint, 255, uint64, UINT64_MAX);
   FE(utinyint, 0, uint64, UINT64_MAX);
 }
@@ -849,7 +858,7 @@ TEST_F(ObExprMinusTest, utiny_uint64)
 TEST_F(ObExprMinusTest, small_small)
 {
   ObMalloc buf;
-  // small small
+  //small small
   R(smallint, -32768, smallint, -32768, int, 0);
   R(smallint, -32768, smallint, 0, int, -32768);
   R(smallint, -32768, smallint, 32767, int, -65535);
@@ -880,7 +889,7 @@ TEST_F(ObExprMinusTest, small_small)
 TEST_F(ObExprMinusTest, small_usmall)
 {
   ObMalloc buf;
-  // small usmall
+  //small usmall
   FE(smallint, -32768, usmallint, 0);
   FE(smallint, -32768, usmallint, 32768);
   FE(smallint, -32768, usmallint, 65535);
@@ -907,7 +916,7 @@ TEST_F(ObExprMinusTest, small_usmall)
   R(smallint, 127, usmallint, 64, uint64, 63);
   FE(smallint, 127, usmallint, 255);
 
-  // usmall small
+  //usmall small
   R(usmallint, 0, smallint, -32768, uint64, 32768);
   R(usmallint, 32768, smallint, -32768, uint64, 65536);
   R(usmallint, 65535, smallint, -32768, uint64, 98303);
@@ -935,10 +944,11 @@ TEST_F(ObExprMinusTest, small_usmall)
   R(usmallint, 255, smallint, 127, uint64, 128);
 }
 
+
 TEST_F(ObExprMinusTest, small_int32)
 {
   ObMalloc buf;
-  // small int32
+  //small int32
   R(smallint, -32768, int32, -2147483648, int, 2147450880);
   R(smallint, -32768, int32, 0, int, -32768);
   R(smallint, -32768, int32, 2147483647, int, -2147516415);
@@ -965,7 +975,7 @@ TEST_F(ObExprMinusTest, small_int32)
   R(smallint, 127, int32, 255, int, -128);
   R(smallint, 127, int32, -64, int, 191);
 
-  // int32 small
+  //int32 small
   R(int32, -2147483648, smallint, -32768, int, -2147450880);
   R(int32, 0, smallint, -32768, int, 32768);
   R(int32, 2147483647, smallint, -32768, int, 2147516415);
@@ -993,11 +1003,12 @@ TEST_F(ObExprMinusTest, small_int32)
   R(int32, -64, smallint, 127, int, -191);
 }
 
+
 TEST_F(ObExprMinusTest, small_uint32)
 {
   ObMalloc buf;
-  // small int32
-  // small uint32
+  //small int32
+  //small uint32
   FE(smallint, -32768, uint32, 0);
   FE(smallint, -32768, uint32, 4294967295);
   FE(smallint, -32768, uint32, 32767);
@@ -1024,7 +1035,7 @@ TEST_F(ObExprMinusTest, small_uint32)
   R(smallint, 127, uint32, 64, uint64, 63);
   FE(smallint, 127, uint32, 255);
 
-  // uint32 small
+  //uint32 small
   R(uint32, 0, smallint, -32768, uint64, 32768);
   R(uint32, 4294967295, smallint, -32768, uint64, 4295000063);
   R(uint32, 32767, smallint, -32768, uint64, 65535);
@@ -1050,12 +1061,15 @@ TEST_F(ObExprMinusTest, small_uint32)
   R(uint32, 32767, smallint, 127, uint64, 32640);
   FE(uint32, 64, smallint, 127);
   R(uint32, 255, smallint, 127, uint64, 128);
+
 }
+
+
 
 TEST_F(ObExprMinusTest, small_int64)
 {
   ObMalloc buf;
-  // small int64
+  //small int64
   R(smallint, -32768, int, -2147483648, int, 2147450880);
   R(smallint, -32768, int, 0, int, -32768);
   R(smallint, -32768, int, 2147483647, int, -2147516415);
@@ -1082,7 +1096,7 @@ TEST_F(ObExprMinusTest, small_int64)
   R(smallint, 127, int, 255, int, -128);
   R(smallint, 127, int, -64, int, 191);
 
-  // int64 small
+  //int64 small
   R(int, -2147483648, smallint, -32768, int, -2147450880);
   R(int, 0, smallint, -32768, int, 32768);
   R(int, 2147483647, smallint, -32768, int, 2147516415);
@@ -1109,7 +1123,7 @@ TEST_F(ObExprMinusTest, small_int64)
   R(int, 255, smallint, 127, int, 128);
   R(int, -64, smallint, 127, int, -191);
 
-  // edge
+  //edge
   FE(smallint, -32768, int, INT64_MAX);
   FE(smallint, -2, int, INT64_MAX);
   FE(int, INT64_MIN, smallint, 1);
@@ -1122,7 +1136,7 @@ TEST_F(ObExprMinusTest, small_int64)
 TEST_F(ObExprMinusTest, small_uint64)
 {
   ObMalloc buf;
-  // small uint64
+  //small uint64
   FE(smallint, -32768, uint64, 0);
   FE(smallint, -32768, uint64, 4294967295);
   FE(smallint, -32768, uint64, 32768);
@@ -1149,7 +1163,8 @@ TEST_F(ObExprMinusTest, small_uint64)
   FE(smallint, 127, uint64, 128);
   FE(smallint, 127, uint64, 255);
 
-  // uint64 small
+
+  //uint64 small
   R(uint64, 0, smallint, -32768, uint64, 32768);
   R(uint64, 4294967295, smallint, -32768, uint64, 4295000063);
   R(uint64, 32768, smallint, -32768, uint64, 65536);
@@ -1176,15 +1191,16 @@ TEST_F(ObExprMinusTest, small_uint64)
   R(uint64, 128, smallint, 127, uint64, 1);
   R(uint64, 255, smallint, 127, uint64, 128);
 
-  // edge
+  //edge
   FE(smallint, -32768, uint64, UINT64_MAX);
   FE(smallint, 32767, uint64, UINT64_MAX);
 }
 
+
 TEST_F(ObExprMinusTest, usmall_usmall)
 {
   ObMalloc buf;
-  // usmall usmall
+  //usmall usmall
   R(usmallint, 0, usmallint, 0, uint64, 0);
   FE(usmallint, 0, usmallint, 32768);
   FE(usmallint, 0, usmallint, 65535);
@@ -1215,7 +1231,7 @@ TEST_F(ObExprMinusTest, usmall_usmall)
 TEST_F(ObExprMinusTest, usmall_int32)
 {
   ObMalloc buf;
-  // usmall int32
+  //usmall int32
   R(usmallint, 0, int32, -2147483648, uint64, 2147483648);
   R(usmallint, 0, int32, 0, uint64, 0);
   FE(usmallint, 0, int32, 2147483647);
@@ -1242,7 +1258,7 @@ TEST_F(ObExprMinusTest, usmall_int32)
   R(usmallint, 255, int32, 255, uint64, 0);
   R(usmallint, 255, int32, -64, uint64, 319);
 
-  // int32 usmall
+  //int32 usmall
   FE(int32, -2147483648, usmallint, 0);
   R(int32, 0, usmallint, 0, uint64, 0);
   R(int32, 2147483647, usmallint, 0, uint64, 2147483647);
@@ -1268,12 +1284,13 @@ TEST_F(ObExprMinusTest, usmall_int32)
   R(int32, 2147483647, usmallint, 255, uint64, 2147483392);
   R(int32, 255, usmallint, 255, uint64, 0);
   FE(int32, -64, usmallint, 255);
+
 }
 
 TEST_F(ObExprMinusTest, usmall_uint32)
 {
   ObMalloc buf;
-  // usmall uint32
+  //usmall uint32
   R(usmallint, 0, uint32, 0, uint64, 0);
   FE(usmallint, 0, uint32, 4294967295);
   FE(usmallint, 0, uint32, 32767);
@@ -1300,7 +1317,7 @@ TEST_F(ObExprMinusTest, usmall_uint32)
   R(usmallint, 255, uint32, 64, uint64, 191);
   R(usmallint, 255, uint32, 255, uint64, 0);
 
-  // uint32 usmall
+  //uint32 usmall
   R(uint32, 0, usmallint, 0, uint64, 0);
   R(uint32, 4294967295, usmallint, 0, uint64, 4294967295);
   R(uint32, 32767, usmallint, 0, uint64, 32767);
@@ -1326,12 +1343,13 @@ TEST_F(ObExprMinusTest, usmall_uint32)
   R(uint32, 32767, usmallint, 255, uint64, 32512);
   FE(uint32, 64, usmallint, 255);
   R(uint32, 255, usmallint, 255, uint64, 0);
+
 }
 
 TEST_F(ObExprMinusTest, usmall_int64)
 {
   ObMalloc buf;
-  // usmall int64
+  //usmall int64
   R(usmallint, 0, int, -2147483648, uint64, 2147483648);
   R(usmallint, 0, int, 0, uint64, 0);
   FE(usmallint, 0, int, 2147483647);
@@ -1358,7 +1376,8 @@ TEST_F(ObExprMinusTest, usmall_int64)
   R(usmallint, 255, int, 255, uint64, 0);
   R(usmallint, 255, int, -64, uint64, 319);
 
-  // int64 usmall
+
+  //int64 usmall
   FE(int, -2147483648, usmallint, 0);
   R(int, 0, usmallint, 0, uint64, 0);
   R(int, 2147483647, usmallint, 0, uint64, 2147483647);
@@ -1385,17 +1404,17 @@ TEST_F(ObExprMinusTest, usmall_int64)
   R(int, 255, usmallint, 255, uint64, 0);
   FE(int, -64, usmallint, 255);
 
-  // edge
+  //edge
   FE(usmallint, 32767, int, INT64_MAX);
   FE(int, INT64_MIN, usmallint, 0);
-  R(int, INT64_MAX, usmallint, 1, uint64, INT64_MAX - 1);
-  R(int, INT64_MAX, usmallint, 32767, uint64, (INT64_MAX - 32767));
+  R(int, INT64_MAX, usmallint, 1, uint64, INT64_MAX-1);
+  R(int, INT64_MAX, usmallint, 32767, uint64, (INT64_MAX-32767));
 }
 
 TEST_F(ObExprMinusTest, usmall_uint64)
 {
   ObMalloc buf;
-  // usmallint uint64
+  //usmallint uint64
   R(usmallint, 0, uint64, 0, uint64, 0);
   FE(usmallint, 0, uint64, 4294967295);
   FE(usmallint, 0, uint64, 32768);
@@ -1422,7 +1441,8 @@ TEST_F(ObExprMinusTest, usmall_uint64)
   R(usmallint, 255, uint64, 128, uint64, 127);
   R(usmallint, 255, uint64, 255, uint64, 0);
 
-  // uint64 usmallint
+
+  //uint64 usmallint
   R(uint64, 0, usmallint, 0, uint64, 0);
   R(uint64, 4294967295, usmallint, 0, uint64, 4294967295);
   R(uint64, 32768, usmallint, 0, uint64, 32768);
@@ -1449,16 +1469,17 @@ TEST_F(ObExprMinusTest, usmall_uint64)
   FE(uint64, 128, usmallint, 255);
   R(uint64, 255, usmallint, 255, uint64, 0);
 
-  // edge
+  //edge
   FE(usmallint, 0, uint64, UINT64_MAX);
   FE(usmallint, 32767, uint64, UINT64_MAX);
-  R(uint64, UINT64_MAX, usmallint, 1, uint64, UINT64_MAX - 1);
+  R(uint64, UINT64_MAX, usmallint, 1, uint64, UINT64_MAX-1);
 }
+
 
 TEST_F(ObExprMinusTest, int32_int32)
 {
   ObMalloc buf;
-  // int32 int32
+  //int32 int32
   R(int32, -2147483648, int32, -2147483648, int, 0);
   R(int32, -2147483648, int32, 0, int, -2147483648);
   R(int32, -2147483648, int32, 2147483647, int, -4294967295);
@@ -1484,12 +1505,13 @@ TEST_F(ObExprMinusTest, int32_int32)
   R(int32, 32767, int32, 2147483647, int, -2147450880);
   R(int32, 32767, int32, -32768, int, 65535);
   R(int32, 32767, int32, 32767, int, 0);
+
 }
 
 TEST_F(ObExprMinusTest, int32_uint32)
 {
   ObMalloc buf;
-  // int32 uint32
+  //int32 uint32
   FE(int32, -2147483648, uint32, 0);
   FE(int32, -2147483648, uint32, 4294967295);
   FE(int32, -2147483648, uint32, 32767);
@@ -1516,7 +1538,7 @@ TEST_F(ObExprMinusTest, int32_uint32)
   FE(int32, 32767, uint32, 2147483647);
   R(int32, 32767, uint32, 255, uint64, 32512);
 
-  // uint32 int32
+  //uint32 int32
   R(uint32, 0, int32, -2147483648, uint64, 2147483648);
   R(uint32, 4294967295, int32, -2147483648, uint64, 6442450943);
   R(uint32, 32767, int32, -2147483648, uint64, 2147516415);
@@ -1547,7 +1569,7 @@ TEST_F(ObExprMinusTest, int32_uint32)
 TEST_F(ObExprMinusTest, int32_int64)
 {
   ObMalloc buf;
-  // int32 int64
+  //int32 int64
   R(int32, -2147483648, int, -2147483648, int, 0);
   R(int32, -2147483648, int, 0, int, -2147483648);
   R(int32, -2147483648, int, 2147483647, int, -4294967295);
@@ -1574,7 +1596,7 @@ TEST_F(ObExprMinusTest, int32_int64)
   R(int32, 32767, int, -32768, int, 65535);
   R(int32, 32767, int, 32767, int, 0);
 
-  // int64 int32
+  //int64 int32
   R(int, -2147483648, int32, -2147483648, int, 0);
   R(int, 0, int32, -2147483648, int, 2147483648);
   R(int, 2147483647, int32, -2147483648, int, 4294967295);
@@ -1601,7 +1623,7 @@ TEST_F(ObExprMinusTest, int32_int64)
   R(int, -32768, int32, 32767, int, -65535);
   R(int, 32767, int32, 32767, int, 0);
 
-  // edge
+  //edge
   FE(int, INT64_MAX, int32, -1);
   FE(int, INT64_MIN, int32, 1);
   FE(int32, 32767, int, INT64_MIN);
@@ -1611,7 +1633,7 @@ TEST_F(ObExprMinusTest, int32_int64)
 TEST_F(ObExprMinusTest, int32_uint64)
 {
   ObMalloc buf;
-  // int32 uint64
+  //int32 uint64
   FE(int32, -2147483648, uint64, 0);
   FE(int32, -2147483648, uint64, 4294967295);
   FE(int32, -2147483648, uint64, 32768);
@@ -1638,7 +1660,7 @@ TEST_F(ObExprMinusTest, int32_uint64)
   R(int32, 32767, uint64, 128, uint64, 32639);
   R(int32, 32767, uint64, 255, uint64, 32512);
 
-  // uint64 int32
+  //uint64 int32
   R(uint64, 0, int32, -2147483648, uint64, 2147483648);
   R(uint64, 4294967295, int32, -2147483648, uint64, 6442450943);
   R(uint64, 32768, int32, -2147483648, uint64, 2147516416);
@@ -1665,7 +1687,7 @@ TEST_F(ObExprMinusTest, int32_uint64)
   FE(uint64, 128, int32, 32767);
   FE(uint64, 255, int32, 32767);
 
-  // edge
+  //edge
   FE(uint64, UINT64_MAX, int32, -1);
   FE(int32, -2, uint64, UINT64_MAX);
 }
@@ -1673,7 +1695,7 @@ TEST_F(ObExprMinusTest, int32_uint64)
 TEST_F(ObExprMinusTest, uint32_uint32)
 {
   ObMalloc buf;
-  // uint32 uint32
+  //uint32 uint32
   R(uint32, 0, uint32, 0, uint64, 0);
   FE(uint32, 0, uint32, 4294967295);
   FE(uint32, 0, uint32, 2147483647);
@@ -1695,7 +1717,7 @@ TEST_F(ObExprMinusTest, uint32_uint32)
 TEST_F(ObExprMinusTest, uint32_int64)
 {
   ObMalloc buf;
-  // uint32 int64
+  //uint32 int64
   R(uint32, 0, int, -2147483648, uint64, 2147483648);
   R(uint32, 0, int, 0, uint64, 0);
   FE(uint32, 0, int, 2147483647);
@@ -1717,7 +1739,7 @@ TEST_F(ObExprMinusTest, uint32_int64)
   R(uint32, 2147483647, int, -32768, uint64, 2147516415);
   R(uint32, 2147483647, int, 32767, uint64, 2147450880);
 
-  // int64 uint32
+  //int64 uint32
   FE(int, -2147483648, uint32, 0);
   R(int, 0, uint32, 0, uint64, 0);
   R(int, 2147483647, uint32, 0, uint64, 2147483647);
@@ -1739,17 +1761,18 @@ TEST_F(ObExprMinusTest, uint32_int64)
   FE(int, -32768, uint32, 2147483647);
   FE(int, 32767, uint32, 2147483647);
 
-  // edge
-  R(int, INT64_MAX, uint32, 1, uint64, INT64_MAX - 1);
+  //edge
+  R(int, INT64_MAX, uint32, 1, uint64, INT64_MAX-1);
   FE(int, INT64_MIN, int32, 1);
   FE(uint32, UINT32_MAX, int, INT64_MAX);
-  R(uint32, UINT32_MAX, int, INT64_MIN, uint64, static_cast<uint64_t>(UINT32_MAX) - INT64_MIN);
+  R(uint32, UINT32_MAX, int, INT64_MIN, uint64, static_cast<uint64_t>(UINT32_MAX)- INT64_MIN);
+
 }
 
 TEST_F(ObExprMinusTest, uint32_uint64)
 {
   ObMalloc buf;
-  // uint32 uint64
+  //uint32 uint64
   R(uint32, 0, uint64, 0, uint64, 0);
   FE(uint32, 0, uint64, 4294967295);
   FE(uint32, 0, uint64, 2147483647);
@@ -1776,7 +1799,7 @@ TEST_F(ObExprMinusTest, uint32_uint64)
   FE(uint32, 0, uint64, 255);
   R(uint32, 0, uint64, 0, uint64, 0);
 
-  // uint64 uint32
+  //uint64 uint32
   R(uint64, 0, uint32, 0, uint64, 0);
   R(uint64, 4294967295, uint32, 0, uint64, 4294967295);
   R(uint64, 2147483647, uint32, 0, uint64, 2147483647);
@@ -1803,15 +1826,17 @@ TEST_F(ObExprMinusTest, uint32_uint64)
   R(uint64, 255, uint32, 0, uint64, 255);
   R(uint64, 0, uint32, 0, uint64, 0);
 
-  // edge
-  R(uint64, UINT64_MAX, uint32, 1, uint64, UINT64_MAX - 1);
+  //edge
+  R(uint64, UINT64_MAX, uint32, 1, uint64, UINT64_MAX-1);
   FE(uint32, 1, uint64, UINT64_MAX);
+
+
 }
 
 TEST_F(ObExprMinusTest, int64_int64)
 {
   ObMalloc buf;
-  // int64 int64
+  //int64 int64
   R(int, -2147483648, int, -2147483648, int, 0);
   R(int, -2147483648, int, 0, int, -2147483648);
   R(int, -2147483648, int, 2147483647, int, -4294967295);
@@ -1838,7 +1863,7 @@ TEST_F(ObExprMinusTest, int64_int64)
   R(int, 32767, int, -32768, int, 65535);
   R(int, 32767, int, 32767, int, 0);
 
-  // edge
+  //edge
   R(int, INT64_MAX, int, INT64_MAX, int, 0);
   R(int, INT64_MIN, int, INT64_MIN, int, 0);
   FE(int, INT64_MAX, int, INT64_MIN);
@@ -1848,7 +1873,7 @@ TEST_F(ObExprMinusTest, int64_int64)
 TEST_F(ObExprMinusTest, int64_uint64)
 {
   ObMalloc buf;
-  // int64 uint64
+  //int64 uint64
   FE(int, -2147483648, uint64, 0);
   FE(int, -2147483648, uint64, 4294967295);
   FE(int, -2147483648, uint64, 2147483647);
@@ -1870,7 +1895,7 @@ TEST_F(ObExprMinusTest, int64_uint64)
   FE(int, 32767, uint64, 2147483647);
   R(int, 32767, uint64, 255, uint64, 32512);
 
-  // uint64 int64
+  //uint64 int64
   R(uint64, 0, int, -2147483648, uint64, 2147483648);
   R(uint64, 4294967295, int, -2147483648, uint64, 6442450943);
   R(uint64, 2147483647, int, -2147483648, uint64, 4294967295);
@@ -1892,15 +1917,16 @@ TEST_F(ObExprMinusTest, int64_uint64)
   R(uint64, 2147483647, int, 32767, uint64, 2147450880);
   FE(uint64, 255, int, 32767);
 
-  // edge
+  //edge
   FE(int, INT64_MAX, uint64, UINT64_MAX);
   FE(uint64, UINT64_MAX, int, -1);
 }
 
+
 TEST_F(ObExprMinusTest, uint64_uint64)
 {
   ObMalloc buf;
-  // uint64 uint64
+  //uint64 uint64
   R(uint64, 0, uint64, 0, uint64, 0);
   FE(uint64, 0, uint64, 4294967295);
   FE(uint64, 0, uint64, 2147483647);
@@ -1918,10 +1944,11 @@ TEST_F(ObExprMinusTest, uint64_uint64)
   FE(uint64, 255, uint64, 2147483647);
   R(uint64, 255, uint64, 255, uint64, 0);
 
-  // edge
+  //edge
   FE(uint64, 0, uint64, UINT64_MAX);
   R(uint64, UINT64_MAX, uint64, UINT64_MAX, uint64, 0);
 }
+
 
 TEST_F(ObExprMinusTest, float_float)
 {
@@ -1939,20 +1966,21 @@ TEST_F(ObExprMinusTest, float_float)
   RD(float, static_cast<float>(123.4), float, static_cast<float>(123.4), 0, 5);
   RD(float, static_cast<float>(123.4), float, static_cast<float>(-123.4), 246.8, 5);
   RD(float, static_cast<float>(123.4), float, static_cast<float>(1), 122.4, 5);
-  // edge
+  //edge
   RD(float, static_cast<float>(123.4), float, static_cast<float>(-FLT_MAX), FLT_MAX, 5);
   RD(float, static_cast<float>(123.4), float, static_cast<float>(FLT_MAX), -FLT_MAX, 5);
   RD(float, static_cast<float>(FLT_MAX), float, static_cast<float>(123.4), FLT_MAX, 5);
-  RD(float, static_cast<float>(FLT_MAX), float, static_cast<float>(-FLT_MAX), 2 * static_cast<double>(FLT_MAX), 5);
+  RD(float, static_cast<float>(FLT_MAX), float, static_cast<float>(-FLT_MAX), 2*static_cast<double>(FLT_MAX), 5);
 
   RD(float, static_cast<float>(-FLT_MAX), float, static_cast<float>(123.4), -FLT_MAX, 5);
   RD(float, static_cast<float>(-FLT_MAX), float, static_cast<float>(-FLT_MAX), 0, 5);
 }
 
+
 TEST_F(ObExprMinusTest, float_double)
 {
   ObMalloc buf;
-  // float double
+  //float double
   RD(float, static_cast<float>(0), double, 0, 0, 5);
   RD(float, static_cast<float>(0), double, 1, -1, 5);
   RD(float, static_cast<float>(0), double, -1, 1, 5);
@@ -1965,7 +1993,7 @@ TEST_F(ObExprMinusTest, float_double)
   RD(float, static_cast<float>(123.4), double, 123.4, 0, 5);
   RD(float, static_cast<float>(123.4), double, -123.4, 246.8, 5);
   RD(float, static_cast<float>(123.4), double, 1, 122.4, 5);
-  // double float
+  //double float
   RD(double, 0, float, static_cast<float>(0), 0, 5);
   RD(double, 0, float, static_cast<float>(1), -1, 5);
   RD(double, 0, float, static_cast<float>(-1), 1, 5);
@@ -1979,11 +2007,11 @@ TEST_F(ObExprMinusTest, float_double)
   RD(double, 123.4, float, static_cast<float>(-123.4), 246.8, 5);
   RD(double, 123.4, float, static_cast<float>(1), 122.4, 5);
 
-  // edge
+  //edge
   RD(float, static_cast<float>(123.4), double, -FLT_MAX, FLT_MAX, 5);
   RD(float, static_cast<float>(123.4), double, FLT_MAX, -FLT_MAX, 5);
   RD(float, static_cast<float>(FLT_MAX), double, 123.4, FLT_MAX, 5);
-  RD(float, static_cast<float>(FLT_MAX), double, -FLT_MAX, 2 * static_cast<double>(FLT_MAX), 5);
+  RD(float, static_cast<float>(FLT_MAX), double, -FLT_MAX, 2*static_cast<double>(FLT_MAX), 5);
 
   RD(float, static_cast<float>(123.4), double, -DBL_MAX, DBL_MAX, 5);
   RD(float, static_cast<float>(123.4), double, DBL_MAX, -DBL_MAX, 5);
@@ -1993,10 +2021,11 @@ TEST_F(ObExprMinusTest, float_double)
   RD(float, static_cast<float>(-FLT_MAX), double, DBL_MAX, -DBL_MAX, 5);
 }
 
+
 TEST_F(ObExprMinusTest, double_double)
 {
   ObMalloc buf;
-  // float double
+  //float double
   RD(double, 0, double, 0, 0, 5);
   RD(double, 0, double, 1, -1, 5);
   RD(double, 0, double, -1, 1, 5);
@@ -2009,7 +2038,7 @@ TEST_F(ObExprMinusTest, double_double)
   RD(double, 123.4, double, 123.4, 0, 5);
   RD(double, 123.4, double, -123.4, 246.8, 5);
   RD(double, 123.4, double, 1, 122.4, 5);
-  // edge
+  //edge
 
   RD(double, DBL_MAX, double, 0, DBL_MAX, 5);
   RD(double, DBL_MAX, double, 123.45, DBL_MAX, 5);
@@ -2026,7 +2055,7 @@ TEST_F(ObExprMinusTest, double_double)
 TEST_F(ObExprMinusTest, double_int)
 {
   ObMalloc buf;
-  // tiny small med
+  //tiny small med
   RD(double, 0, tinyint, 0, 0, 5);
   RD(double, 0, tinyint, -5, 5, 5);
   RD(double, 125, tinyint, 5, 120, 5);
@@ -2040,7 +2069,7 @@ TEST_F(ObExprMinusTest, double_int)
   RD(double, -567, mediumint, 10, -577, 5);
   RD(mediumint, 100, double, 50.5, 49.5, 8);
   RD(mediumint, -100, double, 50.5, -150.5, 8);
-  // double int
+  //double int
   RD(double, 0, int, 0, 0, 8);
   RD(double, 0, int, 123, -123, 8);
   RD(double, 0, int, -123, 123, 8);
@@ -2066,7 +2095,7 @@ TEST_F(ObExprMinusTest, double_int)
   RD(double, -3.4E+38, int, -123, -3.4E+38, 8);
   RD(double, -3.4E+38, int, 2147483647, -3.4E+38, 8);
   RD(double, -3.4E+38, int, -2147483648, -3.4E+38, 8);
-  // int double
+  //int double
   RD(int, 0, double, 0, 0, 8);
   RD(int, 123, double, 0, 123, 8);
   RD(int, -123, double, 0, -123, 8);
@@ -2092,7 +2121,7 @@ TEST_F(ObExprMinusTest, double_int)
   RD(int, -123, double, -3.4E+38, 3.4E+38, 8);
   RD(int, 2147483647, double, -3.4E+38, 3.4E+38, 8);
   RD(int, -2147483648, double, -3.4E+38, 3.4E+38, 8);
-  // edge
+  //edge
   RD(double, DBL_MAX, int, INT64_MIN, DBL_MAX, 8);
   RD(double, DBL_MAX, int, INT64_MAX, DBL_MAX, 8);
   RD(double, -DBL_MAX, int, INT64_MIN, -DBL_MAX, 8);
@@ -2102,12 +2131,13 @@ TEST_F(ObExprMinusTest, double_int)
   RD(int, INT64_MAX, double, -DBL_MAX, DBL_MAX, 8);
   RD(int, INT64_MIN, double, DBL_MAX, -DBL_MAX, 8);
   RD(int, INT64_MIN, double, -DBL_MAX, DBL_MAX, 8);
+
 }
 
 TEST_F(ObExprMinusTest, double_uint)
 {
   ObMalloc buf;
-  // tiny small med
+  //tiny small med
   RD(double, 0, utinyint, 0, 0, 5);
   RD(double, 125, utinyint, 5, 120, 5);
   RD(utinyint, 127, double, 500, -373, 5);
@@ -2120,7 +2150,7 @@ TEST_F(ObExprMinusTest, double_uint)
   RD(double, -567, umediumint, 16777215, -16777782, 5);
   RD(umediumint, 100, double, 50.5, 49.5, 8);
   RD(umediumint, 16777215, double, 50.5, 16777164.5, 8);
-  // double uint
+  //double uint
   RD(double, 0, uint64, 0, 0, 8);
   RD(double, 0, uint64, 123, -123, 8);
   RD(double, 0, uint64, 4294967295, -4294967295, 8);
@@ -2136,7 +2166,7 @@ TEST_F(ObExprMinusTest, double_uint)
   RD(double, -3.4E+38, uint64, 0, -3.4E+38, 8);
   RD(double, -3.4E+38, uint64, 123, -3.4E+38, 8);
   RD(double, -3.4E+38, uint64, 4294967295, -3.4E+38, 8);
-  // uint double
+  //uint double
   RD(uint64, 0, double, 0, 0, 8);
   RD(uint64, 123, double, 0, 123, 8);
   RD(uint64, 4294967295, double, 0, 4294967295, 8);
@@ -2152,7 +2182,7 @@ TEST_F(ObExprMinusTest, double_uint)
   RD(uint64, 0, double, -3.4E+38, 3.4E+38, 8);
   RD(uint64, 123, double, -3.4E+38, 3.4E+38, 8);
   RD(uint64, 4294967295, double, -3.4E+38, 3.4E+38, 8);
-  // edge
+  //edge
   RD(double, DBL_MAX, uint64, 0, DBL_MAX, 8);
   RD(double, DBL_MAX, uint64, UINT64_MAX, DBL_MAX, 8);
   RD(double, -DBL_MAX, uint64, 0, -DBL_MAX, 8);
@@ -2164,10 +2194,11 @@ TEST_F(ObExprMinusTest, double_uint)
   RD(uint64, 0, double, -DBL_MAX, DBL_MAX, 8);
 }
 
+
 TEST_F(ObExprMinusTest, float_int)
 {
   ObMalloc buf;
-  // tiny small med
+  //tiny small med
   RD(float, 0.0f, tinyint, 0, 0, 5);
   RD(float, 0.0f, tinyint, -5, 5, 5);
   RD(float, 125.0f, tinyint, 5, 120, 5);
@@ -2181,7 +2212,7 @@ TEST_F(ObExprMinusTest, float_int)
   RD(float, -567.0f, mediumint, 10, -577, 5);
   RD(mediumint, 100, float, 50.5f, 49.5, 8);
   RD(mediumint, -100, float, 50.5f, -150.5, 8);
-  // float int
+  //float int
   RD(float, static_cast<float>(0), int, 0, 0, 8);
   RD(float, static_cast<float>(0), int, 123, -123, 8);
   RD(float, static_cast<float>(0), int, -123, 123, 8);
@@ -2207,7 +2238,7 @@ TEST_F(ObExprMinusTest, float_int)
   RD(float, static_cast<float>(-3.4E+38), int, -123, -3.4E+38, 8);
   RD(float, static_cast<float>(-3.4E+38), int, 2147483647, -3.4E+38, 8);
   RD(float, static_cast<float>(-3.4E+38), int, -2147483648, -3.4E+38, 8);
-  // int float
+  //int float
   RD(int, 0, float, static_cast<float>(0), 0, 8);
   RD(int, 123, float, static_cast<float>(0), 123, 8);
   RD(int, -123, float, static_cast<float>(0), -123, 8);
@@ -2233,7 +2264,7 @@ TEST_F(ObExprMinusTest, float_int)
   RD(int, -123, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
   RD(int, 2147483647, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
   RD(int, -2147483648, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
-  // edge
+  //edge
   RD(float, static_cast<float>(-FLT_MAX), int, INT64_MIN, -FLT_MAX, 8);
   RD(float, static_cast<float>(-FLT_MAX), int, INT64_MAX, -FLT_MAX, 8);
   RD(float, static_cast<float>(FLT_MAX), int, INT64_MIN, FLT_MAX, 8);
@@ -2244,10 +2275,11 @@ TEST_F(ObExprMinusTest, float_int)
   RD(int, INT64_MIN, float, static_cast<float>(FLT_MAX), -FLT_MAX, 8);
 }
 
+
 TEST_F(ObExprMinusTest, float_uint)
 {
   ObMalloc buf;
-  // tiny small med
+  //tiny small med
   RD(float, 0.0f, utinyint, 0, 0, 5);
   RD(float, 125.0f, utinyint, 5, 120, 5);
   RD(utinyint, 127, float, 500.0f, -373, 5);
@@ -2260,7 +2292,7 @@ TEST_F(ObExprMinusTest, float_uint)
   RD(float, -567.0f, umediumint, 16777215, -16777782, 5);
   RD(umediumint, 100, float, 50.5, 49.5, 8);
   RD(umediumint, 16777215, float, 50.5, 16777164.5, 8);
-  // float uint
+  //float uint
   RD(float, static_cast<float>(0), uint64, 0, 0, 8);
   RD(float, static_cast<float>(0), uint64, 123, -123, 8);
   RD(float, static_cast<float>(0), uint64, 4294967295, -4294967295, 8);
@@ -2276,7 +2308,7 @@ TEST_F(ObExprMinusTest, float_uint)
   RD(float, static_cast<float>(-3.4E+38), uint64, 0, -3.4E+38, 8);
   RD(float, static_cast<float>(-3.4E+38), uint64, 123, -3.4E+38, 8);
   RD(float, static_cast<float>(-3.4E+38), uint64, 4294967295, -3.4E+38, 8);
-  // uint float
+  //uint float
   RD(uint64, 0, float, static_cast<float>(0), 0, 8);
   RD(uint64, 123, float, static_cast<float>(0), 123, 8);
   RD(uint64, 4294967295, float, static_cast<float>(0), 4294967295, 8);
@@ -2292,7 +2324,7 @@ TEST_F(ObExprMinusTest, float_uint)
   RD(uint64, 0, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
   RD(uint64, 123, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
   RD(uint64, 4294967295, float, static_cast<float>(-3.4E+38), 3.4E+38, 8);
-  // edge
+  //edge
   RD(float, FLT_MAX, uint64, 0, FLT_MAX, 8);
   RD(float, FLT_MAX, uint64, UINT64_MAX, FLT_MAX, 8);
   RD(float, -FLT_MAX, uint64, 0, -FLT_MAX, 8);
@@ -2304,13 +2336,14 @@ TEST_F(ObExprMinusTest, float_uint)
   RD(uint64, 0, float, -FLT_MAX, FLT_MAX, 8);
 }
 
+
 TEST_F(ObExprMinusTest, double_number)
 {
   ObMalloc buf;
   number::ObNumber num1;
   number::ObNumber num2;
   number::ObNumber num3;
-  // number double
+  //number double
   RN1(0, double, 0, 0);
   RN1(0, double, 123.45, -123.45);
   RN1(0, double, -123.45, 123.45);
@@ -2326,7 +2359,7 @@ TEST_F(ObExprMinusTest, double_number)
   RN1(-123.45, double, -123.45, 0);
   RN1(-123.45, double, 98765.4321, -98888.8821);
   RN1(-123.45, double, -98765.4321, 98641.9821);
-  // double number
+  //double number
   RN2(double, 0, 0, 0);
   RN2(double, 123.45, 0, 123.45);
   RN2(double, -123.45, 0, -123.45);
@@ -2344,13 +2377,14 @@ TEST_F(ObExprMinusTest, double_number)
   RN2(double, -98765.4321, -123.45, -98641.9821);
 }
 
+
 TEST_F(ObExprMinusTest, float_number)
 {
   ObMalloc buf;
   number::ObNumber num1;
   number::ObNumber num2;
   number::ObNumber num3;
-  // number float
+  //number float
   RN1(0, float, static_cast<float>(0), 0);
   RN1(0, float, static_cast<float>(123), -123);
   RN1(0, float, static_cast<float>(-123), 123);
@@ -2366,7 +2400,7 @@ TEST_F(ObExprMinusTest, float_number)
   RN1(-123.45, float, static_cast<float>(-123), -0.45);
   RN1(-123.45, float, static_cast<float>(456), -579.45);
   RN1(-123.45, float, static_cast<float>(-87), -36.45);
-  // float number
+  //float number
   RN2(float, static_cast<float>(0), 0, 0);
   RN2(float, static_cast<float>(123), 0, 123);
   RN2(float, static_cast<float>(-123), 0, -123);
@@ -2384,13 +2418,14 @@ TEST_F(ObExprMinusTest, float_number)
   RN2(float, static_cast<float>(-87), -123.45, 36.45);
 }
 
+
 TEST_F(ObExprMinusTest, number_int)
 {
   ObMalloc buf;
   number::ObNumber num1;
   number::ObNumber num2;
   number::ObNumber num3;
-  // tiny small medium
+  //tiny small medium
   RN1(0, tinyint, 0, 0);
   RN1(0, tinyint, 42, -42);
   RN2(tinyint, 56, 0, 56);
@@ -2403,7 +2438,7 @@ TEST_F(ObExprMinusTest, number_int)
   RN1(0, mediumint, 42, -42);
   RN2(mediumint, 56, 0, 56);
   RN2(mediumint, -56, 78, -134);
-  // number int
+  //number int
   RN1(0, int, 0, 0);
   RN1(0, int, 42, -42);
   RN1(0, int, -42, 42);
@@ -2416,7 +2451,7 @@ TEST_F(ObExprMinusTest, number_int)
   RN1(-123.45, int, 42, -165.45);
   RN1(-123.45, int, -42, -81.45);
   RN1(-123.45, int, 256, -379.45);
-  // int number
+  //int number
   RN2(int, 0, 0, 0);
   RN2(int, 42, 0, 42);
   RN2(int, -42, 0, -42);
@@ -2429,17 +2464,14 @@ TEST_F(ObExprMinusTest, number_int)
   RN2(int, 42, -123.45, 165.45);
   RN2(int, -42, -123.45, 81.45);
   RN2(int, 256, -123.45, 379.45);
-  // edge
+  //edge
   RN1(-1000000000000, int, 2147483647, -1002147483647);
   RN1(-100000000000000000000000000000000000000000000000000000000000000000,
-      int,
-      2147483647,
-      -100000000000000000000000000000000000000000000000000000002147483647);
+      int, 2147483647, -100000000000000000000000000000000000000000000000000000002147483647);
   RN1(-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
-      int,
-      2147483647,
-      -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002147483647);
+      int, 2147483647, -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002147483647);
 }
+
 
 TEST_F(ObExprMinusTest, number_uint)
 {
@@ -2447,7 +2479,7 @@ TEST_F(ObExprMinusTest, number_uint)
   number::ObNumber num1;
   number::ObNumber num2;
   number::ObNumber num3;
-  // tiny small medium
+  //tiny small medium
   RN1(0, utinyint, 0, 0);
   RN1(0, utinyint, 42, -42);
   RN2(utinyint, 56, 0, 56);
@@ -2460,7 +2492,7 @@ TEST_F(ObExprMinusTest, number_uint)
   RN1(0, umediumint, 42, -42);
   RN2(umediumint, 56, 0, 56);
   RN2(umediumint, 56, 78, -22);
-  // number uint64
+  //number uint64
   RN1(0, uint64, 0, 0);
   RN1(0, uint64, 42, -42);
   RN1(0, uint64, 4294967295, -4294967295);
@@ -2473,7 +2505,7 @@ TEST_F(ObExprMinusTest, number_uint)
   RN1(1000000000000000, uint64, 0, 1000000000000000);
   RN1(1000000000000000, uint64, 42, 999999999999958);
   RN1(1000000000000000, uint64, 4294967295, 999995705032705);
-  // uint64 number
+  //uint64 number
   RN2(uint64, 0, 0, 0);
   RN2(uint64, 42, 0, 42);
   RN2(uint64, 4294967295, 0, 4294967295);
@@ -2486,17 +2518,14 @@ TEST_F(ObExprMinusTest, number_uint)
   RN2(uint64, 0, 1000000000000000, -1000000000000000);
   RN2(uint64, 42, 1000000000000000, -999999999999958);
   RN2(uint64, 4294967295, 1000000000000000, -999995705032705);
-  // edge
+  //edge
   RN1(-1000000000000, uint64, 2147483647, -1002147483647);
-  RN1(-100000000000000000000000000000000000000000000000000000000000000000,
-      uint64,
-      2147483647,
-      -100000000000000000000000000000000000000000000000000000002147483647);
+  RN1(-100000000000000000000000000000000000000000000000000000000000000000, uint64,
+      2147483647, -100000000000000000000000000000000000000000000000000000002147483647);
   RN1(-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
-      uint64,
-      2147483647,
-      -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002147483647);
+      uint64, 2147483647, -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002147483647);
 }
+
 
 TEST_F(ObExprMinusTest, number_string)
 {
@@ -2504,7 +2533,7 @@ TEST_F(ObExprMinusTest, number_string)
   number::ObNumber num1;
   number::ObNumber num2;
   number::ObNumber num3;
-  // number int
+  //number int
   RN1(0, varchar, "0", 0);
   RN1(0, varchar, "42", -42);
   RN1(0, varchar, "-42", 42);
@@ -2517,7 +2546,7 @@ TEST_F(ObExprMinusTest, number_string)
   RN1(-123.45, varchar, "42", -165.45);
   RN1(-123.45, varchar, "-42", -81.45);
   RN1(-123.45, varchar, "256", -379.45);
-  // int number
+  //int number
   RN2(varchar, "0", 0, 0);
   RN2(varchar, "42", 0, 42);
   RN2(varchar, "-42", 0, -42);
@@ -2532,17 +2561,18 @@ TEST_F(ObExprMinusTest, number_string)
   RN2(varchar, "256", -123.45, 379.45);
 }
 
+
 TEST_F(ObExprMinusTest, double_string)
 {
   ObMalloc buf;
-  // double string
+  //double string
   RD(double, 1, varchar, "-123.4", 124.4, 5);
   RD(double, -1, varchar, "0", -1, 5);
   RD(double, -1, varchar, "1", -2, 5);
   RD(double, 123.4, varchar, "123.4", 0, 5);
   RD(double, 123.4, varchar, "-123.4", 246.8, 5);
   RD(double, 123.4, varchar, "1", 122.4, 5);
-  // string double
+  //string double
   RD(varchar, "1", double, -123.4, 124.4, 5);
   RD(varchar, "-1", double, 0, -1, 5);
   RD(varchar, "-1", double, 1, -2, 5);
@@ -2554,14 +2584,14 @@ TEST_F(ObExprMinusTest, double_string)
 TEST_F(ObExprMinusTest, float_string)
 {
   ObMalloc buf;
-  // float string
+  //float string
   RD(float, static_cast<float>(1), varchar, "-123.4", 124.4, 5);
   RD(float, static_cast<float>(-1), varchar, "0", -1, 5);
   RD(float, static_cast<float>(-1), varchar, "1", -2, 5);
   RD(float, static_cast<float>(123.4), varchar, "123.4", 0, 5);
   RD(float, static_cast<float>(123.4), varchar, "-123.4", 246.8, 5);
   RD(float, static_cast<float>(123.4), varchar, "1", 122.4, 5);
-  // string float
+  //string float
   RD(varchar, "1", float, static_cast<float>(-123.4), 124.4, 5);
   RD(varchar, "-1", float, static_cast<float>(0), -1, 5);
   RD(varchar, "-1", float, static_cast<float>(1), -2, 5);
@@ -2570,10 +2600,11 @@ TEST_F(ObExprMinusTest, float_string)
   RD(varchar, "123.4", float, static_cast<float>(1), 122.4, 5);
 }
 
+
 TEST_F(ObExprMinusTest, string_int)
 {
   ObMalloc buf;
-  // tiny small medium
+  //tiny small medium
   RD(varchar, "0", tinyint, 10, -10, 5);
   RD(varchar, "123.456", tinyint, 20, 103.456, 5);
   RD(varchar, "-123.456", smallint, 30, -153.456, 5);
@@ -2587,14 +2618,14 @@ TEST_F(ObExprMinusTest, string_int)
   RD(mediumint, -50, varchar, "123.456", -173.456, 5);
   RD(mediumint, -60, varchar, "-123.456", 63.456, 5);
 
-  // string int
+  //string int
   RD(varchar, "0", int, 100, -100, 5);
   RD(varchar, "123.456", int, 100, 23.456, 5);
   RD(varchar, "-123.456", int, 100, -223.456, 5);
   RD(varchar, "0", int, -100, 100, 5);
   RD(varchar, "123.456", int, -100, 223.456, 5);
   RD(varchar, "-123.456", int, -100, -23.456, 5);
-  // int string
+  //int string
   RD(int, 100, varchar, "0", 100, 5);
   RD(int, 100, varchar, "123.456", -23.456, 5);
   RD(int, 100, varchar, "-123.456", 223.456, 5);
@@ -2606,7 +2637,7 @@ TEST_F(ObExprMinusTest, string_int)
 TEST_F(ObExprMinusTest, string_uint)
 {
   ObMalloc buf;
-  // utiny usmall umedium
+  //utiny usmall umedium
   RD(varchar, "0", utinyint, 0, 0, 5);
   RD(varchar, "123.456", utinyint, 10, 113.456, 5);
   RD(varchar, "-123.456", usmallint, 20, -143.456, 5);
@@ -2619,15 +2650,16 @@ TEST_F(ObExprMinusTest, string_uint)
   RD(usmallint, 30, varchar, "0", 30, 5);
   RD(umediumint, 40, varchar, "123.456", -83.456, 5);
   RD(umediumint, 50, varchar, "-123.456", 173.456, 5);
-  // string uint
+  //string uint
   RD(varchar, "0", uint64, 100, -100, 5);
   RD(varchar, "123.456", uint64, 100, 23.456, 5);
   RD(varchar, "-123.456", uint64, 100, -223.456, 5);
-  // uint string
+  //uint string
   RD(uint64, 100, varchar, "0", 100, 5);
   RD(uint64, 100, varchar, "123.456", -23.456, 5);
   RD(uint64, 100, varchar, "-123.456", 223.456, 5);
 }
+
 
 TEST_F(ObExprMinusTest, float_double_test)
 {
@@ -2639,104 +2671,34 @@ TEST_F(ObExprMinusTest, float_double_test)
   R(float, -123.0, float, -123.0, double, 0);
 
   // float_int_uint
-  R(float,
-      static_cast<float>(INT64_MIN),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MIN), int, INT64_MIN, double, static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(INT64_MIN), int, 0, double, static_cast<double>(INT64_MIN));
-  R(float,
-      static_cast<float>(INT64_MIN),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(INT64_MIN), int, INT64_MAX, double, static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MAX));
   R(float, 0, int, INT64_MIN, double, -static_cast<double>(INT64_MIN));
   R(float, 0, int, 0, float, 0);
   R(float, 0, int, INT64_MAX, double, -static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(INT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MAX), int, INT64_MIN, double, static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(INT64_MAX), int, 0, double, static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(INT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MIN));
+  R(float, static_cast<float>(INT64_MAX), int, INT64_MAX, double, static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), int, INT64_MIN, double, static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MIN));
   R(float, static_cast<float>(UINT64_MAX), int, 0, double, static_cast<double>(UINT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MAX));
-  R(float,
-      static_cast<float>(UINT64_MAX),
-      uint64,
-      UINT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(UINT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), int, INT64_MAX, double, static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MAX));
+  R(float, static_cast<float>(UINT64_MAX), uint64, UINT64_MAX, double, static_cast<double>(UINT64_MAX) - static_cast<double>(UINT64_MAX));
 
   // double_int_uint
-  R(double,
-      static_cast<double>(INT64_MIN),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MIN), int, INT64_MIN, double, static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(INT64_MIN), int, 0, double, static_cast<double>(INT64_MIN));
-  R(double,
-      static_cast<double>(INT64_MIN),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(INT64_MIN), int, INT64_MAX, double, static_cast<double>(INT64_MIN) - static_cast<double>(INT64_MAX));
   R(double, 0, int, INT64_MIN, double, -static_cast<double>(INT64_MIN));
   R(double, 0, int, 0, double, 0);
   R(double, 0, int, INT64_MAX, double, -static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(INT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MAX), int, INT64_MIN, double, static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(INT64_MAX), int, 0, double, static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(INT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      int,
-      INT64_MIN,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MIN));
+  R(double, static_cast<double>(INT64_MAX), int, INT64_MAX, double, static_cast<double>(INT64_MAX) - static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), int, INT64_MIN, double, static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MIN));
   R(double, static_cast<double>(UINT64_MAX), int, 0, double, static_cast<double>(UINT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      int,
-      INT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MAX));
-  R(double,
-      static_cast<double>(UINT64_MAX),
-      uint64,
-      UINT64_MAX,
-      double,
-      static_cast<double>(UINT64_MAX) - static_cast<double>(UINT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), int, INT64_MAX, double, static_cast<double>(UINT64_MAX) - static_cast<double>(INT64_MAX));
+  R(double, static_cast<double>(UINT64_MAX), uint64, UINT64_MAX, double, static_cast<double>(UINT64_MAX) - static_cast<double>(UINT64_MAX));
 }
 
 TEST_F(ObExprMinusTest, number_test)
@@ -2754,16 +2716,16 @@ TEST_F(ObExprMinusTest, number_test)
   num246_n.from("-246", buf);
 
   R(number, num123_n, int, -123, number, num_zero);
-  R(number, num123_n, int, 123, number, num246_n);
-  R(number, num123_p, int, 123, number, num_zero);
+  R(number, num123_n, int,  123, number, num246_n);
+  R(number, num123_p, int,  123, number, num_zero);
   R(number, num123_n, uint64, 123, number, num246_n);
   R(number, num123_p, uint64, 123, number, num_zero);
   R(number, num123_n, float, -123.0, number, num_zero);
-  R(number, num123_n, float, 123.0, number, num246_n);
-  R(number, num123_p, float, -123.0, number, num246_p);
+  R(number, num123_n, float,  123.0, number, num246_n);
+  R(number, num123_p, float,  -123.0, number, num246_p);
   R(number, num123_n, double, -123.0, number, num_zero);
-  R(number, num123_n, double, 123.0, number, num246_n);
-  R(number, num123_p, double, -123.0, number, num246_p);
+  R(number, num123_n, double,  123.0, number, num246_n);
+  R(number, num123_p, double,  -123.0, number, num246_p);
   R(number, num123_n, number, num123_n, number, num_zero);
   R(number, num123_n, number, num123_p, number, num246_n);
   R(number, num123_p, number, num123_p, number, num_zero);
@@ -2777,7 +2739,7 @@ TEST_F(ObExprMinusTest, flow_test)
   FE(int, INT64_MAX, int, INT64_MIN);
   FE(int, INT64_MIN, int, 100);
 
-  // int_uint
+  //int_uint
   FE(int, 100, uint64, 200);
   FE(int, 100, uint64, UINT64_MAX);
   FE(int, INT64_MIN, uint64, 100);
@@ -2788,7 +2750,7 @@ TEST_F(ObExprMinusTest, flow_test)
   // uint_uint
   FE(uint64, 100, uint64, UINT64_MAX);
   FE(uint64, 100, uint64, 200);
-  FE(uint64, UINT64_MAX - 2, uint64, UINT64_MAX);
+  FE(uint64, UINT64_MAX-2, uint64, UINT64_MAX);
 }
 
 TEST_F(ObExprMinusTest, int_string_test)
@@ -2799,27 +2761,29 @@ TEST_F(ObExprMinusTest, int_string_test)
   R(int, -900, varchar, "32591", double, -33491);
   R(int, 18762, varchar, "-1655", double, 20417);
   R(int, 17410, varchar, "6359", double, 11051);
-  // R(int, 9161, varchar, "+18636", double, -9475);
+  //R(int, 9161, varchar, "+18636", double, -9475);
+
 
   // int_string alpha
-  // R(int, 10, varchar, "a0.22222", double, 10);
-  // R(int, 10, varchar, "0.2a2222", double, 9.8);
-  // R(int, 10, varchar, "-0.2a2222", double, 10.2);
-  // R(int, 10, varchar, "-3430a", double, 3440);
-  // R(int, 10, varchar, "-b3430a", double, 10);
-  // R(int, 10, varchar, "-.b3430a", double, 10);
-  // R(int, 10, varchar, "10b.3430a", double, 0);
-  // R(int, 10, varchar, "+10-b.3430a", double, 0);
+  //R(int, 10, varchar, "a0.22222", double, 10);
+  //R(int, 10, varchar, "0.2a2222", double, 9.8);
+  //R(int, 10, varchar, "-0.2a2222", double, 10.2);
+  //R(int, 10, varchar, "-3430a", double, 3440);
+  //R(int, 10, varchar, "-b3430a", double, 10);
+  //R(int, 10, varchar, "-.b3430a", double, 10);
+  //R(int, 10, varchar, "10b.3430a", double, 0);
+  //R(int, 10, varchar, "+10-b.3430a", double, 0);
+
 
   // uint_string
-  // R(uint64, 10, varchar, "a0.22222", double, 10);
-  // R(uint64, 10, varchar, "0.2a2222", double, 9.8);
-  // R(uint64, 10, varchar, "-0.2a2222", double, 10.2);
-  // R(uint64, 10, varchar, "-3430a", double, 3440);
-  // R(uint64, 10, varchar, "-b3430a", double, 10);
-  // R(uint64, 10, varchar, "-.b3430a", double, 10);
-  /// R(uint64, 10, varchar, "10b.3430a", double, 0);
-  // R(uint64, 10, varchar, "+10-b.3430a", double, 0);
+  //R(uint64, 10, varchar, "a0.22222", double, 10);
+  //R(uint64, 10, varchar, "0.2a2222", double, 9.8);
+  //R(uint64, 10, varchar, "-0.2a2222", double, 10.2);
+  //R(uint64, 10, varchar, "-3430a", double, 3440);
+  //R(uint64, 10, varchar, "-b3430a", double, 10);
+  //R(uint64, 10, varchar, "-.b3430a", double, 10);
+  ///R(uint64, 10, varchar, "10b.3430a", double, 0);
+  //R(uint64, 10, varchar, "+10-b.3430a", double, 0);
 }
 
 /*TEST_F(ObExprMinusTest, basic_test)
@@ -3031,7 +2995,8 @@ TEST_F(ObExprMinusTest, int_string_test)
 }
 */
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

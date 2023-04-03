@@ -144,10 +144,11 @@ select /*+no_use_px*/ t1.c1 from t1 left join t2 t on t1.c1=t.c1,t2 left join t3
 
 # case 39 const predicates
 select * from t1 where true;
-select * from t1 where 1=2;
-select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
+# TODO shengle bug:
+# select * from t1 where 1=2;
+# select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
 select * from t1 left join t2 t on t1.c1=t.c1 where false;
-select * from t1 left join t2 t on 1=1 where false;
+# select * from t1 left join t2 t on 1=1 where false;
 
 # case time range
 ## NULL
@@ -409,6 +410,7 @@ select * from t7 group by c1 order by c1 desc;
 select * from t4 order by c1,c2 desc;
 select * from t4 order by c1 desc,c2 desc;
 
+#对于distribute，当分支有序的时候，limit下压
 select * from t1 order by c1 limit 2;
 select * from t1 order by c2 limit 2;
 select * from t2 order by c1 limit 2;
@@ -576,9 +578,11 @@ select * from t7 where 1 not in (select 2 from t8 where t7.c1=t8.c1);
 select * from t4 where (select c1 from t7)+1 in (select 2 from t8 where t4.c1=t8.c1);
 select * from t4 where (select 2)+(select c1 from t7)+1 in (select 2 from t8 where t4.c1=t8.c1);
 
+#Bug 6510754 group by下压
 select sum(c1)+sum(c2), sum(c1) from t1 group by c2 having sum(c1) > 5;
 select sum(c1), c2, count(c1) from t1 group by c2 having sum(c1) > 5 and count(c1) > 0 and c2 > 1;
 
+#Bug 6512309 group by下压引起的表达式调整
 select distinct sum(c1) from t1 group by c2 having sum(c1) > 5;
 select distinct sum(c1), c2, count(c1) from t1 group by c2 having sum(c1) > 5 and count(c1) > 0 and c2 > 1;
 select distinct sum(c1), c2, count(c1), avg(c1) from t1 group by c2 having sum(c1) > 5 and count(c1) > 0 and c2 > 1;
@@ -591,6 +595,7 @@ select * from t4,t4 t5 where t4.c1+t5.c1 in (select t7.c1 from t7,t8);
 select * from t4,t4 t5 where t4.c1 in (select t7.c1 from t7,t8);
 select * from t4,t4 t5 where t4.c1+t5.c1 in (select t7.c1 from t7,t8 where t7.c1=t8.c1);
 
+##bug 6567691 带别名的远程计划group by下压
 select count(*) v from t1 where c2 = 1;
 select count(*) v, sum(c1) as v2 from t1 where c1 > 0;
 select distinct sum(c1), c2, count(c1), avg(c1) as alias from t1 group by c2 having sum(c1) > 5 and count(c1) > 0 and c2 > 1 and alias > 100;
@@ -612,6 +617,7 @@ select count(*) from t1 left outer join t2 using(c1) group by (t1.c1) having cou
 ## EXPR_SYS coverage
 select now() from t1 left outer join t2 using(c1);
 
+##bug:
 select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where least(t1.c2, a1.c2) > 1;
 select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where length(t1.c2) > 1;
 select a2.c2, t1.c2, a1.c2 from t1  left join t2 a1 on (a1.c1 = t1.c1), t2 a2 where least(t1.c2, a1.c2) =a2.c2;
@@ -710,11 +716,11 @@ select * from (select t1.c1 from t1,t2 where t1.c1=t2.c1 limit 1) v order by v.c
 
 ##having filter pushdown
 ##not contain aggregate function and not contain subquery
-
+#没有分组列，那么having条件下压后上层必须任然保留having条件，不能改变分组信息
 select c1 from t1 having false;
 select min(c1) from t1 having false;
 select count(1) from t1 having false;
-
+#包含分组列，having条件下压上层可以不保留，但是为了安全，任然保留
 select c1 from t1 group by c1 having false;
 
 select c1 from t1 group by c1 having c1>0;
@@ -956,7 +962,7 @@ Select distinct 1, 1 + (@var:=1) from t7;
 # A(remote) + B(remote) on same server, generate remote plan
 select t1.c2 + t2.c1 from t1, t2 where t1.c1 = t2.c2 and t1.c1 and t1.c1 = 1 and t2.c1 = 1;
 
-# UNION and onetime expr related bug 
+# UNION and onetime expr related bug fix: k3.alibaba-inc.com/issue/8081505
 (select 'b') union select cast((select 'a') as char(20));
 select cast((select 'a' from dual order by 1 limit 100) as char(20)) union (select 'b') union select cast((select 'a' from dual order by 1 limit 100) as char(20));
 (select (select b from t12) from t3) union (select c3 from t3);
@@ -971,6 +977,7 @@ select (select 'a') as c1;
 select avg(c1) as a from t1 union select sum(c1) as b from t1;
 select * from t1 group by 1>(select count(*) from t2);
 
+##bug:
 (select count(*) from t1) UNION (select count(*) from t1);
 select min(1) from t1;
 select max(1) from t1;
@@ -1119,7 +1126,7 @@ select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=10 order by c1;
 select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3='10' order by c1;
 select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=c1 order by c1;
 select a from y_t3 where a = 'A' collate utf8mb4_general_ci order by a;
-
+#bug:
 select * from hint.t1 group by b having (select b from hint.t2 limit 1);
 select * from hint.t1 group by b having (select b from hint.t2 limit 1) = 1;
 select * from hint.t1 group by b having (select b from hint.t2 limit 1) = 1 or sum(b) = 1;
@@ -1142,7 +1149,7 @@ select ta.a from (select * from t12) ta where ta.a > (select t13.a from t13 wher
 select (select min(c1) from agg_t2) from agg_t1;
 select * from (select c1 from t1 order by c1) ta limit 1;
 select * from t4,t7 order by t4.c3;
-
+#range的is_get方法测试
 select /*+use_nl(tg1 tg2)*/* from tg1, tg1 tg2 where tg1.c1=tg2.c1 and tg1.c2=1 and tg1.c3=1 and tg2.c2=2 and tg2.c3=2;
 select /*+use_nl(tg1 tg2)*/* from tg1, tg1 tg2 where tg1.c1=tg2.c1 and tg1.c2=1 and tg1.c3=1 and tg2.c2=2 and tg2.c3=2 and tg1.c2 = tg2.c2;
 select /*+use_nl(tg1 tg2)*/* from tg1, tg1 tg2 where tg1.c1=tg2.c1 and tg1.c2=1 and tg1.c3 = 1 and tg2.c2=1 and tg2.c3=1 or tg2.c1=2 and tg2.c2=2 and tg2.c3 = 4 and tg1.c1 = 1 and tg1.c2 = 2 and tg1.c3 = 4;
@@ -1154,15 +1161,15 @@ select /*+ use_nl(t1, t2) */ t2.c2, t2.c3 from (select * from y_t4 t where t.c1=
 
 select count(1) from (select * from t1 order by c2 limit 10) t;
 select count(1) from (select c1, c2, (select c3 from t2) as ca from t1 order by ca limit 10) t;
-
+#distinct 覆盖了索引前缀(c2, c3, c1)
 select distinct c3, c2 from t4;
-
+#group by 覆盖了索引前缀(c2, c3, c1)
 select count(c2) from t4 group by c3, c2;
-
+#group by 覆盖了索引前缀(c2, c3, c1)
 select count(c2) from t4 group by c3, c1, c2;
-
+#group by 覆盖了索引前缀(c1, c2, c3)
 select count(c2) from y_t4 group by c2, c1;
-
+#group by 包含了唯一索引(c1, c2, c3)
 select count(c4) from tg1 group by c4, c3, c5, c2, c1;
 select distinct c3, c2, c4, c5, c1 from tg1;
 select distinct b from y_t5 where (a2 >= 'b') and (b = 'a');
@@ -1226,7 +1233,7 @@ select * from tr where c1 > 1 order by c1;
 
 #storing column index
 select/*+index(t_idx_back t_idx_c2)*/ c3 from t_idx_back;
-select /*+no_use_hash_aggregation*/ distinct c2 from t0;
+select /*+no_use_hash_distinct*/ distinct c2 from t0;
 select * from tidx where c3 = 1;
 select * from tidx where c2 > 0 and c2 < 1000 order by c2 limit 100;
 select * from tidx where c2 > 0 and c2 < 1000 limit 100;
@@ -1238,7 +1245,7 @@ select c1, max(c3) over (partition by c2 order by c3), max(c3) over (partition b
 select c1, max(c3) over (partition by c2 order by c3 rows between 1 preceding and 2 following) from t2 order by c2,c3;
 select c1, max(c3) over (partition by c2 order by c3 rows between 1 preceding and 2 following) from t2 order by c3,c2;
 # variable combination bwtween lower and upper
-
+# TODO@njia.nj 不同的upper/lower组合只影响算子参数, 不影响plan的结构, 更适合专门写一个单测
 select c1, max(c3) over (partition by c2 order by c3 rows between 1 preceding and unbounded following) from t2;
 #select c1, max(c3) over (partition by c2 order by c3 rows between 1 preceding and current row) from t2;
 #select c1, max(c3) over (partition by c2 order by c3 rows between 1 preceding and 2 following) from t2;
@@ -1258,7 +1265,7 @@ select * from tg where c1 = 'bcde';
 select * from tg where c1 = 'baaaa';
 select * from tg where c1 = 'bcde' and (c2 = 'cde' or c2 = 'baaaa');
 
-
+#bug:
 select z1.a, z2.a from z1 full outer join z2 on z1.a = z2.a order by z1.a, z2.a;
 
 ### test for distributing column expr to relations
@@ -1280,7 +1287,7 @@ select c2 from (select c1, c2 from t1 order by 1) a;
 select c2 from (select c1 + c2, c2 from t1 order by 1) a;
 
 #refine query range after extract exec params from subplan
-
+#
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
 select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);

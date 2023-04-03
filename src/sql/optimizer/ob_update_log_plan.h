@@ -12,43 +12,58 @@
 
 #ifndef _OB_UPDATE_LOG_PLAN_H
 #define _OB_UPDATE_LOG_PLAN_H 1
-#include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogUpdate;
-class ObUpdateLogPlan : public ObLogPlan {
-public:
-  ObUpdateLogPlan(ObOptimizerContext& ctx, const ObUpdateStmt* update_stmt) : ObLogPlan(ctx, update_stmt)
-  {}
-  virtual ~ObUpdateLogPlan(){};
+namespace oceanbase
+{
+namespace sql
+{
+  class ObLogUpdate;
+  class ObUpdateLogPlan : public ObDelUpdLogPlan
+  {
+  public:
+    ObUpdateLogPlan(ObOptimizerContext &ctx, const ObUpdateStmt *update_stmt)
+      : ObDelUpdLogPlan(ctx, update_stmt)
+    {}
+    virtual ~ObUpdateLogPlan() {}
 
-  int generate_raw_plan();
+    const ObUpdateStmt *get_stmt() const override
+    { return reinterpret_cast<const ObUpdateStmt*>(stmt_); }
 
-  /**
-   * GENERATE logical PLAN
-   */
-  int generate_plan();
+    int perform_vector_assign_expr_replacement(ObUpdateStmt *stmt);
 
-private:
-  int allocate_update_as_top(ObLogicalOperator*& top);
+  protected:
+    virtual int generate_normal_raw_plan() override;
 
-  int allocate_pdml_update_as_top(ObLogicalOperator*& top);
-  int adjust_assignment_exprs(ObTablesAssignments& assigments, ObIArray<ObQueryRefRawExpr*>& subqueries);
+  private:
+    int candi_allocate_update();
+    int candi_allocate_pdml_update();
+    int create_update_plans(ObIArray<CandidatePlan> &candi_plans,
+                            ObConstRawExpr *lock_row_flag_expr,
+                            const bool force_no_multi_part,
+                            const bool force_multi_part,
+                            ObIArray<CandidatePlan> &update_plans);
+    int allocate_update_as_top(ObLogicalOperator *&top,
+                               ObConstRawExpr *lock_row_flag_expr,
+                               bool is_multi_part_dml);
 
-  int replace_alias_ref_expr(ObRawExpr*& expr, ObIArray<ObQueryRefRawExpr*>& subqueries);
-  int allocate_pdml_update_op(ObLogicalOperator*& top, bool is_index_maintenace, bool is_last_dml_op,
-      const common::ObIArray<TableColumns>* table_column, const ObTablesAssignments* one_table_assignment);
-  int allocate_pdml_delete_op(ObLogicalOperator*& top, bool is_index_maintenace,
-      const common::ObIArray<TableColumns>* table_column, const ObTablesAssignments* one_table_assignment);
-  int allocate_pdml_insert_op(ObLogicalOperator*& top, bool is_index_maintenace, bool is_last_dml_op,
-      const common::ObIArray<TableColumns>* table_column, const ObTablesAssignments* one_table_assignment);
+    int replace_alias_ref_expr(ObRawExpr *&expr);
+    int extract_assignment_subqueries(ObIArray<ObRawExpr*> &normal_query_refs,
+                                      ObIArray<ObRawExpr*> &alias_query_refs);
+    int extract_assignment_subqueries(ObRawExpr *expr,
+                                      ObIArray<ObRawExpr*> &normal_query_refs,
+                                      ObIArray<ObRawExpr*> &alias_query_refs);
+    virtual int prepare_dml_infos() override;
+    virtual int prepare_table_dml_info_special(const ObDmlTableInfo& table_info,
+                                               IndexDMLInfo* table_dml_info,
+                                               ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                               ObIArray<IndexDMLInfo*> &all_index_dml_infos) override;
 
-  DISALLOW_COPY_AND_ASSIGN(ObUpdateLogPlan);
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateLogPlan);
 
-private:
-};
-}  // namespace sql
-}  // namespace oceanbase
+  private:
+  };
+}
+}
 #endif

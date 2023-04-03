@@ -20,21 +20,55 @@
 
 namespace oceanbase {
 namespace common {
-class ObOptStatService {
+class ObOptStatService
+{
 public:
-  ObOptStatService() : inited_(false)
-  {}
-  virtual int init(common::ObMySQLProxy* proxy, ObServerConfig* config);
-  virtual int get_table_stat(const ObOptTableStat::Key& key, ObOptTableStat& tstat);
-  virtual int get_column_stat(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle);
-  virtual int load_column_stat_and_put_cache(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle);
-  virtual int load_table_stat_and_put_cache(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle);
+  ObOptStatService() : inited_(false) {}
+  virtual int init(common::ObMySQLProxy *proxy, ObServerConfig *config);
+  virtual int get_table_stat(const uint64_t tenant_id,
+                             const ObOptTableStat::Key &key,
+                             ObOptTableStat &tstat);
+  virtual int get_column_stat(const uint64_t tenant_id,
+                              const ObOptColumnStat::Key &key,
+                              ObOptColumnStatHandle &handle);
+  virtual int load_table_stat_and_put_cache(const uint64_t tenant_id,
+                                            const ObOptTableStat::Key &key,
+                                            ObOptTableStatHandle &handle);
+  int get_column_stat(const uint64_t tenant_id,
+                      ObIArray<const ObOptColumnStat::Key*> &keys,
+                      ObIArray<ObOptColumnStatHandle> &handles);
+  int get_table_stat(const uint64_t tenant_id,
+                     const ObOptTableStat::Key &key,
+                     ObOptTableStatHandle &handle);
 
+  int erase_table_stat(const ObOptTableStat::Key &key);
+  int erase_column_stat(const ObOptColumnStat::Key &key);
+
+  ObOptStatSqlService &get_sql_service() { return sql_service_; }
+
+  int get_table_rowcnt(const uint64_t tenant_id,
+                       const uint64_t table_id,
+                       const ObIArray<ObTabletID> &all_tablet_ids,
+                       const ObIArray<share::ObLSID> &all_ls_ids,
+                       int64_t &table_rowcnt);
 private:
-  int update_column_stat(const ObOptColumnStat& stat);
-  int load_column_stat_and_put_cache(
-      const ObOptColumnStat::Key& key, ObOptColumnStat& new_entry, ObOptColumnStatHandle& handle);
+  /**
+    * 接口load_and_put_cache(key, handle)的实现，外部不应该直接调用这个函数
+    * new_entry是在栈上分配的空间，用于临时存放统计信息
+    */
+  int load_column_stat_and_put_cache(const uint64_t tenant_id,
+                                     ObIArray<const ObOptColumnStat::Key*> &keys,
+                                     ObIArray<ObOptColumnStatHandle> &handles);
 
+  int init_key_column_stats(ObIAllocator &allocator,
+                            ObIArray<const ObOptColumnStat::Key*> &keys,
+                            ObIArray<ObOptKeyColumnStat> &key_column_stats);
+
+  int load_table_rowcnt_and_put_cache(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const ObIArray<ObTabletID> &all_tablet_ids,
+                                      const ObIArray<share::ObLSID> &all_ls_ids,
+                                      int64_t &table_rowcnt);
 protected:
   bool inited_;
   static const int64_t DEFAULT_TAB_STAT_CACHE_PRIORITY = 1;
@@ -45,7 +79,7 @@ protected:
   ObOptColumnStatCache column_stat_cache_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_OPT_STAT_SERVICE_H_ */

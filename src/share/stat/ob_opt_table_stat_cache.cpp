@@ -21,7 +21,7 @@ namespace common {
  *         OB_ENTRY_NOT_EXIST if values is not available from the cache
  *         other error codes  if unexpected errors occurred
  */
-int ObOptTableStatCache::get_value(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle)
+int ObOptTableStatCache::get_value(const ObOptTableStat::Key &key, ObOptTableStatHandle &handle)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get(key, handle.stat_, handle.handle_))) {
@@ -36,16 +36,17 @@ int ObOptTableStatCache::get_value(const ObOptTableStat::Key& key, ObOptTableSta
   return ret;
 }
 
-int ObOptTableStatCache::put_value(const ObOptTableStat::Key& key, const ObOptTableStat& value)
+int ObOptTableStatCache::put_value(const ObOptTableStat::Key &key, const ObOptTableStat &value)
 {
   return put(key, value, true /* overwrite */);
 }
 
-int ObOptTableStatCache::put_and_fetch_value(
-    const ObOptTableStat::Key& key, const ObOptTableStat& value, ObOptTableStatHandle& handle)
+int ObOptTableStatCache::put_and_fetch_value(const ObOptTableStat::Key &key,
+                                             const ObOptTableStat &value,
+                                             ObOptTableStatHandle &handle)
 {
-  return put_and_fetch(key, value, handle.stat_, handle.handle_, true /* overwrite */);
+  return put_and_fetch(key, value, handle.stat_, handle.handle_, true /* overwrite */ );
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

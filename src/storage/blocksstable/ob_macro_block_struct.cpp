@@ -12,112 +12,123 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_macro_block_struct.h"
-#include "storage/ob_tenant_file_struct.h"
+#include "storage/blocksstable/ob_macro_block_struct.h"
+#include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_macro_block_meta.h"
+#include "storage/blocksstable/ob_sstable_meta.h"
 
-namespace oceanbase {
-namespace blocksstable {
+namespace oceanbase
+{
+namespace blocksstable
+{
 ObMacroBlocksWriteCtx::ObMacroBlocksWriteCtx()
-    : allocator_(ObModIds::OB_MACRO_BLOCK_WRITE_CTX),
-      file_ctx_(allocator_),
-      macro_block_list_(),
-      file_handle_(),
-      file_(NULL)
-{}
+  : allocator_(ObModIds::OB_MACRO_BLOCK_WRITE_CTX, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    macro_block_list_(),
+    use_old_macro_block_count_(0)
+{
+}
 
 ObMacroBlocksWriteCtx::~ObMacroBlocksWriteCtx()
 {
   reset();
 }
 
-bool ObMacroBlocksWriteCtx::is_valid() const
-{
-  return macro_block_meta_list_.count() >= macro_block_list_.count();
-}
-
 void ObMacroBlocksWriteCtx::clear()
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObStorageFile* file = file_;
-  if (macro_block_list_.count() != 0) {
-    if (OB_ISNULL(file) && OB_ISNULL(file = file_handle_.get_storage_file())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("fail to get file", K(ret), K_(file_handle));
-    }
-  }
-
   if (OB_SUCC(ret)) {
-    for (int64_t i = 0; i < macro_block_list_.count(); ++i) {
-      if (OB_FAIL(file->dec_ref(macro_block_list_.at(i)))) {
-        LOG_ERROR("failed to dec ref of pg_file",
-            K(ret),
-            K(macro_block_list_.count()),
-            K(i),
-            K(*file),
-            K(macro_block_list_.at(i)));
-      }
-    }
+   for (int64_t i = 0; i < macro_block_list_.count(); ++i) {
+     if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_list_.at(i)))) {
+       LOG_ERROR("failed to dec macro block ref cnt", K(ret), K(macro_block_list_.count()), K(i),
+                                                   "macro id", macro_block_list_.at(i));
+     }
+   }
   }
 
-  file_ = NULL;
-  file_ctx_.reset();
   macro_block_list_.reset();
-  for (int64_t i = 0; i < macro_block_meta_list_.count(); ++i) {
-    ObMacroBlockMetaV2* meta = const_cast<ObMacroBlockMetaV2*>(macro_block_meta_list_.at(i).meta_);
-    ObMacroBlockSchemaInfo* schema = const_cast<ObMacroBlockSchemaInfo*>(macro_block_meta_list_.at(i).schema_);
-    if (nullptr != meta) {
-      meta->~ObMacroBlockMetaV2();
-      allocator_.free(meta);
-    }
-    if (nullptr != schema) {
-      schema->~ObMacroBlockSchemaInfo();
-      allocator_.free(schema);
-    }
-  }
-  macro_block_meta_list_.reset();
   allocator_.reset();
+  use_old_macro_block_count_ = 0;
 }
 
 void ObMacroBlocksWriteCtx::reset()
 {
   clear();
-  file_handle_.reset();
 }
 
-int ObMacroBlocksWriteCtx::set(ObMacroBlocksWriteCtx& src)
+int ObMacroBlocksWriteCtx::set(ObMacroBlocksWriteCtx &src)
 {
   int ret = OB_SUCCESS;
 
   if (!is_empty()) {
     ret = OB_NO_EMPTY_ENTRY;
     LOG_WARN("not empty, cannot transfer new macro blocks", K(ret), K(*this));
-  } else if (!src.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ObMacroBlocksWriteCtx is not valid", K(ret), K(src));
-  } else if (OB_FAIL(file_ctx_.assign(src.file_ctx_))) {
-    LOG_WARN("failed to assign file ctx", K(ret));
-  } else if (OB_FAIL(file_handle_.assign(src.file_handle_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("fail to assign file handle", K(ret), K(src));
   } else {
-    file_ = src.file_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < src.macro_block_list_.count(); ++i) {
-      if (OB_FAIL(add_macro_block(src.macro_block_list_.at(i), src.macro_block_meta_list_.at(i)))) {
-        LOG_WARN("failed to add macro block", K(ret));
-      }
+    use_old_macro_block_count_ = src.use_old_macro_block_count_;
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.macro_block_list_.count(); ++i) {
+    if (OB_FAIL(add_macro_block_id(src.macro_block_list_.at(i)))) {
+      LOG_WARN("fail to add macro block", K(ret), K(i));
     }
   }
 
   if (OB_SUCC(ret)) {
     src.clear();
-  } else {  // handle failed
+  } else { // handle failed
     LOG_WARN("failed to assign macro blocks write ctx, clear dest ctx", K(ret));
     clear();
   }
   return ret;
 }
 
-int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId& macro_block_id)
+int ObMacroBlocksWriteCtx::deep_copy(ObMacroBlocksWriteCtx *&dst, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObMacroBlocksWriteCtx &src = *this;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMacroBlocksWriteCtx)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(dst = new (buf) ObMacroBlocksWriteCtx())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "fail to new a ObMacroBlocksWriteCtx", K(ret));
+  } else if (OB_FAIL(dst->set(src))) {
+    STORAGE_LOG(WARN, "fail to set macro block write ctx", K(ret), K(src));
+  }
+
+  if (OB_FAIL(ret) && OB_UNLIKELY(dst != nullptr)) {
+    dst->~ObMacroBlocksWriteCtx();
+    allocator.free(buf);
+    dst = nullptr;
+  }
+  return ret;
+}
+
+int ObMacroBlocksWriteCtx::get_macro_id_array(ObIArray<MacroBlockId> &block_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < macro_block_list_.count(); ++i) {
+    MacroBlockId &block_id= macro_block_list_.at(i);
+    if (OB_FAIL(block_ids.push_back(block_id))) {
+      LOG_WARN("failed to push back block id", K(ret));
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(block_id))) {
+      block_ids.pop_back();
+      LOG_ERROR("failed to inc macro block ref cnt", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < block_ids.count(); ++i) {
+      const MacroBlockId &block_id = block_ids.at(i);
+      if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(block_id))) {
+        STORAGE_LOG(ERROR, "fail to dec macro block ref cnt", K(tmp_ret), K(block_id), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!macro_block_id.is_valid())) {
@@ -126,12 +137,8 @@ int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId& macro_block_id
   } else if (OB_FAIL(macro_block_list_.push_back(macro_block_id))) {
     LOG_WARN("fail to push back macro block id", K(ret));
   } else {
-    blocksstable::ObStorageFile* file = file_;
-    if (OB_ISNULL(file) && OB_ISNULL(file = file_handle_.get_storage_file())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("fail to get file", K(ret), K_(file_handle));
-    } else if (OB_FAIL(file->inc_ref(macro_block_id))) {
-      LOG_ERROR("failed to inc ref of pg_file", K(ret));
+    if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
+      LOG_ERROR("failed to inc macro block ref cnt", K(ret));
     }
     if (OB_FAIL(ret)) {
       macro_block_list_.pop_back();
@@ -140,53 +147,5 @@ int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId& macro_block_id
   return ret;
 }
 
-int ObMacroBlocksWriteCtx::add_macro_block_meta(const blocksstable::ObFullMacroBlockMeta& full_meta)
-{
-  int ret = OB_SUCCESS;
-  ObMacroBlockMetaV2* dst_macro_block_meta = nullptr;
-  ObMacroBlockSchemaInfo* dst_macro_schema_info = nullptr;
-  if (OB_UNLIKELY(!full_meta.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(full_meta));
-  } else if (OB_FAIL(full_meta.meta_->deep_copy(dst_macro_block_meta, allocator_))) {
-    LOG_WARN("fail to deep copy macro block meta", K(ret));
-  } else if (OB_FAIL(full_meta.schema_->deep_copy(dst_macro_schema_info, allocator_))) {
-    LOG_WARN("fail to deep copy schema info", K(ret));
-  } else if (OB_FAIL(
-                 macro_block_meta_list_.push_back(ObFullMacroBlockMeta(dst_macro_schema_info, dst_macro_block_meta)))) {
-    LOG_WARN("fail to push back macro block meta", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != dst_macro_block_meta) {
-      dst_macro_block_meta->~ObMacroBlockMetaV2();
-      dst_macro_block_meta = nullptr;
-    }
-    if (nullptr != dst_macro_schema_info) {
-      dst_macro_schema_info->~ObMacroBlockSchemaInfo();
-      dst_macro_schema_info = nullptr;
-    }
-  }
-  return ret;
-}
-
-int ObMacroBlocksWriteCtx::add_macro_block(
-    const MacroBlockId& macro_block_id, const blocksstable::ObFullMacroBlockMeta& macro_block_meta)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!macro_block_id.is_valid() || !macro_block_meta.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments",
-        K(ret),
-        K(macro_block_id),
-        K(macro_block_meta),
-        K(macro_block_meta.meta_->is_valid()),
-        K(macro_block_meta.schema_->is_valid()));
-  } else if (OB_FAIL(add_macro_block_meta(macro_block_meta))) {
-    LOG_WARN("fail to add macro block meta", K(ret));
-  } else if (OB_FAIL(add_macro_block_id(macro_block_id))) {
-    LOG_WARN("fail to add macro block id", K(ret));
-  }
-  return ret;
-}
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+} // end namespace blocksstable
+} // end namespace oceanbase

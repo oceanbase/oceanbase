@@ -1,0 +1,24 @@
+#!/bin/bash
+CWD=$(cd `dirname $0`;pwd)
+cd "${CWD}"
+source _env
+
+case "$1" in
+  sys)
+    LOGIN_USER="root@sys"
+    DB="oceanbase"
+    ;;
+  root)
+    DB="oceanbase"
+    LOGIN_USER="root@${OB_TENANT_NAME}"
+    ;;
+  *)
+    DB="test"
+    LOGIN_USER="test@${OB_TENANT_NAME}"
+    ;;
+esac
+
+echo "login as ${LOGIN_USER}"
+CMD="obclient -h127.1 -u${LOGIN_USER} -A -D${DB} -P${OB_MYSQL_PORT} ${PASSCMD}"
+echo "Command is: ${CMD}"
+${CMD}

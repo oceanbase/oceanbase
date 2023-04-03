@@ -15,11 +15,14 @@
 
 #include <stdint.h>
 
-namespace oceanbase {
-namespace observer {
-class ObDumpTaskGenerator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObDumpTaskGenerator
+{
   /*
-    1. etc/dump.config
+    1. etc/dump.config文件写入相应指令
        dump entity all
        dump entity p_entity='0xffffffffff',slot_idx=1000
        dump chunk all
@@ -29,28 +32,28 @@ class ObDumpTaskGenerator {
        set option leak_rate = xxx
        dump memory leak
     2. kill -62 pid
-    3. see log/memory_meta
+    3. 结果见log/memory_meta文件
   */
-  enum TaskType {
-    CONTEXT_ALL = 0,
-    CONTEXT = 1,
-    CHUNK_ALL = 2,
+  enum TaskType
+  {
+    CONTEXT_ALL          = 0,
+    CONTEXT              = 1,
+    CHUNK_ALL           = 2,
     CHUNK_OF_TENANT_CTX = 3,
     CHUNK               = 4,
     SET_LEAK_MOD        = 5,
+    SET_LEAK_RATE       = 6,
     MEMORY_LEAK         = 7,
   };
-
 public:
   static int generate_task_from_file();
   static int generate_mod_stat_task();
-
 private:
-  static int read_cmd(char* buf, int64_t len, int64_t& real_size);
-  static void dump_memory_leak();
+  static int read_cmd(char *buf, int64_t len, int64_t &real_size);
+  static void  dump_memory_leak();
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 
 #endif

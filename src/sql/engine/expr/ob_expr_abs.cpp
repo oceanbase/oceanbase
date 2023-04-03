@@ -21,21 +21,26 @@
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace oceanbase::common;
 
-namespace sql {
+namespace sql
+{
 
-#define DEF_EVAL_ABS_FUNC(type) \
-  template <>                   \
-  int eval_datum_abs<type>(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+#define DEF_EVAL_ABS_FUNC(type)                                \
+  template <>                                                  \
+  int eval_datum_abs<type>(const ObExpr &expr, ObEvalCtx &ctx, \
+                           ObDatum &expr_datum)
 
-static int check_expr_and_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum*& param_datum, bool& found_null)
+static int check_expr_and_eval(const ObExpr &expr, ObEvalCtx &ctx,
+                               ObDatum *&param_datum, bool &found_null)
 {
   int ret = OB_SUCCESS;
   found_null = false;
-  if (OB_UNLIKELY(expr.type_ != T_OP_ABS) || OB_UNLIKELY(expr.arg_cnt_ != 1) || OB_ISNULL(expr.args_) ||
-      OB_ISNULL(expr.args_[0])) {
+  if (OB_UNLIKELY(expr.type_ != T_OP_ABS)
+      || OB_UNLIKELY(expr.arg_cnt_ != 1) || OB_ISNULL(expr.args_)
+      || OB_ISNULL(expr.args_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, param_datum))) {
@@ -48,8 +53,10 @@ static int check_expr_and_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum*& par
   return ret;
 }
 
-template <ObObjType obj_type>
-int eval_datum_abs(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+template<ObObjType obj_type>
+int eval_datum_abs(const ObExpr &expr,
+                          ObEvalCtx &ctx,
+                          ObDatum &expr_datum)
 {
   UNUSED(expr);
   UNUSED(ctx);
@@ -69,7 +76,7 @@ DEF_EVAL_ABS_FUNC(ObNullType)
 DEF_EVAL_ABS_FUNC(ObNumberType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param_datum = NULL;
+  ObDatum *param_datum = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param_datum, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
@@ -89,7 +96,7 @@ DEF_EVAL_ABS_FUNC(ObNumberType)
 DEF_EVAL_ABS_FUNC(ObUNumberType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param_datum = NULL;
+  ObDatum *param_datum = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param_datum, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
@@ -109,14 +116,15 @@ DEF_EVAL_ABS_FUNC(ObUNumberType)
 DEF_EVAL_ABS_FUNC(ObFloatType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param, found_null))) {
     LOG_WARN("check expr and eval", K(ret));
   } else if (found_null) {
     expr_datum.set_null();
   } else {
-    expr_datum.set_float(param->get_float() >= 0.0 ? param->get_float() : -param->get_float());
+    expr_datum.set_float(param->get_float() >= 0.0
+                         ? param->get_float() : -param->get_float());
   }
   return ret;
 }
@@ -124,14 +132,15 @@ DEF_EVAL_ABS_FUNC(ObFloatType)
 DEF_EVAL_ABS_FUNC(ObDoubleType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
   } else if (found_null) {
     expr_datum.set_null();
   } else {
-    expr_datum.set_double(param->get_double() >= 0 ? param->get_double() : -param->get_double());
+    expr_datum.set_double(param->get_double() >= 0
+                          ? param->get_double() : -param->get_double());
   }
   return ret;
 }
@@ -139,7 +148,7 @@ DEF_EVAL_ABS_FUNC(ObDoubleType)
 DEF_EVAL_ABS_FUNC(ObUDoubleType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
@@ -154,7 +163,7 @@ DEF_EVAL_ABS_FUNC(ObUDoubleType)
 DEF_EVAL_ABS_FUNC(ObIntType)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
@@ -162,6 +171,7 @@ DEF_EVAL_ABS_FUNC(ObIntType)
     expr_datum.set_null();
   } else {
     int64_t param_int = param->get_int();
+    // 只有mysql模式会调到这个函数，如果发现是INT64_MIN，需要报out of range
     if (INT64_MIN == param_int) {
       ret = OB_OPERATE_OVERFLOW;
       LOG_WARN("value out of range", K(ret));
@@ -175,7 +185,7 @@ DEF_EVAL_ABS_FUNC(ObIntType)
 DEF_EVAL_ABS_FUNC(ObUInt64Type)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   bool found_null = false;
   if (OB_FAIL(check_expr_and_eval(expr, ctx, param, found_null))) {
     LOG_WARN("failed to check expr and eval", K(ret));
@@ -189,8 +199,9 @@ DEF_EVAL_ABS_FUNC(ObUInt64Type)
 
 ObExpr::EvalFunc abs_funcs[ObMaxType];
 
-template <int IDX>
-struct AbsFuncIniter {
+template<int IDX>
+struct AbsFuncIniter
+{
   static bool init_array()
   {
     abs_funcs[IDX] = &eval_datum_abs<static_cast<ObObjType>(IDX)>;
@@ -200,13 +211,15 @@ struct AbsFuncIniter {
 
 static bool abs_eval_func_init_ret = ObArrayConstIniter<ObMaxType, AbsFuncIniter>::init();
 
-static_assert(ObMaxType == sizeof(abs_funcs) / sizeof(void*), "unexpected size");
+static_assert(ObMaxType == sizeof(abs_funcs) / sizeof(void *), "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_ABS_EVAL, abs_funcs, ARRAYSIZEOF(abs_funcs));
 
-ObExprAbs::ObExprAbs(ObIAllocator& alloc) : ObExprOperator(alloc, T_OP_ABS, N_ABS, 1, NOT_ROW_DIMENSION), func_(NULL)
-{}
 
-int ObExprAbs::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+ObExprAbs::ObExprAbs(ObIAllocator &alloc)
+    : ObExprOperator(alloc, T_OP_ABS, N_ABS, 1, NOT_ROW_DIMENSION),
+      func_(NULL) {}
+
+int ObExprAbs::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   func_ = NULL;
@@ -214,22 +227,24 @@ int ObExprAbs::deserialize(const char* buf, const int64_t data_len, int64_t& pos
   if (OB_SUCC(ret)) {
     if (input_types_.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected error. invalid input types", K(ret), K(input_types_.count()));
+      LOG_ERROR("unexpected error. invalid input types",
+                K(ret),
+                K(input_types_.count()));
     } else {
       ObObjType param_type = input_types_.at(0).get_calc_type();
       if (OB_FAIL(set_func(param_type))) {
         LOG_WARN("set func failed", K(ret), K(param_type));
-        func_ = NULL;  // defensive code
+        func_ = NULL;//defensive code
       }
     }
   }
   return ret;
 }
 
-int ObExprAbs::assign(const ObExprOperator& other)
+int ObExprAbs::assign(const ObExprOperator &other)
 {
   int ret = OB_SUCCESS;
-  const ObExprAbs* tmp_other = dynamic_cast<const ObExprAbs*>(&other);
+  const ObExprAbs *tmp_other = dynamic_cast<const ObExprAbs *>(&other);
   if (OB_UNLIKELY(NULL == tmp_other)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument. wrong type for other", K(ret), K(other));
@@ -243,11 +258,12 @@ int ObExprAbs::assign(const ObExprOperator& other)
   return ret;
 }
 
-int ObExprAbs::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprAbs::calc_result_type1(ObExprResType &type, ObExprResType &type1,
+                                 ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = type_ctx.get_session();
+  const ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -255,16 +271,23 @@ int ObExprAbs::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObEx
     // result type
     ObObjType itype;
     if (OB_SUCC(ObExprResultTypeUtil::get_abs_result_type(itype, type1.get_type()))) {
-      if (ObMaxType == itype) {
+      if (lib::is_oracle_mode() && ob_is_json(type1.get_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      } else if (ObMaxType == itype) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
       } else {
         type.set_type(itype);
       }
     }
 
+    // collation
+    // 结果不可能为字符类型，无需专门设置collation
     if (lib::is_oracle_mode() && (type1.is_varchar_or_char() || type1.is_number_float())) {
       type.set_precision(PRECISION_UNKNOWN_YET);
       type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+    } else if (lib::is_mysql_mode() && type.is_double() && type1.get_scale() != SCALE_UNKNOWN_YET) {
+      type.set_scale(type1.get_scale());
+      type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type1.get_scale())));
     } else {
       type.set_accuracy(type1.get_accuracy());
     }
@@ -272,32 +295,23 @@ int ObExprAbs::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObEx
     // null flag
     ObExprOperator::calc_result_flag1(type, type1);
 
-    if (OB_SUCC(ret) && session->use_static_typing_engine()) {
+    if (OB_SUCC(ret)) {
       // set calc type for param
-      ObObjType param_calc_type = calc_param_type(type1.get_type(), lib::is_oracle_mode());
+      ObObjType param_calc_type = calc_param_type(type1.get_type(),
+                                                  lib::is_oracle_mode());
       if (OB_UNLIKELY(ObMaxType == param_calc_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid param calc type", K(ret), K(type1.get_type()), K(param_calc_type));
       } else {
         type1.set_calc_type(param_calc_type);
+        if (type1.get_type() == ObJsonType) {
+          type1.set_calc_type(ObDoubleType);
+          type.set_type(ObDoubleType);
+        }
       }
     }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
-  }
-  return ret;
-}
-
-int ObExprAbs::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (obj.is_null()) {
-    result.set_null();
-  } else if (OB_ISNULL(func_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error. func_ is null", K(obj), K(ret), K(common::lbt()));
-  } else {
-    ret = func_(result, obj, expr_ctx);
   }
   return ret;
 }
@@ -309,7 +323,7 @@ int ObExprAbs::set_func(ObObjType param_type)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param_type is invalid", K(ret), K(param_type));
   } else {
-    if (share::is_oracle_mode()) {
+    if (lib::is_oracle_mode()) {
       if (OB_FAIL(set_func_oracle(param_type))) {
         LOG_WARN("set_func_oracle failed", K(ret));
       }
@@ -394,7 +408,7 @@ int ObExprAbs::set_func_mysql(ObObjType param_type)
     case ObUInt32Type:
       func_ = abs_uint32_uint64;
       break;
-    // in mysql, abs(uint32/uint64/year) returns uint64
+    //in mysql, abs(uint32/uint64/year) returns uint64
     case ObUInt64Type:
       func_ = abs_uint32_uint64;
       break;
@@ -431,7 +445,7 @@ int ObExprAbs::set_func_mysql(ObObjType param_type)
     case ObCharType:
     // case ObExtendType:
     case ObUnknownType:
-    // TODO text share with varchar temporarily
+    // TODO@hanhui text share with varchar temporarily
     case ObTinyTextType:
     case ObTextType:
     case ObMediumTextType:
@@ -448,6 +462,9 @@ int ObExprAbs::set_func_mysql(ObObjType param_type)
     case ObSetType:
       func_ = abs_enum_set;
       break;
+    case ObJsonType:
+      func_ = abs_double;
+      break;
     default: {
       LOG_ERROR("unexpected param type", K(param_type));
       ret = OB_ERR_UNEXPECTED;
@@ -457,19 +474,23 @@ int ObExprAbs::set_func_mysql(ObObjType param_type)
   return ret;
 }
 
-// tinyint, mediumint, smallint, int32
-int ObExprAbs::abs_int(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//tinyint, mediumint, smallint, int32
+int ObExprAbs::abs_int(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   res.set_int(param.get_int() >= 0 ? param.get_int() : -param.get_int());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// int64
-int ObExprAbs::abs_int64(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//int64
+int ObExprAbs::abs_int64(ObObj &res,
+                     const ObObj &param,
+                     ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   if (INT64_MIN == param.get_int()) {
-    ret = OB_OPERATE_OVERFLOW;  // compatible with MySQL
+    ret = OB_OPERATE_OVERFLOW; //INT64_MIN时，mysql会返回一个out of range的错误
     LOG_WARN("value out of range", K(ret), K(INT64_MIN), K(param));
   } else {
     res.set_int(param.get_int() >= 0LL ? param.get_int() : -param.get_int());
@@ -477,56 +498,74 @@ int ObExprAbs::abs_int64(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
   UNUSED(expr_ctx);
   return ret;
 }
-// utiniyint, umediumint, usmallint
-int ObExprAbs::abs_uint(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//utiniyint, umediumint, usmallint
+int ObExprAbs::abs_uint(ObObj &res,
+                    const ObObj &param,
+                    ObExprCtx &expr_ctx)
 {
   res.set_uint64(static_cast<uint64_t>(param.get_uint32()));
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// uint32 uint64
-int ObExprAbs::abs_uint32_uint64(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//uint32 uint64
+int ObExprAbs::abs_uint32_uint64(ObObj &res,
+                             const ObObj &param,
+                             ObExprCtx &expr_ctx)
 {
   res.set_uint64(param.get_uint64());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// float
-int ObExprAbs::abs_float(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//float
+int ObExprAbs::abs_float(ObObj &res,
+                     const ObObj &param,
+                     ObExprCtx &expr_ctx)
 {
   res.set_float(param.get_float() >= 0.0f ? param.get_float() : -param.get_float());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-int ObExprAbs::abs_float_double(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+int ObExprAbs::abs_float_double(ObObj &res,
+                     const ObObj &param,
+                     ObExprCtx &expr_ctx)
 {
-  res.set_double(static_cast<double>(param.get_float() >= 0.0f ? param.get_float() : -param.get_float()));
+  res.set_double(static_cast<double>(param.get_float() >= 0.0f ?
+                                        param.get_float() :
+                                        -param.get_float()));
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// double
-int ObExprAbs::abs_double(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//double
+int ObExprAbs::abs_double(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   res.set_double(param.get_double() >= 0.0 ? param.get_double() : -param.get_double());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// ufloat
-int ObExprAbs::abs_ufloat_udouble(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//ufloat
+int ObExprAbs::abs_ufloat_udouble(ObObj &res,
+                     const ObObj &param,
+                     ObExprCtx &expr_ctx)
 {
   res.set_udouble(static_cast<double>(param.get_ufloat()));
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// udouble
-int ObExprAbs::abs_udouble(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//udouble
+int ObExprAbs::abs_udouble(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   res.set_udouble(param.get_udouble());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// number
-int ObExprAbs::abs_number(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//number
+int ObExprAbs::abs_number(ObObj &res,
+                     const ObObj &param,
+                     ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!param.is_number() && !param.is_number_float())) {
@@ -549,8 +588,10 @@ int ObExprAbs::abs_number(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
   }
   return ret;
 }
-// unumber
-int ObExprAbs::abs_unumber(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//unumber
+int ObExprAbs::abs_unumber(ObObj &res,
+                      const ObObj &param,
+                      ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   TYPE_CHECK(param, ObUNumberType);
@@ -569,8 +610,10 @@ int ObExprAbs::abs_unumber(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
   return ret;
 }
 
-// null
-int ObExprAbs::abs_null(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//null
+int ObExprAbs::abs_null(ObObj &res,
+                      const ObObj &param,
+                      ObExprCtx &expr_ctx)
 {
   res.set_null();
   UNUSED(param);
@@ -578,8 +621,10 @@ int ObExprAbs::abs_null(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
   return OB_SUCCESS;
 }
 
-// others. (datetime time varchar, etc)
-int ObExprAbs::abs_others_double(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//others. (datetime time varchar, etc)
+int ObExprAbs::abs_others_double(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   double value = 0.0;
@@ -591,8 +636,10 @@ int ObExprAbs::abs_others_double(ObObj& res, const ObObj& param, ObExprCtx& expr
   return ret;
 }
 
-// others for oracle. (datetime time varchar, etc)
-int ObExprAbs::abs_others_number(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//others for oracle. (datetime time varchar, etc)
+int ObExprAbs::abs_others_number(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   number::ObNumber value;
@@ -604,53 +651,65 @@ int ObExprAbs::abs_others_number(ObObj& res, const ObObj& param, ObExprCtx& expr
   return ret;
 }
 
-int ObExprAbs::abs_hexstring(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+int ObExprAbs::abs_hexstring(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   double value = 0.0;
   EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
   EXPR_GET_DOUBLE_V2(param, value);
   if (OB_SUCC(ret)) {
-    // udouble, not double. compatible with mysql.
+    //udouble, not double. compatible with mysql.
     res.set_udouble(value >= 0.0 ? value : -value);
   }
   return ret;
 }
 
-int ObExprAbs::abs_year(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+int ObExprAbs::abs_year(ObObj &res,
+                   const ObObj &param,
+                   ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   uint64_t value = 0.0;
   EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
   EXPR_GET_UINT64_V2(param, value);
   if (OB_SUCC(ret)) {
-    res.set_uint64(value);  // abs(year) returns uint64. compatible with mysql.
+    res.set_uint64(value);//abs(year) returns uint64. compatible with mysql.
   }
   return ret;
 }
 
-// bit
-int ObExprAbs::abs_bit(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//bit
+int ObExprAbs::abs_bit(ObObj &res,
+                       const ObObj &param,
+                       ObExprCtx &expr_ctx)
 {
   res.set_uint64(param.get_bit());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
-// enum_set
-int ObExprAbs::abs_enum_set(ObObj& res, const ObObj& param, ObExprCtx& expr_ctx)
+//enum_set
+int ObExprAbs::abs_enum_set(ObObj &res,
+                            const ObObj &param,
+                            ObExprCtx &expr_ctx)
 {
   res.set_uint64(param.get_uint64());
   UNUSED(expr_ctx);
   return OB_SUCCESS;
 }
 
-int ObExprAbs::cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprAbs::cg_expr(ObExprCGCtx &ctx,
+                       const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
   UNUSED(raw_expr);
-  if (OB_UNLIKELY(T_OP_ABS != rt_expr.type_) || OB_ISNULL(rt_expr.args_) || OB_UNLIKELY(rt_expr.arg_cnt_ != 1) ||
-      OB_ISNULL(rt_expr.args_[0])) {
+  if (OB_UNLIKELY(T_OP_ABS != rt_expr.type_)
+      || OB_ISNULL(rt_expr.args_)
+      || OB_UNLIKELY(rt_expr.arg_cnt_ !=  1)
+      || OB_ISNULL(rt_expr.args_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_UNLIKELY(rt_expr.args_[0]->datum_meta_.type_ >= ObMaxType)) {
@@ -662,122 +721,126 @@ int ObExprAbs::cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& rt_e
   return ret;
 }
 
-ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type, const bool is_oracle_mode)
+ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type,
+                                     const bool is_oracle_mode)
 {
   ObObjType calc_type = ObMaxType;
   if (is_oracle_mode) {
-    switch (orig_param_type) {
-      case ObNullType: {
-        calc_type = ObNullType;
+    switch (orig_param_type)
+    {
+     case ObNullType: {
+       calc_type = ObNullType;
         break;
-      }
-      case ObFloatType: {
-        calc_type = ObFloatType;
-        break;
-      }
-      case ObDoubleType: {
-        calc_type = ObDoubleType;
-        break;
-      }
-      case ObNumberType:
-      case ObTinyIntType:
-      case ObSmallIntType:
-      case ObInt32Type:
-      case ObIntType:
-      case ObNumberFloatType:
-      case ObTimestampTZType:
-      case ObTimestampLTZType:
-      case ObTimestampNanoType:
-      case ObCharType:
-      case ObVarcharType:
-      case ObIntervalDSType:
-      case ObIntervalYMType:
-      case ObNVarchar2Type:
-      case ObNCharType:
-      case ObURowIDType: {
-        calc_type = ObNumberType;
-        break;
-      }
-      default: {
-        // do nothing
-        break;
-      }
+     }
+     case ObFloatType: {
+       calc_type = ObFloatType;
+       break;
+     }
+     case ObDoubleType: {
+       calc_type = ObDoubleType;
+       break;
+     }
+     case ObNumberType:
+     case ObTinyIntType:
+     case ObSmallIntType:
+     case ObInt32Type:
+     case ObIntType:
+     case ObNumberFloatType:
+     case ObTimestampTZType:
+     case ObTimestampLTZType:
+     case ObTimestampNanoType:
+     case ObCharType:
+     case ObVarcharType:
+     case ObIntervalDSType:
+     case ObIntervalYMType:
+     case ObNVarchar2Type:
+     case ObNCharType:
+     case ObURowIDType: {
+       calc_type = ObNumberType;
+       break;
+     }
+     default: {
+       // do nothing
+       break;
+     }
     }
   } else {
-    switch (orig_param_type) {
-      case ObTinyIntType:
-      case ObSmallIntType:
-      case ObMediumIntType:
-      case ObInt32Type:
-      case ObIntType: {
-        calc_type = ObIntType;
-        break;
-      }
-      case ObUTinyIntType:
-      case ObUSmallIntType:
-      case ObUMediumIntType:
-      case ObUInt32Type:
-      case ObUInt64Type: {
-        calc_type = ObUInt64Type;
-        break;
-      }
-      case ObFloatType:
-      case ObDoubleType: {
-        calc_type = ObDoubleType;
-        break;
-      }
-      case ObUFloatType:
-      case ObUDoubleType: {
-        calc_type = ObUDoubleType;
-        break;
-      }
-      case ObNumberType: {
-        calc_type = ObNumberType;
-        break;
-      }
-      case ObUNumberType: {
-        calc_type = ObUNumberType;
-        break;
-      }
-      case ObNullType: {
-        calc_type = ObNullType;
-        break;
-      }
-      case ObYearType: {
-        calc_type = ObUInt64Type;
-        break;
-      }
-      case ObDateTimeType:
-      case ObTimestampType:
-      case ObDateType:
-      case ObTimeType:
-      case ObVarcharType:
-      case ObCharType:
-      case ObUnknownType:
-      case ObHexStringType:
-      case ObTextType:
-      case ObTinyTextType:
-      case ObMediumTextType:
-      case ObLongTextType: {
-        calc_type = ObDoubleType;
-        break;
-      }
-      case ObBitType: {
-        calc_type = ObUInt64Type;
-        break;
-      }
-      case ObEnumType:
-      case ObSetType: {
-        calc_type = ObDoubleType;
-        break;
-      }
-      default: {
-        break;
-      }
+    switch (orig_param_type)
+    {
+    case ObTinyIntType:
+    case ObSmallIntType:
+    case ObMediumIntType:
+    case ObInt32Type:
+    case ObIntType: {
+      calc_type = ObIntType;
+      break;
+    }
+    case ObUTinyIntType:
+    case ObUSmallIntType:
+    case ObUMediumIntType:
+    case ObUInt32Type:
+    case ObUInt64Type: {
+      calc_type = ObUInt64Type;
+      break;
+    }
+    case ObFloatType:
+    case ObDoubleType: {
+      calc_type = ObDoubleType;
+      break;
+    }
+    case ObUFloatType:
+    case ObUDoubleType: {
+      calc_type = ObUDoubleType;
+      break;
+    }
+    case ObNumberType: {
+      calc_type = ObNumberType;
+      break;
+    }
+    case ObUNumberType: {
+      calc_type = ObUNumberType;
+      break;
+    }
+    case ObNullType: {
+      calc_type = ObNullType;
+      break;
+    }
+    case ObYearType: {
+      calc_type = ObUInt64Type;
+      break;
+    }
+    case ObDateTimeType:
+    case ObTimestampType:
+    case ObDateType:
+    case ObTimeType:
+    case ObVarcharType:
+    case ObCharType:
+    case ObUnknownType:
+    case ObHexStringType:
+    case ObTextType:
+    case ObTinyTextType:
+    case ObMediumTextType:
+    case ObLongTextType: {
+      calc_type = ObDoubleType;
+      break;
+    }
+    case ObBitType: {
+      calc_type = ObUInt64Type;
+      break;
+    }
+    case ObEnumType:
+    case ObSetType:
+    case ObJsonType: {
+      calc_type = ObDoubleType;
+      break;
+    }
+    default: {
+      break;
+    }
     }
   }
   return calc_type;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

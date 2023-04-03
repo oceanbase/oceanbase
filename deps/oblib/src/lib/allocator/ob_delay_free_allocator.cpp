@@ -13,32 +13,41 @@
 #include "lib/allocator/ob_delay_free_allocator.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
-ObDelayFreeMemBlock::ObDelayFreeMemBlock(char* end)
-    : ObDLinkBase<ObDelayFreeMemBlock>(), free_timestamp_(0), obj_count_(0), end_(end)
+
+namespace oceanbase
+{
+namespace common
+{
+ObDelayFreeMemBlock::ObDelayFreeMemBlock(char *end)
+  : ObDLinkBase<ObDelayFreeMemBlock>(), free_timestamp_(0), obj_count_(0), end_(end)
 {
   current_ = data_;
 }
 
 ObDelayFreeMemBlock::~ObDelayFreeMemBlock()
-{}
+{
+}
 
 ObDelayFreeAllocator::ObDelayFreeAllocator()
-    : cache_memory_size_(0),
-      memory_fragment_size_(0),
-      total_size_(0),
-      expire_duration_us_(0),
-      label_(nullptr),
-      inited_(false)
-{}
+  : cache_memory_size_(0),
+    memory_fragment_size_(0),
+    total_size_(0),
+    expire_duration_us_(0),
+    label_(nullptr),
+    mutex_(ObLatchIds::OB_DELAY_FREE_ALLOCATOR_LOCK),
+    inited_(false)
+{
+}
 
 ObDelayFreeAllocator::~ObDelayFreeAllocator()
 {
   destroy();
 }
 
-int ObDelayFreeAllocator::init(const lib::ObLabel& label, const bool is_thread_safe, const int64_t expire_duration_us)
+int ObDelayFreeAllocator::init(
+  const lib::ObLabel &label,
+  const bool is_thread_safe,
+  const int64_t expire_duration_us)
 {
   UNUSED(is_thread_safe);
   int ret = OB_SUCCESS;
@@ -48,7 +57,12 @@ int ObDelayFreeAllocator::init(const lib::ObLabel& label, const bool is_thread_s
     LIB_ALLOC_LOG(WARN, "The ObBlockLinkMemoryAllocator has been inited.");
   } else if (expire_duration_us < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_ALLOC_LOG(WARN, "Invaid arguments, ", "label", label, "expire_duration_us", expire_duration_us);
+    LIB_ALLOC_LOG(WARN,
+                  "Invaid arguments, ",
+                  "label",
+                  label,
+                  "expire_duration_us",
+                  expire_duration_us);
   } else {
     label_ = label;
     allocator_.set_label(label);
@@ -73,16 +87,16 @@ void ObDelayFreeAllocator::destroy()
   }
 }
 
-void* ObDelayFreeAllocator::alloc(const int64_t size)
+void *ObDelayFreeAllocator::alloc(const int64_t size)
 {
-  void* ptr_ret = NULL;
-  ObDelayFreeMemBlock* block = NULL;
+  void *ptr_ret = NULL;
+  ObDelayFreeMemBlock *block = NULL;
   int64_t data_size = size + sizeof(DataMeta);
 
   if (!inited_) {
-    LIB_ALLOC_LOG(WARN, "The ObBlockLinkMemoryAllocator has not been inited.");
+    LIB_ALLOC_LOG_RET(WARN, OB_NOT_INIT, "The ObBlockLinkMemoryAllocator has not been inited.");
   } else {
-    // alloc memory
+    //alloc memory
     lib::ObMutexGuard guard(mutex_);
     if (working_list_.is_empty()) {
       block = alloc_block(data_size);
@@ -91,39 +105,39 @@ void* ObDelayFreeAllocator::alloc(const int64_t size)
     }
 
     if (NULL == block) {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc first meta memory block.");
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERROR, "cannot malloc first meta memory block.");
     } else if (data_size <= block->remain()) {
       ptr_ret = block->alloc(data_size);
     } else if (NULL != (block = alloc_block(data_size))) {
       ptr_ret = block->alloc(data_size);
     } else {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc memory ", "size", size);
+      LIB_ALLOC_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "cannot malloc memory ", "size", size);
     }
 
     // set meta value
     if (NULL != ptr_ret) {
-      DataMeta* meta = reinterpret_cast<DataMeta*>(ptr_ret);
+      DataMeta *meta = reinterpret_cast<DataMeta *>(ptr_ret);
       meta->data_len_ = data_size;
       meta->mem_block_ = block;
-      ptr_ret = static_cast<void*>(meta + 1);
+      ptr_ret = static_cast<void *>(meta + 1);
     }
   }
   return ptr_ret;
 }
 
-void ObDelayFreeAllocator::free(void* ptr)
+void ObDelayFreeAllocator::free(void *ptr)
 {
   if (!inited_) {
-    LIB_ALLOC_LOG(WARN, "The ObBlockLinkMemoryAllocator has not been inited.");
+    LIB_ALLOC_LOG_RET(WARN, OB_NOT_INIT, "The ObBlockLinkMemoryAllocator has not been inited.");
   } else if (NULL == ptr) {
-    LIB_ALLOC_LOG(WARN, "the free ptr is NULL");
+    LIB_ALLOC_LOG_RET(WARN, OB_ERROR, "the free ptr is NULL");
   } else {
     lib::ObMutexGuard guard(mutex_);
-    DataMeta* meta = reinterpret_cast<DataMeta*>(ptr) - 1;
-    ObDelayFreeMemBlock* block = meta->mem_block_;
+    DataMeta *meta = reinterpret_cast<DataMeta *>(ptr) - 1;
+    ObDelayFreeMemBlock *block = meta->mem_block_;
 
     if (NULL == block) {
-      LIB_ALLOC_LOG(ERROR, "the free ptr has null mem block ptr");
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERROR, "the free ptr has null mem block ptr");
     } else {
       if (meta->data_len_ > 0) {
         memory_fragment_size_ += meta->data_len_;
@@ -138,7 +152,7 @@ void ObDelayFreeAllocator::free(void* ptr)
   }
 }
 
-void ObDelayFreeAllocator::set_label(const lib::ObLabel& label)
+void ObDelayFreeAllocator::set_label(const lib::ObLabel &label)
 {
   label_ = label;
   allocator_.set_label(label);
@@ -158,13 +172,14 @@ void ObDelayFreeAllocator::reset()
   // NOT reset inited_
 }
 
-ObDelayFreeMemBlock* ObDelayFreeAllocator::alloc_block(const int64_t data_size)
+ObDelayFreeMemBlock *ObDelayFreeAllocator::alloc_block(const int64_t data_size)
 {
-  ObDelayFreeMemBlock* block_ret = NULL;
-  char* ptr = NULL;
+  ObDelayFreeMemBlock *block_ret = NULL;
+  char *ptr = NULL;
 
-  if (!free_list_.is_empty() && free_list_.get_first()->capacity() >= data_size &&
-      free_list_.get_first()->can_expire(expire_duration_us_)) {
+  if (!free_list_.is_empty()
+      && free_list_.get_first()->capacity() >= data_size
+      && free_list_.get_first()->can_expire(expire_duration_us_)) {
     block_ret = free_list_.remove_first();
     cache_memory_size_ -= block_ret->size();
     block_ret->reuse();
@@ -176,10 +191,10 @@ ObDelayFreeMemBlock* ObDelayFreeAllocator::alloc_block(const int64_t data_size)
       mem_block_size = data_size + sizeof(ObDelayFreeMemBlock);
     }
 
-    if (NULL == (ptr = static_cast<char*>(allocator_.alloc(mem_block_size)))) {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc memory of ", "mem_block_size", mem_block_size);
-    } else if (NULL == (block_ret = new (ptr) ObDelayFreeMemBlock(ptr + mem_block_size))) {
-      LIB_ALLOC_LOG(ERROR, "placement new for MemBlock failed.");
+    if (NULL == (ptr = static_cast<char *>(allocator_.alloc(mem_block_size)))) {
+      LIB_ALLOC_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "cannot malloc memory of ", "mem_block_size", mem_block_size);
+    } else if (NULL == (block_ret = new(ptr) ObDelayFreeMemBlock(ptr + mem_block_size))) {
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "placement new for MemBlock failed.");
     } else {
       total_size_ += mem_block_size;
     }
@@ -192,10 +207,10 @@ ObDelayFreeMemBlock* ObDelayFreeAllocator::alloc_block(const int64_t data_size)
   return block_ret;
 }
 
-void ObDelayFreeAllocator::free_block(ObDelayFreeMemBlock* block)
+void ObDelayFreeAllocator::free_block(ObDelayFreeMemBlock *block)
 {
   if (NULL == block) {
-    LIB_ALLOC_LOG(WARN, "The free block is NULL.");
+    LIB_ALLOC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "The free block is NULL.");
   } else {
     working_list_.remove(block);
     free_list_.add_last(block);
@@ -203,8 +218,10 @@ void ObDelayFreeAllocator::free_block(ObDelayFreeMemBlock* block)
     // if there are too many blocks in the free list, try free some of them if possible
     memory_fragment_size_ -= block->data_size();
     cache_memory_size_ += block->size();
-    while (cache_memory_size_ > MAX_CACHE_MEMORY_SIZE && (!free_list_.is_empty()) &&
-           NULL != (block = free_list_.get_first()) && block->can_expire(expire_duration_us_)) {
+    while (cache_memory_size_ > MAX_CACHE_MEMORY_SIZE
+           && (!free_list_.is_empty())
+           && NULL != (block = free_list_.get_first())
+           && block->can_expire(expire_duration_us_)) {
       free_list_.remove_first();
       total_size_ -= block->size();
       cache_memory_size_ -= block->size();
@@ -214,9 +231,9 @@ void ObDelayFreeAllocator::free_block(ObDelayFreeMemBlock* block)
   }
 }
 
-void ObDelayFreeAllocator::free_list(ObDList<ObDelayFreeMemBlock>& list)
+void ObDelayFreeAllocator::free_list(ObDList<ObDelayFreeMemBlock> &list)
 {
-  ObDelayFreeMemBlock* block = NULL;
+  ObDelayFreeMemBlock *block = NULL;
   while (NULL != (block = list.remove_first())) {
     allocator_.free(block);
     block = NULL;

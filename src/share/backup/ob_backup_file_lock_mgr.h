@@ -21,24 +21,31 @@
 #include "share/ob_define.h"
 #include "share/ob_force_print_log.h"
 #include "ob_backup_path.h"
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-class ObBackupFileLockMgr {
+class ObBackupFileLockMgr
+{
 public:
   ObBackupFileLockMgr();
   virtual ~ObBackupFileLockMgr();
-  static ObBackupFileLockMgr& get_instance();
+  static ObBackupFileLockMgr &get_instance();
   void destroy();
   int init();
-  int lock(const ObBackupPath& path, const int64_t abs_timeout_us = INT64_MAX);
-  int try_lock(const ObBackupPath& path);
-  int unlock(const ObBackupPath& path);
+  int lock(
+      const ObBackupPath &path,
+      const int64_t abs_timeout_us = INT64_MAX);
+  int try_lock(
+      const ObBackupPath &path);
+  int unlock(const ObBackupPath &path);
 
 private:
-  int low_try_lock(const ObBackupPath& path, const int64_t max_spin_cnt, uint64_t& spin_cnt);
-  int wait(const ObBackupPath& path, const int64_t abs_timeout_us);
-
+  int low_try_lock(
+      const ObBackupPath &path, const int64_t max_spin_cnt,
+      uint64_t &spin_cnt);
+  int wait(const ObBackupPath &path, const int64_t abs_timeout_us);
 private:
   static const int64_t MAX_BUCKET_NUM = 1024;
   static const int64_t MAX_SPIN_TIMES = 1024;
@@ -49,32 +56,28 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileLockMgr);
 };
 
-class ObBackupFileSpinLock {
+class ObBackupFileSpinLock
+{
 public:
   ObBackupFileSpinLock();
   ~ObBackupFileSpinLock();
-  int init(const ObBackupPath& path);
+  int init(const ObBackupPath &path);
   int lock();
   int lock(const int64_t timeout_us);
   int trylock();
   int unlock();
-  ObBackupPath& get_path()
-  {
-    return path_;
-  }
-
+  ObBackupPath &get_path() { return path_; }
 private:
   // data members
   bool is_inited_;
   bool is_locked_;
   ObBackupPath path_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileSpinLock);
 };
 
 typedef lib::ObLockGuard<ObBackupFileSpinLock> ObBackupFileLockGuard;
 
-}  // namespace share
-}  // namespace oceanbase
+} //share
+} //oceanbase
 #endif /* OCEANBASE_SHARE_BACKUP_OB_BACKUP_FILE_LOCK_MGR_H_ */

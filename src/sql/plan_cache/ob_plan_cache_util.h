@@ -21,195 +21,106 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
-#include "share/partition_table/ob_partition_location_cache.h"
 #include "common/object/ob_object.h"
-#include "sql/plan_cache/ob_param_info.h"
+#include "sql/spm/ob_spm_struct.h"
 #include "sql/ob_sql_define.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/parser/parse_node.h"
 #include "sql/plan_cache/ob_pc_ref_handle.h"
+#include "sql/das/ob_das_define.h"
 #include "lib/utility/serialization.h"
 
-namespace oceanbase {
-namespace common {
-class ObString;
-class ObObj;
-}  // namespace common
-
-namespace storage {
-class ObPartitionService;
+namespace oceanbase
+{
+namespace omt
+{
+  class ObTenantConfigMgr;
+  class ObTenantConfig;
 }
 
-namespace sql {
+namespace common
+{
+class ObString;
+class ObObj;
+}
+
+namespace sql
+{
 class ObPCVSet;
 class ObPhysicalPlan;
-class ObSqlCtx;
+struct ObSqlCtx;
 class ObTableLocation;
 class ObPhyTableLocation;
-class ObPhyTableLocationInfo;
+class ObCandiTableLoc;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
-class ObCacheObject;
+class ObDASCtx;
+class ObILibCacheObject;
+class ObILibCacheKey;
+class ObILibCacheNode;
+class ObPlanCacheKey;
+class ObPlanCacheCtx;
 
 typedef uint64_t ObCacheObjID;
-typedef common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> TmpTableNameArray;
-enum ObjNameSpace {
-  NS_INVALID = 0,
-  NS_CRSR = 1,  // shared cursor:sql text or anonymous block or call store procedure
-  NS_PRCD = 2,  // store procedure, function
-  NS_ANON = 3,  // anonymous
-  NS_TRGR = 4,  // trigger
-  NS_PKG = 5,   // package
-  NS_MAX
+
+#define SERIALIZE_VERSION(arr, allocator, str)\
+do {                                      \
+  if (OB_SUCC(ret)) { \
+    int64_t size = 0; \
+    size = serialization::encoded_length_i64(size) * arr.count(); \
+    if (0 != size) { \
+      char* buf = (char *)allocator.alloc(size); \
+      if (NULL == buf) {  \
+        ret = OB_ALLOCATE_MEMORY_FAILED;   \
+        LOG_WARN("alloc memory failed", K(ret), K(size)); \
+      } \
+      if (OB_SUCC(ret)) { \
+        int64_t pos = 0; \
+        for (int64_t i = 0; OB_SUCC(ret) && i < arr.count(); i++) { \
+          if (OB_FAIL(serialization::encode_i64(buf , size , pos, arr.at(i).version_))) { \
+            LOG_WARN("encode failed", K(size), K(pos), K(ret)); \
+          } \
+        }                         \
+      }                           \
+      (void)str.assign(buf, static_cast<int32_t>(size)); \
+    } \
+  }  \
+} while(0)
+
+struct ObLCKeyValue
+{
+  ObLCKeyValue() : node_(NULL) {}
+  ObLCKeyValue(ObILibCacheKey *key, ObILibCacheNode *node)
+    : key_(key),
+      node_(node) {}
+
+  TO_STRING_KV(KP(key_), KP(node_));
+
+  ObILibCacheKey *key_;
+  ObILibCacheNode *node_;
 };
 
-struct ObPlanCacheKey {
-  ObPlanCacheKey()
-      : key_id_(common::OB_INVALID_ID),
-        db_id_(common::OB_INVALID_ID),
-        sessid_(0),
-        is_ps_mode_(false),
-        namespace_(NS_INVALID)
-  {}
-  ObPlanCacheKey(const ObString& name, uint64_t key_id, uint64_t db_id, uint64_t sessid, bool is_ps_mode,
-      const ObString& sys_vars_str, ObjNameSpace namespace_arg)
-      : name_(name),
-        key_id_(key_id),
-        db_id_(db_id),
-        sessid_(sessid),
-        is_ps_mode_(is_ps_mode),
-        sys_vars_str_(sys_vars_str),
-        namespace_(namespace_arg)
-  {}
+typedef ObLCKeyValue LCKeyValue;
+typedef common::ObSEArray<LCKeyValue , 16> LCKeyValueArray;
 
-  inline void reset()
-  {
-    name_.reset();
-    key_id_ = common::OB_INVALID_ID;
-    db_id_ = common::OB_INVALID_ID;
-    sessid_ = 0;
-    is_ps_mode_ = false;
-    sys_vars_str_.reset();
-    namespace_ = NS_INVALID;
-  }
-
-  inline int deep_copy(common::ObIAllocator& allocator, const ObPlanCacheKey& other)
-  {
-    int ret = common::OB_SUCCESS;
-    if (OB_FAIL(common::ob_write_string(allocator, other.name_, name_))) {
-      SQL_PC_LOG(WARN, "write string failed", K(ret), K(other.name_));
-    } else if (OB_FAIL(common::ob_write_string(allocator, other.sys_vars_str_, sys_vars_str_))) {
-      SQL_PC_LOG(WARN, "write sys vars str failed", K(ret), K(other.sys_vars_str_));
-    } else {
-      db_id_ = other.db_id_;
-      key_id_ = other.key_id_;
-      sessid_ = other.sessid_;
-      is_ps_mode_ = other.is_ps_mode_;
-      namespace_ = other.namespace_;
-    }
-    return ret;
-  }
-
-  inline void destory(common::ObIAllocator& allocator)
-  {
-    if (NULL != name_.ptr()) {
-      allocator.free(name_.ptr());
-    }
-    if (NULL != sys_vars_str_.ptr()) {
-      allocator.free(sys_vars_str_.ptr());
-    }
-  }
-
-  inline uint64_t hash() const
-  {
-    uint64_t hash_ret = name_.hash(0);
-    hash_ret = common::murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
-    hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
-    hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
-    hash_ret = common::murmurhash(&is_ps_mode_, sizeof(bool), hash_ret);
-    hash_ret = sys_vars_str_.hash(hash_ret);
-    hash_ret = common::murmurhash(&namespace_, sizeof(ObjNameSpace), hash_ret);
-
-    return hash_ret;
-  }
-
-  inline bool operator==(const ObPlanCacheKey& other) const
-  {
-    bool cmp_ret = name_ == other.name_ && db_id_ == other.db_id_ && key_id_ == other.key_id_ &&
-                   sessid_ == other.sessid_ && is_ps_mode_ == other.is_ps_mode_ &&
-                   sys_vars_str_ == other.sys_vars_str_ && namespace_ == other.namespace_;
-
-    return cmp_ret;
-  }
-  TO_STRING_KV(K_(name), K_(key_id), K_(db_id), K_(sessid), K_(is_ps_mode), K_(sys_vars_str), K_(namespace));
-  common::ObString name_;
-  uint64_t key_id_;
-  uint64_t db_id_;
-  uint32_t sessid_;
-  bool is_ps_mode_;
-  common::ObString sys_vars_str_;
-  ObjNameSpace namespace_;
-};
-
-#define SERIALIZE_VERSION(arr, allocator, str)                                            \
-  do {                                                                                    \
-    if (OB_SUCC(ret)) {                                                                   \
-      int64_t size = 0;                                                                   \
-      size = serialization::encoded_length_i64(size) * arr.count();                       \
-      if (0 != size) {                                                                    \
-        char* buf = (char*)allocator.alloc(size);                                         \
-        if (NULL == buf) {                                                                \
-          ret = OB_ALLOCATE_MEMORY_FAILED;                                                \
-          LOG_WARN("alloc memory failed", K(ret), K(size));                               \
-        }                                                                                 \
-        if (OB_SUCC(ret)) {                                                               \
-          int64_t pos = 0;                                                                \
-          for (int64_t i = 0; OB_SUCC(ret) && i < arr.count(); i++) {                     \
-            if (OB_FAIL(serialization::encode_i64(buf, size, pos, arr.at(i).version_))) { \
-              LOG_WARN("encode failed", K(size), K(pos), K(ret));                         \
-            }                                                                             \
-          }                                                                               \
-        }                                                                                 \
-        (void)str.assign(buf, static_cast<int32_t>(size));                                \
-      }                                                                                   \
-    }                                                                                     \
-  } while (0)
-
-struct ObPCKeyValue {
-  ObPCKeyValue() : pcv_set_(NULL)
-  {}
-  ObPCKeyValue(ObPlanCacheKey& key, ObPCVSet* pcv_set) : key_(key), pcv_set_(pcv_set)
-  {}
-
-  TO_STRING_KV(K_(key), KP(pcv_set_));
-
-  ObPlanCacheKey key_;
-  ObPCVSet* pcv_set_;
-};
-
-typedef ObPCKeyValue PCKeyValue;
-typedef common::ObSEArray<PCKeyValue, 16> PCKeyValueArray;
-
-struct ObSysVarInPC {
+struct ObSysVarInPC
+{
   common::ObSEArray<common::ObObj, 32> system_variables_;
-  char* buf_;
+  char *buf_;
   int64_t buf_size_;
 
-  ObSysVarInPC() : buf_(NULL), buf_size_(0)
-  {}
+  ObSysVarInPC() : buf_(NULL), buf_size_(0) {
+  }
 
-  int push_back(const common::ObObj& value)
-  {
+  int push_back(const common::ObObj &value) {
     return system_variables_.push_back(value);
   }
 
-  bool empty()
-  {
+  bool empty() {
     return 0 == system_variables_.count();
   }
 
-  int deep_copy_to_self()
-  {
+  int deep_copy_to_self() {
     int ret = common::OB_SUCCESS;
     int64_t pos = 0;
     common::ObObj obj;
@@ -217,8 +128,8 @@ struct ObSysVarInPC {
       ret = common::OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid argument", K_(buf), K_(buf_size));
     }
-    for (int64_t i = 0; common::OB_SUCCESS == ret && i < system_variables_.count(); i++) {
-      if OB_FAIL (obj.deep_copy(system_variables_.at(i), buf_, buf_size_, pos)) {
+    for (int64_t i = 0; common::OB_SUCCESS == ret && i < system_variables_.count(); i ++) {
+      if OB_FAIL(obj.deep_copy(system_variables_.at(i), buf_, buf_size_, pos)) {
         SQL_PC_LOG(WARN, "fail to deep copy obj", K(buf_size_), K(pos), K(ret));
       } else {
         system_variables_.at(i) = obj;
@@ -227,16 +138,16 @@ struct ObSysVarInPC {
     return ret;
   }
 
-  int deep_copy(const ObSysVarInPC& other)
-  {
+  int deep_copy(const ObSysVarInPC &other) {
     int ret = common::OB_SUCCESS;
     common::ObObj obj;
     int64_t pos = 0;
     if (NULL == buf_ || buf_size_ <= 0 || system_variables_.count() != 0) {
       ret = common::OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid argument", K_(buf), K_(buf_size), "system variables count", system_variables_.count());
+      SQL_PC_LOG(WARN, "invalid argument", K_(buf), K_(buf_size),
+                 "system variables count", system_variables_.count());
     }
-    for (int64_t i = 0; common::OB_SUCCESS == ret && i < other.system_variables_.count(); i++) {
+    for (int64_t i = 0; common::OB_SUCCESS == ret && i < other.system_variables_.count(); i ++) {
       if (OB_FAIL(obj.deep_copy(other.system_variables_.at(i), buf_, buf_size_, pos))) {
         SQL_PC_LOG(WARN, "fail to deep copy obj", K(buf_size_), K(pos), K(ret));
       } else if (OB_FAIL(system_variables_.push_back(obj))) {
@@ -246,7 +157,7 @@ struct ObSysVarInPC {
     return ret;
   }
 
-  bool operator==(const ObSysVarInPC& other) const
+  bool operator==(const ObSysVarInPC &other) const
   {
     bool ret = true;
     if (system_variables_.count() == other.system_variables_.count()) {
@@ -280,7 +191,7 @@ struct ObSysVarInPC {
     buf_size_ = 0;
   }
 
-  int serialize_sys_vars(char* buf, int64_t buf_len, int64_t& pos)
+  int serialize_sys_vars(char *buf, int64_t buf_len, int64_t &pos)
   {
     int ret = common::OB_SUCCESS;
     pos = 0;
@@ -289,17 +200,16 @@ struct ObSysVarInPC {
     for (int32_t i = 0; OB_SUCC(ret) && i < sys_var_cnt; ++i) {
       size = 0;
       if (OB_FAIL(system_variables_.at(i).print_plain_str_literal(buf + pos, buf_len - pos, size))) {
-        SQL_PC_LOG(
-            WARN, "fail to encode obj", K(i), K(buf + pos), K(buf_len), K(pos), K(system_variables_.at(i)), K(ret));
+        SQL_PC_LOG(WARN, "fail to encode obj", K(i), K(buf + pos), K(buf_len), K(pos), K(system_variables_.at(i)), K(ret));
       } else {
         pos += size;
-        if (i != sys_var_cnt - 1) {
+        if (i != sys_var_cnt - 1) { //输出间隔符
           if (buf_len - pos <= 0) {
             ret = common::OB_ERR_UNEXPECTED;
             SQL_PC_LOG(WARN, "fail to databuf print", K(buf), K(pos));
           } else {
             char delimiter = ',';
-            memcpy(buf + pos, &delimiter, sizeof(delimiter));
+            memcpy(buf+pos, &delimiter, sizeof(delimiter));
             pos += sizeof(char);
           }
           /*
@@ -319,19 +229,21 @@ struct ObSysVarInPC {
   TO_STRING_KV(K_(system_variables));
 };
 
-struct ObPCMemPctConf {
-  int64_t limit_pct_;
-  int64_t high_pct_;
-  int64_t low_pct_;
+struct ObPCMemPctConf
+{
+  int64_t limit_pct_; //plan cache可使用的租户内存百分比
+  int64_t high_pct_;  //淘汰高水位在plan cache内存上限的百分比
+  int64_t low_pct_; //淘汰低水位在plan cache内存上限的百分比
 
-  ObPCMemPctConf()
-      : limit_pct_(common::OB_PLAN_CACHE_PERCENTAGE),
-        high_pct_(common::OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE),
-        low_pct_(common::OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE)
-  {}
+  ObPCMemPctConf() : limit_pct_(common::OB_PLAN_CACHE_PERCENTAGE),
+                     high_pct_(common::OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE),
+                     low_pct_(common::OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE)
+  {
+  }
 };
 
-enum ParamProperty {
+enum ParamProperty
+{
   INVALID_PARAM,
   NORMAL_PARAM,
   NOT_PARAM,
@@ -339,283 +251,170 @@ enum ParamProperty {
   TRANS_NEG_PARAM,
 };
 
-enum AsynUpdateBaselineStat { ASYN_NOTHING = 0, ASYN_REPLACE, ASYN_INSERT };
-
-struct NotParamInfo {
-  int64_t idx_;
-  common::ObString raw_text_;
-
-  NotParamInfo() : idx_(common::OB_INVALID_ID)
-  {}
-
-  void reset()
-  {
-    idx_ = common::OB_INVALID_ID;
-    raw_text_.reset();
-  }
-
-  TO_STRING_KV(K_(idx), K_(raw_text));
+enum AsynUpdateBaselineStat {
+  ASYN_NOTHING = 0,
+  ASYN_REPLACE,
+  ASYN_INSERT
 };
 
-struct PsNotParamInfo {
-  int64_t idx_;
-  common::ObObjParam ps_param_;
-  TO_STRING_KV(K_(idx), K_(ps_param));
-};
-
-struct ObPCParam {
-  ParseNode* node_;
+struct ObPCParam
+{
+  ParseNode *node_;
   ParamProperty flag_;
 
   ObPCParam() : node_(NULL), flag_(INVALID_PARAM)
-  {}
+  {
+  }
   TO_STRING_KV(KP_(node), K_(flag));
 };
 
-struct ObPCConstParamInfo {
+struct ObPCConstParamInfo
+{
   common::ObSEArray<int64_t, 4> const_idx_;
   common::ObSEArray<common::ObObj, 4> const_params_;
   TO_STRING_KV(K_(const_idx), K_(const_params));
+  bool operator==(const ObPCConstParamInfo &other) const
+  {
+    bool cmp_ret = const_idx_.count() == other.const_idx_.count()
+                   && const_params_.count() == other.const_params_.count();
+    for (int i=0; cmp_ret && i < const_idx_.count(); i++) {
+      cmp_ret = const_idx_.at(i) == other.const_idx_.at(i);
+    }
+    for (int i=0; cmp_ret && i < const_params_.count(); i++) {
+      cmp_ret = const_params_.at(i) == other.const_params_.at(i);
+    }
+    return cmp_ret;
+  }
 };
 
-struct ObPCParamEqualInfo {
+struct ObPCParamEqualInfo
+{
   int64_t first_param_idx_;
   int64_t second_param_idx_;
-  TO_STRING_KV(K_(first_param_idx), K_(second_param_idx));
-};
-
-struct ObFastParserResult {
-  ObFastParserResult()
-      : inner_alloc_("FastParserRes"), raw_params_(&inner_alloc_), ps_params_(&inner_alloc_), cache_params_(NULL)
-  {}
-  ObPlanCacheKey pc_key_;  // plan cache key, parameterized by fast parser
-  common::ModulePageAllocator inner_alloc_;
-  common::ObFixedArray<ObPCParam*, common::ObIAllocator> raw_params_;
-  common::ObFixedArray<const common::ObObjParam*, common::ObIAllocator> ps_params_;
-  ParamStore* cache_params_;
-  void reset()
+  bool use_abs_cmp_;
+  TO_STRING_KV(K_(first_param_idx), K_(second_param_idx), K_(use_abs_cmp));
+  ObPCParamEqualInfo():use_abs_cmp_(false) {}
+  inline bool operator==(const ObPCParamEqualInfo &other) const
   {
-    pc_key_.reset();
-    raw_params_.reuse();
-    ps_params_.reuse();
-    cache_params_ = NULL;
+    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
+                   second_param_idx_ == other.second_param_idx_ &&
+                   use_abs_cmp_ == other.use_abs_cmp_;
+
+    return cmp_ret;
   }
-  TO_STRING_KV(K(pc_key_), K(raw_params_), K(ps_params_), K(cache_params_));
 };
 
-enum WayToGenPlan {
-  WAY_DEPENDENCE_ENVIRONMENT,
-  WAY_ACS,
-  WAY_PLAN_BASELINE,
-  WAY_OPTIMIZER,
-};
-
-struct SelectItemParamInfo {
-  static const int64_t PARAMED_FIELD_BUF_LEN = MAX_COLUMN_CHAR_LENGTH;
-  // for select -1 + a + 1 + b + 2 from dual, the parameterized sql is select? + a +? B +? From dual
-  // questions_pos_ record the offset of each? relative to the column expression, ie [0, 4, 9]
-  // params_idx_ record each? The subscript in raw_params, ie [0, 1, 2]
-  // neg_params_idx_ record which constant is the negative sign, ie [0]
-  // paramed_field_name_ record the parameterized column template, that is,'? + a +? + b + ?'
-  // esc_str_flag_ marks z whether this column is a string constant, such as select'abc' from dual,
-  // the corresponding mark of'abc' is true
-  common::ObSEArray<int64_t, 16> questions_pos_;
-  common::ObSEArray<int64_t, 16> params_idx_;
-  common::ObBitSet<> neg_params_idx_;
-  char paramed_field_name_[PARAMED_FIELD_BUF_LEN];
-  int64_t name_len_;
-  bool esc_str_flag_;
-
-  SelectItemParamInfo() : questions_pos_(), params_idx_(), neg_params_idx_(), name_len_(0), esc_str_flag_(false)
-  {}
-
-  void reset()
+struct ObPCPrivInfo
+{
+  share::ObRawPriv sys_priv_;
+  bool has_privilege_;
+  TO_STRING_KV(K_(sys_priv), K_(has_privilege));
+  ObPCPrivInfo() : sys_priv_(PRIV_ID_NONE), has_privilege_(false)
   {
-    questions_pos_.reset();
-    params_idx_.reset();
-    neg_params_idx_.reset();
-    esc_str_flag_ = false;
-    name_len_ = 0;
   }
-
-  TO_STRING_KV(K_(questions_pos), K_(params_idx), K_(neg_params_idx), K_(name_len), K_(esc_str_flag),
-      K(common::ObString(name_len_, paramed_field_name_)));
-};
-
-typedef common::ObFixedArray<SelectItemParamInfo, common::ObIAllocator> SelectItemParamInfoArray;
-
-struct ObPlanCacheCtx {
-  ObPlanCacheCtx(const common::ObString& sql, const bool is_ps_mode, common::ObIAllocator& allocator, ObSqlCtx& sql_ctx,
-      ObExecContext& exec_ctx, uint64_t tenant_id)
-      : is_ps_mode_(is_ps_mode),
-        raw_sql_(sql),
-        allocator_(allocator),
-        sql_ctx_(sql_ctx),
-        exec_ctx_(exec_ctx),
-        fp_result_(),
-        not_param_info_(allocator),
-        not_param_var_(allocator),
-        param_charset_type_(allocator),
-        normal_parse_const_cnt_(0),
-        plan_baseline_id_(common::OB_INVALID_ID),
-        need_real_add_(true),
-        add_pre_acs_(false),
-        gen_plan_way_(WAY_DEPENDENCE_ENVIRONMENT),
-        need_evolution_(false),
-        is_baseline_fixed_(false),
-        is_baseline_enabled_(true),
-        select_item_param_infos_(allocator),
-        outlined_sql_len_(sql.length()),
-        should_add_plan_(true),
-        must_be_positive_index_(),
-        multi_stmt_fp_results_(allocator),
-        handle_id_(MAX_HANDLE),
-        is_remote_executor_(false)
+  int assign(const ObPCPrivInfo &other)
   {
-    bl_key_.tenant_id_ = tenant_id;
-    fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
-  }
-
-  int get_not_param_info_str(common::ObIAllocator& allocator, common::ObString& str)
-  {
-    int ret = common::OB_SUCCESS;
-    if (not_param_info_.count() > 0) {
-      int64_t size = 0;
-      int64_t not_param_num = not_param_info_.count();
-      for (int64_t i = 0; i < not_param_num; i++) {
-        size += not_param_info_.at(i).raw_text_.length() + 2;
-      }
-      char* buf = (char*)allocator.alloc(size);
-      if (OB_ISNULL(buf)) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        SQL_PC_LOG(WARN, "fail to alloc memory for special param info", K(ret));
-      } else {
-        int64_t pos = 0;
-        for (int64_t i = 0; i < not_param_num; i++) {
-          pos += not_param_info_.at(i).raw_text_.to_string(buf + pos, size - pos);
-          if (i != not_param_num - 1) {
-            pos += snprintf(buf + pos, size - pos, ",");
-          }
-        }
-        str = common::ObString::make_string(buf);
-      }
-    } else {
-      /*do nothing*/
-    }
-
+    int ret = OB_SUCCESS;
+    sys_priv_ = other.sys_priv_;
+    has_privilege_ = other.has_privilege_;
     return ret;
   }
-
-  int is_retry(bool& v) const;
-  int is_retry_for_dup_tbl(bool& v) const;
-  TO_STRING_KV(K(is_ps_mode_), K(raw_sql_), K(need_real_add_), K(add_pre_acs_), K(not_param_info_), K(not_param_var_),
-      K(not_param_index_), K(neg_param_index_), K(param_charset_type_), K(outlined_sql_len_), K(should_add_plan_));
-  bool is_ps_mode_;  // control use which variables to do match
-
-  const common::ObString& raw_sql_;  // query sql
-  common::ObIAllocator& allocator_;  // result mem_pool
-  ObSqlCtx& sql_ctx_;
-  ObExecContext& exec_ctx_;
-  ObFastParserResult fp_result_;                                              // result after fast parser
-  common::ObFixedArray<NotParamInfo, common::ObIAllocator> not_param_info_;   // used for match pcv in pcv_set, gen when
-                                                                              // add plan
-  common::ObFixedArray<PsNotParamInfo, common::ObIAllocator> not_param_var_;  // used for ps mode not param
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> not_param_index_;
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> neg_param_index_;
-  common::ObFixedArray<common::ObCharsetType, common::ObIAllocator> param_charset_type_;
-  TmpTableNameArray tmp_table_names_;
-  ObSqlTraits sql_traits_;
-  int64_t normal_parse_const_cnt_;
-
-  // *****  for spm ****
-
-  uint64_t plan_baseline_id_;
-  bool need_real_add_;
-  bool add_pre_acs_;
-  WayToGenPlan gen_plan_way_;
-  bool need_evolution_;
-  bool is_baseline_fixed_;
-  bool is_baseline_enabled_;  // not used for now
-  share::schema::BaselineKey bl_key_;
-  //******  for spm end *****
-
-  // record idxes for params which should be changed from T_VARCHAR to T_CHAR
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> change_char_index_;
-  SelectItemParamInfoArray select_item_param_infos_;
-  int64_t outlined_sql_len_;
-  bool should_add_plan_;
-  // record which const param must be positive
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true> must_be_positive_index_;
-  // used for store fp results for multi_stmt optimization
-  common::ObFixedArray<ObFastParserResult, common::ObIAllocator> multi_stmt_fp_results_;
-  CacheRefHandleID handle_id_;
-  bool is_remote_executor_;
+  inline bool operator==(const ObPCPrivInfo &other) const
+  {
+    return sys_priv_ == other.sys_priv_ && has_privilege_ == other.has_privilege_;
+  }
 };
 
-struct ObPlanCacheStat {
-  uint64_t access_count_;
-  uint64_t hit_count_;
-
-  ObPlanCacheStat() : access_count_(0), hit_count_(0)
-  {}
-
-  TO_STRING_KV("access_count", access_count_, "hit_count", hit_count_);
-};
-
-struct ObOperatorStat {
+struct ObOperatorStat
+{
   int64_t plan_id_;
-  int64_t operation_id_;  // operator_id
-  int64_t execute_times_;
+  int64_t operation_id_;  //operator_id
+  int64_t execute_times_;        //执行次数
 
-  int64_t input_rows_;
-  int64_t rescan_times_;
-  int64_t output_rows_;
-  ObOperatorStat()
-      : plan_id_(-1), operation_id_(-1), execute_times_(0), input_rows_(0), rescan_times_(0), output_rows_(0)
-  {}
-  ObOperatorStat(const ObOperatorStat& other)
+  int64_t input_rows_; //累计input rows
+  int64_t rescan_times_; //rescan的次数
+  int64_t output_rows_; //output rows total
+  //由于修改stat的时候没有加锁，所以记录的上一次执行的数据可能不属于一次执行的结果，
+  //不再记录last的执行结果
+  //int64_t last_input_rows_; //上次input rows
+  //int64_t last_rescan_times_; //rescan的次数
+  //int64_t last_output_rows_; //output rows in last exectuion
+  //暂时不支持以下和oracle兼容的统计项
+  //int64_t last_cr_buffer_gets_; //上次执行逻辑读次数
+  //int64_t cr_buffer_gets_; //累计逻辑读次数
+  //int64_t last_disk_reads_; //上次物理读次数
+  //int64_t disk_reads_; //累计物理读次数
+  //int64_t last_disk_writes_; //上次物理写次数
+  //int64_t disk_writes_; //累计物理写次数
+  //int64_t last_elapsed_time_; //上次本op执行时间
+  //int64_t elapsed_time_; //累计执行时间
+  ObOperatorStat() : plan_id_(-1),
+    operation_id_(-1),
+    execute_times_(0),
+    input_rows_(0),
+    rescan_times_(0),
+    output_rows_(0)
+  {
+  }
+  ObOperatorStat(const ObOperatorStat &other)
       : plan_id_(other.plan_id_),
-        operation_id_(other.operation_id_),
-        execute_times_(other.execute_times_),
-        input_rows_(other.input_rows_),
-        rescan_times_(other.rescan_times_),
-        output_rows_(other.output_rows_)
-  {}
+      operation_id_(other.operation_id_),
+      execute_times_(other.execute_times_),
+      input_rows_(other.input_rows_),
+      rescan_times_(other.rescan_times_),
+      output_rows_(other.output_rows_)
+  {
+  }
   void init()
   {
     input_rows_ = 0;
     rescan_times_ = 0;
     output_rows_ = 0;
   }
-  TO_STRING_KV(K_(plan_id), K_(operation_id), K_(execute_times), K_(input_rows), K_(rescan_times), K_(output_rows));
+  TO_STRING_KV(K_(plan_id),
+               K_(operation_id),
+               K_(execute_times),
+               K_(input_rows),
+               K_(rescan_times),
+               K_(output_rows));
+
 };
 
-struct ObAcsIdxSelRange {
-  ObAcsIdxSelRange() : index_name_(), low_bound_sel_(0.0), high_bound_sel_(1.0)
-  {}
-  ObAcsIdxSelRange(const ObAcsIdxSelRange& rhs)
-      : index_name_(rhs.index_name_), low_bound_sel_(rhs.low_bound_sel_), high_bound_sel_(rhs.high_bound_sel_)
-  {}
+struct ObAcsIdxSelRange
+{
+  ObAcsIdxSelRange()
+   : index_name_(),
+     low_bound_sel_(0.0),
+     high_bound_sel_(1.0)
+  { }
+  ObAcsIdxSelRange(const ObAcsIdxSelRange &rhs)
+   : index_name_(rhs.index_name_),
+     low_bound_sel_(rhs.low_bound_sel_),
+     high_bound_sel_(rhs.high_bound_sel_)
+  { }
   ObString index_name_;
   double low_bound_sel_;
   double high_bound_sel_;
-  TO_STRING_KV(K_(index_name), K_(low_bound_sel), K_(high_bound_sel));
+  TO_STRING_KV(K_(index_name),
+               K_(low_bound_sel),
+               K_(high_bound_sel));
 };
 
-struct ObTableScanStat {
+struct ObTableScanStat
+{
   ObTableScanStat()
-      : query_range_row_count_(-1),
-        indexback_row_count_(-1),
-        output_row_count_(-1),
-        bf_filter_cnt_(0),
-        bf_access_cnt_(0),
-        fuse_row_cache_hit_cnt_(0),
-        fuse_row_cache_miss_cnt_(0),
-        row_cache_hit_cnt_(0),
-        row_cache_miss_cnt_(0),
-        block_cache_hit_cnt_(0),
-        block_cache_miss_cnt_(0)
-  {}
+    : query_range_row_count_(-1),
+      indexback_row_count_(-1),
+      output_row_count_(-1),
+      bf_filter_cnt_(0),
+      bf_access_cnt_(0),
+      fuse_row_cache_hit_cnt_(0),
+      fuse_row_cache_miss_cnt_(0),
+      row_cache_hit_cnt_(0),
+      row_cache_miss_cnt_(0),
+      block_cache_hit_cnt_(0),
+      block_cache_miss_cnt_(0)
+  { }
   int64_t query_range_row_count_;
   int64_t indexback_row_count_;
   int64_t output_row_count_;
@@ -638,77 +437,92 @@ struct ObTableScanStat {
     block_cache_hit_cnt_ = 0;
     block_cache_miss_cnt_ = 0;
   }
-  TO_STRING_KV(K_(query_range_row_count), K_(indexback_row_count), K_(output_row_count), K_(bf_filter_cnt),
-      K_(bf_access_cnt), K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(fuse_row_cache_hit_cnt),
-      K_(fuse_row_cache_miss_cnt));
+  TO_STRING_KV(K_(query_range_row_count),
+               K_(indexback_row_count),
+               K_(output_row_count),
+               K_(bf_filter_cnt),
+               K_(bf_access_cnt),
+               K_(row_cache_hit_cnt),
+               K_(row_cache_miss_cnt),
+               K_(fuse_row_cache_hit_cnt),
+               K_(fuse_row_cache_miss_cnt));
   OB_UNIS_VERSION(1);
 };
 
-struct ObTableRowCount {
+struct ObTableRowCount
+{
   int64_t op_id_;
   int64_t row_count_;
 
-  ObTableRowCount() : op_id_(OB_INVALID_ID), row_count_(0)
-  {}
-  ObTableRowCount(int64_t op_id, int64_t row_count) : op_id_(op_id), row_count_(row_count)
-  {}
+  ObTableRowCount() : op_id_(OB_INVALID_ID), row_count_(0) {}
+  ObTableRowCount(int64_t op_id, int64_t row_count) : op_id_(op_id), row_count_(row_count) {}
   TO_STRING_KV(K_(op_id), K_(row_count));
 
   OB_UNIS_VERSION(1);
 };
 
-struct ObPlanStat {
+
+struct ObPlanStat
+{
   static const int32_t STMT_MAX_LEN = 4096;
   static const int32_t MAX_SCAN_STAT_SIZE = 100;
-  static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 60 * 1000 * 1000;  // 1 min
-  // static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 30L * 60 * 1000 * 1000; // 30 min
+  static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 60 * 1000 * 1000; // 1 min
+ // static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 30L * 60 * 1000 * 1000; // 30 min
   static const int64_t CACHE_POLICY_UDPATE_THRESHOLD = (1L << 20) - 1;
   static const int64_t CACHE_ACCESS_THRESHOLD = 3000;
   static constexpr double ENABLE_BF_CACHE_THRESHOLD = 0.10;
   static constexpr double ENABLE_ROW_CACHE_THRESHOLD = 0.06;
 
-  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  uint64_t plan_id_;  // plan id
-  // uint64_t hash_;                 // plan hash value
-  int64_t gen_time_;            // plan generated time
-  int64_t schema_version_;      // plan schema version when generated
-  int64_t merged_version_;      // plan merged version when generated
-  int64_t last_active_time_;    // plan last hit time
-  uint64_t hit_count_;          // plan hit count
-  uint64_t mem_used_;           // plan memory size
-  uint64_t slow_count_;         // plan execution slow count
-  int64_t slowest_exec_time_;   // plan execution slowest time
-  uint64_t slowest_exec_usec_;  // plan execution slowest usec
-  char stmt_[STMT_MAX_LEN];     //  sql stmt
-  int32_t stmt_len_;            // stmt_len_
-  ObPhysicalPlan* plan_;        // used in explain
+  char exact_mode_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; // sql id for exact mode
+  uint64_t plan_id_;              // plan id
+  //uint64_t hash_;                 // plan hash value
+  int64_t  gen_time_;             // plan generated time
+  int64_t  schema_version_;       // plan schema version when generated
+  int64_t  last_active_time_;     // plan last hit time
+  uint64_t hit_count_;            // plan hit count
+  uint64_t mem_used_;             // plan memory size
+  uint64_t slow_count_;           // plan execution slow count
+  int64_t  slowest_exec_time_;    // plan execution slowest time
+  uint64_t slowest_exec_usec_;    // plan execution slowest usec
+  common::ObString stmt_;       //  sql stmt
+  ObPhysicalPlan *plan_;          // used in explain
 
-  int64_t execute_times_;
-  int64_t disk_reads_;
-  int64_t direct_writes_;
-  int64_t buffer_gets_;
-  int64_t application_wait_time_;
-  int64_t concurrency_wait_time_;
-  int64_t user_io_wait_time_;
-  int64_t rows_processed_;
-  int64_t elapsed_time_;
-  int64_t total_process_time_;
-  int64_t cpu_time_;
-  int64_t large_querys_;
+  int64_t execute_times_;        //SUCC下执行次数
+  int64_t disk_reads_;           //物理读次数
+  int64_t direct_writes_;        //物理写次数
+  int64_t buffer_gets_;          //逻辑读次数
+  int64_t application_wait_time_; //application类等待事件的总等待时间，主要是lock
+  int64_t concurrency_wait_time_; //concurrency类等待事件的总等待时间，主要是latch
+  int64_t user_io_wait_time_;     //user io类等待事件的总等待时间，主要是block cache miss
+  int64_t rows_processed_;        //返回行数
+  int64_t elapsed_time_;          //执行时间rt
+  int64_t total_process_time_;    //总的process时间
+  int64_t cpu_time_;              //CPU时间，目前可以由执行时间减去所有等待事件总等待时间来获得
+  int64_t large_querys_;     //被判定为大查询的次数
   int64_t delayed_large_querys_;
-  int64_t delayed_px_querys_;
-  int64_t expected_worker_count_;
+  int64_t delayed_px_querys_;    // px query 被丢回队列重试的次数
+  int64_t expected_worker_count_;  // px 预期分配线程数
+  int64_t minimal_worker_count_;  // minial threads required for query
   int64_t outline_version_;
   int64_t outline_id_;
-  bool is_last_exec_succ_;
-  common::ObString sp_info_str_;
-  common::ObString param_infos_;
+  bool is_last_exec_succ_;        // record whether last execute success
+  common::ObString sp_info_str_; //记录非参数的常数的信息
+  common::ObString param_infos_;  //记录所有被参数化参数的数据类型
   common::ObString sys_vars_str_;
-  common::ObString raw_sql_;
+  common::ObString config_str_;
+  common::ObString raw_sql_; //记录生成plan时的原始sql
+  common::ObCollationType sql_cs_type_;
+  common::ObString rule_name_;
+  bool is_rewrite_sql_;
+  int64_t rule_version_; // the rule version when query rewrite generates a plan
+  bool enable_udr_;
   //******** for spm ******
+  //该计划是否正在演进过程中
   bool is_evolution_;
-  AsynUpdateBaselineStat asyn_baseline_stat_;
-  share::schema::ObPlanBaselineInfo bl_info_;
+  uint64_t  db_id_;
+  common::ObString constructed_sql_;
+  common::ObString sql_id_;
+  ObEvolutionStat evolution_stat_; //baseline相关统计信息
   //******** for spm end ******
   // ***** for acs
   bool is_bind_sensitive_;
@@ -719,176 +533,202 @@ struct ObPlanStat {
   ObTableScanStat table_scan_stat_[MAX_SCAN_STAT_SIZE];
   // ***** for acs end ****
 
-  int64_t timeout_count_;
-  int64_t ps_stmt_id_;  // prepare stmt id
+  int64_t timeout_count_; //超时次数
+  int64_t ps_stmt_id_;//prepare stmt id
 
-  ObTableRowCount* table_row_count_first_exec_;
-  int64_t access_table_num_;
-  bool is_expired_;
+  /** 记录第一次计划执行时计划涉及的各个表的行数的数组，数组应该有access_table_num_个元素 */
+  ObTableRowCount *table_row_count_first_exec_;
+  int64_t access_table_num_;         //plan访问的表的个数，目前只统计whole range扫描的表
+  bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
   bool enable_plan_expiration_;
   int64_t first_exec_row_count_;
-  int64_t first_elapsed_time_;
+  int64_t first_exec_usec_;
   int64_t sample_times_;
   int64_t sample_exec_row_count_;
   int64_t sample_exec_usec_;
 
+  // 临时表计划的sessid表示对应的会话id，非临时表sessid为0
   uint64_t sessid_;
+  // 临时表计划所包含的临时表名
   char plan_tmp_tbl_name_str_[STMT_MAX_LEN];
   int32_t plan_tmp_tbl_name_str_len_;
 
+  // plan是否使用了jit编译表达式
   bool is_use_jit_;
 
-  bool enable_bf_cache_;
-  bool enable_fuse_row_cache_;
-  bool enable_row_cache_;
-  bool enable_early_lock_release_;
-  int64_t bf_filter_cnt_;
-  int64_t bf_access_cnt_;
-  int64_t fuse_row_cache_hit_cnt_;
-  int64_t fuse_row_cache_miss_cnt_;
-  int64_t row_cache_hit_cnt_;
-  int64_t row_cache_miss_cnt_;
-  int64_t cache_stat_update_times_;
-  int64_t block_cache_hit_cnt_;
-  int64_t block_cache_miss_cnt_;
+  // 以下的字段用于存储层cache访问策略的自使用选择
+  bool enable_bf_cache_; // 表示是否访问bloomfilter cache的开关
+  bool enable_fuse_row_cache_; // 表示是否访问fuse row cache的开关
+  bool enable_row_cache_; // 表示是否访问row cache的开关
+  bool enable_early_lock_release_; // 表示是否提前解行锁
+  int64_t bf_filter_cnt_; // 表示bloomfilter成功过滤的次数
+  int64_t bf_access_cnt_; // 表示bloomfilter访问的次数
+  int64_t fuse_row_cache_hit_cnt_; // 表示fuse row cache命中次数
+  int64_t fuse_row_cache_miss_cnt_; // 表示fuse row cache不命中次数
+  int64_t row_cache_hit_cnt_; // 表示row cache命中次数
+  int64_t row_cache_miss_cnt_; // 表示row cache不命中次数
+  int64_t cache_stat_update_times_; // 表示cache统计信息更新的次数，用于控制更新cache访问策略的频率
+  int64_t block_cache_hit_cnt_; // 表示block cache命中次数
+  int64_t block_cache_miss_cnt_; // 表示block cache不命中次数
 
   // following fields will be used for plan set memory management
-  PreCalcExprHandler* pre_cal_expr_handler_;  // the handler that pre-calculable expression holds
+  PreCalcExprHandler* pre_cal_expr_handler_; //the handler that pre-calculable expression holds
+  common::hash::ObHashMap<ObAddr, int64_t> expected_worker_map_; // px 全局预期分配线程数
+  common::hash::ObHashMap<ObAddr, int64_t> minimal_worker_map_;  // global minial threads required for query
+  uint64_t plan_hash_value_;
+  common::ObString outline_data_;
+  common::ObString hints_info_;
+  bool hints_all_worked_;
+
 
   ObPlanStat()
-      : plan_id_(0),
-        // hash_(0),
-        gen_time_(0),
-        schema_version_(0),
-        merged_version_(0),
-        last_active_time_(0),
-        hit_count_(0),
-        mem_used_(0),
-        slow_count_(0),
-        slowest_exec_time_(0),
-        slowest_exec_usec_(0),
-        stmt_len_(0),
-        plan_(NULL),
-        execute_times_(0),
-        disk_reads_(0),
-        direct_writes_(0),
-        buffer_gets_(0),
-        application_wait_time_(0),
-        concurrency_wait_time_(0),
-        user_io_wait_time_(0),
-        rows_processed_(0),
-        elapsed_time_(0),
-        total_process_time_(0),
-        cpu_time_(0),
-        large_querys_(0),
-        delayed_large_querys_(0),
-        delayed_px_querys_(0),
-        expected_worker_count_(-1),
-        outline_version_(common::OB_INVALID_VERSION),
-        outline_id_(common::OB_INVALID_ID),
-        is_last_exec_succ_(true),
-        is_evolution_(false),
-        asyn_baseline_stat_(ASYN_NOTHING),
-        is_bind_sensitive_(false),
-        is_bind_aware_(false),
-        plan_sel_info_str_len_(0),
-        plan_sel_info_array_(),
-        timeout_count_(0),
-        ps_stmt_id_(common::OB_INVALID_ID),
-        table_row_count_first_exec_(NULL),
-        access_table_num_(0),
-        is_expired_(false),
-        enable_plan_expiration_(false),
-        first_exec_row_count_(-1),
-        sessid_(0),
-        plan_tmp_tbl_name_str_len_(0),
-        is_use_jit_(false),
-        enable_bf_cache_(true),
-        enable_fuse_row_cache_(true),
-        enable_row_cache_(true),
-        enable_early_lock_release_(false),
-        bf_filter_cnt_(0),
-        bf_access_cnt_(0),
-        fuse_row_cache_hit_cnt_(0),
-        fuse_row_cache_miss_cnt_(0),
-        row_cache_hit_cnt_(0),
-        row_cache_miss_cnt_(0),
-        cache_stat_update_times_(0),
-        block_cache_hit_cnt_(0),
-        block_cache_miss_cnt_(0),
-        pre_cal_expr_handler_(NULL)
-  {
-    sql_id_[0] = '\0';
-  }
+    : plan_id_(0),
+      //hash_(0),
+      gen_time_(0),
+      schema_version_(0),
+      last_active_time_(0),
+      hit_count_(0),
+      mem_used_(0),
+      slow_count_(0),
+      slowest_exec_time_(0),
+      slowest_exec_usec_(0),
+      plan_(NULL),
+      execute_times_(0),
+      disk_reads_(0),
+      direct_writes_(0),
+      buffer_gets_(0),
+      application_wait_time_(0),
+      concurrency_wait_time_(0),
+      user_io_wait_time_(0),
+      rows_processed_(0),
+      elapsed_time_(0),
+      total_process_time_(0),
+      cpu_time_(0),
+      large_querys_(0),
+      delayed_large_querys_(0),
+      delayed_px_querys_(0),
+      expected_worker_count_(-1),
+      minimal_worker_count_(-1),
+      outline_version_(common::OB_INVALID_VERSION),
+      outline_id_(common::OB_INVALID_ID),
+      is_last_exec_succ_(true),
+      sql_cs_type_(common::CS_TYPE_INVALID),
+      rule_name_(),
+      is_rewrite_sql_(false),
+      rule_version_(OB_INVALID_VERSION),
+      enable_udr_(false),
+      is_evolution_(false),
+      db_id_(common::OB_INVALID_ID),
+      constructed_sql_(),
+      sql_id_(),
+      is_bind_sensitive_(false),
+      is_bind_aware_(false),
+      plan_sel_info_str_len_(0),
+      plan_sel_info_array_(),
+      timeout_count_(0),
+      ps_stmt_id_(common::OB_INVALID_ID),
+      table_row_count_first_exec_(NULL),
+      access_table_num_(0),
+      is_expired_(false),
+      enable_plan_expiration_(false),
+      first_exec_row_count_(-1),
+      sessid_(0),
+      plan_tmp_tbl_name_str_len_(0),
+      is_use_jit_(false),
+      enable_bf_cache_(true),
+      enable_fuse_row_cache_(true),
+      enable_row_cache_(true),
+      enable_early_lock_release_(false),
+      bf_filter_cnt_(0),
+      bf_access_cnt_(0),
+      fuse_row_cache_hit_cnt_(0),
+      fuse_row_cache_miss_cnt_(0),
+      row_cache_hit_cnt_(0),
+      row_cache_miss_cnt_(0),
+      cache_stat_update_times_(0),
+      block_cache_hit_cnt_(0),
+      block_cache_miss_cnt_(0),
+      pre_cal_expr_handler_(NULL),
+      plan_hash_value_(0),
+      hints_all_worked_(true)
+{
+  exact_mode_sql_id_[0] = '\0';
+}
 
-  ObPlanStat(const ObPlanStat& rhs)
-      : plan_id_(rhs.plan_id_),
-        // hash_(rhs.hash_),
-        gen_time_(rhs.gen_time_),
-        schema_version_(rhs.schema_version_),
-        merged_version_(rhs.merged_version_),
-        last_active_time_(rhs.last_active_time_),
-        hit_count_(rhs.hit_count_),
-        mem_used_(rhs.mem_used_),
-        slow_count_(rhs.slow_count_),
-        slowest_exec_time_(rhs.slowest_exec_time_),
-        slowest_exec_usec_(rhs.slowest_exec_usec_),
-        plan_(rhs.plan_),
-        execute_times_(rhs.execute_times_),
-        disk_reads_(rhs.disk_reads_),
-        direct_writes_(rhs.direct_writes_),
-        buffer_gets_(rhs.buffer_gets_),
-        application_wait_time_(rhs.application_wait_time_),
-        concurrency_wait_time_(rhs.concurrency_wait_time_),
-        user_io_wait_time_(rhs.user_io_wait_time_),
-        rows_processed_(rhs.rows_processed_),
-        elapsed_time_(rhs.elapsed_time_),
-        total_process_time_(rhs.total_process_time_),
-        cpu_time_(rhs.cpu_time_),
-        large_querys_(rhs.large_querys_),
-        delayed_large_querys_(rhs.delayed_large_querys_),
-        delayed_px_querys_(rhs.delayed_px_querys_),
-        expected_worker_count_(rhs.expected_worker_count_),
-        outline_version_(rhs.outline_version_),
-        outline_id_(rhs.outline_id_),
-        is_last_exec_succ_(rhs.is_last_exec_succ_),
-        is_evolution_(rhs.is_evolution_),
-        asyn_baseline_stat_(rhs.asyn_baseline_stat_),
-        bl_info_(rhs.bl_info_),
-        is_bind_sensitive_(rhs.is_bind_sensitive_),
-        is_bind_aware_(rhs.is_bind_aware_),
-        plan_sel_info_str_len_(rhs.plan_sel_info_str_len_),
-        plan_sel_info_array_(rhs.plan_sel_info_array_),
-        timeout_count_(rhs.timeout_count_),
-        ps_stmt_id_(rhs.ps_stmt_id_),
-        table_row_count_first_exec_(NULL),
-        access_table_num_(0),
-        is_expired_(false),
-        enable_plan_expiration_(rhs.enable_plan_expiration_),
-        first_exec_row_count_(rhs.first_exec_row_count_),
-        sessid_(rhs.sessid_),
-        plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
-        is_use_jit_(rhs.is_use_jit_),
-        enable_bf_cache_(rhs.enable_bf_cache_),
-        enable_fuse_row_cache_(rhs.enable_fuse_row_cache_),
-        enable_row_cache_(rhs.enable_row_cache_),
-        enable_early_lock_release_(rhs.enable_early_lock_release_),
-        bf_filter_cnt_(rhs.bf_filter_cnt_),
-        bf_access_cnt_(rhs.bf_access_cnt_),
-        fuse_row_cache_hit_cnt_(rhs.fuse_row_cache_hit_cnt_),
-        fuse_row_cache_miss_cnt_(rhs.fuse_row_cache_miss_cnt_),
-        row_cache_hit_cnt_(rhs.row_cache_hit_cnt_),
-        row_cache_miss_cnt_(rhs.row_cache_miss_cnt_),
-        cache_stat_update_times_(rhs.cache_stat_update_times_),
-        block_cache_hit_cnt_(rhs.block_cache_hit_cnt_),
-        block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
-        pre_cal_expr_handler_(rhs.pre_cal_expr_handler_)
+  ObPlanStat(const ObPlanStat &rhs)
+    : plan_id_(rhs.plan_id_),
+      //hash_(rhs.hash_),
+      gen_time_(rhs.gen_time_),
+      schema_version_(rhs.schema_version_),
+      last_active_time_(rhs.last_active_time_),
+      hit_count_(rhs.hit_count_),
+      mem_used_(rhs.mem_used_),
+      slow_count_(rhs.slow_count_),
+      slowest_exec_time_(rhs.slowest_exec_time_),
+      slowest_exec_usec_(rhs.slowest_exec_usec_),
+      stmt_(rhs.stmt_),
+      plan_(rhs.plan_),
+      execute_times_(rhs.execute_times_),
+      disk_reads_(rhs.disk_reads_),
+      direct_writes_(rhs.direct_writes_),
+      buffer_gets_(rhs.buffer_gets_),
+      application_wait_time_(rhs.application_wait_time_),
+      concurrency_wait_time_(rhs.concurrency_wait_time_),
+      user_io_wait_time_(rhs.user_io_wait_time_),
+      rows_processed_(rhs.rows_processed_),
+      elapsed_time_(rhs.elapsed_time_),
+      total_process_time_(rhs.total_process_time_),
+      cpu_time_(rhs.cpu_time_),
+      large_querys_(rhs.large_querys_),
+      delayed_large_querys_(rhs.delayed_large_querys_),
+      delayed_px_querys_(rhs.delayed_px_querys_),
+      expected_worker_count_(rhs.expected_worker_count_),
+      minimal_worker_count_(rhs.minimal_worker_count_),
+      outline_version_(rhs.outline_version_),
+      outline_id_(rhs.outline_id_),
+      is_last_exec_succ_(rhs.is_last_exec_succ_),
+      sql_cs_type_(rhs.sql_cs_type_),
+      rule_name_(),
+      is_rewrite_sql_(false),
+      rule_version_(OB_INVALID_VERSION),
+      enable_udr_(false),
+      is_evolution_(rhs.is_evolution_),
+      db_id_(rhs.db_id_),
+      evolution_stat_(rhs.evolution_stat_),
+      is_bind_sensitive_(rhs.is_bind_sensitive_),
+      is_bind_aware_(rhs.is_bind_aware_),
+      plan_sel_info_str_len_(rhs.plan_sel_info_str_len_),
+      plan_sel_info_array_(rhs.plan_sel_info_array_),
+      timeout_count_(rhs.timeout_count_),
+      ps_stmt_id_(rhs.ps_stmt_id_),
+      table_row_count_first_exec_(NULL),
+      access_table_num_(0),
+      is_expired_(false),
+      enable_plan_expiration_(rhs.enable_plan_expiration_),
+      first_exec_row_count_(rhs.first_exec_row_count_),
+      sessid_(rhs.sessid_),
+      plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
+      is_use_jit_(rhs.is_use_jit_),
+      enable_bf_cache_(rhs.enable_bf_cache_),
+      enable_fuse_row_cache_(rhs.enable_fuse_row_cache_),
+      enable_row_cache_(rhs.enable_row_cache_),
+      enable_early_lock_release_(rhs.enable_early_lock_release_),
+      bf_filter_cnt_(rhs.bf_filter_cnt_),
+      bf_access_cnt_(rhs.bf_access_cnt_),
+      fuse_row_cache_hit_cnt_(rhs.fuse_row_cache_hit_cnt_),
+      fuse_row_cache_miss_cnt_(rhs.fuse_row_cache_miss_cnt_),
+      row_cache_hit_cnt_(rhs.row_cache_hit_cnt_),
+      row_cache_miss_cnt_(rhs.row_cache_miss_cnt_),
+      cache_stat_update_times_(rhs.cache_stat_update_times_),
+      block_cache_hit_cnt_(rhs.block_cache_hit_cnt_),
+      block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
+      pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
+      plan_hash_value_(rhs.plan_hash_value_),
+      hints_all_worked_(rhs.hints_all_worked_)
   {
-    stmt_len_ = rhs.stmt_len_;
-    sql_id_[0] = '\0';
-    MEMCPY(stmt_, rhs.stmt_, stmt_len_);
+    exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
     MEMCPY(table_scan_stat_, rhs.table_scan_stat_, sizeof(rhs.table_scan_stat_));
     MEMCPY(plan_tmp_tbl_name_str_, rhs.plan_tmp_tbl_name_str_, rhs.plan_tmp_tbl_name_str_len_);
@@ -896,46 +736,41 @@ struct ObPlanStat {
 
   int to_str_acs_sel_info()
   {
-    int ret = OB_SUCCESS;
-    int64_t pos = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < plan_sel_info_array_.count(); i++) {
-      if (OB_ISNULL(plan_sel_info_array_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_PC_LOG(WARN, "null plan sel info", K(ret));
-      } else if (OB_ISNULL(plan_sel_info_str_)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_PC_LOG(WARN, "null plan sel info str", K(ret));
-      } else if (OB_FAIL(databuff_printf(plan_sel_info_str_,
-                     STMT_MAX_LEN,
-                     pos,
-                     "{%.*s%s%f%s%f%s}",
-                     plan_sel_info_array_.at(i)->index_name_.length(),
-                     plan_sel_info_array_.at(i)->index_name_.ptr(),
-                     "[",
-                     plan_sel_info_array_.at(i)->low_bound_sel_,
-                     ",",
-                     plan_sel_info_array_.at(i)->high_bound_sel_,
-                     "]"))) {
-        if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          SQL_PC_LOG(WARN, "failed to write plan sel info", K(plan_sel_info_array_.at(i)), K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      plan_sel_info_str_len_ = static_cast<int32_t>(pos);
-    }
-    return ret;
+   int ret = OB_SUCCESS;
+   int64_t pos = 0;
+   for (int64_t i = 0; OB_SUCC(ret) && i < plan_sel_info_array_.count(); i++) {
+     if (OB_ISNULL(plan_sel_info_array_.at(i))) {
+       ret = OB_ERR_UNEXPECTED;
+       SQL_PC_LOG(WARN, "null plan sel info", K(ret));
+     } else if (OB_ISNULL(plan_sel_info_str_)) {
+       ret = OB_ERR_UNEXPECTED;
+       SQL_PC_LOG(WARN, "null plan sel info str", K(ret));
+     } else if (OB_FAIL(databuff_printf(plan_sel_info_str_, STMT_MAX_LEN, pos, "{%.*s%s%f%s%f%s}",
+                                        plan_sel_info_array_.at(i)->index_name_.length(),
+                                        plan_sel_info_array_.at(i)->index_name_.ptr(), "[",
+                                        plan_sel_info_array_.at(i)->low_bound_sel_, ",",
+                                        plan_sel_info_array_.at(i)->high_bound_sel_, "]"))) {
+       if (OB_SIZE_OVERFLOW == ret) {
+         ret = OB_SUCCESS;
+         break;
+       } else {
+         SQL_PC_LOG(WARN, "failed to write plan sel info", K(plan_sel_info_array_.at(i)), K(ret));
+       }
+     }
+   }
+   if (OB_SUCC(ret)) {
+     plan_sel_info_str_len_ = static_cast<int32_t>(pos);
+   }
+   return ret;
   }
 
+  //包含超时和SUCC的执行次数
   int64_t get_execute_count()
   {
     return timeout_count_ + execute_times_;
   }
 
-  inline void update_cache_stat(const ObTableScanStat& stat)
+  inline void update_cache_stat(const ObTableScanStat &stat)
   {
     const int64_t current_time = common::ObTimeUtility::current_time();
     if (current_time > gen_time_ + CACHE_POLICY_UPDATE_INTERVAL) {
@@ -948,7 +783,8 @@ struct ObPlanStat {
       ATOMIC_AAF(&row_cache_miss_cnt_, stat.row_cache_miss_cnt_);
       if (0 == (update_times & CACHE_POLICY_UDPATE_THRESHOLD)) {
         if (bf_access_cnt_ > CACHE_ACCESS_THRESHOLD) {
-          if (static_cast<double>(bf_filter_cnt_) / static_cast<double>(bf_access_cnt_) <= ENABLE_BF_CACHE_THRESHOLD) {
+          if (static_cast<double>(bf_filter_cnt_) / static_cast<double>(bf_access_cnt_)
+              <= ENABLE_BF_CACHE_THRESHOLD) {
             enable_bf_cache_ = false;
           } else {
             enable_bf_cache_ = true;
@@ -956,8 +792,8 @@ struct ObPlanStat {
         }
         const int64_t row_cache_access_cnt = row_cache_miss_cnt_ + row_cache_hit_cnt_;
         if (row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
-          if (static_cast<double>(row_cache_hit_cnt_) / static_cast<double>(row_cache_access_cnt) <=
-              ENABLE_ROW_CACHE_THRESHOLD) {
+          if (static_cast<double>(row_cache_hit_cnt_) / static_cast<double>(row_cache_access_cnt)
+              <= ENABLE_ROW_CACHE_THRESHOLD) {
             enable_row_cache_ = false;
           } else {
             enable_row_cache_ = true;
@@ -965,25 +801,18 @@ struct ObPlanStat {
         }
         const int64_t fuse_row_cache_access_cnt = fuse_row_cache_hit_cnt_ + fuse_row_cache_miss_cnt_;
         if (fuse_row_cache_access_cnt > CACHE_ACCESS_THRESHOLD) {
-          if (static_cast<double>(fuse_row_cache_hit_cnt_) / static_cast<double>(fuse_row_cache_access_cnt) <=
-              ENABLE_ROW_CACHE_THRESHOLD) {
+          if (static_cast<double>(fuse_row_cache_hit_cnt_) / static_cast<double>(fuse_row_cache_access_cnt)
+              <= ENABLE_ROW_CACHE_THRESHOLD) {
             enable_fuse_row_cache_ = false;
           } else {
             enable_fuse_row_cache_ = true;
           }
         }
-        SQL_PC_LOG(DEBUG,
-            "update cache policy",
-            K(sql_id_),
-            K(enable_bf_cache_),
-            K(enable_row_cache_),
-            K(enable_fuse_row_cache_),
-            K(bf_filter_cnt_),
-            K(bf_access_cnt_),
-            K(row_cache_hit_cnt_),
-            K(row_cache_access_cnt),
-            K(fuse_row_cache_hit_cnt_),
-            K(fuse_row_cache_access_cnt));
+        SQL_PC_LOG(DEBUG, "update cache policy", K(sql_id_), K(exact_mode_sql_id_),
+            K(enable_bf_cache_), K(enable_row_cache_), K(enable_fuse_row_cache_),
+            K(bf_filter_cnt_), K(bf_access_cnt_),
+            K(row_cache_hit_cnt_), K(row_cache_access_cnt),
+            K(fuse_row_cache_hit_cnt_), K(fuse_row_cache_access_cnt));
         row_cache_hit_cnt_ = 0;
         row_cache_miss_cnt_ = 0;
         bf_access_cnt_ = 0;
@@ -997,109 +826,195 @@ struct ObPlanStat {
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */
-  TO_STRING_KV(K_(plan_id), "sql_text", ObString(stmt_len_, stmt_), K_(raw_sql), K_(gen_time), K_(schema_version),
-      K_(last_active_time), K_(hit_count), K_(mem_used), K_(slow_count), K_(slowest_exec_time), K_(slowest_exec_usec),
-      K_(execute_times), K_(disk_reads), K_(direct_writes), K_(buffer_gets), K_(application_wait_time),
-      K_(concurrency_wait_time), K_(user_io_wait_time), K_(rows_processed), K_(elapsed_time), K_(cpu_time),
-      K_(large_querys), K_(delayed_large_querys), K_(outline_version), K_(outline_id), K_(is_evolution),
-      K_(is_last_exec_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_exec_succ), K_(timeout_count),
-      K_(bl_info));
+  TO_STRING_KV(K_(plan_id),
+               "sql_text", stmt_,
+               K_(raw_sql),
+               K_(gen_time),
+               K_(schema_version),
+               K_(last_active_time),
+               K_(hit_count),
+               K_(mem_used),
+               K_(slow_count),
+               K_(slowest_exec_time),
+               K_(slowest_exec_usec),
+               K_(execute_times),
+               K_(disk_reads),
+               K_(direct_writes),
+               K_(buffer_gets),
+               K_(application_wait_time),
+               K_(concurrency_wait_time),
+               K_(user_io_wait_time),
+               K_(rows_processed),
+               K_(elapsed_time),
+               K_(cpu_time),
+               K_(large_querys),
+               K_(delayed_large_querys),
+               K_(outline_version),
+               K_(outline_id),
+               K_(is_evolution),
+               K_(is_last_exec_succ),
+               K_(is_bind_sensitive),
+               K_(is_bind_aware),
+               K_(is_last_exec_succ),
+               K_(timeout_count),
+               K_(evolution_stat),
+               K_(plan_hash_value),
+               K_(hints_all_worked));
 };
 
-struct SysVarNameVal {
+struct SysVarNameVal
+{
   common::ObString name_;
   common::ObObj value_;
 
   TO_STRING_KV(K_(name), K_(value));
 };
 
-struct StmtStat {
-  int64_t memory_used_;
-  int64_t last_active_timestamp_;  // used now
-  int64_t execute_average_time_;
-  int64_t execute_slowest_time_;
-  int64_t execute_slowest_timestamp_;
-  int64_t execute_count_;  // used now
-  int64_t execute_slow_count_;
-  int64_t ps_count_;
-  bool to_delete_;
-  StmtStat()
-      : memory_used_(0),
-        last_active_timestamp_(0),
-        execute_average_time_(0),
-        execute_slowest_time_(0),
-        execute_slowest_timestamp_(0),
-        execute_count_(0),
-        execute_slow_count_(0),
-        ps_count_(0),
-        to_delete_(false)
-  {}
-
-  void reset()
+struct ObGetAllPlanIdOp
+{
+  explicit ObGetAllPlanIdOp(common::ObIArray<uint64_t> *key_array)
+    : key_array_(key_array)
   {
-    memory_used_ = 0;
-    last_active_timestamp_ = 0;
-    execute_average_time_ = 0;
-    execute_slowest_time_ = 0;
-    execute_slowest_timestamp_ = 0;
-    execute_count_ = 0;
-    execute_slow_count_ = 0;
-    ps_count_ = 0;
-    to_delete_ = false;
   }
-
-  double weight()
+  ObGetAllPlanIdOp()
+    : key_array_(NULL)
   {
-    int64_t time_interval = common::ObTimeUtility::current_time() - last_active_timestamp_;
-    double weight = common::OB_PC_WEIGHT_NUMERATOR / static_cast<double>(time_interval);
-    return weight;
   }
-
-  TO_STRING_KV(K_(memory_used), K_(last_active_timestamp), K_(execute_average_time), K_(execute_slowest_time),
-      K_(execute_slowest_timestamp), K_(execute_count), K_(execute_slow_count), K_(ps_count), K_(to_delete));
-};
-
-struct ObGetAllPlanIdOp {
-  explicit ObGetAllPlanIdOp(common::ObIArray<uint64_t>* key_array) : key_array_(key_array)
-  {}
-  ObGetAllPlanIdOp() : key_array_(NULL)
-  {}
-  void reset()
-  {
-    key_array_ = NULL;
-  }
-  int set_key_array(common::ObIArray<uint64_t>* key_array);
-  int operator()(common::hash::HashMapPair<ObCacheObjID, ObCacheObject*>& entry);
+  void reset() { key_array_ = NULL; }
+  int set_key_array(common::ObIArray<uint64_t> *key_array);
+  int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
 
 public:
-  common::ObIArray<uint64_t>* key_array_;
+  common::ObIArray<uint64_t> *key_array_;
 };
 
-struct ObPhyLocationGetter {
+struct ObGetAllCacheIdOp
+{
+  explicit ObGetAllCacheIdOp(common::ObIArray<uint64_t> *key_array)
+    : key_array_(key_array)
+  {
+  }
+  ObGetAllCacheIdOp()
+    : key_array_(NULL)
+  {
+  }
+  void reset() { key_array_ = NULL; }
+  int set_key_array(common::ObIArray<uint64_t> *key_array);
+  int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
+
+public:
+  common::ObIArray<uint64_t> *key_array_;
+};
+
+struct ObPhyLocationGetter
+{
 public:
   // used for getting plan
-  static int get_phy_locations(const ObIArray<ObTableLocation>& table_locations, const ObPlanCacheCtx& pc_ctx,
-      share::ObIPartitionLocationCache& location_cache, ObIArray<ObPhyTableLocationInfo>& phy_location_infos,
-      bool& need_check_on_same_server);
+  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
+                               const ObPlanCacheCtx &pc_ctx,
+                               ObIArray<ObCandiTableLoc> &phy_location_infos,
+                               bool &need_check_on_same_server);
 
   // used for adding plan
-  static int get_phy_locations(const common::ObIArray<ObTablePartitionInfo*>& partition_infos,
-      ObIArray<ObPhyTableLocation>& phy_locations, ObIArray<ObPhyTableLocationInfo>& phy_location_infos);
+  static int get_phy_locations(const common::ObIArray<ObTablePartitionInfo *> &partition_infos,
+                               //ObIArray<ObDASTableLoc> &phy_locations,
+                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+
+  static int build_table_locs(ObDASCtx &das_ctx,
+                              const common::ObIArray<ObTableLocation> &table_locations,
+                              const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
+  static int build_related_tablet_info(const ObTableLocation &table_location,
+                                       ObExecContext &exec_ctx,
+                                       DASRelatedTabletMap *&related_map);
 
   // used for replica re-select optimization for duplicate table
-  static int reselect_duplicate_table_best_replica(
-      const ObIArray<ObPhyTableLocationInfo>& phy_locations, bool& on_same_server);
+  static int reselect_duplicate_table_best_replica(const ObIArray<ObCandiTableLoc> &phy_locations,
+                                                   bool &on_same_server);
 };
 
-struct ObPlanBaselineHeler {
+/**
+ * This class is the entity of configuration infos that has influence in execution plan.
+ *
+ * Firstly, @Funciton is_out_of_date() will find out whether configs cached in
+ * @Class ObConfigInfoInPC had changed; if changed, do update cached configs.
+ *
+ * update cached configs
+ * 1. @Funciton load_influence_plan_config() will load values
+ * 2. @Function serialize_configs() will serialze config values to strings and plan cache will
+ *    compare this string so as to figure out whether configs has changed.
+ * 3. after generate string, @Function should do @Function update_version()
+ *
+ * add configs has influence in execution plan. @see load_influence_plan_config();
+ *
+ * NOTES:
+ * to add configs that will influence exectuion plan, please add to following funcs:
+ *  1. load_influence_plan_config();
+ *  2. serialize_configs();
+ *  3. adds default values to ObBasicSessionInfo::load_default_configs_in_pc()
+ * */
+class ObConfigInfoInPC
+{
+public:
+  static const int DEFAULT_PUSHDOWN_STORAGE_LEVEL = 3;
 
-  static int init_baseline_params_info_str(
-      const common::Ob2DArray<ObParamInfo, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObWrapperAllocator, false>&
-          params_info,
-      ObIAllocator& alloc, ObString& param_info_str);
+  ObConfigInfoInPC()
+  : pushdown_storage_level_(DEFAULT_PUSHDOWN_STORAGE_LEVEL),
+    rowsets_enabled_(false),
+    enable_px_batch_rescan_(true),
+    bloom_filter_enabled_(true),
+    enable_newsort_(true),
+    px_join_skew_handling_(true),
+    px_join_skew_minfreq_(30),
+    min_cluster_version_(0),
+    cluster_config_version_(-1),
+    tenant_config_version_(-1),
+    tenant_id_(0)
+  {
+  }
+  // init tenant_id_
+  void init(int t_id) {tenant_id_ = t_id;}
+  // load configs which will influence exectuion plan
+  int load_influence_plan_config();
+  // generate config string
+  int serialize_configs(char *buf, int buf_len, int64_t &pos);
+  // whether configs has been changed
+  bool is_out_of_date(int64_t cluster_config, int64_t tenant_config)
+  {
+    return !(cluster_config==cluster_config_version_ &&
+              tenant_config==tenant_config_version_);
+  }
+  void update_version(int64_t cluster_config, int64_t tenant_config)
+  {
+    cluster_config_version_ = cluster_config;
+    tenant_config_version_ = tenant_config;
+  }
+private:
+  int get_all_influence_plan_config();
+  bool is_equal(ObString& str);
+
+public:
+  //
+  // here to add config values
+  //
+  int pushdown_storage_level_;
+  bool rowsets_enabled_;
+  bool enable_px_batch_rescan_;
+  bool enable_px_ordered_coord_;
+  bool bloom_filter_enabled_;
+  bool enable_newsort_;
+  bool px_join_skew_handling_;
+  int8_t px_join_skew_minfreq_;
+  uint64_t min_cluster_version_;
+
+private:
+  // current cluster config version_
+  int64_t cluster_config_version_;
+  // current tenant config version_
+  int64_t tenant_config_version_;
+  int64_t tenant_id_;
 };
 
 extern const char* plan_cache_gc_confs[3];
-}  // namespace sql
-}  // namespace oceanbase
-#endif  //_OB_PLAN_CACHE_UTIL_H_
+}
+}
+#endif //_OB_PLAN_CACHE_UTIL_H_

@@ -40,7 +40,7 @@ select c3 from t5 where c2 > 10;
 select c3,c4 from t5 where c2 > 10;
 
 ######################### test for hierarchical query ###################################
-### single table ###
+### 单表测试 ###
 # same output #
 #select prior c2, c1 from t0 start with c1 = 1 connect by prior c1 = c2;
 #select prior c2, c2 from t0 connect by prior (c1 + 1) = (c1 + 1);
@@ -65,7 +65,7 @@ select c3,c4 from t5 where c2 > 10;
 #select abs(a3) + a3 from t0 where prior c2 < c1 connect by prior c1 > c2;
 #select prior (abs(a3) + a3) from t0 where prior c2 < c1 connect by prior c1 > c2;
 #
-#### multi table  ###
+#### 多表测试 ###
 #
 ## same output #
 #select prior t9.c3, t0.pk from t0 join t9 connect by prior t0.pk = t9.c3;

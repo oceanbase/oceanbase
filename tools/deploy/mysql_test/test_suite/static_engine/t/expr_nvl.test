@@ -1,0 +1,86 @@
+#owner: dachuan.sdc
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+    
+select * from t1;
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+
+--sleep 1
+
+--explain_protocol 2
+eval select nvl(c_null, c_null) from t1;
+eval select nvl2(c_null, c_null, c_null) from t1;
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select nvl(c$left, c$right) from t1;
+    eval select nvl(null, c$left) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--sleep 2
+--explain_protocol 0
+set timestamp = 1600000000;
+--echo ##bugfix:
+select ifnull(null, utc_time(4));
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (a bigint primary key, b datetime(3));
+insert into t1 values(1, now());
+insert into t1 values(2, now(6));
+select nvl(null,b) from t1;
+drop table t1;

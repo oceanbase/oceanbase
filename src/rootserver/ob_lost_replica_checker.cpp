@@ -19,34 +19,35 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/container/ob_se_array.h"
 #include "share/config/ob_server_config.h"
-#include "share/partition_table/ob_partition_table_operator.h"
-#include "share/partition_table/ob_partition_table_iterator.h"
 #include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_part_mgr_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_multi_cluster_util.h"
+#include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
+#include "share/ls/ob_ls_info.h"//ObLSInfo
 #include "rootserver/ob_server_manager.h"
 #include "observer/ob_server_struct.h"
-#include "observer/ob_pg_partition_meta_table_updater.h"
-#include "storage/ob_i_partition_group.h"
-#include "storage/ob_partition_service.h"
-#include "storage/ob_file_system_router.h"
 #include "rootserver/ob_root_service.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace storage;
-namespace rootserver {
+namespace rootserver
+{
 
 ObLostReplicaChecker::ObLostReplicaChecker()
-    : inited_(false), server_manager_(NULL), pt_operator_(NULL), schema_service_(NULL)
-{}
+  : inited_(false), cond_(),
+    server_manager_(NULL),
+    lst_operator_(NULL),
+    schema_service_(NULL)
+{
+}
 
 ObLostReplicaChecker::~ObLostReplicaChecker()
-{}
+{
+}
 
-int ObLostReplicaChecker::check_cancel()
+int ObLostReplicaChecker::check_cancel_()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -59,218 +60,163 @@ int ObLostReplicaChecker::check_cancel()
     ret = OB_CANCELED;
     LOG_WARN("root service is stop", KR(ret));
   } else {
-    // nothing todo
+    //nothing todo
   }
   return ret;
 }
 
-int ObLostReplicaChecker::init(
-    ObServerManager& server_manager, ObPartitionTableOperator& pt_operator, ObMultiVersionSchemaService& schema_service)
+int ObLostReplicaChecker::init(ObServerManager &server_manager,
+                                ObLSTableOperator &lst_operator,
+                                ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
+  const int64_t thread_cnt = 1;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
+    LOG_WARN("fail to init thread cond, ", K(ret));
+  } else if (OB_FAIL(create(thread_cnt, "LostRepCheck"))) {
+    LOG_WARN("create empty server checker thread failed", K(ret), K(thread_cnt));
   } else {
     server_manager_ = &server_manager;
-    pt_operator_ = &pt_operator;
+    lst_operator_ = &lst_operator;
     schema_service_ = &schema_service;
     inited_ = true;
   }
   return ret;
 }
 
+void ObLostReplicaChecker::run3()
+{
+  LOG_INFO("lost replica checker start");
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    const int64_t wait_time_ms = 10 * 1000;//10s;
+    while (!stop_) {
+      ret = OB_SUCCESS;
+      ObThreadCondGuard guard(cond_);
+      if (OB_FAIL(check_lost_replicas())) {
+        LOG_WARN("failed to check lost replica", KR(ret));
+      }
+      if (OB_SUCCESS != cond_.wait(wait_time_ms)) {
+          LOG_DEBUG("wait timeout", K(wait_time_ms));
+      }
+    }
+  }
+  LOG_INFO("lost replica checker stop");
+
+}
+
 int ObLostReplicaChecker::check_lost_replicas()
 {
   int ret = OB_SUCCESS;
-  ObPartitionInfo partition_info;
-  // Traversing meta table, not schema
-  ObPartitionTableIdIterator pt_part_iter;
-  uint64_t pt_table_id = OB_INVALID_ID;
-  int64_t pt_partition_id = OB_INVALID_INDEX;
+  ObLSInfo ls_info;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<uint64_t> tenant_id_array;
   LOG_INFO("start checking lost replicas");
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(pt_part_iter.init(*schema_service_))) {
-    LOG_INFO("pt_part_iterator init failed", K(ret));
-  } else {
-    while (OB_SUCC(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_FAIL(check_cancel())) {
-        if (OB_CANCELED != ret) {
-          LOG_WARN("fail to check cancel", KR(ret));
-        } else {
-          LOG_INFO("rs is stopped, no need check lost replicas", KR(ret));
-        }
-      } else if (OB_FAIL(pt_part_iter.get_next_partition(pt_table_id, pt_partition_id))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("pt_part_iterator next failed", K(ret));
-        }
-      } else if (OB_SUCCESS != (tmp_ret = check_lost_replica_by_pt(pt_table_id, pt_partition_id))) {
-        // check lost_replica by pt, and ignore the error, as far as possible to generate tasks
-        LOG_WARN("fail to check_lost_replica_by_pt", K(tmp_ret), K(pt_table_id), K(pt_partition_id));
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
+  } else if (OB_FAIL(check_cancel_())) {
+    LOG_WARN("need cancel", KR(ret));
+ } else if (OB_ISNULL(schema_service_) || OB_ISNULL(lst_operator_)) {
+    ret  = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), KP(schema_service_), KP(lst_operator_));
+ } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_id_array))) {
+   LOG_WARN("fail to get tenant id array", KR(ret));
+ } else {
+   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {
+     ObTenantLSTableIterator iter;
+     const uint64_t tenant_id = tenant_id_array.at(i);
+     if (is_user_tenant(tenant_id)) {
+       //nothing
+     } else if (OB_FAIL(iter.init(*lst_operator_, tenant_id))) {
+       LOG_WARN("failed to init iter", KR(ret), K(tenant_id));
+     } else {
+       while (OB_SUCC(ret)) {
+         ls_info.reset();
+         if (OB_FAIL(iter.next(ls_info))) {
+           if (OB_ITER_END == ret) {
+             ret = OB_SUCCESS;
+           } else {
+             LOG_WARN("iterate partition table failed", KR(ret));
+           }
+           break;
+         } else if (OB_SUCCESS != (tmp_ret = check_lost_replica_by_ls_(ls_info))) {
+           LOG_WARN("failed to check lost replica by ls", KR(ret), KR(tmp_ret),
+               K(ls_info));
+         }
+       }//end while
+     }
+     //ignore each tenant error
+     ret = OB_SUCCESS;
+   }//end for
+ }
   return ret;
 }
 
-int ObLostReplicaChecker::delete_pg_partition_meta_table_item_(const uint64_t tg_id, const common::ObAddr& svr_ip)
+int ObLostReplicaChecker::check_lost_replica_by_ls_(const share::ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = extract_tenant_id(tg_id);
-  const int64_t version = 0;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  common::ObArray<const ObSimpleTableSchemaV2*> table_schema_array;
-
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_INVALID_ID == tg_id || !svr_ip.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tg_id), K(svr_ip));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id), K(tg_id));
-  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tg_id, table_schema_array))) {
-    LOG_WARN("fail to get table schemas in tablegroup", K(ret), K(tenant_id), K(tg_id));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_array.count(); ++i) {
-      const ObSimpleTableSchemaV2* schema = table_schema_array.at(i);
-      if (NULL == schema) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("schema is null, unexpected error", K(ret), KP(schema), K(tg_id));
-      } else if (!schema->has_partition()) {
-        // do nothing
-        // has not parition, no need to process, like local index
-      } else {
-        bool check_dropped_schema = true;
-        ObTablePgKeyIter iter(*schema, tg_id, check_dropped_schema);
-        ObPartitionKey pkey;
-        ObPGKey pg_key;
-        if (OB_FAIL(iter.init())) {
-          LOG_WARN("fail to iter init", K(ret));
-        } else {
-          while (OB_SUCC(ret) && OB_SUCC(iter.next(pkey, pg_key))) {
-            if (!pkey.is_valid() || !pg_key.is_valid()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid argument", K(ret), K(pkey), K(pg_key));
-            } else if (OB_FAIL(observer::ObPGPartitionMTUpdater::get_instance().add_task(
-                           pkey, observer::ObPGPartitionMTUpdateType::DELETE, version, svr_ip))) {
-              LOG_WARN("fail to async update pg partition meta table", K(ret), K(pkey), K(pg_key));
-            } else {
-              pkey.reset();
-              pg_key.reset();
-            }
-          }
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLostReplicaChecker::check_lost_replica_by_pt(uint64_t pt_table_id, int64_t pt_partition_id)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObPartitionInfo partition_info;
-  ObPTPartPartitionIterator pt_iter;
-  int64_t lost_count = 0;
   bool is_lost_replica = false;
-  LOG_INFO("start checking lost replicas by pt", K(pt_table_id), K(pt_partition_id));
+  int64_t lost_count = 0;
+  LOG_DEBUG("start checking lost replicas by ls", K(ls_info));
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_INVALID_ID == pt_table_id || OB_INVALID_INDEX == pt_partition_id) {
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid pt_table_id or pt_partition_id", K(ret), K(pt_table_id), K(pt_partition_id));
-  } else if (OB_FAIL(pt_iter.init(*pt_operator_, pt_table_id, pt_partition_id))) {
-    LOG_INFO("partition table iterator init failed", K(ret));
+    LOG_WARN("ls info invalid", KR(ret), K(ls_info));
+  } else if (OB_ISNULL(lst_operator_)) {
+    ret  = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls operator is null", KR(ret), KP(lst_operator_));
   } else {
-    while (OB_SUCC(ret)) {
-      // Ignore the error code, and there is no influence between different partitions
-      if (OB_FAIL(check_cancel())) {
-        if (OB_CANCELED != ret) {
-          LOG_WARN("fail to check cancel", KR(ret));
+    const share::ObLSInfo::ReplicaArray &replicas = ls_info.get_replicas();
+    FOREACH_CNT_X(replica, replicas, OB_SUCC(ret)) {
+      is_lost_replica = false;
+      if (OB_FAIL(check_lost_replica_(ls_info, *replica, is_lost_replica))) {
+        LOG_WARN("check_lost_replica failed", KR(ret), K(ls_info), KPC(replica));
+      } else if (is_lost_replica) {
+        lost_count++;
+        if (OB_FAIL(lst_operator_->remove(replica->get_tenant_id(),
+                                          replica->get_ls_id(),
+                                          replica->get_server(),
+                                          false/*inner_table_only*/))) {
+          LOG_WARN("lst_operator remove replica failed", KR(ret), KPC(replica));
         } else {
-          LOG_INFO("rs is stopped, no need check lost replica by pt", KR(ret));
+          LOG_INFO("lost replica checker remove lost replica finish", KR(ret), KPC(replica));
         }
-      } else if (FALSE_IT(partition_info.reuse())) {
-        // never be here
-      } else if (OB_FAIL(pt_iter.next(partition_info))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("pt_iter next failed", K(ret));
-        } else {
-        }  // nothing todo
-      } else {
-        const ObPartitionInfo::ReplicaArray& replicas = partition_info.get_replicas_v2();
-        FOREACH_CNT_X(replica, replicas, OB_SUCCESS == ret)
-        {
-          is_lost_replica = false;
-          if (OB_FAIL(check_lost_replica(partition_info, *replica, is_lost_replica))) {
-            LOG_WARN("check_lost_replica failed", K(partition_info), "replica", *replica, KR(ret));
-          } else if (is_lost_replica) {
-            ++lost_count;
-            // There is a risk here
-            // the reporting mechanism of meta table and partition meta table are independent,
-            // There is a possible condition where the meta table has deleted, but due to the machine is down,
-            // partition meta table has not beed deleted and has remained records.
-            // Later, we need to improve the reporting and management of the two tables
-            ObPartitionKey pkey(replica->table_id_, replica->partition_id_, replica->partition_cnt_);
-            // delete the record of standalone partition from partition meta table
-            if (!pkey.is_pg()) {
-              // not pg
-              const int64_t version = 0;
-              if (OB_SUCCESS != (tmp_ret = observer::ObPGPartitionMTUpdater::get_instance().add_task(
-                                     pkey, observer::ObPGPartitionMTUpdateType::DELETE, version, replica->server_))) {
-                LOG_WARN("fail to async update pg partition meta table", K(tmp_ret), K(pkey));
-              }
-              // delete record of all partitions under pg from partition meta table
-            } else {
-              // if is pg, replica->table_id_ is tg_id
-              if (OB_FAIL(delete_pg_partition_meta_table_item_(replica->table_id_, replica->server_))) {
-                LOG_WARN("delete pg partition meta table item error", K(ret), K(replica));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(pt_operator_->remove(replica->table_id_, replica->partition_id_, replica->server_))) {
-                LOG_WARN("pt_operator remove replica failed", "replica", *replica, K(ret));
-              } else {
-                LOG_INFO("lost replica checker remove lost replica finish", "replica", *replica, KR(ret), K(tmp_ret));
-              }
-            }
+
+        if (OB_SUCC(ret) && is_sys_tenant(replica->get_tenant_id())) {
+          if (OB_FAIL(lst_operator_->remove(replica->get_tenant_id(),
+                                            replica->get_ls_id(),
+                                            replica->get_server(),
+                                            true/*inner_table_only*/))) {
+            LOG_WARN("lst_operator remove replica from inner table failed",
+                     KR(ret), KPC(replica));
           } else {
-            // do nothing
+            LOG_INFO("lost replica checker remove lost replica from inner table finish",
+                     KR(ret), KPC(replica));
           }
         }
+      } else {
+        // do nothing
       }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
     }
   }
 
-  int64_t replica_safe_remove_time_us = GCONF.replica_safe_remove_time;
-  LOG_INFO("finish checking lost replicas by pt, lost_count means count of replicas "
-           "that on server offline long enough",
-      K(lost_count),
-      K(replica_safe_remove_time_us),
-      K(pt_table_id),
-      K(pt_partition_id),
-      K(ret));
+  LOG_DEBUG("finish checking lost replicas by pt, lost_count means count of replicas "
+      "that on server offline long enough", K(lost_count), K(ls_info), K(ret));
   return ret;
 }
 
-int ObLostReplicaChecker::check_lost_replica(
-    const ObPartitionInfo& partition_info, const ObPartitionReplica& replica, bool& is_lost_replica) const
+int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
+                                             const ObLSReplica &replica,
+                                             bool &is_lost_replica) const
 {
   int ret = OB_SUCCESS;
   is_lost_replica = false;
@@ -278,136 +224,66 @@ int ObLostReplicaChecker::check_lost_replica(
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!partition_info.is_valid() || !replica.is_valid()) {
+  } else if (!ls_info.is_valid() || !replica.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid partition_info or invalid replica", K(partition_info), K(replica), K(ret));
-  } else if (replica.modify_time_us_ + GCONF.replica_safe_remove_time < ObTimeUtility::current_time() ||
-             replica.modify_time_us_ + GCONF.server_permanent_offline_time < ObTimeUtility::current_time()) {
-    if (OB_FAIL(check_lost_server(replica.server_, is_lost_server))) {
-      LOG_WARN("check lost server failed", "server", replica.server_, K(ret));
-    } else if (is_lost_server) {
-      /*
-       * The following logic deals with three kinds of downtime:
-       * 1. Paxos replica is not in the member list and is permanently offline
-       * 2. Nonpaxos replica is permanently offline
-       * 3. Non private table of standby cluster is permanently offline
-       *
-       * Before permanently offline, all replicas have migrated to other server,
-       * the corresponding records in inner table have beed deleted,
-       * but there maybe expection:
-       * 1. Failed to delete the records in inner table.
-       * 2. The replica has not migrated before permanently offline
-       *
-       * In order to deal with these two kinds of exceptions,
-       * it is necessary to recycle and clean the inner table records here.
-       *
-       * Knonw Issue:If the migration fails and the replica is recycled here,
-       * there will be less replicas,
-       * The logic for supplementing the replica will be triggered later.
-       *
-       */
-      /*
-       * It is used to determine the record of replica can be deleted, the premise is that
-       * the server is permanently offline:
-       * 1. First, according to whether it is in the leader's member_List,
-       *    if not, then the replica needs to be deleted.
-       *    non paxos replica or not in_service replica can be deleted directly
-       * 2. If the replica in leader's member_List, it is need to determine whether the schema exist
-       *    If schema exist:
-       *      Can not delete the records, the replica should remove member first
-       *      (in ObRereplication::remove_permanent_offline_replicas).
-       *      To ensure that the member is removed first, and then delete the meta table information,
-       *      so as to avoid the occurrence of only_in_member_List
-       *    If schema not exist:
-       *      Because the meta information is not reliable, it can be deleted directly.
-       *      At this time, there may be two situations:
-       *        a.Schema is not exist, it is no problem to delete the record after remove member.
-       *        b.Schema is exist, but misreport not exist(because of the lag of refresh schema and now
-       *          schema module can not provide the deletion information of non tenant schema),
-       *          delete record before remove member, it will cause the occurrence of only_in_member_list(badcase)
-       * 3. Use get_partition_schema to determine whether the partition_schema exist or not
-       */
-      if (partition_info.in_physical_restore()) {
-        is_lost_replica = true;
-      } else if (!replica.is_in_service() || !ObReplicaTypeCheck::is_paxos_replica_V2(replica.replica_type_)) {
-        is_lost_replica = true;
-      } else {
-        // go on check schema
-      }
-      if (OB_SUCC(ret) && !is_lost_replica) {
-        /*
-         * Badcase: Tenant_schema has refreshed without the table, and server is in permanently offline.
-         *          There is a very small probability that only_in_member_list will happen.
-         *          Manual method to reduce the probability of occurrence:
-         *            1. Always use the newest tenant_guard.
-         *            2. If the permanently_offline_time is enough, schema will be refreshed;
-         *          If the replica is only in member list, it can not rereplication until remove member.
-         */
-        const ObPartitionSchema* partition_schema = NULL;
-        share::schema::ObSchemaGetterGuard schema_guard;
-        bool is_part_exist = true;
-        const uint64_t schema_id = replica.table_id_;
-        const uint64_t tenant_id = extract_tenant_id(schema_id);
-        const ObSchemaType schema_type =
-            is_new_tablegroup_id(schema_id) ? ObSchemaType::TABLEGROUP_SCHEMA : ObSchemaType::TABLE_SCHEMA;
-        const int64_t partition_id = replica.partition_id_;
-        bool check_dropped_partition = true;
-        bool is_dropped = true;
-        // check tenant exist
-        if (OB_SUCC(ret)) {
-          if (OB_ISNULL(schema_service_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("schema service is null", K(ret));
-          } else if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-            LOG_WARN("fail to get sys tenant schema guard", KR(ret));
-          } else if (OB_SYS_TENANT_ID == tenant_id) {
-            // nothing todo
-          } else if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-            LOG_WARN("fail to check tenant has dropped", KR(ret), K(schema_id), K(tenant_id), K(partition_id));
-          } else if (!is_dropped) {
-            if (is_sys_table(schema_id)) {
-              // During the physical recovery of the sys table, it will be failed to get tenant_guard
-              // just get sys tenant guard as long as tenant is not dropped
-            } else if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(tenant_id, schema_guard))) {
-              LOG_WARN("fail to get schema gurad", KR(ret), K(schema_id), K(tenant_id), K(partition_id));
-            }
-          } else {
-            is_lost_replica = true;
-          }
-        }
-        if (OB_SUCC(ret) && !is_dropped) {
-          // 2. check table/tablegroup exist
-          if (OB_FAIL(ObPartMgrUtils::get_partition_schema(schema_guard, schema_id, schema_type, partition_schema))) {
-            if (OB_TABLE_NOT_EXIST != ret && OB_TABLEGROUP_NOT_EXIST != ret) {
-              LOG_WARN("fail to get partition schema", KR(ret), K(schema_id), K(tenant_id), K(partition_id));
-            } else {
-              ret = OB_SUCCESS;
-              // ignore failed to get schema
-              is_dropped = true;
-              is_lost_replica = true;
-            }
-          }
-          // 3. check partition exist
-          if (OB_SUCC(ret) && !is_dropped) {
-            if (OB_ISNULL(partition_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("partition schema is null", KR(ret), K(schema_id), K(tenant_id), K(partition_id));
-              is_lost_replica = true;  // schema has been dropped
-            } else if (OB_FAIL(ObPartMgrUtils::check_part_exist(
-                           *partition_schema, partition_id, check_dropped_partition, is_part_exist))) {
-              LOG_WARN("check part exist failed", KR(ret), K(schema_id), K(partition_id));
-            } else if (!is_part_exist) {
-              is_lost_replica = true;  // partition has been dropped
-            }
-          }
+    LOG_WARN("invalid ls_info or invalid replica", KR(ret), K(ls_info), K(replica));
+  } else if (OB_FAIL(check_lost_server_(replica.get_server(), is_lost_server))) {
+    LOG_WARN("check lost server failed", "server", replica.get_server(), K(ret));
+  } else if (is_lost_server) {
+    /*
+     * 下面的逻辑处理了两种宕机情况：
+     * 1. paxos replica 不在 member list 中，永久下线
+     * 2. nonpaxos replica 永久下线
+     *
+     * 发生永久下线之前，副本可能都已经迁移，对应内部表记录也被清理。但可能存在异常：
+     *  - 内部表记录清理失败
+     *  - 发生永久下线之前，副本没有被迁移
+     *
+     * 为了应对这两种异常，需要在这里做内部表记录回收清理。
+     *
+     * Knonw Issue: 迁移失败、又在这里做了副本回收，会出现少副本的情况。
+     *  稍后走补副本逻辑补充副本。R@region 时补副本可能补充到其它 zone。
+     *
+     */
+    /* 
+     * 该逻辑功能是判断一个副本是否需要删除。前提都是该server已经处于永久下线
+     * 1.首先根据是否在leader的member_list中，如果不在member_list中，那么该replica是需要被删除的。
+     * 非paxos副本或者非in_service中的副本需要直接删除
+     * 2.如果在member_list中则需要判断在日志流状态表存在，
+     *   当日志流状态表中存在，这里不处理，交给remove_member处理。
+     *   当日志流状态表中不存在，则可以直接处理了，这种属于GC的残留。
+     *
+     */
+    if (!replica.is_in_service()
+        || !ObReplicaTypeCheck::is_paxos_replica_V2(replica.get_replica_type())) {
+      is_lost_replica = true;
+      LOG_INFO("replica not in service or not paxos replica", K(replica));
+    } else {
+      // go on check ls_status
+    }
+    if (OB_SUCC(ret) && !is_lost_replica) {
+      ObLSStatusOperator status_op;
+      share::ObLSStatusInfo status_info;
+      if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is null", KR(ret));
+      } else if (OB_FAIL(status_op.get_ls_status_info(
+              ls_info.get_tenant_id(), ls_info.get_ls_id(), status_info, *GCTX.sql_proxy_))) {
+        LOG_WARN("failed to get ls status info", KR(ret), K(ls_info));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          is_lost_replica = true;
+          LOG_INFO("replica not in __all_ls_status", K(replica));
+          ret = OB_SUCCESS;
         }
       }
     }
+    LOG_INFO("finish check lost replica", KR(ret), K(is_lost_replica), K(replica));
   }
   return ret;
 }
 
-int ObLostReplicaChecker::check_lost_server(const ObAddr& server, bool& is_lost_server) const
+
+int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost_server) const
 {
   int ret = OB_SUCCESS;
   is_lost_server = false;
@@ -417,6 +293,9 @@ int ObLostReplicaChecker::check_lost_server(const ObAddr& server, bool& is_lost_
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server", K(server), K(ret));
+  } else if (OB_ISNULL(server_manager_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server mgr is null", KR(ret), KP(server_manager_));
   } else if (!server_manager_->has_build()) {
     is_lost_server = false;
   } else {
@@ -428,24 +307,36 @@ int ObLostReplicaChecker::check_lost_server(const ObAddr& server, bool& is_lost_
       ret = OB_SUCCESS;
       is_lost_server = true;
       LOG_INFO("server not exist", K(server));
-    } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING == status.admin_status_) {
-      // The server in deleting status may also be down or manually killed,
-      // Permanent offline after downtime is lost server
-      if (status.is_permanent_offline()) {
-        is_lost_server = true;
-      } else {
-        is_lost_server = false;
-      }
-    } else {
-      const int64_t now = ObTimeUtility::current_time();
-      if (now - status.last_hb_time_ >= GCONF.replica_safe_remove_time ||
-          now - status.last_hb_time_ >= GCONF.server_permanent_offline_time) {
-        is_lost_server = true;
-      }
+    } else if (status.is_permanent_offline()) {
+      is_lost_server = true;
     }
   }
   return ret;
 }
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+void ObLostReplicaChecker::wakeup()
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    cond_.broadcast();
+  }
+}
+
+void ObLostReplicaChecker::stop()
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObRsReentrantThread::stop();
+    ObThreadCondGuard guard(cond_);
+    cond_.broadcast();
+  }
+}
+
+}//end namespace rootserver
+}//end namespace oceanbase

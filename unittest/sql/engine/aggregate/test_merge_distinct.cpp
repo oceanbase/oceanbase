@@ -20,25 +20,25 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::omt;
-class TestMergeDistinct : public ObMergeDistinct {
+class TestMergeDistinct : public ObMergeDistinct
+{
 public:
-  TestMergeDistinct() : ObMergeDistinct(alloc_)
-  {}
-  ~TestMergeDistinct()
-  {}
+      TestMergeDistinct() :ObMergeDistinct(alloc_) {}
+            ~TestMergeDistinct() {}
 };
 
-class TestMergeDistinctTest : public ::testing::Test {
+class TestMergeDistinctTest: public ::testing::Test
+{
 public:
   TestMergeDistinctTest();
   virtual ~TestMergeDistinctTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  void init(ObExecContext& ctx, TestMergeDistinct& merge_distinct, int64_t col_count)
+  void init(ObExecContext &ctx, TestMergeDistinct &merge_distinct, int64_t col_count)
   {
-    ASSERT_EQ(OB_SUCCESS,
-        ObTenantConfigMgr::get_instance().add_tenant_config(ctx.get_my_session()->get_effective_tenant_id()));
+    ASSERT_EQ(OB_SUCCESS, ObTenantConfigMgr::get_instance()
+      .add_tenant_config(ctx.get_my_session()->get_effective_tenant_id()));
 
     merge_distinct.reset();
     merge_distinct.reuse();
@@ -49,7 +49,7 @@ public:
     physical_plan_.reset();
     fake_table_.set_column_count(col_count);
     result_table_.set_column_count(col_count);
-    int32_t projector[3] = {0, 1, 2};
+    int32_t projector[3] = {0,1,2};
     result_table_.set_projector(projector, col_count);
     fake_table_.set_projector(projector, col_count);
     merge_distinct.set_projector(projector, col_count);
@@ -71,71 +71,63 @@ public:
     ctx.get_physical_plan_ctx()->set_phy_plan(&physical_plan_);
   }
 
-  void open_operator(ObExecContext& ctx, TestMergeDistinct& merge_distinct)
+  void open_operator(ObExecContext &ctx, TestMergeDistinct &merge_distinct)
   {
     ASSERT_EQ(OB_SUCCESS, merge_distinct.open(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.open(ctx));
   }
 
-  void close_operator(ObExecContext& ctx, TestMergeDistinct& merge_distinct)
+  void close_operator(ObExecContext &ctx, TestMergeDistinct &merge_distinct)
   {
     ASSERT_EQ(OB_SUCCESS, merge_distinct.close(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.close(ctx));
   }
 
-  ObFakeTable& get_fake_table()
-  {
-    return fake_table_;
-  }
-  ObFakeTable& get_result_table()
-  {
-    return result_table_;
-  }
-  ObPhysicalPlan& get_physical_plan()
-  {
-    return physical_plan_;
-  }
-
+  ObFakeTable &get_fake_table() { return fake_table_; }
+  ObFakeTable &get_result_table() { return result_table_; }
+  ObPhysicalPlan &get_physical_plan() { return physical_plan_; }
 protected:
   ObFakeTable fake_table_;
   ObFakeTable result_table_;
   ObPhysicalPlan physical_plan_;
-
 private:
   // disallow copy
-  TestMergeDistinctTest(const TestMergeDistinctTest& other);
-  TestMergeDistinctTest& operator=(const TestMergeDistinctTest& other);
-
+  TestMergeDistinctTest(const TestMergeDistinctTest &other);
+  TestMergeDistinctTest& operator=(const TestMergeDistinctTest &other);
 private:
   // data members
 };
 
 TestMergeDistinctTest::TestMergeDistinctTest()
-{}
+{
+}
 
 TestMergeDistinctTest::~TestMergeDistinctTest()
-{}
+{
+}
 
 void TestMergeDistinctTest::SetUp()
-{}
+{
+}
 
 void TestMergeDistinctTest::TearDown()
-{}
+{
+}
 
 TEST_F(TestMergeDistinctTest, test_utf8mb4_bin)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = get_fake_table();
-  ObFakeTable& result_table = get_result_table();
+  ObFakeTable &fake_table = get_fake_table();
+  ObFakeTable &result_table = get_result_table();
   TestMergeDistinct merge_distinct;
   ObCollationType cs_type = CS_TYPE_UTF8MB4_BIN;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
 
   init(ctx, merge_distinct, 3);
-  // fake table: distinct column(c1)
+  //fake table: distinct column(c1)
   ADD_ROW(fake_table, COL("r"), COL(1), COL(1));
   ADD_ROW(fake_table, COL("r"), COL(1), COL(2));
   ADD_ROW(fake_table, COL("s"), COL(2), COL(3));
@@ -159,16 +151,16 @@ TEST_F(TestMergeDistinctTest, test_utf8mb4_general_ci)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
-  ObFakeTable& fake_table = get_fake_table();
-  ObFakeTable& result_table = get_result_table();
+  ObFakeTable &fake_table = get_fake_table();
+  ObFakeTable &result_table = get_result_table();
   TestMergeDistinct merge_distinct;
   ObCollationType cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
 
   init(ctx, merge_distinct, 3);
-  // fake table: distinct column(c1)
+  //fake table: distinct column(c1)
   ADD_ROW(fake_table, COL("r"), COL("r"), COL(1));
   ADD_ROW(fake_table, COL("r"), COL("r"), COL(2));
   ADD_ROW(fake_table, COL("s"), COL("s"), COL(3));
@@ -355,11 +347,11 @@ TEST_F(TestMergeDistinctTest, test_invalid_argument)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_global_memory_pool();
   init_sql_factories();
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

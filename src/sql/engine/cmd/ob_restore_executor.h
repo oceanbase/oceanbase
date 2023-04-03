@@ -13,29 +13,25 @@
 #ifndef OCEANBASE_SQL_OB_RESTORE_EXECUTOR_
 #define OCEANBASE_SQL_OB_RESTORE_EXECUTOR_
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
-class ObRestoreTenantStmt;
 class ObPhysicalRestoreTenantStmt;
 
-class ObRestoreTenantExecutor {
-public:
-  ObRestoreTenantExecutor();
-  virtual ~ObRestoreTenantExecutor();
-  int execute(ObExecContext& ctx, ObRestoreTenantStmt& stmt);
-};
-
-class ObPhysicalRestoreTenantExecutor {
+class ObPhysicalRestoreTenantExecutor
+{
 public:
   ObPhysicalRestoreTenantExecutor();
   virtual ~ObPhysicalRestoreTenantExecutor();
-  int execute(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt);
 private:
-  int physical_restore_preview(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt);
+  int sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name);
+  int physical_restore_preview(ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
+} //end namespace sql
+} //end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_RESTORE_EXECUTOR_
+
+#endif //OCEANBASE_SQL_OB_RESTORE_EXECUTOR_

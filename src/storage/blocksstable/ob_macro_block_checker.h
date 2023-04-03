@@ -12,64 +12,62 @@
 
 #ifndef OB_MACRO_BLOCK_CHECKER_H
 #define OB_MACRO_BLOCK_CHECKER_H
-#include "storage/blocksstable/ob_macro_block_reader.h"
-#include "storage/blocksstable/ob_micro_block_reader.h"
-#include "storage/blocksstable/ob_sparse_micro_block_reader.h"
 
-namespace oceanbase {
-namespace blocksstable {
-class ObFullMacroBlockMeta;
+#include "lib/utility/ob_macro_utils.h"
+#include "share/ob_define.h"
+#include "share/schema/ob_table_param.h"
+#include "storage/blocksstable/ob_macro_block_common_header.h"
+#include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_imicro_block_reader.h"
 
-enum ObMacroBlockCheckLevel {
-  CHECK_LEVEL_NOTHING = 0,
-  CHECK_LEVEL_MACRO,  // verify checksum of macro buf, return success if checksum not exist
-  CHECK_LEVEL_MICRO,  // verify checksum of record buf
-  CHECK_LEVEL_ROW,    // verify column checksum by iterating every row
-  CHECK_LEVEL_AUTO,   // verify macro if macro checksum exist, else micro
-  CHECK_LEVEL_MAX
+namespace oceanbase
+{
+namespace blocksstable
+{
+enum ObMacroBlockCheckLevel
+{
+  CHECK_LEVEL_NONE = 0,  // no check
+  CHECK_LEVEL_PHYSICAL = 1, // verify data checksum
+  CHECK_LEVEL_LOGICAL  = 2, // verify column checksum
+  CHECK_LEVEL_MAX,
 };
 
 // note: this class is NOT thread safe
-class ObSSTableMacroBlockChecker {
+class ObSSTableMacroBlockChecker final
+{
 public:
-  ObSSTableMacroBlockChecker() : flat_reader_(), allocator_(common::ObModIds::OB_MACRO_BLOCK_CHECKER), macro_reader_()
-  {}
-  virtual ~ObSSTableMacroBlockChecker()
-  {}
-  int check(const char* macro_block_buf, const int64_t macro_block_buf_size, const ObFullMacroBlockMeta& meta,
-      ObMacroBlockCheckLevel check_level = CHECK_LEVEL_AUTO);
-  void destroy();
-
+  ObSSTableMacroBlockChecker() = default;
+  ~ObSSTableMacroBlockChecker() = default;
+  static int check(
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size,
+      ObMacroBlockCheckLevel check_level = CHECK_LEVEL_PHYSICAL);
 private:
-  int check_macro_buf(
-      const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const int64_t macro_block_buf_size);
-  int check_data_header(const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf,
-      const int64_t macro_block_buf_size, const ObFullMacroBlockMeta& meta);
-  int check_data_block(const char* macro_block_buf, const int64_t macro_block_buf_size,
-      const ObFullMacroBlockMeta& meta, const bool need_check_row);
-  int check_lob_block(
-      const char* macro_block_buf, const int64_t macro_block_buf_size, const ObFullMacroBlockMeta& meta);
-  int check_micro_data(
-      const char* micro_buf, const int64_t micro_buf_size, const ObFullMacroBlockMeta& meta, int64_t* checksum);
-  int build_column_map(const ObFullMacroBlockMeta& meta);
-  int check_sstable_data_header(
-      const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const ObFullMacroBlockMeta& meta);
-  int check_lob_data_header(
-      const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const ObFullMacroBlockMeta& meta);
-  int check_bloomfilter_data_header(
-      const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const ObFullMacroBlockMeta& meta);
+  static int check_logical_checksum(
+      const ObMacroBlockCommonHeader &common_header,
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size);
+  static int calc_micro_column_checksum(
+      const int64_t column_cnt,
+      const common::ObIArray<share::schema::ObColDesc> &out_cols,
+      ObIMicroBlockReader &reader,
+      ObDatumRow &datum_row,
+      int64_t *column_checksum);
+  static int check_physical_checksum(
+      const ObMacroBlockCommonHeader &common_header,
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size);
+  static int get_sstable_header_and_column_checksum(
+      const char *macro_block_buf,
+      const int64_t macro_block_buf_size,
+      ObSSTableMacroBlockHeader &header,
+      common::ObIArray<share::schema::ObColDesc> &columns,
+      const int64_t *&column_checksum);
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMacroBlockChecker);
-
-private:
-  ObMicroBlockReader flat_reader_;
-  ObSparseMicroBlockReader sparse_reader_;
-  common::ObArenaAllocator allocator_;
-  ObMacroBlockReader macro_reader_;
-  ObColumnMap column_map_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];  // for reader to get row
 };
 
-}  // namespace blocksstable
-}  // namespace oceanbase
+} // namespace blocksstable
+} // namespace oceanbase
 
-#endif  // OB_MACRO_BLOCK_CHECKER_H
+#endif//OB_MACRO_BLOCK_CHECKER_H

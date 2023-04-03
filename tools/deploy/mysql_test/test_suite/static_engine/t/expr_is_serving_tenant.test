@@ -1,0 +1,24 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select is_serving_tenant(host_ip(), rpc_port(), effective_tenant_id());
+select is_serving_tenant(host_ip(), rpc_port(), 1);
+select is_serving_tenant(host_ip(), rpc_port(), 888);
+select is_serving_tenant('abc', rpc_port(), effective_tenant_id());
+select is_serving_tenant('abc', rpc_port(), 1);
+select is_serving_tenant('abc', rpc_port(), 888);
+
+connection syscon;
+--sleep 2

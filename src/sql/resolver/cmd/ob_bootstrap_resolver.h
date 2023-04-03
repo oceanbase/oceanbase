@@ -15,18 +15,20 @@
 
 #include "sql/resolver/cmd/ob_system_cmd_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObBootstrapResolver : public ObSystemCmdResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObBootstrapResolver : public ObSystemCmdResolver
+{
 public:
-  explicit ObBootstrapResolver(ObResolverParams& params);
+  explicit ObBootstrapResolver(ObResolverParams &params);
   virtual ~ObBootstrapResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBootstrapResolver);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}// namespace sql
+}// namespace oceanbase
 #endif /* OCEANBASE_SQL_RESOLVER_CMD_BOOTSTRAP_RESOLVER_ */

@@ -15,12 +15,15 @@
 using namespace oceanbase::common;
 
 ObDirectLogReader::ObDirectLogReader()
-{}
+{
+}
 
 ObDirectLogReader::~ObDirectLogReader()
-{}
+{
+}
 
-int ObDirectLogReader::read_log(LogCommand& cmd, uint64_t& log_seq, char*& log_data, int64_t& data_len)
+int ObDirectLogReader::read_log(LogCommand &cmd, uint64_t &log_seq,
+                                char *&log_data, int64_t &data_len)
 {
   int ret = OB_SUCCESS;
 
@@ -40,19 +43,18 @@ int ObDirectLogReader::read_log(LogCommand& cmd, uint64_t& log_seq, char*& log_d
     }
     if (log_buffer_.get_remain_data_len() < entry.get_log_data_len()) {
       ret = OB_LAST_LOG_NOT_COMPLETE;
-      SHARE_LOG(ERROR,
-          "last log not complete",
-          K(file_id_),
-          K(log_buffer_.get_remain_data_len()),
-          K(entry.get_log_data_len()));
-      SHARE_LOG(WARN,
-          "log_buffer_",
-          KP(log_buffer_.get_data()),
-          K(log_buffer_.get_limit()),
-          K(log_buffer_.get_position()),
-          K(log_buffer_.get_capacity()));
-      hex_dump(log_buffer_.get_data(), static_cast<int32_t>(log_buffer_.get_limit()), true, OB_LOG_LEVEL_WARN);
-    } else if (OB_FAIL(entry.check_data_integrity(log_buffer_.get_data() + log_buffer_.get_position()))) {
+      SHARE_LOG(ERROR, "last log not complete",
+                     K(file_id_), K(log_buffer_.get_remain_data_len()),
+                     K(entry.get_log_data_len()));
+      SHARE_LOG(WARN, "log_buffer_",
+                      KP(log_buffer_.get_data()), K(log_buffer_.get_limit()),
+                      K(log_buffer_.get_position()), K(log_buffer_.get_capacity()));
+      hex_dump(log_buffer_.get_data(),
+               static_cast<int32_t>(log_buffer_.get_limit()),
+               true,
+               OB_LOG_LEVEL_WARN);
+    } else if (OB_FAIL(entry.check_data_integrity(
+        log_buffer_.get_data() + log_buffer_.get_position()))) {
       // overwrite ret on purpose
       ret = OB_LAST_LOG_RUINNED;
       SHARE_LOG(ERROR, "check_data_integrity failed", K(ret));
@@ -61,9 +63,11 @@ int ObDirectLogReader::read_log(LogCommand& cmd, uint64_t& log_seq, char*& log_d
 
   if (OB_SUCC(ret)) {
     if (last_log_seq_ != 0 &&
-        (OB_LOG_SWITCH_LOG == entry.cmd_ ? (last_log_seq_ != entry.seq_ && last_log_seq_ + 1 != entry.seq_)
-                                         : (last_log_seq_ + 1) != entry.seq_)) {
-      SHARE_LOG(ERROR, "the log sequence is not continuous", K(last_log_seq_), K(entry.seq_), K(entry.cmd_));
+        (OB_LOG_SWITCH_LOG == entry.cmd_ ?
+         (last_log_seq_ != entry.seq_ && last_log_seq_ + 1 != entry.seq_) :
+         (last_log_seq_ + 1) != entry.seq_)) {
+      SHARE_LOG(ERROR, "the log sequence is not continuous",
+                     K(last_log_seq_), K(entry.seq_), K(entry.cmd_));
       ret = OB_ERROR;
     }
   }
@@ -78,9 +82,14 @@ int ObDirectLogReader::read_log(LogCommand& cmd, uint64_t& log_seq, char*& log_d
   }
 
   if (OB_SUCC(ret)) {
-    SHARE_LOG(DEBUG, "LOG ENTRY:", "SEQ", entry.seq_, "CMD", cmd, "DATA_LEN", data_len, "POS", pos_);
+    SHARE_LOG(DEBUG, "LOG ENTRY:",
+                     "SEQ", entry.seq_,
+                     "CMD", cmd,
+                     "DATA_LEN", data_len,
+                     "POS", pos_);
     pos_ += entry.header_.header_length_ + entry.header_.data_length_;
   }
 
   return ret;
 }
+

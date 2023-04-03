@@ -16,100 +16,144 @@
 // DON'T INCLUDE ANY OCEANBASE HEADER EXCEPT FROM LIB DIRECTORY
 #include "share/ob_lease_struct.h"
 #include "lib/net/ob_addr.h"
-#include "share/part/ob_part_mgr.h"
-#include "share/ob_cluster_info_proxy.h"
-#include "share/ob_cluster_type.h"  // ObClusterType
+#include "share/ob_cluster_role.h"              // ObClusterRole
 #include "share/ob_rpc_struct.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObServerConfig;
 class ObConfigManager;
 class ObMySQLProxy;
 class ObTimer;
-class ObIDataAccessService;
+class ObITabletScan;
 class ObMysqlRandom;
-}  // end of namespace common
+} // end of namespace common
 
-namespace obrpc {
+namespace obrpc
+{
 class ObSrvRpcProxy;
 class ObCommonRpcProxy;
 class ObLoadDataRpcProxy;
-}  // namespace obrpc
+class ObDBMSJobRpcProxy;
+class ObBatchRpc;
+class ObInnerSQLRpcProxy;
+class ObDBMSSchedJobRpcProxy;
+} // end of namespace rpc
 
-namespace share {
+namespace share
+{
 class ObResourcePlanManager;
-class ObPartitionTableOperator;
-class ObRemotePartitionTableOperator;
+class ObLSTableOperator;
+class ObTabletTableOperator;
 class ObRsMgr;
-class ObPartitionLocationCache;
-class ObRemoteSqlProxy;
+class ObLocationService;
 class ObSchemaStatusProxy;
-namespace schema {
-class ObMultiVersionSchemaService;
-}  // end of namespace schema
-}  // end of namespace share
+class ObRatelimitMgr;
+class ObAliveServerTracer;
+class ObCgroupCtrl;
 
-namespace rootserver {
+namespace schema
+{
+class ObMultiVersionSchemaService;
+} // end of namespace schema
+} // end of namespace share
+
+namespace rootserver
+{
 class ObRootService;
 class ObInZoneMaster;
-}  // end of namespace rootserver
+} // end of namespace rootserver
 
-namespace sql {
+namespace sql
+{
 class ObSQLSessionMgr;
-class ObQueryExecCtxMgr;
 class ObSql;
 class ObExecutorRpcImpl;
+class ObDataAccessService;
 class ObConnectResourceMgr;
-}  // end of namespace sql
+} // end of namespace sql
 
-namespace storage {
-class ObPartitionService;
+namespace pl
+{
+class ObPL;
+}
+
+namespace storage
+{
 class ObPtfMgr;
-}  // namespace storage
+class ObLocalityManager;
+}
 
-namespace transaction {
-class ObGlobalTimestampService;
+namespace transaction
+{
 class ObIWeakReadService;
-}  // namespace transaction
+}
 
-namespace obmysql {
+namespace obmysql
+{
 class ObDiag;
-}  // end of namespace obmysql
+} // end of namespace obmysql
 
-namespace omt {
+namespace omt
+{
 class ObMultiTenant;
-class ObCgroupCtrl;
-}  // namespace omt
+}
 
-namespace observer {
+namespace logservice
+{
+class ObServerLogBlockMgr;
+}
+
+
+namespace observer
+{
 class ObService;
 class ObVTIterCreator;
 class ObTableService;
+class ObSrvNetworkFrame;
+class ObIDiskReport;
+class ObResourceInnerSQLConnectionPool;
 
-class ObServerOptions {
+class ObServerOptions
+{
 public:
   ObServerOptions()
-      : rpc_port_(0),
-        elect_port_(0),
-        mysql_port_(0),
-        home_(NULL),
-        zone_(NULL),
-        nodaemon_(false),
-        optstr_(NULL),
-        devname_(NULL),
-        rs_list_(NULL),
-        appname_(NULL),
-        cluster_id_(common::OB_INVALID_CLUSTER_ID),
-        data_dir_(NULL),
-        mode_(NULL),
-        log_level_(0),
-        use_ipv6_(false),
-        flashback_scn_(0)
-  {}
-  ObServerOptions(int rpc_port, int elect_port, int mysql_port, const char* home, const char* zone, bool nodaemon,
-      const char* optstr, const char* devname, const char* rs_list, const char* appname, int64_t cluster_id,
-      const char* data_dir, int8_t log_level, const char* mode, bool use_ipv6, int64_t flashback_scn)
+    : rpc_port_(0),
+      elect_port_(0),
+      mysql_port_(0),
+      home_(NULL),
+      zone_(NULL),
+      nodaemon_(false),
+      optstr_(NULL),
+      devname_(NULL),
+      rs_list_(NULL),
+      appname_(NULL),
+      cluster_id_(common::OB_INVALID_CLUSTER_ID),
+      data_dir_(NULL),
+      startup_mode_(NULL),
+      log_level_(0),
+      use_ipv6_(false),
+      flashback_scn_(0)
+  {
+  }
+  ObServerOptions(int rpc_port,
+                  int elect_port,
+                  int mysql_port,
+                  const char *home,
+                  const char *zone,
+                  bool nodaemon,
+                  const char *optstr,
+                  const char *devname,
+                  const char *rs_list,
+                  const char *appname,
+                  int64_t cluster_id,
+                  const char *data_dir,
+                  int8_t log_level,
+                  const char *mode,
+                  bool use_ipv6,
+                  int64_t flashback_scn)
   {
     rpc_port_ = rpc_port;
     elect_port_ = elect_port;
@@ -123,27 +167,26 @@ public:
     appname_ = appname;
     cluster_id_ = cluster_id;
     data_dir_ = data_dir;
-    mode_ = mode;
+    startup_mode_ = mode;
     log_level_ = log_level;
     use_ipv6_ = use_ipv6;
     flashback_scn_ = flashback_scn;
   }
-  virtual ~ObServerOptions()
-  {}
+  virtual ~ObServerOptions() {}
 
   int rpc_port_;
   int elect_port_;
   int mysql_port_;
-  const char* home_;
-  const char* zone_;
+  const char *home_;
+  const char *zone_;
   bool nodaemon_;
-  const char* optstr_;
-  const char* devname_;
-  const char* rs_list_;
-  const char* appname_;
+  const char *optstr_;
+  const char *devname_;
+  const char *rs_list_;
+  const char *appname_;
   int64_t cluster_id_;
-  const char* data_dir_;
-  const char* mode_;
+  const char *data_dir_;
+  const char *startup_mode_;
   int8_t log_level_;
   bool use_ipv6_;
   int64_t flashback_scn_;
@@ -154,211 +197,128 @@ enum ObServerMode {
   NORMAL_MODE,
   PHY_FLASHBACK_MODE,
   PHY_FLASHBACK_VERIFY_MODE,
+  DISABLED_CLUSTER_MODE,
+  DISABLED_WITH_READONLY_CLUSTER_MODE,
+  ARBITRATION_MODE,
 };
 
-enum ObServiceStatus { SS_INIT, SS_STARTING, SS_SERVING, SS_STOPPING, SS_STOPPED };
+enum ObServiceStatus {
+  SS_INIT,
+  SS_STARTING,
+  SS_SERVING,
+  SS_STOPPING,
+  SS_STOPPED
+};
 
-struct ObGlobalContext {
-  common::ObAddr self_addr_;
-  rootserver::ObRootService* root_service_;
-  rootserver::ObInZoneMaster* in_zone_master_;
-  observer::ObService* ob_service_;
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  common::ObPartMgr* part_mgr_;
-  common::ObServerConfig* config_;
-  common::ObConfigManager* config_mgr_;
-  share::ObPartitionTableOperator* pt_operator_;
-  share::ObRemotePartitionTableOperator* remote_pt_operator_;
-  obrpc::ObSrvRpcProxy* srv_rpc_proxy_;
-  obrpc::ObCommonRpcProxy* rs_rpc_proxy_;
-  obrpc::ObLoadDataRpcProxy* load_data_proxy_;
-  sql::ObExecutorRpcImpl* executor_rpc_;
-  common::ObMySQLProxy* sql_proxy_;
-  share::ObRemoteSqlProxy* remote_sql_proxy_;
-  common::ObDbLinkProxy* dblink_proxy_;
-  share::ObRsMgr* rs_mgr_;
-  storage::ObPartitionService* par_ser_;
-  transaction::ObGlobalTimestampService* gts_;
-  common::ObInOutBandwidthThrottle* bandwidth_throttle_;
-  common::ObIDataAccessService* vt_par_ser_;
-  sql::ObSQLSessionMgr* session_mgr_;
-  sql::ObQueryExecCtxMgr* query_ctx_mgr_;
-  sql::ObSql* sql_engine_;
-  omt::ObMultiTenant* omt_;
-  ObVTIterCreator* vt_iter_creator_;
-  share::ObPartitionLocationCache* location_cache_;
+struct ObGlobalContext
+{
+  common::ObAddrWithSeq self_addr_seq_;
+  rootserver::ObRootService *root_service_;
+  rootserver::ObInZoneMaster *in_zone_master_;
+  observer::ObService *ob_service_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  common::ObServerConfig *config_;
+  common::ObConfigManager *config_mgr_;
+  share::ObLSTableOperator *lst_operator_;
+  share::ObTabletTableOperator *tablet_operator_;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
+  obrpc::ObDBMSJobRpcProxy *dbms_job_rpc_proxy_;
+  obrpc::ObInnerSQLRpcProxy *inner_sql_rpc_proxy_;
+  obrpc::ObDBMSSchedJobRpcProxy *dbms_sched_job_rpc_proxy_;
+  obrpc::ObCommonRpcProxy *rs_rpc_proxy_;
+  obrpc::ObLoadDataRpcProxy *load_data_proxy_;
+  sql::ObExecutorRpcImpl *executor_rpc_;
+  common::ObMySQLProxy *sql_proxy_;
+  common::ObMySQLProxy *ddl_sql_proxy_;
+  common::ObOracleSqlProxy *ddl_oracle_sql_proxy_;
+  common::ObDbLinkProxy *dblink_proxy_;
+  ObResourceInnerSQLConnectionPool *res_inner_conn_pool_;
+  share::ObRsMgr *rs_mgr_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  common::ObITabletScan *vt_par_ser_;
+  sql::ObSQLSessionMgr *session_mgr_;
+  sql::ObSql *sql_engine_;
+  pl::ObPL *pl_engine_;
+  omt::ObMultiTenant *omt_;
+  ObVTIterCreator *vt_iter_creator_;
+  share::ObLocationService *location_service_;
   int64_t start_time_;
-  int64_t* merged_version_;
-  int64_t* global_last_merged_version_;
-  int64_t* warm_up_start_time_;
+  int64_t *warm_up_start_time_;
   uint64_t server_id_;
   ObServiceStatus status_;
-  ObServerMode mode_;
+  ObServerMode startup_mode_;
   share::RSServerStatus rs_server_status_;
   int64_t start_service_time_;
-  common::ObString* sort_dir_;
-  obmysql::ObDiag* diag_;
-  common::ObMysqlRandom* scramble_rand_;
-  ObTableService* table_service_;
-  omt::ObCgroupCtrl* cgroup_ctrl_;
+  obmysql::ObDiag *diag_;
+  common::ObMysqlRandom *scramble_rand_;
+  ObTableService *table_service_;
+  share::ObCgroupCtrl *cgroup_ctrl_;
+  ObSrvNetworkFrame *net_frame_;
+  share::ObRatelimitMgr *rl_mgr_;
+  obrpc::ObBatchRpc *batch_rpc_;
+  share::ObAliveServerTracer *server_tracer_;
+  ObIDiskReport *disk_reporter_;
+  logservice::ObServerLogBlockMgr *log_block_mgr_;
+
   bool inited_;
-  int64_t split_schema_version_;
-  // the start schema_version that sys can read and write __all_table_v2/__all_table_history_v2
-  int64_t split_schema_version_v2_;
-  transaction::ObIWeakReadService* weak_read_service_;
-  share::ObSchemaStatusProxy* schema_status_proxy_;
+  transaction::ObIWeakReadService *weak_read_service_;
+  share::ObSchemaStatusProxy *schema_status_proxy_;
   int64_t flashback_scn_;
   int64_t ssl_key_expired_time_;
-  // the cluster_id of the strongly synchronized standby cluster
-  int64_t sync_standby_cluster_id_;
-  // the redo_transport_option of the strongly synchronized standby cluster
-  share::ObRedoTransportOption sync_standby_redo_options_;
-  // the number of partitions that failed to receive
-  // the acks from strongly synchronized standby cluster during timeout
-  volatile int64_t sync_timeout_partition_cnt_;
   sql::ObConnectResourceMgr* conn_res_mgr_;
+  storage::ObLocalityManager *locality_manager_;
 
-  ObGlobalContext()
-  {
-    MEMSET(this, 0, sizeof(*this));
-    init();
-  }
-  ObGlobalContext& operator=(const ObGlobalContext& other);
+  ObGlobalContext() { MEMSET(this, 0, sizeof(*this)); init(); }
+  ObGlobalContext &operator = (const ObGlobalContext &other);
   void init();
-  bool is_inited() const
-  {
-    return inited_;
-  }
+  bool is_inited() const { return inited_; }
   // Refer to the high availability zone design document
+  //
   bool is_observer() const;
-  bool is_standby_cluster_and_started()
-  {
-    return is_observer() && is_standby_cluster() && has_start_service();
-  }
-  bool is_started_and_can_weak_read()
-  {
-    return is_observer() && has_start_service();
-  }
-  bool is_schema_splited() const
-  {
-    return common::OB_INVALID_VERSION != split_schema_version_;
-  }
-  void set_split_schema_version(int64_t new_split_schema_version);
-  void set_split_schema_version_v2(int64_t new_split_schema_version);
-  int64_t get_switch_epoch2() const;
-  int64_t get_pure_switch_epoch() const;
+  bool is_standby_cluster_and_started() { return is_observer() && is_standby_cluster() && has_start_service(); }
+  bool is_started_and_can_weak_read() { return is_observer() && has_start_service(); }
   bool is_primary_cluster() const;
   bool is_standby_cluster() const;
-  common::ObClusterType get_cluster_type() const;
+  common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;
-  bool can_be_parent_cluster() const;
-  bool can_do_leader_takeover() const;
-  bool is_in_primary_switching_state() const;
-  void get_cluster_type_and_status(
-      common::ObClusterType& cluster_type, share::ServerServiceStatus& server_status) const;
-  bool is_in_standby_switching_state() const;
-  int64_t get_cluster_idx() const;
-  bool is_in_standby_active_state() const;
-  bool is_in_phy_fb_mode() const;
-  bool is_in_phy_fb_verify_mode() const;
-  void set_cluster_idx(const int64_t cluster_idx);
-  bool is_in_flashback_state() const;
-  bool is_in_cleanup_state() const;
-  bool is_in_invalid_state() const;
-  bool is_in_disabled_state() const;
-  bool need_sync_to_standby() const
-  {
-    return false;
-  }
-  // retrun whether the protection mode of cluster is max_availability
-  // it is used to judge need revoke for clog
-  bool is_in_max_availability_mode() const
-  {
-    return false;
-  }
-  // Determine whether the standby database is in strong synchronization state,
-  // and whether it needs to accept strong synchronization logs
-  bool is_sync_level_on_standby()
-  {
-    return false;
-  }
-  int64_t get_cluster_info_version() const
-  {
-    return 0;
-  }
-  common::ObProtectionMode get_protection_mode()
-  {
-    return common::MAXIMUM_PERFORMANCE_MODE;
-  }
-  int get_sync_standby_cluster_list(common::ObIArray<int64_t>& sync_standby);
-  int get_sync_standby_cluster_id(int64_t& sync_cluster_id);
-  void set_upgrade_stage(obrpc::ObUpgradeStage upgrade_stage)
-  {
-    upgrade_stage_ = upgrade_stage;
-  }
-  obrpc::ObUpgradeStage get_upgrade_stage()
-  {
-    return upgrade_stage_;
-  }
+  void set_upgrade_stage(obrpc::ObUpgradeStage upgrade_stage) { upgrade_stage_ = upgrade_stage; }
+  obrpc::ObUpgradeStage get_upgrade_stage() { return upgrade_stage_; }
   DECLARE_TO_STRING;
-  const share::ObClusterInfo& get_cluster_info() const
-  {
-    return cluster_info_;
-  }
-  void inc_sync_timeout_partition_cnt()
-  {
-    ATOMIC_INC(&sync_timeout_partition_cnt_);
-  }
-  void reset_sync_timeout_partition_cnt()
-  {
-    ATOMIC_SET(&sync_timeout_partition_cnt_, 0);
-  }
-  // Retruns the number of partitions that failed to receive
-  // the acks from strongly synchronized standby cluster during timeout
-  int64_t get_sync_timeout_partition_cnt() const
-  {
-    return ATOMIC_LOAD(&sync_timeout_partition_cnt_);
-  }
-  // Returns the timeout of the strongly synchronized standby cluster
-  int64_t get_sync_standby_net_timeout()
-  {
-    return ATOMIC_LOAD(&sync_standby_redo_options_.net_timeout_);
-  }
-
+  // instead of self_addr_
+  const ObAddr &self_addr() const { return self_addr_seq_.get_addr(); }
+  const int64_t &self_seq() const { return self_addr_seq_.get_seq(); }
 private:
-  common::SpinRWLock cluster_info_rwlock_;
-  share::ObClusterInfo cluster_info_;
-  int64_t cluster_idx_;  // Internal identification of cluster
   volatile int64_t server_status_;
-  bool has_start_service() const
-  {
-    return 0 < start_service_time_;
-  }
+  bool has_start_service() const { return 0 < start_service_time_; }
 
   obrpc::ObUpgradeStage upgrade_stage_;
+
 };
 
-struct ObThreadContext {
-  const ObGlobalContext* gctx_;
+struct ObThreadContext
+{
+  const ObGlobalContext *gctx_;
 };
 
-ObGlobalContext& global_context();
+ObGlobalContext &global_context();
 
-struct ObUseWeakGuard {
+struct ObUseWeakGuard
+{
   ObUseWeakGuard();
   ~ObUseWeakGuard();
   static bool did_use_weak();
-
 private:
-  struct TSIUseWeak {
+  struct TSIUseWeak
+  {
     bool inited_;
     bool did_use_weak_;
-    TSIUseWeak() : inited_(false), did_use_weak_(false)
+    TSIUseWeak()
+        :inited_(false), did_use_weak_(false)
     {}
   };
 };
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #define GCTX (::oceanbase::observer::global_context())
 

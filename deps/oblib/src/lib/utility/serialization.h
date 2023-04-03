@@ -20,9 +20,12 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_macro_utils.h"
 
-namespace oceanbase {
-namespace common {
-namespace serialization {
+namespace oceanbase
+{
+namespace common
+{
+namespace serialization
+{
 const uint64_t OB_MAX_V1B = (__UINT64_C(1) << 7) - 1;
 const uint64_t OB_MAX_V2B = (__UINT64_C(1) << 14) - 1;
 const uint64_t OB_MAX_V3B = (__UINT64_C(1) << 21) - 1;
@@ -33,6 +36,7 @@ const uint64_t OB_MAX_V7B = (__UINT64_C(1) << 49) - 1;
 const uint64_t OB_MAX_V8B = (__UINT64_C(1) << 56) - 1;
 const uint64_t OB_MAX_V9B = (__UINT64_C(1) << 63) - 1;
 
+
 const uint64_t OB_MAX_1B = (__UINT64_C(1) << 8) - 1;
 const uint64_t OB_MAX_2B = (__UINT64_C(1) << 16) - 1;
 const uint64_t OB_MAX_3B = (__UINT64_C(1) << 24) - 1;
@@ -42,6 +46,8 @@ const uint64_t OB_MAX_6B = (__UINT64_C(1) << 48) - 1;
 const uint64_t OB_MAX_7B = (__UINT64_C(1) << 56) - 1;
 const uint64_t OB_MAX_8B = UINT64_MAX;
 
+
+
 const uint64_t OB_MAX_INT_1B = (__UINT64_C(23));
 const uint64_t OB_MAX_INT_2B = (__UINT64_C(1) << 8) - 1;
 const uint64_t OB_MAX_INT_3B = (__UINT64_C(1) << 16) - 1;
@@ -49,6 +55,7 @@ const uint64_t OB_MAX_INT_4B = (__UINT64_C(1) << 24) - 1;
 const uint64_t OB_MAX_INT_5B = (__UINT64_C(1) << 32) - 1;
 const uint64_t OB_MAX_INT_7B = (__UINT64_C(1) << 48) - 1;
 const uint64_t OB_MAX_INT_9B = UINT64_MAX;
+
 
 const int64_t OB_MAX_1B_STR_LEN = (__INT64_C(55));
 const int64_t OB_MAX_2B_STR_LEN = (__INT64_C(1) << 8) - 1;
@@ -66,7 +73,8 @@ const int8_t OB_DECIMAL_OPERATION_BIT_POS = 7;
 
 const int8_t OB_INT_VALUE_MASK = 0x1f;
 const int8_t OB_VARCHAR_LEN_MASK = 0x3f;
-const int8_t OB_DATETIME_LEN_MASK = 0x3;
+const int8_t OB_DATETIME_LEN_MASK =  0x3;
+
 
 const int8_t OB_VARCHAR_TYPE = static_cast<int8_t>((0x1 << 7));
 const int8_t OB_SEQ_TYPE = static_cast<int8_t>(0xc0);
@@ -76,18 +84,18 @@ const int8_t OB_MODIFYTIME_TYPE = static_cast<int8_t>(0xf0);
 const int8_t OB_CREATETIME_TYPE = static_cast<int8_t>(0xf4);
 const int8_t OB_FLOAT_TYPE = static_cast<int8_t>(0xf8);
 const int8_t OB_DOUBLE_TYPE = static_cast<int8_t>(0xfa);
-const int8_t OB_NULL_TYPE = static_cast<int8_t>(0xfc);
-const int8_t OB_BOOL_TYPE = static_cast<int8_t>(0xfd);
+const int8_t OB_NULL_TYPE =  static_cast<int8_t>(0xfc);
+const int8_t OB_BOOL_TYPE =  static_cast<int8_t>(0xfd);
 const int8_t OB_EXTEND_TYPE = static_cast<int8_t>(0xfe);
 const int8_t OB_DECIMAL_TYPE = static_cast<int8_t>(0xff);
-const int8_t OB_NUMBER_TYPE = OB_DECIMAL_TYPE;  // 2014number
-const int8_t OB_SERIALIZE_SIZE_NEED_BYTES = 5;  // 4 bytes encode serialize_size and 1 byte encode flag
-inline void set_bit(int8_t& v, int8_t pos)
+const int8_t OB_NUMBER_TYPE = OB_DECIMAL_TYPE; // 2014number
+const int8_t OB_SERIALIZE_SIZE_NEED_BYTES = 5; // 4 bytes encode serialize_size and 1 byte encode flag
+inline void set_bit(int8_t &v, int8_t pos)
 {
   v |= static_cast<int8_t>(1 << pos);
 }
 
-inline void clear_bit(int8_t& v, int8_t pos)
+inline void clear_bit(int8_t &v, int8_t pos)
 {
   v &= static_cast<int8_t>(~(1 << pos));
 }
@@ -110,16 +118,17 @@ inline int64_t encoded_length_i8(int8_t val)
   return static_cast<int64_t>(sizeof(val));
 }
 
-inline int encode_i8(char* buf, const int64_t buf_len, int64_t& pos, int8_t val)
+inline int encode_i8(char *buf, const int64_t buf_len, int64_t &pos, int8_t val)
 {
-  int ret = ((NULL != buf) && ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     *(buf + pos++) = val;
   }
   return ret;
 }
 
-inline int decode_i8(const char* buf, const int64_t data_len, int64_t& pos, int8_t* val)
+inline int decode_i8(const char *buf, const int64_t data_len, int64_t &pos, int8_t *val)
 {
   int ret = (NULL != buf && data_len - pos >= 1) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
   if (OB_SUCC(ret)) {
@@ -139,19 +148,20 @@ inline int64_t encoded_length_i16(int16_t val)
   return static_cast<int64_t>(sizeof(val));
 }
 
-inline int encode_i16(char* buf, const int64_t buf_len, int64_t& pos, int16_t val)
+inline int encode_i16(char *buf, const int64_t buf_len, int64_t &pos, int16_t val)
 {
-  int ret = ((NULL != buf) && ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     *(buf + pos++) = static_cast<char>((((val) >> 8)) & 0xff);
-    *(buf + pos++) = static_cast<char>((val)&0xff);
+    *(buf + pos++) = static_cast<char>((val) & 0xff);
   }
   return ret;
 }
 
-inline int decode_i16(const char* buf, const int64_t data_len, int64_t& pos, int16_t* val)
+inline int decode_i16(const char *buf, const int64_t data_len, int64_t &pos, int16_t *val)
 {
-  int ret = (NULL != buf && data_len - pos >= 2) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
+  int ret = (NULL != buf && data_len - pos  >= 2) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
   if (OB_SUCC(ret)) {
     *val = static_cast<int16_t>(((*(buf + pos++)) & 0xff) << 8);
     *val = static_cast<int16_t>(*val | (*(buf + pos++) & 0xff));
@@ -164,22 +174,23 @@ inline int64_t encoded_length_i32(int32_t val)
   return static_cast<int64_t>(sizeof(val));
 }
 
-inline int encode_i32(char* buf, const int64_t buf_len, int64_t& pos, int32_t val)
+inline int encode_i32(char *buf, const int64_t buf_len, int64_t &pos, int32_t val)
 {
-  int ret = ((NULL != buf) && ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     *(buf + pos++) = static_cast<char>(((val) >> 24) & 0xff);
     *(buf + pos++) = static_cast<char>(((val) >> 16) & 0xff);
     *(buf + pos++) = static_cast<char>(((val) >> 8) & 0xff);
-    *(buf + pos++) = static_cast<char>((val)&0xff);
+    *(buf + pos++) = static_cast<char>((val) & 0xff);
   }
   return ret;
 }
 
-inline int decode_i32(const char* buf, const int64_t data_len, int64_t& pos, int32_t* val)
+inline int decode_i32(const char *buf, const int64_t data_len, int64_t &pos, int32_t *val)
 {
 
-  int ret = (NULL != buf && data_len - pos >= 4) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
+  int ret = (NULL != buf && data_len - pos  >= 4) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
   if (OB_SUCC(ret)) {
     *val = ((static_cast<int32_t>(*(buf + pos++))) & 0xff) << 24;
     *val |= ((static_cast<int32_t>(*(buf + pos++))) & 0xff) << 16;
@@ -194,9 +205,10 @@ inline int64_t encoded_length_i64(int64_t val)
   return static_cast<int64_t>(sizeof(val));
 }
 
-inline int encode_i64(char* buf, const int64_t buf_len, int64_t& pos, int64_t val)
+inline int encode_i64(char *buf, const int64_t buf_len, int64_t &pos, int64_t val)
 {
-  int ret = ((NULL != buf) && ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     *(buf + pos++) = static_cast<char>(((val) >> 56) & 0xff);
     *(buf + pos++) = static_cast<char>(((val) >> 48) & 0xff);
@@ -205,14 +217,14 @@ inline int encode_i64(char* buf, const int64_t buf_len, int64_t& pos, int64_t va
     *(buf + pos++) = static_cast<char>(((val) >> 24) & 0xff);
     *(buf + pos++) = static_cast<char>(((val) >> 16) & 0xff);
     *(buf + pos++) = static_cast<char>(((val) >> 8) & 0xff);
-    *(buf + pos++) = static_cast<char>((val)&0xff);
+    *(buf + pos++) = static_cast<char>((val) & 0xff);
   }
   return ret;
 }
 
-inline int decode_i64(const char* buf, const int64_t data_len, int64_t& pos, int64_t* val)
+inline int decode_i64(const char *buf, const int64_t data_len, int64_t &pos, int64_t *val)
 {
-  int ret = (NULL != buf && data_len - pos >= 8) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
+  int ret = (NULL != buf && data_len - pos  >= 8) ? OB_SUCCESS : OB_DESERIALIZE_ERROR;
   if (OB_SUCC(ret)) {
     *val = ((static_cast<int64_t>((*(buf + pos++))) & 0xff)) << 56;
     *val |= ((static_cast<int64_t>((*(buf + pos++))) & 0xff)) << 48;
@@ -232,16 +244,17 @@ inline int64_t encoded_length_bool(bool val)
   return static_cast<int64_t>(1);
 }
 
-inline int encode_bool(char* buf, const int64_t buf_len, int64_t& pos, bool val)
+inline int encode_bool(char *buf, const int64_t buf_len, int64_t &pos, bool val)
 {
-  int ret = ((NULL != buf) && ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= static_cast<int64_t>(sizeof(val)))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     *(buf + pos++) = (val) ? 1 : 0;
   }
   return ret;
 }
 
-inline int decode_bool(const char* buf, const int64_t buf_len, int64_t& pos, bool* val)
+inline int decode_bool(const char *buf, const int64_t buf_len, int64_t &pos, bool *val)
 {
   int ret = OB_DESERIALIZE_ERROR;
   int8_t v = 0;
@@ -288,27 +301,29 @@ inline int64_t encoded_length_vi64(int64_t val)
  *
  * @return true - success, false - failed
  */
-inline int encode_vi64(char* buf, const int64_t buf_len, int64_t& pos, int64_t val)
+inline int encode_vi64(char *buf, const int64_t buf_len, int64_t &pos, int64_t val)
 {
   uint64_t __v = static_cast<uint64_t>(val);
-  int ret = ((NULL != buf) && ((buf_len - pos) >= encoded_length_vi64(__v))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= encoded_length_vi64(__v))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     while (__v > OB_MAX_V1B) {
       *(buf + pos++) = static_cast<int8_t>((__v) | 0x80);
       __v >>= 7;
     }
     if (__v <= OB_MAX_V1B) {
-      *(buf + pos++) = static_cast<int8_t>((__v)&0x7f);
+      *(buf + pos++) = static_cast<int8_t>((__v) & 0x7f);
     }
   }
   return ret;
 }
 
 /* compatible with decode_vi64 */
-inline int encode_fixed_bytes_i64(char* buf, const int64_t buf_len, int64_t& pos, int64_t val)
+inline int encode_fixed_bytes_i64(char *buf, const int64_t buf_len, int64_t &pos, int64_t val)
 {
   uint64_t __v = static_cast<uint64_t>(val);
-  int ret = ((NULL != buf) && ((buf_len - pos) >= OB_SERIALIZE_SIZE_NEED_BYTES)) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= OB_SERIALIZE_SIZE_NEED_BYTES)) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     int n = OB_SERIALIZE_SIZE_NEED_BYTES;
     while (n--) {
@@ -316,14 +331,14 @@ inline int encode_fixed_bytes_i64(char* buf, const int64_t buf_len, int64_t& pos
         *(buf + pos++) = static_cast<int8_t>((__v) | 0x80);
         __v >>= 7;
       } else {
-        *(buf + pos++) = static_cast<int8_t>((__v)&0x7f);
+        *(buf + pos++) = static_cast<int8_t>((__v) & 0x7f);
       }
     }
   }
   return ret;
 }
 
-inline int decode_vi64(const char* buf, const int64_t data_len, int64_t& pos, int64_t* val)
+inline int decode_vi64(const char *buf, const int64_t data_len, int64_t &pos, int64_t *val)
 {
   uint64_t __v = 0;
   uint32_t shift = 0;
@@ -365,6 +380,7 @@ inline int64_t encoded_length_vi32(int32_t val)
     need_bytes = 5;
   }
   return need_bytes;
+
 }
 
 /**
@@ -377,23 +393,25 @@ inline int64_t encoded_length_vi32(int32_t val)
  * @return true - success, false - failed
  */
 
-inline int encode_vi32(char* buf, const int64_t buf_len, int64_t& pos, int32_t val)
+inline int encode_vi32(char *buf, const int64_t buf_len, int64_t &pos, int32_t val)
 {
   uint32_t __v = static_cast<uint32_t>(val);
-  int ret = ((NULL != buf) && ((buf_len - pos) >= encoded_length_vi32(val))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) &&
+             ((buf_len - pos) >= encoded_length_vi32(val))) ? OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     while (__v > OB_MAX_V1B) {
       *(buf + pos++) = static_cast<int8_t>((__v) | 0x80);
       __v >>= 7;
     }
     if (__v <= OB_MAX_V1B) {
-      *(buf + pos++) = static_cast<int8_t>((__v)&0x7f);
+      *(buf + pos++) = static_cast<int8_t>((__v) & 0x7f);
     }
   }
   return ret;
+
 }
 
-inline int decode_vi32(const char* buf, const int64_t data_len, int64_t& pos, int32_t* val)
+inline int decode_vi32(const char *buf, const int64_t data_len, int64_t &pos, int32_t *val)
 {
   uint32_t __v = 0;
   uint32_t shift = 0;
@@ -426,14 +444,14 @@ inline int64_t encoded_length_float(float val)
   return encoded_length_vi32(tmp);
 }
 
-inline int encode_float(char* buf, const int64_t buf_len, int64_t& pos, float val)
+inline int encode_float(char *buf, const int64_t buf_len, int64_t &pos, float val)
 {
   int32_t tmp = 0;
   MEMCPY(&tmp, &val, sizeof(tmp));
   return encode_vi32(buf, buf_len, pos, tmp);
 }
 
-inline int decode_float(const char* buf, const int64_t data_len, int64_t& pos, float* val)
+inline int decode_float(const char *buf, const int64_t data_len, int64_t &pos, float *val)
 {
   int32_t tmp = 0;
   int ret = OB_SUCCESS;
@@ -450,14 +468,14 @@ inline int64_t encoded_length_double(double val)
   return encoded_length_vi64(tmp);
 }
 
-inline int encode_double(char* buf, const int64_t buf_len, int64_t& pos, double val)
+inline int encode_double(char *buf, const int64_t buf_len, int64_t &pos, double val)
 {
   int64_t tmp = 0;
   MEMCPY(&tmp, &val, sizeof(tmp));
   return encode_vi64(buf, buf_len, pos, tmp);
 }
 
-inline int decode_double(const char* buf, const int64_t data_len, int64_t& pos, double* val)
+inline int decode_double(const char *buf, const int64_t data_len, int64_t &pos, double *val)
 {
   int64_t tmp = 0;
   int ret = OB_SUCCESS;
@@ -479,7 +497,7 @@ inline int64_t encoded_length_vstr(int64_t len)
   return encoded_length_vi64(len) + len + 1;
 }
 
-inline int64_t encoded_length_vstr(const char* str)
+inline int64_t encoded_length_vstr(const char *str)
 {
   return encoded_length_vstr(str ? static_cast<int64_t>(strlen(str) + 1) : 0);
 }
@@ -489,7 +507,7 @@ inline int64_t encoded_length_vstr(const char* str)
  * won't change the pos
  * @return the length of data
  */
-inline int64_t decoded_length_vstr(const char* buf, const int64_t data_len, int64_t pos)
+inline int64_t decoded_length_vstr(const char *buf, const int64_t data_len, int64_t pos)
 {
   int64_t len = -1;
   int64_t tmp_pos = pos;
@@ -508,11 +526,12 @@ inline int64_t decoded_length_vstr(const char* buf, const int64_t data_len, int6
  * @param vbuf pointer to the start of the input buffer
  * @param len length of the input buffer
  */
-inline int encode_vstr(char* buf, const int64_t buf_len, int64_t& pos, const void* vbuf, int64_t len)
+inline int encode_vstr(char *buf, const int64_t buf_len, int64_t &pos, const void *vbuf,
+                       int64_t len)
 {
-  int ret = ((NULL != buf) && (len >= 0) && ((buf_len - pos) >= static_cast<int32_t>(encoded_length_vstr(len))))
-                ? OB_SUCCESS
-                : OB_SIZE_OVERFLOW;
+  int ret = ((NULL != buf) && (len >= 0)
+             && ((buf_len - pos) >= static_cast<int32_t>(encoded_length_vstr(len))))
+            ?  OB_SUCCESS : OB_SIZE_OVERFLOW;
   if (OB_SUCC(ret)) {
     /**
      * even through it's a null string, we can serialize it with
@@ -528,19 +547,19 @@ inline int encode_vstr(char* buf, const int64_t buf_len, int64_t& pos, const voi
   return ret;
 }
 
-inline int encode_vstr(char* buf, const int64_t buf_len, int64_t& pos, const char* s)
+inline int encode_vstr(char *buf, const int64_t buf_len, int64_t &pos, const char *s)
 {
   return encode_vstr(buf, buf_len, pos, s, s ? strlen(s) + 1 : 0);
 }
 
-inline const char* decode_vstr(const char* buf, const int64_t data_len, int64_t& pos, int64_t* lenp)
+inline const char *decode_vstr(const char *buf, const int64_t data_len, int64_t &pos, int64_t *lenp)
 {
-  const char* str = 0;
+  const char *str = 0;
   int64_t tmp_len = 0;
   int64_t tmp_pos = pos;
 
   if ((NULL == buf) || (data_len < 0) || (pos < 0) || (NULL == lenp)) {
-    // just _return_;
+    //just _return_;
   } else if (decode_vi64(buf, data_len, tmp_pos, &tmp_len) != OB_SUCCESS) {
     *lenp = -1;
   } else if (tmp_len >= 0) {
@@ -556,14 +575,14 @@ inline const char* decode_vstr(const char* buf, const int64_t data_len, int64_t&
   return str;
 }
 
-inline const char* decode_vstr(
-    const char* buf, const int64_t data_len, int64_t& pos, char* dest, int64_t buf_len, int64_t* lenp)
+inline const char *decode_vstr(const char *buf, const int64_t data_len, int64_t &pos,
+                               char *dest, int64_t buf_len, int64_t *lenp)
 {
-  const char* str = 0;
+  const char *str = 0;
   int64_t tmp_len = 0;
   int64_t tmp_pos = pos;
   if ((NULL == buf) || (data_len < 0) || (pos < 0) || (0 == dest) || buf_len < 0 || (NULL == lenp)) {
-    // just _return_;
+    //just _return_;
   } else if (decode_vi64(buf, data_len, tmp_pos, &tmp_len) != 0 || tmp_len > buf_len) {
     *lenp = -1;
   } else if (tmp_len >= 0) {
@@ -594,7 +613,7 @@ inline int64_t encoded_length_bool_type(bool val)
   return static_cast<int64_t>(1 + encoded_length_bool(val));
 }
 
-inline int encode_bool_type(char* buf, int64_t buf_len, int64_t& pos, const bool val)
+inline int encode_bool_type(char *buf, int64_t buf_len, int64_t &pos, const bool val)
 {
   int ret = OB_SUCCESS;
 
@@ -606,7 +625,8 @@ inline int encode_bool_type(char* buf, int64_t buf_len, int64_t& pos, const bool
   return ret;
 }
 
-inline int decode_bool_type(const char* buf, const int64_t buf_len, int8_t first_byte, int64_t& pos, bool& val)
+inline int decode_bool_type(const char *buf, const int64_t buf_len, int8_t first_byte, int64_t &pos,
+                            bool &val)
 {
   UNUSED(first_byte);
 
@@ -641,7 +661,7 @@ inline int64_t encoded_length_null()
   return static_cast<int64_t>(1);
 }
 
-inline int encode_null(char* buf, int64_t buf_len, int64_t& pos)
+inline int encode_null(char *buf, int64_t buf_len, int64_t &pos)
 {
   return encode_i8(buf, buf_len, pos, OB_NULL_TYPE);
 }
@@ -655,6 +675,7 @@ inline uint64_t safe_int64_abs(int64_t val)
   return static_cast<uint64_t>(__v);
 }
 
+
 /**
  * @brief encode a uint64_t into given buffer with given length
  *
@@ -666,8 +687,9 @@ inline uint64_t safe_int64_abs(int64_t val)
  *
  * @return  on success, OB_SUCCESS is returned
  */
-inline int __encode_uint_with_given_length(
-    char* buf, const int64_t buf_len, int64_t& pos, const uint64_t val, int64_t val_len)
+inline int __encode_uint_with_given_length(char *buf, const int64_t buf_len,
+                                           int64_t &pos,
+                                           const uint64_t val, int64_t val_len)
 {
   int ret = OB_SUCCESS;
   if ((NULL == buf) || (val_len <= 0) || ((buf_len - pos) < val_len)) {
@@ -676,7 +698,7 @@ inline int __encode_uint_with_given_length(
     uint64_t __v = val;
     int64_t tmp_pos = pos;
     for (int64_t n = 0; n < val_len; ++n) {
-      int8_t t = static_cast<int8_t>((__v >> (n << 3)) & 0xff);
+      int8_t t = static_cast<int8_t>((__v >>(n << 3)) & 0xff);
       ret = encode_i8(buf, buf_len, tmp_pos, t);
       if (OB_FAIL(ret)) {
         break;
@@ -689,8 +711,9 @@ inline int __encode_uint_with_given_length(
   return ret;
 }
 
-inline int __decode_uint_with_given_length(
-    const char* buf, const int64_t data_len, int64_t& pos, uint64_t& val, int64_t val_len)
+inline int __decode_uint_with_given_length(const char *buf, const int64_t data_len,
+                                           int64_t &pos,
+                                           uint64_t &val, int64_t val_len)
 {
   int ret = OB_SUCCESS;
   if ((NULL == buf) || (data_len - pos < val_len)) {
@@ -745,14 +768,14 @@ inline int64_t encoded_length_int(int64_t val)
   return len;
 }
 
-inline int fast_encode(char* buf, int64_t& pos, int64_t val, bool is_add = false)
+inline int fast_encode(char *buf, int64_t &pos, int64_t val, bool is_add = false)
 {
   int ret = OB_SUCCESS;
   int8_t first_byte = 0;
   if (val < 0) {
     set_bit(first_byte, OB_INT_SIGN_BIT_POS);
     val = -val;
-    // val = safe_int64_abs(val);
+    //val = safe_int64_abs(val);
   }
   if (is_add) {
     set_bit(first_byte, OB_INT_OPERATION_BIT_POS);
@@ -761,7 +784,7 @@ inline int fast_encode(char* buf, int64_t& pos, int64_t val, bool is_add = false
     first_byte |= static_cast<int8_t>(val);
     buf[pos++] = first_byte;
   } else {
-    first_byte |= static_cast<int8_t>(OB_MAX_INT_1B);
+    first_byte |= static_cast<int8_t> (OB_MAX_INT_1B);
     if ((uint64_t)val <= OB_MAX_INT_4B) {
       if ((uint64_t)val <= OB_MAX_INT_2B) {
         first_byte = static_cast<int8_t>(first_byte + 1);
@@ -796,26 +819,26 @@ inline int fast_encode(char* buf, int64_t& pos, int64_t val, bool is_add = false
       }
     }
 
-  G_INT9B:
+G_INT9B:
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
-  G_INT7B:
+G_INT7B:
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
-  G_INT5B:
+G_INT5B:
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
-  G_INT4B:
+G_INT4B:
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
-  G_INT3B:
+G_INT3B:
     buf[pos++] = (int8_t)(val & 0xFF);
     val >>= 8;
-  G_INT2B:
+G_INT2B:
     buf[pos++] = (int8_t)(val & 0xFF);
   }
 
@@ -833,7 +856,8 @@ inline int fast_encode(char* buf, int64_t& pos, int64_t val, bool is_add = false
  *
  * @return on success,OB_SUCCESS is returned,on error,OB_SIZE_OVERFLOW is returned.
  */
-inline int encode_int_safe(char* buf, const int64_t buf_len, int64_t& pos, int64_t val, bool is_add = false)
+inline int encode_int_safe(char *buf, const int64_t buf_len, int64_t &pos, int64_t val,
+                           bool is_add = false)
 {
   int ret = OB_SIZE_OVERFLOW;
   int64_t len = encoded_length_int(val);
@@ -853,13 +877,13 @@ inline int encode_int_safe(char* buf, const int64_t buf_len, int64_t& pos, int64
     if (__v <= OB_MAX_INT_1B) {
       first_byte = static_cast<int8_t>(first_byte | __v);
     } else {
-      // 24: 1 byte
-      // 25: 2 bytes
-      // 26: 3 bytes
-      // 27: 4 bytes
-      // 28: 6 bytes
-      // 29: 8 bytes
-      // 30,31 reserved
+      //24: 1 byte
+      //25: 2 bytes
+      //26: 3 bytes
+      //27: 4 bytes
+      //28: 6 bytes
+      //29: 8 bytes
+      //30,31 reserved
       int64_t tmp_len = len;
       if (7 == tmp_len || 9 == tmp_len) {
         tmp_len -= 1;
@@ -878,7 +902,8 @@ inline int encode_int_safe(char* buf, const int64_t buf_len, int64_t& pos, int64
   return ret;
 }
 
-inline int encode_int(char* buf, const int64_t buf_len, int64_t& pos, int64_t val, bool is_add = false)
+inline int encode_int(char *buf, const int64_t buf_len, int64_t &pos, int64_t val,
+                      bool is_add = false)
 {
   if (buf_len - pos >= 10) {
     return fast_encode(buf, pos, val, is_add);
@@ -887,7 +912,8 @@ inline int encode_int(char* buf, const int64_t buf_len, int64_t& pos, int64_t va
   }
 }
 
-inline int fast_decode(const char* buf, int8_t first_byte, int64_t& pos, int64_t& val, bool& is_add)
+inline int fast_decode(const char *buf, int8_t first_byte, int64_t &pos,
+                       int64_t &val, bool &is_add)
 {
   int ret = OB_SUCCESS;
 
@@ -900,10 +926,10 @@ inline int fast_decode(const char* buf, int8_t first_byte, int64_t& pos, int64_t
   } else {
     val = 0;
     int64_t npos = 0;
-    // int64_t len = len_or_value - OB_MAX_INT_1B;
+    //int64_t len = len_or_value - OB_MAX_INT_1B;
     if ((uint8_t)len_or_value <= OB_MAX_INT_1B + 3) {
       if (len_or_value == OB_MAX_INT_1B + 1) {
-        pos++;
+        pos ++;
         npos = pos;
         goto D_INT2B;
       } else if (len_or_value == OB_MAX_INT_1B + 2) {
@@ -931,26 +957,26 @@ inline int fast_decode(const char* buf, int8_t first_byte, int64_t& pos, int64_t
       }
     }
 
-  D_INT9B:
+D_INT9B:
     val |= (uint8_t)buf[--npos];
     val <<= 8;
     val |= (uint8_t)buf[--npos];
     val <<= 8;
-  D_INT7B:
+D_INT7B:
     val |= (uint8_t)buf[--npos];
     val <<= 8;
     val |= (uint8_t)buf[--npos];
     val <<= 8;
-  D_INT5B:
+D_INT5B:
     val |= (uint8_t)buf[--npos];
     val <<= 8;
-  D_INT4B:
+D_INT4B:
     val |= (uint8_t)buf[--npos];
     val <<= 8;
-  D_INT3B:
+D_INT3B:
     val |= (uint8_t)buf[--npos];
     val <<= 8;
-  D_INT2B:
+D_INT2B:
     val |= (uint8_t)buf[--npos];
 
     if (is_neg) {
@@ -961,8 +987,8 @@ inline int fast_decode(const char* buf, int8_t first_byte, int64_t& pos, int64_t
   return ret;
 }
 
-inline int decode_int_safe(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val, bool& is_add)
+inline int decode_int_safe(const char *buf, const int64_t data_len,
+                           int8_t first_byte, int64_t &pos, int64_t &val, bool &is_add)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos < 0)) {
@@ -993,8 +1019,8 @@ inline int decode_int_safe(
   return ret;
 }
 
-inline int decode_int(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val, bool& is_add)
+inline int decode_int(const char *buf, const int64_t data_len, int8_t first_byte,
+                      int64_t &pos, int64_t &val, bool &is_add)
 {
   (void)(data_len);
   if (data_len - pos >= 9) {
@@ -1032,11 +1058,12 @@ inline int64_t encoded_length_str(int64_t len)
   return encoded_length_str_len(len) + len;
 }
 
-inline int encode_str(char* buf, const int64_t buf_len, int64_t& pos, const void* vbuf, int64_t len)
+inline int encode_str(char *buf, const int64_t buf_len, int64_t &pos, const void *vbuf, int64_t len)
 {
   int ret = OB_SIZE_OVERFLOW;
   int64_t len_size = encoded_length_str_len(len);
-  if ((NULL == buf) || (len_size < 0) || (buf_len - pos < len_size + len) || pos < 0 || (len < 0)) {
+  if ((NULL == buf) || (len_size < 0) || (buf_len - pos < len_size + len) || pos < 0
+      || (len < 0)) {
     ret = OB_SIZE_OVERFLOW;
   } else {
     int8_t first_byte = OB_VARCHAR_TYPE;
@@ -1044,14 +1071,14 @@ inline int encode_str(char* buf, const int64_t buf_len, int64_t& pos, const void
     if (1 == len_size) {
       first_byte = static_cast<int8_t>(first_byte | (len & 0xff));
     } else {
-      first_byte = static_cast<int8_t>(first_byte | (len_size - 1 + OB_MAX_1B_STR_LEN));
+      first_byte = static_cast<int8_t>(first_byte | (len_size  - 1 + OB_MAX_1B_STR_LEN));
     }
 
     if (OB_SUCCESS != (ret = encode_i8(buf, buf_len, pos, first_byte))) {
       ret = OB_SIZE_OVERFLOW;
     } else if (len_size > 1) {
       for (int n = 0; n < len_size - 1; ++n) {
-        if (OB_SUCCESS != (ret = encode_i8(buf, buf_len, pos, static_cast<int8_t>(len >> (n << 3))))) {
+        if (OB_SUCCESS != (ret = encode_i8(buf, buf_len, pos, static_cast<int8_t>(len >>(n << 3))))) {
           break;
         }
       }
@@ -1065,9 +1092,10 @@ inline int encode_str(char* buf, const int64_t buf_len, int64_t& pos, const void
   return ret;
 }
 
-inline const char* decode_str(const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int32_t& lenp)
+inline const char *decode_str(const char *buf, const int64_t data_len, int8_t first_byte,
+                              int64_t &pos, int32_t &lenp)
 {
-  const char* str = NULL;
+  const char *str = NULL;
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || data_len < 0) {
     str = NULL;
@@ -1075,7 +1103,7 @@ inline const char* decode_str(const char* buf, const int64_t data_len, int8_t fi
     int8_t len_or_value = first_byte & OB_VARCHAR_LEN_MASK;
     int64_t str_len = 0;
     if (len_or_value <= OB_MAX_1B_STR_LEN) {
-      // OK ,we have already got the length of str
+      //OK ,we have already got the length of str
       str_len = static_cast<int64_t>(len_or_value);
       ret = OB_SUCCESS;
     } else {
@@ -1098,6 +1126,7 @@ inline const char* decode_str(const char* buf, const int64_t data_len, int8_t fi
       lenp = -1;
       str = NULL;
     }
+
   }
   return str;
 }
@@ -1107,7 +1136,8 @@ inline int64_t encoded_length_float_type()
   return static_cast<int64_t>(sizeof(float) + 1);
 }
 
-inline int encode_float_type(char* buf, const int64_t buf_len, int64_t& pos, const float val, const bool is_add)
+inline int encode_float_type(char *buf, const int64_t buf_len, int64_t &pos, const float val,
+                      const bool is_add)
 {
   int32_t tmp = 0;
   MEMCPY(&tmp, &val, sizeof(tmp));
@@ -1127,8 +1157,8 @@ inline int encode_float_type(char* buf, const int64_t buf_len, int64_t& pos, con
   return ret;
 }
 
-inline int decode_float_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, float& val, bool& is_add)
+inline int decode_float_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                      int64_t &pos, float &val, bool &is_add)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if (NULL == buf || data_len - pos < static_cast<int64_t>(sizeof(float))) {
@@ -1154,50 +1184,53 @@ inline int64_t encoded_length_double_type()
   return static_cast<int64_t>(sizeof(double) + 1);
 }
 
-inline int64_t encode_length_number_type(const ObNumberDesc& desc)
+inline int64_t encode_length_number_type(const ObNumberDesc &desc)
 {
   return (encoded_length_i32(desc.desc_) + sizeof(uint32_t) * desc.len_);
 }
 
-inline int decode_number_type(
-    const char* buf, const int64_t buf_len, int64_t& pos, ObNumberDesc& desc, uint32_t*& digits)
+inline int decode_number_type(const char *buf, const int64_t buf_len, int64_t &pos, ObNumberDesc &desc,
+                              uint32_t *&digits)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
-  if (OB_SUCCESS == err) {
-    err = decode_i32(buf, buf_len, tmp_pos, (int32_t*)(&desc.desc_));
+  if (OB_SUCCESS == ret) {
+    ret = decode_i32(buf, buf_len, tmp_pos, (int32_t *)(&desc.desc_));
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     if (0 == desc.len_) {
       digits = NULL;
     } else if (buf_len < (tmp_pos + (int64_t)sizeof(uint32_t) * desc.len_)) {
-      err = OB_DESERIALIZE_ERROR;
+      ret = OB_DESERIALIZE_ERROR;
     } else {
-      digits = (uint32_t*)(buf + tmp_pos);
+      digits = (uint32_t *)(buf + tmp_pos);
       tmp_pos += (sizeof(uint32_t) * desc.len_);
     }
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     pos = tmp_pos;
   }
-  return err;
+  return ret;
 }
 
-inline int encode_number_type(
-    char* buf, const int64_t buf_len, int64_t& pos, const ObNumberDesc& desc, const uint32_t* digits)
+inline int encode_number_type(char *buf,
+                              const int64_t buf_len,
+                              int64_t &pos,
+                              const ObNumberDesc &desc,
+                              const uint32_t *digits)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
-  // if (OB_SUCCESS == err) {
+  //if (OB_SUCCESS == ret) {
   //  int8_t first_byte = OB_NUMBER_TYPE;
-  //  err = encode_i8(buf, buf_len, tmp_pos, first_byte);
+  //  ret = encode_i8(buf, buf_len, tmp_pos, first_byte);
   //}
-  if (OB_SUCCESS == err) {
-    err = encode_i32(buf, buf_len, tmp_pos, (int32_t)desc.desc_);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i32(buf, buf_len, tmp_pos, (int32_t)desc.desc_);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     if (buf_len < (tmp_pos + (int64_t)sizeof(uint32_t) * desc.len_)) {
-      err = OB_BUF_NOT_ENOUGH;
+      ret = OB_BUF_NOT_ENOUGH;
     } else {
       if (0 < desc.len_) {
         MEMCPY(buf + tmp_pos, digits, sizeof(uint32_t) * desc.len_);
@@ -1205,10 +1238,10 @@ inline int encode_number_type(
       }
     }
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     pos = tmp_pos;
   }
-  return err;
+  return ret;
 }
 
 inline int64_t encode_length_otimestamp_tz_type()
@@ -1216,18 +1249,18 @@ inline int64_t encode_length_otimestamp_tz_type()
   return (sizeof(int64_t) + sizeof(uint32_t));
 }
 
-inline int decode_otimestamp_tz_type(
-    const char* buf, const int64_t buf_len, int64_t& pos, int64_t& time_us, uint32_t& tz_ctx)
+inline int decode_otimestamp_tz_type(const char *buf, const int64_t buf_len, int64_t &pos,
+    int64_t &time_us, uint32_t &tz_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(decode_i64(buf, buf_len, pos, &time_us))) {
-  } else if (OB_FAIL(decode_i32(buf, buf_len, pos, (int32_t*)(&tz_ctx)))) {
+  } else if (OB_FAIL(decode_i32(buf, buf_len, pos, (int32_t *)(&tz_ctx)))) {
   }
   return ret;
 }
 
-inline int encode_otimestamp_tz_type(
-    char* buf, const int64_t buf_len, int64_t& pos, const int64_t time_us, const uint32_t tz_ctx)
+inline int encode_otimestamp_tz_type(char *buf, const int64_t buf_len, int64_t &pos,
+    const int64_t time_us, const uint32_t tz_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(encode_i64(buf, buf_len, pos, time_us))) {
@@ -1241,18 +1274,18 @@ inline int64_t encode_length_otimestamp_type()
   return (sizeof(int64_t) + sizeof(uint16_t));
 }
 
-inline int decode_otimestamp_type(
-    const char* buf, const int64_t buf_len, int64_t& pos, int64_t& time_us, uint16_t& time_desc)
+inline int decode_otimestamp_type(const char *buf, const int64_t buf_len, int64_t &pos,
+    int64_t &time_us, uint16_t &time_desc)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(decode_i64(buf, buf_len, pos, &time_us))) {
-  } else if (OB_FAIL(decode_i16(buf, buf_len, pos, (int16_t*)(&time_desc)))) {
+  } else if (OB_FAIL(decode_i16(buf, buf_len, pos, (int16_t *)(&time_desc)))) {
   }
   return ret;
 }
 
-inline int encode_otimestamp_type(
-    char* buf, const int64_t buf_len, int64_t& pos, const int64_t time_us, const uint16_t time_desc)
+inline int encode_otimestamp_type(char *buf, const int64_t buf_len, int64_t &pos,
+    const int64_t time_us, const uint16_t time_desc)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(encode_i64(buf, buf_len, pos, time_us))) {
@@ -1261,63 +1294,65 @@ inline int encode_otimestamp_type(
   return ret;
 }
 
-inline int encode_decimal_type(char* buf, const int64_t buf_len, int64_t& pos, bool is_add, int8_t precision,
-    int8_t scale, int8_t vscale, int8_t nwords, const uint32_t* words)
+
+inline int encode_decimal_type(char *buf, const int64_t buf_len, int64_t &pos, bool is_add,
+                               int8_t precision, int8_t scale, int8_t vscale, int8_t nwords, const uint32_t *words)
 {
-  int err = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (buf == NULL || buf_len <= 0 || pos >= buf_len || NULL == words) {
-    err = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT;
   }
   int8_t first_byte = OB_DECIMAL_TYPE;
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, first_byte);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, first_byte);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     int8_t op = is_add ? 1 : 0;
-    err = encode_i8(buf, buf_len, pos, op);
+    ret = encode_i8(buf, buf_len, pos, op);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, precision);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, precision);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, scale);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, scale);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, vscale);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, vscale);
   }
-  if (OB_SUCCESS == err) {
-    err = encode_i8(buf, buf_len, pos, nwords);
+  if (OB_SUCCESS == ret) {
+    ret = encode_i8(buf, buf_len, pos, nwords);
   }
-  if (OB_SUCCESS == err) {
+  if (OB_SUCCESS == ret) {
     for (int8_t i = 0; i < nwords; ++i) {
-      if (OB_SUCCESS != (err = encode_vi32(buf, buf_len, pos, static_cast<int32_t>(words[i])))) {
+      if (OB_SUCCESS != (ret = encode_vi32(buf, buf_len, pos, static_cast<int32_t>(words[i])))) {
         break;
       }
     }
   }
-  if (OB_SUCCESS != err) {
-    _OB_LOG(WARN, "fail to encode decimal. err = %d", err);
-  }
-  return err;
-}
-
-int decode_decimal_type(const char* buf, const int64_t buf_len, int64_t& pos, bool& is_add, int8_t& precision,
-    int8_t& scale, int8_t& vscale, int8_t& nwords, uint32_t* words);
-
-inline int64_t encoded_length_decimal_type(int8_t nwords, const uint32_t* words)
-{
-  int64_t ret = 6;
-  if (OB_UNLIKELY(NULL == words)) {
-    _OB_LOG(ERROR, "null decimal words");
-  } else {
-    for (int8_t i = 0; i < nwords; ++i) {
-      ret += static_cast<int32_t>(encoded_length_vi32(words[i]));
-    }
+  if (OB_SUCCESS != ret) {
+    _OB_LOG(WARN, "fail to encode decimal. ret = %d", ret);
   }
   return ret;
 }
 
-inline int encode_double_type(char* buf, const int64_t buf_len, int64_t& pos, double val, const bool is_add)
+int decode_decimal_type(const char *buf, const int64_t buf_len, int64_t &pos, bool &is_add,
+                               int8_t &precision, int8_t &scale, int8_t &vscale, int8_t &nwords, uint32_t *words);
+
+inline int64_t encoded_length_decimal_type(int8_t nwords, const uint32_t *words)
+{
+  int64_t len = 6;
+  if (OB_UNLIKELY(NULL == words)) {
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "null decimal words");
+  } else {
+    for (int8_t i = 0; i < nwords; ++i) {
+      len += static_cast<int32_t>(encoded_length_vi32(words[i]));
+    }
+  }
+  return len;
+}
+
+inline int encode_double_type(char *buf, const int64_t buf_len, int64_t &pos, double val,
+                              const bool is_add)
 {
   int64_t tmp = 0;
   MEMCPY(&tmp, &val, sizeof(tmp));
@@ -1339,8 +1374,8 @@ inline int encode_double_type(char* buf, const int64_t buf_len, int64_t& pos, do
   return ret;
 }
 
-inline int decode_double_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, double& val, bool& is_add)
+inline int decode_double_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                              int64_t &pos, double &val, bool &is_add)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if (NULL == buf || data_len - pos < static_cast<int64_t>(sizeof(double))) {
@@ -1376,7 +1411,8 @@ inline int64_t encoded_length_precise_datetime(int64_t value)
   return encoded_length_datetime(value);
 }
 
-inline int __encode_time_type(char* buf, const int64_t buf_len, int8_t first_byte, int64_t& pos, int64_t val)
+inline int __encode_time_type(char *buf, const int64_t buf_len, int8_t first_byte, int64_t &pos,
+                              int64_t val)
 {
   int64_t len = encoded_length_datetime(val);
   int64_t tmp_pos = pos;
@@ -1401,7 +1437,8 @@ inline int __encode_time_type(char* buf, const int64_t buf_len, int8_t first_byt
   return ret;
 }
 
-inline int __decode_time_type(const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val)
+inline int __decode_time_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                              int64_t &pos, int64_t &val)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos < 0)) {
@@ -1430,8 +1467,8 @@ inline int __decode_time_type(const char* buf, const int64_t data_len, int8_t fi
   return ret;
 }
 
-inline int encode_datetime_type(
-    char* buf, const int64_t buf_len, int64_t& pos, const ObDateTime& val, const bool is_add)
+inline int encode_datetime_type(char *buf, const int64_t buf_len, int64_t &pos,
+                                const ObDateTime &val, const bool is_add)
 {
   int ret = OB_SIZE_OVERFLOW;
   if (NULL == buf || buf_len - pos <= 0) {
@@ -1448,12 +1485,13 @@ inline int encode_datetime_type(
     }
 
     ret = __encode_time_type(buf, buf_len, first_byte, pos, val);
+
   }
   return ret;
 }
 
-inline int decode_datetime_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val, bool& is_add)
+inline int decode_datetime_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                                int64_t &pos, int64_t &val, bool &is_add)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos < 0)) {
@@ -1471,8 +1509,8 @@ inline int decode_datetime_type(
   return ret;
 }
 
-inline int encode_precise_datetime_type(
-    char* buf, const int64_t buf_len, int64_t& pos, const ObPreciseDateTime& val, const bool is_add)
+inline int encode_precise_datetime_type(char *buf, const int64_t buf_len, int64_t &pos,
+                                        const ObPreciseDateTime &val, const bool is_add)
 {
   int ret = OB_SIZE_OVERFLOW;
   if (NULL == buf || buf_len - pos <= 0) {
@@ -1489,12 +1527,13 @@ inline int encode_precise_datetime_type(
     }
 
     ret = __encode_time_type(buf, buf_len, first_byte, pos, val);
+
   }
   return ret;
 }
 
-inline int decode_precise_datetime_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val, bool& is_add)
+inline int decode_precise_datetime_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                                        int64_t &pos, int64_t &val, bool &is_add)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos < 0)) {
@@ -1517,7 +1556,8 @@ inline int64_t encoded_length_modifytime(int64_t value)
   return encoded_length_datetime(value);
 }
 
-inline int encode_modifytime_type(char* buf, const int64_t buf_len, int64_t& pos, const ObModifyTime& val)
+inline int encode_modifytime_type(char *buf, const int64_t buf_len, int64_t &pos,
+                                  const ObModifyTime &val)
 {
   int ret = OB_SIZE_OVERFLOW;
   if (NULL == buf || buf_len - pos <= 0 || val < 0) {
@@ -1529,8 +1569,8 @@ inline int encode_modifytime_type(char* buf, const int64_t buf_len, int64_t& pos
   return ret;
 }
 
-inline int decode_modifytime_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val)
+inline int decode_modifytime_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                                  int64_t &pos, int64_t &val)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos <= 0)) {
@@ -1546,12 +1586,14 @@ inline int64_t encoded_length_createtime(const int64_t value)
   return encoded_length_datetime(value);
 }
 
-inline int encode_createtime_type(char* buf, const int64_t buf_len, int64_t& pos, const ObCreateTime& val)
+inline int encode_createtime_type(char *buf, const int64_t buf_len, int64_t &pos,
+                                  const ObCreateTime &val)
 {
   int ret = OB_SIZE_OVERFLOW;
   if (NULL == buf || buf_len - pos <= 0 || val < 0) {
     ret = OB_SIZE_OVERFLOW;
-    _OB_LOG(WARN, "fail to encode_createtime_type: buf[%p], buf_len[%ld], pos[%ld] val[%ld]", buf, buf_len, pos, val);
+    _OB_LOG(WARN, "fail to encode_createtime_type: buf[%p], buf_len[%ld], pos[%ld] val[%ld]",
+              buf, buf_len, pos, val);
   } else {
     int8_t first_byte = OB_CREATETIME_TYPE;
     ret = __encode_time_type(buf, buf_len, first_byte, pos, val);
@@ -1562,8 +1604,8 @@ inline int encode_createtime_type(char* buf, const int64_t buf_len, int64_t& pos
   return ret;
 }
 
-inline int decode_createtime_type(
-    const char* buf, const int64_t data_len, int8_t first_byte, int64_t& pos, int64_t& val)
+inline int decode_createtime_type(const char *buf, const int64_t data_len, int8_t first_byte,
+                                  int64_t &pos, int64_t &val)
 {
   int ret = OB_DESERIALIZE_ERROR;
   if ((NULL == buf) || (data_len - pos <= 0)) {
@@ -1579,7 +1621,7 @@ inline int64_t encoded_length_extend(const int64_t value)
   return encoded_length_vi64(value) + 1;
 }
 
-inline int encode_extend_type(char* buf, const int64_t buf_len, int64_t& pos, const int64_t val)
+inline int encode_extend_type(char *buf, const int64_t buf_len, int64_t &pos, const int64_t val)
 {
   int ret = OB_SUCCESS;
   int64_t len = encoded_length_extend(val);
@@ -1598,17 +1640,18 @@ inline int encode_extend_type(char* buf, const int64_t buf_len, int64_t& pos, co
   return ret;
 }
 
-template <bool is_enum, typename T>
-struct EnumEncoder {};
+template<bool is_enum, typename T>
+struct EnumEncoder { };
 
-template <typename T>
-struct EnumEncoder<true, T> {
-  static int encode(char* buf, const int64_t buf_len, int64_t& pos, const T& val)
+template<typename T>
+struct EnumEncoder<true, T>
+{
+  static int encode(char *buf, const int64_t buf_len, int64_t &pos, const T &val)
   {
     return encode_vi32(buf, buf_len, pos, static_cast<int32_t>(val));
   }
 
-  static int decode(const char* buf, const int64_t data_len, int64_t& pos, T& val)
+  static int decode(const char *buf, const int64_t data_len, int64_t &pos, T &val)
   {
     int32_t ival = 0;
     int ret = OB_SUCCESS;
@@ -1618,25 +1661,26 @@ struct EnumEncoder<true, T> {
     return ret;
   }
 
-  static int64_t encoded_length(const T& val)
+  static int64_t encoded_length(const T &val)
   {
     return encoded_length_vi32(static_cast<int32_t>(val));
   }
 };
 
-template <typename T>
-struct EnumEncoder<false, T> {
-  static int encode(char* buf, const int64_t buf_len, int64_t& pos, const T& val)
+template<typename T>
+struct EnumEncoder<false, T>
+{
+  static int encode(char *buf, const int64_t buf_len, int64_t &pos, const T &val)
   {
     return val.serialize(buf, buf_len, pos);
   }
 
-  static int decode(const char* buf, const int64_t data_len, int64_t& pos, T& val)
+  static int decode(const char *buf, const int64_t data_len, int64_t &pos, T &val)
   {
     return val.deserialize(buf, data_len, pos);
   }
 
-  static int64_t encoded_length(const T& val)
+  static int64_t encoded_length(const T &val)
   {
     return val.get_serialize_size();
   }
@@ -1644,63 +1688,63 @@ struct EnumEncoder<false, T> {
 
 ////////////////////////////////////////////////////////////////
 template <typename T>
-int encode(char* buf, const int64_t buf_len, int64_t& pos, const T& val)
+int encode(char *buf, const int64_t buf_len, int64_t &pos, const T &val)
 {
   return EnumEncoder<__is_enum(T), T>::encode(buf, buf_len, pos, val);
 }
 
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, int64_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, int64_t val)
 {
   return encode_vi64(buf, buf_len, pos, val);
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, uint64_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, uint64_t val)
 {
   return encode_vi64(buf, buf_len, pos, static_cast<int64_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, int32_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, int32_t val)
 {
   return encode_vi32(buf, buf_len, pos, val);
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, uint32_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, uint32_t val)
 {
   return encode_vi32(buf, buf_len, pos, static_cast<int32_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, int16_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, int16_t val)
 {
   return encode_vi32(buf, buf_len, pos, static_cast<int32_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, uint16_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, uint16_t val)
 {
   return encode_vi32(buf, buf_len, pos, static_cast<int32_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, int8_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, int8_t val)
 {
   return encode_i8(buf, buf_len, pos, val);
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, uint8_t val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, uint8_t val)
 {
   return encode_i8(buf, buf_len, pos, static_cast<int8_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, char val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, char val)
 {
   return encode_i8(buf, buf_len, pos, static_cast<int8_t>(val));
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, bool val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, bool val)
 {
   return encode_bool(buf, buf_len, pos, val);
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, float val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, float val)
 {
   return encode_float(buf, buf_len, pos, val);
 }
-inline int encode(char* buf, const int64_t buf_len, int64_t& pos, double val)
+inline int encode(char *buf, const int64_t buf_len, int64_t &pos, double val)
 {
   return encode_double(buf, buf_len, pos, val);
 }
 
 // encode null terminated char array
 template <int64_t CNT>
-int encode(char* buf, const int64_t buf_len, int64_t& pos, const char (&val)[CNT])
+int encode(char *buf, const int64_t buf_len, int64_t &pos, const char (&val)[CNT])
 {
   int ret = OB_SUCCESS;
   size_t size = strlen(val) + 1;
@@ -1718,7 +1762,7 @@ int encode(char* buf, const int64_t buf_len, int64_t& pos, const char (&val)[CNT
 }
 
 template <class T, int64_t CNT>
-int encode(char* buf, const int64_t buf_len, int64_t& pos, const T (&val)[CNT])
+int encode(char *buf, const int64_t buf_len, int64_t &pos, const T (&val)[CNT])
 {
   int ret = OB_SUCCESS;
 
@@ -1732,7 +1776,7 @@ int encode(char* buf, const int64_t buf_len, int64_t& pos, const T (&val)[CNT])
 }
 
 template <typename T1, typename T2>
-int encode(char* buf, const int64_t buf_len, int64_t& pos, const std::pair<T1, T2>& kv_pair)
+int encode(char *buf, const int64_t buf_len, int64_t &pos, const std::pair<T1, T2> &kv_pair)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(encode(buf, buf_len, pos, kv_pair.first))) {
@@ -1742,80 +1786,80 @@ int encode(char* buf, const int64_t buf_len, int64_t& pos, const std::pair<T1, T
 }
 
 ////////////////
-template <typename T>
-int decode(const char* buf, const int64_t data_len, int64_t& pos, T& val)
+template<typename T>
+int decode(const char *buf, const int64_t data_len, int64_t &pos, T &val)
 {
   return EnumEncoder<__is_enum(T), T>::decode(buf, data_len, pos, val);
 }
 
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, int8_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, int8_t &val)
 {
   val = 0;
   return decode_i8(buf, data_len, pos, &val);
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, uint8_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, uint8_t &val)
 {
   val = 0;
   return decode_i8(buf, data_len, pos, reinterpret_cast<int8_t*>(&val));
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, char& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, char &val)
 {
   val = 0;
   return decode_i8(buf, data_len, pos, reinterpret_cast<int8_t*>(&val));
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, int16_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, int16_t &val)
 {
   int32_t v = 0;
   int ret = decode_vi32(buf, data_len, pos, &v);
   val = static_cast<int16_t>(v);
   return ret;
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, uint16_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, uint16_t &val)
 {
   int32_t v = 0;
   int ret = decode_vi32(buf, data_len, pos, &v);
   val = static_cast<uint16_t>(v);
   return ret;
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, int32_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, int32_t &val)
 {
   val = 0;
   return decode_vi32(buf, data_len, pos, &val);
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, uint32_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, uint32_t &val)
 {
   val = 0;
-  return decode_vi32(buf, data_len, pos, reinterpret_cast<int32_t*>(&val));
+  return decode_vi32(buf, data_len, pos, reinterpret_cast<int32_t *>(&val));
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, int64_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, int64_t &val)
 {
   val = 0;
   return decode_vi64(buf, data_len, pos, &val);
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, uint64_t& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, uint64_t &val)
 {
   val = 0;
-  return decode_vi64(buf, data_len, pos, reinterpret_cast<int64_t*>(&val));
+  return decode_vi64(buf, data_len, pos, reinterpret_cast<int64_t *>(&val));
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, bool& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, bool &val)
 {
   val = 0;
   return decode_bool(buf, data_len, pos, &val);
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, float& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, float &val)
 {
   val = 0;
   return decode_float(buf, data_len, pos, &val);
 }
-inline int decode(const char* buf, const int64_t data_len, int64_t& pos, double& val)
+inline int decode(const char *buf, const int64_t data_len, int64_t &pos, double &val)
 {
   val = 0.0;
   return decode_double(buf, data_len, pos, &val);
 }
 
 // decode null terminated char array
-template <int64_t CNT>
-int decode(const char* buf, const int64_t data_len, int64_t& pos, char (&val)[CNT])
+template<int64_t CNT>
+int decode(const char *buf, const int64_t data_len, int64_t &pos, char (&val)[CNT])
 {
   int ret = OB_SUCCESS;
   int64_t rsize = 0;
@@ -1832,8 +1876,8 @@ int decode(const char* buf, const int64_t data_len, int64_t& pos, char (&val)[CN
   return ret;
 }
 
-template <class T, int64_t CNT>
-int decode(const char* buf, const int64_t data_len, int64_t& pos, T (&val)[CNT])
+template<class T, int64_t CNT>
+int decode(const char *buf, const int64_t data_len, int64_t &pos, T (&val)[CNT])
 {
   int ret = OB_SUCCESS;
   int64_t rsize = 0;
@@ -1851,7 +1895,7 @@ int decode(const char* buf, const int64_t data_len, int64_t& pos, T (&val)[CNT])
 }
 
 template <typename T1, typename T2>
-int decode(const char* buf, const int64_t data_len, int64_t& pos, std::pair<T1, T2>& kv_pair)
+int decode(const char *buf, const int64_t data_len, int64_t &pos, std::pair<T1, T2> &kv_pair)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(decode(buf, data_len, pos, kv_pair.first))) {
@@ -1861,7 +1905,7 @@ int decode(const char* buf, const int64_t data_len, int64_t& pos, std::pair<T1, 
 }
 ////////////////
 template <typename T>
-int64_t encoded_length(const T& val)
+int64_t encoded_length(const T &val)
 {
   return EnumEncoder<__is_enum(T), T>::encoded_length(val);
 }
@@ -1935,7 +1979,7 @@ int64_t encoded_length(const T (&val)[CNT])
 }
 
 template <typename T1, typename T2>
-int64_t encoded_length(const std::pair<T1, T2>& kv_pair)
+int64_t encoded_length(const std::pair<T1, T2> &kv_pair)
 {
   int64_t len = 0;
   len += encoded_length(kv_pair.first);
@@ -1943,8 +1987,8 @@ int64_t encoded_length(const std::pair<T1, T2>& kv_pair)
   return len;
 }
 
-}  // namespace serialization
-}  // namespace common
-}  // namespace oceanbase
+} /* serialization */
+} /* common */
+} /* oceanbase*/
 
-#endif  // OCEANBASE_COMMON_SERIALIZATION_H
+#endif //OCEANBASE_COMMON_SERIALIZATION_H

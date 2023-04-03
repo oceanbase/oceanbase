@@ -19,12 +19,10 @@ using namespace oceanbase::common;
 TEST(DISABLED_TestSimpleThreadPool, Basic)
 {
   class : public ObSimpleThreadPool {
-    void handle(void* task)
-    {
+    void handle(void *task) {
       UNUSED(task);
       ATOMIC_INC(&handle_cnt_);
     }
-
   public:
     int handle_cnt_ = 0;
   } pool;
@@ -37,11 +35,11 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
   // When routine without coro push items into this pool, there may be
   // at most 100ms(default timeout) before a item to be processing.
   //
-  // Update: co_futex has fixed problem of thread waking up co-routine
+  // Update: ob_futex has fixed problem of thread waking up co-routine
   TIME_LESS(10000, [&pool] {
     pool.handle_cnt_ = 0;
     ASSERT_EQ(OB_SUCCESS, pool.init(1, 10));
-    this_routine::usleep(1000);  // wait for handler waiting for queue
+    ::usleep(1000);  // wait for handler waiting for queue
     ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
     ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
     ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
@@ -49,7 +47,7 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
       if (pool.handle_cnt_ == 3) {
         break;
       }
-      this_routine::usleep(1000);
+      ::usleep(1000);
     }
     ASSERT_EQ(3, pool.handle_cnt_);
   });
@@ -58,29 +56,27 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
   // When routine with coro push items into this pool, it would be
   // processed ASAP.
   TIME_LESS(10000, [&pool] {
-    cotesting::FlexPool(
-        [&pool] {
-          pool.handle_cnt_ = 0;
-          ASSERT_EQ(OB_SUCCESS, pool.init(1, 10));
-          this_routine::usleep(1000);  // wait for handler waiting for queue
-          ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
-          ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
-          ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
-          for (int i = 0; i < 1000; i++) {
-            if (pool.handle_cnt_ == 3) {
-              break;
-            }
-            this_routine::usleep(1000);
-          }
-          ASSERT_EQ(3, pool.handle_cnt_);
-        },
-        1)
-        .start();
+    cotesting::FlexPool([&pool] {
+      pool.handle_cnt_ = 0;
+      ASSERT_EQ(OB_SUCCESS, pool.init(1, 10));
+      ::usleep(1000);  // wait for handler waiting for queue
+      ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
+      ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
+      ASSERT_EQ(OB_SUCCESS, pool.push((void*)1));
+      for (int i = 0; i < 1000; i++) {
+        if (pool.handle_cnt_ == 3) {
+          break;
+        }
+        ::usleep(1000);
+      }
+      ASSERT_EQ(3, pool.handle_cnt_);
+    }, 1).start();
   });
   pool.destroy();
+
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

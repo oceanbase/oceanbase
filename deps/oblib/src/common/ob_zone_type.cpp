@@ -16,15 +16,17 @@
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
-
-static const char* zone_type_strs[] = {"ReadWrite", "ReadOnly", "Invalid"};
-const char* zone_type_to_str(ObZoneType zone_type)
+namespace oceanbase
 {
-  const char* zone_type_str = NULL;
+namespace common
+{
+
+static const char *zone_type_strs[] = { "ReadWrite", "ReadOnly", "Encryption", "Invalid" };
+const char *zone_type_to_str(ObZoneType zone_type)
+{
+  const char *zone_type_str = NULL;
   if (zone_type < ObZoneType::ZONE_TYPE_READWRITE || zone_type > ObZoneType::ZONE_TYPE_INVALID) {
-    LOG_ERROR("fatal error, unknown zone_type", K(zone_type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown zone_type", K(zone_type));
   } else {
     int index = static_cast<int>(zone_type);
     zone_type_str = zone_type_strs[index];
@@ -32,11 +34,11 @@ const char* zone_type_to_str(ObZoneType zone_type)
   return zone_type_str;
 }
 
-ObZoneType str_to_zone_type(const char* zone_type_str)
+ObZoneType str_to_zone_type(const char *zone_type_str)
 {
   ObZoneType zone_type = ObZoneType::ZONE_TYPE_INVALID;
   if (NULL == zone_type_str) {
-    LOG_ERROR("empty zone_type_str", KP(zone_type_str));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "empty zone_type_str", KP(zone_type_str));
   } else {
     for (int64_t i = 0; i <= ObZoneType::ZONE_TYPE_INVALID; ++i) {
       if (0 == strncasecmp(zone_type_strs[i], zone_type_str, strlen(zone_type_strs[i]))) {
@@ -47,5 +49,6 @@ ObZoneType str_to_zone_type(const char* zone_type_str)
   return zone_type;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
+

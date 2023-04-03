@@ -10,29 +10,35 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX COMMON
+
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
+#include "lib/ash/ob_active_session_guard.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /**
  * -----------------------------------------------------------ObLatchStat------------------------------------------------------
  */
 ObLatchStat::ObLatchStat()
-    : addr_(0),
-      id_(0),
-      level_(0),
-      hash_(0),
-      gets_(0),
-      misses_(0),
-      sleeps_(0),
-      immediate_gets_(0),
-      immediate_misses_(0),
-      spin_gets_(0),
-      wait_time_(0)
-{}
+  : addr_(0),
+    id_(0),
+    level_(0),
+    hash_(0),
+    gets_(0),
+    misses_(0),
+    sleeps_(0),
+    immediate_gets_(0),
+    immediate_misses_(0),
+    spin_gets_(0),
+    wait_time_(0)
+{
+}
 
-int ObLatchStat::add(const ObLatchStat& other)
+int ObLatchStat::add(const ObLatchStat &other)
 {
   int ret = OB_SUCCESS;
   if (0 == addr_) {
@@ -69,10 +75,12 @@ void ObLatchStat::reset()
 /**
  * ----------------------------------------------------------ObLatchStatArray-----------------------------------------------------
  */
-ObLatchStatArray::ObLatchStatArray() : items_()
-{}
+ObLatchStatArray::ObLatchStatArray()
+  : items_()
+{
+}
 
-int ObLatchStatArray::add(const ObLatchStatArray& other)
+int ObLatchStatArray::add(const ObLatchStatArray &other)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < ObLatchIds::LATCH_END && OB_SUCCESS == ret; ++i) {
@@ -91,15 +99,20 @@ void ObLatchStatArray::reset()
 /**
  * -------------------------------------------------------ObWaitEventHistory-------------------------------------------------------
  */
-ObWaitEventHistoryIter::ObWaitEventHistoryIter() : items_(NULL), curr_(0), start_pos_(0), item_cnt_(0)
-{}
+ObWaitEventHistoryIter::ObWaitEventHistoryIter()
+  : items_(NULL),
+    curr_(0),
+    start_pos_(0),
+    item_cnt_(0)
+{
+}
 
 ObWaitEventHistoryIter::~ObWaitEventHistoryIter()
 {
   reset();
 }
 
-int ObWaitEventHistoryIter::init(ObWaitEventDesc* items, const int64_t start_pos, int64_t item_cnt)
+int ObWaitEventHistoryIter::init(ObWaitEventDesc *items, const int64_t start_pos, int64_t item_cnt)
 {
   int ret = OB_SUCCESS;
   if (NULL == items || start_pos < 0 || item_cnt < 0) {
@@ -113,7 +126,7 @@ int ObWaitEventHistoryIter::init(ObWaitEventDesc* items, const int64_t start_pos
   return ret;
 }
 
-int ObWaitEventHistoryIter::get_next(ObWaitEventDesc*& item)
+int ObWaitEventHistoryIter::get_next(ObWaitEventDesc *&item)
 {
   int ret = OB_SUCCESS;
   if (curr_ >= item_cnt_) {
@@ -133,7 +146,11 @@ void ObWaitEventHistoryIter::reset()
   item_cnt_ = 0;
 }
 
-ObWaitEventHistory::ObWaitEventHistory() : curr_pos_(0), item_cnt_(0), nest_cnt_(0), current_wait_(0)
+ObWaitEventHistory::ObWaitEventHistory()
+  : curr_pos_(0),
+    item_cnt_(0),
+    nest_cnt_(0),
+    current_wait_(0)
 {
   memset(items_, 0, sizeof(items_));
 }
@@ -143,8 +160,7 @@ ObWaitEventHistory::~ObWaitEventHistory()
   reset();
 }
 
-int ObWaitEventHistory::push(
-    const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3)
+int ObWaitEventHistory::push(const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3)
 {
   int ret = OB_SUCCESS;
   if (event_no < 0) {
@@ -181,7 +197,7 @@ int ObWaitEventHistory::push(
   return ret;
 }
 
-int ObWaitEventHistory::add(const ObWaitEventHistory& other)
+int ObWaitEventHistory::add(const ObWaitEventHistory &other)
 {
   int64_t i = 0, j = 0, cnt = 0;
   int16_t N = SESSION_WAIT_HISTORY_CNT;
@@ -213,8 +229,7 @@ int ObWaitEventHistory::add(const ObWaitEventHistory& other)
   return ret;
 }
 
-int ObWaitEventHistory::get_next_and_compare(
-    int64_t& iter_1, int64_t& iter_2, int64_t& cnt, const ObWaitEventHistory& other, ObWaitEventDesc* tmp)
+int ObWaitEventHistory::get_next_and_compare(int64_t &iter_1, int64_t &iter_2, int64_t &cnt, const ObWaitEventHistory &other, ObWaitEventDesc *tmp)
 {
   int64_t tmp_1 = iter_1;
   int64_t tmp_2 = iter_2;
@@ -225,16 +240,16 @@ int ObWaitEventHistory::get_next_and_compare(
   if (iter_1 < 0 || iter_2 < 0 || cnt < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    for (; tmp_1 < item_cnt_; ++tmp_1) {
-      if (0 == items_[(curr_pos_ - 1 - tmp_1 + N) % N].level_) {
+    for(; tmp_1 < item_cnt_; ++tmp_1) {
+      if(0 == items_[(curr_pos_ - 1 - tmp_1 + N) % N].level_) {
         tmp_ret = OB_SUCCESS;
         break;
       }
     }
     if (OB_SUCCESS == tmp_ret) {
       tmp_ret = OB_ITER_END;
-      for (; tmp_2 < other.item_cnt_; ++tmp_2) {
-        if (0 == other.items_[(other.curr_pos_ - 1 - tmp_2 + N) % N].level_) {
+      for(; tmp_2 < other.item_cnt_; ++tmp_2) {
+        if(0 == other.items_[(other.curr_pos_ - 1 - tmp_2 + N) % N].level_) {
           tmp_ret = OB_SUCCESS;
           break;
         }
@@ -261,14 +276,15 @@ int ObWaitEventHistory::get_next_and_compare(
   return ret;
 }
 
-int ObWaitEventHistory::get_iter(ObWaitEventHistoryIter& iter)
+int ObWaitEventHistory::get_iter(ObWaitEventHistoryIter &iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(iter.init(items_, (curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT, item_cnt_))) {}
+  if (OB_FAIL(iter.init(items_, (curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT, item_cnt_))) {
+  }
   return ret;
 }
 
-int ObWaitEventHistory::get_last_wait(ObWaitEventDesc*& item)
+int ObWaitEventHistory::get_last_wait(ObWaitEventDesc *&item)
 {
   int ret = OB_SUCCESS;
   int16_t N = SESSION_WAIT_HISTORY_CNT;
@@ -276,8 +292,7 @@ int ObWaitEventHistory::get_last_wait(ObWaitEventDesc*& item)
   if (0 == item_cnt_) {
     ret = OB_ITEM_NOT_SETTED;
   } else {
-    while (cnt < item_cnt_ && 0 != items_[(curr_pos_ - cnt - 1 + N) % N].level_ &&
-           0 != items_[(curr_pos_ - cnt - 1 + N) % N].wait_end_time_) {
+    while (cnt < item_cnt_ && 0 != items_[(curr_pos_ - cnt - 1 + N) % N].level_ && 0 != items_[(curr_pos_ - cnt - 1 + N) % N].wait_end_time_) {
       cnt++;
     }
     if (cnt < item_cnt_) {
@@ -289,7 +304,7 @@ int ObWaitEventHistory::get_last_wait(ObWaitEventDesc*& item)
   return ret;
 }
 
-int ObWaitEventHistory::get_curr_wait(ObWaitEventDesc*& item)
+int ObWaitEventHistory::get_curr_wait(ObWaitEventDesc *&item)
 {
   int ret = OB_SUCCESS;
   int16_t N = SESSION_WAIT_HISTORY_CNT;
@@ -302,7 +317,7 @@ int ObWaitEventHistory::get_curr_wait(ObWaitEventDesc*& item)
   return ret;
 }
 
-int ObWaitEventHistory::get_accord_event(ObWaitEventDesc*& event_desc)
+int ObWaitEventHistory::get_accord_event(ObWaitEventDesc *&event_desc)
 {
   int ret = OB_SUCCESS;
 
@@ -319,7 +334,7 @@ int ObWaitEventHistory::get_accord_event(ObWaitEventDesc*& event_desc)
   return ret;
 }
 
-int ObWaitEventHistory::calc_wait_time(ObWaitEventDesc*& event_desc)
+int ObWaitEventHistory::calc_wait_time(ObWaitEventDesc *&event_desc)
 {
   int ret = OB_SUCCESS;
 
@@ -331,23 +346,19 @@ int ObWaitEventHistory::calc_wait_time(ObWaitEventDesc*& event_desc)
       }
     }
     if (0 != event_desc->level_) {
-      items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_time_ +=
-          event_desc->wait_time_;
-      if (0 == items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT]
-                   .wait_begin_time_) {
-        items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT]
-            .wait_begin_time_ = event_desc->wait_begin_time_;
+      items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_time_ += event_desc->wait_time_;
+      if (0 == items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_begin_time_) {
+        items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_begin_time_ = event_desc->wait_begin_time_;
       }
-      items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT]
-          .wait_end_time_ = event_desc->wait_end_time_;
+      items_[(current_wait_ + event_desc->parent_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].wait_end_time_ = event_desc->wait_end_time_;
     } else {
       if (0 != event_desc->wait_time_) {
-        curr_pos_ = (curr_pos_ - nest_cnt_ + 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT;
-        item_cnt_ = item_cnt_ + 1 - nest_cnt_;
+        curr_pos_ = (curr_pos_ - nest_cnt_ +1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT;
+        item_cnt_ = item_cnt_ + 1 -nest_cnt_;
         nest_cnt_ = 0;
       } else {
         curr_pos_ = (curr_pos_ - nest_cnt_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT;
-        item_cnt_ = item_cnt_ - nest_cnt_;
+        item_cnt_ = item_cnt_ -nest_cnt_;
         nest_cnt_ = 0;
       }
     }
@@ -367,21 +378,22 @@ void ObWaitEventHistory::reset()
 }
 
 ObDiagnoseSessionInfo::ObDiagnoseSessionInfo()
-    : curr_wait_(),
-      max_wait_(NULL),
-      total_wait_(NULL),
-      event_history_(),
-      event_stats_(),
-      stat_add_stats_(),
-      tenant_id_(0)
-{}
+  : curr_wait_(),
+    max_wait_(NULL),
+    total_wait_(NULL),
+    event_history_(),
+    event_stats_(),
+    stat_add_stats_(),
+    tenant_id_(0)
+{
+}
 
 ObDiagnoseSessionInfo::~ObDiagnoseSessionInfo()
 {
   reset();
 }
 
-int ObDiagnoseSessionInfo::add(ObDiagnoseSessionInfo& other)
+int ObDiagnoseSessionInfo::add(ObDiagnoseSessionInfo &other)
 {
   int ret = OB_SUCCESS;
   lock_.wrlock();
@@ -397,6 +409,7 @@ int ObDiagnoseSessionInfo::add(ObDiagnoseSessionInfo& other)
   return ret;
 }
 
+
 void ObDiagnoseSessionInfo::reset()
 {
   curr_wait_.reset();
@@ -408,36 +421,40 @@ void ObDiagnoseSessionInfo::reset()
   tenant_id_ = 0;
 }
 
-ObWaitEventDesc& ObDiagnoseSessionInfo::get_curr_wait()
+ObWaitEventDesc &ObDiagnoseSessionInfo::get_curr_wait()
 {
   int ret = OB_SUCCESS;
-  ObWaitEventDesc* event_desc = NULL;
+  ObWaitEventDesc *event_desc = NULL;
   if (OB_FAIL(event_history_.get_curr_wait(event_desc))) {
     event_desc = &curr_wait_;
   }
   return *event_desc;
 }
 
-int ObDiagnoseSessionInfo::notify_wait_begin(
-    const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3)
+int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3, const bool is_atomic)
 {
   int ret = OB_SUCCESS;
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (OB_FAIL(event_history_.push(event_no, timeout_ms, p1, p2, p3))) {}
+    if (!is_atomic) {
+      ObActiveSessionGuard::get_stat().event_no_ = event_no;
+      ObActiveSessionGuard::get_stat().id_++;
+    }
+    if (OB_FAIL(event_history_.push(event_no, timeout_ms, p1, p2, p3))) {
+    }
   }
   return ret;
 }
 
-int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo* tenant_info, const bool is_atomic)
+int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo *tenant_info, const bool is_atomic)
 {
   int ret = OB_SUCCESS;
   lock_.wrlock();
-  ObWaitEventDesc* event_desc = NULL;
+  ObWaitEventDesc *event_desc = NULL;
 
   if (OB_FAIL(event_history_.get_accord_event(event_desc))) {
-    // NOTICE: allow OB_ARRAY_OUT_OF_RANGE here, no warning. by duoqiao
+    //NOTICE: allow OB_ARRAY_OUT_OF_RANGE here, no warning. by duoqiao
     ret = OB_ARRAY_OUT_OF_RANGE;
   } else if (OB_ISNULL(event_desc)) {
     ret = OB_ERR_UNEXPECTED;
@@ -453,15 +470,14 @@ int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo* tenant_info, co
         total_wait_->time_waited_ += event_desc->wait_time_;
         ++total_wait_->total_waits_;
       }
-      ObWaitEventStat* event_stat = event_stats_.get(event_desc->event_no_);
-      ObWaitEventStat* tenant_event_stat = tenant_info->get_event_stats().get(event_desc->event_no_);
+      ObWaitEventStat *event_stat = event_stats_.get(event_desc->event_no_);
+      ObWaitEventStat *tenant_event_stat = tenant_info->get_event_stats().get(event_desc->event_no_);
       if (NULL != event_stat && NULL != tenant_event_stat) {
         event_stat->total_waits_++;
         tenant_event_stat->total_waits_++;
         event_stat->time_waited_ += event_desc->wait_time_;
         tenant_event_stat->time_waited_ += event_desc->wait_time_;
-        if (event_desc->timeout_ms_ > 0 &&
-            event_desc->wait_time_ > static_cast<int64_t>(event_desc->timeout_ms_) * 1000) {
+        if (event_desc->timeout_ms_ > 0 && event_desc->wait_time_ > static_cast<int64_t>(event_desc->timeout_ms_) * 1000) {
           event_stat->total_timeouts_++;
           tenant_event_stat->total_timeouts_++;
         }
@@ -473,6 +489,12 @@ int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo* tenant_info, co
         }
       }
     }
+    if (!is_atomic) {
+      //LOG_ERROR("XXXX: end wait", "id", ObActiveSessionGuard::get_stat().id_,
+      //          K(event_desc->wait_time_), K(event_desc->event_no_));
+      ObActiveSessionGuard::get_stat().fixup_last_stat(*event_desc);
+      ObActiveSessionGuard::get_stat().event_no_ = 0;
+    }
   }
   lock_.unlock();
   return ret;
@@ -482,7 +504,7 @@ int ObDiagnoseSessionInfo::inc_stat(const int16_t stat_no)
 {
   int ret = OB_SUCCESS;
   // performance critical, do not lock this critical section
-  ObStatEventAddStat* stat = stat_add_stats_.get(stat_no);
+  ObStatEventAddStat *stat = stat_add_stats_.get(stat_no);
   if (NULL == stat) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -495,7 +517,7 @@ int ObDiagnoseSessionInfo::update_stat(const int16_t stat_no, const int64_t delt
 {
   int ret = OB_SUCCESS;
   // performance critical, do not lock this critical section
-  ObStatEventAddStat* stat = stat_add_stats_.get(stat_no);
+  ObStatEventAddStat *stat = stat_add_stats_.get(stat_no);
   if (NULL == stat) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -504,13 +526,13 @@ int ObDiagnoseSessionInfo::update_stat(const int16_t stat_no, const int64_t delt
   return ret;
 }
 
-inline int ObDiagnoseSessionInfo::set_max_wait(ObWaitEventDesc* max_wait)
+inline int ObDiagnoseSessionInfo::set_max_wait(ObWaitEventDesc *max_wait)
 {
   max_wait_ = max_wait;
   return OB_SUCCESS;
 }
 
-inline int ObDiagnoseSessionInfo::set_total_wait(ObWaitEventStat* total_wait)
+inline int ObDiagnoseSessionInfo::set_total_wait(ObWaitEventStat *total_wait)
 {
   total_wait_ = total_wait;
   return OB_SUCCESS;
@@ -527,13 +549,13 @@ inline int ObDiagnoseSessionInfo::set_tenant_id(uint64_t tenant_id)
   return ret;
 }
 
-ObDiagnoseSessionInfo* ObDiagnoseSessionInfo::get_local_diagnose_info()
+ObDiagnoseSessionInfo *ObDiagnoseSessionInfo::get_local_diagnose_info()
 {
-  ObDiagnoseSessionInfo* di = NULL;
+  ObDiagnoseSessionInfo *di = NULL;
   if (lib::is_diagnose_info_enabled()) {
-    ObDISessionCollect* collect = NULL;
-    ObSessionDIBuffer* buffer = NULL;
-    buffer = ObDITls<ObSessionDIBuffer>::get_instance();
+    ObDISessionCollect *collect = NULL;
+    ObSessionDIBuffer *buffer = NULL;
+    buffer = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer) {
       collect = buffer->get_curr_session();
       if (NULL != collect) {
@@ -545,15 +567,20 @@ ObDiagnoseSessionInfo* ObDiagnoseSessionInfo::get_local_diagnose_info()
   return di;
 }
 
-ObDiagnoseTenantInfo::ObDiagnoseTenantInfo() : event_stats_(), stat_add_stats_(), stat_set_stats_(), latch_stats_()
-{}
+ObDiagnoseTenantInfo::ObDiagnoseTenantInfo()
+  : event_stats_(),
+    stat_add_stats_(),
+    stat_set_stats_(),
+    latch_stats_()
+{
+}
 
 ObDiagnoseTenantInfo::~ObDiagnoseTenantInfo()
 {
   reset();
 }
 
-void ObDiagnoseTenantInfo::add(const ObDiagnoseTenantInfo& other)
+void ObDiagnoseTenantInfo::add(const ObDiagnoseTenantInfo &other)
 {
   event_stats_.add(other.event_stats_);
   stat_add_stats_.add(other.stat_add_stats_);
@@ -561,18 +588,18 @@ void ObDiagnoseTenantInfo::add(const ObDiagnoseTenantInfo& other)
   latch_stats_.add(other.latch_stats_);
 }
 
-void ObDiagnoseTenantInfo::add_wait_event(const ObDiagnoseTenantInfo& other)
+void ObDiagnoseTenantInfo::add_wait_event(const ObDiagnoseTenantInfo &other)
 {
   event_stats_.add(other.event_stats_);
 }
 
-void ObDiagnoseTenantInfo::add_stat_event(const ObDiagnoseTenantInfo& other)
+void ObDiagnoseTenantInfo::add_stat_event(const ObDiagnoseTenantInfo &other)
 {
   stat_add_stats_.add(other.stat_add_stats_);
   stat_set_stats_.add(other.stat_set_stats_);
 }
 
-void ObDiagnoseTenantInfo::add_latch_stat(const ObDiagnoseTenantInfo& other)
+void ObDiagnoseTenantInfo::add_latch_stat(const ObDiagnoseTenantInfo &other)
 {
   latch_stats_.add(other.latch_stats_);
 }
@@ -588,7 +615,7 @@ void ObDiagnoseTenantInfo::reset()
 int ObDiagnoseTenantInfo::inc_stat(const int16_t stat_no)
 {
   int ret = OB_SUCCESS;
-  ObStatEventAddStat* stat = stat_add_stats_.get(stat_no);
+  ObStatEventAddStat *stat = stat_add_stats_.get(stat_no);
   if (NULL == stat) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -600,7 +627,7 @@ int ObDiagnoseTenantInfo::inc_stat(const int16_t stat_no)
 int ObDiagnoseTenantInfo::update_stat(const int16_t stat_no, const int64_t delta)
 {
   int ret = OB_SUCCESS;
-  ObStatEventAddStat* stat = stat_add_stats_.get(stat_no);
+  ObStatEventAddStat *stat = stat_add_stats_.get(stat_no);
   if (NULL == stat) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -612,7 +639,7 @@ int ObDiagnoseTenantInfo::update_stat(const int16_t stat_no, const int64_t delta
 int ObDiagnoseTenantInfo::set_stat(const int16_t stat_no, const int64_t value)
 {
   int ret = OB_SUCCESS;
-  ObStatEventSetStat* stat = stat_set_stats_.get(stat_no - ObStatEventIds::STAT_EVENT_ADD_END - 1);
+  ObStatEventSetStat *stat = stat_set_stats_.get(stat_no - ObStatEventIds::STAT_EVENT_ADD_END -1);
   if (NULL == stat) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -622,14 +649,14 @@ int ObDiagnoseTenantInfo::set_stat(const int16_t stat_no, const int64_t value)
   return ret;
 }
 
-ObDiagnoseTenantInfo* ObDiagnoseTenantInfo::get_local_diagnose_info()
+ObDiagnoseTenantInfo *ObDiagnoseTenantInfo::get_local_diagnose_info()
 {
   int ret = OB_SUCCESS;
-  ObDiagnoseTenantInfo* di = NULL;
+  ObDiagnoseTenantInfo *di = NULL;
   if (lib::is_diagnose_info_enabled()) {
-    ObDITenantCollect* collect = NULL;
-    ObSessionDIBuffer* buffer = NULL;
-    buffer = ObDITls<ObSessionDIBuffer>::get_instance();
+    ObDITenantCollect *collect = NULL;
+    ObSessionDIBuffer *buffer = NULL;
+    buffer = GET_TSI(ObSessionDIBuffer);
     if (NULL != buffer) {
       if (NULL == (collect = buffer->get_curr_tenant())) {
         if (OB_FAIL(buffer->switch_tenant(OB_SYS_TENANT_ID))) {
@@ -645,58 +672,81 @@ ObDiagnoseTenantInfo* ObDiagnoseTenantInfo::get_local_diagnose_info()
   return di;
 }
 
-ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeout_ms, const int64_t p1,
-    const int64_t p2, const int64_t p3, const bool is_atomic)
-    : event_no_(0), wait_begin_time_(0), timeout_ms_(0), is_atomic_(is_atomic)
+ObWaitEventGuard::ObWaitEventGuard(
+  const int64_t event_no,
+  const uint64_t timeout_ms,
+  const int64_t p1,
+  const int64_t p2,
+  const int64_t p3,
+  const bool is_atomic)
+  : event_no_(0),
+    wait_begin_time_(0),
+    timeout_ms_(0),
+    di_(nullptr),
+    is_atomic_(is_atomic)
 {
-  event_no_ = event_no;
-  di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
-  if (NULL != di_) {
-    di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3);
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    need_record_ = true;
+    event_no_ = event_no;
+    di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    if (NULL != di_) {
+      di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3, is_atomic);
+    } else {
+      wait_begin_time_ = ObTimeUtility::current_time();
+      timeout_ms_ = timeout_ms;
+    }
   } else {
-    wait_begin_time_ = ObTimeUtility::current_time();
-    timeout_ms_ = timeout_ms;
+    need_record_ = false;
   }
 }
 
 ObWaitEventGuard::~ObWaitEventGuard()
 {
-  ObDiagnoseTenantInfo* tenant_di = ObDiagnoseTenantInfo::get_local_diagnose_info();
-  if (NULL != di_ && NULL != tenant_di) {
-    di_->notify_wait_end(tenant_di, is_atomic_);
-  } else if (NULL == di_ && NULL != tenant_di && 0 != wait_begin_time_) {
-    ObWaitEventStat* tenant_event_stat = tenant_di->get_event_stats().get(event_no_);
-    tenant_event_stat->total_waits_++;
-    int64_t wait_time = ObTimeUtility::current_time() - wait_begin_time_;
-    tenant_event_stat->time_waited_ += wait_time;
-    if (timeout_ms_ > 0 && wait_time > static_cast<int64_t>(timeout_ms_) * 1000) {
-      tenant_event_stat->total_timeouts_++;
-    }
-    if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
-      tenant_event_stat->max_wait_ = wait_time;
+  int64_t wait_time = 0;
+  if (need_record_) {
+    ObDiagnoseTenantInfo *tenant_di = ObDiagnoseTenantInfo::get_local_diagnose_info();
+    if (NULL != di_ && NULL != tenant_di) {
+      di_->notify_wait_end(tenant_di, is_atomic_);
+    } else if (NULL == di_ && NULL != tenant_di && 0 != wait_begin_time_) {
+      ObWaitEventStat *tenant_event_stat = tenant_di->get_event_stats().get(event_no_);
+      tenant_event_stat->total_waits_++;
+      wait_time = ObTimeUtility::current_time() - wait_begin_time_;
+      tenant_event_stat->time_waited_ += wait_time;
+      if (timeout_ms_ > 0 && wait_time > static_cast<int64_t>(timeout_ms_) * 1000) {
+        tenant_event_stat->total_timeouts_++;
+      }
+      if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
+        tenant_event_stat->max_wait_ = wait_time;
+      }
     }
   }
 }
 
-ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc* max_wait, ObDiagnoseSessionInfo* di) : prev_wait_(NULL), di_(di)
+ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di)
+  : prev_wait_(NULL), di_(di)
 {
-  if (OB_LIKELY(NULL != max_wait)) {
-    max_wait->reset();
-    if (OB_ISNULL(di_)) {
-      di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    need_record_ = true;
+    if (OB_LIKELY(NULL != max_wait)) {
+      max_wait->reset();
+      if (OB_ISNULL(di_)) {
+        di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
+      }
+      if (OB_LIKELY(NULL != di_)) {
+        prev_wait_ = di_->get_max_wait();
+        di_->set_max_wait(max_wait);
+      }
     }
-    if (OB_LIKELY(NULL != di_)) {
-      prev_wait_ = di_->get_max_wait();
-      di_->set_max_wait(max_wait);
-    }
+  } else {
+    need_record_ = false;
   }
 }
 
 ObMaxWaitGuard::~ObMaxWaitGuard()
 {
-  if (OB_LIKELY(NULL != di_)) {
+  if (need_record_ && OB_LIKELY(NULL != di_)) {
     if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventDesc* max_wait = di_->get_max_wait();
+      ObWaitEventDesc *max_wait = di_->get_max_wait();
       if (NULL != max_wait) {
         if (max_wait->wait_time_ > prev_wait_->wait_time_) {
           *prev_wait_ = *max_wait;
@@ -709,25 +759,31 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
   }
 }
 
-ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat* total_wait, ObDiagnoseSessionInfo* di) : prev_wait_(NULL), di_(di)
+ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di)
+  : prev_wait_(NULL), di_(di)
 {
-  if (OB_LIKELY(NULL != total_wait)) {
-    total_wait->reset();
-    if (OB_ISNULL(di_)) {
-      di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    need_record_ = true;
+    if (OB_LIKELY(NULL != total_wait)) {
+      total_wait->reset();
+      if (OB_ISNULL(di_)) {
+        di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
+      }
+      if (OB_LIKELY(NULL != di_)) {
+        prev_wait_ = di_->get_total_wait();
+        di_->set_total_wait(total_wait);
+      }
     }
-    if (OB_LIKELY(NULL != di_)) {
-      prev_wait_ = di_->get_total_wait();
-      di_->set_total_wait(total_wait);
-    }
+  } else {
+    need_record_ = false;
   }
 }
 
 ObTotalWaitGuard::~ObTotalWaitGuard()
 {
-  if (OB_LIKELY(NULL != di_)) {
+  if (need_record_ && OB_LIKELY(NULL != di_)) {
     if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventStat* total_wait = di_->get_total_wait();
+      ObWaitEventStat *total_wait = di_->get_total_wait();
       if (NULL != total_wait) {
         prev_wait_->total_waits_ += total_wait->total_waits_;
         prev_wait_->time_waited_ += total_wait->time_waited_;

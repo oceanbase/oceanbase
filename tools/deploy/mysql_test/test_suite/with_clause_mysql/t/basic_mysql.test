@@ -1,0 +1,766 @@
+# owner: dachuan.sdc
+# owner group: sql2
+# tags: optimizer
+
+--result_format 4
+--disable_warnings
+drop database if exists cte_st;
+--enable_warnings
+create database cte_st;
+use cte_st;
+
+create table t1(c1 int, c2 int, c3 int);
+insert into t1 values(1, 2, 3);
+insert into t1 values(4, 5, 6);
+insert into t1 values(7, 8, 9);
+insert into t1 values(10, 11, 12);
+insert into t1 values(13, 14, 15);
+insert into t1 values(16, 17, 18);
+insert into t1 values(19, 20, 21);
+
+create table t2(c21 int, c22 int, c23 int);
+insert into t2 values(1, 2, 3);
+insert into t2 values(4, 5, 6);
+insert into t2 values(7, 8, 9);
+insert into t2 values(10, 11, 12);
+insert into t2 values(13, 14, 15);
+insert into t2 values(16, 17, 18);
+insert into t2 values(19, 20, 21);
+
+create table t3(c1 int primary key, c2 int) partition by hash(c1) partitions 2;
+insert into t3 values(1, 2);
+insert into t3 values(4, 5);
+insert into t3 values(7, 8);
+insert into t3 values(10, 11);
+insert into t3 values(13, 14);
+insert into t3 values(16, 17);
+
+create table t4(c1 int primary key, c2 int);
+CREATE INDEX i1 ON t4(c2);
+insert into t4 values(11, 2);
+insert into t4 values(14, 5);
+insert into t4 values(17, 8);
+insert into t4 values(110, 11);
+insert into t4 values(113, 14);
+insert into t4 values(116, 17);
+
+create table t5(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 6;
+insert into t5 values(1, 2, 3);
+insert into t5 values(4, 5, 6);
+insert into t5 values(7, 8, 9);
+insert into t5 values(10, 11, 12);
+insert into t5 values(13, 14, 15);
+insert into t5 values(16, 17, 18);
+
+create table emp (id int, name varchar(20), leaderid int);
+insert into emp values(1, 'A', '0');
+insert into emp values(2, 'AA', '1');
+insert into emp values(3, 'AB', '1');
+insert into emp values(4, 'ABA', '3');
+insert into emp values(5, 'AAA', '2');
+insert into emp values(6, 'ABB', '3');
+insert into emp values(7, 'AAA', '5');
+insert into emp values(8, 'AAA', '7');
+insert into emp values(9, 'AAAA', '5');
+insert into emp values(10, 'AAAB', '5');
+insert into emp values(11, 'AAAC', '5');
+insert into emp values(12, 'AAAA', '5');
+
+--echo ##############################
+--echo ##   section one cte定义
+--echo ##   PART 1 定义表名的限制
+--echo ##   PART 2 单个的定义
+--echo ##   PART 3 多个定义
+--echo ##   PART 4 subquery的变化
+--echo ##   section two cte的使用
+--echo ##   PART 1 cte出现在normal型查询语句中
+--echo ##   PART 2 cte出现在set型查询语句中
+--echo ##   PART 3 主查询中含有inline cte
+--echo ##   PART 4 歧义语法
+--echo ##   PART 5 出现方式
+--echo ##   PART 6 定义列的使用
+--echo ##   section three cte能够出现的句式
+--echo ##   PART 1 select for update
+--echo ##   PART 2 insert into
+--echo ##   PART 3 update select
+--echo ##   PART 4 select when
+--echo ##   PART 5 delete from
+--echo ##############################
+
+--echo ##############################
+--echo ##   section one
+--echo ##   PART 1 定义表名的限制
+--echo ##############################
+
+--echo ##   PART 1.1 表名，列名不能是保留关键字，可以是分保留关键字
+--error 1064
+WITH explain as (select 1 from dual) select * from explain;
+
+--error 1064
+WITH cte(explain) as (select 1 from dual) select * from cte;
+
+with cte(name) as (select 1 from dual) select * from cte;
+
+--echo ##   PART 1.2 允许与已有的表重名
+explain basic WITH t4 as (select 1 from dual) select * from t4;
+WITH t4 as (select 1 from dual) select * from t4;
+
+--echo ##############################
+--echo ##   PART 2 单个的定义
+--echo ##############################
+
+--echo ##   PART 2.1 定义列名重复
+--error 5751
+with cte(a,a) as (select 1,1 from dual) select * from cte;
+
+--echo ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
+explain basic with cte(a,b) as (select 1,1 from dual) select * from cte;
+with cte(a,b) as (select 1,1 from dual) select * from cte;
+
+--error 1353
+with cte(a,b) as (select 1 from dual) select * from cte;
+
+--error 1353
+with cte(a,b,c) as (select 1, 2, 3, 4 from dual) select * from cte;
+
+--echo ##   PART 2.2.2 不使用定义列使用原来的列
+--error 1054
+with cte(a,b) as (select c1,c2 from t1) select c1 from cte;
+
+--echo ##############################
+--echo ##   PART 3 多个的定义
+--echo ##############################
+
+--echo ##   PART 3.1 前面的定义引用后面的，后面的引用前面的
+--error 1146
+WITH 
+  cte1 (a, b) AS (SELECT c, d FROM cte2), 
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+
+explain basic with
+  cte1 AS (select c1 from t1),
+  cte2 AS (select c1 from cte1)
+select * from cte1;
+
+with
+  cte1 AS (select c1 from t1),
+  cte2 AS (select c1 from cte1)
+select * from cte1;
+
+--echo ##   PART 3.2.1 直接嵌套定义，MySQL支持这样的直接嵌套
+with
+  cte1 AS (  
+           with cte2 AS (select c1 from t1)
+           select c1 from cte2
+          )
+select c1 from cte1;
+
+with 
+  cte1 (cte1col) AS ( 
+                    with cte2 (cte2col) AS (select c1 from t1)
+                    select cte2col from cte2
+                    )
+select cte1col from cte1;
+
+with 
+  cte1 (cte1col) AS ( 
+                    with cte2 (cte2col1, cte2col2) AS (select c1, c2 from t1)
+                    select cte2col2 from cte2
+                    )
+select cte1col from cte1;
+
+--echo ##   PART 3.2.2 在子查询中进行嵌套
+with cte(a) as (select * from (with cteb(a) as (select 1 from dual) select * from cteb) bac) select * from cte;
+
+--echo ##############################
+--echo ##   PART 4 subquery的变化
+--echo ##############################
+
+--echo ##   PART 4.1.0 subquery的变化
+--echo ##   带有聚合
+explain basic with cte as (select count(*) from t1) select * from cte;
+
+with cte as (select count(*) from t1) select * from cte;
+
+--echo ##   带有where
+explain basic with 
+  cte1 AS ( select c1 as col1 from t1 where c1 > 1)
+select col1 from cte1;
+
+with 
+  cte1 AS ( select c1 as col1 from t1 where c1 > 1)
+select col1 from cte1;
+
+explain basic with 
+  cte1 AS ( select * from t1 where c1+'1'<=3)
+select c1 from cte1;
+
+with 
+  cte1 AS ( select * from t1 where c1+'1'<=3)
+select c1 from cte1;
+
+--echo ##   带有group
+explain basic with
+  cte1 AS ( select 1 as c1, 2 as c2 from t1 group by c1)
+select c1 from cte1;
+with 
+  cte1 AS ( select 1 as c1, 2 as c2 from t1 group by c1)
+select c1 from cte1;
+
+--echo ##   带有having
+explain basic with 
+  cte1 AS ( select c1, c2 from t1 where t1.c1 > 2)
+select c1 from cte1;
+with 
+  cte1 AS ( select c1, c2 from t1 where t1.c1 > 2)
+select c1 from cte1;
+
+--echo ##   带有order
+explain basic with 
+  cte1 AS ( select c1, c2 + 1 as c3 from t1 order by c2)
+select c1 from cte1;
+with 
+  cte1 AS ( select c1, c2 + 1 as c3 from t1 order by c2)
+select c1 from cte1;
+
+explain basic with 
+  cte2 AS (select * from t1 left join t2 on t1.c1=t2.c21 order by t1.c1)
+select c1 from cte2;
+with 
+  cte2 AS (select * from t1 left join t2 on t1.c1=t2.c21 order by t1.c1)
+select c1 from cte2;
+
+--echo ##   PART 4.1.1 normal型＋hint
+--echo ##   index
+--echo ##   use_nl/use_merge/leading
+--echo ##   hint在cte定义里面
+explain basic with
+  cte0 AS (select /*+ use_nl(t1 t2) */ * from t2, t1 where t1.c1 = t2.c21)
+select * from cte0;
+
+with
+  cte0 AS (select /*+ use_nl(t1 t2) */ * from t2, t1 where t1.c1 = t2.c21)
+select * from cte0;
+
+--echo ##   hint对cte定义表进行使用，对比与MySQL的一致
+explain basic with cte0 AS (select * from t2) select /*+ leading(t2 cte0) use_nl(cte0)*/ * from cte0, t1 where cte0.c21 = t1.c1;
+
+with cte0 AS (select * from t2) select /*+ leading(t2 cte0) use_nl(cte0)*/ * from cte0, t1 where cte0.c21 = t1.c1;
+
+--echo ##   PART 4.1.2 里面是一个set operator
+explain basic WITH cte AS
+(
+  SELECT 1 AS col1, 2 AS col2 from dual
+  UNION ALL
+  SELECT 3, 4 from dual
+)
+SELECT col1, col2 FROM cte;
+
+WITH cte AS
+(
+  SELECT 1 AS col1, 2 AS col2 from dual
+  UNION ALL
+  SELECT 3, 4 from dual
+)
+SELECT col1, col2 FROM cte;
+
+explain basic WITH cte AS
+(
+  select c1, c2 from t1
+  UNION all
+  select c21, c22 from t2
+)
+select c1, c2 from cte;
+
+WITH cte AS
+(
+  select c1, c2 from t1
+  UNION all
+  select c21, c22 from t2
+)
+select c1, c2 from cte;
+
+--echo ##   PART 4.1.3 里面是一个where exist(semi join)，顺便测试在cte里面as一个列，在外面使用
+explain basic WITH cte AS
+(
+  select 1 as col from t1 where c1 in (select c1 from t1 where exists( (select 1 from dual) union (select 1 from dual)))
+)
+select * from cte, t1 where t1.c1 = cte.col;
+
+WITH cte AS
+(
+  select 1 as col from t1 where c1 in (select c1 from t1 where exists( (select 1 from dual) union (select 1 from dual)))
+)
+select * from cte, t1 where t1.c1 = cte.col;
+
+--echo ##   PART 4.2 有针对某一个分区的操作
+explain basic with cte0 as (select * from t3 partition(p0)) select cte0.c1 from cte0;
+
+with cte0 as (select * from t3 partition(p0)) select cte0.c1 from cte0;
+
+explain basic with cte as (select * from t5 partition(p0)) select * from cte;
+
+with cte as (select * from t5 partition(p0)) select * from cte;
+
+--echo ##############################
+--echo ##   section two
+--echo ##   PART 1 cte出现在normal型查询语句中
+--echo ##############################
+--echo ##   PART 1.1 最基本用法(单表)
+--echo ##   不定义别名列列表的时候最简单的使用方法
+explain basic WITH
+  cte1 AS (select * from t1)
+select c1, c2, c3 from cte1;
+
+WITH
+  cte1 AS (select * from t1)
+select c1, c2, c3 from cte1;
+
+--echo ##   subquery里面取了别名列，看看主句中能否继续使用
+explain basic with
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select col1 from cte1;
+with 
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select col1 from cte1;
+
+explain basic with
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select * from cte1;
+with
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select * from cte1;
+
+explain basic with
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select col1+3 from cte1;
+with
+  cte1 AS ( select c1 + 1 as col1 from t1)
+select col1+3 from cte1;
+
+--echo ##   这种cte的列其实可能没法用了
+explain basic with 
+  cte AS (select 1 from t1)
+select * from cte;
+with 
+  cte AS (select 1 from t1)
+select * from cte;
+
+--echo ##   主句含有order
+explain basic WITH cte2 AS (select c1 from t1)
+select c1 from cte2 order by c1;
+WITH cte2 AS (select c1 from t1)
+select c1 from cte2 order by c1;
+
+--echo ##   对主句中的cte取别名后看看能否继续使用
+explain basic WITH cte2 AS (select c1 from t1)
+select z1.c1 from cte2 z1, t2 where z1.c1 in (1,4,7,11) and z1.c1 = t2.c21;
+WITH cte2 AS (select c1 from t1)
+select z1.c1 from cte2 z1, t2 where z1.c1 in (1,4,7,11) and z1.c1 = t2.c21;
+
+--echo ##   重命名的列出现在where条件中
+explain basic WITH
+  cte1 AS (SELECT c1 as abc, c2 FROM t1)
+select abc from cte1, t2 where abc in (1,4,7) and cte1.abc = t2.c21;
+WITH
+  cte1 AS (SELECT c1 as abc, c2 FROM t1)
+select abc from cte1, t2 where abc in (1,4,7) and cte1.abc = t2.c21;
+
+--echo ##   重命名的列出现在order+where中
+explain basic WITH
+  cte1 (name1, name2) AS (select c1, c2 from t1)
+select name1 from cte1 where name1 in (1,4,11) order by name2;
+WITH
+  cte1 (name1, name2) AS (select c1, c2 from t1)
+select name1 from cte1 where name1 in (1,4,11) order by name2;
+
+--echo ##   在field list中写了inline，里面使用了cte
+explain basic with cte as (select * from t1) select (select count(*) from cte) from t2;
+with cte as (select * from t1) select (select count(*) from cte) from t2;
+
+--echo ##   在cte在外面使用的时候先被取了别名再使用
+explain basic with cte AS (select c1 from t1) 
+select cte.c1 from cte z1, cte where z1.c1 = cte.c1;
+with cte AS (select c1 from t1) 
+select cte.c1 from cte z1, cte where z1.c1 = cte.c1;
+
+explain basic with cte AS (select c1 from t1) 
+select /*+no_rewrite()*/ cte.c1 from cte z1, cte where z1.c1 = cte.c1;
+with cte AS (select c1 from t1) 
+select /*+no_rewrite()*/ cte.c1 from cte z1, cte where z1.c1 = cte.c1;
+
+--echo ##   join＋having not＋order by
+explain basic with
+  cte1 AS( select * from t1)
+select * from cte1 left join t2 on cte1.c1=t2.c21 where t2.c21 != cte1.c1 order by cte1.c1;
+with
+  cte1 AS( select * from t1)
+select * from cte1 left join t2 on cte1.c1=t2.c21 where t2.c21 != cte1.c1 order by cte1.c1;
+
+--echo ##   对cte使用partition命令
+explain basic WITH cte2 AS (select * from t3)
+select * from cte2 partition(p0);
+WITH cte2 AS (select * from t3)
+select * from cte2 partition(p0);
+
+--echo ##   PART 1.2 最基本用法(多表)
+explain basic WITH 
+  cte1 AS (SELECT c1, c2 FROM t1),
+  cte2 AS (SELECT c21, c22 FROM t2) 
+select c21 from cte2;
+WITH 
+  cte1 AS (SELECT c1, c2 FROM t1),
+  cte2 AS (SELECT c21, c22 FROM t2) 
+select c21 from cte2;
+
+explain basic WITH
+  cte1 (c1)AS(select c1 from t1),
+  cte2 AS (select * from t1)
+select c1, c2, c3 from cte2;
+WITH
+  cte1 (c1)AS(select c1 from t1),
+  cte2 AS (select * from t1)
+select c1, c2, c3 from cte2;
+
+explain basic WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+
+--echo ##   join+order
+explain basic WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select * from cte1 left join cte2 on cte1.a=cte2.c order by cte1.a;
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select * from cte1 left join cte2 on cte1.a=cte2.c order by cte1.a;
+
+--echo ##   子查询＋join
+explain basic WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select t11.c11 as c111 from (select c1 as c11, c2 from t1) t11 join cte2 on t11.c2=cte2.c;
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select t11.c11 as c111 from (select c1 as c11, c2 from t1) t11 join cte2 on t11.c2=cte2.c;
+
+--echo ##   第二个cte的定义引用了第一个cte，主句中两个表做join
+explain basic WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT a, b FROM cte1)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+
+--echo ##   第三cte引用第二个，第二个又引用第一个。结果与MySQL一致。
+explain basic WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT a+1, b-1 FROM cte1),
+  cte3 (e, f) AS (SELECT c*2, d*3 FROM cte2)
+SELECT a, b, e, f FROM cte1 JOIN cte3
+on cte1.a < cte3.e;
+WITH 
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
+  cte2 (c, d) AS (SELECT a+1, b-1 FROM cte1),
+  cte3 (e, f) AS (SELECT c*2, d*3 FROM cte2)
+SELECT a, b, e, f FROM cte1 JOIN cte3
+on cte1.a < cte3.e;
+
+--echo ##   一个cte是对某个特定分区，一个加了hint，主查询做join
+with 
+  cte0 AS (
+          select * from t3 partition(p0)
+          ),
+  cte1 AS (
+          select /*+ index(t4 i1) */ * from t4 where c2 > 0
+          )
+select cte0.c1, cte1.c1 from cte0, cte1 where cte0.c1 = cte1.c1;
+
+--echo ##   cte出现在主查询in子句中，还有exists子句中
+explain basic WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
+
+--echo ##   在上面的基础上加入no rewrite hint
+explain basic WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select /*+no_rewrite()*/ 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select /*+no_rewrite()*/ 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
+
+--echo ##   主查询是left join＋having not+order
+explain basic WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select * from cte1 left join cte2 on cte1.a=cte2.c where cte1.b != cte2.d order by cte1.a;
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select * from cte1 left join cte2 on cte1.a=cte2.c where cte1.b != cte2.d order by cte1.a;
+
+--echo ##############################
+--echo ##   PART 2 cte出现在set型查询语句中
+--echo ##############################
+
+explain basic WITH cte2 AS (select c1 from t1)
+select c1 from cte2
+UNION all
+select c21 from t2;
+WITH cte2 AS (select c1 from t1)
+select c1 from cte2
+UNION all
+select c21 from t2;
+
+explain basic WITH cte2 AS (select c1 from t1)
+select /*+no_rewrite()*/ c1 from cte2
+UNION all
+select c21 from t2;
+WITH cte2 AS (select c1 from t1)
+select /*+no_rewrite()*/ c1 from cte2
+UNION all
+select c21 from t2;
+
+explain basic WITH cte2 AS (select c1 from t1)
+select * from t1 intersect (select * from t2);
+WITH cte2 AS (select c1 from t1)
+select * from t1 intersect (select * from t2);
+
+--echo ##############################
+--echo ##   PART 3 主查询中含有inline cte
+--echo ##############################
+
+--echo ##   PART 3.1 inline cte与外层同名/不同名
+with cte(a) as (select 1 from dual) select * from (with cteb(a) as (select 1 from dual) select * from cteb) abc;
+
+--echo ##   同名，这里应该是查询t1
+explain basic with cte as (select c21 from t2)
+select * from (with cte as (select c1 from t1) select * from cte) t;
+with cte as (select c21 from t2)
+select * from (with cte as (select c1 from t1) select * from cte) t;
+
+--echo ##   不同名，这里应该是查询t2
+explain basic with cte as (select c21 from t2)
+select * from (with cte1 as (select c1 from t1) select * from cte) t;
+with cte as (select c21 from t2)
+select * from (with cte1 as (select c1 from t1) select * from cte) t;
+
+--echo ##   三层，这里应该是查询t3
+explain basic with cte as (select c21 from t2)
+select * from (with cte as (select c1 from t1) select * from (with cte as (select c1 from t3) select * from cte) cte) t;
+with cte as (select c21 from t2)
+select * from (with cte as (select c1 from t1) select * from (with cte as (select c1 from t3) select * from cte) cte) t;
+
+--echo ##   PART 3.2 inline cte引用外层cte
+explain basic with cte as (select 1 from dual) select * from (with cte1 as (select * from cte) select * from cte1);
+with cte as (select 1 from dual) select * from (with cte1 as (select * from cte) select * from cte1);
+
+explain basic WITH cte_outer AS (select * from t2) 
+  select t1.*, t4.* from t1
+left join 
+( select c21,c22 from cte_outer) t4 
+on 
+t4.c21=t1.c1;
+WITH cte_outer AS (select * from t2) 
+  select t1.*, t4.* from t1
+left join 
+( select c21,c22 from cte_outer) t4 
+on 
+t4.c21=t1.c1;
+
+explain basic WITH cte_outer AS (select * from t2)
+select t3.*, t4.* from
+( WITH cte_inner AS (select c1 from t1) select c1 from cte_inner where cte_inner.c1 > 1000) t3
+  left join
+( WITH cte_inner(a, b) AS (select c1,c2 from t1) select c21,c22 from cte_outer where cte_outer.c21 > 1000) t4
+on t4.c21=t3.c1
+order by t4.c22;
+WITH cte_outer AS (select * from t2)
+select t3.*, t4.* from
+( WITH cte_inner AS (select c1 from t1) select c1 from cte_inner where cte_inner.c1 > 1000) t3
+  left join
+( WITH cte_inner(a, b) AS (select c1,c2 from t1) select c21,c22 from cte_outer where cte_outer.c21 > 1000) t4
+on t4.c21=t3.c1
+order by t4.c22;
+
+--echo ##   PART 3.3 inline cte中定义表名与已有表名重名，这里应该是查询了t1才对
+explain basic select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 1000) t;
+select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 1000) t;
+
+--echo ##   PART 3.4 inline cte出现在field list
+explain basic select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000), t2.* from t2;
+select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000), t2.* from t2;
+
+--echo ##   PART 3.5 inline cte之后看看列能否正常使用
+explain basic select t3.* from ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 where t3.c1 > 0;
+select t3.* from ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 where t3.c1 > 0;
+
+explain basic select t3.*, t4.* from 
+(WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 
+  left join 
+(WITH cte(a, b) AS (select c1,c2 from t1) select a,b from cte where cte.a > 1000) t4 
+on t4.a=t3.c1 
+order by t4.b;
+select t3.*, t4.* from 
+(WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 
+  left join 
+(WITH cte(a, b) AS (select c1,c2 from t1) select a,b from cte where cte.a > 1000) t4 
+on t4.a=t3.c1 
+order by t4.b;
+
+--echo ##   PART 3.6 inline cte别名后与外部cte做join
+explain basic with cte as (select * from t1) select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
+with cte as (select * from t1) select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
+
+--error 1146
+select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
+
+--echo #result is correct, last cte is point to t2
+with cte as (select * from t1) select (with cte(col1, col2, col3) as(select * from t2) select count(*) from cte) from t1;
+
+--error 1054
+WITH
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2)
+select t11.c11 as c111 from (with cte3 as(select * from t3) select c1 as c11, c2 from cte1) cte1 join cte2 on t11.c2=cte2.c; 
+
+--echo #result is correct
+WITH   
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),   
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2) 
+select * from (with cte3 as(select * from t3) select c1 as c11, c2 from cte3) cte1 join cte2 on cte1.c11=cte2.c;
+
+--echo #result is correct
+WITH   
+  cte1 (a, b) AS (SELECT c1, c2 FROM t1),   
+  cte2 (c, d) AS (SELECT c21, c22 FROM t2) 
+select * from (with cte2 as(select * from t3) select c1 as c11, c2 from cte2) cte1 join cte2 on cte1.c11=cte2.c;
+
+--echo ##############################
+--echo ##   PART 4 歧义语法
+--echo ##############################
+--echo ##   歧义语法
+--echo ##   with里面的column和select里面的column重名的情况测试
+--echo ##   mysql5.6中alias name不能出现在where子句中，但是可以出现在group by、having、order by子句中
+--echo ##   如果普通列和alias name重复，那么在group by、having子句中优先使用基础列，并汇报WARNNING
+--echo ##   order by子句中，优先使用alias name
+--echo ##   这里需要参考mysql8.0中实际使用结果，考虑with clause中定义表中列与基础列重名时的表现
+
+--echo ##   PART 4.1 cte使用时一列被别名为另外一个同名列并在where clause中使用
+with 
+  cte1 (c22, c21) AS (select c1, c2 from t1) 
+select c22 as c21, c21 from cte1 where c21 = 12;
+
+--echo ##   cte使用时一列被别名为另外一个同名列并在order_by_clause中使用
+--error 1052
+with 
+  cte1 (c22, c21) AS (select c1, c2 from t1) 
+select c22 as c21, c21 from cte1 order by c21;
+
+--echo ##   cte使用时一列被别名为另外一个同名列并在having clause中使用
+--error 1052
+with 
+  cte1 (c22, c21) AS (select c1, c2 from t1) 
+select c22 as c21, c21 from cte1 having c21 > 0;
+
+--echo ##   cte使用时一列被别名为另外一个同名列并在group_by_clause中使用
+--error 1052
+with 
+  cte1 (c22, c21) AS (select c1, c2 from t1) 
+select c22 as c21, c21 from cte1 group by c21;
+--error 1353
+with
+  cte1 (c22, c21) AS (select * from t1)
+select c22 as c21, c21 from cte1 group by c21;
+
+--echo ##   cte的列名已经无法在被使用了，这种用法比较特殊
+explain basic with cte as (select count(*) as k from t1) select * from cte where k = 1;
+with cte as (select count(*) as k from t1) select * from cte where k = 1;
+
+--echo ##############################
+--echo ##   section three
+--echo ##   PART 1 select for update
+--echo ##############################
+
+explain basic WITH
+  cte0 AS ( select * from t1)
+select * from cte0 for update;
+WITH
+  cte0 AS ( select * from t1)
+select * from cte0 for update;
+
+--echo ##############################
+--echo ##   PART 2 insert into
+--echo ##############################
+
+explain basic insert into t1 with cte as (select * from t1) SELECT * FROM cte;
+insert into t1 with cte as (select * from t1) SELECT * FROM cte;
+
+explain basic insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
+insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
+select * from t1;
+
+--echo ##############################
+--echo ##   PART 3 update select
+--echo ##############################
+
+explain basic update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
+update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
+select * from t1;
+
+--echo ##############################
+--echo ##   PART 4 select when
+--echo ##############################
+
+explain basic with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from t1 group by c1 order by c1) select * from cte;
+with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from t1 group by c1 order by c1) select * from cte;
+
+explain basic with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
+with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
+
+--echo ##############################
+--echo ##   PART 5 delete from
+--echo ##############################
+
+explain basic delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t1 )) select * from cte);
+delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t1 )) select * from cte);
+
+explain basic delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select * from cte);
+delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select * from cte);
+
+--echo ##############################
+--echo ##   other
+--echo ##############################
+with cte as (select * from t1) select 1 from dual;
+
+with recursive cte1 as
+(
+  select 1 as c1, 2 as c2, 3 as c3, 4 as c4, 5 as c5, 6 as c6, 7 as c7, 8 as c8, 9 as c9, 10 as c10, 11 as c11, 12 as c12
+  union all
+  select c1+1,c2+1,c3+1,c4+1,c5+1,c6+1,c7+1,c8+1,c9+1,c10+1, c11+1, c12+1 from cte1 where c1 < 10
+)
+select * from cte1;
+
+drop database cte_st;

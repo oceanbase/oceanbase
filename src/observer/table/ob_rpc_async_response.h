@@ -52,14 +52,9 @@ char *ObRpcAsyncResponse<T>::easy_alloc(int64_t size) const
 {
   void *buf = NULL;
   if (OB_ISNULL(req_)) {
-    RPC_OBRPC_LOG(ERROR, "request is invalid", KP(req_));
-  } else if (OB_ISNULL(req_->get_request())
-             || OB_ISNULL(req_->get_request()->ms)
-             || OB_ISNULL(req_->get_request()->ms->pool)) {
-    RPC_OBRPC_LOG(ERROR, "request is invalid", K(req_));
+    RPC_OBRPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "request is invalid", KP(req_));
   } else {
-    buf = easy_pool_alloc(
-        req_->get_request()->ms->pool, static_cast<uint32_t>(size));
+    buf = RPC_REQ_OP.alloc_response_buffer(req_, static_cast<uint32_t>(size));
   }
   return static_cast<char*>(buf);
 }
@@ -88,9 +83,6 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
   if (OB_ISNULL(req_)) {
     ret = common::OB_ERR_NULL_VALUE;
     RPC_OBRPC_LOG(WARN, "req is NULL", K(ret));
-  } else if (OB_ISNULL(req_->get_request())) {
-    ret = common::OB_ERR_NULL_VALUE;
-    RPC_OBRPC_LOG(WARN, "req is NULL", K(ret));
   } else {
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
     // TODO: fufeng, make force_destroy_second as a configure item
@@ -103,8 +95,10 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
     // }
     //copy packet into req buffer
     ObRpcPacketCode pcode = rpc_pkt->get_pcode();
+    ObRpcPacket *packet = NULL;
+    req_->set_trace_point(rpc::ObRequest::OB_EASY_REQUEST_RPC_ASYNC_RSP);
     if (OB_SUCC(ret)) {
-      ObRpcPacket *packet = response_pkt;
+      packet = response_pkt;
       packet->set_pcode(pcode);
       packet->set_chid(rpc_pkt->get_chid());
       packet->set_session_id(0);  // not stream
@@ -121,11 +115,9 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
         packet->set_bad_routing();
       }
       packet->calc_checksum();
-      req_->get_request()->opacket = packet;
     }
     //just set request retcode, wakeup in ObSingleServer::handlePacketQueue()
-    req_->set_request_rtcode(EASY_OK);
-    obmysql::ObMySQLRequestUtils::wakeup_request(req_);
+    RPC_REQ_OP.response_result(req_, packet);
   }
   return ret;
 }
@@ -162,26 +154,33 @@ int ObRpcAsyncResponse<T>::response(const int retcode)
       }
     }
 
+    common::ObDataBuffer data_buf;
+    uint32_t rpc_header_size = static_cast<uint32_t>(obrpc::ObRpcPacket::get_header_size());
+    uint32_t ez_rpc_header_size = OB_NET_HEADER_LENGTH + rpc_header_size;
     int64_t content_size = common::serialization::encoded_length(result_) +
         common::serialization::encoded_length(rcode);
 
-    char *buf = NULL;
+    char *pkt_buf = NULL;
     if (OB_FAIL(ret)) {
       //do nothing
     } else if (content_size > common::OB_MAX_PACKET_LENGTH) {
       ret = common::OB_RPC_PACKET_TOO_LONG;
       RPC_OBRPC_LOG(WARN, "response content size bigger than OB_MAX_PACKET_LENGTH", K(ret));
     } else {
-      //allocate memory from easy
-      //[ ObRpcPacket ... ObDatabuffer ... serilized content ...]
-      int64_t size = (content_size) + sizeof (common::ObDataBuffer) + sizeof(ObRpcPacket);
-      buf = static_cast<char*>(easy_alloc(size));
-      if (NULL == buf) {
+      /*
+       *                   RPC response packet buffer format
+       *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       *  |  ObRpcPacket  |  easy header |  RPC header  | rcode | RPC response |
+       *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       */
+      int64_t pkt_buf_size = sizeof(ObRpcPacket) + ez_rpc_header_size + content_size;
+      pkt_buf = static_cast<char*>(easy_alloc(pkt_buf_size));
+      if (NULL == pkt_buf) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        RPC_OBRPC_LOG(WARN, "allocate rpc data buffer fail", K(ret), K(size));
+        RPC_OBRPC_LOG(WARN, "allocate rpc data buffer fail", K(ret), K(pkt_buf_size));
       } else {
-        using_buffer_ = new (buf + sizeof(ObRpcPacket)) common::ObDataBuffer();
-        if (!(using_buffer_->set_data(buf + sizeof(ObRpcPacket) + sizeof (*using_buffer_),
+        using_buffer_ = &data_buf;
+        if (!(using_buffer_->set_data(pkt_buf + sizeof(ObRpcPacket) + ez_rpc_header_size,
             content_size))) {
           ret = common::OB_INVALID_ARGUMENT;
           RPC_OBRPC_LOG(WARN, "invalid parameters", K(ret));
@@ -218,7 +217,7 @@ int ObRpcAsyncResponse<T>::response(const int retcode)
     }
 
     if (OB_SUCC(ret)) {
-      ObRpcPacket *pkt = new (buf) ObRpcPacket();
+      ObRpcPacket *pkt = new (pkt_buf) ObRpcPacket();
       //Response rsp(sessid, is_stream_, is_last, pkt);
       pkt->set_content(using_buffer_->get_data(), using_buffer_->get_position());
       if (OB_FAIL(do_response(pkt, bad_routing))) {

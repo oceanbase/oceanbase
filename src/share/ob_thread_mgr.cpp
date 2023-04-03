@@ -12,46 +12,44 @@
 
 #include "share/ob_thread_mgr.h"
 #include "lib/thread/thread_mgr.h"
-#include "share/partition_table/ob_partition_location_cache.h"
-#include "sql/executor/ob_distributed_scheduler.h"
-#include "clog/ob_log_scan_runnable.h"
-#include "clog/ob_clog_config.h"
-#include "clog/ob_clog_mgr.h"
-#include "clog/ob_remote_log_query_engine.h"
-#include "clog/ob_clog_history_reporter.h"
-#include "storage/transaction/ob_clog_adapter.h"
-#include "storage/transaction/ob_trans_service.h"
-#include "storage/ob_build_index_scheduler.h"
-#include "storage/transaction/ob_gts_worker.h"
-#include "storage/replayengine/ob_log_replay_engine.h"
-#include "storage/ob_replay_status.h"
+#include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_ts_worker.h"
+#include "storage/tx_storage/ob_ls_freeze_thread.h"
+#include "storage/tx_storage/ob_ls_cb_queue_thread.h"
 #include "rootserver/ob_index_builder.h"
-#include "observer/ob_sstable_checksum_updater.h"
 #include "observer/ob_srv_deliver.h"
+#include "logservice/palf/log_io_task_cb_thread_pool.h"
+#include "logservice/palf/log_io_worker.h"
+#include "logservice/palf/log_define.h"
+#include "logservice/palf/fetch_log_engine.h"
+#include "logservice/rcservice/ob_role_change_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 void ob_init_create_func()
 {
-#define TG_DEF(id, name, desc, scope, type, args...)            \
-  lib::create_funcs_[lib::TGDefIDs::id] = []() {                \
-    auto ret = OB_NEW(TGCLSMap<TGType::type>::CLS, "tg", args); \
-    ret->attr_ = {#name, desc, TGScope::scope, TGType::type};   \
-    return ret;                                                 \
-  };
-#include "share/ob_thread_define.h"
-#undef TG_DEF
+  #define TG_DEF(id, name, desc, scope, type, args...)                 \
+    lib::create_funcs_[lib::TGDefIDs::id] = []() {                     \
+      auto ret = OB_NEW(TGCLSMap<TGType::type>::CLS, "tg", args);      \
+      ret->attr_ = {#name, desc, TGScope::scope, TGType::type};        \
+      return ret;                                                      \
+    };
+  #include "share/ob_thread_define.h"
+  #undef TG_DEF
 }
-}  // end of namespace share
+} // end of namespace share
 
-namespace lib {
+namespace lib
+{
 void init_create_func()
 {
   lib_init_create_func();
   share::ob_init_create_func();
 }
-}  // namespace lib
+}
 
-}  // end of namespace oceanbase
+} // end of namespace oceanbase

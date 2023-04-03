@@ -21,11 +21,9 @@ class ObExprCrc32 : public ObFuncExprOperator {
 public:
   explicit ObExprCrc32(common::ObIAllocator& alloc);
   virtual ~ObExprCrc32(){};
-  static int calc_crc32(common::ObObj& obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx);
 
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
 
-  virtual int calc_result1(common::ObObj& obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_crc32_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 

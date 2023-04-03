@@ -15,221 +15,228 @@
 
 #include "rpc/ob_packet.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
 #define OBPROXY_MYSQL_CMD_START 64
+#define PREXECUTE_CMD 161
 
-static const int64_t OB_MYSQL_MAX_PACKET_LENGTH = (1L << 24);  // 3bytes , 16M
+static const int64_t OB_MYSQL_MAX_PACKET_LENGTH = (1L << 24); //3bytes , 16M
 static const int64_t OB_MYSQL_MAX_PAYLOAD_LENGTH = (OB_MYSQL_MAX_PACKET_LENGTH - 1);
 // EASY_IO_BUFFER_SIZE is 16k, reserve 3k for libeasy header and request
-static const int64_t OB_MULTI_RESPONSE_BUF_SIZE = (1L << 14) - 3 * 1024;  // 13k, for result
-static const int64_t OB_ONE_RESPONSE_BUF_SIZE = (1L << 14);               // 16k, error/ok(proxy)
+static const int64_t OB_MULTI_RESPONSE_BUF_SIZE = (1L << 14) - 3 * 1024; //13k, for result
+static const int64_t OB_ONE_RESPONSE_BUF_SIZE = (1L << 14); //16k, error/ok(proxy)
 
-enum ObMySQLCmd {
-  OB_MYSQL_COM_SLEEP,
-  OB_MYSQL_COM_QUIT,
-  OB_MYSQL_COM_INIT_DB,
-  OB_MYSQL_COM_QUERY,
-  OB_MYSQL_COM_FIELD_LIST,
+enum ObMySQLCmd
+{
+  COM_SLEEP,
+  COM_QUIT,
+  COM_INIT_DB,
+  COM_QUERY,
+  COM_FIELD_LIST,
 
-  OB_MYSQL_COM_CREATE_DB,
-  OB_MYSQL_COM_DROP_DB,
-  OB_MYSQL_COM_REFRESH,
-  OB_MYSQL_COM_SHUTDOWN,
-  OB_MYSQL_COM_STATISTICS,
+  COM_CREATE_DB,
+  COM_DROP_DB,
+  COM_REFRESH,
+  COM_SHUTDOWN,
+  COM_STATISTICS,
 
-  OB_MYSQL_COM_PROCESS_INFO,
-  OB_MYSQL_COM_CONNECT,
-  OB_MYSQL_COM_PROCESS_KILL,
-  OB_MYSQL_COM_DEBUG,
-  OB_MYSQL_COM_PING,
+  COM_PROCESS_INFO,
+  COM_CONNECT,
+  COM_PROCESS_KILL,
+  COM_DEBUG,
+  COM_PING,
 
-  OB_MYSQL_COM_TIME,
-  OB_MYSQL_COM_DELAYED_INSERT,
-  OB_MYSQL_COM_CHANGE_USER,
-  OB_MYSQL_COM_BINLOG_DUMP,
+  COM_TIME,
+  COM_DELAYED_INSERT,
+  COM_CHANGE_USER,
+  COM_BINLOG_DUMP,
 
-  OB_MYSQL_COM_TABLE_DUMP,
-  OB_MYSQL_COM_CONNECT_OUT,
-  OB_MYSQL_COM_REGISTER_SLAVE,
+  COM_TABLE_DUMP,
+  COM_CONNECT_OUT,
+  COM_REGISTER_SLAVE,
 
-  OB_MYSQL_COM_STMT_PREPARE,
-  OB_MYSQL_COM_STMT_EXECUTE,
-  OB_MYSQL_COM_STMT_SEND_LONG_DATA,
-  OB_MYSQL_COM_STMT_CLOSE,
+  COM_STMT_PREPARE,
+  COM_STMT_EXECUTE,
+  COM_STMT_SEND_LONG_DATA,
+  COM_STMT_CLOSE,
 
-  OB_MYSQL_COM_STMT_RESET,
-  OB_MYSQL_COM_SET_OPTION,
-  OB_MYSQL_COM_STMT_FETCH,
-  OB_MYSQL_COM_DAEMON,
+  COM_STMT_RESET,
+  COM_SET_OPTION,
+  COM_STMT_FETCH,
+  COM_DAEMON,
 
-  OB_MYSQL_COM_BINLOG_DUMP_GTID,
+  COM_BINLOG_DUMP_GTID,
 
-  // COM_RESET_CONNECTION,
-  OB_MYSQL_COM_END,
+  COM_RESET_CONNECTION,
+  COM_END,
+
 
   // for obproxy
-  // OB_MYSQL_COM_DELETE_SESSION is not a standard mysql package type. This is a package used to process delete session
-  // When the connection is disconnected, the session needs to be deleted, but at this time it may not be obtained in
-  // the callback function disconnect Session lock, at this time, an asynchronous task will be added to the obmysql
-  // queue
-  OB_MYSQL_COM_DELETE_SESSION = OBPROXY_MYSQL_CMD_START,
-  // OB_MYSQL_COM_HANDSHAKE and OB_MYSQL_COM_LOGIN are not standard mysql package types, they are used in ObProxy
-  // OB_MYSQL_COM_HANDSHAKE represents client---->on_connect && observer--->hand shake or error
-  // OB_MYSQL_COM_LOGIN represents client---->hand shake response && observer---> ok or error
-  OB_MYSQL_COM_HANDSHAKE,
-  OB_MYSQL_COM_LOGIN,
-  OB_MYSQL_COM_MAX_NUM
+  // COM_DELETE_SESSION is not a standard mysql package type. This is a package used to process delete session
+  // When the connection is disconnected, the session needs to be deleted, but at this time it may not be obtained in the callback function disconnect
+  // Session lock, at this time, an asynchronous task will be added to the obmysql queue
+  COM_DELETE_SESSION = OBPROXY_MYSQL_CMD_START,
+  // COM_HANDSHAKE and COM_LOGIN are not standard mysql package types, they are used in ObProxy
+  // COM_HANDSHAKE represents client---->on_connect && observer--->hand shake or error
+  // COM_LOGIN represents client---->hand shake response && observer---> ok or error
+  COM_HANDSHAKE,
+  COM_LOGIN,
+
+  COM_STMT_PREXECUTE = PREXECUTE_CMD,
+  COM_STMT_SEND_PIECE_DATA,
+  COM_STMT_GET_PIECE_DATA,
+  COM_MAX_NUM
 };
 
-union ObServerStatusFlags {
-  ObServerStatusFlags() : flags_(0)
-  {}
-  explicit ObServerStatusFlags(uint16_t flag) : flags_(flag)
-  {}
+enum class ObMySQLPacketType
+{
+  INVALID_PKT = 0,
+  PKT_MYSQL,     // 1 -> mysql packet;
+  PKT_OKP,       // 2 -> okp;
+  PKT_ERR,       // 3 -> error packet;
+  PKT_EOF,       // 4 -> eof packet;
+  PKT_ROW,       // 5 -> row packet;
+  PKT_FIELD,     // 6 -> field packet;
+  PKT_PIECE,     // 7 -> piece packet;
+  PKT_STR,       // 8 -> string packet;
+  PKT_PREPARE,   // 9 -> prepare packet;
+  PKT_RESHEAD,   // 10 -> result header packet
+  PKT_PREXEC,    // 11 -> prepare execute packet;
+  PKT_END        // 12 -> end of packet type
+};
+
+union ObServerStatusFlags
+{
+  ObServerStatusFlags() : flags_(0) {}
+  explicit ObServerStatusFlags(uint16_t flag) : flags_(flag) {}
   uint16_t flags_;
-  // ref:http://dev.mysql.com/doc/internals/en/status-flags.html
-  struct ServerStatusFlags {
-    uint16_t OB_SERVER_STATUS_IN_TRANS : 1;                 // a transaction is active
-    uint16_t OB_SERVER_STATUS_AUTOCOMMIT : 1;               // auto-commit is enabled
-    uint16_t OB_SERVER_STATUS_RESERVED_OR_ORACLE_MODE : 1;  // used for oracle_mode for login, reserved for other case
-    uint16_t OB_SERVER_MORE_RESULTS_EXISTS : 1;
-    uint16_t OB_SERVER_STATUS_NO_GOOD_INDEX_USED : 1;
-    uint16_t OB_SERVER_STATUS_NO_INDEX_USED : 1;
+  //ref:http://dev.mysql.com/doc/internals/en/status-flags.html
+  struct ServerStatusFlags
+  {
+    uint16_t OB_SERVER_STATUS_IN_TRANS:             1;  // a transaction is active
+    uint16_t OB_SERVER_STATUS_AUTOCOMMIT:           1;  // auto-commit is enabled
+    uint16_t OB_SERVER_STATUS_RESERVED_OR_ORACLE_MODE: 1;  // used for oracle_mode for login, reserved for other case
+    uint16_t OB_SERVER_MORE_RESULTS_EXISTS:         1;
+    uint16_t OB_SERVER_STATUS_NO_GOOD_INDEX_USED:   1;
+    uint16_t OB_SERVER_STATUS_NO_INDEX_USED:        1;
     // used by Binary Protocol Resultset to signal that
-    // OB_MYSQL_COM_STMT_FETCH has to be used to fetch the row-data.
-    uint16_t OB_SERVER_STATUS_CURSOR_EXISTS : 1;
-    uint16_t OB_SERVER_STATUS_LAST_ROW_SENT : 1;
-    uint16_t OB_SERVER_STATUS_DB_DROPPED : 1;
-    uint16_t OB_SERVER_STATUS_NO_BACKSLASH_ESCAPES : 1;
-    uint16_t OB_SERVER_STATUS_METADATA_CHANGED : 1;
-    uint16_t OB_SERVER_QUERY_WAS_SLOW : 1;
-    uint16_t OB_SERVER_PS_OUT_PARAMS : 1;
-    uint16_t OB_SERVER_STATUS_IN_TRANS_READONLY : 1;  // in a read-only transaction
-    uint16_t OB_SERVER_SESSION_STATE_CHANGED : 1;     // connection state information has changed
+    // COM_STMT_FETCH has to be used to fetch the row-data.
+    uint16_t OB_SERVER_STATUS_CURSOR_EXISTS:        1;
+    uint16_t OB_SERVER_STATUS_LAST_ROW_SENT:        1;
+    uint16_t OB_SERVER_STATUS_DB_DROPPED:           1;
+    uint16_t OB_SERVER_STATUS_NO_BACKSLASH_ESCAPES: 1;
+    uint16_t OB_SERVER_STATUS_METADATA_CHANGED:     1;
+    uint16_t OB_SERVER_QUERY_WAS_SLOW:              1;
+    uint16_t OB_SERVER_PS_OUT_PARAMS:               1;
+    uint16_t OB_SERVER_STATUS_IN_TRANS_READONLY:    1;  // in a read-only transaction
+    uint16_t OB_SERVER_SESSION_STATE_CHANGED:       1;  // connection state information has changed
   } status_flags_;
 };
 
 // used for proxy, OCJ and observer to negotiate new features
-union ObProxyCapabilityFlags {
-  ObProxyCapabilityFlags() : capability_(0)
-  {}
-  explicit ObProxyCapabilityFlags(uint64_t cap) : capability_(cap)
-  {}
-  bool is_checksum_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_CHECKSUM;
-  }
-  bool is_safe_weak_read_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_SAFE_WEAK_READ;
-  }
-  bool is_priority_hit_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_PRIORITY_HIT;
-  }
-  bool is_checksum_swittch_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_CHECKSUM_SWITCH;
-  }
-  bool is_extra_ok_packet_for_statistics_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_EXTRA_OK_PACKET_FOR_STATISTICS;
-  }
-  bool is_cap_used() const
-  {
-    return 0 != capability_;
-  }
-  bool is_extra_ok_packet_for_ocj_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_EXTRA_OK_PACKET_FOR_OCJ;
-  }
-  bool is_ob_protocol_v2_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2;
-  }
-  bool is_abundant_feedback_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_ABUNDANT_FEEDBACK;
-  }
-  bool is_pl_route_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_PL_ROUTE;
-  }
-  bool is_proxy_reroute_support() const
-  {
-    return 1 == cap_flags_.OB_CAP_PROXY_REROUTE;
-  }
+union ObProxyCapabilityFlags
+{
+  ObProxyCapabilityFlags() : capability_(0) {}
+  explicit ObProxyCapabilityFlags(uint64_t cap) : capability_(cap) {}
+  bool is_checksum_support() const { return 1 == cap_flags_.OB_CAP_CHECKSUM; }
+  bool is_safe_weak_read_support() const { return 1 == cap_flags_.OB_CAP_SAFE_WEAK_READ; }
+  bool is_priority_hit_support() const { return 1 == cap_flags_.OB_CAP_PRIORITY_HIT; }
+  bool is_checksum_swittch_support() const { return 1 == cap_flags_.OB_CAP_CHECKSUM_SWITCH; }
+  bool is_extra_ok_packet_for_statistics_support() const { return 1 == cap_flags_.OB_CAP_EXTRA_OK_PACKET_FOR_STATISTICS; }
+  bool is_cap_used() const { return 0 != capability_; }
+  bool is_extra_ok_packet_for_ocj_support() const { return 1 == cap_flags_.OB_CAP_EXTRA_OK_PACKET_FOR_OCJ; }
+  bool is_ob_protocol_v2_support() const { return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2; }
+  bool is_abundant_feedback_support() const { return 1 == cap_flags_.OB_CAP_ABUNDANT_FEEDBACK; }
+  bool is_pl_route_support() const { return 1 == cap_flags_.OB_CAP_PL_ROUTE; }
+  bool is_proxy_reroute_support() const { return 1 == cap_flags_.OB_CAP_PROXY_REROUTE; }
+  bool is_full_link_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING
+                                                        && is_ob_protocol_v2_support(); }
+  bool is_new_extra_info_support() const { return 1 == cap_flags_.OB_CAP_PROXY_NEW_EXTRA_INFO
+                                                        && is_ob_protocol_v2_support(); }
+  bool is_session_var_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC
+                                                        && is_ob_protocol_v2_support(); }
+  bool is_weak_stale_feedback() const { return 1 == cap_flags_.OB_CAP_PROXY_WEAK_STALE_FEEDBACK; }
 
   uint64_t capability_;
-  struct CapabilityFlags {
-    uint64_t OB_CAP_PARTITION_TABLE : 1;
-    uint64_t OB_CAP_CHANGE_USER : 1;
-    uint64_t OB_CAP_READ_WEAK : 1;
-    uint64_t OB_CAP_CHECKSUM : 1;
-    uint64_t OB_CAP_SAFE_WEAK_READ : 1;
-    uint64_t OB_CAP_PRIORITY_HIT : 1;
-    uint64_t OB_CAP_CHECKSUM_SWITCH : 1;
-    uint64_t OB_CAP_EXTRA_OK_PACKET_FOR_OCJ : 1;
+  struct CapabilityFlags
+  {
+    uint64_t OB_CAP_PARTITION_TABLE:                   1;
+    uint64_t OB_CAP_CHANGE_USER:                       1;
+    uint64_t OB_CAP_READ_WEAK:                         1;
+    uint64_t OB_CAP_CHECKSUM:                          1;
+    uint64_t OB_CAP_SAFE_WEAK_READ:                    1;
+    uint64_t OB_CAP_PRIORITY_HIT:                      1;
+    uint64_t OB_CAP_CHECKSUM_SWITCH:                   1;
+    uint64_t OB_CAP_EXTRA_OK_PACKET_FOR_OCJ:           1;
     // used since oceanbase 2.0 and aimed to replace mysql compress protocol for its low performance
-    uint64_t OB_CAP_OB_PROTOCOL_V2 : 1;
-    // whether following an extra ok packet at the end of OB_MYSQL_COM_STATISTICS response
-    uint64_t OB_CAP_EXTRA_OK_PACKET_FOR_STATISTICS : 1;
+    uint64_t OB_CAP_OB_PROTOCOL_V2:                    1;
+    // whether following an extra ok packet at the end of COM_STATISTICS response
+    uint64_t OB_CAP_EXTRA_OK_PACKET_FOR_STATISTICS:    1;
     // for more abundant inforation in feedback
-    uint64_t OB_CAP_ABUNDANT_FEEDBACK : 1;
+    uint64_t OB_CAP_ABUNDANT_FEEDBACK:                 1;
     // for pl route
-    uint64_t OB_CAP_PL_ROUTE : 1;
+    uint64_t OB_CAP_PL_ROUTE:                          1;
 
-    uint64_t OB_CAP_PROXY_REROUTE : 1;
+    uint64_t OB_CAP_PROXY_REROUTE:                     1;
 
-    uint64_t OB_CAP_RESERVED_NOT_USE : 51;
+    // for session_info sync
+    uint64_t OB_CAP_PROXY_SESSIOIN_SYNC:               1;
+    // for full trace_route
+    uint64_t OB_CAP_PROXY_FULL_LINK_TRACING:           1;
+    uint64_t OB_CAP_PROXY_NEW_EXTRA_INFO:              1;
+    uint64_t OB_CAP_PROXY_SESSION_VAR_SYNC:            1;
+    uint64_t OB_CAP_PROXY_WEAK_STALE_FEEDBACK:         1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 46;
   } cap_flags_;
 };
 
-union ObMySQLCapabilityFlags {
-  ObMySQLCapabilityFlags() : capability_(0)
-  {}
-  explicit ObMySQLCapabilityFlags(uint32_t cap) : capability_(cap)
-  {}
+union ObMySQLCapabilityFlags
+{
+  ObMySQLCapabilityFlags() : capability_(0) {}
+  explicit ObMySQLCapabilityFlags(uint32_t cap) : capability_(cap) {}
   uint32_t capability_;
-  // ref:http://dev.mysql.com/doc/internals/en/capability-flags.html
-  struct CapabilityFlags {
-    uint32_t OB_CLIENT_LONG_PASSWORD : 1;
-    uint32_t OB_CLIENT_FOUND_ROWS : 1;
-    uint32_t OB_CLIENT_LONG_FLAG : 1;
-    uint32_t OB_CLIENT_CONNECT_WITH_DB : 1;
-    uint32_t OB_CLIENT_NO_SCHEMA : 1;
-    uint32_t OB_CLIENT_COMPRESS : 1;
-    uint32_t OB_CLIENT_ODBC : 1;
-    uint32_t OB_CLIENT_LOCAL_FILES : 1;
-    uint32_t OB_CLIENT_IGNORE_SPACE : 1;
-    uint32_t OB_CLIENT_PROTOCOL_41 : 1;
-    uint32_t OB_CLIENT_INTERACTIVE : 1;
-    uint32_t OB_CLIENT_SSL : 1;
-    uint32_t OB_CLIENT_IGNORE_SIGPIPE : 1;
-    uint32_t OB_CLIENT_TRANSACTIONS : 1;
-    uint32_t OB_CLIENT_RESERVED : 1;
-    uint32_t OB_CLIENT_SECURE_CONNECTION : 1;
-    uint32_t OB_CLIENT_MULTI_STATEMENTS : 1;
-    uint32_t OB_CLIENT_MULTI_RESULTS : 1;
-    uint32_t OB_CLIENT_PS_MULTI_RESULTS : 1;
-    uint32_t OB_CLIENT_PLUGIN_AUTH : 1;
-    uint32_t OB_CLIENT_CONNECT_ATTRS : 1;
-    uint32_t OB_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA : 1;
-    uint32_t OB_CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS : 1;
-    uint32_t OB_CLIENT_SESSION_TRACK : 1;
-    uint32_t OB_CLIENT_DEPRECATE_EOF : 1;
-    uint32_t OB_CLIENT_RESERVED_NOT_USE : 2;
-    uint32_t OB_CLIENT_SUPPORT_ORACLE_MODE : 1;
-    uint32_t OB_CLIENT_RETURN_HIDDEN_ROWID : 1;
-    uint32_t OB_CLIENT_USE_LOB_LOCATOR : 1;
-    uint32_t OB_CLIENT_SSL_VERIFY_SERVER_CERT : 1;
-    uint32_t OB_CLIENT_REMEMBER_OPTIONS : 1;
+  //ref:http://dev.mysql.com/doc/internals/en/capability-flags.html
+  struct CapabilityFlags
+  {
+    uint32_t OB_CLIENT_LONG_PASSWORD:                   1;
+    uint32_t OB_CLIENT_FOUND_ROWS:                      1;
+    uint32_t OB_CLIENT_LONG_FLAG:                       1;
+    uint32_t OB_CLIENT_CONNECT_WITH_DB:                 1;
+    uint32_t OB_CLIENT_NO_SCHEMA:                       1;
+    uint32_t OB_CLIENT_COMPRESS:                        1;
+    uint32_t OB_CLIENT_ODBC:                            1;
+    uint32_t OB_CLIENT_LOCAL_FILES:                     1;
+    uint32_t OB_CLIENT_IGNORE_SPACE:                    1;
+    uint32_t OB_CLIENT_PROTOCOL_41:                     1;
+    uint32_t OB_CLIENT_INTERACTIVE:                     1;
+    uint32_t OB_CLIENT_SSL:                             1;
+    uint32_t OB_CLIENT_IGNORE_SIGPIPE:                  1;
+    uint32_t OB_CLIENT_TRANSACTIONS:                    1;
+    uint32_t OB_CLIENT_RESERVED:                        1;
+    uint32_t OB_CLIENT_SECURE_CONNECTION:               1;
+    uint32_t OB_CLIENT_MULTI_STATEMENTS:                1;
+    uint32_t OB_CLIENT_MULTI_RESULTS:                   1;
+    uint32_t OB_CLIENT_PS_MULTI_RESULTS:                1;
+    uint32_t OB_CLIENT_PLUGIN_AUTH:                     1;
+    uint32_t OB_CLIENT_CONNECT_ATTRS:                   1;
+    uint32_t OB_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA:  1;
+    uint32_t OB_CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS:    1;
+    uint32_t OB_CLIENT_SESSION_TRACK:                   1;
+    uint32_t OB_CLIENT_DEPRECATE_EOF:                   1;
+    uint32_t OB_CLIENT_RESERVED_NOT_USE:                2;
+    uint32_t OB_CLIENT_SUPPORT_ORACLE_MODE:             1;
+    uint32_t OB_CLIENT_RETURN_HIDDEN_ROWID:             1;
+    uint32_t OB_CLIENT_USE_LOB_LOCATOR:                 1;
+    uint32_t OB_CLIENT_SSL_VERIFY_SERVER_CERT:          1;
+    uint32_t OB_CLIENT_REMEMBER_OPTIONS:                1;
   } cap_flags_;
 };
 
-enum ObClientCapabilityPos {
+enum ObClientCapabilityPos
+{
   OB_CLIENT_LONG_PASSWORD_POS = 0,
   OB_CLIENT_FOUND_ROWS_POS,
   OB_CLIENT_LONG_FLAG_POS,
@@ -255,7 +262,7 @@ enum ObClientCapabilityPos {
   OB_CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS_POS,
   OB_CLIENT_SESSION_TRACK_POS,
   OB_CLIENT_DEPRECATE_EOF_POS,
-  // RESERVED 2
+  //RESERVED 2
   OB_CLIENT_SUPPORT_ORACLE_MODE_POS = 27,
   OB_CLIENT_RETURN_ROWID_POS = 28,
   OB_CLIENT_USE_LOB_LOCATOR_POS = 29,
@@ -263,7 +270,8 @@ enum ObClientCapabilityPos {
   OB_CLIENT_REMEMBER_OPTIONS_POS = 31,
 };
 
-enum ObServerStatusFlagsPos {
+enum ObServerStatusFlagsPos
+{
   OB_SERVER_STATUS_IN_TRANS_POS = 0,
   OB_SERVER_STATUS_AUTOCOMMIT_POS,
   OB_SERVER_STATUS_RESERVED_OR_ORACLE_MODE_POS,
@@ -281,36 +289,37 @@ enum ObServerStatusFlagsPos {
   OB_SERVER_SESSION_STATE_CHANGED_POS,
 };
 
-char const* get_mysql_cmd_str(ObMySQLCmd mysql_cmd);
+char const *get_mysql_cmd_str(ObMySQLCmd mysql_cmd);
 
-// http://dev.mysql.com/doc/refman/5.7/en/information-functions.html#function_current-user
-enum ObInformationFunctions {
-  BENCHMARK_FUNC = 0,   // Repeatedly execute an expression
-  CHARSET_FUNC,         // Return the character set of the argument
-  COERCIBILITY_FUNC,    // Return the collation coercibility value of the string argument
-  COLLATION_FUNC,       // Return the collation of the string argument
-  CONNECTION_ID_FUNC,   // Return the connection ID (thread ID) for the connection
-  CURRENT_USER_FUNC,    // The authenticated user name and host name
-  DATABASE_FUNC,        // Return the default (current) database name
-  FOUND_ROWS_FUNC,      // For a SELECT with a LIMIT clause, the number of rows
-                        // that would be returned were there no LIMIT clause
-  LAST_INSERT_ID_FUNC,  // Value of the AUTOINCREMENT column for the last INSERT
-  ROW_COUNT_FUNC,       // The number of rows updated
-  SCHEAM_FUNC,          // Synonym for DATABASE()
-  SESSION_USER_FUNC,    // Synonym for USER()
-  SYSTEM_USER_FUNC,     // Synonym for USER()
-  USER_FUNC,            // The user name and host name provided by the client
-  VERSION_FUNC,         // Return a string that indicates the MySQL server version
-  MAX_INFO_FUNC         // end
+//http://dev.mysql.com/doc/refman/5.7/en/information-functions.html#function_current-user
+enum ObInformationFunctions
+{
+  BENCHMARK_FUNC = 0,     // Repeatedly execute an expression
+  CHARSET_FUNC,           // Return the character set of the argument
+  COERCIBILITY_FUNC,      // Return the collation coercibility value of the string argument
+  COLLATION_FUNC,         // Return the collation of the string argument
+  CONNECTION_ID_FUNC,     // Return the connection ID (thread ID) for the connection
+  CURRENT_USER_FUNC,      // The authenticated user name and host name
+  DATABASE_FUNC,          // Return the default (current) database name
+  FOUND_ROWS_FUNC,        // For a SELECT with a LIMIT clause, the number of rows
+                          // that would be returned were there no LIMIT clause
+  LAST_INSERT_ID_FUNC,    // Value of the AUTOINCREMENT column for the last INSERT
+  ROW_COUNT_FUNC,         // The number of rows updated
+  SCHEAM_FUNC,            // Synonym for DATABASE()
+  SESSION_USER_FUNC,      // Synonym for USER()
+  SYSTEM_USER_FUNC,       // Synonym for USER()
+  USER_FUNC,              // The user name and host name provided by the client
+  VERSION_FUNC,           // Return a string that indicates the MySQL server version
+  MAX_INFO_FUNC           // end
 };
 
-char const* get_info_func_name(const ObInformationFunctions func);
+char const *get_info_func_name(const ObInformationFunctions func);
 
-template <class K, class V>
-class ObCommonKV {
+template<class K, class V>
+class ObCommonKV
+{
 public:
-  ObCommonKV() : key_(), value_()
-  {}
+  ObCommonKV() : key_(), value_() {}
   void reset()
   {
     key_.reset();
@@ -321,17 +330,59 @@ public:
   TO_STRING_KV(K_(key), K_(value));
 };
 
+struct Ob20ExtraInfo
+{
+public:
+  uint32_t extra_len_;
+  bool exist_trace_info_;
+  ObString trace_info_;
+  // add key name
+  static constexpr const char SYNC_SESSION_INFO[] = "sess_inf";
+  static constexpr const char FULL_LINK_TRACE[] = "full_trc";
+
+  // def value
+  ObString sync_sess_info_;
+  ObString full_link_trace_;
+
+public:
+  Ob20ExtraInfo() : extra_len_(0), exist_trace_info_(false) {}
+  ~Ob20ExtraInfo() {}
+  void reset() {
+    extra_len_ = 0;
+    exist_trace_info_ = false;
+    trace_info_.reset();
+    sync_sess_info_.reset();
+    full_link_trace_.reset();
+  }
+  bool exist_sync_sess_info() { return !sync_sess_info_.empty(); }
+  bool exist_full_link_trace() { return !full_link_trace_.empty(); }
+  ObString& get_sync_sess_info() { return sync_sess_info_; }
+  ObString& get_full_link_trace() { return full_link_trace_; }
+  bool exist_sync_sess_info() const { return !sync_sess_info_.empty(); }
+  bool exist_full_link_trace() const { return !full_link_trace_.empty(); }
+  const ObString& get_sync_sess_info() const { return sync_sess_info_; }
+  const ObString& get_full_link_trace() const { return full_link_trace_; }
+  bool exist_extra_info() {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
+  bool exist_extra_info() const {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
+  int assign(const Ob20ExtraInfo &other, char* buf, int64_t len);
+  int64_t get_total_len() {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
+  int64_t get_total_len() const {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
+  TO_STRING_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info),
+               K_(sync_sess_info), K_(full_link_trace));
+};
+
 typedef ObCommonKV<common::ObString, common::ObString> ObStringKV;
 
 static const int64_t MAX_STORE_LENGTH = 9;
 
-class ObMySQLPacketHeader {
+class ObMySQLPacketHeader
+{
 public:
-  ObMySQLPacketHeader() : len_(0), seq_(0)
-  {}
+  ObMySQLPacketHeader()
+      : len_(0), seq_(0)
+  { }
 
-  void reset()
-  {
+  void reset() {
     len_ = 0;
     seq_ = 0;
   }
@@ -339,8 +390,8 @@ public:
   TO_STRING_KV("length", len_, "sequence", seq_);
 
 public:
-  uint32_t len_;  // MySQL packet length not include packet header
-  uint8_t seq_;   // MySQL packet sequence
+  uint32_t len_;         // MySQL packet length not include packet header
+  uint8_t  seq_;         // MySQL packet sequence
 };
 
 /*
@@ -348,44 +399,48 @@ public:
  *  3B  length of compressed payload
  *  1B  compressed sequence id
  *  3B  length of payload before compression
- * http://imysql.com/mysql-internal-manual/compressed-packet-header.html
  */
-class ObMySQLCompressedPacketHeader {
+class ObMySQLCompressedPacketHeader
+{
 public:
-  ObMySQLCompressedPacketHeader() : comp_len_(0), comp_seq_(0), uncomp_len(0)
-  {}
+  ObMySQLCompressedPacketHeader()
+      : comp_len_(0), comp_seq_(0), uncomp_len(0)
+  { }
 
-  TO_STRING_KV(
-      "compressed_length", comp_len_, "compressed_sequence", comp_seq_, "length_before_compression", uncomp_len);
+  TO_STRING_KV("compressed_length", comp_len_,
+               "compressed_sequence", comp_seq_,
+               "length_before_compression", uncomp_len);
 
 public:
-  uint32_t comp_len_;   // length of compressed payload, not include packet header
-  uint8_t comp_seq_;    // compressed sequence id
-  uint32_t uncomp_len;  // length of payload before compressio
+  uint32_t comp_len_;         // length of compressed payload, not include packet header
+  uint8_t  comp_seq_;         // compressed sequence id
+  uint32_t uncomp_len;        // length of payload before compressio
 };
 
-class ObMySQLPacket : public rpc::ObPacket {
+class ObMySQLPacket
+    : public rpc::ObPacket
+{
 public:
-  ObMySQLPacket() : hdr_(), cdata_(NULL)
+  ObMySQLPacket()
+      : hdr_(), cdata_(NULL), is_packed_(false)
   {}
-  virtual ~ObMySQLPacket()
-  {}
+  virtual ~ObMySQLPacket() {}
 
-  static int store_string_kv(char* buf, int64_t len, const ObStringKV& str, int64_t& pos);
-  static uint64_t get_kv_encode_len(const ObStringKV& string_kv);
-  inline static ObStringKV get_separator_kv();  // separator for system variables and user variables
+  static int store_string_kv(char *buf, int64_t len, const ObStringKV &str, int64_t &pos);
+  static uint64_t get_kv_encode_len(const ObStringKV &string_kv);
+  inline static ObStringKV get_separator_kv(); // separator for system variables and user variables
 
   inline void set_seq(uint8_t seq);
   inline uint8_t get_seq(void) const;
-  inline void set_content(const char* content, uint32_t len);
+  inline void set_content(const char *content, uint32_t len);
+  inline const char *get_cdata() const { return cdata_; }
 
   virtual int64_t get_serialize_size() const;
-  int encode(char* buffer, int64_t length, int64_t& pos, int64_t& pkt_count) const;
-  int encode(char* buffer, int64_t length, int64_t& pos);
-  virtual int decode()
-  {
-    return common::OB_NOT_SUPPORTED;
-  }
+  int encode(char *buffer, int64_t length, int64_t &pos, int64_t &pkt_count) const;
+  int encode(char *buffer, int64_t length, int64_t &pos);
+  int get_pkt_len() { return hdr_.len_; }
+  virtual int decode() { return common::OB_NOT_SUPPORTED; }
+  virtual ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::INVALID_PKT; }
 
   virtual void reset()
   {
@@ -393,8 +448,7 @@ public:
     cdata_ = NULL;
   }
 
-  virtual void assign(const ObMySQLPacket& other)
-  {
+  virtual void assign(const ObMySQLPacket &other) {
     cdata_ = other.cdata_;
     hdr_.len_ = other.hdr_.len_;
     hdr_.seq_ = other.hdr_.seq_;
@@ -403,6 +457,7 @@ public:
   VIRTUAL_TO_STRING_KV("header", hdr_);
 
 protected:
+
   virtual int serialize(char*, const int64_t, int64_t&) const
   {
     return common::OB_NOT_SUPPORTED;
@@ -418,111 +473,106 @@ public:
   static const int64_t JDBC_SSL_MIN_SIZE = 4;
   // 2: capability flags
   static const int64_t MIN_CAPABILITY_SIZE = 2;
-
+  bool is_packed() const { return is_packed_; }
+  void set_is_packed(const bool is_packed) { is_packed_ = is_packed; }
 protected:
   ObMySQLPacketHeader hdr_;
-  const char* cdata_;
+  const char *cdata_;
+  //parallel encoding of output_expr in advance to speed up packet response
+  bool is_packed_;
 };
 
-class ObMySQLRawPacket : public ObMySQLPacket {
+class ObMySQLRawPacket
+    : public ObMySQLPacket
+{
 public:
-  ObMySQLRawPacket()
-      : ObMySQLPacket(), cmd_(OB_MYSQL_COM_MAX_NUM), can_reroute_pkt_(false), exist_trace_info_(false), trace_info_()
+  ObMySQLRawPacket() : ObMySQLPacket(), cmd_(COM_MAX_NUM),
+                       can_reroute_pkt_(false),
+                       is_weak_read_(false),
+                       txn_free_route_(false),
+                       extra_info_()
   {}
 
   explicit ObMySQLRawPacket(obmysql::ObMySQLCmd cmd)
-      : ObMySQLPacket(), cmd_(cmd), can_reroute_pkt_(false), exist_trace_info_(false), trace_info_()
+    : ObMySQLPacket(), cmd_(cmd),
+      can_reroute_pkt_(false),
+      is_weak_read_(false),
+      txn_free_route_(false),
+      extra_info_()
   {}
 
-  virtual ~ObMySQLRawPacket()
-  {}
+  virtual ~ObMySQLRawPacket() {}
 
   inline void set_cmd(ObMySQLCmd cmd);
   inline ObMySQLCmd get_cmd() const;
 
-  inline const char* get_cdata() const;
+  inline const char *get_cdata() const;
   inline uint32_t get_clen() const;
 
   inline void set_can_reroute_pkt(const bool can_rerute);
   inline bool can_reroute_pkt() const;
 
-  void set_exist_trace_info(bool exist)
-  {
-    exist_trace_info_ = exist;
-  }
-  bool exist_trace_info() const
-  {
-    return exist_trace_info_;
-  }
-  void set_trace_info(const common::ObString& trace_info)
-  {
-    trace_info_ = trace_info;
-  }
-  const common::ObString& get_trace_info() const
-  {
-    return trace_info_;
-  }
+  inline void set_is_weak_read(const bool v) { is_weak_read_ = v; }
+  inline bool is_weak_read() const { return is_weak_read_; }
 
+  inline void set_txn_free_route(const bool txn_free_route);
+  inline bool txn_free_route() const;
+
+  inline const Ob20ExtraInfo &get_extra_info() const { return extra_info_; }
+  bool exist_trace_info() const { return extra_info_.exist_trace_info_; }
+  bool exist_extra_info() const { return extra_info_.exist_extra_info(); }
+  const common::ObString &get_trace_info() const { return extra_info_.trace_info_; }
   virtual int64_t get_serialize_size() const;
 
-  virtual void reset()
-  {
+  virtual void reset() {
     ObMySQLPacket::reset();
-    cmd_ = OB_MYSQL_COM_MAX_NUM;
+    cmd_ = COM_MAX_NUM;
     can_reroute_pkt_ = false;
-    exist_trace_info_ = false;
-    trace_info_.reset();
+    is_weak_read_ = false;
+    txn_free_route_ = false;
+    extra_info_.reset();
   }
 
-  virtual void assign(const ObMySQLRawPacket& other)
+  virtual void assign(const ObMySQLRawPacket &other)
   {
     ObMySQLPacket::assign(other);
     cmd_ = other.cmd_;
     can_reroute_pkt_ = other.can_reroute_pkt_;
-    exist_trace_info_ = other.exist_trace_info_;
-    trace_info_ = other.trace_info_;
+    is_weak_read_ = other.is_weak_read_;
+    txn_free_route_ = other.txn_free_route_;
+    extra_info_ = other.extra_info_;
   }
 
-  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_);
-
+  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_, "weak_read", is_weak_read_);
 protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;
 
 private:
   void set_len(uint32_t len);
-
 private:
   ObMySQLCmd cmd_;
   bool can_reroute_pkt_;
-  bool exist_trace_info_;
-  common::ObString trace_info_;
+  bool is_weak_read_;
+  bool txn_free_route_;
+public:
+  Ob20ExtraInfo extra_info_;
 };
 
-class ObMySQLCompressedPacket : public rpc::ObPacket {
+class ObMySQLCompressedPacket
+    : public rpc::ObPacket
+{
 public:
-  ObMySQLCompressedPacket() : hdr_(), cdata_(NULL)
+  ObMySQLCompressedPacket()
+      : hdr_(), cdata_(NULL)
   {}
-  virtual ~ObMySQLCompressedPacket()
-  {}
+  virtual ~ObMySQLCompressedPacket() {}
 
-  inline uint32_t get_comp_len() const
-  {
-    return hdr_.comp_len_;
-  }
-  inline uint8_t get_comp_seq() const
-  {
-    return hdr_.comp_seq_;
-  }
-  inline uint32_t get_uncomp_len() const
-  {
-    return hdr_.uncomp_len;
-  }
-  inline const char* get_cdata() const
-  {
-    return cdata_;
-  }
-  inline void set_content(
-      const char* content, const uint32_t comp_len, const uint8_t comp_seq, const uint32_t uncomp_len)
+  inline uint32_t get_comp_len() const { return hdr_.comp_len_; }
+  inline uint8_t get_comp_seq() const { return hdr_.comp_seq_; }
+  inline uint32_t get_uncomp_len() const { return hdr_.uncomp_len; }
+  inline const char *get_cdata() const { return cdata_; }
+  inline void set_content(const char *content, const uint32_t comp_len,
+                          const uint8_t comp_seq, const uint32_t uncomp_len)
   {
     cdata_ = content;
     hdr_.comp_len_ = comp_len;
@@ -534,7 +584,7 @@ public:
 
 protected:
   ObMySQLCompressedPacketHeader hdr_;
-  const char* cdata_;
+  const char *cdata_;
 };
 
 ObStringKV ObMySQLPacket::get_separator_kv()
@@ -555,7 +605,7 @@ uint8_t ObMySQLPacket::get_seq(void) const
   return hdr_.seq_;
 }
 
-void ObMySQLPacket::set_content(const char* content, uint32_t len)
+void ObMySQLPacket::set_content(const char *content, uint32_t len)
 {
   cdata_ = content;
   hdr_.len_ = len;
@@ -571,7 +621,7 @@ ObMySQLCmd ObMySQLRawPacket::get_cmd() const
   return cmd_;
 }
 
-inline const char* ObMySQLRawPacket::get_cdata() const
+inline const char *ObMySQLRawPacket::get_cdata() const
 {
   return cdata_;
 }
@@ -591,7 +641,31 @@ inline bool ObMySQLRawPacket::can_reroute_pkt() const
   return can_reroute_pkt_;
 }
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+union ObClientAttributeCapabilityFlags
+{
+  ObClientAttributeCapabilityFlags() : capability_(0) {}
+  explicit ObClientAttributeCapabilityFlags(uint64_t cap) : capability_(cap) {}
+  bool is_support_lob_locatorv2() const { return 1 == cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2; }
+
+  uint64_t capability_;
+  struct CapabilityFlags
+  {
+    uint64_t OB_CLIENT_CAP_OB_LOB_LOCATOR_V2:       1;
+    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       63;
+  } cap_flags_;
+};
+
+inline void ObMySQLRawPacket::set_txn_free_route(const bool txn_free_route)
+{
+  txn_free_route_ = txn_free_route;
+}
+
+inline bool ObMySQLRawPacket::txn_free_route() const
+{
+  return txn_free_route_;
+}
+
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_MYSQL_PACKET_H_ */

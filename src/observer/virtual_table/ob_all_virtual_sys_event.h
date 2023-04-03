@@ -13,33 +13,41 @@
 #ifndef OB_ALL_VIRTUAL_SYS_EVENT_H_
 #define OB_ALL_VIRTUAL_SYS_EVENT_H_
 
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "lib/stat/ob_session_stat.h"
 #include "lib/statistic_event/ob_stat_class.h"
 #include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_session_stat.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 #include "observer/virtual_table/ob_all_virtual_diag_index_scan.h"
+#include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualSysEvent : public common::ObVirtualTableScannerIterator {
+class ObAllVirtualSysEvent : public common::ObVirtualTableScannerIterator,
+                             public omt::ObMultiTenantOperator
+{
 public:
   ObAllVirtualSysEvent();
   virtual ~ObAllVirtualSysEvent();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_addr(common::ObAddr& addr)
-  {
-    addr_ = &addr;
-  }
-  virtual int set_ip(common::ObAddr* addr);
+  inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
+  virtual int set_ip(common::ObAddr *addr);
 
 protected:
-  virtual int get_all_diag_info();
-  common::ObSEArray<std::pair<uint64_t, common::ObDiagnoseTenantInfo*>, common::OB_MAX_SERVER_TENANT_CNT> tenant_dis_;
+  virtual int get_the_diag_info(const uint64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info);
 
 private:
-  enum SYS_COLUMN {
+  // omt::ObMultiTenantOperator interface
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  virtual void release_last_tenant() override;
+  virtual bool is_need_process(uint64_t tenant_id) override;
+
+private:
+  enum SYS_COLUMN
+  {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
     SVR_PORT,
@@ -55,30 +63,27 @@ private:
     AVERAGE_WAIT,
     TIME_WAITED_MICRO
   };
-  common::ObAddr* addr_;
+  common::ObAddr *addr_;
   common::ObString ipstr_;
   int32_t port_;
-  int32_t iter_;
   int32_t event_iter_;
   uint64_t tenant_id_;
+  common::ObDiagnoseTenantInfo diag_info_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSysEvent);
 };
 
-class ObAllVirtualSysEventI1 : public ObAllVirtualSysEvent, public ObAllVirtualDiagIndexScan {
+class ObAllVirtualSysEventI1 : public ObAllVirtualSysEvent, public ObAllVirtualDiagIndexScan
+{
 public:
-  ObAllVirtualSysEventI1()
-  {}
-  virtual ~ObAllVirtualSysEventI1()
-  {}
+  ObAllVirtualSysEventI1() {}
+  virtual ~ObAllVirtualSysEventI1() {}
   virtual int inner_open() override
   {
     return set_index_ids(key_ranges_);
   }
 
 protected:
-  virtual int get_all_diag_info() override;
-
-private:
+  virtual int get_the_diag_info(const uint64_t tenant_id, common::ObDiagnoseTenantInfo &diag_info) override;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSysEventI1);
 };
 

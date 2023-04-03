@@ -1,0 +1,137 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: shanyan.g
+#owner group: transaction 
+#description: 测试可串行化隔离级别在各种语句类型场景下的表现，及其限制
+#
+# 原则：
+# 1. 无论是何种表类型，可串行化隔离级别统一采用事务级别快照
+# 2. 目前仅支持读最新数据，不支持弱一致性读
+# 3. 不支持指定快照读场景，指定快照读不应该出现在可串行化隔离级别中
+
+# 创建database
+--disable_warnings
+drop database if exists xm_test;
+drop database if exists xm_test_db1;
+--enable_warnings
+create database xm_test;
+use xm_test;
+# sleep一下，保证连接成功
+sleep 5;
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,xm_test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,xm_test,$OBMYSQL_PORT);
+connection conn1;
+#设置可串行化隔离级别
+set tx_isolation = 'SERIALIZABLE';
+set autocommit = 1;
+connection conn2;
+#设置可串行化隔离级别
+set tx_isolation = 'SERIALIZABLE';
+set autocommit = 1;
+
+connection conn1;
+
+#建表
+create table xm_test_t1 (c1 int primary key, c2 int);
+create table xm_test_t2 (c1 int primary key, c2 int);
+#准备数据
+insert into xm_test_t1 values(1,1);
+insert into xm_test_t1 values(2,1);
+insert into xm_test_t2 values(2,1);
+
+########### case 1: 用户表强一致性读
+begin;
+select * from xm_test_t1;
+insert into xm_test_t1 values (3, 1);
+# 并行的session执行事务，插入数据
+connection conn2;
+insert into xm_test_t1 values (4, 1);
+select * from xm_test_t1;
+# 切回session，要求看不到并发事务的修改
+connection conn1;
+select * from xm_test_t1;
+commit;
+
+########### case 2: 用户表弱一致性读，期望报错，不支持
+begin;
+--error 1235
+select /*+read_consistency(weak) */ * from xm_test_t1;
+commit;
+
+########### case 3: 事务中执行SHOW语句
+# SHOW语句的内部实现实际上是在查询内部表，采用的是用户SESSION
+# 大部分的SHOW语句查询的都是虚拟表，直接采用内存中的schema结构，这种情况下，SHOW语句与隔离级别无关，始终看到最新的数据；
+# 对于show database like语句，实际查询的是__all_database，采用用户SESSION，受用户事务隔离级别影响。
+begin;
+select * from xm_test_t1;
+insert into xm_test_t1 values (5, 1);
+# show database like语句会查询__all_database表，这里会采用事务级别快照
+show databases like 'xm_%';
+# 新的连接上建database
+connection conn2;
+create database xm_test_db1;
+show databases like 'xm_%';
+insert into xm_test_t1 values (6, 1);
+# 切回SESSION
+# 再次show database like，应该看不到新创建的database
+connection conn1;
+show databases like 'xm_%';
+select * from xm_test_t1;
+commit;
+
+########### case 4: 建索引语句
+# 无论事务隔离级别是否是可串行化，都支持建索引
+# 内部实现上，建索引语句采用内部SESSION事务，采用RC隔离级别
+connection conn1;
+create table t_global_index (pk int primary key) partition by hash(pk) partitions 10;
+insert into t_global_index values (1), (2), (3);
+create index index1 on t_global_index (pk) global;
+--source mysql_test/include/check_all_idx_ok.inc
+show index from t_global_index;
+connection conn1;
+
+########### case 5: 用户发起的内部表语句
+# 要求始终读取一致的schema数据
+connection conn1;
+begin;
+insert into xm_test_t1 values (7, 1);
+select * from xm_test_t1;
+# 查询内部表SQL
+select table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+# 并行的session创建表，修改xm_test_t1
+connection conn2;
+create table xm_test_t4 (pk int primary key);
+insert into xm_test_t1 values (8, 1);
+select * from xm_test_t1;
+# 切回session，再次查询内部表，查到的数据与之前一致，看不到新增的表
+connection conn1;
+select table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+# 弱一致性读的内部表语句要求也是一样的
+select /*+read_consistency(weak) */ table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+select * from xm_test_t1;
+commit;
+
+########### case 6: 内部发起的内部表语句，采用独立的内部SESSION，与现有事务没有关系，采用READ-COMMITTED隔离级别
+# gv$table表实现上查询的是__all_virtual_table，__all_virtual_table实现上采用内部SESSION查询__all_table
+# 期望每次读取都读到最新的数据
+connection conn1;
+begin;
+insert into xm_test_t1 values (9, 1);
+select * from xm_test_t1;
+#select t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
+# 并行的session创建表，修改xm_test_t1
+connection conn2;
+create table xm_test_t5 (pk int primary key);
+insert into xm_test_t1 values (10, 1);
+select * from xm_test_t1;
+# 切回session，再次查询内部表，要求看到新建的表
+connection conn1;
+#select t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
+# 弱一致性读的内部表语句要求也是一样的
+#select /*+read_consistency(weak) */ t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
+select * from xm_test_t1;
+commit;
+
+disconnect conn1;
+disconnect conn2;

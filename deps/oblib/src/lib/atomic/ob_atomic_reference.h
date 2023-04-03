@@ -14,22 +14,29 @@
 #define OB_ATOMIC_REFERENCE_H_
 #include <stdint.h>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-union AtomicInt64 {
+union AtomicInt64
+{
   uint64_t atomic;
-  struct {
+  struct
+  {
     uint32_t buffer;
     uint32_t pairs;
   };
-  struct {
+  struct
+  {
     uint32_t ref;
     uint32_t seq;
   };
 };
 
-class ObAtomicReference final {
+
+class ObAtomicReference final
+{
 public:
   ObAtomicReference();
   ~ObAtomicReference();
@@ -37,23 +44,16 @@ public:
   int inc_ref_cnt();
   int check_seq_num_and_inc_ref_cnt(const uint32_t seq_num);
   int check_and_inc_ref_cnt();
-  int dec_ref_cnt_and_inc_seq_num(uint32_t& ref_cnt);
+  int dec_ref_cnt_and_inc_seq_num(uint32_t &ref_cnt);
   bool try_inc_seq_num();
   bool try_check_and_inc_seq_num(const uint32_t seq_num);
-  inline uint32_t get_seq_num() const
-  {
-    return atomic_num_.seq;
-  }
-  inline uint32_t get_ref_cnt() const
-  {
-    return atomic_num_.ref;
-  }
-
+  inline uint32_t get_seq_num() const { return atomic_num_.seq; }
+  inline uint32_t get_ref_cnt() const { return atomic_num_.ref; }
 private:
   AtomicInt64 atomic_num_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif /* OB_ATOMIC_REFERENCE_H_ */

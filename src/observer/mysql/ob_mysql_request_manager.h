@@ -26,26 +26,31 @@
 #include "ob_eliminate_task.h"
 #include "ob_ra_queue.h"
 
-namespace oceanbase {
-namespace conmmon {
-class ObConcurrentFIFOAllocator;
+namespace oceanbase
+{
+namespace conmmon
+{
+  class ObConcurrentFIFOAllocator;
 }
 
-namespace obmysql {
+namespace obmysql
+{
 
-enum ObMySQLRequestStatus {
+enum ObMySQLRequestStatus
+{
   REQUEST_SUCC = 0,
   REQUEST_FAIL,
 };
 
-class ObMySQLRequestRecord {
+class ObMySQLRequestRecord
+{
 public:
-  common::ObConcurrentFIFOAllocator* allocator_;
+  common::ObConcurrentFIFOAllocator *allocator_;
   sql::ObAuditRecordData data_;
 
 public:
-  ObMySQLRequestRecord() : allocator_(nullptr)
-  {}
+  ObMySQLRequestRecord()
+    : allocator_(nullptr) {}
   virtual ~ObMySQLRequestRecord();
 
 public:
@@ -63,65 +68,51 @@ public:
   }
 };
 
-class ObMySQLRequestManager {
+class ObMySQLRequestManager
+{
 public:
-  static const int64_t SQL_AUDIT_PAGE_SIZE = (1LL << 21) - (1LL << 13);  // 2M - 8k
+  static const int64_t SQL_AUDIT_PAGE_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE; // 2M - 17k
   static const int64_t MAX_PARAM_BUF_SIZE = 64 * 1024;
-  // number of deleted sql_audit records executing release_old one time
-  static const int32_t BATCH_RELEASE_COUNT = 50000;
-  static const int32_t MAX_RELEASE_TIME = 5 * 1000;  // 5ms
+  static const int32_t MAX_RELEASE_TIME = 5 * 1000; //5ms
   static const int64_t US_PER_HOUR = 3600000000;
-  static const int64_t MAX_QUEUE_SIZE = 10000000;           // 10m
-  static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000;  // 10w
-  // start to eliminate when sql_audit more than 9 millions records
-  static const int64_t HIGH_LEVEL_EVICT_SIZE = 9000000;  // 900w
-  // stop eliminate when sql_audit fewer than 8 millions records
-  static const int64_t LOW_LEVEL_EVICT_SIZE = 8000000;  // 800w
-  // interval between elimination
-  static const int64_t EVICT_INTERVAL = 1000000;  // 1s
+  //初始化queue大小，常规模式1000w，mini模式10w
+  static const int64_t MAX_QUEUE_SIZE = 10000000; //1000w
+  static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000; // 10w
+  //按行淘汰的高低水位线，以queue大小的百分比设定
+  static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9; // 90%
+  static constexpr float LOW_LEVEL_EVICT_PERCENTAGE = 0.8; // 80%
+  //每进行一次release_old操作删除的sql_audit百分比
+  static constexpr float BATCH_RELEASE_PERCENTAGE = 0.005; //0.005
+  //启动淘汰检查的时间间隔
+  static const int64_t EVICT_INTERVAL = 1000000; //1s
   typedef common::ObRaQueue::Ref Ref;
-
 public:
   ObMySQLRequestManager();
   virtual ~ObMySQLRequestManager();
 
 public:
   int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
+  int start();
+  void wait();
+  void stop();
   void destroy();
 
 public:
-  static int mtl_init(ObMySQLRequestManager*& req_mgr);
-  static void mtl_destroy(ObMySQLRequestManager*& req_mgr);
 
-  common::ObConcurrentFIFOAllocator* get_allocator()
-  {
-    return &allocator_;
-  }
-  int64_t get_request_id()
-  {
-    ATOMIC_INC(&request_id_);
-    return request_id_;
-  }
+  static int mtl_new(ObMySQLRequestManager* &req_mgr);
+  static int mtl_init(ObMySQLRequestManager* &req_mgr);
+  static void mtl_destroy(ObMySQLRequestManager* &req_mgr);
 
-  int record_request(const ObAuditRecordData& audit_record, bool is_sensitive = false);
+  common::ObConcurrentFIFOAllocator *get_allocator() { return &allocator_; }
+  int64_t get_request_id() { ATOMIC_INC(&request_id_); return request_id_; }
 
-  int64_t get_start_idx() const
-  {
-    return (int64_t)queue_.get_pop_idx();
-  }
-  int64_t get_end_idx() const
-  {
-    return (int64_t)queue_.get_push_idx();
-  }
-  int64_t get_size_used()
-  {
-    return (int64_t)(queue_.get_push_idx() - queue_.get_pop_idx());
-  }
-  int64_t get_size()
-  {
-    return (int64_t)queue_.get_size();
-  }
-  int get(const int64_t idx, void*& record, Ref* ref)
+  int record_request(const ObAuditRecordData &audit_record, bool is_sensitive = false);
+
+  int64_t get_start_idx() const { return (int64_t)queue_.get_pop_idx(); }
+  int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }
+  int64_t get_capacity() const { return (int64_t)queue_.get_capacity(); }
+  int64_t get_size_used() const { return (int64_t)queue_.get_size(); }
+  int get(const int64_t idx, void *&record, Ref* ref)
   {
     int ret = OB_SUCCESS;
     if (NULL == (record = queue_.get(idx, ref))) {
@@ -140,11 +131,10 @@ public:
    * called when memory limit exceeded
    */
 
-  int release_old(int64_t limit = BATCH_RELEASE_COUNT)
-  {
+  int release_old(int64_t limit) {
     void* req = NULL;
     int64_t count = 0;
-    while (count++ < limit && NULL != (req = queue_.pop())) {
+    while(count++ < limit && NULL != (req = queue_.pop())) {
       free(req);
     }
     return common::OB_SUCCESS;
@@ -152,15 +142,11 @@ public:
 
   void* alloc(const int64_t size)
   {
-    void* ret = allocator_.alloc(size);
+    void * ret = allocator_.alloc(size);
     return ret;
   }
 
-  void free(void* ptr)
-  {
-    allocator_.free(ptr);
-    ptr = NULL;
-  }
+  void free(void *ptr) { allocator_.free(ptr); ptr = NULL;}
 
   void clear_queue()
   {
@@ -177,7 +163,7 @@ public:
     return inited_ && !destroyed_;
   }
 
-  static int get_mem_limit(uint64_t tenant_id, int64_t& mem_limit);
+  static int get_mem_limit(uint64_t tenant_id, int64_t &mem_limit);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLRequestManager);
@@ -187,16 +173,19 @@ private:
   bool destroyed_;
   uint64_t request_id_;
   int64_t mem_limit_;
-  common::ObConcurrentFIFOAllocator allocator_;  // alloc mem for string buf
+  common::ObConcurrentFIFOAllocator allocator_;//alloc mem for string buf
   common::ObRaQueue queue_;
   ObEliminateTask task_;
 
   // tenant id of this request manager
   uint64_t tenant_id_;
   int tg_id_;
+  volatile bool stop_flag_;
 };
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
+
+
 
 #endif /* SRC_OBSERVER_MYSQL_OB_MYSQL_REQUEST_MANAGER_H_ */

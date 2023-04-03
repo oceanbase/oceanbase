@@ -18,8 +18,10 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
 int ObKVParser::match(int sym)
 {
@@ -55,7 +57,7 @@ int ObKVParser::get_token()
 {
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret)) {
-    if ('\0' == *cur_) {  // NOTE: When encountering 0, always end, ignore data_length
+    if ('\0' == *cur_) { // NOTE: When encountering 0, always end, ignore data_length
       token_ = SYM_END;
       break;
     } else if (data_length_ <= cur_ - data_) {
@@ -71,12 +73,12 @@ int ObKVParser::get_token()
       break;
     } else if (isspace(*cur_)) {
       if (allow_space_) {
-        cur_++;  // Skip the spaces before and after the token
+        cur_++; // Skip the spaces before and after the token
       } else {
         ret = OB_INVALID_ARGUMENT;
       }
     } else if (isprint(*cur_)) {
-      const char* start = cur_;
+      const char *start = cur_;
       while (isprint(*cur_) && !isspace(*cur_) && SYM_KV_SEP != *cur_ && SYM_PAIR_SEP != *cur_) {
         cur_++;
       }
@@ -105,13 +107,13 @@ int ObKVParser::get_token()
   return ret;
 }
 
-int ObKVParser::parse(const char* data)
+int ObKVParser::parse(const char *data)
 {
   int64_t data_length = STRLEN(data);
   return parse(data, data_length);
 }
 
-int ObKVParser::parse(const char* data, int64_t data_length)
+int ObKVParser::parse(const char *data, int64_t data_length)
 {
   int ret = OB_SUCCESS;
   bool finish = false;
@@ -119,7 +121,7 @@ int ObKVParser::parse(const char* data, int64_t data_length)
   if (OB_ISNULL(data) || data_length <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null data ptr", K(ret));
-  } else if (OB_ISNULL(data_ = static_cast<char *>(allocator_.alloc(length)))) {
+  } else if (OB_ISNULL(data_ = static_cast<char*>(allocator_.alloc(length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(length));
   } else {
@@ -154,10 +156,10 @@ int ObKVParser::parse(const char* data, int64_t data_length)
     }
   }
   if (OB_SUCC(ret) && NULL != cb_) {
-    if (false == cb_->check()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail check parsed data", K(ret));
-    }
+      if (false == cb_->check()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("fail check parsed data", K(ret));
+      }
   }
   return ret;
 }
@@ -182,5 +184,6 @@ int ObKVParser::kv_pair()
   return ret;
 }
 
-}  // namespace share
-}  // namespace oceanbase
+
+}/* ns share*/
+}/* ns oceanbase */

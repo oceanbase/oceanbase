@@ -13,23 +13,41 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_extra_info_factory.h"
+#include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
+#include "sql/engine/expr/ob_expr_dll_udf.h"
+#include "sql/engine/expr/ob_expr_collection_construct.h"
+#include "sql/engine/expr/ob_expr_obj_access.h"
+#include "sql/engine/expr/ob_expr_subquery_ref.h"
+#include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
+#include "sql/engine/expr/ob_expr_pl_integer_checker.h"
+#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_object_construct.h"
+#include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_coll_pred.h"
+#include "sql/engine/expr/ob_expr_output_pack.h"
+#include "sql/engine/expr/ob_expr_plsql_variable.h"
+#include "sql/engine/expr/ob_pl_expr_subquery.h"
+#include "sql/engine/expr/ob_expr_cast.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-#define REG_EXTRA_INFO(type, ExtraInfoClass)                                                \
-  do {                                                                                      \
+#define REG_EXTRA_INFO(type, ExtraInfoClass)      \
+  do {                                            \
     static_assert(type > T_INVALID && type < T_MAX_OP, "invalid expr type for extra info"); \
-    ALLOC_FUNS_[type] = ObExprExtraInfoFactory::alloc<ExtraInfoClass>;                      \
-  } while (0)
+    ALLOC_FUNS_[type] = ObExprExtraInfoFactory::alloc<ExtraInfoClass>; \
+  } while(0)
 
-ObExprExtraInfoFactory::AllocExtraInfoFunc ObExprExtraInfoFactory::ALLOC_FUNS_[T_MAX_OP] = {};
+ObExprExtraInfoFactory::AllocExtraInfoFunc ObExprExtraInfoFactory::ALLOC_FUNS_[T_MAX_OP] = { };
 
-int ObExprExtraInfoFactory::alloc(
-    common::ObIAllocator& alloc, const ObExprOperatorType& type, ObIExprExtraInfo*& extra_info)
+int ObExprExtraInfoFactory::alloc(common::ObIAllocator &alloc,
+                                  const ObExprOperatorType &type,
+                                  ObIExprExtraInfo *&extra_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!(type > T_INVALID && type < T_MAX_OP))) {
@@ -48,18 +66,39 @@ int ObExprExtraInfoFactory::alloc(
   return ret;
 }
 
+
 void ObExprExtraInfoFactory::register_expr_extra_infos()
 {
   MEMSET(ALLOC_FUNS_, 0, sizeof(ALLOC_FUNS_));
 
-  // Add the structure of ObExpr Extra info, you need to register here
-  REG_EXTRA_INFO(T_FUN_SYS_CALC_PARTITION_ID, CalcPartitionIdInfo);
+  // 添加ObExpr extra info的结构, 需要在这里进行注册
+  REG_EXTRA_INFO(T_FUN_SYS_CALC_PARTITION_ID, CalcPartitionBaseInfo);
   REG_EXTRA_INFO(T_FUN_ENUM_TO_STR, ObEnumSetInfo);
   REG_EXTRA_INFO(T_FUN_SET_TO_STR, ObEnumSetInfo);
   REG_EXTRA_INFO(T_FUN_ENUM_TO_INNER_TYPE, ObEnumSetInfo);
   REG_EXTRA_INFO(T_FUN_SET_TO_INNER_TYPE, ObEnumSetInfo);
   REG_EXTRA_INFO(T_FUN_COLUMN_CONV, ObEnumSetInfo);
+  REG_EXTRA_INFO(T_FUN_NORMAL_UDF, ObNormalDllUdfInfo);
+  REG_EXTRA_INFO(T_FUN_PL_COLLECTION_CONSTRUCT, ObExprCollectionConstruct::ExtraInfo);
+  REG_EXTRA_INFO(T_OBJ_ACCESS_REF, ObExprObjAccess::ExtraInfo);
+  REG_EXTRA_INFO(T_REF_QUERY, ObExprSubQueryRef::ExtraInfo);
+  REG_EXTRA_INFO(T_FUN_PL_GET_CURSOR_ATTR, ObExprPLGetCursorAttr::ExtraInfo);
+  REG_EXTRA_INFO(T_FUN_PL_INTEGER_CHECKER, ObExprPLIntegerChecker::ExtraInfo);
+  REG_EXTRA_INFO(T_FUN_UDF, ObExprUDFInfo);
+  REG_EXTRA_INFO(T_FUN_PL_OBJECT_CONSTRUCT, ObExprObjectConstructInfo);
+  REG_EXTRA_INFO(T_OP_MULTISET, ObExprMultiSetInfo);
+  REG_EXTRA_INFO(T_OP_COLL_PRED, ObExprCollPredInfo);
+  REG_EXTRA_INFO(T_OP_OUTPUT_PACK, ObOutputPackInfo);
+  REG_EXTRA_INFO(T_FUN_PLSQL_VARIABLE, ObPLSQLVariableInfo);
+  REG_EXTRA_INFO(T_FUN_SUBQUERY, ObExprPlSubQueryInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_AUTOINC_NEXTVAL, ObAutoincNextvalInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_CALC_TABLET_ID, CalcPartitionBaseInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_CALC_PARTITION_TABLET_ID, CalcPartitionBaseInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_LEAST, ObExprOperator::DatumCastExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_GREATEST, ObExprOperator::DatumCastExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_NULLIF, ObExprOperator::DatumCastExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_CAST, ObExprCast::CastMultisetExtraInfo);
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

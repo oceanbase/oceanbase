@@ -12,82 +12,75 @@
 
 #include "ob_sys_task_stat.h"
 
-namespace oceanbase {
-using namespace common;
-namespace share {
-
-const char* sys_task_type_to_str(const ObSysTaskType& type)
+namespace oceanbase
 {
-  const char* str = "";
+using namespace common;
+namespace share
+{
+const static char *ObSysTaskTypeStr[] = {
+    "GROUP_MIGRATION",
+    "SINGLE_MIGRATION",
+    "DDL",
+    "SSTABLE_MINI_MERGE",
+    "SPECIAL_TABLE_MERGE",
+    "SSTABLE_MINOR_MERGE",
+    "SSTABLE_MAJOR_MERGE",
+    "WRITE_CKPT",
+    "BACKUP",
+    "BACKUP_VALIDATION",
+    "BACKUP_BACKUPSET",
+    "BACKUP_ARCHIVELOG",
+    "DDL_KV_MERGE",
+    "COMPLEMENT_DATA",
+    "RESTORE",
+    "BACKUP_CLEAN",
+    "BACKFILL_TX",
+    "REMOVE_MEMBER"
+};
 
-  switch (type) {
-    case GROUP_PARTITION_MIGRATION_TASK:
-      str = "group partition migration";
-      break;
-    case PARTITION_MIGRATION_TASK:
-      str = "single partition migration";
-      break;
-    case CREATE_INDEX_TASK:
-      str = "create index";
-      break;
-    case SSTABLE_MINOR_MERGE_TASK:
-      str = "sstable minor merge";
-      break;
-    case SSTABLE_MAJOR_MERGE_TASK:
-      str = "sstable major merge";
-      break;
-    case PARTITION_SPLIT_TASK:
-      str = "partition split";
-      break;
-    case MAJOR_MERGE_FINISH_TASK:
-      str = "major merge finish task";
-      break;
-    case SSTABLE_MINI_MERGE_TASK:
-      str = "sstable mini merge";
-      break;
-    case FAST_RECOVERY_TASK:
-      str = "fast recovery";
-      break;
-    case PARTITION_BACKUP_TASK:
-      str = "partition backup task";
-      break;
-    case BACKUP_VALIDATION_TASK:
-      str = "backup validation task";
-      break;
-    case BACKUP_BACKUPSET_TASK:
-      str = "backup backupset task";
-      break;
-    case BACKUP_ARCHIVELOG_TASK:
-      str = "backup archivelog task";
-      break;
-    default:
-      str = "invalid task type";
+const char *sys_task_type_to_str(const ObSysTaskType &type)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MAX_SYS_TASK_TYPE) == ARRAYSIZEOF(ObSysTaskTypeStr), "sys_task_type str len is mismatch");
+  const char *str = "";
+  if (OB_UNLIKELY(type < 0 || type >= MAX_SYS_TASK_TYPE)) {
+    str = "invalid task type";
+  } else {
+    str = ObSysTaskTypeStr[type];
   }
   return str;
 }
 
 ObSysTaskStat::ObSysTaskStat()
-    : start_time_(0), task_id_(), task_type_(MAX_SYS_TASK_TYPE), svr_ip_(), tenant_id_(0), comment_(), is_cancel_(false)
+  : start_time_(0),
+    task_id_(),
+    task_type_(MAX_SYS_TASK_TYPE),
+    svr_ip_(),
+    tenant_id_(0),
+    comment_(),
+    is_cancel_(false)
 {
   comment_[0] = '\0';
 }
 
-ObSysTaskStatMgr::ObSysTaskStatMgr() : lock_(), task_array_()
+ObSysTaskStatMgr::ObSysTaskStatMgr()
+  : lock_(common::ObLatchIds::SYS_TASK_STAT_LOCK),
+    task_array_()
 {
   task_array_.set_label(ObModIds::OB_SYS_TASK_STATUS);
-  task_array_.reserve(DEFAULT_SYS_TASK_STATUS_COUNT);  // ignore ret
+  task_array_.reserve(DEFAULT_SYS_TASK_STATUS_COUNT); // ignore ret
 }
 
 ObSysTaskStatMgr::~ObSysTaskStatMgr()
-{}
+{
+}
 
-ObSysTaskStatMgr& ObSysTaskStatMgr::get_instance()
+ObSysTaskStatMgr &ObSysTaskStatMgr::get_instance()
 {
   static ObSysTaskStatMgr mgr_;
   return mgr_;
 }
 
-int ObSysTaskStatMgr::get_iter(ObSysStatMgrIter& iter)
+int ObSysTaskStatMgr::get_iter(ObSysStatMgrIter &iter)
 {
   int ret = OB_SUCCESS;
   iter.reset();
@@ -109,7 +102,7 @@ int ObSysTaskStatMgr::get_iter(ObSysStatMgrIter& iter)
   return ret;
 }
 
-int ObSysTaskStatMgr::add_task(ObSysTaskStat& task)
+int ObSysTaskStatMgr::add_task(ObSysTaskStat &task)
 {
   int ret = OB_SUCCESS;
 
@@ -125,11 +118,18 @@ int ObSysTaskStatMgr::add_task(ObSysTaskStat& task)
     }
   }
 
+
   SpinWLockGuard guard(lock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < task_array_.count(); ++i) {
     if (task_array_.at(i).task_id_.equals(task.task_id_)) {
       ret = OB_ENTRY_EXIST;
-      SERVER_LOG(ERROR, "task id is exist, cannot add again", K(ret), K(task), K(i), K(task_array_.at(i)));
+      if (DDL_TASK != task.task_type_) {
+        SERVER_LOG(ERROR, "task id is exist, cannot add again",
+            K(ret), K(task), K(i), K(task_array_.at(i)));
+      } else {
+        SERVER_LOG(WARN, "ddl task id is exist, cannot add again",
+            K(ret), K(task), K(i), K(task_array_.at(i)));
+      }
     }
   }
 
@@ -144,7 +144,7 @@ int ObSysTaskStatMgr::add_task(ObSysTaskStat& task)
   return ret;
 }
 
-int ObSysTaskStatMgr::del_task(const ObTaskId& task_id)
+int ObSysTaskStatMgr::del_task(const ObTaskId &task_id)
 {
   int ret = OB_SUCCESS;
   int64_t status_idx = -1;
@@ -170,11 +170,41 @@ int ObSysTaskStatMgr::del_task(const ObTaskId& task_id)
         }
       } else {
         ret = OB_ENTRY_NOT_EXIST;
-        SERVER_LOG(WARN, "sys task not exist", K(task_id));
+        SERVER_LOG(WARN, "sys task not exist", K(ret), K(task_id));
       }
     }
   }
 
+  return ret;
+}
+
+int ObSysTaskStatMgr::update_task(const ObTaskId &task_id, const char *msg, const int64_t msg_len)
+{
+  int ret = OB_SUCCESS;
+  ObSysTaskStat *updated_task = nullptr;
+  if (task_id.is_invalid()) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "get invalid argument in ObSysTaskStatMgr::update_task", K(ret), K(task_id));
+  } else {
+    SpinWLockGuard guard(lock_);
+    int64_t i = 0;
+    for ( ; OB_SUCC(ret) && i < task_array_.count(); ++i) {
+      updated_task = &task_array_.at(i);
+      if (OB_ISNULL(updated_task)) {
+      } else if (updated_task->task_id_.equals(task_id)) {
+        if (-1 == (snprintf(updated_task->comment_, msg_len, "%s", msg))) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "failed to update task", K(ret), K(task_id), K(updated_task->comment_), K(msg));
+        }
+        break;
+      }
+    }
+
+    if (i == task_array_.count()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      SERVER_LOG(WARN, "sys task not exist", K(ret), K(task_id));
+    }
+  }
   return ret;
 }
 
@@ -184,12 +214,12 @@ int ObSysTaskStatMgr::set_self_addr(const ObAddr addr)
   if (!addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    self_addr_ = addr;
+      self_addr_ = addr;
   }
   return ret;
 }
 
-int ObSysTaskStatMgr::task_exist(const ObTaskId& task_id, bool& is_exist)
+int ObSysTaskStatMgr::task_exist(const ObTaskId &task_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -209,7 +239,7 @@ int ObSysTaskStatMgr::task_exist(const ObTaskId& task_id, bool& is_exist)
   return ret;
 }
 
-int ObSysTaskStatMgr::cancel_task(const ObTaskId& task_id)
+int ObSysTaskStatMgr::cancel_task(const ObTaskId &task_id)
 {
   int ret = OB_SUCCESS;
 
@@ -236,7 +266,7 @@ int ObSysTaskStatMgr::cancel_task(const ObTaskId& task_id)
   return ret;
 }
 
-int ObSysTaskStatMgr::is_task_cancel(const ObTaskId& task_id, bool& is_cancel)
+int ObSysTaskStatMgr::is_task_cancel(const ObTaskId &task_id, bool &is_cancel)
 {
   int ret = OB_SUCCESS;
   is_cancel = false;
@@ -261,5 +291,5 @@ int ObSysTaskStatMgr::is_task_cancel(const ObTaskId& task_id, bool& is_cancel)
 
   return ret;
 }
-}  // namespace share
-}  // namespace oceanbase
+}//common
+}//oceanbase

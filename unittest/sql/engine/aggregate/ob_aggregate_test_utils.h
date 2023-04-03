@@ -25,24 +25,27 @@
 #include "sql/engine/aggregate/ob_groupby.h"
 #include "sql/engine/aggregate/ob_scalar_aggregate.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::omt;
-class TestAggregateFactory {
+class TestAggregateFactory
+{
 public:
-  TestAggregateFactory()
-  {}
-  ~TestAggregateFactory()
-  {}
+  TestAggregateFactory() {}
+  ~TestAggregateFactory() {}
 
-  static void init(ObExecContext& ctx, ObGroupBy& groupby_op, int64_t col_count, bool is_distinct,
-      bool is_number = true, ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN,
-      ObCollationType group_cs_type = CS_TYPE_UTF8MB4_BIN)
+  static void init(ObExecContext &ctx,
+                   ObGroupBy &groupby_op,
+                   int64_t col_count,
+                   bool is_distinct,
+                   bool is_number = true,
+                   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN,
+                   ObCollationType group_cs_type = CS_TYPE_UTF8MB4_BIN)
   {
-    ObPhysicalPlanCtx* plan_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
     groupby_op.reset();
     groupby_op.reuse();
     fake_table_.reset();
@@ -56,10 +59,11 @@ public:
     ASSERT_EQ(OB_SUCCESS, my_session_.init_tenant(ObString::make_string("sys"), 1));
     ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
     ASSERT_EQ(OB_SUCCESS, my_session_.load_default_sys_variable(false, true));
+    ASSERT_EQ(OB_SUCCESS, my_session_.load_default_configs_in_pc());
 
     THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 6000000000);
     fake_table_.set_column_count(col_count);
-    result_table_.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));  // sum, avg
+    result_table_.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));    // sum, avg
     groupby_op.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));
 
     fake_table_.set_id(0);
@@ -82,10 +86,14 @@ public:
     groupby_op.add_group_column_idx(2, group_cs_type);
   }
 
-  static void init(ObExecContext& ctx, ObScalarAggregate& scalar_aggr_op, int64_t col_count, bool is_distinct,
-      bool is_number = true, ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
+  static void init(ObExecContext &ctx,
+                   ObScalarAggregate &scalar_aggr_op,
+                   int64_t col_count,
+                   bool is_distinct,
+                   bool is_number = true,
+                   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
   {
-    ObPhysicalPlanCtx* plan_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
 
     scalar_aggr_op.reset();
     scalar_aggr_op.reuse();
@@ -100,9 +108,10 @@ public:
     ASSERT_EQ(OB_SUCCESS, my_session_.init_tenant(ObString::make_string("sys"), 1));
     ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
     ASSERT_EQ(OB_SUCCESS, my_session_.load_default_sys_variable(false, true));
+    ASSERT_EQ(OB_SUCCESS, my_session_.load_default_configs_in_pc());
 
     fake_table_.set_column_count(col_count);
-    result_table_.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));  // sum, avg
+    result_table_.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));    // sum, avg
     scalar_aggr_op.set_column_count(col_count + (is_number ? 5 : 3) + (is_distinct ? 1 : 0));
     scalar_aggr_op.init(10);
     fake_table_.set_id(0);
@@ -115,8 +124,8 @@ public:
 
     scalar_aggr_op.set_child(0, fake_table_);
 
-    ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(3));
     ctx.set_my_session(&my_session_);
+    ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(3));
     ASSERT_EQ(OB_SUCCESS, ctx.create_physical_plan_ctx());
     plan_ctx = ctx.get_physical_plan_ctx();
     ASSERT_FALSE(NULL == plan_ctx);
@@ -124,9 +133,9 @@ public:
     add_aggr_column(scalar_aggr_op, is_distinct, is_number, agg_cs_type);
   }
 
-  static void init(ObExecContext& ctx, ObScalarAggregate& scalar_aggr_op, int64_t col_count)
+  static void init(ObExecContext &ctx, ObScalarAggregate &scalar_aggr_op, int64_t col_count)
   {
-    ObPhysicalPlanCtx* plan_ctx = NULL;
+    ObPhysicalPlanCtx *plan_ctx = NULL;
 
     scalar_aggr_op.reset();
     scalar_aggr_op.reuse();
@@ -141,10 +150,11 @@ public:
     ASSERT_EQ(OB_SUCCESS, my_session_.init_tenant(ObString::make_string("sys"), 1));
     ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
     ASSERT_EQ(OB_SUCCESS, my_session_.load_default_sys_variable(false, true));
+    ASSERT_EQ(OB_SUCCESS, my_session_.load_default_configs_in_pc());
 
     scalar_aggr_op.init(10);
     fake_table_.set_column_count(col_count);
-    result_table_.set_column_count(col_count + 3);  // avg(c), avg(b), avg(a)
+    result_table_.set_column_count(col_count + 3);    // avg(c), avg(b), avg(a)
     scalar_aggr_op.set_column_count(col_count + 3);
 
     fake_table_.set_id(0);
@@ -157,8 +167,8 @@ public:
 
     scalar_aggr_op.set_child(0, fake_table_);
 
-    ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(3));
     ctx.set_my_session(&my_session_);
+    ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(3));
     ASSERT_EQ(OB_SUCCESS, ctx.create_physical_plan_ctx());
     plan_ctx = ctx.get_physical_plan_ctx();
     ASSERT_FALSE(NULL == plan_ctx);
@@ -166,54 +176,46 @@ public:
     add_aggr_column(scalar_aggr_op);
   }
 
-  static void open_operator(ObExecContext& ctx, ObGroupBy& groupby_op)
+  static void open_operator(ObExecContext &ctx, ObGroupBy &groupby_op)
   {
-    ObPhyOperator* op = static_cast<ObPhyOperator*>(&groupby_op);
+    ObPhyOperator *op = static_cast<ObPhyOperator *>(&groupby_op);
     ASSERT_EQ(OB_SUCCESS, op->open(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.open(ctx));
   }
 
-  static void close_operator(ObExecContext& ctx, ObGroupBy& groupby_op)
+  static void close_operator(ObExecContext &ctx, ObGroupBy &groupby_op)
   {
-    ObPhyOperator* op = static_cast<ObPhyOperator*>(&groupby_op);
+    ObPhyOperator *op = static_cast<ObPhyOperator *>(&groupby_op);
     ASSERT_EQ(OB_SUCCESS, op->close(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.close(ctx));
   }
 
-  static void open_operator(ObExecContext& ctx, ObScalarAggregate& groupby_op)
+  static void open_operator(ObExecContext &ctx, ObScalarAggregate &groupby_op)
   {
-    ObPhyOperator* op = static_cast<ObPhyOperator*>(&groupby_op);
+    ObPhyOperator *op = static_cast<ObPhyOperator *>(&groupby_op);
     ASSERT_EQ(OB_SUCCESS, op->open(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.open(ctx));
   }
 
-  static void close_operator(ObExecContext& ctx, ObScalarAggregate& groupby_op)
+  static void close_operator(ObExecContext &ctx, ObScalarAggregate &groupby_op)
   {
-    ObPhyOperator* op = static_cast<ObPhyOperator*>(&groupby_op);
+    ObPhyOperator *op = static_cast<ObPhyOperator *>(&groupby_op);
     ASSERT_EQ(OB_SUCCESS, op->close(ctx));
     ASSERT_EQ(OB_SUCCESS, result_table_.close(ctx));
   }
 
-  static ObFakeTable& get_fake_table()
-  {
-    return fake_table_;
-  }
-  static ObFakeTable& get_result_table()
-  {
-    return result_table_;
-  }
-  static ObPhysicalPlan& get_physical_plan()
-  {
-    return physical_plan_;
-  }
-
+  static ObFakeTable &get_fake_table() { return fake_table_; }
+  static ObFakeTable &get_result_table() { return result_table_; }
+  static ObPhysicalPlan &get_physical_plan() { return physical_plan_; }
 private:
-  static void add_aggr_column(
-      ObGroupBy& groupby_op, bool is_distinct, bool is_number = true, ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
+  static void add_aggr_column(ObGroupBy &groupby_op,
+                              bool is_distinct,
+                              bool is_number = true,
+                              ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
   {
-    ObAggregateExpression* col_expr = NULL;
+    ObAggregateExpression *col_expr = NULL;
     ObPostExprItem expr_item;
-    // count(aggr_col)
+    //count(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->reset();
     col_expr->set_item_count(1);
@@ -226,7 +228,7 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     groupby_op.add_aggr_column(col_expr);
-    // max(aggr_col)
+    //max(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(1);
@@ -238,7 +240,7 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     groupby_op.add_aggr_column(col_expr);
-    // min(aggr_col)
+    //min(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(1);
@@ -250,9 +252,9 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     groupby_op.add_aggr_column(col_expr);
-    // functions used only for number
+    //functions used only for number
     if (is_number) {
-      // sum(aggr_col)
+      //sum(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
       col_expr->set_item_count(1);
       expr_item.set_column(1);
@@ -263,7 +265,7 @@ private:
       col_expr->add_aggr_cs_type(agg_cs_type);
       col_expr->set_real_param_col_count(1);
       groupby_op.add_aggr_column(col_expr);
-      // avg(aggr_col)
+      //avg(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
       col_expr->set_item_count(1);
       expr_item.set_column(1);
@@ -276,7 +278,7 @@ private:
       groupby_op.add_aggr_column(col_expr);
     }
     if (is_distinct) {
-      // approx_count_distinct(aggr_col)
+      //approx_count_distinct(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
       col_expr->reset();
       col_expr->set_item_count(1);
@@ -292,11 +294,11 @@ private:
     }
   }
 
-  static void add_aggr_column(ObScalarAggregate& scalar_aggr_op)
+  static void add_aggr_column(ObScalarAggregate &scalar_aggr_op)
   {
-    ObAggregateExpression* col_expr = NULL;
+    ObAggregateExpression *col_expr = NULL;
     ObPostExprItem expr_item;
-    // avg(c)
+    //avg(c)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(0);
@@ -305,7 +307,7 @@ private:
     col_expr->set_aggr_func(T_FUN_AVG, false);
     col_expr->set_real_param_col_count(1);
     scalar_aggr_op.add_aggr_column(col_expr);
-    // avg(b)
+    //avg(b)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(1);
@@ -314,7 +316,7 @@ private:
     col_expr->set_aggr_func(T_FUN_AVG, false);
     col_expr->set_real_param_col_count(1);
     scalar_aggr_op.add_aggr_column(col_expr);
-    // avg(a)
+    //avg(a)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(2);
@@ -325,12 +327,14 @@ private:
     scalar_aggr_op.add_aggr_column(col_expr);
   }
 
-  static void add_aggr_column(ObScalarAggregate& scalar_aggr_op, bool is_distinct, bool is_number = true,
-      ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
+  static void add_aggr_column(ObScalarAggregate &scalar_aggr_op,
+                              bool is_distinct,
+                              bool is_number = true,
+                              ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
   {
-    ObAggregateExpression* col_expr = NULL;
+    ObAggregateExpression *col_expr = NULL;
     ObPostExprItem expr_item;
-    // count(aggr_col)
+    //count(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->reset();
     col_expr->set_item_count(1);
@@ -343,7 +347,7 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     scalar_aggr_op.add_aggr_column(col_expr);
-    // max(aggr_col)
+    //max(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(1);
@@ -355,7 +359,7 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     scalar_aggr_op.add_aggr_column(col_expr);
-    // min(aggr_col)
+    //min(aggr_col)
     ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
     col_expr->set_item_count(1);
     expr_item.set_column(1);
@@ -367,11 +371,11 @@ private:
     col_expr->add_aggr_cs_type(agg_cs_type);
     col_expr->set_real_param_col_count(1);
     scalar_aggr_op.add_aggr_column(col_expr);
-    // functions used only for number
+    //functions used only for number
     if (is_number) {
-      // sum(aggr_col)
+      //sum(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
-      col_expr->set_item_count(1);
+    col_expr->set_item_count(1);
       expr_item.set_column(1);
       col_expr->add_expr_item(expr_item);
       col_expr->set_result_index(6);
@@ -380,9 +384,9 @@ private:
       col_expr->add_aggr_cs_type(agg_cs_type);
       col_expr->set_real_param_col_count(1);
       scalar_aggr_op.add_aggr_column(col_expr);
-      // avg(aggr_col)
+      //avg(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
-      col_expr->set_item_count(1);
+    col_expr->set_item_count(1);
       expr_item.set_column(1);
       col_expr->add_expr_item(expr_item);
       col_expr->set_result_index(7);
@@ -393,7 +397,7 @@ private:
       scalar_aggr_op.add_aggr_column(col_expr);
     }
     if (is_distinct) {
-      // approx_count_distinct(aggr_col)
+      //approx_count_distinct(aggr_col)
       ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
       col_expr->reset();
       col_expr->set_item_count(1);
@@ -408,7 +412,6 @@ private:
       scalar_aggr_op.add_aggr_column(col_expr);
     }
   }
-
 private:
   static ObPhysicalPlan physical_plan_;
   static ObFakeTable fake_table_;

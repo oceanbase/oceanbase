@@ -14,9 +14,12 @@
 #include <stdlib.h>
 #include <math.h>
 
-namespace oceanbase {
-namespace common {
-ObRandom::ObRandom() : seed_()
+namespace oceanbase
+{
+namespace common
+{
+ObRandom::ObRandom()
+    : seed_()
 {
   seed_[0] = (uint16_t)rand(0, 65535);
   seed_[1] = (uint16_t)rand(0, 65535);
@@ -25,12 +28,17 @@ ObRandom::ObRandom() : seed_()
 }
 
 ObRandom::~ObRandom()
-{}
+{
+}
 
 int64_t ObRandom::rand(const int64_t a, const int64_t b)
 {
+  struct Wrapper {
+    uint16_t v_[3];
+  };
   // NOTE: thread local random seed
-  static __thread uint16_t seed[3] = {0, 0, 0};
+  RLOCAL(Wrapper, wrapper);
+  uint16_t *seed = (&wrapper)->v_;
   if (0 == seed[0] && 0 == seed[1] && 0 == seed[2]) {
     seed[0] = static_cast<uint16_t>(GETTID());
     seed[1] = seed[0];
@@ -61,13 +69,6 @@ int64_t ObRandom::get(const int64_t a, const int64_t b)
 int32_t ObRandom::get_int32()
 {
   return static_cast<int32_t>(jrand48(seed_));
-}
-
-int32_t ObRandom::get_int32(const int32_t a, const int32_t b)
-{
-  int32_t min = a < b ? a : b;
-  int32_t max = a < b ? b : a;
-  return min + abs(get_int32()) % (max - min + 1);
 }
 
 } /* namespace common */

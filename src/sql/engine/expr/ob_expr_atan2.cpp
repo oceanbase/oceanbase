@@ -14,7 +14,7 @@
 #include "ob_expr_atan2.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include <math.h>
@@ -22,23 +22,31 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-ObExprAtan2::ObExprAtan2(ObIAllocator& alloc)
+namespace oceanbase
+{
+namespace sql
+{
+ObExprAtan2::ObExprAtan2(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_ATAN2, N_ATAN2, ONE_OR_TWO, NOT_ROW_DIMENSION)
-{}
+{
+  param_lazy_eval_ = true;
+}
 
 ObExprAtan2::~ObExprAtan2()
-{}
+{
+}
 
-int ObExprAtan2::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types, int64_t type_num, common::ObExprTypeCtx& type_ctx) const
+int ObExprAtan2::calc_result_typeN(ObExprResType &type,
+                                   ObExprResType *types,
+                                   int64_t type_num,
+                                   common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (share::is_oracle_mode() && OB_UNLIKELY(NULL == types || type_num != 2)) {
+  if (lib::is_oracle_mode() && OB_UNLIKELY(NULL == types || type_num != 2)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("Invalid argument.", K(ret), K(types), K(type_num));
-  } else if (share::is_mysql_mode() && OB_UNLIKELY(NULL == types || type_num <= 0 || type_num > 2)) {
+  } else if (lib::is_mysql_mode()
+             && OB_UNLIKELY(NULL == types || type_num <= 0 || type_num > 2)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("Invalid argument.", K(ret), K(types), K(type_num));
   } else {
@@ -51,61 +59,12 @@ int ObExprAtan2::calc_result_typeN(
   return ret;
 }
 
-int ObExprAtan2::calc_resultN(
-    common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (share::is_oracle_mode() && OB_UNLIKELY(NULL == objs || param_num != 2)) {
-    ret = OB_ERR_PARAM_SIZE;
-    LOG_WARN("Invalid argument.", K(ret), K(objs), K(param_num));
-  } else if (share::is_mysql_mode() && OB_UNLIKELY(NULL == objs || param_num <= 0 || param_num > 2)) {
-    ret = OB_ERR_PARAM_SIZE;
-    LOG_WARN("Invalid argument.", K(ret), K(objs), K(param_num));
-  } else if (OB_UNLIKELY(OB_ISNULL(expr_ctx.calc_buf_))) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    if (1 == param_num) {
-      // only mysql mode
-      if (OB_UNLIKELY(objs[0].is_null())) {
-        result.set_null();
-      } else if (objs[0].is_double()) {
-        double arg = objs[0].get_double();
-        double res = atan(arg);
-        result.set_double(res);
-      }
-    } else if (2 == param_num) {
-      const ObObj& obj1 = objs[0];
-      const ObObj& obj2 = objs[1];
-      if (OB_UNLIKELY(ObNullType == obj1.get_type() || ObNullType == obj2.get_type())) {
-        result.set_null();
-      } else if (OB_UNLIKELY(obj1.is_zero() && obj2.is_zero())) {
-        ret = OB_NUMERIC_OVERFLOW;
-        LOG_WARN("fail to calc atan2(0,0)", K(ret));
-      } else if (obj1.is_number() && obj2.is_number()) {
-        number::ObNumber res_nmb;
-        if (OB_FAIL(obj1.get_number().atan2(obj2.get_number(), res_nmb, *(expr_ctx.calc_buf_)))) {
-          LOG_WARN("fail to calc atan2", K(ret));
-        } else {
-          result.set_number(res_nmb);
-        }
-      } else if (obj1.is_double() && obj2.is_double()) {
-        double arg1 = obj1.get_double();
-        double arg2 = obj2.get_double();
-        double res = atan2(arg1, arg2);
-        result.set_double(res);
-      }
-    }
-  }
-  return ret;
-}
-
-int calc_atan2_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_atan2_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   if (1 == expr.arg_cnt_) {
     // only mysql mode
-    ObDatum* radian = NULL;
+    ObDatum *radian = NULL;
     if (OB_FAIL(expr.args_[0]->eval(ctx, radian))) {
       LOG_WARN("eval radian arg failed", K(ret), K(expr));
     } else if (radian->is_null()) {
@@ -114,18 +73,23 @@ int calc_atan2_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
       const double arg = radian->get_double();
       res_datum.set_double(atan(arg));
     }
-  } else {  // 2 == expr.arg_cnt_
+  } else { // 2 == expr.arg_cnt_
     // calc atan2(y/x)
-    ObExpr* arg0 = expr.args_[0];
-    ObExpr* arg1 = expr.args_[1];
-    ObDatum* y = NULL;
-    ObDatum* x = NULL;
-    if (OB_FAIL(arg0->eval(ctx, y)) || OB_FAIL(arg1->eval(ctx, x))) {
-      LOG_WARN("eval arg failed", K(ret), K(expr), KP(y), KP(x));
-    } else if (y->is_null() || x->is_null()) {
+    ObExpr *arg0 = expr.args_[0];
+    ObExpr *arg1 = expr.args_[1];
+    ObDatum *y = NULL;
+    ObDatum *x = NULL;
+    if (OB_FAIL(arg0->eval(ctx, y))) {
+      LOG_WARN("eval arg failed", K(ret), K(expr), KP(y));
+    } else if (y->is_null()) {
       /* arg is already be cast to number type, no need to is_null_oracle */
       res_datum.set_null();
-    } else if (ObNumberType == arg0->datum_meta_.type_ && ObNumberType == arg1->datum_meta_.type_) {
+    } else if (OB_FAIL(arg1->eval(ctx, x))) {
+      LOG_WARN("eval arg failed", K(ret), K(expr), KP(x));
+    } else if (x->is_null()) {
+      res_datum.set_null();
+    } else if (ObNumberType == arg0->datum_meta_.type_
+              && ObNumberType == arg1->datum_meta_.type_) {
       number::ObNumber y_nmb(y->get_number());
       number::ObNumber x_nmb(x->get_number());
       if (y_nmb.is_zero() && x_nmb.is_zero()) {
@@ -133,13 +97,15 @@ int calc_atan2_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
         LOG_WARN("calc atan2(0,0) failed", K(ret));
       } else {
         number::ObNumber res_nmb;
-        if (OB_FAIL(y_nmb.atan2(x_nmb, res_nmb, ctx.get_reset_tmp_alloc()))) {
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        if (OB_FAIL(y_nmb.atan2(x_nmb, res_nmb, alloc_guard.get_allocator()))) {
           LOG_WARN("calc atan2 failed", K(ret), K(y_nmb), K(x_nmb), K(expr));
         } else {
           res_datum.set_number(res_nmb);
         }
       }
-    } else if (ObDoubleType == arg0->datum_meta_.type_ && ObDoubleType == arg1->datum_meta_.type_) {
+    } else if (ObDoubleType == arg0->datum_meta_.type_
+              && ObDoubleType == arg1->datum_meta_.type_) {
       res_datum.set_double(atan2(y->get_double(), x->get_double()));
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -148,15 +114,17 @@ int calc_atan2_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprAtan2::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprAtan2::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                         ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (share::is_oracle_mode() && OB_UNLIKELY(2 != rt_expr.arg_cnt_)) {
+  if (lib::is_oracle_mode() && OB_UNLIKELY(2 != rt_expr.arg_cnt_)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
-  } else if (share::is_mysql_mode() && OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
+  } else if (lib::is_mysql_mode()
+             && OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
   } else {
@@ -165,5 +133,5 @@ int ObExprAtan2::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, Ob
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

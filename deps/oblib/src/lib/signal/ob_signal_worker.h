@@ -17,30 +17,27 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/ob_signal_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-struct ObSigRequest {
+struct ObSigRequest
+{
   constexpr static uint64_t MAGIC = 0xebeb12344321bebe;
   ObSigRequest()
-      : magic_(MAGIC), fd_{-1, -1}, fd2_{-1, -1}, code_(INVALID_LELVEL), ref_cnt_(0), exclude_tid_(-1), trace_id_()
+    : magic_(MAGIC),
+      fd_{-1, -1},
+      fd2_{-1, -1},
+      code_(INVALID_LELVEL),
+      ref_cnt_(0),
+      exclude_tid_(-1),
+      trace_id_()
   {}
-  bool check_magic()
-  {
-    return MAGIC == magic_;
-  }
-  int64_t inc_and_fetch_ref()
-  {
-    return ATOMIC_AAF(&ref_cnt_, 1);
-  }
-  int64_t dec_and_fetch_ref()
-  {
-    return ATOMIC_AAF(&ref_cnt_, -1);
-  }
-  int64_t fetch_ref()
-  {
-    return ATOMIC_LOAD(&ref_cnt_);
-  }
+  bool check_magic() { return MAGIC == magic_; }
+  int64_t inc_and_fetch_ref() { return ATOMIC_AAF(&ref_cnt_, 1); }
+  int64_t dec_and_fetch_ref() { return ATOMIC_AAF(&ref_cnt_, -1); }
+  int64_t fetch_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
   uint64_t magic_;
   int fd_[2];
@@ -51,7 +48,8 @@ struct ObSigRequest {
   DTraceId trace_id_;
 };
 
-class ObSignalWorker : public lib::ThreadPool {
+class ObSignalWorker : public lib::ThreadPool
+{
 public:
   ObSignalWorker();
   ~ObSignalWorker();
@@ -61,27 +59,14 @@ public:
   void wait() override;
 };
 
-class ObSigProcessor;
-struct MPHandlerCtx {
-  MPHandlerCtx() : fd_{-1, -1}, fd2_{-1, -1}, trace_id_(), processor_(nullptr)
-  {}
-  int fd_[2];
-  int fd2_[2];
-  DTraceId trace_id_;
-  ObSigProcessor* processor_;
-};
-
-class ObMPSigHandler : public ObISigHandler {
+class ObSigHandlerCtx;
+class ObSigHandler
+{
 public:
-  ObMPSigHandler(MPHandlerCtx& ctx) : ctx_(ctx)
-  {}
-  void handle() override;
-
-private:
-  MPHandlerCtx& ctx_;
+  void handle(ObSigHandlerCtx &ctx);
 };
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SIGNAL_WORKER_H_
+#endif // OCEANBASE_SIGNAL_WORKER_H_

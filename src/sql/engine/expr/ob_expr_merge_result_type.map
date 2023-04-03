@@ -2,14 +2,14 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
-        ObTinyIntType,       /*NullType=>TinyIntType  */
-        ObSmallIntType,      /*NullType=>SmallIntType  */
-        ObIntType,           /*NullType=>MediumIntType  */
+        ObInt32Type,         /*NullType=>TinyIntType  */
+        ObInt32Type,         /*NullType=>SmallIntType  */
+        ObInt32Type,         /*NullType=>MediumIntType  */
         ObInt32Type,         /*NullType=>Int32Type  */
         ObIntType,           /*NullType=>IntType  */
-        ObUTinyIntType,       /*NullType=>UTinyIntType  */
-        ObUSmallIntType,      /*NullType=>USmallIntType  */
-        ObUMediumIntType,     /*NullType=>UMediumIntType  */
+        ObUInt32Type,        /*NullType=>UTinyIntType  */
+        ObUInt32Type,        /*NullType=>USmallIntType  */
+        ObUInt32Type,        /*NullType=>UMediumIntType  */
         ObUInt32Type,         /*NullType=>UInt32Type  */
         ObUInt64Type,           /*NullType=>UIntType  */
         ObFloatType,         /*NullType=>FloatType  */
@@ -26,7 +26,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,       /*NullType=>VarcharType  */
         ObCharType,          /*NullType=>CharType  */
         ObVarcharType,       /*NullType=>HexStringType  */
-        ObMaxType,           /*NullType=>ExtendType  */
+        ObExtendType,        /*NullType=>ExtendType  */
         ObVarcharType,       /*NullType=>UnknownType  */
         ObTinyTextType,      /*NullType=>ObTinyTextType  */
         ObTextType,          /* NullType=>ObTextType  */
@@ -47,21 +47,24 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*NullType=>ObNVarchar2Type       */
         ObNCharType,         /*NullType=>ObNCharType       */
         ObURowIDType,        /*NullType=>URowID*/
+        ObLobType,           /*NullType=>ObLobType*/
+        ObJsonType,          /*NullType=>ObJsonType*/
+        ObGeometryType,      /*NullType=>ObGeometryType*/
     },
 
     /*TinyIntType*/
     {
-        ObTinyIntType,    /*TinyIntType=>NullType  */
-        ObTinyIntType,    /*TinyIntType=>TinyIntType  */
-        ObSmallIntType,   /*TinyIntType=>SmallIntType  */
-        ObMediumIntType,  /*TinyIntType=>MediumIntType  */
+        ObInt32Type,      /*TinyIntType=>NullType  */
+        ObInt32Type,      /*TinyIntType=>TinyIntType  */
+        ObInt32Type,      /*TinyIntType=>SmallIntType  */
+        ObInt32Type,      /*TinyIntType=>MediumIntType  */
         ObInt32Type,      /*TinyIntType=>Int32Type  */
         ObIntType,        /*TinyIntType=>IntType  */
-        ObTinyIntType,    /*TinyIntType=>UTinyIntType  */
-        ObSmallIntType,   /*TinyIntType=>USmallIntType  */
-        ObMediumIntType,  /*TinyIntType=>UMediumIntType  */
-        ObInt32Type,      /*TinyIntType=>UInt32Type  */
-        ObIntType,        /*TinyIntType=>UIntType  */
+        ObInt32Type,      /*TinyIntType=>UTinyIntType  */
+        ObInt32Type,      /*TinyIntType=>USmallIntType  */
+        ObInt32Type,      /*TinyIntType=>UMediumIntType  */
+        ObIntType,        /*TinyIntType=>UInt32Type  */
+        ObNumberType,     /*TinyIntType=>UIntType  */
         ObFloatType,      /*TinyIntType=>FloatType  */
         ObDoubleType,     /*TinyIntType=>DoubleType  */
         ObFloatType,      /*TinyIntType=>UFloatType  */
@@ -97,21 +100,24 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*TinyIntType=>ObNVarchar2Type       */
         ObNCharType,      /*TinyIntType=>ObNCharType       */
         ObMaxType,        /*TinyInt=>URowID*/
+        ObMaxType,        /*TinyInt=>ObLobType*/
+        ObJsonType,       /*TinyInt=>ObJsonType*/
+        ObGeometryType,   /*TinyInt=>ObGeometryType*/
     },
 
     /*SmallIntType*/
     {
-        ObSmallIntType,   /*SmallIntType=>NullType  */
-        ObSmallIntType,   /*SmallIntType=>TinyIntType  */
-        ObSmallIntType,   /*SmallIntType=>SmallIntType  */
-        ObMediumIntType,  /*SmallIntType=>MediumIntType  */
+        ObInt32Type,      /*SmallIntType=>NullType  */
+        ObInt32Type,      /*SmallIntType=>TinyIntType  */
+        ObInt32Type,      /*SmallIntType=>SmallIntType  */
+        ObInt32Type,      /*SmallIntType=>MediumIntType  */
         ObInt32Type,      /*SmallIntType=>Int32Type  */
         ObIntType,        /*SmallIntType=>IntType  */
-        ObSmallIntType,   /*SmallIntType=>UTinyIntType  */
-        ObSmallIntType,   /*SmallIntType=>USmallIntType  */
-        ObMediumIntType,  /*SmallIntType=>UMediumIntType  */
-        ObInt32Type,      /*SmallIntType=>UInt32Type  */
-        ObIntType,        /*SmallIntType=>UIntType  */
+        ObInt32Type,      /*SmallIntType=>UTinyIntType  */
+        ObInt32Type,      /*SmallIntType=>USmallIntType  */
+        ObInt32Type,      /*SmallIntType=>UMediumIntType  */
+        ObIntType,        /*SmallIntType=>UInt32Type  */
+        ObNumberType,     /*SmallIntType=>UIntType  */
         ObFloatType,      /*SmallIntType=>FloatType  */
         ObDoubleType,     /*SmallIntType=>DoubleType  */
         ObFloatType,      /*SmallIntType=>UFloatType  */
@@ -147,21 +153,24 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*SmallIntType=>ObNVarchar2Type       */
         ObNCharType,      /*SmallIntType=>ObNCharType       */
         ObMaxType,        /*SmallInt=>URowID*/
+        ObMaxType,        /*SmallInt=>ObLobType*/
+        ObJsonType,       /*SmallInt=>ObJsonType*/
+        ObGeometryType,   /*SmallInt=>ObGeometryType*/
     },
 
     /*MediumIntType*/
     {
-        ObMediumIntType,  /*MediumIntType=>NullType  */
-        ObMediumIntType,  /*MediumIntType=>TinyIntType  */
-        ObMediumIntType,  /*MediumIntType=>SmallIntType  */
-        ObMediumIntType,  /*MediumIntType=>MediumIntType  */
+        ObInt32Type,      /*MediumIntType=>NullType  */
+        ObInt32Type,      /*MediumIntType=>TinyIntType  */
+        ObInt32Type,      /*MediumIntType=>SmallIntType  */
+        ObInt32Type,      /*MediumIntType=>MediumIntType  */
         ObInt32Type,      /*MediumIntType=>Int32Type  */
         ObIntType,        /*MediumIntType=>IntType  */
-        ObMediumIntType,  /*MediumIntType=>UTinyIntType  */
-        ObMediumIntType,  /*MediumIntType=>USmallIntType  */
-        ObMediumIntType,  /*MediumIntType=>UMediumIntType  */
-        ObInt32Type,      /*MediumIntType=>UInt32Type  */
-        ObIntType,        /*MediumIntType=>UIntType  */
+        ObInt32Type,      /*MediumIntType=>UTinyIntType  */
+        ObInt32Type,      /*MediumIntType=>USmallIntType  */
+        ObInt32Type,      /*MediumIntType=>UMediumIntType  */
+        ObIntType,        /*MediumIntType=>UInt32Type  */
+        ObNumberType,     /*MediumIntType=>UIntType  */
         ObFloatType,      /*MediumIntType=>FloatType  */
         ObDoubleType,     /*MediumIntType=>DoubleType  */
         ObFloatType,      /*MediumIntType=>UFloatType  */
@@ -197,6 +206,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*MediumIntType=>ObNVarchar2Type       */
         ObNCharType,      /*MediumIntType=>ObNCharType       */
         ObMaxType,        /*MediumInt=>URowID*/
+        ObMaxType,        /*MediumInt=>ObLobType*/
+        ObJsonType,       /*MediumInt=>ObJsonType*/
+        ObGeometryType,   /*MediumInt=>ObGeometryType*/
     },
 
     /*Int32Type*/
@@ -210,8 +222,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObInt32Type,      /*Int32Type=>UTinyIntType  */
         ObInt32Type,      /*Int32Type=>USmallIntType  */
         ObInt32Type,      /*Int32Type=>UMediumIntType  */
-        ObInt32Type,      /*Int32Type=>UInt32Type  */
-        ObIntType,        /*Int32Type=>UIntType  */
+        ObIntType,        /*Int32Type=>UInt32Type  */
+        ObNumberType,     /*Int32Type=>UIntType  */
         ObDoubleType,     /*Int32Type=>FloatType  */
         ObDoubleType,     /*Int32Type=>DoubleType  */
         ObDoubleType,     /*Int32Type=>UFloatType  */
@@ -247,6 +259,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*Int32Type=>ObNVarchar2Type       */
         ObNCharType,      /*Int32Type=>ObNCharType       */
         ObMaxType,        /*Int32Type=>URowID*/
+        ObMaxType,        /*Int32Type=>ObLobType*/
+        ObJsonType,       /*Int32Type=>ObJsonType*/
+        ObGeometryType,   /*Int32Type=>ObGeometryType*/
     },
 
     /*IntType*/
@@ -254,12 +269,12 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObIntType,        /*IntType=>NullType  */
         ObIntType,        /*IntType=>TinyIntType  */
         ObIntType,        /*IntType=>SmallIntType  */
-        ObInt32Type,      /*IntType=>MediumIntType  */
+        ObIntType,        /*IntType=>MediumIntType  */
         ObIntType,        /*IntType=>Int32Type  */
         ObIntType,        /*IntType=>IntType  */
         ObIntType,        /*IntType=>UTinyIntType  */
         ObIntType,        /*IntType=>USmallIntType  */
-        ObInt32Type,      /*IntType=>UMediumIntType  */
+        ObIntType,        /*IntType=>UMediumIntType  */
         ObIntType,        /*IntType=>UInt32Type  */
         ObNumberType,     /*IntType=>UIntType  */
         ObDoubleType,     /*IntType=>FloatType  */
@@ -297,19 +312,22 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*IntType=>ObNVarchar2Type       */
         ObNCharType,      /*IntType=>ObNCharType       */
         ObMaxType,        /*IntType=>URowID*/
+        ObMaxType,        /*IntType=>ObLobType*/
+        ObJsonType,       /*IntType=>ObJsonType*/
+        ObGeometryType,   /*IntType=>ObGeometryType*/
     },
 
     /*UTinyIntType*/
     {
-        ObUTinyIntType,    /*UTinyIntType=>NullType  */
-        ObTinyIntType,    /*UTinyIntType=>TinyIntType  */
-        ObSmallIntType,   /*UTinyIntType=>SmallIntType  */
-        ObMediumIntType,  /*UTinyIntType=>MediumIntType  */
+        ObUInt32Type,      /*UTinyIntType=>NullType  */
+        ObInt32Type,      /*UTinyIntType=>TinyIntType  */
+        ObInt32Type,      /*UTinyIntType=>SmallIntType  */
+        ObInt32Type,      /*UTinyIntType=>MediumIntType  */
         ObInt32Type,      /*UTinyIntType=>Int32Type  */
         ObIntType,        /*UTinyIntType=>IntType  */
-        ObUTinyIntType,   /*UTinyIntType=>UTinyIntType  */
-        ObUSmallIntType,  /*UTinyIntType=>USmallIntType  */
-        ObUMediumIntType, /*UTinyIntType=>UMediumIntType  */
+        ObUInt32Type,     /*UTinyIntType=>UTinyIntType  */
+        ObUInt32Type,     /*UTinyIntType=>USmallIntType  */
+        ObUInt32Type,     /*UTinyIntType=>UMediumIntType  */
         ObUInt32Type,     /*UTinyIntType=>UInt32Type  */
         ObUInt64Type,     /*UTinyIntType=>UIntType  */
         ObFloatType,      /*UTinyIntType=>FloatType  */
@@ -347,19 +365,22 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UTinyIntType=>ObNVarchar2Type       */
         ObNCharType,      /*UTinyIntType=>ObNCharType       */
         ObMaxType,        /*UTinyIntType=>URowID*/
+        ObMaxType,        /*UTinyIntType=>ObLobType*/
+        ObJsonType,       /*UTinyIntType=>ObJsonType*/
+        ObGeometryType,   /*UTinyIntType=>ObGeometryType*/
     },
 
     /*USmallIntType*/
     {
-        ObUSmallIntType,   /*USmallIntType=>NullType  */
-        ObSmallIntType,   /*USmallIntType=>TinyIntType  */
-        ObSmallIntType,   /*USmallIntType=>SmallIntType  */
-        ObMediumIntType,  /*USmallIntType=>MediumIntType  */
+        ObUInt32Type,      /*USmallIntType=>NullType  */
+        ObInt32Type,      /*USmallIntType=>TinyIntType  */
+        ObInt32Type,      /*USmallIntType=>SmallIntType  */
+        ObInt32Type,      /*USmallIntType=>MediumIntType  */
         ObInt32Type,      /*USmallIntType=>Int32Type  */
         ObIntType,        /*USmallIntType=>IntType  */
-        ObUSmallIntType,  /*USmallIntType=>UTinyIntType  */
-        ObUSmallIntType,  /*USmallIntType=>USmallIntType  */
-        ObUMediumIntType, /*USmallIntType=>UMediumIntType  */
+        ObUInt32Type,     /*USmallIntType=>UTinyIntType  */
+        ObUInt32Type,     /*USmallIntType=>USmallIntType  */
+        ObUInt32Type,     /*USmallIntType=>UMediumIntType  */
         ObUInt32Type,     /*USmallIntType=>UInt32Type  */
         ObUInt64Type,     /*USmallIntType=>UIntType  */
         ObFloatType,      /*USmallIntType=>FloatType  */
@@ -397,19 +418,22 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*USmallIntType=>ObNVarchar2Type       */
         ObNCharType,      /*USmallIntType=>ObNCharType       */
         ObMaxType,        /*USmallIntType=>URowIDType*/
+        ObMaxType,        /*USmallIntType=>ObLobType*/
+        ObJsonType,       /*USmallIntType=>ObJsonType*/
+        ObGeometryType,   /*USmallIntType=>ObGeometryType*/
     },
 
     /*UMediumIntType*/
     {
-        ObUMediumIntType,  /*UMediumIntType=>NullType  */
-        ObMediumIntType,  /*UMediumIntType=>TinyIntType  */
-        ObMediumIntType,  /*UMediumIntType=>SmallIntType  */
-        ObMediumIntType,  /*UMediumIntType=>MediumIntType  */
+        ObUInt32Type,      /*UMediumIntType=>NullType  */
+        ObInt32Type,      /*UMediumIntType=>TinyIntType  */
+        ObInt32Type,      /*UMediumIntType=>SmallIntType  */
+        ObInt32Type,      /*UMediumIntType=>MediumIntType  */
         ObInt32Type,      /*UMediumIntType=>Int32Type  */
         ObIntType,        /*UMediumIntType=>IntType  */
-        ObUMediumIntType, /*UMediumIntType=>UTinyIntType  */
-        ObUMediumIntType, /*UMediumIntType=>USmallIntType  */
-        ObUMediumIntType, /*UMediumIntType=>UMediumIntType  */
+        ObUInt32Type,     /*UMediumIntType=>UTinyIntType  */
+        ObUInt32Type,     /*UMediumIntType=>USmallIntType  */
+        ObUInt32Type,     /*UMediumIntType=>UMediumIntType  */
         ObUInt32Type,     /*UMediumIntType=>UInt32Type  */
         ObUInt64Type,     /*UMediumIntType=>UIntType  */
         ObFloatType,      /*UMediumIntType=>FloatType  */
@@ -447,15 +471,18 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UMediumIntType=>ObNVarchar2Type       */
         ObNCharType,      /*UMediumIntType=>ObNCharType       */
         ObMaxType,        /*UMediumIntType=>ObURowIDType*/
+        ObMaxType,        /*UMediumIntType=>ObLobType*/
+        ObJsonType,       /*UMediumIntType=>ObJsonType*/
+        ObGeometryType,   /*UMediumIntType=>ObGeometryType*/
     },
 
     /*UInt32Type*/
     {
-        ObUInt32Type,      /*UInt32Type=>NullType  */
-        ObInt32Type,      /*UInt32Type=>TinyIntType  */
-        ObInt32Type,      /*UInt32Type=>SmallIntType  */
-        ObInt32Type,      /*UInt32Type=>MediumIntType  */
-        ObInt32Type,      /*UInt32Type=>Int32Type  */
+        ObUInt32Type,     /*UInt32Type=>NullType  */
+        ObIntType,        /*UInt32Type=>TinyIntType  */
+        ObIntType,        /*UInt32Type=>SmallIntType  */
+        ObIntType,        /*UInt32Type=>MediumIntType  */
+        ObIntType,        /*UInt32Type=>Int32Type  */
         ObIntType,        /*UInt32Type=>IntType  */
         ObUInt32Type,     /*UInt32Type=>UTinyIntType  */
         ObUInt32Type,     /*UInt32Type=>USmallIntType  */
@@ -497,19 +524,22 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UInt32Type=>ObNVarchar2Type       */
         ObNCharType,      /*UInt32Type=>ObNCharType       */
         ObMaxType,        /*UInt32Type=>URowIDType*/
+        ObMaxType,        /*UInt32Type=>ObLobType*/
+        ObJsonType,       /*UInt32Type=>ObJsonType*/
+        ObGeometryType,   /*UInt32Type=>ObGeometryType*/
     },
 
     /*UIntType*/
     {
-        ObUInt64Type,        /*UIntType=>NullType  */
-        ObIntType,        /*UIntType=>TinyIntType  */
-        ObIntType,        /*UIntType=>SmallIntType  */
-        ObInt32Type,      /*UIntType=>MediumIntType  */
-        ObIntType,        /*UIntType=>Int32Type  */
+        ObUInt64Type,     /*UIntType=>NullType  */
+        ObNumberType,     /*UIntType=>TinyIntType  */
+        ObNumberType,     /*UIntType=>SmallIntType  */
+        ObNumberType,     /*UIntType=>MediumIntType  */
+        ObNumberType,     /*UIntType=>Int32Type  */
         ObNumberType,     /*UIntType=>IntType  */
         ObUInt64Type,     /*UIntType=>UTinyIntType  */
         ObUInt64Type,     /*UIntType=>USmallIntType  */
-        ObUInt32Type,     /*UIntType=>UMediumIntType  */
+        ObUInt64Type,     /*UIntType=>UMediumIntType  */
         ObUInt64Type,     /*UIntType=>UInt32Type  */
         ObUInt64Type,     /*UIntType=>UIntType  */
         ObDoubleType,     /*UIntType=>FloatType  */
@@ -547,6 +577,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UIntType=>ObNVarchar2Type       */
         ObNCharType,      /*UIntType=>ObNCharType       */
         ObMaxType,        /*UIntType=>URowIDTyp*/
+        ObMaxType,        /*UIntType=>ObLobType*/
+        ObJsonType,       /*UIntType=>ObJsonType*/
+        ObGeometryType,   /*UIntType=>ObGeometryType*/
     },
 
     /*FloatType*/
@@ -597,6 +630,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*FloatType=>ObNVarchar2Type       */
         ObNCharType,      /*FloatType=>ObNCharType       */
         ObMaxType,        /*FloatType=>URowID*/
+        ObMaxType,        /*FloatType=>ObLobType*/
+        ObJsonType,       /*FloatType=>ObJsonType*/
+        ObGeometryType,   /*FloatType=>ObGeometryType*/
     },
 
     /*DoubleType*/
@@ -647,6 +683,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*DoubleType=>ObNVarchar2Type       */
         ObNCharType,      /*DoubleType=>ObNCharType       */
         ObMaxType,        /*DoubleTYpe=>URowIDType*/
+        ObMaxType,        /*DoubleTYpe=>ObLobType*/
+        ObJsonType,       /*DoubleTYpe=>ObJsonType*/
+        ObGeometryType,   /*DoubleTYpe=>ObGeometryType*/
     },
 
     /*UFloatType*/
@@ -697,6 +736,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UFloatType=>ObNVarchar2Type       */
         ObNCharType,      /*UFloatType=>ObNCharType       */
         ObMaxType,        /*UFloatType=>ObURowIDType*/
+        ObMaxType,        /*UFloatType=>ObLobType*/
+        ObJsonType,       /*UFloatType=>ObJsonType*/
+        ObGeometryType,   /*UFloatTYpe=>ObGeometryType*/
     },
 
     /*UDoubleType*/
@@ -747,6 +789,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UDoubleType=>ObNVarchar2Type       */
         ObNCharType,      /*UDoubleType=>ObNCharType       */
         ObMaxType,        /*UDoubleType=>URowIDType*/
+        ObMaxType,        /*UDoubleType=>ObLobType*/
+        ObJsonType,       /*UDoubleType=>ObJsonType*/
+        ObGeometryType,   /*UDoubleTYpe=>ObGeometryType*/
     },
 
     /*NumberType*/
@@ -797,6 +842,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*NumberType=>ObNVarchar2Type       */
         ObNCharType,      /*NumberType=>ObNCharType       */
         ObMaxType,        /*NumberType=>URowIDType*/
+        ObMaxType,        /*NumberType=>ObLobType*/
+        ObJsonType,       /*NumberType=>ObJsonType*/
+        ObGeometryType,   /*NumberTYpe=>ObGeometryType*/
     },
 
     /*UNumberType*/
@@ -847,6 +895,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*UNumberType=>ObNVarchar2Type       */
         ObNCharType,      /*UNumberType=>ObNCharType       */
         ObMaxType,        /*UNumberType=>URowIDType*/
+        ObMaxType,        /*UNumberType=>ObLobType*/
+        ObJsonType,       /*UNumberType=>ObJsonType*/
+        ObGeometryType,   /*UNumberTYpe=>ObGeometryType*/
     },
 
     /*DateTimeType*/
@@ -897,6 +948,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*DateTimeType=>ObNVarchar2Type       */
         ObNCharType,         /*DateTimeType=>ObNCharType       */
         ObMaxType,           /*DateTimeType=>URowIDType*/
+        ObMaxType,           /*DateTimeType=>ObLobType*/
+        ObJsonType,          /*DateTimeType=>ObJsonType*/
+        ObGeometryType,      /*DateTimeTYpe=>ObGeometryType*/
     },
 
     /*TimestampType*/
@@ -947,6 +1001,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*TimestampType=>ObNVarchar2Type       */
         ObNCharType,         /*TimestampType=>ObNCharType       */
         ObMaxType,           /*TimestampType=>URowIDType*/
+        ObMaxType,           /*TimestampType=>ObLobType*/
+        ObJsonType,          /*TimestampType=>ObJsonType*/
+        ObGeometryType,      /*TimestampTYpe=>ObGeometryType*/
     },
 
     /*DateType*/
@@ -997,6 +1054,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*DateType=>ObNVarchar2Type       */
         ObNCharType,         /*DateType=>ObNCharType       */
         ObMaxType,           /*DateType=>URowIDType*/
+        ObMaxType,           /*DateType=>ObLobType*/
+        ObJsonType,          /*DateType=>ObJsonType*/
+        ObGeometryType,      /*DateTYpe=>ObGeometryType*/
     },
 
     /*TimeType*/
@@ -1047,6 +1107,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*TimeType=>ObNVarchar2Type       */
         ObNCharType,         /*TimeType=>ObNCharType       */
         ObMaxType,           /*TimeType=>URowIDType*/
+        ObMaxType,           /*TimeType=>ObLobType*/
+        ObJsonType,          /*TimeType=>ObJsonType*/
+        ObGeometryType,      /*TimeTYpe=>ObGeometryType*/
     },
 
     /*YearType*/
@@ -1097,6 +1160,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*YearType=>ObNVarchar2Type       */
         ObNCharType,      /*YearType=>ObNCharType       */
         ObMaxType,        /*YearType=>URowIDType*/
+        ObMaxType,        /*YearType=>ObLobType*/
+        ObJsonType,       /*YearType=>ObJsonType*/
+        ObGeometryType,   /*YearTYpe=>ObGeometryType*/
     },
 
     /*VarcharType*/
@@ -1128,9 +1194,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*VarcharType=>HexStringType  */
         ObMaxType,        /*VarcharType=>ExtendType  */
         ObVarcharType,    /*VarcharType=>UnknownType  */
-        ObTinyTextType,   /*VarcharType=>ObTinyTextType  */
-        ObTextType,       /* VarcharType=>ObTextType  */
-        ObMediumTextType, /* VarcharType=>ObMediumTextType  */
+        ObLongTextType,   /*VarcharType=>ObTinyTextType  */
+        ObLongTextType,   /* VarcharType=>ObTextType  */
+        ObLongTextType,   /* VarcharType=>ObMediumTextType  */
         ObLongTextType,   /* VarcharType=>ObLongTextType  */
         ObVarcharType,    /* VarcharType=>ObBitType  */
         ObVarcharType,    /* VarcharType=>ObEnumType  */
@@ -1146,7 +1212,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*VarcharType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*VarcharType=>ObNVarchar2Type       */
         ObNVarchar2Type,  /*VarcharType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*VarcharType=>URowID*/
+        ObMaxType,        /*VarcharType=>ObLobType*/
+        ObJsonType,       /*VarcharType=>ObJsonType*/
+        ObGeometryType,   /*VarcharTYpe=>ObGeometryType*/
     },
 
     /*CharType*/
@@ -1178,9 +1247,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*CharType=>HexStringType  */
         ObMaxType,        /*CharType=>ExtendType  */
         ObVarcharType,    /*CharType=>UnknownType  */
-        ObTinyTextType,   /*CharType=>ObTinyTextType  */
-        ObTextType,       /* CharType=>ObTextType  */
-        ObMediumTextType, /* CharType=>ObMediumTextType  */
+        ObLongTextType,   /*CharType=>ObTinyTextType  */
+        ObLongTextType,   /* CharType=>ObTextType  */
+        ObLongTextType,   /* CharType=>ObMediumTextType  */
         ObLongTextType,   /* CharType=>ObLongTextType  */
         ObCharType,       /* CharType=>ObBitType  */
         ObCharType,       /* CharType=>ObEnumType  */
@@ -1197,6 +1266,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*CharType=>ObNVarchar2Type       */
         ObNCharType,      /*CharType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObMaxType,        /*CharType=>ObLobType*/
+        ObJsonType,       /*CharType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
 
     /*HexStringType*/
@@ -1246,12 +1318,15 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*HexStringType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*HexStringType=>ObNVarchar2Type       */
         ObNCharType,      /*HexStringType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*HexStringType=>URowID*/
+        ObMaxType,        /*HexStringType=>ObLobType*/
+        ObJsonType,       /*HexStringType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
 
     /*ExtendType*/
     {
-        ObMaxType,       /*ExtendType=>NullType  */
+        ObExtendType,    /*ExtendType=>NullType  */
         ObMaxType,       /*ExtendType=>TinyIntType  */
         ObMaxType,       /*ExtendType=>SmallIntType  */
         ObMaxType,       /*ExtendType=>MediumIntType  */
@@ -1276,7 +1351,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ExtendType=>VarcharType  */
         ObMaxType,       /*ExtendType=>CharType  */
         ObMaxType,       /*ExtendType=>HexStringType  */
-        ObMaxType,       /*ExtendType=>ExtendType  */
+        ObExtendType,    /*ExtendType=>ExtendType  */
         ObMaxType,       /*ExtendType=>UnknownType  */
         ObMaxType,       /*ExtendType=>ObTinyTextType  */
         ObMaxType,       /* ExtendType=>ObTextType  */
@@ -1296,7 +1371,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ExtendType=>ObNumberFloatType  */
         ObNVarchar2Type, /*ExtendType=>ObNVarchar2Type       */
         ObNCharType,     /*ExtendType=>ObNCharType       */
-        ObMaxType,       /*URowID*/
+        ObMaxType,       /*ExtendType=>URowID*/
+        ObMaxType,       /*ExtendType=>ObLobType*/
+        ObMaxType,       /*ExtendType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
 
     /*UnknownType*/
@@ -1346,7 +1424,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*UnknownType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*UnknownType=>ObNVarchar2Type       */
         ObNCharType,      /*UnknownType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*UnknownType=>URowID*/
+        ObMaxType,        /*UnknownType=>ObLobType*/
+        ObJsonType,       /*UnknownType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
     /*ObTinyTextType*/
     {
@@ -1372,8 +1453,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObTinyTextType,   /*ObTinyTextType=>DateType  */
         ObTinyTextType,   /*ObTinyTextType=>TimeType  */
         ObTinyTextType,   /*ObTinyTextType=>YearType  */
-        ObTinyTextType,   /*ObTinyTextType=>VarcharType  */
-        ObTinyTextType,   /*ObTinyTextType=>CharType  */
+        ObLongTextType,   /*ObTinyTextType=>VarcharType  */
+        ObLongTextType,   /*ObTinyTextType=>CharType  */
         ObTinyTextType,   /*ObTinyTextType=>HexStringType  */
         ObMaxType,        /*ObTinyTextType=>ExtendType  */
         ObTinyTextType,   /*ObTinyTextType=>UnknownType  */
@@ -1381,9 +1462,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObTextType,       /* ObTinyTextType=>ObTextType  */
         ObMediumTextType, /* ObTinyTextType=>ObMediumTextType  */
         ObLongTextType,   /* ObTinyTextType=>ObLongTextType  */
-        ObTextType,       /* ObTinyTextType=>ObBitType  */
-        ObTextType,       /* ObTinyTextType=>ObEnumType  */
-        ObTextType,       /* ObTinyTextType=>ObSetType  */
+        ObLongTextType,    /* ObTinyTextType=>ObBitType  */
+        ObLongTextType,    /* ObTinyTextType=>ObEnumType  */
+        ObLongTextType,    /* ObTinyTextType=>ObSetType  */
         ObMaxType,        /* ObTinyTextType=>ObEnumInnerType  */
         ObMaxType,        /* ObTinyTextType=>ObSetInnerType  */
         ObTinyTextType,   /*ObTinyTextType=>ObTimestampTZType  */
@@ -1396,6 +1477,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTinyTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTinyTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObLongTextType,   /*Lob=>ObLongTextType*/
+        ObJsonType,       /*ObTinyTextType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
     /*ObTextType*/
     {
@@ -1421,8 +1505,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObTextType,       /*ObTextType=>DateType  */
         ObTextType,       /*ObTextType=>TimeType  */
         ObTextType,       /*ObTextType=>YearType  */
-        ObTextType,       /*ObTextType=>VarcharType  */
-        ObTextType,       /*ObTextType=>CharType  */
+        ObLongTextType,   /*ObTextType=>VarcharType  */
+        ObLongTextType,   /*ObTextType=>CharType  */
         ObTextType,       /*ObTextType=>HexStringType  */
         ObMaxType,        /*ObTextType=>ExtendType  */
         ObTextType,       /*ObTextType=>UnknownType  */
@@ -1430,9 +1514,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObTextType,       /* ObTextType=>ObTextType  */
         ObMediumTextType, /* ObTextType=>ObMediumTextType  */
         ObLongTextType,   /* ObTextType=>ObLongTextType  */
-        ObMediumTextType, /* ObTextType=>ObBitType  */
-        ObMediumTextType, /* ObTextType=>ObEnumType  */
-        ObMediumTextType, /* ObTextType=>ObSetType  */
+        ObLongTextType,   /* ObTextType=>ObBitType  */
+        ObLongTextType,   /* ObTextType=>ObEnumType  */
+        ObLongTextType,   /* ObTextType=>ObSetType  */
         ObMaxType,        /* ObTextType=>ObEnumInnerType  */
         ObMaxType,        /* ObTextType=>ObSetInnerType  */
         ObTextType,       /*ObTextType=>ObTimestampTZType  */
@@ -1445,6 +1529,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObLongTextType,   /*Lob=>ObLongTextType*/
+        ObJsonType,       /*ObTextType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
 
     /*ObMediumTextType*/
@@ -1471,8 +1558,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMediumTextType, /*ObMediumTextType=>DateType  */
         ObMediumTextType, /*ObMediumTextType=>TimeType  */
         ObMediumTextType, /*ObMediumTextType=>YearType  */
-        ObMediumTextType, /*ObMediumTextType=>VarcharType  */
-        ObMediumTextType, /*ObMediumTextType=>CharType  */
+        ObLongTextType,   /*ObMediumTextType=>VarcharType  */
+        ObLongTextType,   /*ObMediumTextType=>CharType  */
         ObMediumTextType, /*ObMediumTextType=>HexStringType  */
         ObMaxType,        /*ObMediumTextType=>ExtendType  */
         ObMediumTextType, /*ObMediumTextType=>UnknownType  */
@@ -1494,6 +1581,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObMediumTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObMediumTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObLongTextType,   /*Lob=>ObLongTextType*/
+        ObJsonType,       /*ObMediumTextType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
 
     /*ObLongTextType*/
@@ -1544,6 +1634,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /*ObLongTextType=>ObNVarchar2Type       */
         ObNCharType,     /*ObLongTextType=>ObNCharType       */
         ObMaxType,       /*URowID*/
+        ObLongTextType,  /*Lob=>ObLongTextType*/
+        ObJsonType,      /*ObLongTextType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
     /*ObBitType*/
     {
@@ -1574,8 +1667,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObBitType=>HexStringType  */
         ObMaxType,        /*ObBitType=>ExtendType  */
         ObVarcharType,    /*ObBitType=>UnknownType  */
-        ObTextType,       /*ObBitType=>ObTinyTextType  */
-        ObMediumTextType, /* ObBitType=>ObTextType  */
+        ObLongTextType,   /*ObBitType=>ObTinyTextType  */
+        ObLongTextType,   /* ObBitType=>ObTextType  */
         ObLongTextType,   /* ObBitType=>ObMediumTextType  */
         ObLongTextType,   /* ObBitType=>ObLongTextType  */
         ObBitType,        /* ObBitType=>ObBitType  */
@@ -1592,7 +1685,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObBitType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*ObBitType=>ObNVarchar2Type       */
         ObNCharType,      /*ObBitType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObBitType=>URowID*/
+        ObMaxType,        /*ObBitType=>ObLobType*/
+        ObJsonType,       /*ObBitType=>ObJsonType*/
+        ObGeometryType,   /*ObGeometryType*/
     },
     /*ObEnumType*/
     {
@@ -1623,8 +1719,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObEnumType=>HexStringType  */
         ObMaxType,        /*ObEnumType=>ExtendType  */
         ObVarcharType,    /*ObEnumType=>UnknownType  */
-        ObTextType,       /*ObEnumType=>ObTinyTextType  */
-        ObMediumTextType, /* ObEnumType=>ObTextType  */
+        ObLongTextType,   /*ObEnumType=>ObTinyTextType  */
+        ObLongTextType,   /* ObEnumType=>ObTextType  */
         ObLongTextType,   /* ObEnumType=>ObMediumTextType  */
         ObLongTextType,   /* ObEnumType=>ObLongTextType  */
         ObVarcharType,    /* ObEnumType=>ObBitType  */
@@ -1641,7 +1737,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObEnumType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*ObEnumType=>ObNVarchar2Type       */
         ObNCharType,      /*ObEnumType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObEnumType=>URowID*/
+        ObMaxType,        /*ObEnumType=>ObLobType*/
+        ObVarcharType,    /*ObEnumType=>ObJsonType*/
+        ObMaxType,        /*ObGeometryType*/
     },
     /*ObSetType*/
     {
@@ -1672,8 +1771,8 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObSetType=>HexStringType  */
         ObMaxType,        /*ObSetType=>ExtendType  */
         ObVarcharType,    /*ObSetType=>UnknownType  */
-        ObTextType,       /*ObSetType=>ObTinyTextType  */
-        ObMediumTextType, /* ObSetType=>ObTextType  */
+        ObLongTextType,   /*ObSetType=>ObTinyTextType  */
+        ObLongTextType,   /* ObSetType=>ObTextType  */
         ObLongTextType,   /* ObSetType=>ObMediumTextType  */
         ObLongTextType,   /* ObSetType=>ObLongTextType  */
         ObVarcharType,    /* ObSetType=>ObBitType  */
@@ -1690,7 +1789,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObSetType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*ObSetType=>ObNVarchar2Type       */
         ObNCharType,      /*ObSetType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObSetType=>URowID*/
+        ObMaxType,        /*ObSetType=>ObLobType*/
+        ObVarcharType,    /*ObSetType=>ObJsonType*/
+        ObMaxType,        /*ObGeometryType*/
     },
     /*ObEnumInnerType*/
     {
@@ -1739,7 +1841,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObEnumInnerType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*ObEnumInnerType=>ObNVarchar2Type       */
         ObNCharType,      /*ObEnumInnerType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObEnumInnerType=>URowID*/
+        ObMaxType,        /*ObEnumInnerType=>ObLobType*/
+        ObVarcharType,    /*ObEnumInnerType=>ObJsonType*/
+        ObMaxType,        /*ObGeometryType*/
     },
     /*ObSetInnerType*/
     {
@@ -1788,7 +1893,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObSetInnerType=>ObNumberFloatType  */
         ObNVarchar2Type,  /*ObSetInnerType=>ObNVarchar2Type       */
         ObNCharType,      /*ObSetInnerType=>ObNCharType       */
-        ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObSetInnerType=>URowID*/
+        ObMaxType,        /*ObSetInnerType=>ObLobType*/
+        ObVarcharType,    /*ObSetInnerType=>ObJsonType*/
+        ObMaxType,        /*ObGeometryType*/
     },
     /*ObTimestampTZType*/
     {
@@ -1838,6 +1946,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,   /*ObTimestampTZType=>ObNVarchar2Type       */
         ObNCharType,       /*ObTimestampTZType=>ObNCharType       */
         ObMaxType,         /*URowID*/
+        ObMaxType,         /*ObTimestampTZType=>ObLobType*/
+        ObMaxType,         /*ObTimestampTZType=>ObJsonType*/
+        ObMaxType,         /*ObGeometryType*/
     },
     /*ObTimestampLTZType*/
     {
@@ -1887,6 +1998,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,    /*ObTimestampLTZType=>ObNVarchar2Type       */
         ObNCharType,        /*ObTimestampLTZType=>ObNCharType       */
         ObMaxType,          /*URowID*/
+        ObMaxType,          /*ObTimestampLTZType=>ObLobType*/
+        ObMaxType,          /*ObTimestampLTZType=>ObJsonType*/
+        ObMaxType,          /*ObGeometryType*/
     },
     /*ObTimestampNanoType*/
     {
@@ -1936,6 +2050,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,     /*ObTimestampNanoType=>ObNVarchar2Type       */
         ObNCharType,         /*ObTimestampNanoType=>ObNCharType       */
         ObMaxType,           /*URowID*/
+        ObMaxType,           /*ObTimestampNanoType=>ObLobType*/
+        ObMaxType,           /*ObTimestampNanoType=>ObJsonType*/
+        ObMaxType,           /*ObGeometryType*/
     },
     /*ObRawType*/
     {
@@ -1985,6 +2102,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /*ObRawType=>ObNVarchar2Type       */
         ObNCharType,     /*ObRawType=>ObNCharType       */
         ObMaxType,       /*URowID*/
+        ObMaxType,       /*ObRawType=>ObLobType*/
+        ObMaxType,       /*ObRawType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
     /*ObIntervalYMType*/
     {
@@ -2034,6 +2154,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObIntervalYMType, /*ObIntervalYMType=>ObNVarchar2Type       */
         ObIntervalYMType, /*ObIntervalYMType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObIntervalYMType=>ObLobType*/
+        ObMaxType,        /*ObIntervalYMType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
     /*ObIntervalDSType*/
     {
@@ -2083,6 +2206,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObIntervalDSType, /*ObIntervalDSType=>ObNVarchar2Type       */
         ObIntervalDSType, /*ObIntervalDSType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObMaxType,        /*ObIntervalDSType=>ObLobType*/
+        ObMaxType,        /*ObIntervalDSType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
 
     /*ObNumberFloatType*/
@@ -2133,6 +2259,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*NumberFloatType=>ObNVarchar2Type       */
         ObNCharType,      /*NumberFloatType=>ObNCharType       */
         ObMaxType,        /*URowID*/
+        ObMaxType,        /*NumberFloatType=>ObLobType*/
+        ObMaxType,        /*NumberFloatType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
     /*ObNVarchar2Type*/
     {
@@ -2182,6 +2311,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /* ObNVarchar2Type=>ObNVarchar2Type       */
         ObNVarchar2Type, /* ObNVarchar2Type=>ObNCharType       */
         ObMaxType,       /*URowID*/
+        ObMaxType,       /*ObNVarchar2Type=>ObLobType*/
+        ObMaxType,       /*ObNVarchar2Type=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
     /*ObNCharType*/
     {
@@ -2231,6 +2363,9 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /* ObNCharType=>ObNVarchar2Type       */
         ObNCharType,     /* ObNCharType=>ObNCharType       */
         ObMaxType,       /*URowID*/
+        ObMaxType,       /*ObNCharType=>ObLobType*/
+        ObMaxType,       /*ObNCharType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
     },
     /*ObURowIDType*/
     {
@@ -2279,6 +2414,165 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObURowIDType=>ObNumberFloatType  */
         ObMaxType,     /* ObURowIDType=>ObNVarchar2Type       */
         ObMaxType,     /* ObURowIDType=>ObNCharType       */
-        ObURowIDType,     /*URowID=>URowIDType*/
+        ObURowIDType,  /*URowID=>URowIDType*/
+        ObMaxType,     /*ObURowIDType=>ObLobType*/
+        ObMaxType,     /*ObURowIDType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
+    },
+    /*ObLobType*/
+    {
+        ObLobType,     /* ObLobType=>NullType  */
+        ObMaxType,     /* ObLobType=>TinyIntType  */
+        ObMaxType,     /* ObLobType=>SmallIntType  */
+        ObMaxType,     /* ObLobType=>MediumIntType  */
+        ObMaxType,     /* ObLobType=>Int32Type  */
+        ObMaxType,     /* ObLobType=>IntType  */
+        ObMaxType,     /* ObLobType=>UTinyIntType  */
+        ObMaxType,     /* ObLobType=>USmallIntType  */
+        ObMaxType,     /* ObLobType=>UMediumIntType  */
+        ObMaxType,     /* ObLobType=>UInt32Type  */
+        ObMaxType,     /* ObLobType=>UIntType  */
+        ObMaxType,     /* ObLobType=>FloatType  */
+        ObMaxType,     /* ObLobType=>DoubleType  */
+        ObMaxType,     /* ObLobType=>UFloatType  */
+        ObMaxType,     /* ObLobType=>UDoubleType  */
+        ObMaxType,     /* ObLobType=>NumberType  */
+        ObMaxType,     /* ObLobType=>UNumberType  */
+        ObMaxType,     /* ObLobType=>DateTimeType  */
+        ObMaxType,     /* ObLobType=>TimestampType  */
+        ObMaxType,     /* ObLobType=>DateType  */
+        ObMaxType,     /* ObLobType=>TimeType  */
+        ObMaxType,     /* ObLobType=>YearType  */
+        ObMaxType,     /* ObLobType=>VarcharType  */
+        ObMaxType,     /* ObLobType=>CharType  */
+        ObMaxType,     /* ObLobType=>HexStringType  */
+        ObMaxType,     /* ObLobType=>ExtendType  */
+        ObMaxType,     /* ObLobType=>UnknownType  */
+        ObMaxType,     /* ObLobType=>ObTinyTextType  */
+        ObMaxType,     /* ObLobType=>ObTextType  */
+        ObMaxType,     /* ObLobType=>ObMediumTextType  */
+        ObMaxType,     /* ObLobType=>ObLongTextType  */
+        ObMaxType,     /* ObLobType=>ObBitType  */
+        ObMaxType,     /* ObLobType=>ObEnumType  */
+        ObMaxType,     /* ObLobType=>ObSetType  */
+        ObMaxType,     /* ObLobType=>ObEnumInnerType  */
+        ObMaxType,     /* ObLobType=>ObSetInnerType  */
+        ObMaxType,     /* ObLobType=>ObTimestampTZType  */
+        ObMaxType,     /* ObLobType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObLobType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObLobType=>ObRawType  */
+        ObMaxType,     /* ObLobType=>ObIntervalYMType  */
+        ObMaxType,     /* ObLobType=>ObIntervalDSType  */
+        ObMaxType,     /* ObLobType=>ObNumberFloatType  */
+        ObMaxType,     /* ObLobType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObLobType=>ObNCharType       */
+        ObMaxType,     /*ObLobType=>ObURowIDType*/
+        ObLobType,         /*ObLobType=>ObLobType*/
+        ObMaxType,      /*ObLobType=>ObJsonType*/
+        ObMaxType,      /*ObGeometryType*/
+    },
+    /*ObJsonType*/
+    {
+        ObJsonType,     /* ObJsonType=>NullType  */
+        ObJsonType,     /* ObJsonType=>TinyIntType  */
+        ObJsonType,     /* ObJsonType=>SmallIntType  */
+        ObJsonType,     /* ObJsonType=>MediumIntType  */
+        ObJsonType,     /* ObJsonType=>Int32Type  */
+        ObJsonType,     /* ObJsonType=>IntType  */
+        ObJsonType,     /* ObJsonType=>UTinyIntType  */
+        ObJsonType,     /* ObJsonType=>USmallIntType  */
+        ObJsonType,     /* ObJsonType=>UMediumIntType  */
+        ObJsonType,     /* ObJsonType=>UInt32Type  */
+        ObJsonType,     /* ObJsonType=>UIntType  */
+        ObJsonType,     /* ObJsonType=>FloatType  */
+        ObJsonType,     /* ObJsonType=>DoubleType  */
+        ObJsonType,     /* ObJsonType=>UFloatType  */
+        ObJsonType,     /* ObJsonType=>UDoubleType  */
+        ObJsonType,     /* ObJsonType=>NumberType  */
+        ObJsonType,     /* ObJsonType=>UNumberType  */
+        ObJsonType,     /* ObJsonType=>DateTimeType  */
+        ObJsonType,     /* ObJsonType=>TimestampType  */
+        ObJsonType,     /* ObJsonType=>DateType  */
+        ObJsonType,     /* ObJsonType=>TimeType  */
+        ObJsonType,     /* ObJsonType=>YearType  */
+        ObJsonType,     /* ObJsonType=>VarcharType  */
+        ObJsonType,     /* ObJsonType=>CharType  */
+        ObJsonType,     /* ObJsonType=>HexStringType  */
+        ObMaxType,     /* ObJsonType=>ExtendType  */
+        ObJsonType,     /* ObJsonType=>UnknownType  */
+        ObJsonType,     /* ObJsonType=>ObTinyTextType  */
+        ObJsonType,     /* ObJsonType=>ObTextType  */
+        ObJsonType,     /* ObJsonType=>ObMediumTextType  */
+        ObJsonType,     /* ObJsonType=>ObLongTextType  */
+        ObJsonType,     /* ObJsonType=>ObBitType  */
+        ObVarcharType,  /* ObJsonType=>ObEnumType  */
+        ObVarcharType,  /* ObJsonType=>ObSetType  */
+        ObVarcharType,  /* ObJsonType=>ObEnumInnerType  */
+        ObVarcharType,  /* ObJsonType=>ObSetInnerType  */
+        ObMaxType,     /* ObJsonType=>ObTimestampTZType  */
+        ObMaxType,     /* ObJsonType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObJsonType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObJsonType=>ObRawType  */
+        ObMaxType,     /* ObJsonType=>ObIntervalYMType  */
+        ObMaxType,     /* ObJsonType=>ObIntervalDSType  */
+        ObMaxType,     /* ObJsonType=>ObNumberFloatType  */
+        ObMaxType,     /* ObJsonType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObJsonType=>ObNCharType       */
+        ObMaxType,     /*ObJsonType=>ObURowIDType*/
+        ObMaxType,     /*ObJsonType=>ObLobType*/
+        ObJsonType,    /*ObJsonType=>ObJsonType*/
+        ObMaxType,     /*ObJsonType=>ObGeometryType*/
+    },
+    /*ObGeometryType*/
+    {
+        ObGeometryType,     /* ObGeometryType=>NullType  */
+        ObGeometryType,     /* ObGeometryType=>TinyIntType  */
+        ObGeometryType,     /* ObGeometryType=>SmallIntType  */
+        ObGeometryType,     /* ObGeometryType=>MediumIntType  */
+        ObGeometryType,     /* ObGeometryType=>Int32Type  */
+        ObGeometryType,     /* ObGeometryType=>IntType  */
+        ObGeometryType,     /* ObGeometryType=>UTinyIntType  */
+        ObGeometryType,     /* ObGeometryType=>USmallIntType  */
+        ObGeometryType,     /* ObGeometryType=>UMediumIntType  */
+        ObGeometryType,     /* ObGeometryType=>UInt32Type  */
+        ObGeometryType,     /* ObGeometryType=>UIntType  */
+        ObGeometryType,     /* ObGeometryType=>FloatType  */
+        ObGeometryType,     /* ObGeometryType=>DoubleType  */
+        ObGeometryType,     /* ObGeometryType=>UFloatType  */
+        ObGeometryType,     /* ObGeometryType=>UDoubleType  */
+        ObGeometryType,     /* ObGeometryType=>NumberType  */
+        ObGeometryType,     /* ObGeometryType=>UNumberType  */
+        ObGeometryType,     /* ObGeometryType=>DateTimeType  */
+        ObGeometryType,     /* ObGeometryType=>TimestampType  */
+        ObGeometryType,     /* ObGeometryType=>DateType  */
+        ObGeometryType,     /* ObGeometryType=>TimeType  */
+        ObGeometryType,     /* ObGeometryType=>YearType  */
+        ObGeometryType,     /* ObGeometryType=>VarcharType  */
+        ObGeometryType,     /* ObGeometryType=>CharType  */
+        ObGeometryType,     /* ObGeometryType=>HexStringType  */
+        ObMaxType,          /* ObGeometryType=>ExtendType  */
+        ObGeometryType,     /* ObGeometryType=>UnknownType  */
+        ObGeometryType,     /* ObGeometryType=>ObTinyTextType  */
+        ObGeometryType,     /* ObGeometryType=>ObTextType  */
+        ObGeometryType,     /* ObGeometryType=>ObMediumTextType  */
+        ObGeometryType,     /* ObGeometryType=>ObLongTextType  */
+        ObGeometryType,     /* ObGeometryType=>ObBitType  */
+        ObMaxType,     /* ObGeometryType=>ObEnumType  */
+        ObMaxType,     /* ObGeometryType=>ObSetType  */
+        ObMaxType,     /* ObGeometryType=>ObEnumInnerType  */
+        ObMaxType,     /* ObGeometryType=>ObSetInnerType  */
+        ObMaxType,     /* ObGeometryType=>ObTimestampTZType  */
+        ObMaxType,     /* ObGeometryType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObGeometryType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObGeometryType=>ObRawType  */
+        ObMaxType,     /* ObGeometryType=>ObIntervalYMType  */
+        ObMaxType,     /* ObGeometryType=>ObIntervalDSType  */
+        ObMaxType,     /* ObGeometryType=>ObNumberFloatType  */
+        ObMaxType,     /* ObGeometryType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObGeometryType=>ObNCharType       */
+        ObMaxType,     /*ObGeometryType=>ObURowIDType*/
+        ObMaxType,     /*ObGeometryType=>ObLobType*/
+        ObMaxType,     /*ObGeometryType=>ObJsonType*/
+        ObGeometryType,     /*ObGeometryType=>ObGeometryType*/
     },
 };

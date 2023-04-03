@@ -35,15 +35,19 @@ using namespace std;
 #define SEND_CNT 1
 #define ERROR_MSG "Common error"
 
-class TestProxy : public ObRpcProxy {
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
   RPC_S(@PR5 test, OB_TEST_PCODE);
-  // RPC_S(@PR5 test2, OB_TEST2_PCODE, (int64_t), int64_t);
+  //RPC_S(@PR5 test2, OB_TEST2_PCODE, (int64_t), int64_t);
 };
 
-class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
+class MyProcessor
+    : public TestProxy::Processor<OB_TEST_PCODE>
+{
 protected:
   int process()
   {
@@ -66,17 +70,16 @@ protected:
   }
 };
 
-class ObTestDeliver : public rpc::frame::ObReqDeliver {
+class ObTestDeliver
+    : public rpc::frame::ObReqDeliver
+{
 public:
-  int init()
-  {
-    return 0;
-  }
+  int init() { return 0; }
 
-  int deliver(rpc::ObRequest& req)
+  int deliver(rpc::ObRequest &req)
   {
     LOG_INFO("request", K(req));
-    const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
+    const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
 
     switch (pkt.get_pcode()) {
       case OB_TEST_PCODE: {
@@ -92,13 +95,15 @@ public:
     return 0;
   }
 
-  void stop()
-  {}
+  void stop() {}
 };
 
-class TestRpcServer : public ::testing::Test {
+class TestRpcServer
+    : public ::testing::Test
+{
 public:
-  TestRpcServer() : handler_(server_), transport_(NULL)
+  TestRpcServer()
+      : handler_(server_), transport_(NULL)
   {}
 
   void SetUp() override
@@ -122,7 +127,7 @@ protected:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObTestDeliver server_;
-  rpc::frame::ObReqTransport* transport_;
+  rpc::frame::ObReqTransport *transport_;
   ObRandom rand;
   int32_t PORT;
 };
@@ -139,7 +144,7 @@ TEST_F(TestRpcServer, TestName)
     EXPECT_EQ(OB_ERROR, proxy.timeout(12340).test());
   }
 
-  ObAddr dst2(ObAddr::IPV4, "127.0.0.1", PORT + 1);
+  ObAddr dst2(ObAddr::IPV4, "127.0.0.1", PORT+1);
   EXPECT_EQ(OB_TIMEOUT, proxy.to(dst2).test());
 }
 
@@ -148,19 +153,15 @@ TEST_F(TestRpcServer, CR)
   ObAddr dst(ObAddr::IPV4, "127.0.0.1", PORT);
   TestProxy proxy;
   proxy.init(transport_, dst);
-  cotesting::FlexPool(
-      [proxy, dst] {
-        auto cnt = 1000;
-        while (cnt--) {
-          EXPECT_EQ(OB_ERROR, proxy.to(dst).timeout(20000).test());
-        }
-      },
-      4,
-      10)
-      .start();
+  cotesting::FlexPool([proxy, dst] {
+    auto cnt = 1000;
+    while (cnt--) {
+      EXPECT_EQ(OB_ERROR, proxy.to(dst).timeout(20000).test());
+    }
+  }, 4, 10).start();
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   ob_get_tsi_warning_buffer()->set_warn_log_on(true);

@@ -12,18 +12,19 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "common/ob_common_utility.h"
-#include "lib/coro/co.h"
 
 using namespace oceanbase::lib;
 
-namespace oceanbase {
-namespace common {
-static __thread char* g_stackaddr = nullptr;
-static __thread size_t g_stacksize = 0;
-
-const char* print_server_role(const ObServerRole server_role)
+namespace oceanbase
 {
-  const char* role_string = NULL;
+namespace common
+{
+_RLOCAL(char*, g_stackaddr);
+_RLOCAL(size_t, g_stacksize);
+
+const char *print_server_role(const ObServerRole server_role)
+{
+  const char *role_string = NULL;
   switch (server_role) {
     case OB_CHUNKSERVER:
       role_string = "chunkserver";
@@ -58,71 +59,51 @@ void set_reserved_stack_size(int64_t reserved_size)
   reserved_stack_size = reserved_size;
 }
 
-int check_stack_overflow_in_c(int* check_overflow)
-{
-  int ret = OB_SUCCESS;
-  bool is_overflow = false;
-  ret = check_stack_overflow(is_overflow);
-  if (OB_SUCC(ret)) {
-    *check_overflow = static_cast<int>(is_overflow);
-  }
-
-  return ret;
-}
-
-int check_stack_overflow(bool& is_overflow, int64_t reserved_size /* default equals 'reserved_stack_size' variable*/,
-    int64_t* used_size /*nullptr*/)
+int check_stack_overflow(bool &is_overflow,
+                         int64_t reserved_size/* default equals 'reserved_stack_size' variable*/,
+                         int64_t *used_size/*nullptr*/)
 {
   int ret = OB_SUCCESS;
   is_overflow = false;
   size_t stack_size = 0;
-  char* stack_eof = NULL;
-  void* cur_stack = NULL;
-  void* stack_start = NULL;
+  char *stack_eof = NULL;
+  void *cur_stack = NULL;
+  void *stack_start = NULL;
   if (OB_FAIL(get_stackattr(stack_start, stack_size))) {
     LOG_ERROR("get stack attributes fail", K(ret));
     is_overflow = true;
   } else {
-    stack_eof = static_cast<char*>(stack_start) + stack_size;
+    stack_eof = static_cast<char *>(stack_start) + stack_size;
     cur_stack = &stack_start;
-    if (OB_UNLIKELY(static_cast<int64_t>(stack_size) < reserved_size)) {  // stack size is the whole stack size
+    if (OB_UNLIKELY(static_cast<int64_t>(stack_size) < reserved_size)) { //stack size is the whole stack size
       ret = OB_ERR_UNEXPECTED;
       is_overflow = true;
-      COMMON_LOG(ERROR, "stack size smaller than reserved_stack_size ", K(ret), K(stack_size), K(reserved_size));
-    } else if (OB_UNLIKELY(stack_eof < static_cast<char*>(cur_stack))) {
+      COMMON_LOG(ERROR, "stack size smaller than reserved_stack_size ",
+          K(ret), K(stack_size), K(reserved_size));
+    } else if (OB_UNLIKELY(stack_eof < static_cast<char *>(cur_stack))) {
       is_overflow = true;
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "stack incorrect params", K(ret), KP(stack_eof), KP(cur_stack));
     } else {
-      int64_t cur_stack_used = stack_eof - (static_cast<char*>(cur_stack));
+      int64_t cur_stack_used = stack_eof - (static_cast<char *>(cur_stack));
       if (used_size != nullptr) {
         *used_size = cur_stack_used;
       }
       COMMON_LOG(DEBUG, "stack info ", K(cur_stack_used), K(stack_size), K(reserved_size));
       if (OB_UNLIKELY(cur_stack_used > (static_cast<int64_t>(stack_size) - reserved_size))) {
         is_overflow = true;
-        COMMON_LOG(WARN,
-            "stack possible overflow",
-            KP(cur_stack),
-            KP(stack_eof),
-            KP(stack_start),
-            K(stack_size),
-            K(reserved_size),
-            K(cur_stack_used));
+        COMMON_LOG(WARN, "stack possible overflow", KP(cur_stack), KP(stack_eof),
+            KP(stack_start), K(stack_size), K(reserved_size), K(cur_stack_used));
       }
     }
   }
   return ret;
 }
 
-int get_stackattr(void*& stackaddr, size_t& stacksize)
+int get_stackattr(void *&stackaddr, size_t &stacksize)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(CO_IS_ENABLED())) {
-    auto cls = reinterpret_cast<common::ObLocalStore*>(CO_CURRENT().get_context().get_local_store());
-    stackaddr = cls->stack_addr_;
-    stacksize = cls->stack_size_;
-  } else if (OB_LIKELY(g_stackaddr != nullptr)) {
+  if (OB_LIKELY(g_stackaddr != nullptr)) {
     stackaddr = g_stackaddr;
     stacksize = g_stacksize;
   } else {
@@ -145,16 +126,10 @@ int get_stackattr(void*& stackaddr, size_t& stacksize)
   return ret;
 }
 
-void set_stackattr(void* stackaddr, size_t stacksize)
+void set_stackattr(void *stackaddr, size_t stacksize)
 {
-  if (CO_IS_ENABLED()) {
-    auto cls = reinterpret_cast<common::ObLocalStore*>(CO_CURRENT().get_context().get_local_store());
-    cls->stack_addr_ = stackaddr;
-    cls->stack_size_ = stacksize;
-  } else {
-    g_stackaddr = (char*)stackaddr;
-    g_stacksize = stacksize;
-  }
+  g_stackaddr = (char*)stackaddr;
+  g_stacksize = stacksize;
 }
 
 ObFatalErrExtraInfoGuard::ObFatalErrExtraInfoGuard()
@@ -168,16 +143,16 @@ ObFatalErrExtraInfoGuard::~ObFatalErrExtraInfoGuard()
   get_val() = last_;
 }
 
-ObFatalErrExtraInfoGuard*& ObFatalErrExtraInfoGuard::get_val()
+ObFatalErrExtraInfoGuard *&ObFatalErrExtraInfoGuard::get_val()
 {
-  static RLOCAL(ObFatalErrExtraInfoGuard*, value_ptr);
+  RLOCAL(ObFatalErrExtraInfoGuard *, value_ptr);
   return value_ptr;
 }
 
-const ObFatalErrExtraInfoGuard* ObFatalErrExtraInfoGuard::get_thd_local_val_ptr()
+const ObFatalErrExtraInfoGuard *ObFatalErrExtraInfoGuard::get_thd_local_val_ptr()
 {
   return ObFatalErrExtraInfoGuard::get_val();
 }
 
-}  // end of namespace common
-}  // namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbse

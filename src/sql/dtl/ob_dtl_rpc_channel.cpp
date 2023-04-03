@@ -32,9 +32,10 @@ namespace dtl {
 
 void ObDtlRpcChannel::SendMsgCB::on_invalid()
 {
-  LOG_WARN("SendMsgCB invalid, check object serialization impl or oom", K_(trace_id));
+  LOG_WARN_RET(OB_ERROR, "SendMsgCB invalid, check object serialization impl or oom",
+           K_(trace_id));
   AsyncCB::on_invalid();
-  const ObDtlRpcDataResponse& resp = result_;
+  const ObDtlRpcDataResponse &resp = result_;
   int ret = response_.on_finish(resp.is_block_, OB_RPC_PACKET_INVALID);
   if (OB_FAIL(ret)) {
     LOG_WARN("set finish failed", K_(trace_id), K(ret));
@@ -43,18 +44,27 @@ void ObDtlRpcChannel::SendMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendMsgCB::on_timeout()
 {
-  LOG_WARN("SendMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
-  const ObDtlRpcDataResponse& resp = result_;
-  int ret = response_.on_finish(resp.is_block_, OB_TIMEOUT);
+  const ObDtlRpcDataResponse &resp = result_;
+  int tmp_ret = OB_TIMEOUT;
+  int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
+  if (timeout_ts_ - cur_timestamp > 100 * 1000) {
+    LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
+              "change error code to OB_CONNECT_ERROR", K(tmp_ret),
+              K(timeout_ts_), K(cur_timestamp));
+    tmp_ret = OB_RPC_CONNECT_ERROR;
+  }
+  int ret = response_.on_finish(resp.is_block_, tmp_ret);
+  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+           K_(trace_id), K(ret));
   if (OB_FAIL(ret)) {
-    LOG_WARN("set finish failed", K_(trace_id), K(ret));
+    LOG_WARN("set finish failed", K_(trace_id), K(ret), K(get_error()));
   }
 }
 
 int ObDtlRpcChannel::SendMsgCB::process()
 {
-  const ObDtlRpcDataResponse& resp = result_;
-  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
+  const ObDtlRpcDataResponse &resp = result_;
+  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
   int tmp_ret = OB_SUCCESS != rcode_.rcode_ ? rcode_.rcode_ : resp.recode_;
   int ret = response_.on_finish(resp.is_block_, tmp_ret);
   if (OB_FAIL(ret)) {
@@ -63,12 +73,13 @@ int ObDtlRpcChannel::SendMsgCB::process()
   return ret;
 }
 
-rpc::frame::ObReqTransport::AsyncCB* ObDtlRpcChannel::SendMsgCB::clone(const rpc::frame::SPAlloc& alloc) const
+rpc::frame::ObReqTransport::AsyncCB *ObDtlRpcChannel::SendMsgCB::clone(
+    const rpc::frame::SPAlloc &alloc) const
 {
-  SendMsgCB* cb = NULL;
-  void* mem = alloc(sizeof(*this));
+  SendMsgCB *cb = NULL;
+  void *mem = alloc(sizeof(*this));
   if (NULL != mem) {
-    cb = new (mem) SendMsgCB(response_, trace_id_);
+    cb = new(mem)SendMsgCB(response_, trace_id_, timeout_ts_);
   }
   return cb;
 }
@@ -77,11 +88,13 @@ rpc::frame::ObReqTransport::AsyncCB* ObDtlRpcChannel::SendMsgCB::clone(const rpc
 
 void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 {
-  LOG_WARN("SendBCMsgCB invalid, check object serialization impl or oom", K_(trace_id));
+  LOG_WARN_RET(OB_ERROR, "SendBCMsgCB invalid, check object serialization impl or oom",
+           K_(trace_id));
   AsyncCB::on_invalid();
-  ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
+  ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
   for (int64_t i = 0; i < responses_.count(); ++i) {
-    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+    int ret_code = (OB_SUCCESS != rcode_.rcode_)
+                    ? rcode_.rcode_
                     : (i < resps.count() ? resps.at(i).recode_ : OB_RPC_PACKET_INVALID);
     int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
@@ -93,10 +106,12 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
 {
-  LOG_WARN("SendBCMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
-  ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
-  for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
-    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+  LOG_WARN_RET(OB_TIMEOUT, "SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+           K_(trace_id));
+  ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
+  for (int64_t i = 0; i < responses_.count(); ++i) {
+    int ret_code = (OB_SUCCESS != rcode_.rcode_)
+                    ? rcode_.rcode_
                     : (i < resps.count() ? resps.at(i).recode_ : OB_TIMEOUT);
     int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
@@ -104,20 +119,23 @@ void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
     }
   }
   resps.reset();
+  destroy();
 }
 
 int ObDtlRpcChannel::SendBCMsgCB::process()
 {
   int ret = OB_SUCCESS;
-  ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
+  ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
   if (resps.count() != responses_.count()) {
-    LOG_ERROR("unexpected status: response count is not match", K(resps.count()), K(responses_.count()));
+    LOG_WARN("unexpected status: response count is not match",
+      K(resps.count()), K(responses_.count()));
   }
-  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
+  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
   for (int64_t i = 0; i < responses_.count(); ++i) {
     bool is_block = i < resps.count() ? resps.at(i).is_block_ : false;
-    int ret_code =
-        (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_ : (i < resps.count() ? resps.at(i).recode_ : OB_ERR_UNEXPECTED);
+    int ret_code = (OB_SUCCESS != rcode_.rcode_)
+                  ? rcode_.rcode_
+                  : (i < resps.count() ? resps.at(i).recode_ : OB_ERR_UNEXPECTED);
     int tmp_ret = responses_.at(i)->on_finish(is_block, ret_code);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
@@ -128,16 +146,18 @@ int ObDtlRpcChannel::SendBCMsgCB::process()
     LOG_TRACE("rpc clone sendbcmsg cb", K(responses_.at(i)), K(trace_id_));
   }
   resps.reset();
+  destroy();
   return ret;
 }
 
-rpc::frame::ObReqTransport::AsyncCB* ObDtlRpcChannel::SendBCMsgCB::clone(const rpc::frame::SPAlloc& alloc) const
+rpc::frame::ObReqTransport::AsyncCB *ObDtlRpcChannel::SendBCMsgCB::clone(
+    const rpc::frame::SPAlloc &alloc) const
 {
   LOG_DEBUG(" clone sendbcmsg cb", K(lbt()));
-  SendBCMsgCB* cb = NULL;
-  void* mem = alloc(sizeof(*this));
+  SendBCMsgCB *cb = NULL;
+  void *mem = alloc(sizeof(*this));
   if (NULL != mem) {
-    cb = new (mem) SendBCMsgCB(trace_id_);
+    cb = new(mem)SendBCMsgCB(trace_id_);
     int ret = cb->assign_resp(responses_);
     if (OB_SUCCESS != ret) {
       LOG_ERROR("failed to clone responses", K(ret));
@@ -146,10 +166,25 @@ rpc::frame::ObReqTransport::AsyncCB* ObDtlRpcChannel::SendBCMsgCB::clone(const r
   return cb;
 }
 
+void ObDtlRpcChannel::SendBCMsgCB::destroy()
+{
+  responses_.reset();
+}
 ///////////////////////////////////////////////////////////////////////////////
 
-ObDtlRpcChannel::ObDtlRpcChannel(const uint64_t tenant_id, const uint64_t id, const ObAddr& peer)
+ObDtlRpcChannel::ObDtlRpcChannel(
+    const uint64_t tenant_id,
+    const uint64_t id,
+    const ObAddr &peer)
     : ObDtlBasicChannel(tenant_id, id, peer)
+{}
+
+ObDtlRpcChannel::ObDtlRpcChannel(
+    const uint64_t tenant_id,
+    const uint64_t id,
+    const ObAddr &peer,
+    const int64_t hash_val)
+    : ObDtlBasicChannel(tenant_id, id, peer, hash_val)
 {}
 
 ObDtlRpcChannel::~ObDtlRpcChannel()
@@ -168,63 +203,76 @@ int ObDtlRpcChannel::init()
 }
 
 void ObDtlRpcChannel::destroy()
-{}
+{
+}
 
-int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer*& buffer)
+int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
 {
   int ret = OB_SUCCESS;
-  ObDtlLinkedBuffer* linked_buffer = nullptr;
+  ObDtlLinkedBuffer *linked_buffer = nullptr;
   ObDtlMsgHeader header;
   const bool keep_buffer_pos = true;
-  if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header, keep_buffer_pos))) {
-    LOG_WARN("failed to deserialize msg", K(ret));
-  } else if (header.is_drain()) {
-    // drain msg
-    if (dfc_) {
-      dfc_->set_drain(this);
-      LOG_TRACE("a RPC channel has been drained", K(this), KP(this->id_), KP(this->peer_id_));
+  MTL_SWITCH(tenant_id_) {
+    if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header, keep_buffer_pos))) {
+      LOG_WARN("failed to deserialize msg", K(ret));
+    } else if (header.is_drain()) {
+      // drain msg
+      if (dfc_) {
+        dfc_->set_drain(this);
+        LOG_TRACE("a RPC channel has been drained", K(this), KP(this->id_), KP(this->peer_id_));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("control channel can't drain msg", K(ret));
+      }
+    } else if (is_drain()) {
+      // do nothing
+    } else if (OB_ISNULL(linked_buffer = alloc_buf(buffer->size()))){
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate buffer", K(ret));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("control channel can't drain msg", K(ret));
-    }
-  } else if (OB_ISNULL(linked_buffer = alloc_buf(buffer->size()))) {
-    ret = OB_REACH_MEMORY_LIMIT;
-    LOG_WARN("failed to allocate buffer", K(ret));
-  } else {
-    LOG_TRACE("DTL feedup a new msg to msg loop", K(buffer->size()), KP(id_), K(peer_));
-    ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
-    if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg() && 0 != get_recv_buffer_cnt()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("first buffer is not first", K(ret), K(get_id()), K(get_peer_id()));
-    } else if (OB_FAIL(block_on_increase_size(linked_buffer->size()))) {
-      free_buf(linked_buffer);
-      linked_buffer = nullptr;
-      LOG_WARN("failed to increase buffer size for dfc", K(ret), K(header));
-    } else if (OB_FAIL(recv_list_.push(linked_buffer))) {
-      LOG_WARN("push buffer into channel recv list fail", K(ret));
-      free_buf(linked_buffer);
-      linked_buffer = nullptr;
-    } else if (FALSE_IT(inc_recv_buffer_cnt())) {
-    } else {
-      if (buffer->is_data_msg()) {
-        metric_.mark_first_in();
-        if (buffer->is_eof()) {
-          metric_.mark_last_in();
+      LOG_TRACE("DTL feedup a new msg to msg loop", K(buffer->size()), KP(id_), K(peer_));
+      ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
+      if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg()
+          && 0 != get_recv_buffer_cnt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("first buffer is not first", K(ret), K(get_id()), K(get_peer_id()),
+                K(get_recv_buffer_cnt()), K(linked_buffer->seq_no()));
+        free_buf(linked_buffer);
+        linked_buffer = nullptr;
+      } else if (OB_FAIL(block_on_increase_size(linked_buffer->size()))) {
+        free_buf(linked_buffer);
+        linked_buffer = nullptr;
+        LOG_WARN("failed to increase buffer size for dfc", K(ret), K(header));
+      } else if (OB_FAIL(recv_list_.push(linked_buffer))) {
+        LOG_WARN("push buffer into channel recv list fail", K(ret));
+        free_buf(linked_buffer);
+        linked_buffer = nullptr;
+      } else if (FALSE_IT(inc_recv_buffer_cnt())) {
+      } else {
+        if (buffer->is_data_msg()) {
+          metric_.mark_first_in();
+          if (buffer->is_eof()) {
+            metric_.mark_eof();
+          }
+          metric_.set_last_in_ts(::oceanbase::common::ObTimeUtility::current_time());
+        }
+        IGNORE_RETURN recv_sem_.signal();
+        if (msg_watcher_ != nullptr) {
+          msg_watcher_->notify(*this);
         }
       }
-      IGNORE_RETURN recv_sem_.post();
-      if (msg_watcher_ != nullptr) {
-        msg_watcher_->notify(*this);
-      }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: failed to switch tenant gurad", K(ret), K(tenant_id_));
   }
   return ret;
 }
 
-int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
+int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
 {
   int ret = OB_SUCCESS;
-  ObCurTraceId::TraceId* cur_trace_id = NULL;
+  ObCurTraceId::TraceId *cur_trace_id = NULL;
   bool is_first = false;
   bool is_eof = false;
   bool bcast_mode = OB_NOT_NULL(bc_service_);
@@ -248,16 +296,9 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
       LOG_WARN("failed to block data flow", K(ret));
     }
   }
-  LOG_TRACE("send message:",
-      K(buf->tenant_id()),
-      K(buf->size()),
-      KP(get_id()),
-      K_(peer),
-      K(ret),
-      K(get_send_buffer_cnt()),
-      K(belong_to_receive_data()),
-      K(belong_to_transmit_data()),
-      K(bcast_mode));
+  LOG_TRACE("send message:", K(buf->tenant_id()), K(buf->size()), KP(get_id()), K_(peer), K(ret),
+    K(get_send_buffer_cnt()), K(belong_to_receive_data()), K(belong_to_transmit_data()),
+    K(bcast_mode), K(get_msg_seq_no()));
 
   if (OB_FAIL(ret)) {
   } else if (bcast_mode) {
@@ -268,17 +309,16 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
     // The peer may not setup when the first message arrive,
     // we wait first message return and retry until peer setup.
     int64_t timeout_us = buf->timeout_ts() - ObTimeUtility::current_time();
-    SendMsgCB cb(msg_response_, *cur_trace_id);
+    SendMsgCB cb(msg_response_, *cur_trace_id, buf->timeout_ts());
     if (timeout_us <= 0) {
       ret = OB_TIMEOUT;
-      LOG_WARN("send dtl message timeout", K(ret), K(peer_), K(buf->timeout_ts()));
+      LOG_WARN("send dtl message timeout", K(ret), K(peer_),
+          K(buf->timeout_ts()));
     } else if (OB_FAIL(msg_response_.start())) {
       LOG_WARN("start message process fail", K(ret));
-    } else if (OB_FAIL(DTL.get_rpc_proxy()
-                           .to(peer_)
-                           .timeout(timeout_us)
-                           .compressed(compressor_type_)
-                           .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {
+    } else if (OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
+        .compressed(compressor_type_)
+        .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {
       LOG_WARN("send message failed", K_(peer), K(ret));
       int tmp_ret = msg_response_.on_start_fail();
       if (OB_SUCCESS != tmp_ret) {
@@ -295,8 +335,9 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
       if (is_first) {
         metric_.mark_first_out();
       }
+      metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
       if (is_eof) {
-        metric_.mark_last_out();
+        metric_.mark_eof();
         set_eof();
       }
     }
@@ -304,6 +345,6 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
   return ret;
 }
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase

@@ -1,108 +1,167 @@
 add_subdirectory(compress)
 add_subdirectory(restore)
-add_subdirectory(regex)
 
-ob_lib_add_target(oblib_lib_charset
+ob_set_subtarget(oblib_lib ALONE
+  timezone/ob_timezone_util.cpp
+  geo/ob_geo_func_difference.cpp
+  geo/ob_geo_func_covered_by.cpp
+  geo/ob_geo_func_within.cpp
+  geo/ob_geo_func_union.cpp
+)
+
+ob_set_subtarget(oblib_lib charset
+  charset/ob_ctype_bin_os.cc
+  charset/ob_ctype_gb18030_os.cc
+  charset/ob_ctype_gbk_os.cc
+  charset/ob_ctype_latin1_os.cc
+  charset/ob_ctype_mb_os.cc
+  charset/ob_ctype_simple_os.cc
+  charset/ob_ctype_os.cc
+  charset/ob_ctype_utf16_os.cc
+  charset/ob_ctype_utf8_os.cc
+  charset/ob_dtoa_os.cc
   charset/ob_charset.cpp
-  charset/ob_ctype_bin.c
-  charset/ob_ctype.c
-  charset/ob_ctype_mb.c
-  charset/ob_ctype_simple.c
-  charset/ob_ctype_utf8.c
-  charset/ob_dtoa.c
-  hash/xxhash.c
-)
-disable_pch(oblib_lib_charset)
-
-ob_lib_add_target(oblib_lib_coro_context
-  coro/context/asm/jump_aarch64_sysv_elf_gas.S
-  coro/context/asm/make_aarch64_sysv_elf_gas.S
-  coro/context/asm/ontop_aarch64_sysv_elf_gas.S
-  coro/context/asm/jump_x86_64_sysv_elf_gas.S
-  coro/context/asm/make_x86_64_sysv_elf_gas.S
-  coro/context/asm/ontop_x86_64_sysv_elf_gas.S
-)
-disable_pch(oblib_lib_coro_context)
-
-ob_set_subtarget(oblib_lib coro
-  coro/co_base_sched.cpp
-  coro/co_context.cpp
-  coro/co_local_storage.cpp
-  coro/context/fcontext.hpp
-  coro/co_protected_stack_allocator.cpp
-  coro/co_routine.cpp
-  coro/co_sched.cpp
-  coro/co_set_sched.cpp
-  coro/co_thread.cpp
-  coro/co_thread_mgr.cpp
-  coro/co_timer_queue.cpp
-  coro/co_utils.cpp
-  coro/co_var_center.cpp
-  coro/syscall/co_futex.cpp
-  coro/thread.cpp
 )
 
 ob_set_subtarget(oblib_lib common
-  alloc/abit_set.cpp
-  alloc/alloc_assist.cpp
-  alloc/alloc_failed_reason.cpp
-  alloc/alloc_func.cpp
-  alloc/alloc_struct.cpp
-  alloc/memory_dump.cpp
-  allocator/ob_allocator_v2.cpp
-  allocator/ob_block_alloc_mgr.cpp
-  allocator/ob_buddy_allocator.cpp
-  allocator/ob_concurrent_fifo_allocator.cpp
-  allocator/ob_ctx_parallel_define.cpp
-  allocator/ob_delay_free_allocator.cpp
-  allocator/ob_fifo_allocator.cpp
-  allocator/ob_hazard_ref.cpp
-  allocator/ob_libeasy_mem_pool.cpp
-  allocator/ob_malloc.cpp
-  allocator/ob_memfrag_recycle_allocator.cpp
-  allocator/ob_mem_leak_checker.cpp
-  allocator/ob_mod_define.cpp
-  allocator/ob_sql_arena_allocator.cpp
-  allocator/ob_tc_malloc.cpp
-  allocator/ob_thread_mempool.cpp
-  allocator/ob_page_manager.cpp
-  alloc/block_set.cpp
-  alloc/object_set.cpp
-  alloc/ob_malloc_allocator.cpp
-  alloc/ob_tenant_ctx_allocator.cpp
-  async/event_base.cpp
+  ob_abort.cpp
+  ob_date_unit_type.cpp
+  ob_lib_config.cpp
+  ob_name_id_def.cpp
+  ob_replica_define.cpp
+  ob_running_mode.cpp
+  runtime.cpp
+  worker.cpp
+)
+
+ob_set_subtarget(oblib_lib geo
+  geo/ob_geo_common.cpp
+  geo/ob_geo_bin.cpp
+  geo/ob_geo_ibin.cpp
+  geo/ob_geo_bin_iter.ipp
+  geo/ob_geo_tree.cpp
+  geo/ob_s2adapter.cpp
+  geo/ob_geo.cpp
+  geo/ob_wkt_parser.cpp
+  geo/ob_geo_utils.cpp
+  geo/ob_srs_wkt_parser.cpp
+  geo/ob_srs_info.cpp
+  geo/ob_geo_visitor.cpp
+  geo/ob_geo_wkb_size_visitor.cpp
+  geo/ob_geo_wkb_visitor.cpp
+  geo/ob_geo_coordinate_range_visitor.cpp
+  geo/ob_geo_latlong_check_visitor.cpp
+  geo/ob_geo_longtitude_correct_visitor.cpp
+  geo/ob_geo_to_tree_visitor.cpp
+  geo/ob_geo_to_s2_visitor.cpp
+  geo/ob_geo_to_wkt_visitor.cpp
+  geo/ob_geo_reverse_coordinate_visitor.cpp
+  geo/ob_geo_normalize_visitor.cpp
+  geo/ob_geo_denormalize_visitor.cpp
+  geo/ob_geo_wkb_check_visitor.cpp
+  geo/ob_geo_zoom_in_visitor.cpp
+  geo/ob_geo_func_envelope.cpp
+  geo/ob_geo_func_intersects.cpp
+  geo/ob_geo_func_area.cpp
+  geo/ob_geo_func_correct.cpp
+  geo/ob_geo_func_disjoint.cpp
+  geo/ob_geo_func_utils.cpp
+  geo/ob_geo_func_distance_sphere.cpp
+  geo/ob_geo_func_transform.cpp
+  geo/ob_geo_func_box.cpp
+  geo/ob_geo_func_buffer.cpp
+  geo/ob_geo_func_distance.cpp
+  geo/ob_geo_func_isvalid.cpp
+  geo/ob_geometry_cast.cpp
+)
+
+ob_set_subtarget(oblib_lib common_mixed
   atomic/ob_atomic_reference.cpp
   checksum/ob_crc64.cpp
+  checksum/ob_parity_check.cpp
   container/ob_bitmap.cpp
-  container/ob_id_set.cpp
   container/ob_vector.ipp
   cpu/ob_cpu_topology.cpp
-  ec/ob_erasure_code_isa.cpp
-  ec/ob_erasure_code_table_cache.cpp
+  encode/ob_base64_encode.cpp
+  encode/ob_quoted_printable_encode.cpp
+  encode/ob_uuencode.cpp
   encrypt/ob_encrypted_helper.cpp
   file/file_directory_utils.cpp
-  file/fileutil.cpp
   file/ob_file.cpp
-  hash_func/murmur_hash.cpp
+  file/ob_string_util.cpp
   hash/ob_concurrent_hash_map.cpp
   hash/ob_hashutils.cpp
-  io/ob_io_benchmark.cpp
-  io/ob_io_common.cpp
-  io/ob_io_disk.cpp
-  io/ob_io_manager.cpp
-  io/ob_io_request.cpp
-  io/ob_io_resource.cpp
+  hash/xxhash.c
+  hash_func/murmur_hash.cpp
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
-  lock/Cond.cpp
-  lock/Mutex.cpp
+  json_type/ob_json_path.cpp
+  json_type/ob_json_tree.cpp
+  json_type/ob_json_bin.cpp
+  json_type/ob_json_base.cpp
+  json_type/ob_json_parse.cpp
+  lds/ob_lds_define.cpp
+  net/ob_addr.cpp
+  net/ob_net_util.cpp
+  number/ob_number_v2.cpp
+  objectpool/ob_concurrency_objpool.cpp
+  objectpool/ob_pool.ipp
+  objectpool/ob_server_object_pool.cpp
+  profile/ob_atomic_event.cpp
+  profile/ob_perf_event.cpp
+  profile/ob_profile_log.cpp
+  profile/ob_trace_id.cpp
+  profile/ob_trace_id_adaptor.cpp
+  queue/ob_dedup_queue.cpp
+  queue/ob_lighty_queue.cpp
+  queue/ob_link_queue.cpp
+  queue/ob_ms_queue.cpp
+  random/ob_random.cpp
+  rc/context.cpp
+  rc/ob_rc.cpp
+  rowid/ob_urowid.cpp
+  stat/ob_di_cache.cpp
+  stat/ob_diagnose_info.cpp
+  stat/ob_latch_define.cpp
+  stat/ob_session_stat.cpp
+  stat/ob_stat_template.cpp
+  statistic_event/ob_stat_event.cpp
+  string/ob_hex_utils_base.cpp
+  string/ob_sql_string.cpp
+  string/ob_string.cpp
+  string/ob_strings.cpp
+  string/ob_string_buffer.cpp
+  task/ob_timer.cpp
+  task/ob_timer_monitor.cpp
+  thread_local/ob_tsi_utils.cpp
+  thread_local/thread_buffer.cpp
+  time/Time.cpp
+  time/ob_cur_time.cpp
+  time/ob_time_utility.cpp
+  time/ob_tsc_timestamp.cpp
+  timezone/ob_oracle_format_models.cpp
+  timezone/ob_time_convert.cpp
+  timezone/ob_timezone_info.cpp
+  trace/ob_trace.cpp
+  trace/ob_trace_event.cpp
+  wait_event/ob_wait_class.cpp
+  wait_event/ob_wait_event.cpp
+)
+
+ob_set_subtarget(oblib_lib lock
+  lock/cond.cpp
+  lock/mutex.cpp
   lock/ob_bucket_lock.cpp
   lock/ob_latch.cpp
   lock/ob_thread_cond.cpp
-  lock/RecMutex.cpp
-  lock/tbrwlock.cpp
-  metrics/ob_meter.cpp
+  lock/ob_rwlock.cpp
+  lock/ob_futex.cpp
+  lock/ob_bucket_qsync_lock.cpp
+  lock/ob_qsync_lock.cpp
+)
+
+ob_set_subtarget(oblib_lib mysqlclient
   mysqlclient/ob_isql_client.cpp
   mysqlclient/ob_mysql_connection.cpp
   mysqlclient/ob_mysql_connection_pool.cpp
@@ -118,362 +177,111 @@ ob_set_subtarget(oblib_lib common
   mysqlclient/ob_server_connection_pool.cpp
   mysqlclient/ob_single_connection_proxy.cpp
   mysqlclient/ob_single_mysql_connection_pool.cpp
-  net/ob_addr.cpp
-  net/tbnetutil.cpp
-  number/ob_number_v2.cpp
-  ob_date_unit_type.cpp
-  ob_abort.cpp
-  objectpool/ob_concurrency_objpool.cpp
-  objectpool/ob_pool.ipp
-  objectpool/ob_server_object_pool.cpp
-  ob_lib_config.cpp
-  ob_running_mode.cpp
+)
+
+ob_set_subtarget(oblib_lib oblog
   oblog/ob_async_log_struct.cpp
   oblog/ob_base_log_buffer.cpp
   oblog/ob_base_log_writer.cpp
   oblog/ob_easy_log.cpp
   oblog/ob_log.cpp
   oblog/ob_log_module.ipp
+  oblog/ob_log_time_fmt.cpp
   oblog/ob_trace_log.cpp
   oblog/ob_warning_buffer.cpp
-  oblog/ob_log_compressor.cpp
-  ob_name_id_def.cpp
-  ob_replica_define.cpp
-  profile/ob_atomic_event.cpp
-  profile/ob_perf_event.cpp
-  profile/ob_profile_log.cpp
-  profile/ob_trace_id_adaptor.cpp
-  profile/ob_trace_id.cpp
-  queue/ob_dedup_queue.cpp
-  queue/ob_lighty_queue.cpp
-  queue/ob_link_queue.cpp
-  queue/ob_ms_queue.cpp
-  queue/ob_seq_queue.cpp
-  random/ob_random.cpp
-  rc/context.cpp
-  rc/ob_rc.cpp
-  resource/achunk_mgr.cpp
-  resource/ob_resource_mgr.cpp
-  runtime.cpp
-  statistic_event/ob_stat_event.cpp
-  stat/ob_diagnose_info.cpp
-  stat/ob_di_cache.cpp
-  stat/ob_latch_define.cpp
-  stat/ob_session_stat.cpp
-  stat/ob_stat_template.cpp
-  string/ob_sql_string.cpp
-  string/ob_string.cpp
-  string/ob_strings.cpp
-  string/ob_hex_utils_base.cpp
-  task/ob_timer.cpp
-  task/ob_timer_monitor.cpp
-  thread_local/ob_tsi_factory.cpp
-  thread_local/ob_tsi_utils.cpp
-  thread_local/thread_buffer.cpp
+  oblog/ob_syslog_rate_limiter.cpp
+)
+
+
+ob_set_subtarget(oblib_lib signal
+  signal/ob_signal_handlers.cpp
+  signal/ob_signal_processor.cpp
+  signal/ob_signal_struct.cpp
+  signal/ob_signal_utils.cpp
+  signal/ob_signal_worker.cpp
+  signal/safe_snprintf.c
+  signal/ob_libunwind.c
+)
+
+ob_set_subtarget(oblib_lib thread
   thread/ob_async_task_queue.cpp
   thread/ob_dynamic_thread_pool.cpp
   thread/ob_reentrant_thread.cpp
   thread/ob_simple_thread_pool.cpp
   thread/ob_work_queue.cpp
-  thread/thread_mgr_interface.cpp
   thread/thread_mgr.cpp
-  thread/thread_pool.cpp
-  time/ob_cur_time.cpp
-  time/ob_time_utility.cpp
-  time/ob_tsc_timestamp.cpp
-  time/tbtimeutil.cpp
-  time/Time.cpp
-  timezone/ob_oracle_format_models.cpp
-  timezone/ob_time_convert.cpp
-  timezone/ob_timezone_info.cpp
-  timezone/ob_timezone_util.cpp
-  trace/ob_trace_event.cpp
+  thread/thread_mgr_interface.cpp
+  thread/protected_stack_allocator.cpp
+  thread/thread.cpp
+  thread/threads.cpp
+  thread/ob_tenant_hook.cpp
+)
+
+ob_set_subtarget(oblib_lib utility
+  utility/ob_fast_convert.cpp
   utility/ob_hang_fatal_error.cpp
   utility/ob_print_utils.cpp
   utility/ob_serialization_helper.cpp
   utility/ob_tracepoint.cpp
   utility/ob_utility.cpp
   utility/utility.cpp
-  utility/ob_fast_convert.cpp
-  wait_event/ob_wait_class.cpp
-  wait_event/ob_wait_event.cpp
-  word_segment/ob_word_segment.cpp
-  encode/ob_base64_encode.cpp
-  signal/ob_memory_cutter.cpp
-  signal/safe_snprintf.cpp
-  signal/ob_signal_struct.cpp
-  signal/ob_signal_utils.cpp
-  signal/ob_signal_handlers.cpp
-  signal/ob_signal_worker.cpp
-  signal/ob_signal_processor.cpp
-  worker.cpp
-  rowid/ob_urowid.cpp)
+  utility/ob_proto_trans_util.cpp
+)
+
+ob_set_subtarget(oblib_lib ash
+  ash/ob_active_session_guard.cpp
+)
+
+ob_set_subtarget(oblib_lib ssl
+  ssl/ob_ssl_config.cpp
+)
 
 ob_lib_add_target(oblib_lib)
 
-ob_lib_add_pchs(lib
-  utility/ob_macro_utils.h
-  ob_abort.h
-  alloc/alloc_assist.h
-  ob_errno.h
-  profile/ob_atomic_event.h
-  atomic/ob_atomic.h
-  coro/co_var_center.h
-  coro/co_utils.h
-  coro/co_sched.h
-  coro/co_routine.h
-  coro/context/fcontext.hpp
-  coro/co_context.h
-  coro/co_config.h
-  utility/ob_template_utils.h
-  utility/ob_sample_rate_limiter.h
-  utility/ob_rate_limiter.h
-  utility/ob_fast_convert.h
-  oblog/ob_log_print_kv.h
-  oblog/ob_log_module.h
-  oblog/ob_log_level.h
-  oblog/ob_log.h
-  oblog/ob_base_log_writer.h
-  oblog/ob_async_log_struct.h
-  oblog/ob_log_compressor.h
-  hash/fnv_hash.h
-  coro/co_var.h
-  time/Time.h
-  time/tbtimeutil.h
-  net/tbnetutil.h
-  lock/tbrwlock.h
-  thread/runnable.h
-  ob_define.h
-  ob_cxa_guard.h
-  lock/threadmutex.h
-  hash_func/murmur_hash.h
-  utility/serialization.h
-  utility/ob_unify_serialize.h
-  rc/ob_rc.h
-  allocator/ob_allocator.h
-  alloc/alloc_struct.h
-  hash_func/wyhash.h
-  string/ob_string.h
-  hash/xxhash.h
-  list/ob_dlink_node.h
-  hash_func/ob_hash_func.h
-  coro/thread.h
-  coro/co_timer_queue.h
-  coro/co_thread.h
-  container/ob_rbtree.h
-  list/ob_dlist.h
-  async/event_base.h
-  coro/co_base_sched.h
-  wait_event/ob_wait_class.h
-  thread_local/ob_tsi_utils.h
-  coro/syscall/co_futex.h
-  coro/routine.h
-  coro/co_set_sched.h
-  coro/co.h
-  wait_event/ob_wait_event.h
-  stat/ob_latch_define.h
-  metrics/ob_counter.h
-  time/ob_tsc_timestamp.h
-  time/ob_time_utility.h
-  resource/achunk_mgr.h
-  queue/ob_link.h
-  lock/ob_mutex.h
-  lock/ob_lock_guard.h
-  lock/ob_latch.h
-  alloc/abit_set.h
-  resource/ob_resource_mgr.h
-  resource/ob_cache_washer.h
-  random/ob_random.h
-  lock/ob_spin_rwlock.h
-  allocator/ob_tc_malloc.h
-  allocator/ob_ctx_parallel_define.h
-  alloc/alloc_failed_reason.h
-  alloc/ob_tenant_ctx_allocator.h
-  alloc/object_set.h
-  alloc/object_mgr.h
-  alloc/block_set.h
-  alloc/alloc_interface.h
-  alloc/ob_malloc_allocator.h
-  alloc/alloc_func.h
-  allocator/ob_malloc.h
-  utility/ob_utility.h
-  lock/ob_spin_lock.h
-  allocator/page_arena.h
-  coro/co_local_storage.h
-  allocator/ob_page_manager.h
-  allocator/ob_allocator_v2.h
-  thread_local/ob_tsi_factory.h
-  utility/ob_serialization_helper.h
-  utility/ob_print_utils.h
-  utility/ob_print_kv.h
-  string/ob_fixed_length_string.h
-  ob_name_def.h
-  charset/ob_ctype.h
-  ob_date_unit_type.h
-  ob_name_id_def.h
-  utility/ob_hang_fatal_error.h
-  ob_lib_config.h
-  trace/ob_seq_event_recorder.h
-  profile/ob_trace_id_adaptor.h
-  json/ob_yson.h
-  json/ob_yson_encode.h
-  container/ob_array_wrap.h
-  trace/ob_trace_event.h
-  timezone/ob_time_convert.h
-  container/ob_iarray.h
-  charset/ob_charset.h
-  oblog/ob_trace_log.h
-  utility/utility.h
-  hash/ob_hashutils.h
-  hash/ob_serialization.h
-  hash/ob_hashtable.h
-  hash/ob_hashmap.h
-  rc/context.h
-  runtime.h
-  allocator/ob_sql_arena_allocator.h
-  worker.h
-  container/ob_array.h
-  container/ob_se_array.h
-  container/ob_2d_array.h
-  container/ob_fixed_array.h
-  container/ob_array_serialization.h
-  net/ob_addr.h
-  allocator/ob_qsync.h
-  thread/thread_pool.h
-  profile/ob_trace_id.h
-  coro/co_user_thread.h
-  lock/ob_thread_cond.h
-  allocator/ob_block_alloc_mgr.h
-  number/ob_number_v2.h
-  allocator/ob_slice_alloc.h
-  allocator/ob_vslice_alloc.h
-  allocator/ob_lf_fifo_allocator.h
-  allocator/ob_concurrent_fifo_allocator.h
-  charset/ob_mysql_global.h
-  hash/ob_darray.h
-  allocator/ob_hazard_ref.h
-  container/ob_vector.h
-  checksum/ob_crc64.h
-  container/ob_se_array_iterator.h
-  objectpool/ob_concurrency_objpool.h
-  list/ob_intrusive_list.h
-  list/ob_atomic_list.h
-  allocator/ob_fifo_allocator.h
-  allocator/ob_retire_station.h
-  lock/ob_tc_ref.h
-  hash/ob_link_hashmap.h
-  hash/ob_link_hashmap_deps.h
-  hash/ob_dchash.h
-  timezone/ob_timezone_info.h
-  rowid/ob_urowid.h
-  charset/ob_dtoa.h
-  lock/Lock.h
-  lock/Mutex.h
-  lock/Cond.h
-  lock/Monitor.h
-  task/ob_timer.h
-  list/ob_list.h
-  container/ob_bit_set.h
-  regex/ob_regex.h
-  mysqlclient/ob_isql_client.h
-  objectpool/ob_pool.h
-  mysqlclient/ob_mysql_result.h
-  mysqlclient/ob_mysql_statement.h
-  mysqlclient/ob_mysql_result_impl.h
-  mysqlclient/ob_mysql_connection.h
-  mysqlclient/ob_isql_connection.h
-  mysqlclient/ob_isql_connection_pool.h
-  mysqlclient/ob_mysql_connection_pool.h
-  allocator/ob_cached_allocator.h
-  hash/ob_array_index_hash_set.h
-  compress/ob_compressor.h
-  mysqlclient/ob_mysql_proxy.h
-  compress/ob_stream_compressor.h
-  compress/zlib/ob_zlib_compressor.h
-  compress/lz4/ob_lz4_stream_compressor.h
-  compress/lz4/ob_lz4_compressor.h
-  compress/zstd/ob_zstd_stream_compressor.h
-  compress/zstd/ob_zstd_compressor.h
-  compress/zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h
-  compress/zstd_1_3_8/ob_zstd_compressor_1_3_8.h
-  compress/snappy/ob_snappy_compressor.h
-  compress/none/ob_none_compressor.h
-  compress/ob_compress_util.h
-  compress/ob_compressor_pool.h
-  queue/ob_fixed_queue.h
-  hash/ob_hashset.h
-  ob_replica_define.h
-  container/ob_array_helper.h
-  hash/ob_placement_hashutils.h
-  hash/ob_placement_hashset.h
-  container/ob_array_iterator.h
-  hash/ob_pointer_hashmap.h
-  lock/ob_drw_lock.h
-  atomic/ob_atomic_reference.h
-  lock/ob_bucket_lock.h
-  queue/ob_dedup_queue.h
-  lock/ob_tc_rwlock.h
-  hash/ob_ptr_array_map.h
-  allocator/ob_pooled_allocator.h
-  hash/ob_iteratable_hashmap.h
-  objectpool/ob_tc_factory.h
-  objectpool/ob_global_factory.h
-  lock/ob_recursive_mutex.h
-  restore/ob_storage_file.h
-  restore/ob_i_storage.h
-  restore/ob_storage.h
-  cpu/ob_cpu_topology.h
-  container/ob_id_map.h
-  objectpool/ob_resource_pool.h
-  core_local/ob_core_local_storage.h
-  string/ob_sql_string.h
-  container/ob_bitmap.h
-  container/ob_array_array.h
-  mysqlclient/ob_single_connection_proxy.h
-  mysqlclient/ob_mysql_transaction.h
-  json/ob_json.h
-  string/ob_strings.h
-  queue/ob_lighty_queue.h
-  queue/ob_seq_queue.h
-  thread/ob_simple_thread_pool.h
-  thread/thread_mgr_interface.h
-  ob_running_mode.h
-  utility/ob_tracepoint.h
-  hash/ob_placement_hashmap.h
-  stat/ob_stat_template.h
-  statistic_event/ob_stat_event.h
-  statistic_event/ob_stat_class.h
-  stat/ob_diagnose_info.h
-  allocator/ob_fixed_size_block_allocator.h
-  allocator/ob_small_allocator.h
-  io/ob_io_resource.h
-  io/ob_io_request.h
-  io/ob_io_disk.h
-  io/ob_io_common.h
-  io/ob_io_manager.h
-  io/ob_io_benchmark.h
-  thread/ob_thread_name.h
-  thread/ob_reentrant_thread.h
-  hash/ob_hash.h
-  hash/ob_fixed_hash2.h
-  thread/ob_async_task_queue.h
-  hash/ob_linear_hash_map.h
-  allocator/ob_external_ref.h
-  oblog/ob_warning_buffer.h
-  thread/thread_mgr.h
-  thread/thread_define.h
-  hash/ob_refered_map.h
-  atomic/atomic128.h
-  profile/ob_active_resource_list.h
-  list/dlink.h
-  bloom_filter/ob_bloomfilter.h
-  container/ob_fast_array.h
-  list/ob_obj_store.h
-  time/ob_cur_time.h
-  hash/ob_concurrent_hash_map.h
+ob_set_subtarget(ob_malloc_object_list common_alloc
+  alloc/abit_set.cpp
+  alloc/alloc_assist.cpp
+  alloc/alloc_failed_reason.cpp
+  alloc/alloc_func.cpp
+  alloc/alloc_struct.cpp
+  alloc/block_set.cpp
+  alloc/memory_dump.cpp
+  alloc/ob_malloc_allocator.cpp
+  alloc/ob_malloc_callback.cpp
+  alloc/ob_malloc_sample_struct.cpp
+  alloc/ob_tenant_ctx_allocator.cpp
+  alloc/object_mgr.cpp
+  alloc/object_set.cpp
+  alloc/memory_sanity.cpp
+  alloc/ob_futex_v2.cpp
+  alloc/ob_latch_v2.cpp
+  resource/achunk_mgr.cpp
+  resource/ob_resource_mgr.cpp
+  allocator/ob_allocator_v2.cpp
+  allocator/ob_block_alloc_mgr.cpp
+  allocator/ob_concurrent_fifo_allocator.cpp
+  allocator/ob_ctx_parallel_define.cpp
+  allocator/ob_delay_free_allocator.cpp
+  allocator/ob_fifo_allocator.cpp
+  allocator/ob_hazard_ref.cpp
+  allocator/ob_libeasy_mem_pool.cpp
+  allocator/ob_malloc.cpp
+  allocator/ob_mem_leak_checker.cpp
+  allocator/ob_mod_define.cpp
+  allocator/ob_page_manager.cpp
+  allocator/ob_slice_alloc.cpp
+  allocator/ob_tc_malloc.cpp
 )
+ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
+target_link_libraries(ob_malloc_object oblib_base_base_base)
+add_library(ob_malloc STATIC)
+target_link_libraries(ob_malloc ob_malloc_object)
 
 add_library(malloc_hook STATIC
   alloc/malloc_hook.cpp
   alloc/malloc_hook.h)
 target_link_libraries(malloc_hook oblib_base)
+
+target_link_libraries(oblib_lib
+  PUBLIC ob_malloc
+)

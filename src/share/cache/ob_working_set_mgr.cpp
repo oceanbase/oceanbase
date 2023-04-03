@@ -16,9 +16,11 @@
 
 #include "ob_kvcache_inst_map.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace lib;
-namespace common {
+namespace common
+{
 void WorkingSetMB::reset()
 {
   mb_handle_ = NULL;
@@ -30,7 +32,7 @@ void WorkingSetMB::reset()
   retire_link_.reset();
 }
 
-int WorkingSetMB::store(const ObIKVCacheKey& key, const ObIKVCacheValue& value, ObKVCachePair*& kvpair)
+int WorkingSetMB::store(const ObIKVCacheKey &key, const ObIKVCacheValue &value, ObKVCachePair *&kvpair)
 {
   int ret = OB_SUCCESS;
   if (NULL == mb_handle_) {
@@ -45,7 +47,10 @@ int WorkingSetMB::store(const ObIKVCacheKey& key, const ObIKVCacheValue& value, 
 }
 
 int WorkingSetMB::alloc(
-    const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair*& kvpair)
+    const int64_t key_size,
+    const int64_t value_size,
+    const int64_t align_kv_size,
+    ObKVCachePair *&kvpair)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mb_handle_)) {
@@ -62,7 +67,7 @@ int WorkingSetMB::alloc(
 void WorkingSetMB::set_full(const double base_mb_score)
 {
   if (NULL == mb_handle_) {
-    LOG_ERROR("mb_handle_ is null", KP_(mb_handle));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "mb_handle_ is null", KP_(mb_handle));
   } else {
     mb_handle_->set_full(base_mb_score);
   }
@@ -78,8 +83,11 @@ ObWorkingSet::~ObWorkingSet()
   reset();
 }
 
-int ObWorkingSet::init(const WSListKey& ws_list_key, int64_t limit, ObKVMemBlockHandle* mb_handle,
-    ObFixedQueue<WorkingSetMB>& ws_mb_pool, ObIMBHandleAllocator& mb_handle_allocator)
+int ObWorkingSet::init(
+    const WSListKey &ws_list_key,
+    int64_t limit, ObKVMemBlockHandle *mb_handle,
+    ObFixedQueue<WorkingSetMB> &ws_mb_pool,
+    ObIMBHandleAllocator &mb_handle_allocator)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -125,7 +133,7 @@ void ObWorkingSet::reset()
   inited_ = false;
 }
 
-bool ObWorkingSet::add_handle_ref(WorkingSetMB* ws_mb)
+bool ObWorkingSet::add_handle_ref(WorkingSetMB *ws_mb)
 {
   bool added = false;
   if (NULL != ws_mb) {
@@ -134,15 +142,15 @@ bool ObWorkingSet::add_handle_ref(WorkingSetMB* ws_mb)
   return added;
 }
 
-void ObWorkingSet::de_handle_ref(WorkingSetMB* ws_mb)
+void ObWorkingSet::de_handle_ref(WorkingSetMB *ws_mb)
 {
   if (NULL != ws_mb) {
     mb_handle_allocator_->de_handle_ref(ws_mb->mb_handle_);
   }
 }
 
-int ObWorkingSet::alloc(
-    ObKVCacheInst& inst, const enum ObKVCachePolicy policy, const int64_t block_size, WorkingSetMB*& ws_mb)
+int ObWorkingSet::alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
+    const int64_t block_size, WorkingSetMB *&ws_mb)
 {
   int ret = OB_SUCCESS;
   UNUSED(policy);
@@ -154,7 +162,7 @@ int ObWorkingSet::alloc(
     LOG_WARN("invalid argument", K(ret), K(block_size));
   } else {
     ws_mb = NULL;
-    ObKVMemBlockHandle* mb_handle = NULL;
+    ObKVMemBlockHandle *mb_handle = NULL;
     if (used_ + block_size < limit_) {
       if (OB_FAIL(mb_handle_allocator_->alloc_mbhandle(inst, block_size, mb_handle))) {
         LOG_WARN("alloc_mbhandle failed", K(ret), K(block_size));
@@ -182,7 +190,7 @@ int ObWorkingSet::alloc(
   return ret;
 }
 
-int ObWorkingSet::free(WorkingSetMB* ws_mb)
+int ObWorkingSet::free(WorkingSetMB *ws_mb)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -216,21 +224,22 @@ int ObWorkingSet::free(WorkingSetMB* ws_mb)
   return ret;
 }
 
-WorkingSetMB*& ObWorkingSet::get_curr_mb(ObKVCacheInst& inst, const enum ObKVCachePolicy policy)
+WorkingSetMB *&ObWorkingSet::get_curr_mb(ObKVCacheInst &inst, const enum ObKVCachePolicy policy)
 {
   UNUSED(inst);
   UNUSED(policy);
   return cur_;
 }
 
-bool ObWorkingSet::mb_status_match(ObKVCacheInst& inst, const enum ObKVCachePolicy policy, WorkingSetMB* ws_mb)
+bool ObWorkingSet::mb_status_match(ObKVCacheInst &inst,
+    const enum ObKVCachePolicy policy, WorkingSetMB *ws_mb)
 {
   UNUSED(inst);
   UNUSED(policy);
   return this == ws_mb->mb_handle_->working_set_;
 }
 
-int ObWorkingSet::build_ws_mb(ObKVMemBlockHandle* mb_handle, WorkingSetMB*& ws_mb)
+int ObWorkingSet::build_ws_mb(ObKVMemBlockHandle *mb_handle, WorkingSetMB *&ws_mb)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -258,21 +267,21 @@ int ObWorkingSet::build_ws_mb(ObKVMemBlockHandle* mb_handle, WorkingSetMB*& ws_m
   return ret;
 }
 
-int ObWorkingSet::reuse_mb(ObKVCacheInst& inst, const int64_t block_size, ObKVMemBlockHandle*& mb_handle)
+int ObWorkingSet::reuse_mb(ObKVCacheInst &inst, const int64_t block_size, ObKVMemBlockHandle *&mb_handle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    WorkingSetMB* reused_mb = NULL;
+    WorkingSetMB *reused_mb = NULL;
     HazardList retire_list;
     int64_t reused_size = 0;
     {
       QClockGuard guard(get_qclock());
-      ObDLink* p = static_cast<ObDLink*>(link_next(&head_));
+      ObDLink *p = static_cast<ObDLink *>(link_next(&head_));
       while (NULL != p && reused_size < block_size && OB_SUCC(ret)) {
-        WorkingSetMB* ws_mb = CONTAINER_OF(p, WorkingSetMB, dlink_);
+        WorkingSetMB *ws_mb = CONTAINER_OF(p, WorkingSetMB, dlink_);
         bool can_try_reuse = false;
         if (ws_mb->is_mark_delete()) {
           // ignore deleted ws_mb
@@ -303,7 +312,7 @@ int ObWorkingSet::reuse_mb(ObKVCacheInst& inst, const int64_t block_size, ObKVMe
           }
           ws_mb->dec_ref();
         }
-        p = static_cast<ObDLink*>(link_next(p));
+        p = static_cast<ObDLink *>(link_next(p));
       }
     }
     retire_ws_mbs(*ws_mb_pool_, retire_list);
@@ -327,11 +336,11 @@ int ObWorkingSet::reuse_mb(ObKVCacheInst& inst, const int64_t block_size, ObKVMe
   return ret;
 }
 
-bool ObWorkingSet::try_reuse_mb(WorkingSetMB* ws_mb, ObKVMemBlockHandle*& mb_handle)
+bool ObWorkingSet::try_reuse_mb(WorkingSetMB *ws_mb, ObKVMemBlockHandle *&mb_handle)
 {
   bool reused = false;
   if (NULL != ws_mb) {
-    ObKVMemBlockHandle* reused_handle = ws_mb->mb_handle_;
+    ObKVMemBlockHandle *reused_handle = ws_mb->mb_handle_;
     const uint32_t seq_num = ws_mb->seq_num_;
     // add_handle_ref before change status
     if (mb_handle_allocator_->add_handle_ref(reused_handle, seq_num)) {
@@ -347,7 +356,7 @@ bool ObWorkingSet::try_reuse_mb(WorkingSetMB* ws_mb, ObKVMemBlockHandle*& mb_han
           // try_check_and_inc_seq_num will set ref_cnt to 0, no need to de_handle_ref any more
         } else {
           if (!ATOMIC_BCAS((uint32_t*)(&reused_handle->status_), FREE, FULL)) {
-            COMMON_LOG(ERROR, "change mb_handle status back to FULL failed");
+            COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "change mb_handle status back to FULL failed");
           }
           mb_handle_allocator_->de_handle_ref(reused_handle);
         }
@@ -363,23 +372,23 @@ void ObWorkingSet::clear_mbs()
     HazardList retire_list;
     {
       QClockGuard guard(get_qclock());
-      ObDLink* p = static_cast<ObDLink*>(link_next(&head_));
+      ObDLink *p = static_cast<ObDLink *>(link_next(&head_));
       while (NULL != p) {
-        WorkingSetMB* ws_mb = CONTAINER_OF(p, WorkingSetMB, dlink_);
+        WorkingSetMB *ws_mb = CONTAINER_OF(p, WorkingSetMB, dlink_);
         if (ws_mb->is_mark_delete()) {
           // ignore deleted ws_mb
         } else {
           dl_del(&ws_mb->dlink_);
           retire_list.push(&ws_mb->retire_link_);
         }
-        p = static_cast<ObDLink*>(link_next(p));
+        p = static_cast<ObDLink *>(link_next(p));
       }
     }
     retire_ws_mbs(*ws_mb_pool_, retire_list);
   }
 }
 
-int ObWorkingSet::insert_ws_mb(ObDLink& head, WorkingSetMB* ws_mb)
+int ObWorkingSet::insert_ws_mb(ObDLink &head, WorkingSetMB *ws_mb)
 {
   int ret = OB_SUCCESS;
   if (NULL == ws_mb) {
@@ -392,7 +401,7 @@ int ObWorkingSet::insert_ws_mb(ObDLink& head, WorkingSetMB* ws_mb)
   return ret;
 }
 
-int ObWorkingSet::delete_ws_mb(ObFixedQueue<WorkingSetMB>& ws_mb_pool, WorkingSetMB* ws_mb)
+int ObWorkingSet::delete_ws_mb(ObFixedQueue<WorkingSetMB> &ws_mb_pool, WorkingSetMB *ws_mb)
 {
   int ret = OB_SUCCESS;
   if (NULL == ws_mb) {
@@ -410,7 +419,7 @@ int ObWorkingSet::delete_ws_mb(ObFixedQueue<WorkingSetMB>& ws_mb_pool, WorkingSe
   return ret;
 }
 
-void ObWorkingSet::retire_ws_mbs(ObFixedQueue<WorkingSetMB>& ws_mb_pool, HazardList& retire_list)
+void ObWorkingSet::retire_ws_mbs(ObFixedQueue<WorkingSetMB> &ws_mb_pool, HazardList &retire_list)
 {
   if (retire_list.size() > 0) {
     HazardList reclaim_list;
@@ -419,13 +428,13 @@ void ObWorkingSet::retire_ws_mbs(ObFixedQueue<WorkingSetMB>& ws_mb_pool, HazardL
   }
 }
 
-void ObWorkingSet::reuse_ws_mbs(ObFixedQueue<WorkingSetMB>& ws_mb_pool, HazardList& reclaim_list)
+void ObWorkingSet::reuse_ws_mbs(ObFixedQueue<WorkingSetMB> &ws_mb_pool, HazardList &reclaim_list)
 {
   int ret = OB_SUCCESS;
-  ObLink* p = NULL;
+  ObLink *p = NULL;
   // should continue even error occur
   while (NULL != (p = reclaim_list.pop())) {
-    WorkingSetMB* ws_mb = CONTAINER_OF(p, WorkingSetMB, retire_link_);
+    WorkingSetMB *ws_mb = CONTAINER_OF(p, WorkingSetMB, retire_link_);
     ws_mb->reset();
     if (OB_FAIL(ws_mb_pool.push(ws_mb))) {
       COMMON_LOG(ERROR, "push ws_mb to pool failed", K(ret));
@@ -443,7 +452,7 @@ ObWorkingSetMgr::WorkingSetList::~WorkingSetList()
   reset();
 }
 
-int ObWorkingSetMgr::WorkingSetList::init(const WSListKey& ws_list_key, ObIMBHandleAllocator& mb_handle_allocator)
+int ObWorkingSetMgr::WorkingSetList::init(const WSListKey &ws_list_key, ObIMBHandleAllocator &mb_handle_allocator)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -483,7 +492,7 @@ void ObWorkingSetMgr::WorkingSetList::reset()
   inited_ = false;
 }
 
-int ObWorkingSetMgr::WorkingSetList::add_ws(ObWorkingSet* ws)
+int ObWorkingSetMgr::WorkingSetList::add_ws(ObWorkingSet *ws)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -504,7 +513,7 @@ int ObWorkingSetMgr::WorkingSetList::add_ws(ObWorkingSet* ws)
   return ret;
 }
 
-int ObWorkingSetMgr::WorkingSetList::del_ws(ObWorkingSet* ws)
+int ObWorkingSetMgr::WorkingSetList::del_ws(ObWorkingSet *ws)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -525,7 +534,7 @@ int ObWorkingSetMgr::WorkingSetList::del_ws(ObWorkingSet* ws)
   return ret;
 }
 
-int ObWorkingSetMgr::WorkingSetList::pop_mb_handle(ObKVMemBlockHandle*& mb_handle)
+int ObWorkingSetMgr::WorkingSetList::pop_mb_handle(ObKVMemBlockHandle *&mb_handle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -538,7 +547,7 @@ int ObWorkingSetMgr::WorkingSetList::pop_mb_handle(ObKVMemBlockHandle*& mb_handl
       // don't print log here
     } else {
       while (OB_SUCC(ret) && free_array_.count() > 0 && NULL == mb_handle) {
-        FreeArrayMB* free_mb = NULL;
+        FreeArrayMB *free_mb = NULL;
         if (OB_FAIL(free_array_.pop_back(free_mb))) {
           LOG_WARN("pop_back failed", K(ret));
         } else {
@@ -559,7 +568,7 @@ int ObWorkingSetMgr::WorkingSetList::pop_mb_handle(ObKVMemBlockHandle*& mb_handl
   return ret;
 }
 
-int ObWorkingSetMgr::WorkingSetList::push_mb_handle(ObKVMemBlockHandle* mb_handle)
+int ObWorkingSetMgr::WorkingSetList::push_mb_handle(ObKVMemBlockHandle *mb_handle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -580,7 +589,7 @@ int ObWorkingSetMgr::WorkingSetList::push_mb_handle(ObKVMemBlockHandle* mb_handl
           free_array_mbs_.at(i).seq_num_ = mb_handle->get_seq_num();
           free_array_mbs_.at(i).in_array_ = true;
           // change status to full so that wash thread can wash it
-          ATOMIC_STORE((uint32_t*)(&mb_handle->status_), FULL);
+          ATOMIC_STORE((uint32_t *)(&mb_handle->status_), FULL);
           if (OB_FAIL(free_array_.push_back(&free_array_mbs_.at(i)))) {
             LOG_WARN("push_back failed", K(ret));
           } else {
@@ -602,39 +611,36 @@ int ObWorkingSetMgr::WorkingSetList::push_mb_handle(ObKVMemBlockHandle* mb_handl
 }
 
 ObWorkingSetMgr::ObWorkingSetMgr()
-    : inited_(false),
-      lock_(),
-      ws_list_map_(),
-      list_pool_(),
-      ws_pool_(),
-      ws_mb_pool_(),
-      mb_handle_allocator_(NULL),
-      allocator_(ObNewModIds::OB_KVSTORE_CACHE)
-{}
+  : inited_(false), lock_(), ws_list_map_(),
+    list_pool_(), ws_pool_(), ws_mb_pool_(),
+    mb_handle_allocator_(NULL), allocator_(ObNewModIds::OB_KVSTORE_CACHE)
+{
+}
 
 ObWorkingSetMgr::~ObWorkingSetMgr()
 {
   destroy();
 }
 
-int ObWorkingSetMgr::init(ObIMBHandleAllocator& mb_handle_allocator)
+int ObWorkingSetMgr::init(ObIMBHandleAllocator &mb_handle_allocator)
 {
   int ret = OB_SUCCESS;
-  char* buf = NULL;
+  char *buf = NULL;
   const int64_t list_num = MAX_CACHE_NUM * MAX_TENANT_NUM_PER_SERVER;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ws_list_map_.create(list_num, ObNewModIds::OB_KVSTORE_CACHE, ObNewModIds::OB_KVSTORE_CACHE))) {
+  } else if (OB_FAIL(ws_list_map_.create(list_num,
+        ObNewModIds::OB_KVSTORE_CACHE, ObNewModIds::OB_KVSTORE_CACHE))) {
     LOG_WARN("create ws_list_map failed", K(ret), K(list_num));
-  } else if (NULL == (buf = static_cast<char*>(
-                          allocator_.alloc((sizeof(WorkingSetList) + sizeof(WorkingSetList*)) * list_num)))) {
+  } else if (NULL == (buf = static_cast<char *>(allocator_.alloc(
+      (sizeof(WorkingSetList) + sizeof(WorkingSetList *)) * list_num)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret), K(list_num));
   } else if (OB_FAIL(list_pool_.init(list_num, buf + sizeof(WorkingSetList) * list_num))) {
     LOG_WARN("list_pool init failed", K(ret), K(list_num));
   } else {
-    WorkingSetList* list = NULL;
+    WorkingSetList *list = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < list_num; ++i) {
       list = new (buf + sizeof(WorkingSetList) * i) WorkingSetList();
       if (OB_FAIL(list_pool_.push(list))) {
@@ -645,13 +651,14 @@ int ObWorkingSetMgr::init(ObIMBHandleAllocator& mb_handle_allocator)
 
   if (OB_SUCC(ret)) {
     const int64_t ws_num = MAX_WORKING_SET_COUNT;
-    if (NULL == (buf = static_cast<char*>(allocator_.alloc((sizeof(ObWorkingSet) + sizeof(ObWorkingSet*)) * ws_num)))) {
+    if (NULL == (buf = static_cast<char *>(allocator_.alloc(
+        (sizeof(ObWorkingSet) + sizeof(ObWorkingSet *)) * ws_num)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret), K(ws_num));
     } else if (OB_FAIL(ws_pool_.init(ws_num, buf + sizeof(ObWorkingSet) * ws_num))) {
       LOG_WARN("ws_pool init failed", K(ret), K(ws_num));
     } else {
-      ObWorkingSet* ws = NULL;
+      ObWorkingSet *ws = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < ws_num; ++i) {
         ws = new (buf + sizeof(ObWorkingSet) * i) ObWorkingSet();
         if (OB_FAIL(ws_pool_.push(ws))) {
@@ -663,14 +670,14 @@ int ObWorkingSetMgr::init(ObIMBHandleAllocator& mb_handle_allocator)
 
   if (OB_SUCC(ret)) {
     const int64_t ws_mb_num = MAX_WORKING_SET_MB_COUNT;
-    if (NULL ==
-        (buf = static_cast<char*>(allocator_.alloc((sizeof(WorkingSetMB) + sizeof(WorkingSetMB*)) * ws_mb_num)))) {
+    if (NULL == (buf = static_cast<char *>(allocator_.alloc(
+        (sizeof(WorkingSetMB) + sizeof(WorkingSetMB *)) * ws_mb_num)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret), K(ws_mb_num));
     } else if (OB_FAIL(ws_mb_pool_.init(ws_mb_num, buf + sizeof(WorkingSetMB) * ws_mb_num))) {
       LOG_WARN("ws_mb_pool init failed", K(ret), K(ws_mb_num));
     } else {
-      WorkingSetMB* ws_mb = NULL;
+      WorkingSetMB *ws_mb = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < ws_mb_num; ++i) {
         ws_mb = new (buf + sizeof(WorkingSetMB) * i) WorkingSetMB();
         if (OB_FAIL(ws_mb_pool_.push(ws_mb))) {
@@ -705,7 +712,8 @@ void ObWorkingSetMgr::destroy()
   }
 }
 
-int ObWorkingSetMgr::create_working_set(const WSListKey& ws_list_key, const int64_t limit, ObWorkingSet*& working_set)
+int ObWorkingSetMgr::create_working_set(const WSListKey &ws_list_key,
+    const int64_t limit, ObWorkingSet *&working_set)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -715,8 +723,8 @@ int ObWorkingSetMgr::create_working_set(const WSListKey& ws_list_key, const int6
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ws_list_key));
   } else {
-    ObKVMemBlockHandle* mb_handle = NULL;
-    WorkingSetList* list = NULL;
+    ObKVMemBlockHandle *mb_handle = NULL;
+    WorkingSetList *list = NULL;
     const bool create_not_exist = true;
     DRWLock::WRLockGuard wr_guard(lock_);
     working_set = NULL;
@@ -726,7 +734,8 @@ int ObWorkingSetMgr::create_working_set(const WSListKey& ws_list_key, const int6
       LOG_WARN("ws_pool pop failed", K(ret));
     } else if (OB_FAIL(alloc_mb(list, mb_handle))) {
       LOG_WARN("alloc_mb failed", K(ret));
-    } else if (OB_FAIL(working_set->init(ws_list_key, limit, mb_handle, ws_mb_pool_, *mb_handle_allocator_))) {
+    } else if (OB_FAIL(working_set->init(
+        ws_list_key, limit, mb_handle, ws_mb_pool_, *mb_handle_allocator_))) {
       LOG_WARN("working_set init failed", K(ret), K(ws_list_key), K(limit));
     } else if (OB_FAIL(list->add_ws(working_set))) {
       LOG_WARN("add_ws failed", K(ret), KP(working_set));
@@ -743,7 +752,7 @@ int ObWorkingSetMgr::create_working_set(const WSListKey& ws_list_key, const int6
   return ret;
 }
 
-int ObWorkingSetMgr::delete_working_set(ObWorkingSet* working_set)
+int ObWorkingSetMgr::delete_working_set(ObWorkingSet *working_set)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -756,9 +765,9 @@ int ObWorkingSetMgr::delete_working_set(ObWorkingSet* working_set)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid working_set", K(ret), "working_set", *working_set);
   } else {
-    WorkingSetList* list = NULL;
+    WorkingSetList *list = NULL;
     const bool create_not_exist = false;
-    const WSListKey& ws_list_key = working_set->get_ws_list_key();
+    const WSListKey &ws_list_key = working_set->get_ws_list_key();
     DRWLock::WRLockGuard wr_guard(lock_);
     if (OB_FAIL(get_ws_list(ws_list_key, create_not_exist, list))) {
       LOG_WARN("get_ws_list failed", K(ret), K(ws_list_key), K(create_not_exist));
@@ -776,7 +785,8 @@ int ObWorkingSetMgr::delete_working_set(ObWorkingSet* working_set)
   return ret;
 }
 
-int ObWorkingSetMgr::get_ws_list(const WSListKey& ws_list_key, const bool create_not_exist, WorkingSetList*& list)
+int ObWorkingSetMgr::get_ws_list(const WSListKey &ws_list_key,
+                                 const bool create_not_exist, WorkingSetList *&list)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -801,7 +811,7 @@ int ObWorkingSetMgr::get_ws_list(const WSListKey& ws_list_key, const bool create
   return ret;
 }
 
-int ObWorkingSetMgr::create_ws_list(const WSListKey& ws_list_key, WorkingSetList*& list)
+int ObWorkingSetMgr::create_ws_list(const WSListKey &ws_list_key, WorkingSetList *&list)
 {
   int ret = OB_SUCCESS;
   list = NULL;
@@ -832,7 +842,7 @@ int ObWorkingSetMgr::create_ws_list(const WSListKey& ws_list_key, WorkingSetList
   return ret;
 }
 
-int ObWorkingSetMgr::alloc_mb(WorkingSetList* list, ObKVMemBlockHandle*& mb_handle)
+int ObWorkingSetMgr::alloc_mb(WorkingSetList *list, ObKVMemBlockHandle *&mb_handle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -855,7 +865,7 @@ int ObWorkingSetMgr::alloc_mb(WorkingSetList* list, ObKVMemBlockHandle*& mb_hand
   return ret;
 }
 
-int ObWorkingSetMgr::free_mb(WorkingSetList* list, ObKVMemBlockHandle* mb_handle)
+int ObWorkingSetMgr::free_mb(WorkingSetList *list, ObKVMemBlockHandle *mb_handle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -877,5 +887,5 @@ int ObWorkingSetMgr::free_mb(WorkingSetList* list, ObKVMemBlockHandle* mb_handle
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase

@@ -1,0 +1,12 @@
+desc oceanbase.__all_virtual_upgrade_inspection;
+Field	Type	Null	Key	Default	Extra
+name	varchar(128)	NO		NULL	
+info	varchar(4096)	NO		NULL	
+select * from oceanbase.__all_virtual_upgrade_inspection;
+name	info
+zone_check	succeed
+sys_stat_check	succeed
+sys_param_check	succeed
+sys_table_schema_check	succeed
+data_version_check	succeed
+all_check	succeed

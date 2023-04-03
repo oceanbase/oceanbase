@@ -20,31 +20,97 @@
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
+#include "share/ob_lob_access_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace sql;
 using namespace obmysql;
 using namespace share;
-namespace observer {
+namespace observer
+{
 
-ObSyncCmdDriver::ObSyncCmdDriver(const ObGlobalContext& gctx, const ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-    ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender)
-    : ObQueryDriver(gctx, ctx, session, retry_ctrl, sender)
-{}
+ObSyncCmdDriver::ObSyncCmdDriver(const ObGlobalContext &gctx,
+                                 const ObSqlCtx &ctx,
+                                 sql::ObSQLSessionInfo &session,
+                                 ObQueryRetryCtrl &retry_ctrl,
+                                 ObIMPPacketSender &sender,
+                                 bool is_prexecute)
+    : ObQueryDriver(gctx, ctx, session, retry_ctrl, sender, is_prexecute)
+{
+}
 
 ObSyncCmdDriver::~ObSyncCmdDriver()
-{}
-
-int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
 {
+}
+
+int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
+{
+  int ret = OB_SUCCESS;
+  OMPKEOF eofp;
+
+  if (OB_FAIL(seal_eof_packet(has_more_result, eofp))) {
+    LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
+  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+    LOG_WARN("response packet fail", K(ret), K(has_more_result));
+  }
+  return ret;
+}
+
+int ObSyncCmdDriver::seal_eof_packet(bool has_more_result, OMPKEOF& eofp)
+{
+  int ret = OB_SUCCESS;
+  const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
+  uint16_t warning_count = 0;
+  if (OB_ISNULL(warnings_buf)) {
+    LOG_WARN("can not get thread warnings buffer", K(warnings_buf));
+  } else {
+    warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+  }
+  eofp.set_warning_count(warning_count);
+  ObServerStatusFlags flags = eofp.get_server_status();
+  flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
+    = (session_.is_server_status_in_transaction() ? 1 : 0);
+  flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (session_.get_local_autocommit() ? 1 : 0);
+  flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
+  // flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = 1;
+  if (!session_.is_obproxy_mode()) {
+    // in java client or others, use slow query bit to indicate partition hit or not
+    flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
+  }
+
+  eofp.set_server_status(flags);
+
+  // for proxy
+  // in multi-stmt, send extra ok packet in the last stmt(has no more result)
+  if (!is_prexecute_ && !has_more_result
+        && OB_FAIL(sender_.update_last_pkt_pos())) {
+    LOG_WARN("failed to update last packet pos", K(ret));
+  }
+  return ret;
+}
+
+int ObSyncCmdDriver::response_query_result(sql::ObResultSet &result,
+                                           bool is_ps_protocol,
+                                           bool has_more_result,
+                                           bool &can_retry,
+                                           int64_t fetch_limit)
+{
+  return ObQueryDriver::response_query_result(
+    result, is_ps_protocol, has_more_result, can_retry, fetch_limit);
+}
+
+int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
+{
+  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
-  bool ac = true;
-  if (OB_FAIL(session_.get_autocommit(ac))) {
-    LOG_WARN("fail to get autocommit", K(ret));
-  } else if (OB_FAIL(result.sync_open())) {
+  OMPKEOF eofp;
+  bool need_send_eof = false;
+  if (OB_FAIL(result.open())) {
+    // 只有open失败的时候才可能重试，因open的时候会开启事务/语句等，并且没有给用户返回任何信息
     int cret = OB_SUCCESS;
     int cli_ret = OB_SUCCESS;
     if (ObStmt::is_ddl_stmt(result.get_stmt_type(), result.has_global_variable())) {
@@ -60,11 +126,11 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
       LOG_WARN("close result set fail", K(cret));
     }
 
-    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
-    LOG_WARN("result set open failed, check if need retry", K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
+    // open失败，决定是否需要重试
+    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
+    LOG_WARN("result set open failed, check if need retry",
+             K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
     ret = cli_ret;
-
-  } else if (FALSE_IT(THIS_WORKER.disable_retry())) {
   } else if (result.is_with_rows()) {
     if (!result.is_pl_stmt(result.get_stmt_type())) {
       ret = OB_ERR_UNEXPECTED;
@@ -76,38 +142,13 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
         LOG_WARN("close result set fail", K(cret));
       }
     } else {
-      OMPKEOF eofp;
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
-      uint16_t warning_count = 0;
-      if (OB_ISNULL(warnings_buf)) {
-        LOG_WARN("can not get thread warnings buffer");
+      if (OB_FAIL(seal_eof_packet(result.has_more_result(), eofp))) {
+        LOG_WARN("failed to send eof package", K(ret), K(result.has_more_result()));
       } else {
-        warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
-      }
-      eofp.set_warning_count(warning_count);
-      ObServerStatusFlags flags = eofp.get_server_status();
-      flags.status_flags_.OB_SERVER_STATUS_IN_TRANS = (session_.is_server_status_in_transaction() ? 1 : 0);
-      flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
-      flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = result.has_more_result();
-      // flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = 1;
-      if (!session_.is_obproxy_mode()) {
-        // in java client or others, use slow query bit to indicate partition hit or not
-        flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
-      }
-
-      eofp.set_server_status(flags);
-
-      // for proxy
-      // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-      if (!result.has_more_result()) {
-        sender_.update_last_pkt_pos();
-      }
-      if (OB_FAIL(sender_.response_packet(eofp))) {
-        LOG_WARN("response packet fail", K(ret));
+        need_send_eof = true;
       }
     }
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
 
   if (OB_SUCC(ret)) {
     // for CRUD SQL
@@ -116,24 +157,37 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
 
     if (OB_FAIL(result.close())) {
       LOG_WARN("close result set fail", K(ret));
-    } else if (!result.is_with_rows() || (sender_.need_send_extra_ok_packet() && !result.has_more_result())) {
+    } else if (!result.is_with_rows()
+                || (sender_.need_send_extra_ok_packet() && !result.has_more_result())
+                || is_prexecute_) {
       process_ok = true;
       ObOKPParam ok_param;
       ok_param.message_ = const_cast<char*>(result.get_message());
       ok_param.affected_rows_ = result.get_affected_rows();
       ok_param.lii_ = result.get_last_insert_id_to_client();
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
       } else {
-        ok_param.warnings_count_ = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+        ok_param.warnings_count_ =
+            static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
       }
       ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
       ok_param.has_more_result_ = result.has_more_result();
-      if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
-        LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+      ok_param.has_pl_out_ = is_prexecute_ && result.is_with_rows() ? true : false;
+      if (need_send_eof) {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param, &eofp))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
       }
-    } else { /*do nothing*/
+    } else {
+      if (need_send_eof && OB_FAIL(sender_.response_packet(eofp, &session_))) {
+        LOG_WARN("response packet fail", K(ret));
+      }
     }
   }
 
@@ -144,7 +198,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
       LOG_WARN("send error packet fail", K(sret), K(ret));
     }
   }
-
+  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
   return ret;
 }
 
@@ -152,7 +206,8 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
 // two aspects:
 // - set session last_schema_version to proxy for part DDL
 // - promote local schema up to target version if last_schema_version is set
-int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& result)
+int ObSyncCmdDriver::process_schema_version_changes(
+    const ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
 
@@ -163,24 +218,28 @@ int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& resu
     uint64_t tenant_id = session_.get_effective_tenant_id();
     // - set session last_schema_version to proxy for DDL
     if (ObStmt::is_ddl_stmt(result.get_stmt_type(), result.has_global_variable())) {
-      if (OB_FAIL(ObSQLUtils::update_session_last_schema_version(*gctx_.schema_service_, session_))) {
+      if (OB_FAIL(ObSQLUtils::update_session_last_schema_version(*gctx_.schema_service_,
+                                                                 session_))) {
         LOG_WARN("fail to update session last schema_version", K(ret));
       }
     }
 
+    // TODO: (xiaochu.yh) 和xiyu沟通结论：这段逻辑可以下移
+    //  > 应该是当时没有细想吧， 可以放到下层的result set中
     if (OB_SUCC(ret)) {
       // - promote local schema up to target version if last_schema_version is set
       if (result.get_stmt_type() == stmt::T_VARIABLE_SET) {
-        const ObVariableSetStmt* set_stmt = static_cast<const ObVariableSetStmt*>(result.get_cmd());
+        const ObVariableSetStmt *set_stmt = static_cast<const ObVariableSetStmt*>(result.get_cmd());
         if (NULL != set_stmt) {
-          ObVariableSetStmt::VariableNamesSetNode tmp_node;  // just for init node
+          ObVariableSetStmt::VariableSetNode tmp_node;//just for init node
           for (int64_t i = 0; OB_SUCC(ret) && i < set_stmt->get_variables_size(); ++i) {
-            ObVariableSetStmt::VariableNamesSetNode& var_node = tmp_node;
+            ObVariableSetStmt::VariableSetNode &var_node = tmp_node;
             ObString set_var_name(OB_SV_LAST_SCHEMA_VERSION);
             if (OB_FAIL(set_stmt->get_variable_node(i, var_node))) {
               LOG_WARN("fail to get_variable_node", K(i), K(ret));
-            } else if (var_node.is_set_variable_) {
-              if (ObCharset::case_insensitive_equal(var_node.var_set_node_.variable_name_, set_var_name)) {
+            } else {
+              if (ObCharset::case_insensitive_equal(var_node.variable_name_,
+                                                    set_var_name)) {
                 if (OB_FAIL(check_and_refresh_schema(tenant_id))) {
                   LOG_WARN("failed to check_and_refresh_schema", K(ret), K(tenant_id));
                 }
@@ -195,6 +254,9 @@ int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& resu
   return ret;
 }
 
+// FIXME: 在目标租户执行 set @@ob_last_schema_version = 123456;
+//        后是否需要触发刷 schema？
+//        当前的行为是，只要通过 sql 主动设置，则按照设置的来。
 int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -218,50 +280,63 @@ int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
   return ret;
 }
 
-int ObSyncCmdDriver::response_query_result(ObMySQLResultSet& result)
+int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
-  session_.get_trans_desc().consistency_wait();
-
-  const common::ObNewRow* row = NULL;
-  if (OB_FAIL(result.next_row(row))) {
+  const common::ObNewRow *row = NULL;
+  if (OB_FAIL(result.next_row(row)) ) {
     LOG_WARN("fail to get next row", K(ret));
-  } else if (OB_FAIL(response_query_header(result, result.has_more_result(), true))) {
+  } else if ((!is_prexecute_ || stmt::T_ANONYMOUS_BLOCK == result.get_stmt_type()) &&
+              OB_FAIL(response_query_header(result, result.has_more_result(), true, is_prexecute_))) {
     LOG_WARN("fail to response query header", K(ret));
   } else if (OB_ISNULL(ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
-    ObNewRow* tmp_row = const_cast<ObNewRow*>(row);
+    ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
-      if (ob_is_string_type(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
+      if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
         OZ(convert_string_value_charset(value, result));
-      } else if (value.is_clob_locator() && OB_FAIL(convert_lob_value_charset(value, result))) {
+      } else if (value.is_clob_locator()
+                && OB_FAIL(convert_lob_value_charset(value, result))) {
         LOG_WARN("convert lob value charset failed", K(ret));
+      } else if (ob_is_text_tc(value.get_type())
+                && OB_FAIL(convert_text_value_charset(value, result))) {
+        LOG_WARN("convert text value charset failed", K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(convert_lob_locator_to_longtext(value, result))) {
+      if (OB_SUCC(ret)
+          && (value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+          && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
       }
     }
 
     if (OB_SUCC(ret)) {
       MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? BINARY : TEXT;
-      const ObSQLSessionInfo* tmp_session = result.get_exec_context().get_my_session();
+      const ObSQLSessionInfo *tmp_session = result.get_exec_context().get_my_session();
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(tmp_session);
-      OMPKRow rp(ObSMRow(protocol_type,
-          *row,
-          dtc_params,
-          result.get_field_columns(),
-          ctx_.schema_guard_,
-          tmp_session->get_effective_tenant_id()));
-      if (OB_FAIL(sender_.response_packet(rp))) {
+      ObSMRow sm_row(protocol_type,
+                     *row,
+                     dtc_params,
+                     result.get_field_columns(),
+                     ctx_.schema_guard_,
+                     tmp_session->get_effective_tenant_id());
+      OMPKRow rp(sm_row);
+      if (OB_FAIL(sender_.response_packet(rp, const_cast<ObSQLSessionInfo *>(tmp_session)))) {
         LOG_WARN("response packet fail", K(ret), KP(row));
+      } else {
+        ObArenaAllocator *allocator = NULL;
+        if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+          LOG_WARN("fail to get lob fake allocator", K(ret));
+        } else if (OB_NOT_NULL(allocator)) {
+          allocator->reset();
+        }
       }
     }
   }
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

@@ -23,11 +23,11 @@
 */
 
 #ifndef HAVE_ADJTIME
-#define HAVE_ADJTIME 1
+#define HAVE_ADJTIME    1
 #endif /* !defined HAVE_ADJTIME */
 
 #ifndef HAVE_GETTEXT
-#define HAVE_GETTEXT 0
+#define HAVE_GETTEXT    0
 #endif /* !defined HAVE_GETTEXT */
 
 #ifndef HAVE_INCOMPATIBLE_CTIME_R
@@ -35,7 +35,7 @@
 #endif /* !defined INCOMPATIBLE_CTIME_R */
 
 #ifndef HAVE_LINK
-#define HAVE_LINK 1
+#define HAVE_LINK   1
 #endif /* !defined HAVE_LINK */
 
 #ifndef HAVE_SETTIMEOFDAY
@@ -43,27 +43,27 @@
 #endif /* !defined HAVE_SETTIMEOFDAY */
 
 #ifndef HAVE_SYMLINK
-#define HAVE_SYMLINK 1
+#define HAVE_SYMLINK    1
 #endif /* !defined HAVE_SYMLINK */
 
 #ifndef HAVE_SYS_STAT_H
-#define HAVE_SYS_STAT_H 1
+#define HAVE_SYS_STAT_H   1
 #endif /* !defined HAVE_SYS_STAT_H */
 
 #ifndef HAVE_SYS_WAIT_H
-#define HAVE_SYS_WAIT_H 1
+#define HAVE_SYS_WAIT_H   1
 #endif /* !defined HAVE_SYS_WAIT_H */
 
 #ifndef HAVE_UNISTD_H
-#define HAVE_UNISTD_H 1
+#define HAVE_UNISTD_H   1
 #endif /* !defined HAVE_UNISTD_H */
 
 #ifndef HAVE_UTMPX_H
-#define HAVE_UTMPX_H 0
+#define HAVE_UTMPX_H    0
 #endif /* !defined HAVE_UTMPX_H */
 
 #ifndef LOCALE_HOME
-#define LOCALE_HOME "/usr/lib/locale"
+#define LOCALE_HOME   "/usr/lib/locale"
 #endif /* !defined LOCALE_HOME */
 
 #if HAVE_INCOMPATIBLE_CTIME_R
@@ -75,7 +75,7 @@
 ** Nested includes
 */
 
-#include "sys/types.h" /* for time_t */
+#include "sys/types.h"  /* for time_t */
 #include "stdio.h"
 #include "errno.h"
 #include "string.h"
@@ -89,10 +89,10 @@
 
 #if HAVE_SYS_WAIT_H
 #include <sys/wait.h> /* for WIFEXITED and WEXITSTATUS */
-#endif                /* HAVE_SYS_WAIT_H */
+#endif /* HAVE_SYS_WAIT_H */
 
 #ifndef WIFEXITED
-#define WIFEXITED(status) (((status)&0xff) == 0)
+#define WIFEXITED(status) (((status) & 0xff) == 0)
 #endif /* !defined WIFEXITED */
 #ifndef WEXITSTATUS
 #define WEXITSTATUS(status) (((status) >> 8) & 0xff)
@@ -100,19 +100,21 @@
 
 #if HAVE_UNISTD_H
 #include "unistd.h" /* for F_OK, R_OK, and other POSIX goodness */
-#endif              /* HAVE_UNISTD_H */
+#endif /* HAVE_UNISTD_H */
 
 #ifndef F_OK
-#define F_OK 0
+#define F_OK  0
 #endif /* !defined F_OK */
 #ifndef R_OK
-#define R_OK 4
+#define R_OK  4
 #endif /* !defined R_OK */
 
 #define is_digit(c) (9 >= (unsigned)(c) - '0')
 
 #ifndef HAVE_STDINT_H
-#define HAVE_STDINT_H (__STDC_VERSION__ >= 199901 || (__GLIBC__ + (0 < __GLIBC_MINOR__)) > 2)
+#define HAVE_STDINT_H \
+  (__STDC_VERSION__ >= 199901 || \
+   (__GLIBC__ + (0 < __GLIBC_MINOR__)) > 2)
 #endif
 
 #if HAVE_STDINT_H
@@ -120,71 +122,71 @@
 #endif
 
 #ifndef HAVE_INTTYPES_H
-#define HAVE_INTTYPES_H HAVE_STDINT_H
+# define HAVE_INTTYPES_H HAVE_STDINT_H
 #endif
 #if HAVE_INTTYPES_H
-#include <inttypes.h>
+# include <inttypes.h>
 #endif
 
 #ifndef INT_FAST64_MAX
 #if defined __LONG_LONG_MAX__ || defined LLONG_MAX
 typedef long long int_fast64_t;
-#ifdef LLONG_MAX
-#define INT_FAST64_MAX LLONG_MAX
-#define INT_FAST64_MIN LLONG_MIN
-#else
-#define INT_FAST64_MAX __LONG_LONG_MAX__
-#define INT_FAST64_MIN __LONG_LONG_MIN__
-#endif
-#define SCNdFAST64 "lld"
+# ifdef LLONG_MAX
+#  define INT_FAST64_MAX LLONG_MAX
+#  define INT_FAST64_MIN LLONG_MIN
+# else
+#  define INT_FAST64_MAX __LONG_LONG_MAX__
+#  define INT_FAST64_MIN __LONG_LONG_MIN__
+# endif
+# define SCNdFAST64 "lld"
 #else
 #if (LONG_MAX >> 31) < 0xffffffff
 
 #endif /* (LONG_MAX >> 31) < 0xffffffff */
-typedef long int_fast64_t;
-#define INT_FAST64_MAX LONG_MAX
-#define INT_FAST64_MIN LONG_MIN
-#define SCNdFAST64 "ld"
+typedef long    int_fast64_t;
+# define INT_FAST64_MAX LONG_MAX
+# define INT_FAST64_MIN LONG_MIN
+# define SCNdFAST64 "ld"
 #endif
 #endif
 
 #ifndef INT_FAST32_MAX
-#if 0 == INT_MAX >> 31
+# if 0 == INT_MAX >> 31
 typedef long int_fast32_t;
-#else
+# else
 typedef int int_fast32_t;
-#endif
+# endif
 #endif
 
 #ifndef INTMAX_MAX
-#if defined LLONG_MAX || defined __LONG_LONG_MAX__
+# if defined LLONG_MAX || defined __LONG_LONG_MAX__
 typedef long long intmax_t;
-#define strtoimax strtoll
-#define PRIdMAX "lld"
-#ifdef LLONG_MAX
-#define INTMAX_MIN LLONG_MIN
-#define INTMAX_MAX LLONG_MAX
-#else
-#define INTMAX_MIN __LONG_LONG_MIN__
-#define INTMAX_MAX __LONG_LONG_MAX__
-#endif
-#else
+#  define strtoimax strtoll
+#  define PRIdMAX "lld"
+#  ifdef LLONG_MAX
+#   define INTMAX_MIN LLONG_MIN
+#   define INTMAX_MAX LLONG_MAX
+#  else
+#   define INTMAX_MIN __LONG_LONG_MIN__
+#   define INTMAX_MAX __LONG_LONG_MAX__
+#  endif
+# else
 typedef long intmax_t;
-#define strtoimax strtol
-#define PRIdMAX "ld"
-#define INTMAX_MAX LONG_MAX
-#define INTMAX_MIN LONG_MIN
-#endif
+#  define strtoimax strtol
+#  define PRIdMAX "ld"
+#  define INTMAX_MAX LONG_MAX
+#  define INTMAX_MIN LONG_MIN
+# endif
 #endif
 
 #ifndef UINTMAX_MAX
-#if defined ULLONG_MAX || defined __LONG_LONG_MAX__
+# if defined ULLONG_MAX || defined __LONG_LONG_MAX__
 typedef unsigned long long uintmax_t;
-#define PRIuMAX "llu"
-#else
+#  define PRIuMAX "llu"
+# else
 typedef unsigned long uintmax_t;
-#define PRIuMAX "lu"
-#endif
+#  define PRIuMAX "lu"
+# endif
 #endif
 
 #ifndef INT32_MAX
@@ -195,25 +197,25 @@ typedef unsigned long uintmax_t;
 #endif
 
 #if __GNUC__ + (96 <= __GNUC_MINOR__) > 2
-#define ATTRIBUTE_FORMAT(spec) __attribute__((__format__ spec))
-#define ATTRIBUTE_CONST __attribute__((const))
-#define ATTRIBUTE_PURE __attribute__((__pure__))
+# define ATTRIBUTE_FORMAT(spec) __attribute__ ((__format__ spec))
+# define ATTRIBUTE_CONST __attribute__ ((const))
+# define ATTRIBUTE_PURE __attribute__ ((__pure__))
 #else
-#define ATTRIBUTE_FORMAT(spec)
-#define ATTRIBUTE_CONST
-#define ATTRIBUTE_PURE
+# define ATTRIBUTE_FORMAT(spec)
+# define ATTRIBUTE_CONST
+# define ATTRIBUTE_PURE
 #endif
 
 #if !defined _Noreturn && 201112 > __STDC_VERSION__
-#if 2 < __GNUC__ + (8 <= __GNUC_MINOR__)
-#define _Noreturn __attribute__((__noreturn__))
-#else
-#define _Noreturn
-#endif
+# if 2 < __GNUC__ + (8 <= __GNUC_MINOR__)
+#  define _Noreturn __attribute__ ((__noreturn__))
+# else
+#  define _Noreturn
+# endif
 #endif
 
 #if __STDC_VERSION__ < 199901 && !defined restrict
-#define restrict
+# define restrict
 #endif
 
 /*
@@ -227,7 +229,7 @@ typedef unsigned long uintmax_t;
 */
 
 #ifndef asctime_r
-extern char* asctime_r(struct tm const*, char*);
+extern char  *asctime_r(struct tm const *, char *);
 #endif
 
 /*
@@ -238,44 +240,42 @@ extern char* asctime_r(struct tm const*, char*);
 ** typical platforms.
 */
 #ifdef time_tz
-static time_t sys_time(time_t* x)
-{
-  return time(x);
-}
+static time_t sys_time(time_t *x) { return time(x); }
 
-#undef ctime
-#define ctime tz_ctime
-#undef ctime_r
-#define ctime_r tz_ctime_r
-#undef difftime
-#define difftime tz_difftime
-#undef gmtime
-#define gmtime tz_gmtime
-#undef gmtime_r
-#define gmtime_r tz_gmtime_r
-#undef localtime
-#define localtime tz_localtime
-#undef localtime_r
-#define localtime_r tz_localtime_r
-#undef mktime
-#define mktime tz_mktime
-#undef time
-#define time tz_time
-#undef time_t
-#define time_t tz_time_t
+# undef  ctime
+# define ctime tz_ctime
+# undef  ctime_r
+# define ctime_r tz_ctime_r
+# undef  difftime
+# define difftime tz_difftime
+# undef  gmtime
+# define gmtime tz_gmtime
+# undef  gmtime_r
+# define gmtime_r tz_gmtime_r
+# undef  localtime
+# define localtime tz_localtime
+# undef  localtime_r
+# define localtime_r tz_localtime_r
+# undef  mktime
+# define mktime tz_mktime
+# undef  time
+# define time tz_time
+# undef  time_t
+# define time_t tz_time_t
 
 typedef time_tz time_t;
 
-char* ctime(time_t const*);
-char* ctime_r(time_t const*, char*);
+char *ctime(time_t const *);
+char *ctime_r(time_t const *, char *);
 double difftime(time_t, time_t);
-struct tm* gmtime(time_t const*);
-struct tm* gmtime_r(time_t const* restrict, struct tm* restrict);
-struct tm* localtime(time_t const*);
-struct tm* localtime_r(time_t const* restrict, struct tm* restrict);
-time_t mktime(struct tm*);
+struct tm *gmtime(time_t const *);
+struct tm *gmtime_r(time_t const *restrict, struct tm *restrict);
+struct tm *localtime(time_t const *);
+struct tm *localtime_r(time_t const *restrict, struct tm *restrict);
+time_t mktime(struct tm *);
 
-static time_t time(time_t* p)
+static time_t
+time(time_t *p)
 {
   time_t r = sys_time(0);
   if (p) {
@@ -289,16 +289,16 @@ static time_t time(time_t* p)
 ** Private function declarations.
 */
 
-char* icatalloc(char* old, const char* new);
-char* icpyalloc(const char* string);
-const char* scheck(const char* string, const char* format);
+char     *icatalloc(char *old, const char *new);
+char     *icpyalloc(const char *string);
+const char   *scheck(const char *string, const char *format);
 
 /*
 ** Finally, some convenience items.
 */
 
 #ifndef TRUE
-#define TRUE 1
+#define TRUE  1
 #endif
 
 #ifndef FALSE
@@ -306,16 +306,21 @@ const char* scheck(const char* string, const char* format);
 #endif
 
 #ifndef TYPE_SIGNED
-#define TYPE_SIGNED(type) (0 > ((type)-1))
+#define TYPE_SIGNED(type) (0 > ((type) -1))
 #endif
 
 #ifndef TYPE_BIT
-#define TYPE_BIT(type) (CHAR_BIT * sizeof(type))
+#define TYPE_BIT(type)  (CHAR_BIT * sizeof (type))
 #endif
 
-static time_t const time_t_min = (TYPE_SIGNED(time_t) ? (time_t)-1 << (sizeof(time_t) * CHAR_BIT - 1) : 0);
+static time_t const time_t_min =
+    (TYPE_SIGNED(time_t)
+     ? (time_t) - 1 << (sizeof(time_t) * CHAR_BIT - 1)
+     : 0);
 static time_t const time_t_max =
-    (TYPE_SIGNED(time_t) ? -(~0 < 0) - ((time_t)-1 << (sizeof(time_t) * CHAR_BIT - 1)) : -1);
+    (TYPE_SIGNED(time_t)
+     ? - (~ 0 < 0) - ((time_t) - 1 << (sizeof(time_t) * CHAR_BIT - 1))
+     : -1);
 
 #ifndef INT_STRLEN_MAXIMUM
 /*
@@ -324,7 +329,9 @@ static time_t const time_t_max =
 ** add one for integer division truncation;
 ** add one more for a minus sign if the type is signed.
 */
-#define INT_STRLEN_MAXIMUM(type) ((TYPE_BIT(type) - TYPE_SIGNED(type)) * 302 / 1000 + 1 + TYPE_SIGNED(type))
+#define INT_STRLEN_MAXIMUM(type) \
+  ((TYPE_BIT(type) - TYPE_SIGNED(type)) * 302 / 1000 + \
+   1 + TYPE_SIGNED(type))
 #endif /* !defined INT_STRLEN_MAXIMUM */
 
 /*
@@ -372,29 +379,29 @@ static time_t const time_t_max =
 #if HAVE_INCOMPATIBLE_CTIME_R
 #undef asctime_r
 #undef ctime_r
-char* asctime_r(struct tm const*, char*);
-char* ctime_r(time_t const*, char*);
+char *asctime_r(struct tm const *, char *);
+char *ctime_r(time_t const *, char *);
 #endif /* HAVE_INCOMPATIBLE_CTIME_R */
 
 #ifndef YEARSPERREPEAT
-#define YEARSPERREPEAT 400 /* years before a Gregorian repeat */
-#endif                     /* !defined YEARSPERREPEAT */
+#define YEARSPERREPEAT    400 /* years before a Gregorian repeat */
+#endif /* !defined YEARSPERREPEAT */
 
 /*
 ** The Gregorian year averages 365.2425 days, which is 31556952 seconds.
 */
 
 #ifndef AVGSECSPERYEAR
-#define AVGSECSPERYEAR 31556952L
+#define AVGSECSPERYEAR    31556952L
 #endif /* !defined AVGSECSPERYEAR */
 
 #ifndef SECSPERREPEAT
-#define SECSPERREPEAT ((int_fast64_t)YEARSPERREPEAT * (int_fast64_t)AVGSECSPERYEAR)
+#define SECSPERREPEAT   ((int_fast64_t) YEARSPERREPEAT * (int_fast64_t) AVGSECSPERYEAR)
 #endif /* !defined SECSPERREPEAT */
 
 #ifndef SECSPERREPEAT_BITS
-#define SECSPERREPEAT_BITS 34 /* ceil(log2(SECSPERREPEAT)) */
-#endif                        /* !defined SECSPERREPEAT_BITS */
+#define SECSPERREPEAT_BITS  34  /* ceil(log2(SECSPERREPEAT)) */
+#endif /* !defined SECSPERREPEAT_BITS */
 
 /*
 ** UNIX was a registered trademark of The Open Group in 2003.

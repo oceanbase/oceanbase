@@ -16,13 +16,15 @@
 #include "lib/string/ob_string.h"
 #include "common/sql_mode/ob_sql_mode.h"
 #include "common/object/ob_object.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 bool is_sql_mode_supported(ObSQLMode mode);
 
-int ob_str_to_sql_mode(const ObString& str, ObSQLMode& mode);
+int ob_str_to_sql_mode(const ObString &str, ObSQLMode &mode);
 
-int ob_sql_mode_to_str(const ObObj& int_val, ObObj& str_val, ObIAllocator* allocator);
+int ob_sql_mode_to_str(const ObObj &int_val, ObObj &str_val, ObIAllocator *allocator);
 inline ObSQLMode ob_compatibility_mode_to_sql_mode(ObCompatibilityMode comp_mode)
 {
   return ObCompatibilityMode::ORACLE_MODE == comp_mode ? SMO_ORACLE : 0;
@@ -45,7 +47,10 @@ inline bool is_no_zero_date(ObSQLMode mode)
 {
   return (SMO_NO_ZERO_DATE & mode);
 }
-
+inline bool is_no_zero_in_date(ObSQLMode mode)
+{
+  return (SMO_NO_ZERO_IN_DATE & mode);
+}
 inline bool is_no_unsigned_subtraction(ObSQLMode mode)
 {
   return (SMO_NO_UNSIGNED_SUBTRACTION & mode);
@@ -61,6 +66,18 @@ inline bool is_no_field_options(ObSQLMode mode)
 inline bool is_no_table_options(ObSQLMode mode)
 {
   return (SMO_NO_TABLE_OPTIONS & mode);
+}
+inline bool is_allow_invalid_dates(ObSQLMode mode)
+{
+  return (SMO_ALLOW_INVALID_DATES & mode);
+}
+inline bool is_no_auto_create_user(ObSQLMode mode)
+{
+  return (SMO_NO_AUTO_CREATE_USER & mode);
+}
+inline bool is_error_for_division_by_zero(ObSQLMode mode)
+{
+  return (SMO_ERROR_FOR_DIVISION_BY_ZERO & mode);
 }
 inline bool is_mysql_compatible(ObCompatibilityMode mode)
 {
@@ -87,7 +104,13 @@ inline bool is_only_full_group_by_on(ObSQLMode mode)
 {
   return (SMO_ONLY_FULL_GROUP_BY & mode) || lib::is_oracle_mode();
 }
-}  // namespace common
-}  // namespace oceanbase
+
+inline bool is_time_truncate_fractional(ObSQLMode mode)
+{
+  return (SMO_TIME_TRUNCATE_FRACTIONAL & mode);
+}
+
+}
+}
 
 #endif /* OB_SQL_MODE_UTILS_H_ */

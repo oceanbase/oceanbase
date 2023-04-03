@@ -16,37 +16,30 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprToType : public ObFuncExprOperator {
+class ObExprToType: public ObFuncExprOperator
+{
   OB_UNIS_VERSION_V(1);
-
 public:
   ObExprToType();
-  explicit ObExprToType(common::ObIAllocator& alloc);
-  virtual ~ObExprToType(){};
+  explicit ObExprToType(common::ObIAllocator &alloc);
+  virtual ~ObExprToType() {};
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
-  virtual int assign(const ObExprOperator& other);
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int assign(const ObExprOperator &other);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const;
 public:
-  OB_INLINE void set_expect_type(common::ObObjType expect_type)
-  {
-    expect_type_ = expect_type;
-  }
-  OB_INLINE void set_cast_mode(common::ObCastMode cast_mode)
-  {
-    cast_mode_ = cast_mode;
-  }
-
+  OB_INLINE void set_expect_type(common::ObObjType expect_type) { expect_type_ = expect_type; }
+  OB_INLINE void set_cast_mode(common::ObCastMode cast_mode) { cast_mode_ = cast_mode; }
 private:
-  int calc_result_type_for_literal(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result_type_for_column(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-
+  int calc_result_type_for_literal(ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const;
+  int calc_result_type_for_column(ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const;
 private:
   // data members
   common::ObObjType expect_type_;
@@ -55,6 +48,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToType);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_EXPR_TO_TYPE_H_ */
+}
+}
+#endif  /* _OB_EXPR_TO_TYPE_H_ */

@@ -16,21 +16,25 @@
 #include "share/ob_common_rpc_proxy.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObCreateResourcePoolExecutor::ObCreateResourcePoolExecutor()
-{}
+{
+}
 
 ObCreateResourcePoolExecutor::~ObCreateResourcePoolExecutor()
-{}
-
-int ObCreateResourcePoolExecutor::execute(ObExecContext& ctx, ObCreateResourcePoolStmt& stmt)
 {
+}
+
+int ObCreateResourcePoolExecutor::execute(ObExecContext &ctx,
+                                          ObCreateResourcePoolStmt &stmt) {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObCreateResourcePoolArg& create_resource_pool_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObCreateResourcePoolArg &create_resource_pool_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -38,24 +42,27 @@ int ObCreateResourcePoolExecutor::execute(ObExecContext& ctx, ObCreateResourcePo
   } else if (NULL == (common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get common rpc proxy failed");
-  } else if (OB_SUCCESS != (ret = common_rpc_proxy->create_resource_pool(create_resource_pool_arg))) {
+  } else if (OB_SUCCESS != (ret = common_rpc_proxy->create_resource_pool(
+              create_resource_pool_arg))) {
     SQL_ENG_LOG(WARN, "rpc proxy create resource_pool failed", K(ret));
   }
   return ret;
 }
 
 ObAlterResourcePoolExecutor::ObAlterResourcePoolExecutor()
-{}
+{
+}
 
 ObAlterResourcePoolExecutor::~ObAlterResourcePoolExecutor()
-{}
+{
+}
 
-int ObAlterResourcePoolExecutor::execute(ObExecContext& ctx, ObAlterResourcePoolStmt& stmt)
+int ObAlterResourcePoolExecutor::execute(ObExecContext &ctx, ObAlterResourcePoolStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObAlterResourcePoolArg& alter_resource_pool_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObAlterResourcePoolArg &alter_resource_pool_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -70,17 +77,19 @@ int ObAlterResourcePoolExecutor::execute(ObExecContext& ctx, ObAlterResourcePool
 }
 
 ObSplitResourcePoolExecutor::ObSplitResourcePoolExecutor()
-{}
+{
+}
 
 ObSplitResourcePoolExecutor::~ObSplitResourcePoolExecutor()
-{}
+{
+}
 
-int ObSplitResourcePoolExecutor::execute(ObExecContext& ctx, ObSplitResourcePoolStmt& stmt)
+int ObSplitResourcePoolExecutor::execute(ObExecContext &ctx, ObSplitResourcePoolStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObSplitResourcePoolArg& split_resource_pool_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObSplitResourcePoolArg &split_resource_pool_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -95,17 +104,19 @@ int ObSplitResourcePoolExecutor::execute(ObExecContext& ctx, ObSplitResourcePool
 }
 
 ObMergeResourcePoolExecutor::ObMergeResourcePoolExecutor()
-{}
+{
+}
 
 ObMergeResourcePoolExecutor::~ObMergeResourcePoolExecutor()
-{}
+{
+}
 
-int ObMergeResourcePoolExecutor::execute(ObExecContext& ctx, ObMergeResourcePoolStmt& stmt)
+int ObMergeResourcePoolExecutor::execute(ObExecContext &ctx, ObMergeResourcePoolStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObMergeResourcePoolArg& merge_resource_pool_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObMergeResourcePoolArg &merge_resource_pool_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -119,18 +130,48 @@ int ObMergeResourcePoolExecutor::execute(ObExecContext& ctx, ObMergeResourcePool
   return ret;
 }
 
-ObDropResourcePoolExecutor::ObDropResourcePoolExecutor()
-{}
+ObAlterResourceTenantExecutor::ObAlterResourceTenantExecutor()
+{
+}
 
-ObDropResourcePoolExecutor::~ObDropResourcePoolExecutor()
-{}
+ObAlterResourceTenantExecutor::~ObAlterResourceTenantExecutor()
+{
+}
 
-int ObDropResourcePoolExecutor::execute(ObExecContext& ctx, ObDropResourcePoolStmt& stmt)
+int ObAlterResourceTenantExecutor::execute(
+    ObExecContext &ctx, ObAlterResourceTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObDropResourcePoolArg& drop_resource_pool_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = nullptr;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
+  const obrpc::ObAlterResourceTenantArg &arg = stmt.get_arg();
+
+  if (OB_UNLIKELY(nullptr == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)))) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "get task executor context failed", KR(ret));
+  } else if (OB_UNLIKELY(nullptr == (common_rpc_proxy = task_exec_ctx->get_common_rpc()))) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "get common rpc proxy failed", KR(ret));
+  } else if (OB_SUCCESS != (ret = common_rpc_proxy->alter_resource_tenant(arg))) {
+    SQL_ENG_LOG(WARN, "fail to send alter resource tenant rpc", KR(ret));
+  }
+  return ret;
+}
+
+ObDropResourcePoolExecutor::ObDropResourcePoolExecutor()
+{
+}
+
+ObDropResourcePoolExecutor::~ObDropResourcePoolExecutor()
+{
+}
+
+int ObDropResourcePoolExecutor::execute(ObExecContext &ctx, ObDropResourcePoolStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObDropResourcePoolArg &drop_resource_pool_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -144,18 +185,22 @@ int ObDropResourcePoolExecutor::execute(ObExecContext& ctx, ObDropResourcePoolSt
   return ret;
 }
 
+
+
+
 ObCreateResourceUnitExecutor::ObCreateResourceUnitExecutor()
-{}
+{
+}
 
 ObCreateResourceUnitExecutor::~ObCreateResourceUnitExecutor()
-{}
-
-int ObCreateResourceUnitExecutor::execute(ObExecContext& ctx, ObCreateResourceUnitStmt& stmt)
 {
+}
+
+int ObCreateResourceUnitExecutor::execute(ObExecContext &ctx, ObCreateResourceUnitStmt &stmt) {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObCreateResourceUnitArg& create_resource_unit_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObCreateResourceUnitArg &create_resource_unit_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -170,17 +215,18 @@ int ObCreateResourceUnitExecutor::execute(ObExecContext& ctx, ObCreateResourceUn
 }
 
 ObAlterResourceUnitExecutor::ObAlterResourceUnitExecutor()
-{}
+{
+}
 
 ObAlterResourceUnitExecutor::~ObAlterResourceUnitExecutor()
-{}
-
-int ObAlterResourceUnitExecutor::execute(ObExecContext& ctx, ObAlterResourceUnitStmt& stmt)
 {
+}
+
+int ObAlterResourceUnitExecutor::execute(ObExecContext &ctx, ObAlterResourceUnitStmt &stmt) {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObAlterResourceUnitArg& alter_resource_unit_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObAlterResourceUnitArg &alter_resource_unit_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -195,17 +241,19 @@ int ObAlterResourceUnitExecutor::execute(ObExecContext& ctx, ObAlterResourceUnit
 }
 
 ObDropResourceUnitExecutor::ObDropResourceUnitExecutor()
-{}
+{
+}
 
 ObDropResourceUnitExecutor::~ObDropResourceUnitExecutor()
-{}
+{
+}
 
-int ObDropResourceUnitExecutor::execute(ObExecContext& ctx, ObDropResourceUnitStmt& stmt)
+int ObDropResourceUnitExecutor::execute(ObExecContext &ctx, ObDropResourceUnitStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObDropResourceUnitArg& drop_resource_unit_arg = stmt.get_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObDropResourceUnitArg &drop_resource_unit_arg = stmt.get_arg();
 
   if (NULL == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -219,5 +267,6 @@ int ObDropResourceUnitExecutor::execute(ObExecContext& ctx, ObDropResourceUnitSt
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}/* ns sql*/
+}/* ns oceanbase */

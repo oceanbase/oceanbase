@@ -16,7 +16,9 @@
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
 
-class TestNetClient : public ::testing::Test {
+class TestNetClient
+    : public ::testing::Test
+{
 public:
   virtual void SetUp()
   {
@@ -33,9 +35,11 @@ protected:
 };
 
 TEST_F(TestNetClient, TestName)
-{}
+{
 
-int main(int argc, char* argv[])
+}
+
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

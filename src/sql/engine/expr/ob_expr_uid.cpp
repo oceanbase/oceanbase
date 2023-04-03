@@ -25,19 +25,26 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprUid::ObExprUid(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_UID, N_UID, 0, NOT_ROW_DIMENSION)
-{}
+
+ObExprUid::ObExprUid(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_UID, N_UID, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprUid::~ObExprUid()
-{}
+{
+}
 
-int ObExprUid::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprUid::calc_result_type0(ObExprResType &type,
+                                  ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
-  if (share::is_oracle_mode()) {
+  if (lib::is_oracle_mode()) {
     type.set_number();
     type.set_precision(PRECISION_UNKNOWN_YET);
     type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
@@ -47,34 +54,12 @@ int ObExprUid::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) c
   return OB_SUCCESS;
 }
 
-int ObExprUid::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else if (!share::is_oracle_mode()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("UID function is supported by Oracle mode", K(ret), K(share::is_oracle_mode()));
-  } else {
-    const uint64_t sess_uid = session_info->get_user_id();
-    // result.set_uint64_value(sess_uid);
-    number::ObNumber num;
-    if (OB_FAIL(num.from(sess_uid, *(expr_ctx.calc_buf_)))) {
-      LOG_WARN("convert int to number failed", K(ret), K(sess_uid));
-    } else {
-      result.set_number(num);
-    }
-  }
-  return ret;
-}
-
-int ObExprUid::eval_uid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprUid::eval_uid(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObBasicSessionInfo* session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -91,7 +76,8 @@ int ObExprUid::eval_uid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
   return ret;
 }
 
-int ObExprUid::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprUid::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -99,5 +85,5 @@ int ObExprUid::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

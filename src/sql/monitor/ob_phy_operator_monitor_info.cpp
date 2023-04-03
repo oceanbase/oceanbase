@@ -18,16 +18,22 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
-namespace oceanbase {
-namespace sql {
-ObPhyOperatorMonitorInfo::ObPhyOperatorMonitorInfo()
-    : ObIValue(PLAN_MONITOR_INFO), op_id_(-1), job_id_(0), task_id_(0), op_type_(PHY_INVALID)
+namespace oceanbase
 {
-  memset(info_array_, 0, OB_MAX_INFORMATION_COUNT * sizeof(int64_t));
+namespace sql
+{
+ObPhyOperatorMonitorInfo::ObPhyOperatorMonitorInfo() : ObIValue(PLAN_MONITOR_INFO),
+    op_id_(-1),
+    job_id_(0),
+    task_id_(0),
+    op_type_(PHY_INVALID)
+{
+    memset(info_array_, 0, OB_MAX_INFORMATION_COUNT * sizeof(int64_t));
 }
 
 ObPhyOperatorMonitorInfo::~ObPhyOperatorMonitorInfo()
-{}
+{
+}
 
 int ObPhyOperatorMonitorInfo::set_operator_id(int64_t op_id)
 {
@@ -65,7 +71,7 @@ int ObPhyOperatorMonitorInfo::set_task_id(int64_t task_id)
   return ret;
 }
 
-int ObPhyOperatorMonitorInfo::assign(const ObPhyOperatorMonitorInfo& other)
+int ObPhyOperatorMonitorInfo::assign(const ObPhyOperatorMonitorInfo &other)
 {
   int ret = OB_SUCCESS;
   op_id_ = other.op_id_;
@@ -78,30 +84,30 @@ int ObPhyOperatorMonitorInfo::assign(const ObPhyOperatorMonitorInfo& other)
   return ret;
 }
 
-void ObPhyOperatorMonitorInfo::operator=(const ObPhyOperatorMonitorInfo& other)
+void ObPhyOperatorMonitorInfo::operator=(const ObPhyOperatorMonitorInfo &other)
 {
   if (OB_SUCCESS != assign(other)) {
-    LOG_ERROR("fail to assign", K(&other));
+    LOG_ERROR_RET(OB_ERROR, "fail to assign", K(&other));
   }
 }
 
-ObPhyOperatorMonitorInfo::ObPhyOperatorMonitorInfo(const ObPhyOperatorMonitorInfo& other)
-    : ObIValue(PLAN_MONITOR_INFO),
-      op_id_(other.op_id_),
-      job_id_(other.job_id_),
-      task_id_(other.task_id_),
-      op_type_(other.op_type_)
+ObPhyOperatorMonitorInfo::ObPhyOperatorMonitorInfo(const ObPhyOperatorMonitorInfo &other)
+: ObIValue(PLAN_MONITOR_INFO), op_id_(other.op_id_),
+    job_id_(other.job_id_), task_id_(other.task_id_), op_type_(other.op_type_)
 {
   for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
     info_array_[i] = other.info_array_[i];
   }
 }
 
-int64_t ObPhyOperatorMonitorInfo::to_string(char* buf, int64_t buf_len) const
+int64_t ObPhyOperatorMonitorInfo::to_string(char *buf, int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(N_OP_ID, op_id_, N_JOB_ID, job_id_, N_TASK_ID, task_id_, N_OP, op_type_);
+  J_KV(N_OP_ID, op_id_,
+       N_JOB_ID, job_id_,
+       N_TASK_ID, task_id_,
+       N_OP, op_type_);
   for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
     if (info_array_[i] != 0 && NULL != OB_OPERATOR_MONITOR_INFOS[i].info_name_) {
       J_OBJ_START();
@@ -117,7 +123,10 @@ int64_t ObPhyOperatorMonitorInfo::to_string(char* buf, int64_t buf_len) const
 bool ObPhyOperatorMonitorInfo::is_timestamp(int64_t i) const
 {
   bool bret = false;
-  if (OPEN_TIME == i || FIRST_ROW_TIME == i || LAST_ROW_TIME == i || CLOSE_TIME == i) {
+  if (OPEN_TIME == i
+      || FIRST_ROW_TIME == i
+      || LAST_ROW_TIME == i
+      || CLOSE_TIME == i) {
     bret = true;
   }
   return bret;
@@ -143,7 +152,7 @@ int64_t ObPhyOperatorMonitorInfo::print_info(char* buf, int64_t buf_len) const
       J_OBJ_START();
       if (is_timestamp(i)) {
         if (OB_SUCCESS != ObTimeUtility2::usec_to_str(info_array_[i], timebuf, time_buf_len, time_buf_pos)) {
-          LOG_WARN("fail to print time as str", K(i));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(i));
           J_KV(OB_OPERATOR_MONITOR_INFOS[i].info_name_, info_array_[i]);
         } else {
           timebuf[time_buf_pos] = '\0';
@@ -164,8 +173,9 @@ void ObPhyOperatorMonitorInfo::set_value(ObOperatorMonitorInfoIds index, int64_t
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     info_array_[index] = value;
   } else {
-    LOG_WARN("invalid index", K(index), K(value));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index), K(value));
   }
+
 }
 
 void ObPhyOperatorMonitorInfo::increase_value(ObOperatorMonitorInfoIds index)
@@ -173,16 +183,16 @@ void ObPhyOperatorMonitorInfo::increase_value(ObOperatorMonitorInfoIds index)
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     info_array_[index]++;
   } else {
-    LOG_WARN("invalid index", K(index));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index));
   }
 }
 
-void ObPhyOperatorMonitorInfo::get_value(ObOperatorMonitorInfoIds index, int64_t& value)
+void ObPhyOperatorMonitorInfo::get_value(ObOperatorMonitorInfoIds index, int64_t &value)
 {
   if (index >= 0 && index < OB_MAX_INFORMATION_COUNT) {
     value = info_array_[index];
   } else {
-    LOG_WARN("invalid index", K(index));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid index", K(index));
   }
 }
 
@@ -191,7 +201,7 @@ int64_t ObPhyOperatorMonitorInfo::get_valid_info_count() const
   int64_t count = 0;
   for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
     if (info_array_[i] != 0) {
-      count++;
+      count ++;
     }
   }
   return count;
@@ -235,6 +245,7 @@ OB_DEF_DESERIALIZE(ObPhyOperatorMonitorInfo)
       LOG_WARN("fail to decode value", K(ret), K(pos));
     } else {
       if (index >= OB_MAX_INFORMATION_COUNT) {
+        //nothing to do, 也许收到一个新版本的统计信息
       } else if (index < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid index", K(index), K(i), K(value), K(ret));
@@ -264,5 +275,5 @@ OB_DEF_SERIALIZE_SIZE(ObPhyOperatorMonitorInfo)
   return len;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

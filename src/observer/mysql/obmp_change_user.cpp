@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/mysql/obmp_change_user.h"
+#include "observer/mysql/obmp_utils.h"
 #include "lib/string/ob_sql_string.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "rpc/obmysql/packet/ompk_ok.h"
@@ -26,14 +27,17 @@
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/parser/ob_parser_utils.h"
-#include "observer/mysql/obsm_struct.h"
+#include "rpc/obmysql/obsm_struct.h"
+
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
 using namespace oceanbase::share::schema;
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 int ObMPChangeUser::deserialize()
 {
   int ret = OB_SUCCESS;
@@ -41,7 +45,7 @@ int ObMPChangeUser::deserialize()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid request", K(req_));
   } else {
-    ObSQLSessionInfo* session = NULL;
+    ObSQLSessionInfo *session = NULL;
     ObMySQLCapabilityFlags capability;
     if (OB_FAIL(get_session(session))) {
       LOG_WARN("get session  fail", K(ret));
@@ -57,11 +61,11 @@ int ObMPChangeUser::deserialize()
       revert_session(session);
     }
     if (OB_SUCC(ret)) {
-      pkt_ = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
-      const char* buf = pkt_.get_cdata();
-      const char* pos = pkt_.get_cdata();
+      pkt_  = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+      const char *buf = pkt_.get_cdata();
+      const char *pos = pkt_.get_cdata();
       const int64_t len = pkt_.get_clen();
-      const char* end = buf + len;
+      const char *end = buf + len;
 
       if (OB_LIKELY(pos < end)) {
         username_.assign_ptr(pos, static_cast<int32_t>(STRLEN(pos)));
@@ -99,35 +103,35 @@ int ObMPChangeUser::deserialize()
       if (OB_LIKELY(pos < end)) {
         if (capability.cap_flags_.OB_CLIENT_CONNECT_ATTRS) {
           uint64_t all_attrs_len = 0;
-          const char* attrs_end = NULL;
+          const char *attrs_end = NULL;
           if (OB_FAIL(ObMySQLUtil::get_length(pos, all_attrs_len))) {
             LOG_WARN("fail to get all_attrs_len", K(ret));
           } else {
             attrs_end = pos + all_attrs_len;
           }
           ObStringKV str_kv;
-          while (OB_SUCC(ret) && OB_LIKELY(pos < attrs_end)) {
+          while(OB_SUCC(ret) && OB_LIKELY(pos < attrs_end)) {
             if (OB_FAIL(decode_string_kv(attrs_end, pos, str_kv))) {
               OB_LOG(WARN, "fail to decode string kv", K(ret));
             } else {
               if (str_kv.key_ == OB_MYSQL_PROXY_SESSION_VARS) {
-                const char* vars_start = str_kv.value_.ptr();
+                const char *vars_start = str_kv.value_.ptr();
                 if (OB_FAIL(decode_session_vars(vars_start, str_kv.value_.length()))) {
                   OB_LOG(WARN, "fail to decode session vars", K(ret));
                 }
               } else {
-                // do not save it
+                //do not save it
               }
             }
           }
-        }  // end connect attrs
-      }    // end if
+        } // end connect attrs
+      } // end if
     }
   }
   return ret;
 }
 
-int ObMPChangeUser::decode_string_kv(const char* attrs_end, const char*& pos, ObStringKV& kv)
+int ObMPChangeUser::decode_string_kv(const char *attrs_end, const char *&pos, ObStringKV &kv)
 {
   int ret = OB_SUCCESS;
   uint64_t key_len = 0;
@@ -151,26 +155,27 @@ int ObMPChangeUser::decode_string_kv(const char* attrs_end, const char*& pos, Ob
         pos += value_len;
       }
     }
+
   }
   return ret;
 }
 
-int ObMPChangeUser::decode_session_vars(const char*& pos, const int64_t session_vars_len)
+int ObMPChangeUser::decode_session_vars(const char *&pos, const int64_t session_vars_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pos) || OB_UNLIKELY(session_vars_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalie input value", K(pos), K(session_vars_len), K(ret));
-  } else {
-    const char* end = pos + session_vars_len;
+  } else{
+    const char *end = pos + session_vars_len;
     bool found_separator = false;
     ObStringKV tmp_kv;
     while (OB_SUCC(ret) && OB_LIKELY(pos < end)) {
       if (OB_FAIL(decode_string_kv(end, pos, tmp_kv))) {
         OB_LOG(WARN, "fail to decode string kv", K(ret));
       } else {
-        if (tmp_kv.key_ == ObMySQLPacket::get_separator_kv().key_ &&
-            tmp_kv.value_ == ObMySQLPacket::get_separator_kv().value_) {
+        if (tmp_kv.key_ == ObMySQLPacket::get_separator_kv().key_
+            && tmp_kv.value_ == ObMySQLPacket::get_separator_kv().value_) {
           found_separator = true;
           // continue
         } else {
@@ -185,7 +190,7 @@ int ObMPChangeUser::decode_session_vars(const char*& pos, const int64_t session_
           }
         }
       }
-    }  // end while
+    } // end while
   }
 
   return ret;
@@ -194,25 +199,33 @@ int ObMPChangeUser::decode_session_vars(const char*& pos, const int64_t session_
 int ObMPChangeUser::process()
 {
   int ret = OB_SUCCESS;
-
-  bool has_called_txs_end_trans = false;
-  ObSQLSessionInfo* session = NULL;
+  ObSQLSessionInfo *session = NULL;
   bool is_proxy_mod = get_conn()->is_proxy_;
+  bool need_disconnect = true;
+  bool need_response_error = true;
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
+  } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+  } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+    need_response_error = false;
+    LOG_WARN("fail to update sess info", K(ret));
+  } else if (FALSE_IT(session->post_sync_session_info())) {
   } else {
+    need_disconnect = false;
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
-
-    if (OB_FAIL(ObSqlTransControl::end_trans(gctx_.par_ser_, session, has_called_txs_end_trans))) {
-      OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(has_called_txs_end_trans));
+    if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
+      OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(session));
     } else {
       session->clean_status();
       if (OB_FAIL(load_privilege_info(session))) {
-        OB_LOG(WARN, "load privilige info failed", K(ret));
+        OB_LOG(WARN,"load privilige info failed", K(ret));
       } else {
         if (is_proxy_mod) {
           if (!sys_vars_.empty()) {
@@ -232,26 +245,26 @@ int ObMPChangeUser::process()
     }
   }
 
-  // send packet to client
+  //send packet to client
   if (OB_SUCC(ret)) {
     ObOKPParam ok_param;
+    ok_param.is_on_change_user_ = true;
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {
       OB_LOG(WARN, "response ok packet fail", K(ret));
     }
-  } else {
+  } else if (need_response_error) {
     if (OB_FAIL(send_error_packet(ret, NULL))) {
-      OB_LOG(WARN, "response fail packet fail", K(ret));
+      OB_LOG(WARN,"response fail packet fail", K(ret));
     }
   }
 
-  if (OB_UNLIKELY(!has_called_txs_end_trans) && conn_valid_) {
-    if (NULL == session) {
-      LOG_WARN("will disconnect connection", K(ret), K(has_called_txs_end_trans), K(conn_valid_));
+  if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {
+    if (OB_ISNULL(session)) {
+      LOG_WARN("will disconnect connection", K(ret), K(session));
     } else {
-      LOG_WARN(
-          "will disconnect connection", K(ret), K(session->get_sessid()), K(has_called_txs_end_trans), K(conn_valid_));
+      LOG_WARN("will disconnect connection", K(ret), KPC(session));
     }
-    disconnect();
+    force_disconnect();
   }
 
   if (session != NULL) {
@@ -260,20 +273,20 @@ int ObMPChangeUser::process()
   return ret;
 }
 
-int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
+int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
 
   ObSchemaGetterGuard schema_guard;
   if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid argument", K(session), K(gctx_.schema_service_));
-  } else if (OB_FAIL(
-                 gctx_.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
-    OB_LOG(WARN, "fail get schema guard", K(ret));
+    OB_LOG(WARN,"invalid argument", K(session), K(gctx_.schema_service_));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+                                  session->get_effective_tenant_id(), schema_guard))) {
+    OB_LOG(WARN,"fail get schema guard", K(ret));
   } else {
     share::schema::ObUserLoginInfo login_info;
-    const char* sep_pos = username_.find('@');
+    const char *sep_pos = username_.find('@');
     if (NULL != sep_pos) {
       ObString username(sep_pos - username_.ptr(), username_.ptr());
       login_info.user_name_ = username;
@@ -289,10 +302,10 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
     }
     login_info.client_ip_ = session->get_client_ip();
     OB_LOG(INFO, "com change user", "username", login_info.user_name_, "tenant name", login_info.tenant_name_);
-    const ObSMConnection& conn = *get_conn();
+    const ObSMConnection &conn = *get_conn();
     login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
     login_info.passwd_ = auth_response_;
-    SSL* ssl_st = req_->get_ssl_st();
+    SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
 
     share::schema::ObSessionPrivInfo session_priv;
     if (session->has_got_conn_res()) {
@@ -301,9 +314,10 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
         LOG_WARN("user disconnect failed", K(ret));
       }
     }
-    const ObUserInfo* user_info = NULL;
+    const ObUserInfo *user_info = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+    } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
+                ssl_st, user_info))) {
       OB_LOG(WARN, "User access denied", K(login_info), K(ret));
     } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
       OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
@@ -317,10 +331,13 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_default_database(database_))) {
         OB_LOG(WARN, "failed to set default database", K(ret), K(database_));
+      } else if (OB_FAIL(session->load_default_sys_variable(false, true))) {
+        LOG_WARN("failed to load system variables", K(ret));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         OB_LOG(WARN, "failed to update database variables", K(ret));
-      } else if (OB_FAIL(schema_guard.get_database_id(
-                     session->get_effective_tenant_id(), session->get_database_name(), db_id))) {
+      } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
+                                                      session->get_database_name(),
+                                                      db_id))) {
         OB_LOG(WARN, "failed to get database id", K(ret));
       } else {
         session->set_database_id(db_id);
@@ -334,7 +351,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
 // Attention:in order to get the real type of each user var,
 // we should build a standard sql 'SET @var1 = val1,@var2 = val2,......;',
 // and then parse the sql
-int ObMPChangeUser::replace_user_variables(ObBasicSessionInfo& session) const
+int ObMPChangeUser::replace_user_variables(ObBasicSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
   if (!user_vars_.empty()) {
@@ -346,8 +363,9 @@ int ObMPChangeUser::replace_user_variables(ObBasicSessionInfo& session) const
     ObStringKV kv;
     for (int64_t i = 0; OB_SUCC(ret) && i < user_vars_.count(); ++i) {
       kv = user_vars_.at(i);
-      if (OB_FAIL(
-              sql.append_fmt(" @%.*s = %.*s,", kv.key_.length(), kv.key_.ptr(), kv.value_.length(), kv.value_.ptr()))) {
+      if (OB_FAIL(sql.append_fmt(" @%.*s = %.*s,",
+                                 kv.key_.length(), kv.key_.ptr(),
+                                 kv.value_.length(), kv.value_.ptr()))) {
         OB_LOG(WARN, "fail to append fmt user var", K(ret), K(kv));
       }
     }
@@ -358,13 +376,12 @@ int ObMPChangeUser::replace_user_variables(ObBasicSessionInfo& session) const
       stmt.assign_ptr(sql.ptr(), static_cast<int32_t>(sql.length()));
       ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
       ObParser parser(allocator, session.get_sql_mode());
-      SMART_VAR(ParseResult, result)
-      {
+      SMART_VAR(ParseResult, result) {
         if (OB_FAIL(parser.parse(stmt, result))) {
           OB_LOG(WARN, "fail to parse stmt", K(ret), K(stmt));
         } else {
           // 3. parse result node and handle user session var
-          ParseNode* node = result.result_tree_;
+          ParseNode *node = result.result_tree_;
           ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
           ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
           if (OB_FAIL(parse_var_node(node, cast_ctx, session))) {
@@ -377,7 +394,7 @@ int ObMPChangeUser::replace_user_variables(ObBasicSessionInfo& session) const
   return ret;
 }
 
-int ObMPChangeUser::parse_var_node(const ParseNode* node, ObCastCtx& cast_ctx, ObBasicSessionInfo& session) const
+int ObMPChangeUser::parse_var_node(const ParseNode *node, ObCastCtx &cast_ctx, ObBasicSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -385,8 +402,8 @@ int ObMPChangeUser::parse_var_node(const ParseNode* node, ObCastCtx& cast_ctx, O
     OB_LOG(WARN, "node is null", K(ret));
   } else {
     bool found = false;
-    ParseNode* tmp_node = NULL;
-    ParseNode* val_node = NULL;
+    ParseNode *tmp_node = NULL;
+    ParseNode *val_node = NULL;
     ObString var;
     ObString val;
     ObObjType type;
@@ -414,19 +431,20 @@ int ObMPChangeUser::parse_var_node(const ParseNode* node, ObCastCtx& cast_ctx, O
         } else if (OB_FAIL(parse_var_node(tmp_node, cast_ctx, session))) {
           OB_LOG(WARN, "fail to parse node", K(ret));
         }
-      }  // end NULL != tmp_node
-    }    // end for
-  }      // end else
+      } // end NULL != tmp_node
+    } // end for
+  } // end else
   return ret;
 }
 
-int ObMPChangeUser::handle_user_var(const ObString& var, const ObString& val, const ObObjType type, ObCastCtx& cast_ctx,
-    ObBasicSessionInfo& session) const
+int ObMPChangeUser::handle_user_var(const ObString &var, const ObString &val,
+                                    const ObObjType type, ObCastCtx &cast_ctx,
+                                    ObBasicSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
   ObObj in_obj;
   ObObj buf_obj;
-  const ObObj* out_obj = NULL;
+  const ObObj *out_obj = NULL;
   ObSessionVariable sess_var;
   if (ObNullType == type) {
     sess_var.value_.set_null();
@@ -455,5 +473,5 @@ int ObMPChangeUser::handle_user_var(const ObString& var, const ObString& val, co
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} //namespace observer
+} //namespace oceanbase

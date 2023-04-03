@@ -17,26 +17,34 @@
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
 
-namespace oceanbase {
-namespace common {
-class ObDataTypeCastParams;
+namespace oceanbase
+{
+namespace common
+{
+struct ObDataTypeCastParams;
 }
-namespace sql {
-class ColumnItem;
-typedef common::ObSEArray<common::ObNewRange*, 1, common::ModulePageAllocator, true> ObQueryRangeArray;
+namespace sql
+{
+struct ColumnItem;
+typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, true> ObRangesArray;
 typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
 
-class ObQueryRangeProvider {
+class ObQueryRangeProvider
+{
 public:
-  virtual int get_tablet_ranges(
-      ObQueryRangeArray& ranges, ObGetMethodArray& get_methods, const common::ObDataTypeCastParams& dtc_params) = 0;
+  virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
+                                ObGetMethodArray &get_methods,
+                                const common::ObDataTypeCastParams &dtc_params) = 0;
 
   // to string
-  virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_REWRITE_QUERY_RANGE_PROVIDER_
+}
+}
+#endif //OCEANBASE_SQL_REWRITE_QUERY_RANGE_PROVIDER_
 //// end of header file
+
+
+

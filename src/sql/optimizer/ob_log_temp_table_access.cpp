@@ -27,93 +27,186 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::sql::log_op_def;
 
-ObLogTempTableAccess::ObLogTempTableAccess(ObLogPlan& plan)
-    : ObLogicalOperator(plan), table_id_(0), ref_table_id_(0), is_last_access_(false), access_exprs_()
-{}
-
-ObLogTempTableAccess::~ObLogTempTableAccess()
-{}
-
-int ObLogTempTableAccess::allocate_exchange_post(AllocExchContext* ctx)
+ObLogTempTableAccess::ObLogTempTableAccess(ObLogPlan &plan)
+  : ObLogicalOperator(plan),
+    table_id_(0),
+    temp_table_id_(OB_INVALID_ID),
+    access_exprs_()
 {
-  int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  ObShardingInfo sharding_info;
-  ObQueryCtx* query_ctx = NULL;
-  ObLogicalOperator* temp_table_insert = NULL;
-  if (OB_ISNULL(query_ctx = get_stmt()->query_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer.", K(ret));
-  } else if (OB_FAIL(query_ctx->get_temp_table_plan(ref_table_id_, temp_table_insert))) {
-    LOG_WARN("failed to get temp table sharding info.", K(ret));
-  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(temp_table_insert->get_sharding_info()))) {
-    LOG_WARN("failed to copy sharding info", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
 }
 
-int ObLogTempTableAccess::allocate_expr_post(ObAllocExprContext& ctx)
+ObLogTempTableAccess::~ObLogTempTableAccess()
+{
+}
+
+int ObLogTempTableAccess::generate_access_expr()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
+    LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_stmt()->get_column_exprs(table_id_, access_exprs_))) {
     LOG_WARN("failed to get column exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs_.count(); ++i) {
-      bool expr_is_required = false;
-      ObRawExpr* expr = access_exprs_.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expr", K(ret));
-      } else if (!is_plan_root() && OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx, expr_is_required))) {
-        LOG_WARN("failed to mark expr as produced", K(branch_id_), K(ret));
-      } else { /*do nothing*/
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
-        LOG_WARN("failed to allocate_expr_post", K(ret));
-      } else { /*do nothing*/
-      }
-    }
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObLogTempTableAccess::transmit_op_ordering()
+int ObLogTempTableAccess::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  reset_op_ordering();
+  if (OB_FAIL(generate_access_expr())) {
+    LOG_WARN("failed to generate access expr", K(ret));
+  } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
+    LOG_WARN("failed to add exprs to ctx", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get exprs", K(ret));
+  } else { /*do nothing*/ }
+
   return ret;
 }
 
-int ObLogTempTableAccess::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const
+int ObLogTempTableAccess::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(raw_exprs.append(access_exprs_))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
-int ObLogTempTableAccess::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs_.count(); ++i) {
+    ObRawExpr *expr = access_exprs_.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null expr", K(ret));
+    } else if (OB_FAIL(mark_expr_produced(expr,
+                                          branch_id_,
+                                          id_,
+                                          ctx))) {
+      LOG_WARN("failed to mark expr as produced", K(branch_id_), K(ret));
+    } else if (!is_plan_root() && OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+      LOG_WARN("failed to add expr", K(ret));
+    } else { /*do nothing*/ }
   }
   if (OB_SUCC(ret)) {
-    const ObIArray<ObRawExpr*>& access = get_access_exprs();
+    if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+      LOG_WARN("failed to allocate_expr_post", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObLogTempTableAccess::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+{
+  int ret = OB_SUCCESS;
+  card = get_card();
+  cost = get_cost();
+  double selectivity = 1.0;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()),K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            get_filter_exprs(),
+                                                            selectivity,
+                                                            get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calculate selectivity", K(ret));
+  } else { 
+    double read_card = card;
+    if (selectivity > 0 && selectivity < 1) {
+      read_card /= selectivity;
+    } else {
+      read_card = 0;
+    }
+    //bloom filter selectivity
+    for (int64_t i = 0; i < param.join_filter_infos_.count(); ++i) {
+      const JoinFilterInfo &info = param.join_filter_infos_.at(i);
+      if (info.table_id_ == table_id_) {
+        card *= info.join_filter_selectivity_;
+      }
+    }
+    //refine row count
+    if (param.need_row_count_ >= 0) {
+      if (param.need_row_count_ >= card) {
+        //do nothing
+      } else {
+        read_card = param.need_row_count_ / selectivity;
+        card = param.need_row_count_;
+      }
+    }
+    double per_dop_card = read_card / parallel_;
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx.get_cost_model_type()) +
+                ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx.get_cost_model_type());
+    if (param.override_) {
+      set_op_cost(cost);
+      set_cost(cost);
+      set_card(card);
+    }
+  }
+  return ret;
+}
+
+int ObLogTempTableAccess::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    // print access
+    const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    const ObString &temp_table_name = get_table_name();
+    const ObString &access_name = get_access_name();
+    BEGIN_BUF_PRINT;
+    if (access_name.empty()) {
+      if (OB_FAIL(BUF_PRINTF("%.*s",
+                             temp_table_name.length(),
+                             temp_table_name.ptr()))) {
+        LOG_WARN("failed to print str", K(ret));
+      }
+    } else {
+      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)",
+                             access_name.length(),
+                             access_name.ptr(),
+                             temp_table_name.length(),
+                             temp_table_name.ptr()))) {
+        LOG_WARN("failed to print str", K(ret));
+      }
+    }
+    END_BUF_PRINT(plan_item.object_alias_,
+                  plan_item.object_alias_len_);
+  }
+  return ret;
+}
+
+int ObLogTempTableAccess::get_temp_table_plan(ObLogicalOperator *& insert_op)
+{
+  int ret = OB_SUCCESS;
+  insert_op = NULL;
+  ObLogPlan *plan = get_plan();
+  const uint64_t temp_table_id = get_temp_table_id();
+  if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected null", K(ret));
+  } else {
+    ObIArray<ObSqlTempTableInfo*> &temp_tables = plan->get_optimizer_context().get_temp_table_infos();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < temp_tables.count(); ++i) {
+      if (OB_ISNULL(temp_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected null", K(ret));
+      } else if (temp_table_id != temp_tables.at(i)->temp_table_id_) {
+        /* do nothing */
+      } else {
+        find = true;
+        insert_op = temp_tables.at(i)->table_plan_;
+      }
+    }
+    if (OB_SUCC(ret) && !find) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to find table plan", K(ret));
+    }
   }
   return ret;
 }

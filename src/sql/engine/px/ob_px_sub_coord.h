@@ -29,112 +29,125 @@
 #include "sql/ob_sql_trans_control.h"
 #include "lib/allocator/ob_safe_arena.h"
 
-namespace oceanbase {
-namespace observer {
-class ObGlobalContext;
+namespace oceanbase
+{
+namespace observer
+{
+struct ObGlobalContext;
 }
 
-namespace sql {
+namespace sql
+{
 class ObPxSQCHandler;
 
-#define ENG_OP typename ObEngineOpTraits<NEW_ENG>
-class ObPxSubCoord {
+class ObPxSubCoord
+{
 public:
-  explicit ObPxSubCoord(const observer::ObGlobalContext& gctx, ObPxRpcInitSqcArgs& arg)
+  explicit ObPxSubCoord(const observer::ObGlobalContext &gctx,
+                        ObPxRpcInitSqcArgs &arg)
       : gctx_(gctx),
         sqc_arg_(arg),
         sqc_ctx_(arg),
         allocator_(common::ObModIds::OB_SQL_PX),
         local_worker_factory_(gctx, allocator_),
         thread_worker_factory_(gctx, allocator_),
-        first_buffer_cache_(allocator_)
+        first_buffer_cache_(allocator_),
+        bf_key_(),
+        is_single_tsc_leaf_dfo_(false)
   {}
   virtual ~ObPxSubCoord() = default;
   int pre_process();
-  int try_start_tasks(int64_t& dispatch_worker_count, bool is_fast_sqc = false);
+  int try_start_tasks(int64_t &dispatch_worker_count, bool is_fast_sqc = false);
   void notify_dispatched_task_exit(int64_t dispatched_work);
   int end_process();
-  int init_exec_env(ObExecContext& exec_ctx);
-  ObPxSQCProxy& get_sqc_proxy()
-  {
-    return sqc_ctx_.sqc_proxy_;
-  }
-  ObSqcCtx& get_sqc_ctx()
-  {
-    return sqc_ctx_;
-  }
-  int start_participants(ObPxRpcInitSqcArgs& args)
-  {
-    return trans_ctrl_.start_participants(*args.exec_ctx_, args.sqc_);
-  };
-  int end_participants(ObPxRpcInitSqcArgs& args, bool need_rollback)
-  {
-    int ret = OB_SUCCESS;
-    if (NULL != args.exec_ctx_) {
-      ret = trans_ctrl_.end_participants(*args.exec_ctx_, need_rollback);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-    }
-    return ret;
-  }
-  int set_partitions_info(ObIArray<ObPxPartitionInfo>& partitions_info)
-  {
+  int init_exec_env(ObExecContext &exec_ctx);
+  ObPxSQCProxy &get_sqc_proxy() { return sqc_ctx_.sqc_proxy_; }
+  ObSqcCtx &get_sqc_ctx() { return sqc_ctx_; }
+  int set_partitions_info(ObIArray<ObPxTabletInfo> &partitions_info) {
     return sqc_ctx_.partitions_info_.assign(partitions_info);
   }
-  int report_sqc_finish(int end_ret)
-  {
+  int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);
   }
-  int init_first_buffer_cache(bool is_rpc_worker, int64_t dop);
+  int init_first_buffer_cache(int64_t dop);
   void destroy_first_buffer_cache();
+  void destroy_bloom_filter();
 
+  // for ddl insert sstable
+  // using start and end pair function to control the life cycle of ddl context
+  int check_need_start_ddl(bool &need_start_ddl);
+  int start_ddl();
+  int end_ddl(const bool need_commit);
+  int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
+
+  int pre_setup_op_input(ObExecContext &ctx,
+      ObOpSpec &root,
+      ObSqcCtx &sqc_ctx,
+      const DASTabletLocIArray &tsc_locations,
+      const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+  int rebuild_sqc_access_table_locations();
+  void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
 private:
-  int setup_loop_proc(ObSqcCtx& sqc_ctx) const;
-  int setup_op_input(ObExecContext& ctx, ObPhyOperator& root, ObSqcCtx& sqc_ctx,
-      ObPartitionReplicaLocationIArray& tsc_locations, int64_t& tsc_locations_idx,
-      ObIArray<const ObTableScan*>& all_scan_ops, int64_t& dml_op_count);
-  int setup_op_input(ObExecContext& ctx, ObOpSpec& root, ObSqcCtx& sqc_ctx,
-      ObPartitionReplicaLocationIArray& tsc_locations, int64_t& tsc_locations_idx,
-      ObIArray<const ObTableScanSpec*>& all_scan_ops, int64_t& dml_op_count);
-  template <bool NEW_ENG>
-  int get_tsc_or_dml_op_partition_key(ENG_OP::Root& root, ObPartitionReplicaLocationIArray& tsc_locations,
-      int64_t& tsc_locations_idx, common::ObIArray<const ENG_OP::TSC*>& scan_ops,
-      common::ObIArray<common::ObPartitionArray>& partition_keys_array, int64_t& td_op_count, int64_t part_count);
-  int link_sqc_qc_channel(ObPxRpcInitSqcArgs& sqc_arg);
-  int dispatch_tasks(
-      ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx, int64_t& dispatch_worker_count, bool is_fast_sqc = false);
-  int link_sqc_task_channel(ObSqcCtx& sqc_ctx);
-  int unlink_sqc_task_channel(ObSqcCtx& sqc_ctx);
-  int unlink_sqc_qc_channel(ObPxRpcInitSqcArgs& sqc_arg);
-  int create_tasks(ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx);
+  int setup_loop_proc(ObSqcCtx &sqc_ctx) const;
+  int setup_op_input(ObExecContext &ctx,
+                     ObOpSpec &root,
+                     ObSqcCtx &sqc_ctx,
+                     const DASTabletLocIArray &tsc_locations,
+                     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+  int setup_gi_op_input(ObExecContext &ctx,
+                        ObOpSpec &root,
+                        ObSqcCtx &sqc_ctx,
+                        const DASTabletLocIArray &tsc_locations,
+                        const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+  int get_tsc_or_dml_op_tablets(ObOpSpec &root,
+                                const DASTabletLocIArray &tsc_locations,
+                                const common::ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
+                                common::ObIArray<const ObTableScanSpec*> &scan_ops,
+                                common::ObIArray<DASTabletLocArray> &tablets_array);
+  int link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg);
+  int dispatch_tasks(ObPxRpcInitSqcArgs &sqc_arg,
+                     ObSqcCtx &sqc_ctx,
+                     int64_t &dispatch_worker_count,
+                     bool is_fast_sqc = false);
+  int link_sqc_task_channel(ObSqcCtx &sqc_ctx);
+  int unlink_sqc_task_channel(ObSqcCtx &sqc_ctx);
+  int unlink_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg);
+  int create_tasks(ObPxRpcInitSqcArgs &sqc_arg, ObSqcCtx &sqc_ctx, bool is_fast_sqc = false);
   int try_cleanup_tasks();
 
-  int dispatch_task_to_thread_pool(ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx, ObPxSqcMeta& sqc, int64_t task_idx);
-  int dispatch_task_to_local_thread(ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx, ObPxSqcMeta& sqc);
+  int dispatch_task_to_thread_pool(ObPxRpcInitSqcArgs &sqc_arg,
+                                   ObSqcCtx &sqc_ctx,
+                                   ObPxSqcMeta &sqc,
+                                   int64_t task_idx);
+  int dispatch_task_to_local_thread(ObPxRpcInitSqcArgs &sqc_arg,
+                                    ObSqcCtx &sqc_ctx,
+                                    ObPxSqcMeta &sqc);
 
-  int try_prealloc_data_channel(ObSqcCtx& sqc_ctx, ObPxSqcMeta& sqc);
-  int try_prealloc_transmit_channel(ObSqcCtx& sqc_ctx, ObPxSqcMeta& sqc);
-  int try_prealloc_receive_channel(ObSqcCtx& sqc_ctx, ObPxSqcMeta& sqc);
+  int try_prealloc_data_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
+  int try_prealloc_transmit_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
+  int try_prealloc_receive_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
 
-  dtl::ObDtlLocalFirstBufferCache* get_first_buffer_cache()
-  {
-    return &first_buffer_cache_;
-  }
-
+  dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return &first_buffer_cache_; }
+  int get_participants(ObPxSqcMeta &sqc,
+                       const int64_t table_id,
+                       ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids) const;
+  void try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op);
 private:
-  const observer::ObGlobalContext& gctx_;
-  ObPxRpcInitSqcArgs& sqc_arg_;
+  const observer::ObGlobalContext &gctx_;
+  ObPxRpcInitSqcArgs &sqc_arg_;
   ObSqcCtx sqc_ctx_;
   ObSubTransCtrl trans_ctrl_;
+  ObDDLCtrl ddl_ctrl_; // for ddl insert sstable
   common::ObSafeArena allocator_;
-  ObPxLocalWorkerFactory local_worker_factory_;
-  ObPxThreadWorkerFactory thread_worker_factory_;
+  ObPxLocalWorkerFactory local_worker_factory_; // 当仅有1个task时，使用 local 构造 worker
+  ObPxThreadWorkerFactory thread_worker_factory_; // 超过1个task的部分，使用thread 构造 worker
   int64_t reserved_thread_count_;
   dtl::ObDtlLocalFirstBufferCache first_buffer_cache_;
+  ObPXBloomFilterHashWrapper bf_key_; // for bloom_filter_use op
+  bool is_single_tsc_leaf_dfo_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSubCoord);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#undef ENG_OP
+}
+}
 #endif /* _OB_SQL_PX_SUB_CORRD_H_ */
 //// end of header file

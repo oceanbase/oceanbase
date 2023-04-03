@@ -18,28 +18,26 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 #define LABEL_ITEM_DEF(name, ...) constexpr const char ObModIds::name[];
 #include "lib/allocator/ob_mod_define.h"
 #undef LABEL_ITEM_DEF
 
-int ObModSet::get_mod_id(const common::ObString& mod_name) const
+bool ObCtxInfo::is_valid_ctx_name(const char *ctx_name, uint64_t& ctx_id) const
 {
-  int id = -1;
-  bool found = false;
-  for (int i = 0; !found && i < MOD_COUNT_LIMIT; i++) {
-    if (mod_names_[i] != NULL) {
-      if ((strlen(mod_names_[i]) == (uint64_t)(mod_name.length())) &&
-          (0 == strncasecmp(mod_names_[i], mod_name.ptr(), mod_name.length()))) {
-        id = i;
-        found = true;
-      }
+  bool ret = false;
+  for (int i = 0; i < ObCtxIds::MAX_CTX_ID && !ret; ++i) {
+    if (0 == strcmp(ctx_names_[i], ctx_name)) {
+      ret = true;
+      ctx_id = i;
     }
   }
-  return id;
+  return ret;
 }
 
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase

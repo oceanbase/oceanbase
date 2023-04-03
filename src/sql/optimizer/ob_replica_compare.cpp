@@ -13,39 +13,36 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_replica_compare.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObReplicaCompare::ObReplicaCompare(ObRoutePolicyType policy_type)
-    : ret_(OB_SUCCESS),
-      policy_type_(policy_type),
-      readonly_zone_first_{IS_OTHER_REGION, ZONE_TYPE, MERGE_STATUS, POS_TYPE},
-      only_readonly_zone_{
-          ZONE_TYPE,
-          IS_OTHER_REGION,
-          MERGE_STATUS,
-          POS_TYPE,
-      },
-      unmerge_zone_first_{IS_OTHER_REGION, MERGE_STATUS, ZONE_TYPE, POS_TYPE}
-{
-  static_assert(sizeof(readonly_zone_first_) == sizeof(only_readonly_zone_), "invalid array size");
-  static_assert(sizeof(readonly_zone_first_) == sizeof(unmerge_zone_first_), "invalid array size");
-  static_assert((sizeof(readonly_zone_first_) / sizeof(CompareType)) == (sizeof(cmp_func_array_) / sizeof(CmpFuncPtr)),
-      "invalid array size");
+    :ret_(OB_SUCCESS),
+     policy_type_(policy_type),
+     readonly_zone_first_{IS_OTHER_REGION, ZONE_TYPE, MERGE_STATUS, POS_TYPE},
+     only_readonly_zone_{ZONE_TYPE, IS_OTHER_REGION, MERGE_STATUS, POS_TYPE,},
+     unmerge_zone_first_{IS_OTHER_REGION, MERGE_STATUS, ZONE_TYPE, POS_TYPE}
+      {
+        static_assert(sizeof(readonly_zone_first_) == sizeof(only_readonly_zone_), "invalid array size");
+        static_assert(sizeof(readonly_zone_first_) == sizeof(unmerge_zone_first_), "invalid array size");
+        static_assert((sizeof(readonly_zone_first_)/sizeof(CompareType)) == (sizeof(cmp_func_array_)/sizeof(CmpFuncPtr)), "invalid array size");
 
-  cmp_func_array_[IS_OTHER_REGION] = &ObReplicaCompare::compare_other_region;
-  cmp_func_array_[ZONE_TYPE] = &ObReplicaCompare::compare_zone_type;
-  cmp_func_array_[MERGE_STATUS] = &ObReplicaCompare::compare_merge_status;
-  cmp_func_array_[POS_TYPE] = &ObReplicaCompare::compare_pos_type;
-}
+        cmp_func_array_[IS_OTHER_REGION] = &ObReplicaCompare::compare_other_region;
+        cmp_func_array_[ZONE_TYPE] = &ObReplicaCompare::compare_zone_type;
+        cmp_func_array_[MERGE_STATUS] = &ObReplicaCompare::compare_merge_status;
+        cmp_func_array_[POS_TYPE] = &ObReplicaCompare::compare_pos_type;
+      }
 
-bool ObReplicaCompare::operator()(
-    const ObRoutePolicy::CandidateReplica& replica1, const ObRoutePolicy::CandidateReplica& replica2)
+
+bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica1,
+                                  const ObRoutePolicy::CandidateReplica &replica2)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
-  CompareType* cmp_type_array = NULL;
-  if (OB_FAIL(ret_)) {  // do nothing if we already have an error
+  CompareType *cmp_type_array = NULL;
+  if (OB_FAIL(ret_)) {//do nothing if we already have an error
   } else {
     if (READONLY_ZONE_FIRST == policy_type_) {
       cmp_type_array = readonly_zone_first_;
@@ -58,7 +55,7 @@ bool ObReplicaCompare::operator()(
       LOG_WARN("unexpected policy type", K(policy_type_), K(ret));
     }
     CompareRes cmp_res = EQUAL;
-    for (int64_t i = 0; OB_SUCC(ret) && cmp_res == EQUAL && i < CMP_CNT; ++i) {
+    for(int64_t i = 0 ; OB_SUCC(ret) && cmp_res == EQUAL && i < CMP_CNT; ++i) {
       CompareType cmp_type = cmp_type_array[i];
       CmpFuncPtr cmp_fun = cmp_func_array_[cmp_type];
       if (OB_ISNULL(cmp_fun)) {
@@ -74,5 +71,5 @@ bool ObReplicaCompare::operator()(
   return bool_ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase

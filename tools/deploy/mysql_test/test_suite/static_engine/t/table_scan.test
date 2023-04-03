@@ -1,0 +1,73 @@
+# owner: bin.lb
+#tags: optimizer
+# owner group: sql2
+
+--result_format 4
+--explain_protocol 0
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 number, c2 number, c3 char(20), c4 varchar(20), primary key(c1, c2), index i1 (c2));
+
+insert into t1 (c1, c2, c3, c4) values (1, 2, 'a', 'b');
+insert into t1 (c1, c2, c3, c4) values (3, 4, 'c', 'd');
+insert into t1 (c1, c2, c3, c4) values (5, 1, 'xx', 'yy');
+insert into t1 (c1, c2, c3, c4) values (5, 2, 'xx', 'yy');
+insert into t1 (c1, c2, c3, c4) values (7, 5, 'xx1', 'yy2');
+insert into t1 (c1, c2, c3, c4) values (7, 6, 'xx1', 'yy2');
+insert into t1 (c1, c2, c3, c4) values (8, 7, 'xx1', 'yy2');
+
+alter table t1 add column c5 varchar(20) default 'c5_default';
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+--explain_protocol 2
+
+# base table
+select * from t1;
+select * from t1 order by c1 desc, c2 desc;
+select * from t1 where c1 + c2 < 10;
+select * from t1 limit 2;
+select * from t1 where c1 = 5;
+select * from t1 where c1 = 5 or c1 = 7;
+select * from t1 where (c1 = 2 and c2 = 4) or (c1 = 7 and c2 = 5) or (c1 = 8 and c2 = 7);
+
+
+# index back
+select * from t1 where c2  = 2 and c1 + c2 < 10 and c4 > c3;
+
+#index only
+select c1, c2 from t1 where c2 > 4;
+
+--echo ***** test index back
+--disable_warnings
+drop table t1;
+--enable_warnings
+create table t1(c1 int primary key, c2 int, c3 int, index idx(c2));
+insert into t1 values(1,1,1), (2,2,2), (3,3,3), (4,4,4),(5,5,5), (6,6,6), (7,7,7);
+
+--echo
+--echo # case 1: index back with before_index_back_filter
+select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c1 <  4;
+
+--echo
+--echo # case 2: index back without before_index_back_filter
+select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c3 <  4;
+
+# index back + limit
+select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
+
+--disable_warnings
+drop table t1;
+--enable_warnings
+
+connection syscon;
+--sleep 2

@@ -14,6 +14,7 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
 #include "lib/alloc/alloc_failed_reason.h"
+#include "lib/ob_abort.h"
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
@@ -28,32 +29,20 @@ const double ObjectSet::BLOCK_CACHE_RATIO = 0.0;
 
 const static int BT_BUF_LEN = 256;
 
-void __attribute__((weak)) has_unfree_callback(char* info)
+void __attribute__((weak)) has_unfree_callback(char *info)
 {
-  _OB_LOG(ERROR, "HAS UNFREE PTR!!! %s", info);
+  _OB_LOG_RET(ERROR, OB_ERROR, "HAS UNFREE PTR!!! %s", info);
 }
 
-ObjectSet::ObjectSet(__MemoryContext__* mem_context, const uint32_t ablock_size)
-    : mem_context_(mem_context),
-      locker_(nullptr),
-      mod_set_(nullptr),
-      blk_mgr_(nullptr),
-      blist_(NULL),
-      last_remainder_(NULL),
-      bm_(NULL),
-      free_lists_(NULL),
-      dirty_list_mutex_(),
-      dirty_list_(nullptr),
-      dirty_objs_(0),
-      alloc_bytes_(0),
-      used_bytes_(0),
-      hold_bytes_(0),
-      allocs_(0),
-      normal_alloc_bytes_(0),
-      normal_used_bytes_(0),
-      normal_hold_bytes_(0),
-      ablock_size_(ablock_size),
-      cells_per_block_(AllocHelper::cells_per_block(ablock_size))
+ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size)
+  : mem_context_(mem_context), locker_(nullptr),
+    blk_mgr_(nullptr), blist_(NULL), last_remainder_(NULL),
+    bm_(NULL), free_lists_(NULL),
+    dirty_list_mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK), dirty_list_(nullptr), dirty_objs_(0),
+    alloc_bytes_(0), used_bytes_(0), hold_bytes_(0), allocs_(0),
+    normal_alloc_bytes_(0), normal_used_bytes_(0),
+    normal_hold_bytes_(0), ablock_size_(ablock_size),
+    cells_per_block_(AllocHelper::cells_per_block(ablock_size))
 {}
 
 ObjectSet::~ObjectSet()
@@ -61,35 +50,29 @@ ObjectSet::~ObjectSet()
   reset();
 }
 
-AObject* ObjectSet::alloc_object(const uint64_t size, const ObMemAttr& attr)
+AObject *ObjectSet::alloc_object(
+    const uint64_t size, const ObMemAttr &attr)
 {
-  uint64_t alloc_size = size;
-  auto& leak_checker = common::ObMemLeakChecker::get_instance();
-  bool check_leak = mem_context_ != nullptr && leak_checker.is_context_check() &&
-                    leak_checker.get_static_id() == mem_context_->get_static_id();
-  if (OB_UNLIKELY(check_leak)) {
-    alloc_size += BT_BUF_LEN;
-  }
-  const uint64_t adj_size = MAX(alloc_size, MIN_AOBJECT_SIZE);
+  const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
   const uint64_t all_size = align_up2(adj_size + AOBJECT_META_SIZE, 16);
 
-  const int64_t ctx_id = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  const int64_t ctx_id = blk_mgr_->ctx_id_;
   abort_unless(ctx_id == attr.ctx_id_);
-  if (common::ObCtxIds::LIBEASY == ctx_id) {
+  if (OB_UNLIKELY(common::ObCtxIds::LIBEASY == ctx_id)) {
     do_free_dirty_list();
   }
 
-  AObject* obj = NULL;
-  if (alloc_size >= UINT32_MAX || 0 == alloc_size) {
+  AObject *obj = NULL;
+  if (OB_UNLIKELY(size >= UINT32_MAX) || OB_UNLIKELY(0 == size)) {
     // not support
-    auto& afc = g_alloc_failed_ctx();
+    auto &afc = g_alloc_failed_ctx();
     afc.reason_ = SINGLE_ALLOC_SIZE_OVERFLOW;
-    afc.alloc_size_ = alloc_size;
+    afc.alloc_size_ = size;
   } else if (all_size <= ablock_size_) {
-    const uint32_t cls = (uint32_t)(1 + ((all_size - 1) / AOBJECT_CELL_BYTES));
+    const uint32_t cls = (uint32_t)(1+ ((all_size - 1) / AOBJECT_CELL_BYTES));
     obj = alloc_normal_object(cls, attr);
     if (NULL != obj) {
-      normal_alloc_bytes_ += alloc_size;
+      normal_alloc_bytes_ += size;
       normal_used_bytes_ += obj->nobjs_ * AOBJECT_CELL_BYTES;
     }
   } else {
@@ -101,40 +84,27 @@ AObject* ObjectSet::alloc_object(const uint64_t size, const ObMemAttr& attr)
     abort_unless(obj->in_use_);
     abort_unless(obj->is_valid());
 
-    reinterpret_cast<uint64_t&>(obj->data_[alloc_size]) = AOBJECT_TAIL_MAGIC_CODE;
-    obj->alloc_bytes_ = static_cast<uint32_t>(alloc_size);
+    reinterpret_cast<uint64_t&>(obj->data_[size]) = AOBJECT_TAIL_MAGIC_CODE;
+    obj->alloc_bytes_ = static_cast<uint32_t>(size);
 
-    if (attr.label_.is_str_) {
-      if (attr.label_.str_ != nullptr) {
-        STRNCPY(&obj->label_[0], attr.label_.str_, sizeof(obj->label_));
-        obj->label_[sizeof(obj->label_) - 1] = '\0';
-      } else {
-        obj->label_[0] = '\0';
-      }
+    if (attr.label_.str_ != nullptr) {
+      STRNCPY(&obj->label_[0], attr.label_.str_, sizeof(obj->label_));
+      obj->label_[sizeof(obj->label_) - 1] = '\0';
     } else {
-      obj->ident_char_ = INVISIBLE_CHARACTER;
-      obj->mod_id_ = attr.label_.mod_id_;
-      if (mod_set_ != nullptr) {
-        mod_set_->mod_update(obj->mod_id_, obj->hold(cells_per_block_), static_cast<int64_t>(obj->alloc_bytes_));
-      }
+      obj->label_[0] = '\0';
     }
-    check_leak = check_leak && (leak_checker.is_wildcard() || leak_checker.label_match(*obj));
-    if (OB_UNLIKELY(check_leak)) {
-      common::lbt(&obj->data_[alloc_size - BT_BUF_LEN], BT_BUF_LEN);
-    }
-    obj->on_context_leak_check_ = check_leak;
-
     allocs_++;
-    alloc_bytes_ += alloc_size;
-    used_bytes_ += all_size;
+    alloc_bytes_ += size;
+    used_bytes_ += obj->hold(cells_per_block_);
   }
 
   return obj;
 }
 
-AObject* ObjectSet::realloc_object(AObject* obj, const uint64_t size, const ObMemAttr& attr)
+AObject *ObjectSet::realloc_object(
+    AObject *obj, const uint64_t size, const ObMemAttr &attr)
 {
-  AObject* new_obj = NULL;
+  AObject *new_obj = NULL;
   uint64_t copy_size = 0;
 
   if (NULL == obj) {
@@ -144,7 +114,8 @@ AObject* ObjectSet::realloc_object(AObject* obj, const uint64_t size, const ObMe
     if (obj->is_large_ != 0) {
       copy_size = MIN(obj->alloc_bytes_, size);
     } else {
-      copy_size = MIN(size, (obj->nobjs_ - META_CELLS) * AOBJECT_CELL_BYTES);
+      copy_size = MIN(
+          size, (obj->nobjs_ - META_CELLS) * AOBJECT_CELL_BYTES);
     }
 
     new_obj = alloc_object(size, attr);
@@ -158,12 +129,14 @@ AObject* ObjectSet::realloc_object(AObject* obj, const uint64_t size, const ObMe
   return new_obj;
 }
 
-AObject* ObjectSet::alloc_normal_object(const uint32_t cls, const ObMemAttr& attr)
+AObject *ObjectSet::alloc_normal_object(const uint32_t cls, const ObMemAttr &attr)
 {
-  AObject* obj = NULL;
+  AObject *obj = NULL;
 
   // best fit
-  if (NULL != bm_ && NULL != free_lists_ && bm_->isset(cls)) {
+  if (NULL != bm_
+      && NULL != free_lists_
+      && bm_->isset(cls)) {
     obj = free_lists_[cls];
     take_off_free_object(obj);
     obj->in_use_ = true;
@@ -191,18 +164,20 @@ AObject* ObjectSet::alloc_normal_object(const uint32_t cls, const ObMemAttr& att
   //   2. the remainder as last remainder
   //
   if (NULL == obj) {
-    if (NULL != bm_ && NULL != free_lists_ && NULL != last_remainder_) {
-      AObject* const lrback = last_remainder_;
+    if (NULL != bm_
+        && NULL != free_lists_
+        && NULL != last_remainder_) {
+      AObject * const lrback = last_remainder_;
       last_remainder_ = NULL;
       add_free_object(merge_obj(lrback));
     }
 
-    ABlock* block = alloc_block(ablock_size_, attr);
+    ABlock *block = alloc_block(ablock_size_, attr);
     if (NULL != block) {
       normal_hold_bytes_ += ablock_size_;
 
-      AObject* remainder = NULL;
-      obj = new (block->data_) AObject();
+      AObject *remainder = NULL;
+      obj = new (block->data()) AObject();
       obj->nobjs_ = static_cast<uint16_t>(cells_per_block_);
       obj = split_obj(obj, cls, remainder);
       obj->in_use_ = true;
@@ -215,9 +190,9 @@ AObject* ObjectSet::alloc_normal_object(const uint32_t cls, const ObMemAttr& att
   return obj;
 }
 
-AObject* ObjectSet::get_free_object(const uint32_t cls)
+AObject *ObjectSet::get_free_object(const uint32_t cls)
 {
-  AObject* obj = NULL;
+  AObject *obj = NULL;
 
   if (NULL != bm_ && NULL != free_lists_) {
     const int ffs = bm_->find_first_significant(cls);
@@ -228,9 +203,10 @@ AObject* ObjectSet::get_free_object(const uint32_t cls)
     }
 
     if (ffs >= 0 && NULL != obj && ffs >= static_cast<int32_t>(cls)) {
-      if (NULL != last_remainder_ && obj->block() == last_remainder_->block() &&
-          (obj->phy_next(obj->nobjs_) == last_remainder_ ||
-              last_remainder_->phy_next(last_remainder_->nobjs_) == obj)) {
+      if (NULL != last_remainder_
+          && obj->block() == last_remainder_->block()
+          && (obj->phy_next(obj->nobjs_) == last_remainder_
+              || last_remainder_->phy_next(last_remainder_->nobjs_) == obj)) {
         last_remainder_ = merge_obj(last_remainder_);
       } else {
         if (NULL != last_remainder_) {
@@ -252,20 +228,19 @@ AObject* ObjectSet::get_free_object(const uint32_t cls)
   return obj;
 }
 
-void ObjectSet::add_free_object(AObject* obj)
+void ObjectSet::add_free_object(AObject *obj)
 {
   abort_unless(NULL != obj);
-  abort_unless(NULL != bm_ && NULL != free_lists_);
   abort_unless(obj->is_valid());
 
-  if (obj->nobjs_ >= MIN_FREE_CELLS) {
-    AObject*& head = free_lists_[obj->nobjs_];
+  if (OB_ISNULL(bm_) || OB_ISNULL(free_lists_)) {
+  } else if (obj->nobjs_ >= MIN_FREE_CELLS) {
+    AObject *&head = free_lists_[obj->nobjs_];
     if (bm_->isset(obj->nobjs_)) {
       obj->prev_ = head->prev_;
       obj->next_ = head;
       obj->prev_->next_ = obj;
       obj->next_->prev_ = obj;
-      head = obj;
     } else {
       bm_->set(obj->nobjs_);
       obj->prev_ = obj;
@@ -275,18 +250,18 @@ void ObjectSet::add_free_object(AObject* obj)
   }
 }
 
-void ObjectSet::take_off_free_object(AObject* obj)
+void ObjectSet::take_off_free_object(AObject *obj)
 {
   abort_unless(NULL != obj);
-  abort_unless(NULL != bm_ && NULL != free_lists_);
   abort_unless(obj->is_valid());
 
-  if (!!obj->in_use_) {
+  if (OB_ISNULL(bm_) || OB_ISNULL(free_lists_)) {
+  } else if (!!obj->in_use_) {
   } else if (obj->nobjs_ < MIN_FREE_CELLS) {
   } else if (obj->next_ == obj) {
     bm_->unset(obj->nobjs_);
   } else {
-    AObject*& head = free_lists_[obj->nobjs_];
+    AObject *&head = free_lists_[obj->nobjs_];
     if (head == obj) {
       head = head->next_;
     }
@@ -295,7 +270,7 @@ void ObjectSet::take_off_free_object(AObject* obj)
   }
 }
 
-void ObjectSet::free_normal_object(AObject* obj)
+void ObjectSet::free_normal_object(AObject *obj)
 {
   abort_unless(NULL != obj);
   abort_unless(obj->is_valid());
@@ -303,30 +278,23 @@ void ObjectSet::free_normal_object(AObject* obj)
   normal_alloc_bytes_ -= obj->alloc_bytes_;
   normal_used_bytes_ -= obj->nobjs_ * AOBJECT_CELL_BYTES;
 
-  if (NULL == bm_ || NULL == free_lists_) {
-    obj->in_use_ = false;
+  AObject *newobj = merge_obj(obj);
+  auto ctx_id = blk_mgr_->ctx_id_;
+  auto tenant_id = blk_mgr_->tenant_id_;
+  if (newobj->nobjs_ == cells_per_block_) {
+    hold_bytes_ -= ablock_size_;
+    normal_hold_bytes_ -= ablock_size_;
+    free_block(newobj->block());
+  } else if (OB_ISNULL(last_remainder_)) {
+    last_remainder_ = newobj;
   } else {
-    AObject* newobj = merge_obj(obj);
-
-    if (newobj->nobjs_ == cells_per_block_) {
-      // we can cache `BLOCK_CACHE_RATIO` of hold blocks
-      if (normal_used_bytes_ == 0 ||
-          ((double)normal_used_bytes_ > (double)normal_hold_bytes_ * (1. - BLOCK_CACHE_RATIO))) {
-        add_free_object(newobj);
-      } else {
-        hold_bytes_ -= ablock_size_;
-        normal_hold_bytes_ -= ablock_size_;
-        free_block(newobj->block());
-      }
-    } else {
-      add_free_object(newobj);
-    }
+    add_free_object(newobj);
   }
 }
 
-ABlock* ObjectSet::alloc_block(const uint64_t size, const ObMemAttr& attr)
+ABlock *ObjectSet::alloc_block(const uint64_t size, const ObMemAttr &attr)
 {
-  ABlock* block = blk_mgr_->alloc_block(size, attr);
+  ABlock *block = blk_mgr_->alloc_block(size, attr);
 
   if (NULL != block) {
     if (NULL != blist_) {
@@ -347,7 +315,7 @@ ABlock* ObjectSet::alloc_block(const uint64_t size, const ObMemAttr& attr)
   return block;
 }
 
-void ObjectSet::free_block(ABlock* block)
+void ObjectSet::free_block(ABlock *block)
 {
   abort_unless(NULL != block);
   abort_unless(block->is_valid());
@@ -366,13 +334,13 @@ void ObjectSet::free_block(ABlock* block)
   blk_mgr_->free_block(block);
 }
 
-AObject* ObjectSet::alloc_big_object(const uint64_t size, const ObMemAttr& attr)
+AObject *ObjectSet::alloc_big_object(const uint64_t size, const ObMemAttr &attr)
 {
-  AObject* obj = NULL;
-  ABlock* block = alloc_block(size + AOBJECT_META_SIZE, attr);
+  AObject *obj = NULL;
+  ABlock *block = alloc_block(size + AOBJECT_META_SIZE, attr);
 
   if (NULL != block) {
-    obj = new (block->data_) AObject();
+    obj = new (block->data()) AObject();
     obj->is_large_ = true;
     obj->in_use_ = true;
     obj->alloc_bytes_ = static_cast<uint32_t>(size);
@@ -381,7 +349,7 @@ AObject* ObjectSet::alloc_big_object(const uint64_t size, const ObMemAttr& attr)
   return obj;
 }
 
-void ObjectSet::free_big_object(AObject* obj)
+void ObjectSet::free_big_object(AObject *obj)
 {
   abort_unless(NULL != obj);
   abort_unless(NULL != obj->block());
@@ -392,20 +360,24 @@ void ObjectSet::free_big_object(AObject* obj)
   free_block(obj->block());
 }
 
-void ObjectSet::free_object(AObject* obj)
+void ObjectSet::free_object(AObject *obj)
 {
   abort_unless(obj != NULL);
   abort_unless(obj->is_valid());
-  abort_unless(AOBJECT_TAIL_MAGIC_CODE == reinterpret_cast<uint64_t&>(obj->data_[obj->alloc_bytes_]));
-  abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
+  abort_unless(
+      AOBJECT_TAIL_MAGIC_CODE
+      == reinterpret_cast<uint64_t&>(obj->data_[obj->alloc_bytes_]));
+  abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE ||
+               obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
   abort_unless(obj->in_use_);
 
 #ifdef ERRSIM
-  if (0 != (E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
+  if (0 != (OB_E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
     memset(obj->data_, 0xAA, obj->alloc_bytes_);
   }
 #endif
-  const int64_t ctx_id = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  const int64_t ctx_id = blk_mgr_->ctx_id_;
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   if (ctx_id == common::ObCtxIds::LIBEASY) {
     if (locker_->trylock()) {
       do_free_object(obj);
@@ -437,19 +409,16 @@ void ObjectSet::free_object(AObject* obj)
   }
 }
 
-void ObjectSet::do_free_object(AObject* obj)
+void ObjectSet::do_free_object(AObject *obj)
 {
   const int64_t hold = obj->hold(cells_per_block_);
   const int64_t used = obj->alloc_bytes_;
-
-  if (INVISIBLE_CHARACTER == obj->ident_char_ && mod_set_ != nullptr) {
-    mod_set_->mod_update(obj->mod_id_, -hold, -used);
-  }
 
   alloc_bytes_ -= obj->alloc_bytes_;
   used_bytes_ -= hold;
 
   obj->in_use_ = false;
+  obj->on_malloc_sample_ = false;
   if (!obj->is_large_) {
     free_normal_object(obj);
   } else {
@@ -458,17 +427,33 @@ void ObjectSet::do_free_object(AObject* obj)
 
   // 1. havn't created free lists
   // 2. touch free lists build ratio
-  if (NULL == bm_ && NULL == free_lists_ && normal_hold_bytes_ > ablock_size_ &&
-      (normal_used_bytes_ < static_cast<double>(normal_hold_bytes_) * (1. - FREE_LISTS_BUILD_RATIO))) {
-    build_free_lists();
-    last_remainder_ = NULL;
+  if (OB_ISNULL(bm_) && OB_ISNULL(free_lists_)) {
+    if (normal_hold_bytes_ > ablock_size_
+        && (normal_used_bytes_
+          < static_cast<double>(normal_hold_bytes_)
+          * (1. - FREE_LISTS_BUILD_RATIO))) {
+      build_free_lists();
+      last_remainder_ = NULL;
+    }
+  } else if (OB_NOT_NULL(blist_) && blist_->next_ == blist_) {
+    abort_unless(0 == alloc_bytes_);
+    abort_unless(0 == used_bytes_);
+    if (free_lists_ != nullptr) {
+      ABlock *free_list_block = nullptr;
+      AChunk *chunk = AChunk::ptr2chunk(free_lists_);
+      abort_unless(chunk->is_valid());
+      free_list_block = chunk->ptr2blk(free_lists_);
+      free_block(free_list_block);
+      free_lists_ = nullptr;
+    }
+    bm_ = nullptr;
   }
 }
 
 void ObjectSet::do_free_dirty_list()
 {
   if (OB_NOT_NULL(dirty_list_)) {
-    AObject* list = nullptr;
+    AObject *list = nullptr;
     {
       ObMutexGuard g(dirty_list_mutex_);
       list = dirty_list_;
@@ -476,75 +461,81 @@ void ObjectSet::do_free_dirty_list()
       dirty_objs_ = 0;
     }
     while (OB_NOT_NULL(list)) {
-      AObject* obj = list;
+      AObject *obj = list;
       list = list->next_;
       do_free_object(obj);
     }
   }
 }
 
-void ObjectSet::reset()
+bool ObjectSet::check_has_unfree(const char **first_label)
 {
-  if (mem_context_ != nullptr && blist_ != nullptr) {
-    auto& leak_checker = common::ObMemLeakChecker::get_instance();
-    const bool check_leak =
-        leak_checker.is_context_check() && leak_checker.get_static_id() == mem_context_->get_static_id();
-    ABlock* free_list_block =
-        nullptr == free_lists_ ? nullptr : CONTAINER_OF(reinterpret_cast<char*>(free_lists_), ABlock, data_[0]);
-    ABlock* block = blist_;
+  bool has_unfree = false;
+  if (first_label != NULL) *first_label = NULL;
+
+  if (blist_ != NULL) {
+    ABlock *free_list_block = nullptr;
+    if (free_lists_ != nullptr) {
+      AChunk *chunk = AChunk::ptr2chunk(free_lists_);
+      abort_unless(chunk->is_valid());
+      free_list_block = chunk->ptr2blk(free_lists_);
+    }
+    ABlock *block = blist_;
     // Filter the block to which the freelist itself belongs
     // Check whether the objects of the block are all! in_use (object_set may cache an 8k block)
-    bool has_unfree = false;
-    const static int buf_len = 256;
-    char buf[buf_len];
     do {
       if (block != free_list_block) {
-        AObject* obj = reinterpret_cast<AObject*>(block->data_);
+        AObject *obj = reinterpret_cast<AObject *>(block->data());
         while (true) {
           bool tmp_has_unfree = obj->in_use_;
           if (OB_UNLIKELY(tmp_has_unfree)) {
-            const char* label = obj->ident_char_ != INVISIBLE_CHARACTER
-                                    ? (char*)&obj->label_[0]
-                                    : common::ObModSet::instance().get_mod_name(obj->mod_id_);
+            if (first_label != NULL) {
+              *first_label = *first_label ?:(char*)&obj->label_[0];
+            }
             if (!has_unfree) {
-              int64_t pos = snprintf(buf,
-                  buf_len,
-                  "context: %p, label: %s, static_id: 0x%lx, static_info: %s, dynamic_info: %s",
-                  mem_context_,
-                  label,
-                  mem_context_->get_static_id(),
-                  common::to_cstring(mem_context_->get_static_info()),
-                  common::to_cstring(mem_context_->get_dynamic_info()));
-              buf[pos] = '\0';
               has_unfree = true;
             }
-            if (check_leak && obj->on_context_leak_check_) {
-              _OB_LOG(INFO,
-                  "CONTEXT MEMORY LEAK. ptr: %p, size: %d, label: %s, lbt: %.*s",
-                  obj->data_,
-                  obj->alloc_bytes_ - BT_BUF_LEN,
-                  label,
-                  BT_BUF_LEN,
-                  &obj->data_[obj->alloc_bytes_ - BT_BUF_LEN]);
-            }
           }
-          // If check_leak is turned on, it will traverse all, otherwise it will jump out directly if one case is found
-          // is_large indicates that the object occupies a block exclusively, and the effect is equivalent to is_last
-          if ((!check_leak && has_unfree) || obj->is_large_ || obj->is_last(cells_per_block_)) {
+          // It will jump out directly if one case is found is_large indicates that
+          // the object occupies a block exclusively, and the effect is equivalent to is_last
+          if (has_unfree || obj->is_large_ || obj->is_last(cells_per_block_)) {
             break;
           }
           obj = obj->phy_next(obj->nobjs_);
         }
-        if (!check_leak && has_unfree) {
+        if (has_unfree) {
           break;
         }
       }
       block = block->next_;
     } while (block != blist_);
+  }
 
-    if (OB_UNLIKELY(has_unfree)) {
-      has_unfree_callback(buf);
+  return has_unfree;
+}
+
+void ObjectSet::reset()
+{
+  const bool context_check = mem_context_ != nullptr;
+  const static int buf_len = 256;
+  char buf[buf_len] = {'\0'};
+  const char *first_label = NULL;
+  bool has_unfree = check_has_unfree(&first_label);
+  if (has_unfree) {
+    if (context_check) {
+      const StaticInfo &static_info = mem_context_->get_static_info();
+      const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
+      int64_t pos = snprintf(buf, buf_len,
+                             "context: %p, label: %s, static_id: 0x%lx, "
+                             "static_info:{filename: %s, line: %d, function: %s}, "
+                             "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
+                             mem_context_, first_label,
+                             mem_context_->get_static_id(),
+                             static_info.filename_, static_info.line_, static_info.function_,
+                             dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
+      buf[pos] = '\0';
     }
+    has_unfree_callback(buf);
   }
 
   while (NULL != blist_) {
@@ -563,40 +554,41 @@ void ObjectSet::reset()
   normal_used_bytes_ = 0;
   normal_hold_bytes_ = 0;
   hold_bytes_ = 0;
-  if (mod_set_ != nullptr) {
-    mod_set_->reset();
-  }
 }
 
 bool ObjectSet::build_free_lists()
 {
   abort_unless(NULL == bm_ && NULL == free_lists_);
   ObMemAttr attr;
-  attr.tenant_id_ = blk_mgr_->get_tenant_ctx_allocator().get_tenant_id();
-  attr.ctx_id_ = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  attr.tenant_id_ = blk_mgr_->tenant_id_;
+  attr.ctx_id_ = blk_mgr_->ctx_id_;
   attr.label_ = common::ObModIds::OB_OBJ_FREELISTS;
-  ABlock* new_block = alloc_block(
-      sizeof(FreeList) * (cells_per_block_ + 1) + sizeof(BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);
+  ABlock *new_block = alloc_block(sizeof (FreeList) * (cells_per_block_ + 1) +
+      sizeof (BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);
 
-  OB_LOG(DEBUG, "build free lists", K(common::lbt()));
+  OB_LOG(DEBUG, "build free lists", KCSTRING(common::lbt()));
 
   if (NULL != new_block) {
-    // new_block->label_ = common::ObModIds::OB_OBJ_FREELISTS;
-    free_lists_ = new (new_block->data_) FreeList();
-    bm_ = new (&new_block->data_[sizeof(FreeList) * (cells_per_block_ + 1)])
-        BitMap(cells_per_block_ + 1, &new_block->data_[sizeof(FreeList) * (cells_per_block_ + 1) + sizeof(BitMap)]);
+    //new_block->label_ = common::ObModIds::OB_OBJ_FREELISTS;
+    char *new_block_data = new_block->data();
+    free_lists_ = new (new_block_data) FreeList();
+    bm_ = new (&new_block_data[sizeof (FreeList) * (cells_per_block_ + 1)])
+      BitMap(cells_per_block_ + 1,
+             &new_block_data[sizeof (FreeList) * (cells_per_block_ + 1) + sizeof (BitMap)]);
 
     // the new block is at tail of blist_, the BREAK and CONTINUE is
     // necessary otherwise the code will be very ugly and bug prone.
-    for (ABlock* block = blist_; block != new_block; block = block->next_) {
-      AObject* obj = reinterpret_cast<AObject*>(block->data_);
+    for (ABlock *block = blist_;
+         block != new_block;
+         block = block->next_) {
+      AObject *obj = reinterpret_cast<AObject*>(block->data());
       abort_unless(obj->is_valid());
 
       // ignore large object
       if (!obj->is_large_) {
         for (;;) {
           while (obj->in_use_ && !obj->is_last(cells_per_block_)) {
-            AObject* next_obj = obj->phy_next(obj->nobjs_);
+            AObject *next_obj = obj->phy_next(obj->nobjs_);
             next_obj->nobjs_prev_ = obj->nobjs_;
             obj = next_obj;
             abort_unless(obj->is_valid());
@@ -609,7 +601,7 @@ bool ObjectSet::build_free_lists()
             break;
           }
           // the first object not in use
-          AObject* first = obj;
+          AObject *first = obj;
           obj = obj->phy_next(obj->nobjs_);
           abort_unless(obj->is_valid());
           while (!obj->in_use_ && !obj->is_last(cells_per_block_)) {
@@ -625,10 +617,84 @@ bool ObjectSet::build_free_lists()
             obj->nobjs_prev_ = first->nobjs_;
             add_free_object(first);
           }
-        }  // for one block
-      }    // if (!obj->is_large_)
-    }      // for all block
+        } // for one block
+      } // if (!obj->is_large_)
+    } // for all block
   }
 
   return new_block != NULL;
+}
+
+AObject *ObjectSet::split_obj(AObject *obj, const uint32_t cls, AObject *&remainder)
+{
+  AObject *new_obj = NULL;
+
+  remainder = NULL;
+  if (NULL == obj) {
+  } else if (obj->nobjs_ < cls + META_CELLS) {
+    new_obj = obj;
+  } else {
+    remainder = new (obj->phy_next(cls)) AObject();
+    remainder->nobjs_prev_ = static_cast<uint16_t>(cls);
+    remainder->nobjs_ = static_cast<uint16_t>(obj->nobjs_ - cls);
+    remainder->obj_offset_ = static_cast<uint16_t>(obj->obj_offset_ + cls);
+    obj->nobjs_ = static_cast<uint16_t>(cls);
+    new_obj = obj;
+
+    if (!remainder->is_last(cells_per_block_)) {
+      AObject *next = remainder->phy_next(remainder->nobjs_);
+      abort_unless(next->is_valid());
+      next->nobjs_prev_ = remainder->nobjs_;
+    }
+  }
+  return new_obj;
+}
+
+AObject *ObjectSet::merge_obj(AObject *obj)
+{
+  abort_unless(NULL != obj);
+  abort_unless(obj->is_valid());
+
+  AObject *prev_obj = NULL;
+  AObject *next_obj = NULL;
+  AObject *next_next_obj = NULL;
+
+  if (0 != obj->obj_offset_) {
+    prev_obj = obj->phy_next(-obj->nobjs_prev_);
+    abort_unless(prev_obj->is_valid());
+    if (prev_obj == last_remainder_) {
+      last_remainder_ = nullptr;
+    } else if (!prev_obj->in_use_) {
+      take_off_free_object(prev_obj);
+    }
+  }
+
+  if (!obj->is_last(cells_per_block_)) {
+    next_obj = obj->phy_next(obj->nobjs_);
+    abort_unless(next_obj->is_valid());
+    if (next_obj == last_remainder_) {
+      last_remainder_ = nullptr;
+    } else if (!next_obj->in_use_) {
+      take_off_free_object(next_obj);
+    }
+  }
+
+  if (NULL != next_obj && !next_obj->in_use_) {
+    if (!next_obj->is_last(cells_per_block_)) {
+      next_next_obj = next_obj->phy_next(next_obj->nobjs_);
+      abort_unless(next_next_obj->is_valid());
+    }
+  }
+
+  AObject *head = NULL != prev_obj && !prev_obj->in_use_ ? prev_obj : obj;
+  AObject *tail = next_obj != NULL && !next_obj->in_use_ ? next_next_obj : next_obj;
+
+  if (NULL != tail) {
+    head->nobjs_ = static_cast<uint16_t>(tail->obj_offset_ - head->obj_offset_);
+    tail->nobjs_prev_ = head->nobjs_;
+  } else {
+    head->nobjs_ = static_cast<uint16_t>(cells_per_block_ - head->obj_offset_);
+  }
+
+  return head;
 }

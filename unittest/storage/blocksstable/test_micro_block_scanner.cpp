@@ -17,51 +17,54 @@
 #include "storage/blocksstable/ob_micro_block_scanner.h"
 #include "storage/blocksstable/ob_micro_block_writer.h"
 #include "ob_row_generate.h"
-#include "storage/blocksstable/ob_column_map.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace blocksstable;
 using namespace storage;
 using namespace share::schema;
 
-namespace unittest {
+namespace unittest
+{
 static const int64_t rowkey_column_count = 2;
-// every ObObjType from ObNullType to ObExtendType
-// static const int64_t column_num = ObUnknownType;
+//every ObObjType from ObNullType to ObExtendType
+//static const int64_t column_num = ObUnknownType;
 static const int64_t column_num = ObHexStringType;
 static const int64_t macro_block_size = 2L * 1024 * 1024;
 static const int64_t table_id = 3001;
 const int64_t test_row_num = 10;
 
-class TestMicroBlockScanner : public ::testing::Test {
+class TestMicroBlockScanner : public ::testing::Test
+{
 public:
   TestMicroBlockScanner();
   virtual void SetUp();
-  virtual void TearDown()
-  {}
-  static void SetUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
-  int check_row(ObMicroBlockScanner& scanner, const int64_t start_row, const int64_t end_row, const bool reverse);
+  virtual void TearDown() {}
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
+  int check_row(ObMicroBlockScanner &scanner,
+      const int64_t start_row, const int64_t end_row, const bool reverse);
 
 protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
   ObArenaAllocator allocator_;
-  // oceanbase::common::ObObj objs_[column_num];
+  //oceanbase::common::ObObj objs_[column_num];
 };
 
-TestMicroBlockScanner::TestMicroBlockScanner() : allocator_(ObModIds::TEST)
-{}
+TestMicroBlockScanner::TestMicroBlockScanner()
+  : allocator_(ObModIds::TEST)
+{
+
+}
 
 void TestMicroBlockScanner::SetUp()
 {
   const int64_t table_id = 3001;
   ObTableSchema table_schema;
   ObColumnSchemaV2 column;
-  // init table schema
+  //init table schema
   table_schema.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema.set_table_name("test_row_writer"));
   table_schema.set_tenant_id(1);
@@ -70,10 +73,10 @@ void TestMicroBlockScanner::SetUp()
   table_schema.set_table_id(table_id);
   table_schema.set_rowkey_column_num(rowkey_column_count);
   table_schema.set_max_used_column_id(column_num);
-  // init column
+  //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
-  for (int64_t i = 0; i < column_num; ++i) {
+  for(int64_t i = 0; i < column_num; ++i){
     ObObjType obj_type = static_cast<ObObjType>(i);
     column.reset();
     column.set_table_id(table_id);
@@ -83,35 +86,35 @@ void TestMicroBlockScanner::SetUp()
     column.set_data_type(obj_type);
     column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
     column.set_data_length(1);
-    if (obj_type == common::ObIntType) {
+    if(obj_type == common::ObIntType){
       column.set_rowkey_position(1);
-    } else if (obj_type == common::ObVarcharType) {
+    } else if(obj_type == common::ObVarcharType) {
       column.set_rowkey_position(2);
     } else {
       column.set_rowkey_position(0);
     }
     ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
   }
-  // init ObRowGenerate
+  //init ObRowGenerate
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema, &allocator_));
 }
 
-int TestMicroBlockScanner::check_row(
-    ObMicroBlockScanner& scanner, const int64_t start_row, const int64_t end_row, const bool reverse)
+int TestMicroBlockScanner::check_row(ObMicroBlockScanner &scanner,
+    const int64_t start_row, const int64_t end_row, const bool reverse)
 {
   int ret = OB_SUCCESS;
-  const ObStoreRow* get_row;
+  const ObStoreRow *get_row;
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow row;
   row.row_val_.cells_ = objs;
   row.row_val_.count_ = column_num;
-  if (!reverse) {
-    for (int64_t i = start_row; i <= end_row; ++i) {
+  if(!reverse){
+    for(int64_t i = start_row; i <= end_row; ++ i){
       EXPECT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
       EXPECT_EQ(OB_SUCCESS, scanner.get_next_row(get_row));
       EXPECT_EQ(get_row->row_val_.count_, column_num);
-      for (int64_t j = 0; j < column_num && ret == OB_SUCCESS; ++j) {
-        if (get_row->row_val_.cells_[j] != objs[j]) {
+      for(int64_t j = 0; j < column_num && ret == OB_SUCCESS; ++ j){
+        if(get_row->row_val_.cells_[j] != objs[j]){
           ret = OB_ERROR;
           STORAGE_LOG(ERROR, "obj not equal", K(get_row->row_val_.cells_[j]), K(objs[j]));
         }
@@ -121,12 +124,12 @@ int TestMicroBlockScanner::check_row(
       EXPECT_TRUE(exist);
     }
   } else {
-    for (int64_t i = end_row; i >= start_row; --i) {
+     for(int64_t i = end_row; i >= start_row; -- i){
       EXPECT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
       EXPECT_EQ(OB_SUCCESS, scanner.get_next_row(get_row));
       EXPECT_EQ(get_row->row_val_.count_, column_num);
-      for (int64_t j = 0; j < column_num && ret == OB_SUCCESS; ++j) {
-        if (get_row->row_val_.cells_[j] != objs[j]) {
+      for(int64_t j = 0; j < column_num && ret == OB_SUCCESS; ++ j){
+        if(get_row->row_val_.cells_[j] != objs[j]){
           ret = OB_ERROR;
           STORAGE_LOG(ERROR, "obj not equal", K(get_row->row_val_.cells_[j]), K(objs[j]));
         }
@@ -146,30 +149,28 @@ TEST_F(TestMicroBlockScanner, test_scanner)
   ObStoreRow row;
   row.row_val_.cells_ = objs;
   row.row_val_.count_ = column_num;
-  // ObMicroBlockWriter init the column_map and block_data
+  //ObMicroBlockWriter init the column_map and block_data
   ObMicroBlockWriter writer;
   ret = writer.init(macro_block_size, rowkey_column_count, column_num);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
+  for(int64_t i = 0; i < test_row_num; ++i){
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
     ASSERT_EQ(OB_SUCCESS, writer.append_row(row));
   }
-  char* buf = NULL;
+  char *buf = NULL;
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, writer.build_block(buf, size));
-  // init column_map
+  //init column_map
   ObArray<ObColDesc> cols;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(cols));
-  ASSERT_EQ(OB_SUCCESS,
-      column_map_.init(allocator_,
-          row_generate_.get_schema().get_schema_version(),
-          row_generate_.get_schema().get_rowkey_column_num(),
-          column_num,
-          cols));
+  ASSERT_EQ(OB_SUCCESS, column_map_.init(allocator_,
+                                         row_generate_.get_schema().get_schema_version(),
+                                         row_generate_.get_schema().get_rowkey_column_num(),
+                                         column_num, cols));
 
   ObMicroBlockData block(buf, size);
-  // normal success
-  ObMicroBlockScanner scanner;
+  //normal success
+  ObMicroBlockScanner scanner(allocator_);
   ObStoreRange range;
   range.set_table_id(table_id);
   ObStoreRow start_row;
@@ -179,93 +180,91 @@ TEST_F(TestMicroBlockScanner, test_scanner)
   start_row.row_val_.count_ = column_num;
   end_row.row_val_.cells_ = range_objs[1];
   end_row.row_val_.count_ = column_num;
-  // set inclusive
+  //set inclusive
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(0, start_row));
   range.get_start_key().assign(range_objs[0], rowkey_column_count);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(test_row_num - 1, end_row));
   range.get_end_key().assign(range_objs[1], rowkey_column_count);
   range.get_border_flag().set_inclusive_start();
   range.get_border_flag().set_inclusive_end();
-  ret = scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 1, false));
-  ret = scanner.set_scan_param(column_map_, range, block, true, true, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, true, true, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 1, true));
-  // unset inclusive
+  //unset inclusive
   range.get_start_key().assign(range_objs[0], rowkey_column_count);
   range.get_end_key().assign(range_objs[1], rowkey_column_count);
   range.get_border_flag().unset_inclusive_start();
   range.get_border_flag().unset_inclusive_end();
-  ret = scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 1, test_row_num - 2, false));
-  ret = scanner.set_scan_param(column_map_, range, block, true, true, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, true, true, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 1, test_row_num - 2, true));
-  // not bound
+  //not bound
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(1, start_row));
   range.get_start_key().assign(range_objs[0], rowkey_column_count);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(test_row_num - 2, end_row));
   range.get_end_key().assign(range_objs[1], rowkey_column_count);
   range.get_border_flag().unset_inclusive_start();
   range.get_border_flag().unset_inclusive_start();
-  ret = scanner.set_scan_param(column_map_, range, block, false, false, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, false, false, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 1, false));
-  ret = scanner.set_scan_param(column_map_, range, block, false, true, FLAT_ROW_STORE, allocator_);
+  ret = scanner.set_scan_param(column_map_, range, block, false, true, FLAT_ROW_STORE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 1, true));
 
-  // block error
+  //block error
   ObMicroBlockData block2(buf, 0);
-  ASSERT_EQ(
-      OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_, range, block2, true, false, FLAT_ROW_STORE, allocator_));
-  // start_key is beyond
+  ASSERT_EQ(OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_, range, block2, true, false, FLAT_ROW_STORE));
+  //start_key is beyond
   ObStoreRow row_beyond;
   ObObj obj_tmp[column_num];
   row_beyond.row_val_.cells_ = obj_tmp;
   row_beyond.row_val_.count_ = column_num;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row_beyond));
   range.get_start_key().assign(row_beyond.row_val_.cells_, rowkey_column_count);
-  ASSERT_EQ(
-      OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_));
-  const ObStoreRow* r_row = NULL;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE));
+  const ObStoreRow *r_row = NULL;
   /*ASSERT_EQ(OB_BEYOND_THE_RANGE, scanner.get_next_row(r_row));
   ASSERT_TRUE(NULL == r_row);*/
-  // start key is the last one and unset inclusive
+  //start key is the last one and unset inclusive
   range.get_border_flag().unset_inclusive_start();
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(test_row_num - 1, start_row));
   range.get_start_key().assign(range_objs[0], rowkey_column_count);
-  ASSERT_EQ(
-      OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_));
-  // endkey key is last one
+  ASSERT_EQ(OB_INVALID_ARGUMENT, scanner.set_scan_param(column_map_,range, block, true, false, FLAT_ROW_STORE));
+  //endkey key is last one
   range.get_border_flag().set_inclusive_start();
   range.get_border_flag().unset_inclusive_end();
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(0, start_row));
   range.get_start_key().assign(range_objs[0], rowkey_column_count);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(test_row_num - 1, end_row));
   range.get_end_key().assign(range_objs[1], rowkey_column_count);
-  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_));
+  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_,range, block, true, false, FLAT_ROW_STORE));
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 2, false));
-  // endkey is the first one and unset inclusive
+  //endkey is the first one and unset inclusive
   range.get_border_flag().unset_inclusive_start();
   range.get_border_flag().unset_inclusive_end();
   range.get_start_key().set_min();
   range.get_end_key().assign(range_objs[0], rowkey_column_count);
-  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_));
+  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE));
   ASSERT_EQ(OB_BEYOND_THE_RANGE, scanner.get_next_row(r_row));
   ASSERT_TRUE(NULL == r_row);
-  // endkey is beyond
+  //endkey is beyond
   range.get_end_key().assign(row_beyond.row_val_.cells_, rowkey_column_count);
-  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE, allocator_));
+  ASSERT_EQ(OB_SUCCESS, scanner.set_scan_param(column_map_, range, block, true, false, FLAT_ROW_STORE));
   ASSERT_EQ(OB_SUCCESS, check_row(scanner, 0, test_row_num - 1, false));
+
 }
 
-}  // end namespace unittest
-}  // end namespace oceanbase
+}//end namespace unittest
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

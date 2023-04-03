@@ -1,0 +1,15 @@
+obproxy-ce:
+  depends:
+    - {{%% COMPONENT %%}}
+  servers:
+    - 127.0.0.1
+  global:
+    listen_port: {{%% LISTEN_PORT %%}}
+    prometheus_listen_port: {{%% PROMETHEUS_LISTEN_PORT %%}}
+    home_path: {{%% OBPORXY_HOME_PATH %%}}
+    enable_cluster_checkout: false
+    skip_proxy_sys_private_check: true
+    syslog_level: 'DEBUG'
+    enable_metadb_used: 'false'
+    enable_qa_mode: 'TRUE'
+    location_expire_period: '1'

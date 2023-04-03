@@ -12,12 +12,15 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_backup_path.h"
+#include "share/backup/ob_backup_io_adapter.h"
+#include "lib/ob_define.h"
 
 using namespace oceanbase;
 using namespace common;
 using namespace share;
 
-ObBackupPath::ObBackupPath() : cur_pos_(0)
+ObBackupPath::ObBackupPath()
+  : cur_pos_(0)
 {
   path_[0] = '\0';
 }
@@ -32,6 +35,7 @@ void ObBackupPath::reset()
   path_[0] = '\0';
   cur_pos_ = 0;
 }
+
 
 int ObBackupPath::trim_right_backslash()
 {
@@ -48,15 +52,15 @@ int ObBackupPath::trim_right_backslash()
   return ret;
 }
 
-int ObBackupPath::init(const common::ObString& backup_root_path)
+int ObBackupPath::init(const common::ObString &backup_root_path)
 {
   int ret = OB_SUCCESS;
 
   if (cur_pos_ != 0) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(
-                 path_, sizeof(path_), cur_pos_, "%.*s", backup_root_path.length(), backup_root_path.ptr()))) {
+  }  else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "%.*s",
+      backup_root_path.length(), backup_root_path.ptr()))) {
     OB_LOG(WARN, "fail to backup_root_path", K(ret), K(backup_root_path));
   } else if (OB_FAIL(trim_right_backslash())) {
     OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
@@ -72,7 +76,8 @@ int ObBackupPath::join_incarnation(const uint64_t incarnation)
   if (cur_pos_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%lu", OB_STR_INCARNATION, incarnation))) {
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+      "/%s_%lu", OB_STR_INCARNATION, incarnation))) {
     LOG_WARN("failed to join incarnation", K(ret), K(incarnation), K(*this));
   } else if (OB_FAIL(trim_right_backslash())) {
     OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
@@ -81,230 +86,337 @@ int ObBackupPath::join_incarnation(const uint64_t incarnation)
   return ret;
 }
 
-int ObBackupPath::join(const common::ObString& str_path)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (str_path.length() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(str_path));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%.*s", str_path.length(), str_path.ptr()))) {
-    LOG_WARN("failed to join path", K(ret), K(str_path), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join(const uint64_t int_path)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%lu", int_path))) {
-    LOG_WARN("failed to join int path", K(ret), K(int_path), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join(const int64_t v)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", KR(ret), K(*this));
-  } else if (OB_UNLIKELY(v < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(v));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%ld", v))) {
-    LOG_WARN("failed to databuff_printf", KR(ret), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    LOG_WARN("fail to trim_right_backslash", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
-int ObBackupPath::join_full_backup_set(const int64_t backup_set_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", KR(ret), K(*this));
-  } else if (OB_UNLIKELY(backup_set_id < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(backup_set_id));
-  } else if (OB_FAIL(databuff_printf(
-                 path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_FULL_BACKUP_SET, backup_set_id))) {
-    LOG_WARN("failed to join full_backup_set", K(ret), K(backup_set_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_inc_backup_set(const int64_t backup_set_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(
-                 path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_INC_BACKUP_SET, backup_set_id))) {
-    LOG_WARN("failed to join inc_backup_set", K(ret), K(backup_set_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_meta_index(const int64_t task_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(
-                 databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_META_INDEX, task_id))) {
-    LOG_WARN("failed to join sys meta inedx", K(ret), K(task_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_meta_file(const int64_t task_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_META_FILE, task_id))) {
-    LOG_WARN("failed to join sys meta inedx", K(ret), K(task_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_macro_block_file(const int64_t backup_set_id, const int64_t sub_task_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(path_,
-                 sizeof(path_),
-                 cur_pos_,
-                 "/%s_%lu.%lu",
-                 OB_STRING_BACKUP_MACRO_BLOCK_FILE,
-                 backup_set_id,
-                 sub_task_id))) {
-    LOG_WARN("failed to join macro block file", K(ret), K(backup_set_id), K(sub_task_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_macro_block_index(const int64_t backup_set_id, const int64_t retry_cnt)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (0 == retry_cnt &&
-             OB_FAIL(databuff_printf(
-                 path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_MACRO_BLOCK_INDEX, backup_set_id))) {
-    LOG_WARN("failed to join macro block file", K(ret), K(backup_set_id), K(retry_cnt), K(*this));
-  } else if (retry_cnt > 0 && OB_FAIL(databuff_printf(path_,
-                                  sizeof(path_),
-                                  cur_pos_,
-                                  "/%s_%ld.%ld",
-                                  OB_STRING_BACKUP_MACRO_BLOCK_INDEX,
-                                  backup_set_id,
-                                  retry_cnt))) {
-    LOG_WARN("failed to join macro block file", K(ret), K(backup_set_id), K(retry_cnt), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_sstable_macro_index(const int64_t backup_set_id, const int64_t retry_cnt)
-{
-  int ret = OB_SUCCESS;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (0 == retry_cnt &&
-             OB_FAIL(databuff_printf(
-                 path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STRING_BACKUP_SSTABLE_MACRO_INDEX, backup_set_id))) {
-    LOG_WARN("failed to join macro block file", K(ret), K(backup_set_id), K(retry_cnt), K(*this));
-  } else if (retry_cnt > 0 && OB_FAIL(databuff_printf(path_,
-                                  sizeof(path_),
-                                  cur_pos_,
-                                  "/%s_%ld.%ld",
-                                  OB_STRING_BACKUP_SSTABLE_MACRO_INDEX,
-                                  backup_set_id,
-                                  retry_cnt))) {
-    LOG_WARN("failed to join macro block file", K(ret), K(backup_set_id), K(retry_cnt), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_archive_pg_key(const common::ObPGKey& pg_key)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t table_id = pg_key.get_table_id();
-  const int64_t partition_id = pg_key.get_partition_id();
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K(*this));
-  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%lu_%ld", table_id, partition_id))) {
-    LOG_WARN("failed to join archive key", K(ret), K(table_id), K(partition_id), K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "failed to trim right backup slash", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPath::join_round_and_piece(const int64_t round, const int64_t piece_id, const int64_t piece_create_date)
+int ObBackupPath::add_backup_suffix(const ObBackupFileSuffix &type)
 {
   int ret = OB_SUCCESS;
   if (cur_pos_ <= 0) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(*this));
   } else {
-    if (OB_BACKUP_NO_SWITCH_PIECE_ID == piece_id) {
-      ret = databuff_printf(path_, sizeof(path_), cur_pos_, "/%ld", round);
-    } else {
-      ret = databuff_printf(path_, sizeof(path_), cur_pos_, "/%ld_%ld_%ld", round, piece_id, piece_create_date);
+    switch (type) {
+      case ARCHIVE: {
+        if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "%s", OB_ARCHIVE_SUFFIX))) {
+          LOG_WARN("failed to add archive suffix", K(ret));
+        }
+        break;
+      }
+      case BACKUP: {
+        if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "%s", OB_BACKUP_SUFFIX))) {
+          LOG_WARN("failed to add backup suffix", K(ret));
+        }
+        break;
+      }
+      case NONE: {
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknow backup file suffix type", K(ret), K(type));
+      }
     }
 
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to join round_and_piece", K(ret), K(round), K(piece_id), K(piece_create_date), K(*this));
-    } else if (OB_FAIL(trim_right_backslash())) {
-      OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-    } else { /*do nothing*/
-    }
+  }
+  return ret;
+}
+int ObBackupPath::join(const common::ObString &str_path, const ObBackupFileSuffix &type)
+{
+  int ret = OB_SUCCESS;
+
+  if (cur_pos_ <= 0) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not inited", K(ret), K(*this));
+  } else if (str_path.length() <= 0 ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(str_path));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+      "/%.*s", str_path.length(), str_path.ptr()))) {
+    LOG_WARN("failed to join path", K(ret), K(str_path), K(*this));
+  } else if (OB_FAIL(add_backup_suffix(type))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
+  }
+  return ret;
+
+}
+
+int ObBackupPath::join(const uint64_t int_path, const ObBackupFileSuffix &type)
+{
+  int ret = OB_SUCCESS;
+
+  if (cur_pos_ <= 0) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_,
+      "/%lu", int_path))) {
+    LOG_WARN("failed to join int path", K(ret), K(int_path), K(*this));
+  } else if (OB_FAIL(add_backup_suffix(type))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join(const int64_t v, const ObBackupFileSuffix &type)
+{
+  int ret = OB_SUCCESS;
+
+  if (cur_pos_ <= 0) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not inited", KR(ret), K(*this));
+  } else if (OB_UNLIKELY(v < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(v));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%ld", v))) {
+    LOG_WARN("failed to databuff_printf", KR(ret), K(*this));
+  } else if (OB_FAIL(add_backup_suffix(type))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("fail to trim_right_backslash", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObBackupPath::join_tenant_incarnation(const uint64_t tenant_id, const int64_t incarnation)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_,
+                 sizeof(path_),
+                 cur_pos_,
+                 "/%s_%lu_%s_%lu",
+                 OB_STR_TENANT,
+                 tenant_id,
+                 OB_STR_INCARNATION,
+                 incarnation))) {
+    LOG_WARN("failed to join incarnation", K(ret), K(tenant_id), K(incarnation), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_round_piece(const int64_t round, const int64_t piece_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%lu_%lu", round, piece_id))) {
+    LOG_WARN("failed to join round piece", K(ret), K(round), K(piece_id));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_backup_set(const ObBackupSetDesc &backup_set_desc)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_type = NULL;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (!backup_set_desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_set_desc));
+  } else if (backup_set_desc.backup_type_.is_full_backup()) {
+    backup_type = OB_STR_FULL_BACKUP;
+  } else {
+    backup_type = OB_STR_INC_BACKUP;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(path_,
+                 sizeof(path_),
+                 cur_pos_,
+                 "/%s_%ld_%s",
+                 OB_STR_BACKUP_SET,
+                 backup_set_desc.backup_set_id_,
+                 backup_type))) {
+    LOG_WARN("failed to join full_backup_set", K(ret), K(backup_set_desc), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_complement_log()
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s", OB_STR_COMPLEMENT_LOG))) {
+    LOG_WARN("failed to join complement log", K(ret), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_ls(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STR_LS, ls_id.id()))) {
+    LOG_WARN("failed to join incarnation", K(ret), K(ls_id), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_macro_data_dir(
+    const ObBackupDataType &backup_type, const int64_t turn_id, const int64_t retry_id)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_data_type = NULL;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (turn_id < 0 || retry_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(turn_id), K(retry_id));
+  } else if (backup_type.is_major_backup()) {
+    backup_data_type = OB_STR_MAJOR_BACKUP;
+  } else if (backup_type.is_minor_backup()) {
+    backup_data_type = OB_STR_MINOR_BACKUP;
+  } else {
+    backup_data_type = OB_STR_SYS_BACKUP;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(path_,
+                 sizeof(path_),
+                 cur_pos_,
+                 "/%s_%s_%ld_%s_%ld",
+                 backup_data_type,
+                 OB_STR_TURN,
+                 turn_id,
+                 OB_STR_RETRY,
+                 retry_id))) {
+    LOG_WARN("failed to join macro data dir", K(ret), K(turn_id), K(retry_id), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_macro_data_file(const int64_t file_id)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "%s.%ld", OB_STR_BACKUP_MACRO_BLOCK_DATA, file_id))) {
+    LOG_WARN("failed to join macro block data file", K(ret), K(file_id), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_data_info_turn(const int64_t turn_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STR_DATA_INTO_TURN, turn_id))) {
+    LOG_WARN("failed to join macro block data file", K(ret), K(turn_id), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, 
+      "/%s_%ld_%s_%ld", OB_STR_META_INFO_TURN, turn_id, OB_STR_RETRY, retry_id))) {
+    LOG_WARN("failed to join info retry", K(ret), K(retry_id), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_tenant_macro_range_index_file(const ObBackupDataType &backup_type, const int64_t retry_id)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_data_type = NULL;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (backup_type.is_major_backup()) {
+    backup_data_type = OB_STR_MAJOR_BACKUP;
+  } else if (backup_type.is_minor_backup()) {
+    backup_data_type = OB_STR_MINOR_BACKUP;
+  } else {
+    backup_data_type = OB_STR_SYS_BACKUP;
+  }
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                 sizeof(file_name),
+                 "%s_%s_%s.%ld",
+                 OB_STR_TENANT,
+                 backup_data_type,
+                 OB_STR_BACKUP_MACRO_RANGE_INDEX,
+                 retry_id))) {
+    LOG_WARN("failed to join macro range index file", K(ret), K(backup_type), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_tenant_meta_index_file(const ObBackupDataType &backup_type, const int64_t retry_id, const bool is_sec_meta)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_data_type = NULL;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (backup_type.is_major_backup()) {
+    backup_data_type = OB_STR_MAJOR_BACKUP;
+  } else if (backup_type.is_minor_backup()) {
+    backup_data_type = OB_STR_MINOR_BACKUP;
+  } else {
+    backup_data_type = OB_STR_SYS_BACKUP;
+  }
+  // meta_index corresponds to tablet meta index and sstable meta index
+  // sec_meta_index corresponds to macro block id mapping meta index, which will be removed later
+  const char *meta_file_name = is_sec_meta ? OB_STR_BACKUP_SEC_META_INDEX : OB_STR_BACKUP_META_INDEX;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(
+                 file_name, sizeof(file_name), "%s_%s_%s.%ld",
+                 OB_STR_TENANT, backup_data_type, meta_file_name, retry_id))) {
+    LOG_WARN("failed to join tenant meta index file", K(ret), K(backup_type), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
   }
   return ret;
 }
@@ -314,7 +426,7 @@ common::ObString ObBackupPath::get_obstr() const
   return ObString(cur_pos_, path_);
 }
 
-ObBackupPath& ObBackupPath::operator=(const ObBackupPath& path)
+ObBackupPath &ObBackupPath::operator =(const ObBackupPath &path)
 {
   if (this != &path) {
 
@@ -338,1219 +450,775 @@ uint64_t ObBackupPath::hash() const
   return seed;
 }
 
-bool ObBackupPath::operator==(const ObBackupPath& path) const
+bool ObBackupPath::operator ==(const ObBackupPath &path) const
 {
   return (0 == STRCMP(path_, path.get_ptr()) && (cur_pos_ == path.length()));
 }
 
-int ObBackupPath::join_backup_set(
-    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, const int64_t backup_date)
+int ObBackupPathUtil::get_tenant_data_backup_set_placeholder_path_(
+    const uint64_t backup_set_id,
+    const ObBackupType backup_type,
+    const SCN &min_restore_scn,
+    const ObString &suffix, 
+    ObBackupPath &path) 
 {
   int ret = OB_SUCCESS;
-  const char* backup_type = NULL;
-
-  if (cur_pos_ <= 0) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", KR(ret), K(*this));
-  } else if (full_backup_set_id <= 0 || inc_backup_set_id <= 0 || inc_backup_set_id < full_backup_set_id ||
-             backup_date <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(full_backup_set_id), K(inc_backup_set_id), K(backup_date));
-  } else if (full_backup_set_id == inc_backup_set_id) {
-    backup_type = OB_STR_FULL_BACKUP;
-  } else {
-    backup_type = OB_STR_INC_BACKUP;
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(databuff_printf(path_,
-                 sizeof(path_),
-                 cur_pos_,
-                 "/%s_%ld_%s_%ld",
-                 OB_STRING_BACKUP_FULL_BACKUP_SET,
-                 inc_backup_set_id,
-                 backup_type,
-                 backup_date))) {
-    LOG_WARN("failed to join full_backup_set",
-        K(ret),
-        K(inc_backup_set_id),
-        K(full_backup_set_id),
-        K(backup_date),
-        K(*this));
-  } else if (OB_FAIL(trim_right_backslash())) {
-    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/
-int ObBackupPathUtil::get_cluster_prefix_path(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(path.init(dest.dest_.root_path_))) {
-    LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(dest.cluster_name_))) {
-    LOG_WARN("Failed to join cluster name", K(ret));
-  } else if (OB_FAIL(path.join(dest.cluster_id_))) {
-    LOG_WARN("failed to join cluster_id", K(ret));
-  } else if (OB_FAIL(path.join_incarnation(dest.incarnation_))) {
-    LOG_WARN("failed to join incarnation", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/cluster_clog_backup_info
-int ObBackupPathUtil::get_cluster_clog_backup_info_path(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(OB_STR_CLUSTER_CLOG_BACKUP_INFO))) {
-    LOG_WARN("failed to join cluster_clog_backup_info", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/tenant_clog_backup_info
-int ObBackupPathUtil::get_tenant_clog_backup_info_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_clog_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(tenant_id), K(dest));
-  } else if (OB_FAIL(path.join(OB_STR_TENANT_CLOG_BACKUP_INFO))) {
-    LOG_WARN("failed to join tenant_clog_backup_info", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/cluster_clog_backup_piece_info
-int ObBackupPathUtil::get_cluster_clog_backup_piece_info_path(
-    const ObClusterBackupDest& dest, const bool is_backup_backup, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (!is_backup_backup) {
-    if (OB_FAIL(path.join(OB_STR_CLUSTER_CLOG_BACKUP_PIECE_INFO))) {
-      LOG_WARN("failed to join cluster_clog_backup_piece_info", K(ret));
-    }
-  } else {
-    if (OB_FAIL(path.join(OB_STR_CLUSTER_CLOG_BACKUP_BACKUP_PIECE_INFO))) {
-      LOG_WARN("failed to join cluster_clog_backup_backup_piece_info", K(ret));
-    }
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/backup_piece_info
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/backup_backup_piece_info
-int ObBackupPathUtil::get_tenant_clog_backup_piece_info_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-
-  if (!dest.is_valid() || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_clog_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(dest));
-  } else if (!is_backup_backup) {
-    if (OB_FAIL(path.join(OB_STR_TENANT_CLOG_BACKUP_PIECE_INFO))) {
-      LOG_WARN("failed to join tenant_clog_backup_piece_info", K(ret));
-    }
-  } else {
-    if (OB_FAIL(path.join(OB_STR_TENANT_CLOG_BACKUP_BACKUP_PIECE_INFO))) {
-      LOG_WARN("failed to join tenant_clog_backup_piece_info", K(ret));
-    }
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/piece_dir
-int ObBackupPathUtil::get_tenant_clog_backup_piece_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  ObClusterBackupDest cluster_dest;
-  char piece_dir_name[OB_BACKUP_PIECE_DIR_NAME_LENGTH];
-  path.reset();
-
-  if (!dest.is_valid() || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_clog_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(tenant_id), K(dest));
-  } else {
-    if (backup_piece_id != 0) {
-      if (OB_FAIL(databuff_printf(
-              piece_dir_name, sizeof(piece_dir_name), "%ld_%ld_%ld", round_id, backup_piece_id, create_date))) {
-        LOG_WARN("failed to print piece dir name", K(ret), K(round_id), K(backup_piece_id), K(create_date));
-      }
-    } else {
-      if (OB_FAIL(databuff_printf(piece_dir_name, sizeof(piece_dir_name), "%ld", round_id))) {
-        LOG_WARN("failed to print piece dir name", K(ret), K(round_id));
-      }
-    }
-  }
-
-  if (FAILEDx(path.join(piece_dir_name))) {
-    LOG_WARN("failed to add piece dir", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/single_piece_info
-int ObBackupPathUtil::get_tenant_clog_backup_single_piece_info_path(const ObClusterBackupDest& dest,
-    const uint64_t tenant_id, const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_clog_backup_piece_dir_path(dest, tenant_id, round_id, backup_piece_id, create_date, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(OB_STR_TENANT_CLOG_SINGLE_BACKUP_PIECE_INFO))) {
-    LOG_WARN("failed to join tenant_clog_backup_info", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round
-int ObBackupPathUtil::get_cluster_clog_prefix_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(ret));
-  } else if (OB_FAIL(get_tenant_clog_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join_round_and_piece(round, piece_id, piece_create_date))) {
-    LOG_WARN("failed to join round_and_piece", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/mount_file
-int ObBackupPathUtil::get_tenant_clog_mount_file_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  // mount file is used to detect availability of archvie medium
-  const int64_t piece_id = 0;
-  const int64_t piece_create_date = 0;
-
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(ret));
-  } else if (OB_FAIL(get_cluster_clog_prefix_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get tenant clog path", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join("mount_file"))) {
-    LOG_WARN("failed to join round", K(ret));
-  }
-  return ret;
-}
-
-//"oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1"
-int ObBackupPathUtil::get_tenant_data_full_backup_set_path(
-    const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!path_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ObBackupBaseDataPathInfo is invalid,", K(ret), K(path_info));
-  } else if (OB_FAIL(get_tenant_backup_data_path(path_info.dest_, path_info.tenant_id_, path))) {
-    LOG_WARN("failed to get tenant backup data path", K(ret), K(path_info));
-  } else if (OB_BACKUP_COMPATIBLE_VERSION_V1 == path_info.compatible_) {
-    if (OB_FAIL(path.join_full_backup_set(path_info.full_backup_set_id_))) {
-      LOG_WARN("failed to join full_backup_set_id_", K(ret));
-    }
-  } else if (has_independ_inc_backup_set(path_info.compatible_)) {
-    if (OB_FAIL(path.join_backup_set(
-            path_info.full_backup_set_id_, path_info.inc_backup_set_id_, path_info.backup_date_))) {
-      LOG_WARN("failed to join backup_set_id_", K(ret), K(path_info));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("path info compatible is invalid", K(ret), K(path_info));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_data_inc_backup_set_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (!simple_path.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("simple path is not valid", K(ret), K(simple_path));
-  } else if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init backup path", K(ret), K(simple_path));
-  } else if (OB_FAIL(path.join_inc_backup_set(simple_path.backup_set_id_))) {
-    LOG_WARN("failed to join inc backup set", K(ret), K(simple_path));
-  }
-  return ret;
-}
-
-// v1: "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/"
-// +"data/backup_set_1/backup_2"
-// v2: "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/"
-// +"data/backup_set_2/backup_2"
-int ObBackupPathUtil::get_tenant_data_inc_backup_set_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (!path_info.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get tenant data inc backup set path get invalid argument", K(ret), K(path_info));
-  } else if (OB_BACKUP_COMPATIBLE_VERSION_V1 == path_info.compatible_) {
-    if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-      LOG_WARN("failed to get full backup path", K(ret));
-    } else if (OB_FAIL(path.join_inc_backup_set(path_info.inc_backup_set_id_))) {
-      LOG_WARN("failed to join inc_backup_set_id", K(ret));
-    }
-  } else if (has_independ_inc_backup_set(path_info.compatible_)) {
-    if (OB_FAIL(get_tenant_backup_data_path(path_info.dest_, path_info.tenant_id_, path))) {
-      LOG_WARN("failed to get tenant backup data path", K(ret), K(path_info));
-    } else if (OB_FAIL(path.join_backup_set(
-                   path_info.full_backup_set_id_, path_info.inc_backup_set_id_, path_info.backup_date_))) {
-      LOG_WARN("failed to join backup_set_id_", K(ret), K(path_info));
-    } else if (OB_FAIL(path.join_inc_backup_set(path_info.inc_backup_set_id_))) {
-      LOG_WARN("failed to join inc_backup_set_id", K(ret));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("path info compatible is invalid", K(ret), K(path_info));
-  }
-  return ret;
-}
-
-// assert task_id is not duplicate
-// "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/backup_2/meta_index_file_1"
-int ObBackupPathUtil::get_tenant_data_meta_index_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join_meta_index(task_id))) {
-    LOG_WARN("failed to join sys meta index", K(ret));
-  }
-  return ret;
-}
-
-// for rootserver reform meta index
-// "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/backup_2/meta_index_file"
-int ObBackupPathUtil::get_tenant_data_meta_index_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join("/"))) {
-    LOG_WARN("failed to set path", K(ret), K(path_info));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_META_INDEX))) {
-    LOG_WARN("failed to set path", K(ret), K(path_info));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_data_meta_file_path(
-    const share::ObSimpleBackupSetPath& simple_path, const int64_t task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(simple_path, path))) {
-    LOG_WARN("failed to get tenant data inc backup set path", K(ret), K(simple_path));
-  } else if (OB_FAIL(path.join_meta_file(task_id))) {
-    LOG_WARN("failed to join meta file", K(ret), K(task_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_data_meta_file_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join_meta_file(task_id))) {
-    LOG_WARN("failed to join meta file", K(ret));
-  }
-  return ret;
-}
-
-// "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/data/table_id/part_id"
-int ObBackupPathUtil::get_tenant_pg_data_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get full backup path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_data_path(
-    const ObBackupPath& base_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path = base_path;
-  if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_sstable_macro_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_data_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get pg data path", K(ret));
-  } else if (OB_FAIL(path.join_sstable_macro_index(path_info.inc_backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join sstable_macro_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_data_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get pg data path", K(ret));
-  } else if (OB_FAIL(path.join_macro_block_index(path_info.inc_backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_macro_block_index_path(const share::ObSimpleBackupSetPath& simple_path,
-    const int64_t table_id, const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  } else if (OB_FAIL(path.join_macro_block_index(simple_path.backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t full_backup_set_id, const int64_t inc_backup_set_id, const int64_t sub_task_id,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  ObBackupBaseDataPathInfo new_path_info;
-  const ObBackupBaseDataPathInfo* path_info_ptr = NULL;
-
-  if (OB_BACKUP_COMPATIBLE_VERSION_V1 == path_info.compatible_) {
-    path_info_ptr = &path_info;
-  } else if (has_independ_inc_backup_set(path_info.compatible_)) {
-    if (OB_FAIL(new_path_info.set(path_info.dest_,
-            path_info.tenant_id_,
-            full_backup_set_id,
-            inc_backup_set_id,
-            path_info.backup_date_,
-            path_info.compatible_))) {
-      LOG_WARN("failed to set path info", K(ret), K(path_info));
-    } else {
-      path_info_ptr = &new_path_info;
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup path info compatible is invalid", K(ret), K(path_info));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_tenant_pg_data_path(*path_info_ptr, table_id, part_id, path))) {
-    LOG_WARN("failed to get pg data path", K(ret));
-  } else if (OB_FAIL(path.join_macro_block_file(inc_backup_set_id, sub_task_id))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-
-  return ret;
-}
-
-int ObBackupPathUtil::get_major_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t backup_set_id, const int64_t sub_task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_major_data_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg major data path", K(ret), K(path_info));
-  } else if (OB_FAIL(path.join_macro_block_file(backup_set_id, sub_task_id))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_major_macro_block_file_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
-    const int64_t part_id, const int64_t backup_set_id, const int64_t sub_task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_major_data_path(simple_path, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg major data path", K(ret), K(simple_path));
-  } else if (OB_FAIL(path.join_macro_block_file(backup_set_id, sub_task_id))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_minor_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t backup_set_id, const int64_t backup_task_id, const int64_t sub_task_id,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_pg_minor_data_path(path_info, table_id, part_id, backup_task_id, path))) {
-    LOG_WARN("failed to get tenant pg major data path", K(ret), K(path_info));
-  } else if (OB_FAIL(path.join_macro_block_file(backup_set_id, sub_task_id))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_minor_macro_block_file_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
-    const int64_t part_id, const int64_t backup_set_id, const int64_t backup_task_id, const int64_t sub_task_id,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_pg_minor_data_path(simple_path, table_id, part_id, backup_task_id, path))) {
-    LOG_WARN("failed to get tenant pg major data path", K(ret), K(simple_path));
-  } else if (OB_FAIL(path.join_macro_block_file(backup_set_id, sub_task_id))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_cluster_data_backup_info_path(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get cluster prefix path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(OB_STRING_CLUSTER_DATA_BACKUP_INFO))) {
-    LOG_WARN("failed to join cluster data backup info", K(ret), K(dest));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_data_backup_info_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_backup_data_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant backup data path", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_DATA_BACKUP_INFO))) {
-    LOG_WARN("failed to join tenant data backup info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_backup_set_info_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get tenant data full backup set path", K(ret), K(path_info));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_SET_INFO))) {
-    LOG_WARN("failed to join cluster backup set info", K(ret), K(path_info));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_sys_pg_list_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(simple_path, path))) {
-    LOG_WARN("failed to get tenant data inc backup set path", KR(ret), K(simple_path));
-  } else if (OB_FAIL(path.join(OB_STRING_SYS_PG_LIST))) {
-    LOG_WARN("failed to join normal pg list", KR(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_sys_pg_list_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_SYS_PG_LIST))) {
-    LOG_WARN("failed to join sys pg list", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_normal_pg_list_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(simple_path, path))) {
-    LOG_WARN("failed to get tenant data inc backup set path", KR(ret), K(simple_path));
-  } else if (OB_FAIL(path.join(OB_STRING_NORMAL_PG_LIST))) {
-    LOG_WARN("failed to join normal pg list", KR(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_normal_pg_list_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_NORMAL_PG_LIST))) {
-    LOG_WARN("failed to join normal pg list", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_info_path(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get cluster prefix path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_INFO))) {
-    LOG_WARN("failed to join tenant info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_name_info_path(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get cluster prefix path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_NAME_INFO))) {
-    LOG_WARN("failed to join tenant info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_locality_info_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(simple_path, path))) {
-    LOG_WARN("failed to get tenant data inc backup set path", KR(ret), K(simple_path));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_LOCALITY_INFO))) {
-    LOG_WARN("failed to join tenant locality info", KR(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_locality_info_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_LOCALITY_INFO))) {
-    LOG_WARN("failed to join tenant locality info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_backup_diagnose_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_inc_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get inc backup path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_TENANT_DIAGNOSE_INFO))) {
-    LOG_WARN("failed to join tenant diagnose info", K(ret));
-  }
-  return ret;
-}
-
-// TODO() make ObArchivePathUtil use same func
-
-int ObBackupPathUtil::get_tenant_clog_data_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_clog_prefix_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get cluster clog prefix path", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join data", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_clog_index_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_cluster_clog_prefix_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get cluster clog prefix path", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_INDEX)))) {
-    LOG_WARN("failed to join data", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_table_clog_data_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const int64_t table_id,
-    const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_clog_data_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get tenant clog data path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table id", K(ret), K(table_id));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to join partition id", K(ret), K(part_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_table_clog_index_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const int64_t table_id,
-    const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_clog_index_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get tenant clog index path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to join partition id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_table_data_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get full backup path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_backup_data_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_clog_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_CLOG))) {
-    LOG_WARN("failed to join OB_STRING_BACKUP_CLOG", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(tenant_id))) {
-    LOG_WARN("failed to join teannt_id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_cluster_clog_info(const ObClusterBackupDest& dest, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_CLOG_INFO))) {
-    LOG_WARN("failed to join clog_info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_cluster_clog_info_file_path(
-    const ObClusterBackupDest& dest, const common::ObString& file_name, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get_cluster_prefix_path", K(ret), K(dest), K(path));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_CLOG_INFO))) {
-    LOG_WARN("failed to join clog_info", K(ret));
-  } else if (OB_FAIL(path.join(file_name))) {
-    LOG_WARN("failed to join file name", K(ret), K(file_name));
-  }
-  return ret;
-}
-
-// 3.x backup minor and major new interface
-int ObBackupPathUtil::get_tenant_pg_major_data_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get full backup path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to join part_id", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MJAOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MJAOR_DATA));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_major_data_path(
-    const ObSimpleBackupSetPath& simple_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MJAOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MJAOR_DATA));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/archive_key/
-int ObBackupPathUtil::get_clog_archive_key_prefix(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(ret));
-  } else if (OB_FAIL(get_cluster_clog_prefix_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", K(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_ARCHIVE_KEY))) {
-    LOG_WARN("failed to join archive_key", KR(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_minor_data_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-    const int64_t part_id, const int64_t task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_minor_dir_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg minor dir path", K(ret), K(path_info), K(table_id), K(part_id));
-  } else if (OB_FAIL(path.join(task_id))) {
-    LOG_WARN("failed to join task_id", K(ret), K(task_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_minor_data_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
-    const int64_t part_id, const int64_t task_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_minor_dir_path(simple_path, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg minor dir path", K(ret), K(simple_path), K(table_id), K(part_id));
-  } else if (OB_FAIL(path.join(task_id))) {
-    LOG_WARN("failed to join task_id", K(ret), K(task_id));
-  }
-  return ret;
-}
-
-// "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/
-// data/table_id/part_id/major_data/macro_block_index_xxx.xxx"
-int ObBackupPathUtil::get_major_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info,
-    const int64_t table_id, const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_data_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get pg data path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MJAOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MJAOR_DATA));
-  } else if (OB_FAIL(path.join_macro_block_index(path_info.inc_backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_major_macro_block_index_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
-    const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init backup path", K(ret));
-  } else if (OB_FAIL(get_tenant_pg_data_path(path, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg data path", KR(ret), K(simple_path), K(table_id), K(part_id));
-  } else if (OB_FAIL(path.join(OB_STRING_MJAOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MJAOR_DATA));
-  } else if (OB_FAIL(path.join_macro_block_index(simple_path.backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_minor_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info,
-    const int64_t table_id, const int64_t part_id, const int64_t task_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_data_path(path_info, table_id, part_id, path))) {
-    LOG_WARN("failed to get pg data path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MINOR_DATA))) {
-    LOG_WARN("failed to join minor data string", K(ret), K(OB_STRING_MINOR_DATA));
-  } else if (OB_FAIL(path.join(task_id))) {
-    LOG_WARN("failed to join task id", K(ret), K(task_id));
-  } else if (OB_FAIL(path.join_macro_block_index(path_info.inc_backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_minor_macro_block_index_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
-    const int64_t part_id, const int64_t task_id, const int64_t retry_cnt, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_pg_minor_dir_path(simple_path, table_id, part_id, path))) {
-    LOG_WARN("failed to get tenant pg minor dir path", KR(ret), K(simple_path), K(table_id), K(part_id));
-  } else if (OB_FAIL(path.join(task_id))) {
-    LOG_WARN("failed to join task id", K(ret), K(task_id));
-  } else if (OB_FAIL(path.join_macro_block_index(simple_path.backup_set_id_, retry_cnt))) {
-    LOG_WARN("failed to join macro_block_index", K(ret));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/archive_key/tid_pid
-int ObBackupPathUtil::get_clog_archive_key_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const common::ObPGKey& pg_key,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date)) ||
-      OB_UNLIKELY(!pg_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(pg_key), K(ret));
-  } else if (OB_FAIL(get_cluster_clog_prefix_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", KR(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_ARCHIVE_KEY))) {
-    LOG_WARN("failed to join archive key", KR(ret), K(OB_STRING_BACKUP_ARCHIVE_KEY));
-  } else if (OB_FAIL(path.join_archive_pg_key(pg_key))) {
-    LOG_WARN("failed to join pg key", KR(ret), K(pg_key));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_cluster_backup_set_file_info_path(
-    const ObClusterBackupDest& dest, const bool is_backup_backup, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_cluster_prefix_path(dest, path))) {
-    LOG_WARN("failed to get cluster prefix path", K(ret), K(dest));
-  } else if (is_backup_backup) {
-    if (OB_FAIL(path.join(OB_STR_CLUSTER_BACKUP_BACKUP_SET_FILE_INFO))) {
-      LOG_WARN("failed to join cluster data backup info", K(ret), K(dest));
-    }
-  } else {
-    if (OB_FAIL(path.join(OB_STR_CLUSTER_BACKUP_SET_FILE_INFO))) {
-      LOG_WARN("failed to join cluster data backup info", K(ret), K(dest));
-    }
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_backup_set_file_info_path(
-    const ObClusterBackupDest& dest, const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(get_tenant_backup_data_path(dest, tenant_id, path))) {
-    LOG_WARN("failed to get tenant backup data path", K(ret), K(dest), K(tenant_id));
-  } else if (is_backup_backup) {
-    if (OB_FAIL(path.join(OB_STR_TENANT_BACKUP_BACKUP_SET_FILE_INFO))) {
-      LOG_WARN("failed to join tenant data backup info", K(ret));
-    }
-  } else {
-    if (OB_FAIL(path.join(OB_STR_TENANT_BACKUP_SET_FILE_INFO))) {
-      LOG_WARN("failed to join cluster data backup info", K(ret), K(dest));
-    }
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_single_backup_set_info_path(
-    const ObSimpleBackupSetPath& simple_path, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init backup path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STR_SINGLE_BACKUP_SET_INFO))) {
-    LOG_WARN("failed to join backup set info", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_single_backup_set_info_path(
-    const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get tenant data full backup set path", K(ret), K(path_info));
-  } else if (OB_FAIL(path.join(OB_STR_SINGLE_BACKUP_SET_INFO))) {
-    LOG_WARN("failed to join cluster backup set info", K(ret), K(path_info));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/piece_id/data/tid
-int ObBackupPathUtil::get_table_clog_data_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const uint64_t table_id,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date)) ||
-      table_id == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(table_id), K(ret));
-  } else if (OB_FAIL(get_tenant_clog_backup_piece_data_dir_path(
-                 dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", KR(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table id", KR(ret), K(table_id));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/piece_id/index/tid
-int ObBackupPathUtil::get_table_clog_index_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const uint64_t table_id,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date)) ||
-      table_id == 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(tenant_id), K(round), K(piece_id), K(piece_create_date), K(table_id), K(ret));
-  } else if (OB_FAIL(get_tenant_clog_backup_piece_index_dir_path(
-                 dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", KR(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table id", KR(ret), K(table_id));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/piece_id/data
-int ObBackupPathUtil::get_tenant_clog_backup_piece_data_dir_path(const ObClusterBackupDest& dest,
-    const uint64_t tenant_id, const int64_t round, const int64_t piece_id, const int64_t piece_create_date,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_id), K(round), K(piece_id), K(piece_create_date));
-  } else if (OB_FAIL(
-                 get_tenant_clog_backup_piece_dir_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", KR(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_DATA))) {
-    LOG_WARN("failed to join path", KR(ret), K(OB_STRING_BACKUP_DATA));
-  }
-  return ret;
-}
-
-// oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/piece_id/index
-int ObBackupPathUtil::get_tenant_clog_backup_piece_index_dir_path(const ObClusterBackupDest& dest,
-    const uint64_t tenant_id, const int64_t round, const int64_t piece_id, const int64_t piece_create_date,
-    ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 != piece_id && (0 >= piece_create_date || OB_INVALID_TIMESTAMP == piece_create_date))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_id), K(round), K(piece_id), K(piece_create_date));
-  } else if (OB_FAIL(
-                 get_tenant_clog_backup_piece_dir_path(dest, tenant_id, round, piece_id, piece_create_date, path))) {
-    LOG_WARN("failed to get clog prefix", KR(ret), K(dest), K(tenant_id));
-  } else if (OB_FAIL(path.join(OB_STRING_BACKUP_INDEX))) {
-    LOG_WARN("failed to join path", KR(ret), K(OB_STRING_BACKUP_INDEX));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_minor_dir_path(
-    const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get full backup path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to join table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MINOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MINOR_DATA));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_tenant_pg_minor_dir_path(
-    const ObSimpleBackupSetPath& simple_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(path.init(simple_path.get_simple_path()))) {
-    LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(ObString::make_string(OB_STRING_BACKUP_DATA)))) {
-    LOG_WARN("failed to join tenant_id", K(ret));
-  } else if (OB_FAIL(path.join(table_id))) {
-    LOG_WARN("failed to table_id", K(ret));
-  } else if (OB_FAIL(path.join(part_id))) {
-    LOG_WARN("failed to part_id", K(ret));
-  } else if (OB_FAIL(path.join(OB_STRING_MINOR_DATA))) {
-    LOG_WARN("failed to join major data string", K(ret), K(OB_STRING_MINOR_DATA));
-  }
-  return ret;
-}
-
-int ObBackupMountFile::get_mount_file_path(
-    const ObLogArchiveBackupInfo& backup_info, ObClusterBackupDest& cluster_dest, share::ObBackupPath& path)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupDest dest;
-  cluster_dest.reset();
-  path.reset();
-
-  if (backup_info.status_.tenant_id_ != OB_SYS_TENANT_ID) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only sys tenant need check mount file", K(ret), K(backup_info));
-  } else if (OB_FAIL(dest.set(backup_info.backup_dest_))) {
-    LOG_WARN("failed to set dest", K(ret), K(backup_info));
-  } else if (OB_STORAGE_FILE != dest.device_type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only support create mount file for nfs", K(ret), K(backup_info));
-  } else if (OB_FAIL(cluster_dest.set(dest, OB_START_INCARNATION))) {
-    LOG_WARN("failed to set cluster dest", K(ret), K(dest));
-  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_mount_file_path(
-                 cluster_dest, backup_info.status_.tenant_id_, backup_info.status_.round_, path))) {
-    LOG_WARN("failed to get_cluster_clog_mount_file_path", K(ret), K(backup_info));
-  }
-
-  return ret;
-}
-
-int ObBackupMountFile::create_mount_file(const ObLogArchiveBackupInfo& backup_info)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupPath path;
-  ObClusterBackupDest cluster_dest;
-  ObStorageUtil util(false /*no need retry*/);
-  const static int64_t MOUNT_FILE_BUF_LENGTH = 64;
   int64_t pos = 0;
-  bool is_exist = false;
-  char buf[MOUNT_FILE_BUF_LENGTH];
+  char min_restore_ts_buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  const char *backup_type_str = backup_type.is_full_backup() ? "full" : "inc";
+  char backup_set_placeholder_name[OB_MAX_BACKUP_PATH_LENGTH];
+  if (OB_FAIL(backup_scn_to_time_tag(min_restore_scn, min_restore_ts_buff, sizeof(min_restore_ts_buff), pos))) {
+    LOG_WARN("fail to format time tag", K(ret), K(min_restore_scn));
+  } else if (OB_FAIL(databuff_printf(backup_set_placeholder_name, sizeof(backup_set_placeholder_name), 
+      "backup_set_%lu_%s_%s_%s", backup_set_id, backup_type_str, suffix.ptr(), min_restore_ts_buff))) {
+    LOG_WARN("failed to format backup set placeholder name", K(ret), K(path));
+  } else if (OB_FAIL(path.join(backup_set_placeholder_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to backup set placeholder name", K(ret), K(backup_set_placeholder_name));
+  }
+  return ret;
+}
 
-  if (OB_FAIL(ObBackupMountFile::get_mount_file_path(backup_info, cluster_dest, path))) {
-    LOG_WARN("failed to get_mount_file_path", K(ret), K(backup_info));
-  } else if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), cluster_dest.get_storage_info()))) {
-    LOG_WARN("failed to mk dir", K(ret), K(path));
-  } else if (OB_FAIL(util.is_exist(path.get_obstr(), cluster_dest.get_storage_info(), is_exist))) {
-    LOG_WARN("failed to check is exist", K(ret), K(path));
-  } else if (!is_exist) {
-    if (OB_FAIL(databuff_printf(buf, sizeof(buf), pos, "%ld", backup_info.status_.round_))) {
-      LOG_WARN("failed to print round", K(ret), K(backup_info));
-    } else if (OB_FAIL(util.write_single_file(path.get_obstr(), cluster_dest.get_storage_info(), buf, pos))) {
-      LOG_WARN("failed to write mount file", K(ret), K(path), K(pos), K(backup_info));
-    } else {
-      FLOG_INFO("[BACKUP_MOUNT_FILE]succeed to create mount file", K(backup_info), K(path));
-    }
+// file:///obbackup/backup_sets
+int ObBackupPathUtil::get_backup_sets_dir_path(const share::ObBackupDest &backup_tenant_dest,
+    ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(backup_tenant_dest.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret));
+  } else if (OB_FAIL(path.join(OB_STR_BACKUP_SETS, ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join backup set", K(ret), K(backup_tenant_dest));
+  }
+  return ret;
+}
+
+// file:///backup/backup_sets/backup_set_xx_xxx_start.obbak
+int ObBackupPathUtil::get_backup_set_placeholder_start_path(
+    const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  char backup_set_name[OB_MAX_BACKUP_PATH_LENGTH];
+  if (OB_FAIL(get_backup_sets_dir_path(backup_tenant_dest, backup_path))) {
+    LOG_WARN("failed to get tenant backup sets dir path", K(ret), K(backup_tenant_dest));
+  } else if (backup_set_desc.backup_type_.is_full_backup() 
+      && OB_FAIL(databuff_printf(backup_set_name, sizeof(backup_set_name), "backup_set_%lu_full_start", backup_set_desc.backup_set_id_))) {
+    LOG_WARN("failed to format backup set name", K(ret), K(backup_tenant_dest));
+  } else if (!backup_set_desc.backup_type_.is_full_backup() 
+      && OB_FAIL(databuff_printf(backup_set_name, sizeof(backup_set_name), "backup_set_%lu_inc_start", backup_set_desc.backup_set_id_))) {
+    LOG_WARN("failed to format backup set name", K(ret), K(backup_tenant_dest));
+  } else if (OB_FAIL(backup_path.join(backup_set_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("fail to join backup set name", K(ret), K(backup_set_name));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_backup_set_placeholder_end_success_path(
+    const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc,  
+    const SCN &min_restore_scn, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  ObString suffix("end_success");
+  if (OB_FAIL(get_backup_sets_dir_path(backup_tenant_dest, backup_path))) {
+    LOG_WARN("failed to get tenant backup sets dir path", K(ret), K(backup_tenant_dest));
+  } else if (OB_FAIL(get_tenant_data_backup_set_placeholder_path_(
+      backup_set_desc.backup_set_id_, backup_set_desc.backup_type_, min_restore_scn, suffix, backup_path))) {
+    LOG_WARN("failed to set placeholder path", K(ret), K(backup_path));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_backup_set_placeholder_end_failed_path(
+    const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc, 
+    const SCN &min_restore_scn, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  ObString suffix("end_failed");
+  if (OB_FAIL(get_backup_sets_dir_path(backup_tenant_dest, backup_path))) {
+    LOG_WARN("failed to get tenant backup sets dir path", K(ret), K(backup_tenant_dest));
+  } else if (OB_FAIL(get_tenant_data_backup_set_placeholder_path_(
+      backup_set_desc.backup_set_id_, backup_set_desc.backup_type_, min_restore_scn, suffix, backup_path))) {
+    LOG_WARN("failed to set placeholder path", K(ret), K(backup_path));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/
+int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(backup_set_dest.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret));
+  } 
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/
+int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_tenant_dest, 
+    const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
+    const share::ObBackupSetDesc &backup_set_desc,
+    char *placeholder_prefix,
+    int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_type_str = backup_set_desc.backup_type_.is_full_backup() ? "full" : "inc";
+  if (OB_ISNULL(placeholder_prefix)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("placeholder_prefix is null", K(ret));
+  } else if (OB_FAIL(databuff_printf(placeholder_prefix, length,
+      "backup_set_%lu_%s_", backup_set_desc.backup_set_id_, backup_type_str))) {
+    LOG_WARN("failed to format backup set placeholder prefix", K(ret), K(backup_set_desc));
   }
 
   return ret;
 }
 
-int ObBackupMountFile::check_mount_file(const ObLogArchiveBackupInfo& backup_info)
+// file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx.obbak
+int ObBackupPathUtil::get_backup_set_inner_placeholder(
+    const share::ObBackupDest &backup_set_dest, const share::ObBackupSetDesc &backup_set_desc, 
+    const SCN &replay_scn, const SCN &min_restore_scn,
+    share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  char log_replay_ts_buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  char min_restore_ts_buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  const char *backup_type_str = backup_set_desc.backup_type_.is_full_backup() ? "full" : "inc";
+  char backup_set_placeholder_name[OB_MAX_BACKUP_PATH_LENGTH];
+  int64_t pos = 0;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get tenant data infos dir", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_scn_to_time_tag(replay_scn, log_replay_ts_buff, sizeof(log_replay_ts_buff), pos))) {
+    LOG_WARN("fail to format time tag", K(ret), K(replay_scn));
+  } else if (OB_FALSE_IT(pos = 0)) {
+  } else if (OB_FAIL(backup_scn_to_time_tag(min_restore_scn, min_restore_ts_buff, sizeof(min_restore_ts_buff), pos))) {
+    LOG_WARN("fail to format time tag", K(ret), K(min_restore_scn));
+  } else if (OB_FAIL(databuff_printf(backup_set_placeholder_name, sizeof(backup_set_placeholder_name), 
+      "backup_set_%lu_%s_%s_%s", backup_set_desc.backup_set_id_, backup_type_str, log_replay_ts_buff, min_restore_ts_buff))) {
+    LOG_WARN("failed to format backup set placeholder name", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(backup_set_placeholder_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to backup set placeholder name", K(ret), K(backup_set_placeholder_name));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/
+int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id, 
+    ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("failed to join log stream", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, desc, path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest), K(desc));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("failed to join log stream", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1/tablet_info.obbak
+int ObBackupPathUtil::get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_meta_info_turn_and_retry(turn_id, retry_id))) {
+    LOG_WARN("failed to join info retry", K(ret), K(retry_id));
+  } else if (OB_FAIL(path.join(OB_STR_TABLET_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
+int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, path))) {
+    LOG_WARN(
+        "failed to get log stream backup dir path", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (OB_FAIL(path.join_macro_data_dir(backup_data_type, turn_id, retry_id))) {
+    LOG_WARN("failed to join macro data dir", K(ret), K(backup_data_type), K(turn_id), K(retry_id));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
+int ObBackupPathUtil::get_ls_backup_data_dir_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_backup_data_dir_path(
+      backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/macro_block_data.1.obbak
+int ObBackupPathUtil::get_macro_block_backup_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_data_dir_path(
+          backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, path))) {
+    LOG_WARN("failed to get log stream backup data dir path",
+        K(ret),
+        K(backup_set_dest),
+        K(ls_id));
+  } else if (OB_FAIL(path.join_macro_data_file(file_id))) {
+    LOG_WARN("failed to join macro_block_index", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_macro_block_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_macro_block_backup_path(
+      backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, file_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/macro_range_index.obbak
+int ObBackupPathUtil::get_ls_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest, 
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type, const int64_t turn_id, 
+    const int64_t retry_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_data_dir_path(
+          backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, path))) {
+    LOG_WARN("failed to get log stream backup data dir path",
+        K(ret),
+        K(backup_set_dest),
+        K(ls_id));
+  } else if (OB_FAIL(path.join(OB_STR_BACKUP_MACRO_RANGE_INDEX, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join macro range index", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_macro_range_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_macro_range_index_backup_path(
+      backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/meta_index.obbak
+int ObBackupPathUtil::get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest, 
+    const share::ObLSID &ls_id, const ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, const bool is_sec_meta, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  const char *meta_file_name = is_sec_meta ? OB_STR_BACKUP_SEC_META_INDEX : OB_STR_BACKUP_META_INDEX;
+  if (OB_FAIL(get_ls_backup_data_dir_path(
+          backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, path))) {
+    LOG_WARN("failed to get log stream backup data dir path",
+        K(ret),
+        K(backup_set_dest),
+        K(ls_id));
+  } else if (OB_FAIL(path.join(meta_file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join macro range index", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_meta_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t retry_id, const bool is_sec_meta, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_meta_index_backup_path(
+      backup_set_dest, ls_id, backup_data_type, turn_id, retry_id, is_sec_meta, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/
+int ObBackupPathUtil::get_ls_info_dir_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(ObString::make_string("infos"), ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_info_dir_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_info_dir_path(
+      backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/data_info_turn_1
+int ObBackupPathUtil::get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_set_dest,
+    const int64_t turn_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(ObString::make_string("infos"), ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join data", K(ret));
+  } else if (OB_FAIL(backup_path.join_data_info_turn(turn_id))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const int64_t turn_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_info_data_info_dir_path(backup_set_dest, turn_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/meta_info/
+int ObBackupPathUtil::get_tenant_meta_info_dir_path(const share::ObBackupDest &backup_set_dest, 
+    share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_META_INFO, ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_tenant_meta_info_dir_path(const share::ObBackupDest &backup_tenant_dest, 
+    const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_tenant_meta_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/meta_info/ls_attr_info.1.obbak
+int ObBackupPathUtil::get_backup_ls_attr_info_path(const share::ObBackupDest &backup_set_dest,
+    const int64_t turn_id, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  if (OB_FAIL(get_tenant_meta_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(databuff_printf(buf, OB_BACKUP_MAX_TIME_STR_LEN, "%s.%ld", OB_STR_LS_ATTR_INFO, turn_id))) {
+    LOG_WARN("failed to printf ls attr info", K(ret));
+  } else if (OB_FAIL(backup_path.join(buf, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join ls attr info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/meta_info/ls_meta_infos.obbak
+int ObBackupPathUtil::get_ls_meta_infos_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_tenant_meta_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_LS_META_INFOS, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join ls meta infos", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/tenant_backup_set_infos.obbak
+int ObBackupPathUtil::get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_set_dest, 
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_TENANT_BACKUP_SET_INFOS, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_tenant_backup_set_infos_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
+int ObBackupPathUtil::get_backup_set_info_path(const share::ObBackupDest &backup_set_dest,
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_SINGLE_BACKUP_SET_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_backup_set_info_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_backup_set_info_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/diagnose_info.obbak
+int ObBackupPathUtil::get_diagnose_info_path(const share::ObBackupDest &backup_set_dest,
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_DIAGNOSE_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_diagnose_info_path(const share::ObBackupDest &backup_tenant_dest,
+    share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_diagnose_info_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/locality_info.obbak
+int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_set_dest,
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_LOCALITY_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_tenant_dest,
+    share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_locality_info_path(backup_set_dest, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
+int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id, 
+    const int64_t retry_id, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_tenant_dest, desc, backup_path))) {
+    LOG_WARN("fail to get backup set dier path", K(ret), K(backup_tenant_dest), K(desc));
+  } else if (OB_FAIL(backup_path.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(ls_id));
+  } else if (OB_FAIL(backup_path.join_meta_info_turn_and_retry(turn_id, retry_id))) {
+    LOG_WARN("failed to join info retry", K(ret), K(retry_id));
+  } else if (OB_FAIL(backup_path.join(OB_STR_LS_META_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/macro_range_index.obbak
+int ObBackupPathUtil::get_tenant_macro_range_index_backup_path(const share::ObBackupDest &backup_set_dest,
+    const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_data_info_turn(turn_id))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  } else if (OB_FAIL(path.join_tenant_macro_range_index_file(backup_data_type, retry_id))) {
+    LOG_WARN("failed to join tenant macro range index file", K(ret), K(backup_data_type), K(retry_id));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_tenant_macro_range_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+    const int64_t retry_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_tenant_macro_range_index_backup_path(
+      backup_set_dest, backup_data_type, turn_id, retry_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/logstream_1/xxx_xxx_turn_1_retry_0/meta_index.obbak
+int ObBackupPathUtil::get_tenant_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
+    const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
+    const bool is_sec_meta, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_data_info_turn(turn_id))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  } else if (OB_FAIL(path.join_tenant_meta_index_file(backup_data_type, retry_id, is_sec_meta))) {
+    LOG_WARN("failed to join tenant macro range index file", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_tenant_meta_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+    const int64_t retry_id, const bool is_sec_meta, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_tenant_meta_index_backup_path(
+      backup_set_dest, backup_data_type, turn_id, retry_id, is_sec_meta, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file://obbackup/backup_set_1_full/infos/data_info_turn_1/tablet_log_stream_info.obbak
+int ObBackupPathUtil::get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
+    const uint64_t turn_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_data_info_turn(turn_id))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  } else if (OB_FAIL(path.join(OB_STR_TABLET_LOG_STREAM_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join tablet_log_stream_info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/deleted_tablet_info
+
+int ObBackupPathUtil::get_deleted_tablet_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join(OB_STR_DELETED_TABLET_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join tablet_log_stream_info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/
+int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest, 
+    const share::ObLSID &ls_id, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, backup_path))) {
+    LOG_WARN(
+        "failed to get log stream backup dir path", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (OB_FAIL(backup_path.join_complement_log())) {
+    LOG_WARN("faile to join complement log", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_complement_log_dir_path(backup_set_dest, ls_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/1
+int ObBackupPathUtil::get_ls_complement_log_backup_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_complement_log_dir_path(backup_set_dest, ls_id, path))) {
+    LOG_WARN(
+        "failed to get ls complement log dir path", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join file id", K(ret), K(file_id));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_ls_complement_log_backup_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t file_id, 
+    share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret));
+  } else if (OB_FAIL(get_ls_complement_log_backup_path(backup_set_dest, ls_id, file_id, backup_path))) {
+    LOG_WARN("fail to get ls backup data dir path", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/tenant_1001_incarnation_1/clog/1_1/log_stream_1/
+int ObBackupPathUtil::get_ls_log_archive_prefix(const share::ObBackupDest &backup_set_dest, uint64_t tenant_id,
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
+    ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(backup_set_dest.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_tenant_incarnation(tenant_id, incarnation))) {
+    LOG_WARN("failed to join tenant and incarnation", K(ret), K(tenant_id));
+  } else if (OB_FAIL(path.join(ObString::make_string(OB_STR_CLOG), ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join clog", K(ret));
+  } else if (OB_FAIL(path.join_round_piece(round, piece_id))) {
+    LOG_WARN("failed to join round and piece", K(ret), K(round), K(piece_id));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("failed to join log stream", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+// file:///obbackup/tenant_1001_incarnation_1/clog/1_1/log_stream_1/1
+int ObBackupPathUtil::get_ls_log_archive_path(const share::ObBackupDest &backup_set_dest, const uint64_t tenant_id,
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
+    const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_log_archive_prefix(backup_set_dest, tenant_id, incarnation, round, piece_id, ls_id, path))) {
+    LOG_WARN("failed to get ls log archive prefix", K(ret));
+  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join file id", K(ret), K(file_id));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
+    const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath path;
-  ObClusterBackupDest cluster_dest;
-  ObStorageUtil util(false /*no need retry*/);
-  bool is_exist = false;
-
-  if (OB_FAIL(ObBackupMountFile::get_mount_file_path(backup_info, cluster_dest, path))) {
-    LOG_WARN("failed to get_mount_file_path", K(ret), K(backup_info));
-  } else if (OB_FAIL(util.is_exist(path.get_obstr(), cluster_dest.get_storage_info(), is_exist))) {
-    LOG_WARN("failed to read mount file", K(ret), K(path), K(backup_info));
-  } else if (!is_exist) {
-    // mk parent dir will force nfs renew dentry
-    if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), cluster_dest.get_storage_info()))) {
-      LOG_WARN("failed to mk dir", K(ret), K(path));
-    } else if (OB_FAIL(util.is_exist(path.get_obstr(), cluster_dest.get_storage_info(), is_exist))) {
-      LOG_WARN("failed to read mount file", K(ret), K(path), K(backup_info));
-    } else if (!is_exist) {
-      ret = OB_BACKUP_MOUNT_FILE_NOT_VALID;
-      FLOG_WARN("[BACKUP_MOUNT_FILE]check backup mount file is not exist", K(ret), K(path), K(backup_info));
-    }
-  }
-
-  return ret;
-}
-
-int ObBackupMountFile::need_check_mount_file(const ObLogArchiveBackupInfo& info, bool& need_check)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupDest dest;
-  need_check = true;
-
-  if (!info.is_valid()) {
+  backup_set_dest.reset();
+  if (!backup_tenant_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(info));
-  } else if (OB_FAIL(dest.set(info.backup_dest_))) {
-    LOG_WARN("failed to set dest", K(ret), K(info));
-  } else if (OB_STORAGE_FILE != dest.device_type_) {
-    need_check = false;
-  }
+    LOG_WARN("invalid argumnet", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.init(backup_tenant_dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_backup_set(backup_desc))) {
+    LOG_WARN("fail to join backup set", K(ret));
+  } 
 
+  const ObBackupStorageInfo *storage_info = nullptr;
+  char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(storage_info = backup_tenant_dest.get_storage_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage info must not be nullptr", K(ret));
+  } else if (OB_FAIL(storage_info->get_storage_info_str(
+        storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, true/*need_encrypt*/))) {
+    LOG_WARN("fail to get storage info", K(ret));
+  } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
+    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+  }
   return ret;
 }

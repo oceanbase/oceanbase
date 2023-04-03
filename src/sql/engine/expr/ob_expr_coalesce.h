@@ -15,23 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprCoalesce : public ObExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprCoalesce : public ObExprOperator
+{
 public:
-  explicit ObExprCoalesce(common::ObIAllocator& alloc);
+  explicit  ObExprCoalesce(common::ObIAllocator &alloc);
   virtual ~ObExprCoalesce();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_ct_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& expected_type, common::ObCastCtx& cast_ctx);
-
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_stack,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_ct_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                      const ObBitVector &skip, const int64_t batch_size);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCoalesce);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_COALESCE_H_ */

@@ -1,8 +1,0 @@
-with cte1(c1, c2) as
-  (select 1, '0' from dual
-   union all select 2, '1' from dual
-  ),
-cte2(c1, c2) as
-  (select '0', 1 from dual
-   union all select cte1.c2, cte1.c1 from cte2, cte1 where 10 = cte2.c1)
-select * from cte1;

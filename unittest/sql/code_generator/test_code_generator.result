@@ -4260,11 +4260,11 @@
                               "scale":-1
                             },
                             "orig_default_value": {
-                              "VARCHAR":"REPLICA_STATUS_NORMAL",
+                              "VARCHAR":"NORMAL",
                               "collation":"utf8mb4_general_ci"
                             },
                             "cur_default_value": {
-                              "VARCHAR":"REPLICA_STATUS_NORMAL",
+                              "VARCHAR":"NORMAL",
                               "collation":"utf8mb4_general_ci"
                             }
                           },

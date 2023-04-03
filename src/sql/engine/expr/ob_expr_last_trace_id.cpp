@@ -16,17 +16,21 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprLastTraceId::ObExprLastTraceId(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_GET_LAST_TRACE_ID, N_LAST_TRACE_ID, 0)
-{}
+ObExprLastTraceId::ObExprLastTraceId(ObIAllocator &alloc)
+  : ObStringExprOperator(alloc, T_FUN_GET_LAST_TRACE_ID, N_LAST_TRACE_ID, 0)
+{
+}
 
 ObExprLastTraceId::~ObExprLastTraceId()
-{}
+{
+}
 
-int ObExprLastTraceId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprLastTraceId::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_varchar();
@@ -36,56 +40,29 @@ int ObExprLastTraceId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& typ
   return OB_SUCCESS;
 }
 
-int ObExprLastTraceId::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "session info is null");
-  } else {
-    common::ObCurTraceId::TraceId& trace_id =
-        const_cast<common::ObCurTraceId::TraceId&>(session_info->get_last_trace_id());
-    if (trace_id.is_invalid()) {
-      result.set_null();
-    } else {
-      const int64_t buf_len = 128;
-      char* buf = static_cast<char*>(expr_ctx.calc_buf_->alloc(buf_len));
-      int64_t pos = 0;
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(ERROR, "fail to alloc memory", K(ret), K(buf));
-      } else {
-        BUF_PRINTF("%s", to_cstring(trace_id));
-        result.set_varchar(ObString(strlen(buf), buf));
-        result.set_collation(result_type_);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprLastTraceId::eval_last_trace_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprLastTraceId::eval_last_trace_id(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
+  const ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session info is null", K(ret));
   } else {
-    const ObCurTraceId::TraceId& trace_id = session_info->get_last_trace_id();
+    const ObCurTraceId::TraceId &trace_id = phy_plan_ctx->get_last_trace_id();
     if (trace_id.is_invalid()) {
       expr_datum.set_null();
     } else {
       const int64_t MAX_BUF_LEN = 128;
-      char* buf = expr.get_str_res_mem(ctx, MAX_BUF_LEN);
+      char *buf = expr.get_str_res_mem(ctx, MAX_BUF_LEN);
       int64_t pos = 0;
       if (OB_ISNULL(buf)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "buff is null", K(ret));
       } else {
-        if (OB_FAIL(databuff_printf(buf, MAX_BUF_LEN, pos, "%s", to_cstring(trace_id)))) {
+        if (OB_FAIL(databuff_printf(buf, MAX_BUF_LEN, pos, "%s",
+                                    to_cstring(trace_id)))) {
           SQL_ENG_LOG(WARN, "fail to databuff_printf", K(ret));
         } else {
           expr_datum.set_string(buf, pos);
@@ -96,12 +73,13 @@ int ObExprLastTraceId::eval_last_trace_id(const ObExpr& expr, ObEvalCtx& ctx, Ob
   return ret;
 }
 
-int ObExprLastTraceId::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprLastTraceId::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
   rt_expr.eval_func_ = ObExprLastTraceId::eval_last_trace_id;
   return OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

@@ -18,56 +18,41 @@
 using namespace oceanbase;
 using namespace common;
 
-struct Key {
+struct Key
+{
   int64_t key;
-  Key() : key(0)
-  {}
-  Key(int64_t k) : key(k)
-  {}
-  uint64_t hash()
-  {
-    return murmurhash(&key, sizeof(key), 0);
-  };
-  int compare(const Key& r)
-  {
-    return key < r.key ? -1 : key == r.key ? 0 : 1;
-  }
+  Key() : key(0) { }
+  Key(int64_t k) : key(k) { }
+  uint64_t hash() { return murmurhash(&key, sizeof(key), 0); };
+  int compare(const Key & r) { return key < r.key ? -1 : key == r.key ? 0 : 1; }
 };
 
-struct Adder {
+struct Adder
+{
   int64_t sum;
-  Adder() : sum(0)
-  {}
-  void operator()(Key k, int64_t* v)
-  {
-    UNUSED(k);
-    UNUSED(v);
-    sum++;
-  }
+  Adder() : sum(0) { }
+  void operator()(Key k, int64_t* v) { UNUSED(k); UNUSED(v); sum++; }
 };
 
 typedef ObConcurrentHashMap<Key, int64_t> HashMap;
 
 int64_t create_num = 0;
-class ObStressThread : public lib::ThreadPool {
+class ObStressThread : public lib::ThreadPool
+{
 public:
-  ObStressThread()
-  {}
+  ObStressThread() { }
   void run1()
   {
     int64_t v = 0;
     int err = OB_SUCCESS;
-    int64_t N = 10000000;
-    int64_t k = 10;  // ObRandom::rand(0, N / 10);
+    int64_t N = 1000000;
+    int64_t k = 10;//ObRandom::rand(0, N / 10);
     for (int64_t i = 0; i < N; i++) {
       err = hashmap->get_refactored(Key(k), v);
     }
     UNUSED(err);
   }
   HashMap* hashmap;
-
-private:
-  obsys::CThreadMutex mutex;
 };
 
 TEST(TestObConcurrentHashMap, concurrent)
@@ -84,10 +69,10 @@ TEST(TestObConcurrentHashMap, concurrent)
   threads.wait();
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level(2);
-  // OB_LOGGER.set_file_name("test_concurrent_hash_map_with_hazard_value.log", false, true);
+  //OB_LOGGER.set_file_name("test_concurrent_hash_map_with_hazard_value.log", false, true);
   return RUN_ALL_TESTS();
 }

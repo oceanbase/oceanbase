@@ -16,14 +16,17 @@
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 
-class TestProxy : public ObRpcProxy {
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
   RPC_S(PR5 test, OB_TEST_PCODE, (int));
 };
 
-class Processor : public TestProxy::Processor<OB_TEST_PCODE> {
+class Processor : public TestProxy::Processor<OB_TEST_PCODE>
+{
 public:
   int process()
   {
@@ -53,7 +56,7 @@ TEST(TestTesting, Basic)
   ASSERT_EQ(2234, proxy.to(service.get_dst()).test(2234));
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

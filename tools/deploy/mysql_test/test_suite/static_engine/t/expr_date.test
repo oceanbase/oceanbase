@@ -1,0 +1,26 @@
+# owner: xiaoyi.xy
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (sys, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(2000));
+insert into t1 values("2019-10-11");
+
+connection sys;
+sleep 2;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select date(c1) from t1;
+select date("2019-10-10") from dual;
+select date(null) from dual;
+
+connection sys;
+
+--sleep 2

@@ -21,11 +21,25 @@
 #include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
+int ObInnerConfigRootAddr::check_inner_stat() const
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(config_) || OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP_(config), KP_(proxy));
+  }
+  return ret;
+}
 
-int ObInnerConfigRootAddr::init(ObMySQLProxy& sql_proxy, ObServerConfig& config)
+int ObInnerConfigRootAddr::init(ObMySQLProxy &sql_proxy, ObServerConfig &config)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -41,20 +55,20 @@ int ObInnerConfigRootAddr::init(ObMySQLProxy& sql_proxy, ObServerConfig& config)
 }
 
 // update root server list if %addr_list not same with config_->rootservice_list
-int ObInnerConfigRootAddr::store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-    const common::ObClusterType cluster_type, const int64_t timestamp)
+int ObInnerConfigRootAddr::store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                                 const bool force, const common::ObClusterRole cluster_role,
+                                 const int64_t timestamp)
 {
   // TODO: Currently there is no local cache of the read copy location of __all_core_table
   UNUSED(readonly_addr_list);
-  UNUSED(cluster_type);
+  UNUSED(cluster_role);
   UNUSED(timestamp);
   UNUSED(force);
   int ret = OB_SUCCESS;
   bool need_update = false;
   char addr_buf[MAX_IP_PORT_LENGTH] = "";
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (addr_list.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "addr count", addr_list.count());
@@ -63,18 +77,19 @@ int ObInnerConfigRootAddr::store(const ObIAddrList& addr_list, const ObIAddrList
       need_update = true;
     } else {
       ObAddr addr;
-      for (int64_t i = 0; OB_SUCC(ret) && !need_update && i < config_->rootservice_list.size(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && !need_update
+          && i < config_->rootservice_list.size(); ++i) {
         addr.reset();
         int64_t sql_port = 0;
-        if (OB_FAIL(config_->rootservice_list.get(static_cast<int32_t>(i), addr_buf, sizeof(addr_buf)))) {
+        if (OB_FAIL(config_->rootservice_list.get(
+            static_cast<int32_t>(i), addr_buf, sizeof(addr_buf)))) {
           LOG_WARN("rootservice_list get failed", K(i), K(ret));
         } else if (OB_FAIL(parse_rs_addr(addr_buf, addr, sql_port))) {
-          LOG_WARN("parse_rs_addr failed", K(addr_buf), K(ret));
+          LOG_WARN("parse_rs_addr failed", KCSTRING(addr_buf), K(ret));
         } else {
           bool found = false;
-          FOREACH_CNT_X(a, addr_list, !found)
-          {
-            if (addr == a->server_ && sql_port == a->sql_port_) {
+          FOREACH_CNT_X(a, addr_list, !found) {
+            if (addr == a->get_server() && sql_port == a->get_sql_port()) {
               found = true;
             }
           }
@@ -113,40 +128,42 @@ int ObInnerConfigRootAddr::store(const ObIAddrList& addr_list, const ObIAddrList
   return ret;
 }
 
-int ObInnerConfigRootAddr::format_rootservice_list(const ObIAddrList& addr_list, ObSqlString& str)
+int ObInnerConfigRootAddr::format_rootservice_list(const ObIAddrList &addr_list, ObSqlString &str)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
     char ip_buf[OB_IP_STR_BUFF] = "";
-    const ObRootAddr& rs = addr_list.at(i);
+    const ObRootAddr &rs = addr_list.at(i);
+    ObAddr addr = rs.get_server();
     // If it is not the last RS, add a separator at the end
     const bool need_append_delimiter = (i != addr_list.count() - 1);
 
-    if (OB_UNLIKELY(!rs.server_.ip_to_string(ip_buf, sizeof(ip_buf)))) {
+    if (OB_UNLIKELY(!addr.ip_to_string(ip_buf, sizeof(ip_buf)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("convert ip to string failed", KR(ret), K(rs));
     } else if (OB_FAIL(str.append_fmt("%s%s%s:%d:%ld%s",
-                   rs.server_.using_ipv4() ? "" : "[",
-                   ip_buf,
-                   rs.server_.using_ipv4() ? "" : "]",
-                   rs.server_.get_port(),
-                   rs.sql_port_,
-                   need_append_delimiter ? ";" : ""))) {
+        addr.using_ipv4() ? "" : "[",
+        ip_buf,
+        addr.using_ipv4() ? "" : "]",
+        addr.get_port(),
+        rs.get_sql_port(),
+        need_append_delimiter ? ";" : ""))) {
       LOG_WARN("fail to append_fmt", KR(ret), K(str));
     }
   }
   return ret;
 }
 
-int ObInnerConfigRootAddr::fetch(ObIAddrList& addr_list, ObIAddrList& readonly_addr_list, ObClusterType& cluster_type)
+int ObInnerConfigRootAddr::fetch(
+    ObIAddrList &addr_list,
+    ObIAddrList &readonly_addr_list)
 {
   int ret = OB_SUCCESS;
   char addr_buf[MAX_IP_PORT_LENGTH] = "";
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+  const int64_t local_cluster_id = GCONF.cluster_id;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    cluster_type = GCTX.is_primary_cluster() ? PRIMARY_CLUSTER : STANDBY_CLUSTER;
     addr_list.reuse();
     // TODO: The location of the read-only copy of __all_core_table is not cached locally, so it cannot be read
     readonly_addr_list.reuse();
@@ -155,45 +172,24 @@ int ObInnerConfigRootAddr::fetch(ObIAddrList& addr_list, ObIAddrList& readonly_a
     for (int64_t i = 0; OB_SUCC(ret) && i < config_->rootservice_list.size(); ++i) {
       addr.reset();
       int64_t sql_port = 0;
-      if (OB_FAIL(config_->rootservice_list.get(static_cast<int>(i), addr_buf, sizeof(addr_buf)))) {
+      if (OB_FAIL(config_->rootservice_list.get(
+          static_cast<int>(i), addr_buf, sizeof(addr_buf)))) {
         LOG_WARN("get rs failed", K(ret), K(i));
       } else if (OB_FAIL(parse_rs_addr(addr_buf, addr, sql_port))) {
         LOG_WARN("parse_rs_addr failed", K(addr_buf), K(ret));
-      } else {
-        rs_addr.reset();
-        rs_addr.role_ = FOLLOWER;
-        rs_addr.sql_port_ = sql_port;
-        rs_addr.server_ = addr;
-        if (OB_FAIL(addr_list.push_back(rs_addr))) {
-          LOG_WARN("add rs address to array failed", K(ret));
-        }
+      } else if (OB_FAIL(rs_addr.init(addr, FOLLOWER, sql_port))) {
+       LOG_WARN("failed to simple init rs_addr", KR(ret), K(addr), K(sql_port)); 
+      } else if (OB_FAIL(addr_list.push_back(rs_addr))) {
+        LOG_WARN("add rs address to array failed", K(ret));
       }
     }
-    LOG_INFO("fetch addr_list &readonly_addr_list", K(ret), K(addr_list), K(readonly_addr_list), K(cluster_type));
+    LOG_TRACE("fetch addr_list &readonly_addr_list", K(ret),
+        K(addr_list), K(readonly_addr_list));
   }
   return ret;
 }
 
-// Only the local rs_list will be stored. If you need to get the remote rs_list, you can directly report an error
-int ObInnerConfigRootAddr::fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list,
-    ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_type)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (GCONF.cluster_id == cluster_id) {
-    if (OB_FAIL(fetch(addr_list, readonly_addr_list, cluster_type))) {
-      LOG_WARN("failed to fetch rslist", K(ret));
-    }
-  } else {
-    // Only the rs_list of this cluster is saved in the inner config
-    ret = OB_NOT_SUPPORTED;
-  }
-  return ret;
-}
-
-int ObInnerConfigRootAddr::parse_rs_addr(char* addr_buf, ObAddr& addr, int64_t& sql_port)
+int ObInnerConfigRootAddr::parse_rs_addr(char *addr_buf, ObAddr &addr, int64_t &sql_port)
 {
   int ret = OB_SUCCESS;
   if (nullptr == addr_buf) {
@@ -202,14 +198,15 @@ int ObInnerConfigRootAddr::parse_rs_addr(char* addr_buf, ObAddr& addr, int64_t& 
   } else {
     int64_t rpc_port = 0;
     bool use_ipv6 = false;
-    char* ip_str = nullptr;
-    char* port_str = nullptr;
-    char* sql_port_str = nullptr;
-    char* save_ptr = nullptr;
+    char *ip_str = nullptr;
+    char *port_str = nullptr;
+    char *sql_port_str = nullptr;
+    char *save_ptr = nullptr;
 
     /*
-     * ipv4 format: a.b.c.d:port1:port2, proxy only uses one port
-     * ipv6 format: [a:b:c:d:e:f:g:h]:port1:port2, proxy only uses one port
+     * ipv4格式: a.b.c.d:port1:port2, proxy只使用一个port
+     * ipv6格式: [a:b:c:d:e:f:g:h]:port1:port2, proxy只使用一个port
+     *
      */
     if ('[' != addr_buf[0]) { /* ipv4 */
       if (OB_ISNULL(ip_str = strtok_r(addr_buf, ":", &save_ptr))) {
@@ -219,7 +216,7 @@ int ObInnerConfigRootAddr::parse_rs_addr(char* addr_buf, ObAddr& addr, int64_t& 
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("parse port failed", K(addr_buf), K(ret));
       }
-    } else { /* ipv6 */
+    } else {                  /* ipv6 */
       use_ipv6 = true;
       ip_str = addr_buf + 1;
       port_str = strrchr(addr_buf, ']');
@@ -257,7 +254,7 @@ int ObInnerConfigRootAddr::parse_rs_addr(char* addr_buf, ObAddr& addr, int64_t& 
         if (nullptr != port_str) {
           rpc_port = atoi(port_str);
         } else {
-          rpc_port = 1;  // fake rpc port, for obproxy, will never be used
+          rpc_port = 1; // fake rpc port, for obproxy, will never be used
         }
         sql_port = atoi(sql_port_str);
         if (!addr.set_ip_addr(ip_str, static_cast<int32_t>(rpc_port))) {
@@ -270,5 +267,5 @@ int ObInnerConfigRootAddr::parse_rs_addr(char* addr_buf, ObAddr& addr, int64_t& 
   return ret;
 }
 
-}  // end namespace share
-}  // namespace oceanbase
+} // end namespace share
+} // end oceanbase

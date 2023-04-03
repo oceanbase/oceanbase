@@ -19,50 +19,43 @@
 #include "ob_cnnt_by_pump_bfs.h"
 #include "ob_nl_cnnt_by_op.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObNLConnectByWithIndexSpec : public ObNLConnectBySpecBase {
+class ObNLConnectByWithIndexSpec : public ObNLConnectBySpecBase
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObNLConnectByWithIndexSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-      : ObNLConnectBySpecBase(alloc, type)
+  ObNLConnectByWithIndexSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+  : ObNLConnectBySpecBase(alloc, type)
   {}
 };
 
-class ObNLConnectByWithIndexOp : public ObNLConnectByOpBase {
+class ObNLConnectByWithIndexOp : public ObNLConnectByOpBase
+{
 public:
-  ObNLConnectByWithIndexOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
+  ObNLConnectByWithIndexOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   ~ObNLConnectByWithIndexOp();
 
   virtual int inner_open() override;
   virtual int inner_close() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
 
   virtual OperatorOpenOrder get_operator_open_order() const override final
-  {
-    return OPEN_SELF_ONLY;
-  }
+  { return OPEN_SELF_FIRST; }
 
   int prepare_rescan_params();
 
   int restore_prior_expr();
-  int64_t get_current_level() const override
-  {
-    return connect_by_pump_.get_current_level();
-  }
-  virtual int get_sys_parent_path(ObString& parent_path) override
-  {
-    return connect_by_pump_.get_parent_path(sys_connect_by_path_id_, parent_path);
-  }
-  virtual int set_sys_current_path(const ObString&, const ObString& res_path) override
-  {
-    return connect_by_pump_.set_cur_node_path(sys_connect_by_path_id_, res_path);
-  }
-
+  int64_t get_current_level() const override { return connect_by_pump_.get_current_level(); }
+  virtual int get_sys_parent_path(ObString &parent_path) override
+  { return connect_by_pump_.get_parent_path(sys_connect_by_path_id_, parent_path); }
+  virtual int set_sys_current_path(const ObString &, const ObString &res_path) override
+  { return connect_by_pump_.set_cur_node_path(sys_connect_by_path_id_, res_path); }
 private:
   typedef int (ObNLConnectByWithIndexOp::*state_operation_func_type)();
   typedef int (ObNLConnectByWithIndexOp::*state_function_func_type)();
@@ -94,31 +87,29 @@ private:
   int read_right_func_going();
   int read_right_func_end();
 
-  int add_pseudo_column(ObExpr* pseudo_expr, ObConnectByPseudoColumn column_type);
+  int add_pseudo_column(ObExpr *pseudo_expr, ObConnectByPseudoColumn column_type);
 
   int init();
-  int open_right_child();
-
+  int rescan_right();
 public:
   ObConnectByOpBFSPump connect_by_pump_;
-
 private:
   // state operations and transfer functions array.
   state_operation_func_type state_operation_func_[CNTB_STATE_STATE_COUNT];
   state_function_func_type state_function_func_[CNTB_STATE_STATE_COUNT][FT_TYPE_COUNT];
   ObCnntByOpState state_;
   // const common::ObNewRow *root_row_;
-  const ObChunkDatumStore::StoredRow* root_row_;
-  const ObChunkDatumStore::StoredRow* cur_output_row_;
+  const ObChunkDatumStore::StoredRow *root_row_;
+  const ObChunkDatumStore::StoredRow *cur_output_row_;
   // common::ObNewRow null_cell_row_;//used for root row output
   // common::ObNewRow mock_right_row_;//used for root row output
-  bool is_match_;  // whether there is a child, for calc connect_by_isleaf
-  bool is_cycle_;  // whether part of a cycle, for calc connect_by_iscycle
+  bool is_match_;//判断是否存在连接成功的情况，用来生产connect_by_isleaf
+  bool is_cycle_;//判断是否有循环的情况，用来生产connect_by_iscycle
   bool is_inited_;
-  bool open_right_child_;
   bool need_return_;
+  lib::MemoryContext mem_context_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 #endif /* SRC_SQL_ENGINE_OB_NESTED_LOOP_CONNECT_BY_WITH_INDEX_OP_H_ */

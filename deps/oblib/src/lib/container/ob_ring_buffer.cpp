@@ -17,5 +17,5 @@ namespace common {
 
 ObRingBuffer::Node* const ObRingBuffer::Node::LOCKED_ADDR = nullptr;
 
-}  // namespace common
-}  // namespace oceanbase
+}  // common
+}  // oceanbase

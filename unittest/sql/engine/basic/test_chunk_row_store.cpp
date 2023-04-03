@@ -22,21 +22,27 @@
 #include "common/row/ob_row_store.h"
 #include "share/config/ob_server_config.h"
 #include "sql/ob_sql_init.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
-namespace oceanbase {
-namespace sql {
+
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
+static ObSimpleMemLimitGetter getter;
 
-class TestEnv : public ::testing::Environment {
+class TestEnv : public ::testing::Environment
+{
 public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
     int ret = OB_SUCCESS;
-    lib::ObMallocAllocator* malloc_allocator = lib::ObMallocAllocator::get_instance();
-    // ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
-    // ASSERT_EQ(OB_SUCCESS, ret);
-    ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID, common::ObCtxIds::WORK_AREA);
+    lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
+    //ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
+    //ASSERT_EQ(OB_SUCCESS, ret);
+    ret = malloc_allocator->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
     LOG_WARN("initial setup random seed", K(s));
@@ -44,17 +50,19 @@ public:
   }
 
   virtual void TearDown() override
-  {}
+  {
+  }
 };
 
-#define CALL(func, ...) \
-  func(__VA_ARGS__);    \
-  ASSERT_FALSE(HasFatalFailure());
+#define CALL(func, ...) func(__VA_ARGS__); ASSERT_FALSE(HasFatalFailure());
 
-class TestChunkRowStore : public blocksstable::TestDataFilePrepare {
+class TestChunkRowStore : public blocksstable::TestDataFilePrepare
+{
 public:
-  TestChunkRowStore() : blocksstable::TestDataFilePrepare("TestDisk_chunk_row_store", 2 << 20, 5000)
-  {}
+  TestChunkRowStore() : blocksstable::TestDataFilePrepare(&getter,
+                                                          "TestDisk_chunk_row_store", 2<<20, 5000)
+  {
+  }
 
   virtual void SetUp() override
   {
@@ -63,8 +71,10 @@ public:
     blocksstable::TestDataFilePrepare::SetUp();
     ret = blocksstable::ObTmpFileManager::get_instance().init();
     ASSERT_EQ(OB_SUCCESS, ret);
-    ret = blocksstable::ObTmpFileManager::get_instance().start();
-    ASSERT_EQ(OB_SUCCESS, ret);
+    static ObTenantBase tenant_ctx(tenant_id_);
+    ObTenantEnv::set_tenant(&tenant_ctx);
+    ObTenantIOManager *io_service = nullptr;
+    EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
 
     row_.count_ = COLS;
     row_.cells_ = cells_;
@@ -73,7 +83,7 @@ public:
     row_verify_.count_ = COLS;
     row_verify_.cells_ = cells_;
 
-    // mem limit 1M
+    //mem limit 1M
     ret = rs_.init(1L << 20, tenant_id_, ctx_id_, label_);
     ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -93,11 +103,10 @@ public:
 
     blocksstable::ObTmpFileManager::get_instance().destroy();
     blocksstable::TestDataFilePrepare::TearDown();
-    ObTenantManager::get_instance().destroy();
-    LOG_WARN("TearDown finished", K_(rs));
+    LOG_INFO("TearDown finished", K_(rs));
   }
 
-  ObNewRow& gen_row(int64_t row_id)
+  ObNewRow &gen_row(int64_t row_id)
   {
     cells_[0].set_int(row_id);
     int64_t max_size = 512;
@@ -109,8 +118,8 @@ public:
     return row_;
   }
 
-  // varify next row
-  // template <typename T>
+  //varify next row
+  //template <typename T>
   void verify_row(ObChunkRowStore::Iterator& it, int64_t n, bool verify_all = false)
   {
     int ret = it.get_next_row(row_verify_);
@@ -142,8 +151,8 @@ public:
     return verify_row(it_, id, verify_all);
   }
 
-  void verify_n_rows(ObChunkRowStore& rs, ObChunkRowStore::Iterator& it, int64_t n, bool verify_all = false,
-      int64_t chunk_size = 0, int64_t start = 0)
+  void verify_n_rows(ObChunkRowStore &rs, ObChunkRowStore::Iterator& it,
+      int64_t n, bool verify_all = false, int64_t chunk_size = 0, int64_t start = 0)
   {
     if (!it.is_valid()) {
       ASSERT_EQ(rs.begin(it), 0);
@@ -151,9 +160,9 @@ public:
     }
     for (int64_t i = start; i < n; i++) {
       CALL(verify_row, it, i, verify_all);
-      //      if (i % 1000 == 0) {
-      //        LOG_WARN("verified rows:", K(i));
-      //      }
+//      if (i % 1000 == 0) {
+//        LOG_WARN("verified rows:", K(i));
+//      }
     }
   }
 
@@ -162,15 +171,15 @@ public:
     return verify_n_rows(rs_, it_, n, verify_all);
   }
 
-  void append_rows(ObChunkRowStore& rs, int64_t cnt)
+  void append_rows(ObChunkRowStore &rs, int64_t cnt)
   {
     int64_t ret = OB_SUCCESS;
     int64_t base = rs.get_row_cnt();
     for (int64_t i = 0; i < cnt; i++) {
-      ObNewRow& row = gen_row(base + i);
+      ObNewRow &row = gen_row(base + i);
       ret = rs.add_row(row);
       ASSERT_EQ(OB_SUCCESS, ret);
-      // if (i % 1000 == 0) {
+      //if (i % 1000 == 0) {
       //  LOG_WARN("appended rows:", K(i));
       //}
     }
@@ -196,18 +205,14 @@ public:
     rs.set_block_size(block_size);
     begin = ObTimeUtil::current_time();
     for (i = 0; i < rows; i++) {
-      ObNewRow& row = gen_row(i);
+      ObNewRow &row = gen_row(i);
       ret = rs.add_row(row);
       ASSERT_EQ(OB_SUCCESS, ret);
-      // if (i % 1000 == 0) {
+      //if (i % 1000 == 0) {
       //  LOG_WARN("appended rows:", K(i));
       //}
     }
-    LOG_WARN("rs write time:",
-        K(block_size),
-        K(rows),
-        K(rs.get_block_cnt()),
-        K(rs.get_block_list_cnt()),
+    LOG_WARN("rs write time:", K(block_size), K(rows), K(rs.get_block_cnt()), K(rs.get_block_list_cnt()),
         K(ObTimeUtil::current_time() - begin));
     begin = ObTimeUtil::current_time();
     ObChunkRowStore::Iterator it;
@@ -222,8 +227,8 @@ public:
   }
 
   void with_or_without_chunk(bool is_with);
-
 protected:
+
   const static int64_t COLS = 3;
   bool enable_big_row_ = false;
   ObObj cells_[COLS];
@@ -235,7 +240,7 @@ protected:
 
   int64_t tenant_id_ = OB_SYS_TENANT_ID;
   int64_t ctx_id_ = ObCtxIds::WORK_AREA;
-  const char* label_ = ObModIds::OB_SQL_ROW_STORE;
+  const char *label_ = ObModIds::OB_SQL_ROW_STORE;
 
   const static int64_t BUF_SIZE = 2 << 20;
   char str_buf_[BUF_SIZE];
@@ -244,7 +249,6 @@ protected:
 int TestChunkRowStore::init_tenant_mgr()
 {
   int ret = OB_SUCCESS;
-  ObTenantManager& tm = ObTenantManager::get_instance();
   ObAddr self;
   oceanbase::rpc::frame::ObReqTransport req_transport(NULL, NULL);
   oceanbase::obrpc::ObSrvRpcProxy rpc_proxy;
@@ -252,19 +256,14 @@ int TestChunkRowStore::init_tenant_mgr()
   oceanbase::share::ObRsMgr rs_mgr;
   int64_t tenant_id = OB_SYS_TENANT_ID;
   self.set_ip_addr("127.0.0.1", 8086);
-  ret = tm.init(self, rpc_proxy, rs_rpc_proxy, rs_mgr, &req_transport, &ObServerConfig::get_instance());
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(tenant_id);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.set_tenant_mem_limit(tenant_id, 2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SYS_TENANT_ID);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ret = tm.add_tenant(OB_SERVER_TENANT_ID);
+  ret = getter.add_tenant(tenant_id,
+                          2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
   EXPECT_EQ(OB_SUCCESS, ret);
   const int64_t ulmt = 128LL << 30;
   const int64_t llmt = 128LL << 30;
-  ret = tm.set_tenant_mem_limit(OB_SYS_TENANT_ID, ulmt, llmt);
+  ret = getter.add_tenant(OB_SERVER_TENANT_ID,
+                          ulmt,
+                          llmt);
   EXPECT_EQ(OB_SUCCESS, ret);
   oceanbase::lib::set_memory_limit(128LL << 32);
   return ret;
@@ -274,18 +273,18 @@ TEST_F(TestChunkRowStore, basic)
 {
   int ret = OB_SUCCESS;
 
-  LOG_WARN("starting basic test: append 3000 rows");
-  CALL(append_rows, 3000);  // approximate 1MB, no need to dump
+  LOG_INFO("starting basic test: append 3000 rows");
+  CALL(append_rows, 3000); // approximate 1MB, no need to dump
   CALL(verify_n_rows, rs_.get_row_cnt(), true);
   LOG_WARN("basic test: varified rows", K(rs_.get_row_cnt()));
   it_.reset();
 
-  LOG_WARN("starting basic test: append 10000 rows");
-  CALL(append_rows, 10000);  // need to dump
+  LOG_INFO("starting basic test: append 10000 rows");
+  CALL(append_rows, 10000); //need to dump
   rs_.finish_add_row();
   LOG_WARN("mem", K(rs_.get_mem_hold()), K(rs_.get_mem_used()));
   ASSERT_EQ(13000, rs_.get_row_cnt());
-  LOG_WARN("starting basic test: verify rows");
+  LOG_INFO("starting basic test: verify rows");
   CALL(verify_n_rows, rs_.get_row_cnt() - 1, true);
 
   ret = it_.get_next_row(row_verify_);
@@ -301,7 +300,7 @@ TEST_F(TestChunkRowStore, basic)
 
   rs_.reset();
 
-  LOG_WARN("starting basic test: big row 20000 rows");
+  LOG_INFO("starting basic test: big row 20000 rows");
   enable_big_row_ = true;
   ret = rs_.init(1L << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -328,8 +327,8 @@ TEST_F(TestChunkRowStore, multi_iter)
   ret = rs.init(1 << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  LOG_WARN("starting basic test: append 3000 rows");
-  CALL(append_rows, rs, total);  // approximate 1MB, no need to dump
+  LOG_INFO("starting basic test: append 3000 rows");
+  CALL(append_rows, rs, total); // approximate 1MB, no need to dump
   rs.finish_add_row();
   LOG_WARN("Multi_iter", K_(rs.mem_hold), K_(rs.mem_used));
 
@@ -362,13 +361,13 @@ TEST_F(TestChunkRowStore, multi_iter)
   rs.reset();
 }
 
+
 TEST_F(TestChunkRowStore, keep_projector0)
 {
   ObChunkRowStore rs(NULL);
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS,
-      rs.init(
-          100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID, common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -395,7 +394,7 @@ TEST_F(TestChunkRowStore, keep_projector0)
   ObChunkRowStore::Iterator it1;
   ASSERT_EQ(OB_SUCCESS, rs.begin(it1));
 
-  r.projector_size_ = 0;
+  r.projector_size_ =0;
   r.projector_ = NULL;
 
   ASSERT_EQ(OB_SUCCESS, it1.get_next_row(r));
@@ -406,7 +405,7 @@ TEST_F(TestChunkRowStore, keep_projector0)
   ASSERT_EQ(2, r.get_cell(1).get_int());
   ASSERT_EQ(2, r.cells_[1].get_int());
 
-  ObNewRow* rr;
+  ObNewRow *rr;
   ASSERT_EQ(OB_SUCCESS, it1.get_next_row(rr));
 
   ASSERT_TRUE(NULL == rr->projector_);
@@ -420,17 +419,14 @@ TEST_F(TestChunkRowStore, keep_projector0)
   rs.reset();
 }
 
+
 TEST_F(TestChunkRowStore, keep_projector2)
 {
   ObChunkRowStore rs(NULL);
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS,
-      rs.init(100 << 20,
-          OB_SERVER_TENANT_ID,
-          ObCtxIds::DEFAULT_CTX_ID,
-          common::ObModIds::OB_SQL_CHUNK_ROW_STORE,
-          true,
-          ObChunkRowStore::STORE_MODE::FULL));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
+                                ObChunkRowStore::STORE_MODE::FULL));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -466,7 +462,7 @@ TEST_F(TestChunkRowStore, keep_projector2)
   ASSERT_EQ(1, r.cells_[1].get_int());
   ASSERT_EQ(2, r.get_cell(1).get_int());
 
-  ObNewRow* rr;
+  ObNewRow *rr;
   ASSERT_EQ(OB_SUCCESS, it1.get_next_row(rr));
 
   ASSERT_TRUE(NULL != rr->projector_);
@@ -485,22 +481,14 @@ TEST_F(TestChunkRowStore, keep_projector2_with_copy)
 {
   ObChunkRowStore rs(NULL);
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS,
-      rs.init(100 << 20,
-          OB_SERVER_TENANT_ID,
-          ObCtxIds::DEFAULT_CTX_ID,
-          common::ObModIds::OB_SQL_CHUNK_ROW_STORE,
-          true,
-          ObChunkRowStore::STORE_MODE::FULL));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
+                                ObChunkRowStore::STORE_MODE::FULL));
   ObChunkRowStore rs2(NULL);
   ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
-  ASSERT_EQ(OB_SUCCESS,
-      rs2.init(100 << 20,
-          OB_SERVER_TENANT_ID,
-          ObCtxIds::DEFAULT_CTX_ID,
-          common::ObModIds::OB_SQL_CHUNK_ROW_STORE,
-          true,
-          ObChunkRowStore::STORE_MODE::FULL));
+  ASSERT_EQ(OB_SUCCESS, rs2.init(100 << 20, OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID,
+                                common::ObModIds::OB_SQL_CHUNK_ROW_STORE, true,
+                                ObChunkRowStore::STORE_MODE::FULL));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -529,7 +517,7 @@ TEST_F(TestChunkRowStore, keep_projector2_with_copy)
   ASSERT_EQ(OB_SUCCESS, rs2.copy_row(sr, &rs));
   ObChunkRowStore::Iterator it2;
   ASSERT_EQ(OB_SUCCESS, rs2.begin(it2));
-  ObNewRow* rr;
+  ObNewRow *rr;
   ASSERT_EQ(OB_SUCCESS, it2.get_next_row(rr));
   // only fill cells, projector_ unchanged.
   ASSERT_EQ(0, rr->get_cell(0).get_int());
@@ -554,7 +542,7 @@ TEST_F(TestChunkRowStore, basic2)
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
-  // mem limit 5M
+  //mem limit 5M
   ret = rs.init(5L << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
   CALL(append_rows, rs, 100000);
@@ -569,6 +557,7 @@ TEST_F(TestChunkRowStore, basic2)
   rs.reset();
 }
 
+
 TEST_F(TestChunkRowStore, chunk_iterator)
 {
   int ret = OB_SUCCESS;
@@ -576,7 +565,7 @@ TEST_F(TestChunkRowStore, chunk_iterator)
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::ChunkIterator chunk_it;
   ObChunkRowStore::RowIterator it;
-  // mem limit 5M
+  //mem limit 5M
   ret = rs.init(5L << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
   CALL(append_rows, rs, 100000);
@@ -587,7 +576,7 @@ TEST_F(TestChunkRowStore, chunk_iterator)
   ASSERT_EQ(rs.get_row_cnt_in_memory() + rs.get_row_cnt_on_disk(), 100000);
   rs.finish_add_row();
   ASSERT_EQ(OB_SUCCESS, rs.begin(chunk_it, ObChunkRowStore::BLOCK_SIZE * 4));
-  const ObChunkRowStore::StoredRow* v_sr = NULL;
+  const ObChunkRowStore::StoredRow *v_sr = NULL;
   int64_t v;
   int64_t extend_v;
   int64_t row_cnt = 0;
@@ -596,7 +585,7 @@ TEST_F(TestChunkRowStore, chunk_iterator)
   ASSERT_EQ(OB_SUCCESS, ret);
   row_cnt += chunk_it.get_cur_chunk_row_cnt();
   LOG_WARN("got chunk of rows:", K(row_cnt));
-  while (OB_SUCC(ret)) {
+  while(OB_SUCC(ret)) {
     ret = it.get_next_row(v_sr);
     if (ret == OB_ITER_END) {
       ret = chunk_it.load_next_chunk(it);
@@ -634,8 +623,8 @@ TEST_F(TestChunkRowStore, test_copy_row)
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
-  const ObChunkRowStore::StoredRow* sr;
-  LOG_WARN("starting mem_perf test: append rows", K(rows));
+  const ObChunkRowStore::StoredRow *sr;
+  LOG_INFO("starting mem_perf test: append rows", K(rows));
   int64_t begin = ObTimeUtil::current_time();
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -651,7 +640,7 @@ TEST_F(TestChunkRowStore, mem_perf)
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
-  LOG_WARN("starting mem_perf test: append rows", K(rows));
+  LOG_INFO("starting mem_perf test: append rows", K(rows));
   int64_t begin = ObTimeUtil::current_time();
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -688,21 +677,21 @@ TEST_F(TestChunkRowStore, time_cmp)
   ra.init(0, tenant_id_, ctx_id_, label_);
   int64_t begin = ObTimeUtil::current_time();
   for (int64_t i = 0; i < rows; i++) {
-    ObNewRow& row = gen_row(i);
+    ObNewRow &row = gen_row(i);
     ret = ra.add_row(row);
     ASSERT_EQ(OB_SUCCESS, ret);
     if (i % 1000 == 0) {
       LOG_WARN("appended rows:", K(i));
     }
   }
-  LOG_WARN(
-      "ra write time:", K(rows), K(ra.get_mem_hold()), K(ra.get_file_size()), K(ObTimeUtil::current_time() - begin));
+  LOG_WARN("ra write time:", K(rows), K(ra.get_mem_hold()), K(ra.get_file_size()),
+      K(ObTimeUtil::current_time() - begin));
   begin = ObTimeUtil::current_time();
   i = 0;
   while (OB_SUCC(ra.get_row(i, row_verify_))) {
-    row_verify_.get_cell(0).get_int(v);
-    ASSERT_EQ(i, v);
-    i++;
+   row_verify_.get_cell(0).get_int(v);
+   ASSERT_EQ(i, v);
+   i++;
   }
   LOG_WARN("old rc scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   ra.reset();
@@ -715,19 +704,15 @@ TEST_F(TestChunkRowStore, time_cmp)
 
   begin = ObTimeUtil::current_time();
   for (int64_t i = 0; i < rows; i++) {
-    ObNewRow& row = gen_row(i);
+    ObNewRow &row = gen_row(i);
     ret = rs_old.add_row(row);
     ASSERT_EQ(OB_SUCCESS, ret);
     if (i % 1000 == 0) {
       LOG_WARN("appended rows:", K(i));
     }
   }
-  LOG_WARN("old rs write time:",
-      K(rows),
-      K(rs_old.get_block_count()),
-      K(rs_old.get_block_size()),
-      K(rs_old.get_used_mem_size()),
-      K(ObTimeUtil::current_time() - begin));
+  LOG_WARN("old rs write time:", K(rows), K(rs_old.get_block_count()), K(rs_old.get_block_size()),
+      K(rs_old.get_used_mem_size()), K(ObTimeUtil::current_time() - begin));
 
   begin = ObTimeUtil::current_time();
   ObRowStore::Iterator it_old = rs_old.begin();
@@ -810,7 +795,7 @@ TEST_F(TestChunkRowStore, disk)
   int64_t write_time = 0;
   int64_t round = 500;
   int64_t rows = round * 10000;
-  LOG_WARN("starting write disk test: append rows", K(rows));
+  LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
@@ -825,19 +810,20 @@ TEST_F(TestChunkRowStore, disk)
     write_time += common::ObTimeUtil::current_time() - begin;
   }
 
-  LOG_WARN("mem and disk", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
-  LOG_WARN("disk write:", K(rows), K(write_time));
+  LOG_INFO("mem and disk", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
+  LOG_INFO("disk write:", K(rows), K(write_time));
 
   ASSERT_EQ(OB_SUCCESS, rs.finish_add_row());
-  LOG_WARN("mem and disk after finish", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
+  LOG_INFO("mem and disk after finish", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
 
   it.reset();
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true);
-  LOG_WARN("disk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
   rs.reset();
 }
+
 
 TEST_F(TestChunkRowStore, disk_with_chunk)
 {
@@ -846,83 +832,77 @@ TEST_F(TestChunkRowStore, disk_with_chunk)
   int64_t round = 2;
   int64_t cnt = 10000;
   int64_t rows = round * cnt;
-  LOG_WARN("starting write disk test: append rows", K(rows));
+  LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
   rs.set_mem_limit(1L << 20);
   for (int64_t i = 0; i < round; i++) {
-    // if (i == round / 2) {
-    // enable_big_row_ = true;
-    // }
+    //if (i == round / 2) {
+      //enable_big_row_ = true;
+   // }
     begin = common::ObTimeUtil::current_time();
     CALL(append_rows, rs, cnt);
     write_time += common::ObTimeUtil::current_time() - begin;
   }
 
-  LOG_WARN("mem and disk", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
-  LOG_WARN("disk write:", K(rows), K(write_time));
+  LOG_INFO("mem and disk", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()));
+  LOG_INFO("disk write:", K(rows), K(write_time));
 
   ASSERT_EQ(OB_SUCCESS, rs.finish_add_row());
-  LOG_WARN("mem and disk after finish",
-      K(rows),
-      K(rs.get_mem_hold()),
-      K(rs.get_mem_used()),
-      K(rs.get_file_size()),
-      K(rs.max_blk_size_),
-      K(rs.min_blk_size_),
-      K(rs.n_block_in_file_));
+  LOG_INFO("mem and disk after finish", K(rows), K(rs.get_mem_hold()), K(rs.get_mem_used()), K(rs.get_file_size()), K(rs.max_blk_size_), K(rs.min_blk_size_), K(rs.n_block_in_file_));
 
   it.reset();
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true);
-  LOG_WARN("disk without chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk without chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true);
-  LOG_WARN("disk without chunk scan time2:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk without chunk scan time2:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 1L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 2L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 8L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 10L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 16L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   begin = ObTimeUtil::current_time();
   CALL(verify_n_rows, rs, it, rs.get_row_cnt(), true, 20L << 20);
-  LOG_WARN("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
+  LOG_INFO("disk with chunk scan time:", K(rows), K(ObTimeUtil::current_time() - begin));
   it.reset();
 
   rs.reset();
 }
 
-// test chunk row store
-// case from oarowstore
+
+// test chunk row store根据内存比例进行dump，去掉了这层逻辑，是否dump由上层驱动
+//case from oarowstore
 // TEST_F(TestChunkRowStore, start_dump_by_total_mem_used)
 // {
-//   LOG_WARN("starting dump mem test: append rows", K(500000));
+//   LOG_INFO("starting dump mem test: append rows", K(500000));
 //   int ret = OB_SUCCESS;
 //   ObChunkRowStore rs;
 //   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
@@ -943,6 +923,7 @@ TEST_F(TestChunkRowStore, disk_with_chunk)
 
 //   ret = rs.init(0, tenant_id_, ctx_id_, mod_id_);
 //   ASSERT_EQ(OB_SUCCESS, ret);
+
 
 //   // case1: trigger dump by memory mod usage (60% of limit, 30MB)
 //   // write 28MB, all in memory
@@ -1007,20 +988,20 @@ TEST_F(TestChunkRowStore, disk_with_chunk)
 TEST_F(TestChunkRowStore, test_add_block)
 {
   int ret = OB_SUCCESS;
-  // send
+  //send
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
-  ObChunkRowStore::Block* block;
+  ObChunkRowStore::Block *block;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
 
-  ObNewRow& row = gen_row(1);
+  ObNewRow &row = gen_row(1);
   int64_t row_size = ObChunkRowStore::Block::row_store_size(row);
 
   ret = rs.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   int64_t min_size = rs.min_blk_size(row_size);
-  void* mem = alloc.alloc(min_size);
+  void *mem = alloc.alloc(min_size);
 
   ret = rs.init_block_buffer(mem, min_size, block);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1036,13 +1017,13 @@ TEST_F(TestChunkRowStore, test_add_block)
   LOG_WARN("Molly size", K(block->get_buffer()->data_size()), K(block->get_buffer()->capacity()));
 
   ObArenaAllocator alloc2(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
-  void* mem2 = alloc2.alloc(block->get_buffer()->data_size());
+  void *mem2 =  alloc2.alloc(block->get_buffer()->data_size());
   memcpy(mem2, mem, block->get_buffer()->data_size());
 
-  // recv
+  //recv
   ObChunkRowStore rs2;
   ASSERT_EQ(OB_SUCCESS, rs2.alloc_dir_id());
-  ObChunkRowStore::Block* block2 = reinterpret_cast<ObChunkRowStore::Block*>(mem2);
+  ObChunkRowStore::Block *block2 = reinterpret_cast<ObChunkRowStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = rs2.add_block(block2, true);
@@ -1053,7 +1034,7 @@ TEST_F(TestChunkRowStore, test_add_block)
   CALL(verify_n_rows, rs2, it2, 99, true);
   ASSERT_EQ(true, it2.has_next());
   CALL(verify_n_rows, rs2, it2, 100, true, 0, 99);
-  ASSERT_EQ(false, it2.has_next());
+  ASSERT_FALSE(it2.has_next());
   ASSERT_EQ(OB_ITER_END, it2.get_next_row(row));
   rs2.remove_added_blocks();
   it2.reset();
@@ -1066,18 +1047,19 @@ TEST_F(TestChunkRowStore, row_extend_row)
   int64_t write_time = 0;
   int64_t round = 500;
   int64_t rows = round * 10000;
-  LOG_WARN("starting write disk test: append rows", K(rows));
+  LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
-  ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_, true, ObChunkRowStore::WITHOUT_PROJECTOR, 8));
-  LOG_WARN("starting basic test: append 3000 rows");
+  ASSERT_EQ(OB_SUCCESS,
+            rs.init(0, tenant_id_, ctx_id_, label_, true, ObChunkRowStore::WITHOUT_PROJECTOR, 8));
+  LOG_INFO("starting basic test: append 3000 rows");
   int64_t ret = OB_SUCCESS;
   int64_t base = rs.get_row_cnt();
   ObChunkRowStore::StoredRow* sr = NULL;
   const ObChunkRowStore::StoredRow* v_sr = NULL;
   for (int64_t i = 0; i < 100; i++) {
-    ObNewRow& row = gen_row(i);
+    ObNewRow &row = gen_row(i);
     ret = rs.add_row(row, &sr);
     ASSERT_EQ(OB_SUCCESS, ret);
     *static_cast<int64_t*>(sr->get_extra_payload()) = i;
@@ -1103,6 +1085,7 @@ TEST_F(TestChunkRowStore, row_extend_row)
       LOG_WARN("verify failed", K(i), K(v), K(extend_v));
     }
     ASSERT_EQ(i, v);
+
   }
   it.reset();
   rs.reset();
@@ -1113,7 +1096,7 @@ TEST_F(TestChunkRowStore, test_both_disk_and_memory)
   int64_t round = 2;
   int64_t cnt = 100;
   int64_t rows = round * cnt;
-  LOG_WARN("starting write disk test: append rows", K(rows));
+  LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
@@ -1134,12 +1117,13 @@ TEST_F(TestChunkRowStore, test_both_disk_and_memory)
   rs.reset();
 }
 
+
 TEST_F(TestChunkRowStore, test_only_disk_data)
 {
   int64_t round = 2;
   int64_t cnt = 100;
   int64_t rows = round * cnt;
-  LOG_WARN("starting write disk test: append rows", K(rows));
+  LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkRowStore rs;
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkRowStore::Iterator it;
@@ -1157,22 +1141,23 @@ TEST_F(TestChunkRowStore, test_only_disk_data)
   rs.reset();
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
+
 
 void ignore_sig(int sig)
 {
   UNUSED(sig);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   signal(49, ignore_sig);
   oceanbase::sql::init_sql_factories();
   oceanbase::common::ObLogger::get_logger().set_file_name("test_chunk_row_store.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
-  auto* env = new (oceanbase::sql::TestEnv);
+  auto *env = new (oceanbase::sql::TestEnv);
   testing::AddGlobalTestEnvironment(env);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();

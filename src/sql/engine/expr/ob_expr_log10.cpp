@@ -14,23 +14,29 @@
 #include "ob_expr_log10.h"
 #include <cmath>
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-ObExprLog10::ObExprLog10(ObIAllocator& alloc)
+namespace oceanbase
+{
+namespace sql
+{
+ObExprLog10::ObExprLog10(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_LOG_TEN, N_LOG10, 1, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprLog10::~ObExprLog10()
-{}
+{
+}
 
-int ObExprLog10::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+int ObExprLog10::calc_result_type1(ObExprResType &type,
+                                   ObExprResType &type1,
+                                   common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
@@ -44,32 +50,11 @@ int ObExprLog10::calc_result_type1(ObExprResType& type, ObExprResType& type1, co
   return ret;
 }
 
-int ObExprLog10::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int calc_log10_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  double val = 0.0;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (obj.is_null()) {
-    result.set_null();
-  } else if (OB_FAIL(obj.get_double(val))) {
-    LOG_WARN("get_double from obj failed", K(ret), K(obj), K(val));
-  } else {
-    if (val <= 0) {
-      LOG_USER_WARN(OB_EER_INVALID_ARGUMENT_FOR_LOGARITHM);
-      result.set_null();
-    } else {
-      result.set_double(std::log10(val));
-    }
-  }
-  return ret;
-}
-
-int calc_log10_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret), K(expr));
   } else if (arg->is_null()) {
@@ -86,12 +71,14 @@ int calc_log10_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprLog10::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprLog10::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) || (ObDoubleType != rt_expr.args_[0]->datum_meta_.type_)) {
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) ||
+      (ObDoubleType != rt_expr.args_[0]->datum_meta_.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_ or arg res type is invalid", K(ret), K(rt_expr));
   } else {
@@ -99,5 +86,5 @@ int ObExprLog10::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, Ob
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

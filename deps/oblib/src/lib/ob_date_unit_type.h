@@ -16,7 +16,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-enum ObDateUnitType {
+enum ObDateUnitType
+{
   /* the type of date unit */
   DATE_UNIT_MICROSECOND = 0,
   DATE_UNIT_SECOND,
@@ -61,10 +62,10 @@ const char* ob_get_format_unit_type_str(enum ObGetFormatUnitType type);
 #ifdef __cplusplus
 }
 
-static_assert(
-    DATE_UNIT_DAY > DATE_UNIT_HOUR && DATE_UNIT_HOUR > DATE_UNIT_MINUTE && DATE_UNIT_MINUTE > DATE_UNIT_SECOND,
-    "Please keep the sequence of interval day to second types");
+static_assert(DATE_UNIT_DAY > DATE_UNIT_HOUR
+              && DATE_UNIT_HOUR > DATE_UNIT_MINUTE
+              && DATE_UNIT_MINUTE > DATE_UNIT_SECOND, "Please keep the sequence of interval day to second types");
 static_assert(DATE_UNIT_YEAR > DATE_UNIT_MONTH, "Please keep the sequence of interval year to month types");
 
 #endif
-#endif  //_OCEANBASE_COMMON_DATE_UNIT_TYPE_H_
+#endif //_OCEANBASE_COMMON_DATE_UNIT_TYPE_H_

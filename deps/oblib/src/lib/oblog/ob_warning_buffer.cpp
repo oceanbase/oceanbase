@@ -12,14 +12,21 @@
 
 #include "lib/oblog/ob_warning_buffer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 bool ObWarningBuffer::is_log_on_ = false;
-RLOCAL(ObWarningBuffer*, g_warning_buffer);
+_RLOCAL(ObWarningBuffer *, g_warning_buffer);
 
-OB_SERIALIZE_MEMBER(ObWarningBuffer::WarningItem, msg_, code_, log_level_, line_no_, column_no_);
+OB_SERIALIZE_MEMBER(ObWarningBuffer::WarningItem,
+                    msg_,
+                    code_,
+                    log_level_,
+                    line_no_,
+                    column_no_);
 
-ObWarningBuffer& ObWarningBuffer::operator=(const ObWarningBuffer& other)
+ObWarningBuffer &ObWarningBuffer::operator= (const ObWarningBuffer &other)
 {
   if (this != &other) {
     reset();
@@ -35,7 +42,7 @@ ObWarningBuffer& ObWarningBuffer::operator=(const ObWarningBuffer& other)
   return *this;
 }
 
-ObWarningBuffer::WarningItem& ObWarningBuffer::WarningItem::operator=(const WarningItem& other)
+ObWarningBuffer::WarningItem &ObWarningBuffer::WarningItem::operator= (const WarningItem &other)
 {
   if (this != &other) {
     STRCPY(msg_, other.msg_);
@@ -44,9 +51,10 @@ ObWarningBuffer::WarningItem& ObWarningBuffer::WarningItem::operator=(const Warn
     line_no_ = other.line_no_;
     column_no_ = other.column_no_;
     code_ = other.code_;
+    STRCPY(sql_state_, other.sql_state_);
   }
   return *this;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

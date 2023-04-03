@@ -17,21 +17,27 @@
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
-namespace oceanbase {
+#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
-namespace sql {
+namespace sql
+{
 
-ObVariableSetResolver::ObVariableSetResolver(ObResolverParams& params) : ObStmtResolver(params)
-{}
+ObVariableSetResolver::ObVariableSetResolver(ObResolverParams &params)
+  : ObStmtResolver(params)
+{
+}
 
 ObVariableSetResolver::~ObVariableSetResolver()
-{}
+{
+}
 
-int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
+int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObVariableSetStmt* variable_set_stmt = NULL;
+  ObVariableSetStmt *variable_set_stmt = NULL;
   if (OB_UNLIKELY(T_VARIABLE_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_VARIABLE_SET", K(ret), K(parse_tree.type_));
@@ -44,224 +50,277 @@ int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
   } else {
     stmt_ = variable_set_stmt;
     variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
-    ParseNode* set_node = NULL;
+    ParseNode *set_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
-    ObVariableSetStmt::NamesSetNode names_node;
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
       if (OB_ISNULL(set_node = parse_tree.children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set node is NULL", K(ret));
-      } else if (T_VAR_VAL == set_node->type_) {
-        if (OB_FAIL(resolve_set_variable(*set_node, var_node, variable_set_stmt))) {
-          LOG_WARN("resolve set variable failed", K(ret));
-        }
-      } else if (T_SET_NAMES == set_node->type_ || T_SET_CHARSET == set_node->type_) {
-        if (OB_FAIL(resolve_set_names(*set_node, names_node)))
-        LOG_WARN("resolve set names failed", K(ret));
-      } else {
+      } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexpected set_node->type_ ", K(ret), K(set_node->type_));
-      }
-      if (OB_SUCC(ret)) {
-        const bool is_set_variable = T_VAR_VAL == set_node->type_;
-        ObVariableSetStmt::VariableNamesSetNode var_names_node(is_set_variable, var_node, names_node);
-        if (OB_FAIL(variable_set_stmt->add_variable_node(var_names_node))) {
-          LOG_WARN("Add set entry failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObVariableSetResolver::resolve_set_variable(const ParseNode &set_node,
-                                                ObVariableSetStmt::VariableSetNode &var_node,
-                                                ObVariableSetStmt* variable_set_stmt)
-{
-  int ret = OB_SUCCESS;
-  ParseNode* var = NULL;
-  switch (set_node.value_) {
-    case 0:
-      var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
-      break;
-    case 1:
-      var_node.set_scope_ = ObSetVar::SET_SCOPE_GLOBAL;
-      variable_set_stmt->set_has_global_variable(true);
-      break;
-    case 2:
-      var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
-      break;
-    default:
-      var_node.set_scope_ = ObSetVar::SET_SCOPE_NEXT_TRANS;
-      break;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(var = set_node.children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("var is NULL", K(ret));
-  } else {
-    ObString var_name;
-    if (T_IDENT == var->type_) {
-      var_node.is_system_variable_ = true;
-      var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
-    } else if (T_OBJ_ACCESS_REF == var->type_) {  // Oracle mode
-      const ParseNode* name_node = NULL;
-      if (OB_ISNULL(name_node = var->children_[0]) || OB_UNLIKELY(var->children_[1] != NULL)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable name not an identifier type");
-      } else if (OB_UNLIKELY(name_node->type_ != T_IDENT)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable name not an identifier type");
+        LOG_ERROR("set_node->type_ must be T_VAR_VAL", K(ret), K(set_node->type_));
       } else {
-        var_node.is_system_variable_ = true;
-        var_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
-      }
-    } else {
-      var_node.is_system_variable_ = (T_SYSTEM_VARIABLE == var->type_);
-      var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_write_string(*allocator_, var_name, var_node.variable_name_))) {
-        LOG_WARN("Can not malloc space for variable name", K(ret));
-      } else {
-        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_node.variable_name_);
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(set_node.children_[1])) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("value node is NULL", K(ret));
-    } else if (T_DEFAULT == set_node.children_[1]->type_) {
-      // set system_variable = default
-      var_node.is_set_default_ = true;
-    } else if (var_node.is_system_variable_) {
-      ParseNode value_node;
-      if (T_IDENT == set_node.children_[1]->type_) {
-        MEMCPY(&value_node, set_node.children_[1], sizeof(ParseNode));
-        value_node.type_ = T_VARCHAR;
-      } else if (T_COLUMN_REF == set_node.children_[1]->type_) {
-        if (NULL == set_node.children_[1]->children_[0] && NULL == set_node.children_[1]->children_[1] &&
-            NULL != set_node.children_[1]->children_[2]) {
-          MEMCPY(&value_node, set_node.children_[1]->children_[2], sizeof(ParseNode));
-          value_node.type_ = T_VARCHAR;
-        } else {
-          MEMCPY(&value_node, set_node.children_[1], sizeof(ParseNode));
+        ParseNode *var = NULL;
+        switch (set_node->value_) {
+          case 0:
+            //为了兼容mysql，这里为SET_SCOPE_SESSION而不是SET_SCOPE_NEXT_TRANS
+            //var_node.set_scope_ = ObSetVar::SET_SCOPE_NEXT_TRANS;
+            var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
+            break;
+          case 1:
+            var_node.set_scope_ = ObSetVar::SET_SCOPE_GLOBAL;
+            variable_set_stmt->set_has_global_variable(true);
+            break;
+          case 2:
+            var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
+            break;
+          default:
+            var_node.set_scope_ = ObSetVar::SET_SCOPE_NEXT_TRANS;
+            break;
         }
-      } else if (T_OBJ_ACCESS_REF == set_node.children_[1]->type_) {  // Oracle mode
-        if (OB_ISNULL(set_node.children_[1]->children_[0]) ||
-            OB_UNLIKELY(set_node.children_[1]->children_[1] != NULL)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value not a varchar nor identifier type");
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(var = set_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("var is NULL", K(ret));
         } else {
-          MEMCPY(&value_node, set_node.children_[1]->children_[0], sizeof(ParseNode));
-        }
-
-        if (OB_SUCC(ret)) {
-          if (T_IDENT == set_node.children_[1]->children_[0]->type_) {
-            value_node.type_ = T_VARCHAR;
-          } else if (T_FUN_SYS == set_node.children_[1]->children_[0]->type_) {
-            // do nothing
+          ObString var_name;
+          if (T_IDENT == var->type_) {
+            var_node.is_system_variable_ = true; //PL的set语句在PL resolver里解析，不会走到这里，所以到这里的肯定是系统变量的缺省写法
+            var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
+          } else if (T_OBJ_ACCESS_REF == var->type_) { //Oracle mode
+            const ParseNode *name_node = NULL;
+            if (OB_ISNULL(name_node = var->children_[0]) || OB_UNLIKELY(var->children_[1] != NULL) ||
+                OB_UNLIKELY(name_node->type_ != T_IDENT)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Variable name is not an identifier type", K(ret));
+            } else {
+              var_node.is_system_variable_ = true; //PL的set语句在PL resolver里解析，不会走到这里，所以到这里的肯定是系统变量的缺省写法
+              var_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
+            }
           } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
+            var_node.is_system_variable_ = (T_SYSTEM_VARIABLE == var->type_);
+            var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ob_write_string(*allocator_, var_name, var_node.variable_name_))) {
+              LOG_WARN("Can not malloc space for variable name", K(ret));
+            } else {
+              ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_node.variable_name_);
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(set_node->children_[1])) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("value node is NULL", K(ret));
+          } else if (T_DEFAULT == set_node->children_[1]->type_) {
+            // set 系统变量 = default
+            var_node.is_set_default_ = true;
+          } else if (var_node.is_system_variable_) {
+            ParseNode value_node;
+            if (T_IDENT == set_node->children_[1]->type_) {
+              MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
+              value_node.type_ = T_VARCHAR;
+            } else if (T_COLUMN_REF == set_node->children_[1]->type_) {
+              if (NULL == set_node->children_[1]->children_[0] && NULL == set_node->children_[1]->children_[1] && NULL != set_node->children_[1]->children_[2]) {
+                MEMCPY(&value_node, set_node->children_[1]->children_[2], sizeof(ParseNode));
+                value_node.type_ = T_VARCHAR;
+              } else {
+                MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
+              }
+            } else if (T_OBJ_ACCESS_REF == set_node->children_[1]->type_) { //Oracle mode
+              if (OB_ISNULL(set_node->children_[1]->children_[0]) || OB_UNLIKELY(set_node->children_[1]->children_[1] != NULL)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("Variable value not a varchar nor identifier type", K(ret));
+              } else {
+                MEMCPY(&value_node, set_node->children_[1]->children_[0], sizeof(ParseNode));
+              }
+
+              if (OB_SUCC(ret)) {
+                if (T_IDENT == set_node->children_[1]->children_[0]->type_) {
+                  value_node.type_ = T_VARCHAR;
+                } else if (T_FUN_SYS == set_node->children_[1]->children_[0]->type_) {
+                  //do nothing
+                } else {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("Variable value type is not supported", K(ret), K(set_node->children_[1]->children_[0]->type_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
+                }
+              }
+            } else {
+              MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
+            }
+            if (OB_SUCC(ret)) {
+              if (0 == var_node.variable_name_.case_compare("ob_compatibility_mode") &&
+                  0 == strncasecmp(value_node.str_value_, "oracle",
+                                   std::min(static_cast<int32_t>(value_node.str_len_), 6))) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
+              }
+              if (OB_SUCC(ret) &&
+                  OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
+                LOG_WARN("resolve variable value failed", K(ret));
+              }
+            }
+          } else {
+            // use WARN_ON_FAIL cast_mode if set user_variable
+            const stmt::StmtType session_ori_stmt_type = session_info_->get_stmt_type();
+            session_info_->set_stmt_type(stmt::T_SELECT);
+            if (OB_FAIL(resolve_value_expr(*set_node->children_[1], var_node.value_expr_))) {
+              LOG_WARN("failed to resolve value expr", K(ret));
+            }
+            session_info_->set_stmt_type(session_ori_stmt_type);
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
+              ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+              LOG_WARN("invalid scope for agg function", K(ret));
+            } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              LOG_WARN("Add set entry failed", K(ret));
+            }
           }
         }
-      } else {
-        MEMCPY(&value_node, set_node.children_[1], sizeof(ParseNode));
-      }
-      if (OB_SUCC(ret)) {
-        if (0 == var_node.variable_name_.case_compare("ob_compatibility_mode") &&
-            0 == strncasecmp(
-                      value_node.str_value_, "oracle", std::min(static_cast<int32_t>(value_node.str_len_), 6))) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
-        } else if (OB_FAIL(
-                        ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
-          LOG_WARN("resolve variable value failed", K(ret));
-        }
-      }
-    } else {
-      if (OB_FAIL(ObResolverUtils::resolve_const_expr(
-              params_, *set_node.children_[1], var_node.value_expr_, NULL))) {
-        LOG_WARN("resolve variable value failed", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node,
-                                             ObVariableSetStmt::NamesSetNode &names_node)
+int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&value_expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(set_node.children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "set_node.children_ is null.", K(ret));
-  } else if (OB_ISNULL(set_node.children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "set_node.children_[0] is null.", K(ret));
+  ObArray<ObQualifiedName> columns;
+  ObArray<ObSubQueryInfo> sub_query_info;
+  ObArray<ObAggFunRawExpr*> aggr_exprs;
+  ObArray<ObWinFunRawExpr*> win_exprs;
+  ObArray<ObUDFInfo> udf_info;
+  ObArray<ObVarInfo> sys_vars;
+  ObArray<ObOpRawExpr*> op_exprs;
+  ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
+  ObCollationType collation_connection = CS_TYPE_INVALID;
+  ObCharsetType character_set_connection = CHARSET_INVALID;
+  if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
+  } else if (OB_FAIL(params_.session_info_->get_collation_connection(collation_connection))) {
+    LOG_WARN("fail to get collation_connection", K(ret));
+  } else if (OB_FAIL(params_.session_info_->get_character_set_connection(character_set_connection))) {
+    LOG_WARN("fail to get character_set_connection", K(ret));
   } else {
-    if (T_SET_NAMES == set_node.type_) {
-      // SET NAMES
-      names_node.is_set_names_ = true;
-      if (T_DEFAULT == set_node.children_[0]->type_) {
-        names_node.is_default_charset_ = true;
-      } else {
-        names_node.is_default_charset_ = false;
-        ObString charset;
-        charset.assign_ptr(
-            set_node.children_[0]->str_value_, static_cast<int32_t>(set_node.children_[0]->str_len_));
-        if (0 == charset.case_compare("utf16")) {
-          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
-              static_cast<int>(strlen("character_set_client")),
-              "character_set_client",
-              charset.length(),
-              charset.ptr());
-        } else {
-          names_node.charset_ = charset;
+    ObExprResolveContext ctx(*params_.expr_factory_, params_.session_info_->get_timezone_info(),
+                             OB_NAME_CASE_INVALID);
+    ctx.dest_collation_ = collation_connection;
+    ctx.connection_charset_ = character_set_connection;
+    ctx.param_list_ = params_.param_list_;
+    ctx.is_extract_param_type_ = !params_.is_prepare_protocol_; //when prepare do not extract
+    ctx.schema_checker_ = params_.schema_checker_;
+    ctx.session_info_ = params_.session_info_;
+    ctx.secondary_namespace_ = params_.secondary_namespace_;
+    ctx.query_ctx_ = params_.query_ctx_;
+    ObRawExprResolverImpl expr_resolver(ctx);
+    if (OB_FAIL(params_.session_info_->get_name_case_mode(ctx.case_mode_))) {
+      LOG_WARN("fail to get name case mode", K(ret));
+    } else if (OB_FAIL(expr_resolver.resolve(&val_node, value_expr, columns, sys_vars,
+                                             sub_query_info, aggr_exprs, win_exprs,
+                                             udf_info, op_exprs, user_var_exprs))) {
+      LOG_WARN("resolve expr failed", K(ret));
+    } else if (udf_info.count() > 0 &&
+               OB_FAIL(ObRawExprUtils::init_udfs_info(params_, udf_info))) {
+      LOG_WARN("failed to init udf infos", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
+      LOG_WARN("resolve columns for const expr failed", K(ret));
+    } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
+      ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
+      if (OB_ISNULL(call_expr->get_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
+        LOG_WARN("failed to formalize call expr", K(ret));
+      }
+    } else if (value_expr->has_flag(CNT_SUB_QUERY)) {
+      if (is_oracle_mode()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("subqueries or stored function calls here is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "subqueries or stored function calls here");
+      } else if (is_mysql_mode()) {
+        if (OB_FAIL(resolve_subquery_info(sub_query_info, value_expr))) {
+          LOG_WARN("failed to resolve subquery info", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        if (NULL == set_node.children_[1]) {
-          names_node.is_default_collation_ = true;
-        } else {
-          names_node.is_default_collation_ = false;
-          ObString collation;
-          collation.assign_ptr(
-              set_node.children_[1]->str_value_, static_cast<int32_t>(set_node.children_[1]->str_len_));
-          names_node.collation_ = collation;
-        }
-      }
+      LOG_TRACE("set user variable with subquery", K(sub_query_info.count()), K(is_mysql_mode()));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
+      LOG_WARN("failed to formalize value expr", K(ret));
     } else {
-      // SET CHARACTER SET
-      names_node.is_set_names_ = false;
-      if (T_DEFAULT == set_node.children_[0]->type_) {
-        names_node.is_default_charset_ = true;
-      } else {
-        names_node.is_default_charset_ = false;
-        names_node.charset_.assign_ptr(set_node.children_[0]->str_value_,
-                                       static_cast<int32_t>(set_node.children_[0]->str_len_));
-      }
+      params_.prepare_param_count_ += ctx.prepare_param_count_; //prepare param count
     }
   }
-  LOG_DEBUG("resolve set names", K(names_node));
   return ret;
 }
 
+int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquery_info,
+                                                 ObRawExpr *&value_expr)
+{
+  int ret = OB_SUCCESS;
+  int current_level = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_info.count(); i++) {
+    const ObSubQueryInfo &info = subquery_info.at(i);
+    ObSelectResolver subquery_resolver(params_);
+    subquery_resolver.set_current_level(current_level + 1);
+    subquery_resolver.set_current_view_level(current_level);
+    ObSelectStmt *sub_stmt = NULL;
+    if (OB_ISNULL(info.sub_query_) || OB_ISNULL(info.ref_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery info is invalid", K_(info.sub_query), K_(info.ref_expr));
+    } else if (OB_UNLIKELY(T_SELECT != info.sub_query_->type_)) {
+      ret = OB_ERR_ILLEGAL_TYPE;
+      LOG_WARN("Unknown statement type in subquery", "stmt_type", info.sub_query_->type_);
+    }
 
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(subquery_resolver.resolve_child_stmt(*(info.sub_query_)))) {
+      LOG_WARN("resolve select subquery failed", K(ret));
+    } else if (OB_ISNULL(sub_stmt = subquery_resolver.get_child_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      // for set stmt, the parent stmt of subquery is subquery itself
+      // we do this only to make sure that the sub_stmt is not a root stmt
+      ObDMLStmt *dml_stmt = subquery_resolver.get_select_stmt();
+      info.ref_expr_->set_ref_stmt(sub_stmt);
+      info.ref_expr_->set_output_column(sub_stmt->get_select_item_size());
+      // the column type of ref_expr stores the target type of subquery
+      for (int64_t j = 0; OB_SUCC(ret) && j < sub_stmt->get_select_item_size(); ++j) {
+        ObRawExpr *target_expr = sub_stmt->get_select_item(j).expr_;
+        if (OB_ISNULL(target_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("target expr is null", K(ret));
+        } else {
+          const ObExprResType &column_type = target_expr->get_result_type();
+          if (OB_FAIL(info.ref_expr_->add_column_type(column_type))) {
+            LOG_WARN("add column type to subquery ref expr failed", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
-ObAlterSessionSetResolver::ObAlterSessionSetResolver(ObResolverParams& params) : ObStmtResolver(params)
-{}
+ObAlterSessionSetResolver::ObAlterSessionSetResolver(ObResolverParams &params)
+  : ObStmtResolver(params)
+{
+}
 
 ObAlterSessionSetResolver::~ObAlterSessionSetResolver()
-{}
+{
+}
 
 // for oracle mode grammer: alter session set sys_var = val
-int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
+int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObVariableSetStmt* variable_set_stmt = NULL;
+  ObVariableSetStmt *variable_set_stmt = NULL;
   if (OB_UNLIKELY(T_ALTER_SESSION_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_ALTER_SESSION_SET", K(ret), K(parse_tree.type_));
@@ -275,8 +334,8 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
     // start resolve
     stmt_ = variable_set_stmt;
     variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
-    ParseNode* set_clause_node = NULL;
-    ParseNode* set_param_node = NULL;
+    ParseNode *set_clause_node = NULL;
+    ParseNode *set_param_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
     // resolve alter_session_set_clause
     if (OB_ISNULL(set_clause_node = parse_tree.children_[0])) {
@@ -296,7 +355,7 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
           LOG_WARN("set_node->type_ must be T_VAR_VAL", K(ret), K(set_param_node->type_));
         } else {
           // resolve set_system_parameter_clause
-          ParseNode* var = NULL;
+          ParseNode *var = NULL;
           var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
           if (OB_ISNULL(var = set_param_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
@@ -305,8 +364,8 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
             // resolve variable
             ObString var_name;
             if (T_IDENT != var->type_) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable name not an identifier type");
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Variable name not an identifier type", K(ret));
             } else {
               var_node.is_system_variable_ = true;
               var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
@@ -332,16 +391,15 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
               }
             }
           }
-          if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(
-                                      ObVariableSetStmt::make_variable_name_node(var_node)))) {
+          if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
             LOG_WARN("Add set entry failed", K(ret));
           }
         }
-      }  // end for
+      } // end for
     }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

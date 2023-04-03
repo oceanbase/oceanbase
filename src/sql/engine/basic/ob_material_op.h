@@ -17,49 +17,67 @@
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObMaterialSpec : public ObOpSpec {
-  OB_UNIS_VERSION_V(1);
-
+class ObMaterialSpec : public ObOpSpec
+{
+OB_UNIS_VERSION_V(1);
 public:
-  ObMaterialSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type)
+  ObMaterialSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type)
   {}
 };
 
-class ObMaterialOp : public ObOperator {
+class ObMaterialOpInput : public ObOpInput
+{
+  OB_UNIS_VERSION_V(1);
+  friend ObMaterialOp;
 public:
-  ObMaterialOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(exec_ctx, spec, input),
-        mem_context_(nullptr),
-        datum_store_(),
-        datum_store_it_(),
-        profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
-        sql_mem_processor_(profile_),
-        is_first_(false)
+  ObMaterialOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObOpInput(ctx, spec), bypass_(false) {};
+  virtual ~ObMaterialOpInput() = default;
+  virtual int init(ObTaskInfo &task_info) override { UNUSED(task_info); return common::OB_SUCCESS; }
+  virtual void reset() override { bypass_ = false; }
+  void set_bypass(bool bypass) { bypass_ = bypass; }
+  int64_t is_bypass() const { return bypass_; }
+protected:
+  bool bypass_; // if true, do bypass
+};
+
+class ObMaterialOp : public ObOperator
+{
+public:
+  ObMaterialOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(exec_ctx, spec, input),
+    mem_context_(nullptr), datum_store_(), datum_store_it_(),
+    profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+    sql_mem_processor_(profile_, op_monitor_info_), is_first_(false)
   {}
 
   virtual int inner_open() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
+  virtual int inner_get_next_batch(int64_t max_row_cnt) override;
   virtual int inner_close() override;
   virtual void destroy() override;
 
-  int get_material_row_count(int64_t& count) const
+  int get_material_row_count(int64_t &count) const
   {
     count = datum_store_.get_row_cnt();
     return common::OB_SUCCESS;
   }
-
+  // reset material iterator, used for NLJ/NL connectby
+  int rewind();
 private:
   int process_dump();
-  int get_all_row_from_child(ObSQLSessionInfo& session);
+  int get_all_row_from_child(ObSQLSessionInfo &session);
+  int get_all_batch_from_child(ObSQLSessionInfo &session);
 
   bool need_dump()
-  {
-    return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound();
-  }
+  { return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound(); }
   void destroy_mem_context()
   {
     if (nullptr != mem_context_) {
@@ -67,7 +85,6 @@ private:
       mem_context_ = nullptr;
     }
   }
-
 private:
   lib::MemoryContext mem_context_;
   ObChunkDatumStore datum_store_;
@@ -78,7 +95,7 @@ private:
   bool is_first_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SRC_SQL_ENGINE_BASIC_OB_MATERIAL_OP_H_ */

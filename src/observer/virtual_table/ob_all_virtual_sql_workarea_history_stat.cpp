@@ -22,9 +22,10 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
+using namespace oceanbase::share;
 
-ObSqlWorkareaHistoryStatIterator::ObSqlWorkareaHistoryStatIterator()
-    : wa_stats_(), tenant_ids_(), cur_nth_wa_(0), cur_nth_tenant_(0)
+ObSqlWorkareaHistoryStatIterator::ObSqlWorkareaHistoryStatIterator() :
+  wa_stats_(), tenant_ids_(), cur_nth_wa_(0), cur_nth_tenant_(0)
 {}
 
 void ObSqlWorkareaHistoryStatIterator::destroy()
@@ -40,20 +41,18 @@ void ObSqlWorkareaHistoryStatIterator::reset()
   cur_nth_tenant_ = 0;
 }
 
-int ObSqlWorkareaHistoryStatIterator::init()
+int ObSqlWorkareaHistoryStatIterator::init(const uint64_t effective_tenant_id)
 {
   int ret = OB_SUCCESS;
-  omt::TenantIdList id_list(16, NULL, ObModIds::OB_COMMON_ARRAY);
   if (OB_ISNULL(GCTX.omt_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null of omt", K(ret));
-  } else {
-    GCTX.omt_->get_tenant_ids(id_list);
-    for (int64_t i = 0; OB_SUCC(ret) && i < id_list.size(); i++) {
-      if (OB_FAIL(tenant_ids_.push_back(id_list.at(i)))) {
-        LOG_WARN("failed to push back tenant id", K(ret), K(i));
-      }
+    LOG_WARN("unexpected null of omt", KR(ret));
+  } else if (is_sys_tenant(effective_tenant_id)) {
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids_))) {
+      LOG_WARN("failed to get_mtl_tenant_ids", KR(ret));
     }
+  } else if (OB_FAIL(tenant_ids_.push_back(effective_tenant_id))) {
+    LOG_WARN("failed to push back tenant_id", KR(ret), K(effective_tenant_id));
   }
   return ret;
 }
@@ -67,11 +66,10 @@ int ObSqlWorkareaHistoryStatIterator::get_next_batch_wa_stats()
     ret = OB_ITER_END;
   } else {
     uint64_t tenant_id = tenant_ids_.at(cur_nth_tenant_);
-    ObTenantSqlMemoryManager* sql_mem_mgr = nullptr;
-    FETCH_ENTITY(TENANT_SPACE, tenant_id)
-    {
-      sql_mem_mgr = MTL_GET(ObTenantSqlMemoryManager*);
-      if (OB_NOT_NULL(sql_mem_mgr) && OB_FAIL(sql_mem_mgr->get_workarea_stat(wa_stats_))) {
+    ObTenantSqlMemoryManager *sql_mem_mgr = nullptr;
+    MTL_SWITCH(tenant_id) {
+      sql_mem_mgr = MTL(ObTenantSqlMemoryManager*);
+      if (nullptr != sql_mem_mgr && OB_FAIL(sql_mem_mgr->get_workarea_stat(wa_stats_))) {
         LOG_WARN("failed to get workarea stat", K(ret));
       }
     }
@@ -80,7 +78,9 @@ int ObSqlWorkareaHistoryStatIterator::get_next_batch_wa_stats()
   return ret;
 }
 
-int ObSqlWorkareaHistoryStatIterator::get_next_wa_stat(ObSqlWorkAreaStat*& wa_stat, uint64_t& tenant_id)
+int ObSqlWorkareaHistoryStatIterator::get_next_wa_stat(
+  ObSqlWorkAreaStat *&wa_stat,
+  uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   if (0 > cur_nth_wa_ || cur_nth_wa_ > wa_stats_.count()) {
@@ -88,7 +88,8 @@ int ObSqlWorkareaHistoryStatIterator::get_next_wa_stat(ObSqlWorkAreaStat*& wa_st
     LOG_WARN("unexpected status: current wa exceeds total wa stats", K(ret));
   } else {
     while (OB_SUCC(ret) && cur_nth_wa_ >= wa_stats_.count()) {
-      if (OB_FAIL(get_next_batch_wa_stats())) {}
+      if (OB_FAIL(get_next_batch_wa_stats())) {
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -100,7 +101,8 @@ int ObSqlWorkareaHistoryStatIterator::get_next_wa_stat(ObSqlWorkAreaStat*& wa_st
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
-ObSqlWorkareaHistoryStat::ObSqlWorkareaHistoryStat() : ipstr_(), port_(0), iter_()
+ObSqlWorkareaHistoryStat::ObSqlWorkareaHistoryStat() :
+  ipstr_(), port_(0), iter_()
 {}
 
 void ObSqlWorkareaHistoryStat::destroy()
@@ -121,7 +123,7 @@ int ObSqlWorkareaHistoryStat::get_server_ip_and_port()
 {
   int ret = OB_SUCCESS;
   char ipbuf[common::OB_IP_STR_BUFF];
-  common::ObAddr& addr = GCTX.self_addr_;
+  const common::ObAddr &addr = GCTX.self_addr();
   if (!addr.ip_to_string(ipbuf, sizeof(ipbuf))) {
     SERVER_LOG(ERROR, "ip to string failed");
     ret = OB_ERR_UNEXPECTED;
@@ -135,16 +137,20 @@ int ObSqlWorkareaHistoryStat::get_server_ip_and_port()
   return ret;
 }
 
-int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa_stat, common::ObNewRow*& row)
+int ObSqlWorkareaHistoryStat::fill_row(
+  uint64_t tenant_id,
+  ObSqlWorkAreaStat &wa_stat,
+  common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
     uint64_t col_id = output_column_ids_.at(cell_idx);
-    switch (col_id) {
+    switch(col_id) {
       case SVR_IP: {
         cells[cell_idx].set_varchar(ipstr_);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case SVR_PORT: {
@@ -158,14 +164,16 @@ int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa
       case SQL_ID: {
         ObString sql_id(wa_stat.get_sql_id());
         cells[cell_idx].set_varchar(sql_id);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case OPERATION_TYPE: {
         const char* operator_str = get_phy_op_name(wa_stat.get_op_type());
         ObString op_type(operator_str);
         cells[cell_idx].set_varchar(op_type);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case OPERATION_ID: {
@@ -195,7 +203,8 @@ int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa
           exec_str.assign_ptr(EXECUTION_MULTIPASSES, strlen(EXECUTION_MULTIPASSES));
         }
         cells[cell_idx].set_varchar(exec_str);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case LAST_DEGREE: {
@@ -222,7 +231,7 @@ int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa
         cells[cell_idx].set_int(wa_stat.get_active_avg_time());
         break;
       }
-      case MAX_TEMPSEG_SIZE: {
+      case MAX_TEMPSEG_SIZE:{
         cells[cell_idx].set_int(wa_stat.get_max_temp_size());
         break;
       }
@@ -242,7 +251,8 @@ int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa
           exec_str.assign_ptr(EXECUTION_MANUAL_POLICY, strlen(EXECUTION_MANUAL_POLICY));
         }
         cells[cell_idx].set_varchar(exec_str);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       default: {
@@ -257,11 +267,11 @@ int ObSqlWorkareaHistoryStat::fill_row(uint64_t tenant_id, ObSqlWorkAreaStat& wa
   return ret;
 }
 
-int ObSqlWorkareaHistoryStat::inner_get_next_row(common::ObNewRow*& row)
+int ObSqlWorkareaHistoryStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!start_to_read_) {
-    if (OB_FAIL(iter_.init())) {
+    if (OB_FAIL(iter_.init(effective_tenant_id_))) {
       LOG_WARN("failed to init iterator", K(ret));
     } else {
       start_to_read_ = true;
@@ -270,7 +280,7 @@ int ObSqlWorkareaHistoryStat::inner_get_next_row(common::ObNewRow*& row)
       }
     }
   }
-  ObSqlWorkAreaStat* wa_stat = nullptr;
+  ObSqlWorkAreaStat *wa_stat = nullptr;
   uint64_t tenant_id = 0;
   if (OB_FAIL(iter_.get_next_wa_stat(wa_stat, tenant_id))) {
     if (OB_ITER_END != ret) {

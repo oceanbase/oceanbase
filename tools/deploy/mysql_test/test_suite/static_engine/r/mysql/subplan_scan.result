@@ -1,0 +1,128 @@
+result_format: 4
+
+drop table if exists t1;
+create table t1 (c1 int, c2 int);
+insert into t1 (c1, c2) values (1, 1);
+insert into t1 (c1, c2) values (1, 1);
+insert into t1 (c1, c2) values (1, 2);
+insert into t1 (c1, c2) values (10, 10);
+insert into t1 (c1, c2) values (10, 10);
+
+
+
+set @@ob_enable_plan_cache = 0;
+
+explain select c2, sum(c1) from (select distinct c2, c1 from t1) x group by c2;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |HASH GROUP BY  |    |5       |5           |
+|1 | SUBPLAN SCAN  |x   |5       |4           |
+|2 |  HASH DISTINCT|    |5       |4           |
+|3 |   TABLE SCAN  |t1  |5       |2           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([x.c2], [T_FUN_SUM(x.c1)]), filter(nil), rowset=256
+      group([x.c2]), agg_func([T_FUN_SUM(x.c1)])
+  1 - output([x.c2], [x.c1]), filter(nil), rowset=256
+      access([x.c2], [x.c1])
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1])
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c2, sum(c1) from (select distinct c2, c1 from t1) x group by c2;
++------+---------+
+| c2   | sum(c1) |
++------+---------+
+|    1 |       1 |
+|    2 |       1 |
+|   10 |      10 |
++------+---------+
+
+explain select c2, sum(c1 + c2) from (select distinct c2, c1 from t1) x group by c2;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |HASH GROUP BY  |    |5       |5           |
+|1 | SUBPLAN SCAN  |x   |5       |4           |
+|2 |  HASH DISTINCT|    |5       |4           |
+|3 |   TABLE SCAN  |t1  |5       |2           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)]), filter(nil), rowset=256
+      group([x.c2]), agg_func([T_FUN_SUM(x.c1 + x.c2)])
+  1 - output([x.c2], [x.c1]), filter(nil), rowset=256
+      access([x.c2], [x.c1])
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1])
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c2, sum(c1 + c2) from (select distinct c2, c1 from t1) x group by c2;
++------+--------------+
+| c2   | sum(c1 + c2) |
++------+--------------+
+|    1 |            2 |
+|    2 |            3 |
+|   10 |           20 |
++------+--------------+
+
+explain select c2, sum(c1 + c2), max(c3) from (select c1, c2, c1 + 2 as c3 from (select distinct c2, c1 from t1) x ) y group by c2;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |HASH GROUP BY  |    |5       |5           |
+|1 | SUBPLAN SCAN  |x   |5       |4           |
+|2 |  HASH DISTINCT|    |5       |4           |
+|3 |   TABLE SCAN  |t1  |5       |2           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)], [T_FUN_MAX(x.c1 + 2)]), filter(nil), rowset=256
+      group([x.c2]), agg_func([T_FUN_SUM(x.c1 + x.c2)], [T_FUN_MAX(x.c1 + 2)])
+  1 - output([x.c1], [x.c2]), filter(nil), rowset=256
+      access([x.c1], [x.c2])
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1])
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c2, sum(c1 + c2), max(c3) from (select c1, c2, c1 + 2 as c3 from (select distinct c2, c1 from t1) x ) y group by c2;
++------+--------------+---------+
+| c2   | sum(c1 + c2) | max(c3) |
++------+--------------+---------+
+|    1 |            2 |       3 |
+|    2 |            3 |       3 |
+|   10 |           20 |      12 |
++------+--------------+---------+
+
+explain select * from t1 where c2 in (select 1 from t1);
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c2 in (select 1 from t1);
++------+------+
+| c1   | c2   |
++------+------+
+|    1 |    1 |
+|    1 |    1 |
++------+------+
+

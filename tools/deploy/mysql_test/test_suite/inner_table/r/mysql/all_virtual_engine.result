@@ -1,0 +1,25 @@
+use oceanbase;
+select * from __all_virtual_engine;
+ENGINE	SUPPORT	COMMENT	TRANSACTIONS	XA	SAVEPOINTS
+OceanBase	YES	Supports transactions	YES	NO	NO
+select Engine, Support, Comment, Transactions, XA, Savepoints from __all_virtual_engine;
+Engine	Support	Comment	Transactions	XA	Savepoints
+OceanBase	YES	Supports transactions	YES	NO	NO
+show create table __all_virtual_engine;
+Table	Create Table
+__all_virtual_engine	CREATE TABLE `__all_virtual_engine` (
+  `ENGINE` varchar(64) NOT NULL,
+  `SUPPORT` varchar(4) NOT NULL,
+  `COMMENT` varchar(2048) NOT NULL,
+  `TRANSACTIONS` varchar(4) NOT NULL,
+  `XA` varchar(4) NOT NULL,
+  `SAVEPOINTS` varchar(4) NOT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+desc __all_virtual_engine;
+Field	Type	Null	Key	Default	Extra
+ENGINE	varchar(64)	NO		NULL	
+SUPPORT	varchar(4)	NO		NULL	
+COMMENT	varchar(2048)	NO		NULL	
+TRANSACTIONS	varchar(4)	NO		NULL	
+XA	varchar(4)	NO		NULL	
+SAVEPOINTS	varchar(4)	NO		NULL	

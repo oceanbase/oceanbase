@@ -12,91 +12,104 @@
 
 #ifndef __OB_SQL_RESOURCE_EXECUTOR_H__
 #define __OB_SQL_RESOURCE_EXECUTOR_H__
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObCreateResourcePoolStmt;
 class ObDropResourcePoolStmt;
 class ObSplitResourcePoolStmt;
 class ObMergeResourcePoolStmt;
+class ObAlterResourceTenantStmt;
 class ObAlterResourcePoolStmt;
 class ObCreateResourceUnitStmt;
 class ObAlterResourceUnitStmt;
 class ObDropResourceUnitStmt;
 
-class ObCreateResourcePoolExecutor {
+class ObCreateResourcePoolExecutor
+{
 public:
   ObCreateResourcePoolExecutor();
   virtual ~ObCreateResourcePoolExecutor();
-  int execute(ObExecContext& ctx, ObCreateResourcePoolStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObCreateResourcePoolStmt &stmt);
 private:
 };
 
-class ObDropResourcePoolExecutor {
+class ObDropResourcePoolExecutor
+{
 public:
   ObDropResourcePoolExecutor();
   virtual ~ObDropResourcePoolExecutor();
-  int execute(ObExecContext& ctx, ObDropResourcePoolStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObDropResourcePoolStmt &stmt);
 private:
 };
 
-class ObSplitResourcePoolExecutor {
+class ObSplitResourcePoolExecutor
+{
 public:
   ObSplitResourcePoolExecutor();
   virtual ~ObSplitResourcePoolExecutor();
-  int execute(ObExecContext& ctx, ObSplitResourcePoolStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObSplitResourcePoolStmt &stmt);
 private:
 };
 
-class ObMergeResourcePoolExecutor {
+class ObMergeResourcePoolExecutor
+{
 public:
   ObMergeResourcePoolExecutor();
   virtual ~ObMergeResourcePoolExecutor();
-  int execute(ObExecContext& ctx, ObMergeResourcePoolStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObMergeResourcePoolStmt &stmt);
 private:
 };
 
-class ObAlterResourcePoolExecutor {
+class ObAlterResourceTenantExecutor
+{
+public:
+  ObAlterResourceTenantExecutor();
+  virtual ~ObAlterResourceTenantExecutor();
+  int execute(ObExecContext &ctx, ObAlterResourceTenantStmt &stmt);
+private:
+};
+
+class ObAlterResourcePoolExecutor
+{
 public:
   ObAlterResourcePoolExecutor();
   virtual ~ObAlterResourcePoolExecutor();
-  int execute(ObExecContext& ctx, ObAlterResourcePoolStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObAlterResourcePoolStmt &stmt);
 private:
 };
 
-class ObCreateResourceUnitExecutor {
+class ObCreateResourceUnitExecutor
+{
 public:
   ObCreateResourceUnitExecutor();
   virtual ~ObCreateResourceUnitExecutor();
-  int execute(ObExecContext& ctx, ObCreateResourceUnitStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObCreateResourceUnitStmt &stmt);
 private:
 };
 
-class ObAlterResourceUnitExecutor {
+class ObAlterResourceUnitExecutor
+{
 public:
   ObAlterResourceUnitExecutor();
   virtual ~ObAlterResourceUnitExecutor();
-  int execute(ObExecContext& ctx, ObAlterResourceUnitStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObAlterResourceUnitStmt &stmt);
 private:
 };
 
-class ObDropResourceUnitExecutor {
+class ObDropResourceUnitExecutor
+{
 public:
   ObDropResourceUnitExecutor();
   virtual ~ObDropResourceUnitExecutor();
-  int execute(ObExecContext& ctx, ObDropResourceUnitStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObDropResourceUnitStmt &stmt);
 private:
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* __OB_SQL_RESOURCE_EXECUTOR_H__ */
 //// end of header file
+

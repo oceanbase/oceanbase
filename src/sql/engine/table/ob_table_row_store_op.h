@@ -17,74 +17,69 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObTableRowStoreOpInput : public ObOpInput {
+namespace oceanbase
+{
+namespace sql
+{
+class ObTableRowStoreOpInput : public ObOpInput
+{
   friend class ObTableRowStoreOp;
   OB_UNIS_VERSION(1);
-
 public:
-  ObTableRowStoreOpInput(ObExecContext& ctx, const ObOpSpec& spec)
-      : ObOpInput(ctx, spec), multi_row_store_(), allocator_(NULL)
-  {}
-  virtual ~ObTableRowStoreOpInput()
-  {}
+  ObTableRowStoreOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObOpInput(ctx, spec),
+      multi_row_store_(),
+      allocator_(NULL)
+  { }
+  virtual ~ObTableRowStoreOpInput() {}
 
   virtual void reset() override
   {
     multi_row_store_.reset();
-    // deserialize_allocator_ cannot be reset
-    // because it is only set once when creating operator input
+    //deserialize_allocator_ cannot be reset
+    //because it is only set once when creating operator input
   }
-  virtual int init(ObTaskInfo& task_info) override;
+  virtual int init(ObTaskInfo &task_info) override;
   /**
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
-
+  virtual void set_deserialize_allocator(common::ObIAllocator *allocator);
 private:
-  // One partition corresponds to one row store
-  common::ObFixedArray<ObChunkDatumStore*, common::ObIAllocator> multi_row_store_;
-  common::ObIAllocator* allocator_;
-
+  //一个分区对应一个row store
+  common::ObFixedArray<ObChunkDatumStore *, common::ObIAllocator> multi_row_store_;
+  common::ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreOpInput);
 };
 
-class ObTableRowStoreSpec : public ObOpSpec {
+class ObTableRowStoreSpec : public ObOpSpec
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObTableRowStoreSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-      : ObOpSpec(alloc, type), table_id_(common::OB_INVALID_ID)
+  ObTableRowStoreSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+      table_id_(common::OB_INVALID_ID)
   {}
-  ~ObTableRowStoreSpec()
-  {}
-
+  ~ObTableRowStoreSpec() {}
 public:
   uint64_t table_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreSpec);
 };
 
-class ObTableRowStoreOp : public ObOperator {
+class ObTableRowStoreOp : public ObOperator
+{
 public:
-  ObTableRowStoreOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(exec_ctx, spec, input), row_store_idx_(0)
+  ObTableRowStoreOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(exec_ctx, spec, input),
+      row_store_idx_(0)
   {}
 
-  virtual ~ObTableRowStoreOp()
-  {
-    destroy();
-  }
+  virtual ~ObTableRowStoreOp() { destroy(); }
 
-  virtual void destroy()
-  {
-    ObOperator::destroy();
-  }
-  int rescan();
+  virtual void destroy() { ObOperator::destroy(); }
+  int inner_rescan();
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
@@ -102,10 +97,9 @@ public:
    * Every op should implement this method.
    */
   virtual int inner_close();
-  virtual int64_t to_string_kv(char* buf, const int64_t buf_len);
+  virtual int64_t to_string_kv(char *buf, const int64_t buf_len);
 
   int fetch_stored_row();
-
 private:
   ObChunkDatumStore::Iterator row_store_it_;
   int64_t row_store_idx_;

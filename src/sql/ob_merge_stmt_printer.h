@@ -17,38 +17,38 @@
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObMergeStmtPrinter : public ObDMLStmtPrinter {
+class ObMergeStmtPrinter : public ObDMLStmtPrinter
+{
 public:
-  ObMergeStmtPrinter()
-  {}
-  ObMergeStmtPrinter(
-      char* buf, int64_t buf_len, int64_t* pos, const ObMergeStmt* stmt, common::ObObjPrintParams print_params)
-      : ObDMLStmtPrinter(buf, buf_len, pos, stmt, print_params)
-  {}
-  virtual ~ObMergeStmtPrinter()
-  {}
+  ObMergeStmtPrinter()=delete;
+  ObMergeStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObMergeStmt *stmt,
+                     ObSchemaGetterGuard *schema_guard,
+                     common::ObObjPrintParams print_params) :
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
+  virtual ~ObMergeStmtPrinter() {}
 
-  void init(char* buf, int64_t buf_len, int64_t* pos, ObMergeStmt* stmt);
+  void init(char *buf, int64_t buf_len, int64_t *pos, ObMergeStmt *stmt);
   virtual int do_print();
-
 private:
   int print();
 
-  int print_conds(const ObIArray<ObRawExpr*>& conds);
+  int print_conds(const ObIArray<ObRawExpr *> &conds);
 
-  int print_update_clause(const ObMergeStmt& merge_stmt);
+  int print_update_clause(const ObMergeStmt &merge_stmt);
 
-  int print_insert_clause(const ObMergeStmt& merge_stmt);
+  int print_insert_clause(const ObMergeStmt &merge_stmt);
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeStmtPrinter);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OB_MERGE_STMT_PRINTER_H
+#endif // OB_MERGE_STMT_PRINTER_H

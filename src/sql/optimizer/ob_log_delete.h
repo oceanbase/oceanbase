@@ -14,36 +14,32 @@
 #define _OB_LOG_DELETE_H 1
 #include "ob_log_del_upd.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogDelete : public ObLogDelUpd {
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogDelete: public ObLogDelUpd
+{
 public:
-  ObLogDelete(ObLogPlan& plan) : ObLogDelUpd(plan)
-  {}
+  ObLogDelete(ObDelUpdLogPlan &plan) :
+    ObLogDelUpd(plan)
+  { }
   virtual ~ObLogDelete()
-  {}
-  int calc_cost();
-  /**
-   *  Add needed expr to context
-   *
-   *  For 'delete', we need to add(in this order)
-   *  1. Primary keys
-   *  2. columns in some index(no duplicate)
-   */
-  virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-
-  virtual int est_cost() override;
-
-  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
-    out = NULL;
-    return common::OB_SUCCESS;
   }
-  virtual const char* get_name() const override;
-
+  virtual int est_cost();
+  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  int inner_est_cost(double child_card, double &op_cost);
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual const char *get_name() const;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+protected:
+  virtual int generate_rowid_expr_for_trigger() override;
+  virtual int generate_multi_part_partition_id_expr() override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDelete);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif

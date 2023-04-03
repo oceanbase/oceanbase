@@ -15,60 +15,69 @@
 
 #include "lib/hash/ob_hashutils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-namespace hash {
+namespace hash
+{
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 class ObCuckooHashMap;
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-class ObCuckooHashMapIterator {
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+class ObCuckooHashMapIterator
+{
 private:
   typedef ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal> HashMap;
   typedef ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> HashMapIterator;
   typedef HashMapPair<_key_type, _value_type> pair_type;
-  typedef pair_type& reference;
-  typedef pair_type* pointer;
-
+  typedef pair_type &reference;
+  typedef pair_type *pointer;
 public:
-  ObCuckooHashMapIterator(
-      const HashMap& map, const int64_t bucket_pos, const int64_t slot_pos, const int64_t slot_count)
-      : map_(&map), bucket_pos_(bucket_pos), slot_pos_(slot_pos), slot_count_(slot_count)
-  {}
-  ObCuckooHashMapIterator() : map_(nullptr), bucket_pos_(0), slot_pos_(0), slot_count_(0)
-  {}
-  reference operator*() const
+  ObCuckooHashMapIterator(const HashMap &map, const int64_t bucket_pos, const int64_t slot_pos, const int64_t slot_count)
+    : map_(&map), bucket_pos_(bucket_pos), slot_pos_(slot_pos), slot_count_(slot_count)
   {
-    return bucket_pos_ < map_->bucket_num_ ? map_->buckets_[bucket_pos_].slots_[slot_pos_]
-                                           : map_->overflow_array_[slot_pos_];
   }
-  pointer operator->() const
+  ObCuckooHashMapIterator()
+    : map_(nullptr), bucket_pos_(0), slot_pos_(0), slot_count_(0)
   {
-    return bucket_pos_ < map_->bucket_num_ ? &(map_->buckets_[bucket_pos_].slots_[slot_pos_])
-                                           : &(map_->overflow_array_[slot_pos_]);
   }
-  bool operator==(const HashMapIterator& iter) const
+  reference operator *() const
+  {
+    return bucket_pos_ < map_->bucket_num_ ? map_->buckets_[bucket_pos_].slots_[slot_pos_] : map_->overflow_array_[slot_pos_];
+  }
+  pointer operator ->() const
+  {
+    return bucket_pos_ < map_->bucket_num_ ? &(map_->buckets_[bucket_pos_].slots_[slot_pos_]) : &(map_->overflow_array_[slot_pos_]);
+  }
+  bool operator ==(const HashMapIterator &iter) const
   {
     return map_ == iter.map_ && bucket_pos_ == iter.bucket_pos_ && slot_pos_ == iter.slot_pos_;
   }
-  bool operator!=(const HashMapIterator& iter) const
+  bool operator !=(const HashMapIterator &iter) const
   {
     return !operator==(iter);
   }
-  HashMapIterator& operator++()
+  HashMapIterator &operator ++()
   {
     if (OB_ISNULL(map_)) {
-      OB_LOG(ERROR, "hash map must not be NULL", K(lbt()));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash map must not be NULL", K(lbt()));
     } else if (bucket_pos_ == map_->bucket_num_ && slot_pos_ >= map_->overflow_count_) {
       // do nothing
     } else {
       bool found = false;
       if (bucket_pos_ < map_->bucket_num_) {
         ++slot_pos_;
-        for (; bucket_pos_ < map_->bucket_num_; ++bucket_pos_) {
-          for (; slot_pos_ < slot_count_; ++slot_pos_) {
+        for ( ; bucket_pos_ < map_->bucket_num_; ++bucket_pos_) {
+          for ( ; slot_pos_ < slot_count_; ++slot_pos_) {
             if (map_->buckets_[bucket_pos_].occupied_[slot_pos_]) {
               found = true;
               break;
@@ -88,53 +97,144 @@ public:
     }
     return *this;
   }
-  HashMapIterator operator++(int)
+  HashMapIterator operator ++(int)
   {
     HashMapIterator iter = *this;
     ++*this;
     return iter;
   }
-
 private:
-  const HashMap* map_;
+  const HashMap *map_;
   int64_t bucket_pos_;
   int64_t slot_pos_;
   int64_t slot_count_;
 };
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+class ObCuckooHashMapConstIterator
+{
+
+private:
+  typedef ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal> HashMap;
+  typedef ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> HashMapIterator;
+  typedef ObCuckooHashMapConstIterator<_key_type, _value_type, _hashfunc, _equal> HashMapConstIterator;
+  typedef HashMapPair<_key_type, _value_type> pair_type;
+  //typedef pair_type &reference;
+  //typedef pair_type *pointer;
+  typedef const pair_type &const_reference;
+  typedef const pair_type *const_pointer;
+
+public:
+  ObCuckooHashMapConstIterator(const HashMap &map, const int64_t bucket_pos, const int64_t slot_pos, const int64_t slot_count)
+    : map_(&map), bucket_pos_(bucket_pos), slot_pos_(slot_pos), slot_count_(slot_count)
+  {
+  }
+  ObCuckooHashMapConstIterator()
+    : map_(nullptr), bucket_pos_(0), slot_pos_(0), slot_count_(0)
+  {
+  }
+  const_reference operator *() const
+  {
+    return bucket_pos_ < map_->bucket_num_ ? map_->buckets_[bucket_pos_].slots_[slot_pos_] : map_->overflow_array_[slot_pos_];
+  }
+  const_pointer operator ->() const
+  {
+    return bucket_pos_ < map_->bucket_num_ ? &(map_->buckets_[bucket_pos_].slots_[slot_pos_]) : &(map_->overflow_array_[slot_pos_]);
+  }
+  bool operator ==(const HashMapConstIterator &iter) const
+  {
+    return map_ == iter.map_ && bucket_pos_ == iter.bucket_pos_ && slot_pos_ == iter.slot_pos_;
+  }
+  bool operator !=(const HashMapConstIterator &iter) const
+  {
+    return !operator==(iter);
+  }
+  HashMapConstIterator &operator ++()
+  {
+    if (OB_ISNULL(map_)) {
+      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "hash map must not be NULL", K(lbt()));
+    } else if (bucket_pos_ == map_->bucket_num_ && slot_pos_ >= map_->overflow_count_) {
+      // do nothing
+    } else {
+      bool found = false;
+      if (bucket_pos_ < map_->bucket_num_) {
+        ++slot_pos_;
+        for ( ; bucket_pos_ < map_->bucket_num_; ++bucket_pos_) {
+          for ( ; slot_pos_ < slot_count_; ++slot_pos_) {
+            if (map_->buckets_[bucket_pos_].occupied_[slot_pos_]) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            slot_pos_ = 0;
+          } else {
+            break;
+          }
+        }
+      } else if (bucket_pos_ == map_->bucket_num_) {
+        if (slot_pos_ < map_->overflow_count_) {
+          ++slot_pos_;
+        }
+      }
+    }
+    return *this;
+  }
+  HashMapConstIterator operator ++(int)
+  {
+    HashMapConstIterator iter = *this;
+    ++*this;
+    return iter;
+  }
+private:
+  const HashMap *map_;
+  int64_t bucket_pos_;
+  int64_t slot_pos_;
+  int64_t slot_count_;
+};
+
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 class ObCuckooHashMapIterator;
 
-template <typename _key_type, typename _value_type, typename _hashfunc = hash_func<_key_type>,
-    typename _equal = equal_to<_key_type>>
-class ObCuckooHashMap {
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc = hash_func<_key_type>,
+          typename _equal = equal_to<_key_type>>
+class ObCuckooHashMap
+{
 public:
   typedef ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> iterator;
+  typedef ObCuckooHashMapConstIterator<_key_type, _value_type, _hashfunc, _equal> const_iterator;
   ObCuckooHashMap();
   ~ObCuckooHashMap();
-  int create(const int64_t bucket_num, ObIAllocator* allocator);
-  int get(const _key_type& key, _value_type& value) const;
-  int set(const _key_type& key, const _value_type& value, const bool is_overwrite = false);
-  int erase(const _key_type& key, _value_type* value = nullptr);
+  int create(const int64_t bucket_num, ObIAllocator *allocator);
+  int get(const _key_type &key, _value_type &value) const;
+  int set(const _key_type &key, const _value_type &value, const bool is_overwrite = false);
+  int erase(const _key_type &key, _value_type *value = nullptr);
   void destroy();
   void clear();
   int64_t size() const;
   iterator begin();
   iterator end();
-  bool is_inited() const
-  {
-    return is_inited_;
-  }
-
+  bool is_inited() const { return is_inited_; }
+  const_iterator begin() const;
+  const_iterator end() const;
 private:
   friend class ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>;
+  friend class ObCuckooHashMapConstIterator<_key_type, _value_type, _hashfunc, _equal>;
   static const int64_t MAX_CUCKOO_INSERT_DEPTH = 40;
   static const int64_t BUCKET_SLOT_COUNT = 4;
   static const int64_t OVERFLOW_EXPAND_COUNT = 10;
   static const int64_t MIN_REQUIRED_LOAD_FACTOR = 2;
   typedef ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal> self_t;
   typedef HashMapPair<_key_type, _value_type> pair_type;
-  struct Bucket {
+  struct Bucket{
     Bucket()
     {
       memset(slots_, 0, sizeof(pair_type) * BUCKET_SLOT_COUNT);
@@ -144,12 +244,11 @@ private:
     bool occupied_[BUCKET_SLOT_COUNT];
   };
   struct SlotPos {
-    SlotPos() : bucket_pos_(-1), slot_pos_(-1)
-    {}
-    bool is_valid() const
+    SlotPos()
+      : bucket_pos_(-1), slot_pos_(-1)
     {
-      return bucket_pos_ >= 0 && slot_pos_ >= 0;
     }
+    bool is_valid() const { return bucket_pos_ >= 0 && slot_pos_ >= 0; }
     void reset()
     {
       bucket_pos_ = -1;
@@ -158,69 +257,70 @@ private:
     int64_t bucket_pos_;
     int64_t slot_pos_;
   };
-
 private:
-  uint64_t hash1(const _key_type& key) const;
+  uint64_t hash1(const _key_type &key) const;
   uint64_t hash2(const uint64_t hash_val) const;
-  int get_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type& key, SlotPos& pos) const;
-  int get_slot_pos(const _key_type& key, SlotPos& slot_p) const;
-  int get_overflow_slot_pos(const _key_type& key, SlotPos& slot_p) const;
-  int copy_pair(const _key_type& key, const _value_type& value, pair_type& pair);
-  int erase_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type& key, bool& found,
-      _value_type* value = nullptr);
-  int set_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type* pkey, const _value_type* pvalue,
-      const bool is_overwrite, bool& done);
-  int quick_set(const _key_type* pkey, const _value_type* pvalue, const bool is_overwrite, bool& done);
-  int cuckoo_set_impl(const uint64_t hash_val, const bool is_first_hash, const bool is_overwrite, const _key_type* pkey,
-      const _value_type* pvalue, pair_type& old_pair, bool& finished);
+  int get_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type &key, SlotPos &pos) const;
+  int get_slot_pos(const _key_type &key, SlotPos &slot_p) const;
+  int get_overflow_slot_pos(const _key_type &key, SlotPos &slot_p) const;
+  int copy_pair(const _key_type &key, const _value_type &value, pair_type &pair);
+  int erase_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type &key, bool &found, _value_type *value = nullptr);
+  int set_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite, bool &done);
+  int quick_set(
+      const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite, bool &done);
+  int cuckoo_set_impl(
+      const uint64_t hash_val, const bool is_first_hash, const bool is_overwrite, const _key_type *pkey, const _value_type *pvalue, pair_type &old_pair, bool &finished);
   int cuckoo_set(
-      const _key_type* pkey, const _value_type* pvalue, const bool is_overwrite, pair_type& old_pair, bool& done);
-  int overflow_set(const _key_type& key, const _value_type& value, bool& done);
+    const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite, pair_type &old_pair, bool &done);
+  int overflow_set(const _key_type &key, const _value_type &value, bool &done);
   int rehash();
   int64_t advised_bucket_num(const int64_t elem_count);
-
 private:
   bool is_inited_;
-  Bucket* buckets_;
+  Bucket *buckets_;
   int64_t bucket_num_;
   int64_t occupied_count_;
   ObRandom random_;
-  common::ObIAllocator* allocator_;
-  pair_type* overflow_array_;
+  common::ObIAllocator *allocator_;
+  pair_type *overflow_array_;
   int64_t overflow_capacity_;
   int64_t overflow_count_;
   mutable _hashfunc hashfunc_;
   mutable _equal equal_;
 };
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::ObCuckooHashMap()
-    : is_inited_(false),
-      buckets_(nullptr),
-      bucket_num_(0),
-      occupied_count_(0),
-      random_(),
-      allocator_(nullptr),
-      overflow_array_(nullptr),
-      overflow_capacity_(0),
-      overflow_count_(0),
-      hashfunc_(),
-      equal_()
-{}
+  : is_inited_(false), buckets_(nullptr), bucket_num_(0), occupied_count_(0), random_(), allocator_(nullptr),
+    overflow_array_(nullptr), overflow_capacity_(0), overflow_count_(0), hashfunc_(), equal_()
+{
+}
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::~ObCuckooHashMap()
 {
   destroy();
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-uint64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::hash1(const _key_type& key) const
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+uint64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::hash1(const _key_type &key) const
 {
   return hashfunc_(key);
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 uint64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::hash2(const uint64_t hash_val1) const
 {
   uint32_t hash_val_tmp = static_cast<uint32_t>(hash_val1);
@@ -228,19 +328,22 @@ uint64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::hash2(const
   return hash_val1 + delta;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::create(
-    const int64_t bucket_num, common::ObIAllocator* allocator)
+    const int64_t bucket_num, common::ObIAllocator *allocator)
 {
   int ret = common::OB_SUCCESS;
-  char* buf = nullptr;
+  char *buf = nullptr;
   const int64_t tmp_advised_bucket_num = advised_bucket_num(bucket_num);
   bucket_num_ = std::max(tmp_advised_bucket_num / BUCKET_SLOT_COUNT + 1, 2L);
   bucket_num_ = (bucket_num_ % 2 == 0) ? bucket_num_ : bucket_num_ + 1;
   if (bucket_num_ <= 0 || nullptr == allocator) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(bucket_num), KP(allocator));
-  } else if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(bucket_num_ * (sizeof(Bucket)))))) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(bucket_num_ * (sizeof(Bucket)))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to allocate memory", K(ret));
   } else {
@@ -260,15 +363,18 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::create(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::clear()
 {
   if (nullptr != allocator_) {
     if (nullptr != buckets_) {
       for (int64_t i = 0; i < bucket_num_; ++i) {
-        Bucket& b = buckets_[i];
+        Bucket &b = buckets_[i];
         for (int64_t j = 0; j < BUCKET_SLOT_COUNT; ++j) {
-          pair_type& pair = b.slots_[i];
+          pair_type &pair = b.slots_[i];
           pair.~pair_type();
           b.occupied_[j] = false;
         }
@@ -277,7 +383,7 @@ void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::clear()
     }
     if (nullptr != overflow_array_) {
       for (int64_t i = 0; i < overflow_capacity_; ++i) {
-        pair_type& pair = overflow_array_[i];
+        pair_type &pair = overflow_array_[i];
         pair.~pair_type();
       }
       allocator_->free(overflow_array_);
@@ -288,15 +394,18 @@ void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::clear()
   }
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::destroy()
 {
   if (nullptr != allocator_) {
     if (nullptr != buckets_) {
       for (int64_t i = 0; i < bucket_num_; ++i) {
-        Bucket& b = buckets_[i];
+        Bucket &b = buckets_[i];
         for (int64_t j = 0; j < BUCKET_SLOT_COUNT; ++j) {
-          pair_type& pair = b.slots_[i];
+          pair_type &pair = b.slots_[i];
           pair.~pair_type();
         }
       }
@@ -307,7 +416,7 @@ void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::destroy()
     }
     if (nullptr != overflow_array_) {
       for (int64_t i = 0; i < overflow_capacity_; ++i) {
-        pair_type& pair = overflow_array_[i];
+        pair_type &pair = overflow_array_[i];
         pair.~pair_type();
       }
       allocator_->free(overflow_array_);
@@ -320,9 +429,12 @@ void ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::destroy()
   }
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_impl(
-    const uint64_t hash_val, const bool is_first_hash, const _key_type& key, SlotPos& slot_p) const
+    const uint64_t hash_val, const bool is_first_hash, const _key_type &key, SlotPos &slot_p) const
 {
   int ret = common::OB_SUCCESS;
   slot_p.reset();
@@ -332,11 +444,11 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_impl(
   } else {
     const int64_t bucket_num = bucket_num_;
     const int64_t bucket_pos = hash_val % (bucket_num / 2) + (is_first_hash ? 0 : bucket_num / 2);
-    Bucket& b = buckets_[bucket_pos];
+    Bucket &b = buckets_[bucket_pos];
     for (int64_t i = 0; OB_SUCC(ret) && i < BUCKET_SLOT_COUNT; ++i) {
       bool occupied = b.occupied_[i];
       if (occupied) {
-        pair_type& pair = b.slots_[i];
+        pair_type &pair = b.slots_[i];
         if (equal_(pair.first, key)) {
           slot_p.bucket_pos_ = bucket_pos;
           slot_p.slot_pos_ = i;
@@ -348,9 +460,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_impl(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase_impl(
-    const uint64_t hash_val, const bool is_first_hash, const _key_type& key, bool& found, _value_type* value)
+    const uint64_t hash_val, const bool is_first_hash, const _key_type &key, bool &found, _value_type *value)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -360,11 +475,11 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase_impl(
     const int64_t bucket_num = bucket_num_;
     const int64_t bucket_pos = hash_val % (bucket_num / 2) + (is_first_hash ? 0 : bucket_num / 2);
     found = false;
-    Bucket& b = buckets_[bucket_pos];
+    Bucket &b = buckets_[bucket_pos];
     for (int64_t i = 0; OB_SUCC(ret) && i < BUCKET_SLOT_COUNT && !found; ++i) {
       bool occupied = b.occupied_[i];
       if (occupied) {
-        pair_type& pair = b.slots_[i];
+        pair_type &pair = b.slots_[i];
         found = equal_(pair.first, key);
         if (found) {
           if (nullptr != value) {
@@ -386,33 +501,39 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase_impl(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_slot_pos(
-    const _key_type& key, SlotPos& slot_p) const
+  const _key_type &key, SlotPos &slot_p) const
 {
   int ret = common::OB_SUCCESS;
   int64_t hash_val1 = hash1(key);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObCuckooHashMap has not been inited", K(ret));
-  } else if (OB_FAIL(get_impl(hash_val1, true /*first hash*/, key, slot_p))) {
+  } else if (OB_FAIL(get_impl(hash_val1, true/*first hash*/, key, slot_p))) {
     OB_LOG(WARN, "fail to get value", K(ret));
   } else if (!slot_p.is_valid()) {
-    if (OB_FAIL(get_impl(hash2(hash_val1), false /*not first hash*/, key, slot_p))) {
+    if (OB_FAIL(get_impl(hash2(hash_val1), false/*not first hash*/, key, slot_p))) {
       OB_LOG(WARN, "fail to get value", K(ret));
     }
   }
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_overflow_slot_pos(
-    const _key_type& key, SlotPos& slot_p) const
+  const _key_type &key, SlotPos &slot_p) const
 {
   int ret = common::OB_SUCCESS;
   slot_p.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < overflow_count_; ++i) {
-    if (equal_(overflow_array_[i].first, key)) {
+    if(equal_(overflow_array_[i].first, key)) {
       slot_p.bucket_pos_ = bucket_num_;
       slot_p.slot_pos_ = i;
       break;
@@ -421,8 +542,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get_overflow_slo
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get(const _key_type& key, _value_type& value) const
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get(
+    const _key_type &key, _value_type &value) const
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -433,8 +558,8 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get(const _key_t
     if (OB_FAIL(get_slot_pos(key, slot_p))) {
       OB_LOG(WARN, "fail to get slot pos", K(ret));
     } else if (slot_p.is_valid()) {
-      Bucket& b = buckets_[slot_p.bucket_pos_];
-      pair_type& pair = b.slots_[slot_p.slot_pos_];
+      Bucket &b = buckets_[slot_p.bucket_pos_];
+      pair_type &pair = b.slots_[slot_p.slot_pos_];
       if (OB_FAIL(copy_assign(value, pair.second))) {
         OB_LOG(WARN, "fail to copy assign value", K(ret));
       }
@@ -453,8 +578,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::get(const _key_t
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase(const _key_type& key, _value_type* value)
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase(
+    const _key_type &key, _value_type *value)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -463,15 +592,15 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase(const _key
   } else {
     bool found = false;
     uint64_t hash_val1 = hash1(key);
-    if (OB_FAIL(erase_impl(hash_val1, true /*first hash*/, key, found, value))) {
+    if (OB_FAIL(erase_impl(hash_val1, true/*first hash*/, key, found, value))) {
       OB_LOG(WARN, "fail to erase", K(ret));
     } else if (!found) {
       uint64_t hash_val2 = hash2(hash_val1);
-      if (OB_FAIL(erase_impl(hash_val2, false /*second hash*/, key, found, value))) {
+      if (OB_FAIL(erase_impl(hash_val2, false/*second hash*/, key, found ,value))) {
         OB_LOG(WARN, "fail to erase", K(ret));
       } else if (!found) {
         for (int64_t i = 0; OB_SUCC(ret) && i < overflow_count_ && !found; ++i) {
-          pair_type& pair = overflow_array_[i];
+          pair_type &pair = overflow_array_[i];
           found = equal_(pair.first, key);
           if (found) {
             if (nullptr != value) {
@@ -487,7 +616,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase(const _key
                 if (OB_FAIL(copy_assign(pair, overflow_array_[overflow_count_ - 1]))) {
                   OB_LOG(WARN, "fail to copy assign", K(ret));
                 } else {
-                  pair_type& tmp = overflow_array_[overflow_count_ - 1];
+                  pair_type &tmp = overflow_array_[overflow_count_ - 1];
                   tmp.~pair_type();
                   new (&tmp) pair_type();
                 }
@@ -506,10 +635,13 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::erase(const _key
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(const uint64_t hash_val,
-    const bool is_first_hash, const bool is_overwrite, const _key_type* pkey, const _value_type* pvalue,
-    pair_type& old_pair, bool& finished)
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(
+    const uint64_t hash_val, const bool is_first_hash, const bool is_overwrite, const _key_type *pkey, const _value_type *pvalue, pair_type &old_pair,
+    bool &finished)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -519,13 +651,13 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(
     const int64_t bucket_pos = hash_val % (bucket_num_ / 2) + (is_first_hash ? 0 : bucket_num_ / 2);
     int64_t slot_idx = -1;
     finished = false;
-    Bucket& b = buckets_[bucket_pos];
+    Bucket &b = buckets_[bucket_pos];
     OB_LOG(DEBUG, "cuckoo set impl", K(*pkey));
     for (int64_t i = 0; OB_SUCC(ret) && i < BUCKET_SLOT_COUNT; ++i) {
       bool occupied = b.occupied_[i];
       if (occupied) {
         if (is_overwrite) {
-          pair_type& pair = b.slots_[i];
+          pair_type &pair = b.slots_[i];
           bool is_equal = equal_(pair.first, *pkey);
           if (is_equal) {
             slot_idx = i;
@@ -533,7 +665,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(
           }
         }
       } else {
-        pair_type& pair = b.slots_[i];
+        pair_type &pair = b.slots_[i];
         if (OB_FAIL(copy_assign(pair.first, *pkey))) {
           OB_LOG(WARN, "fail to copy data", K(ret));
         } else if (OB_FAIL(copy_assign(pair.second, *pvalue))) {
@@ -550,7 +682,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(
     // all slots are occupied or overwrite is requested
     if (OB_SUCC(ret) && !finished) {
       slot_idx = -1 == slot_idx ? random_.get(0, BUCKET_SLOT_COUNT - 1) : slot_idx;
-      pair_type& pair = b.slots_[slot_idx];
+      pair_type &pair = b.slots_[slot_idx];
       pair_type old_pair_tmp;
       if (OB_FAIL(copy_assign(old_pair_tmp.first, pair.first))) {
         OB_LOG(WARN, "fail to copy data", K(ret));
@@ -577,9 +709,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set_impl(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set(
-    const _key_type* pkey, const _value_type* pvalue, const bool is_overwrite, pair_type& old_pair, bool& done)
+    const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite, pair_type &old_pair, bool &done)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -587,8 +722,8 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set(
     OB_LOG(WARN, "ObCuckooHashMap has not been inited", K(ret));
   } else {
     int64_t cuckoo_step = 0;
-    const _key_type* pkey_tmp = pkey;
-    const _value_type* pvalue_tmp = pvalue;
+    const _key_type *pkey_tmp = pkey;
+    const _value_type *pvalue_tmp = pvalue;
     bool is_first_hash = true;
     done = false;
     OB_LOG(DEBUG, "begin cuckoo set", K(*pkey));
@@ -609,9 +744,13 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::cuckoo_set(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set_impl(const uint64_t hash_val,
-    const bool is_first_hash, const _key_type* pkey, const _value_type* pvalue, const bool is_overwrite, bool& done)
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set_impl(
+    const uint64_t hash_val, const bool is_first_hash, const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite,
+    bool &done)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -621,11 +760,11 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set_impl(const u
     const int64_t bucket_num = bucket_num_;
     const int64_t bucket_pos = hash_val % (bucket_num / 2) + (is_first_hash ? 0 : bucket_num / 2);
     done = false;
-    Bucket& b = buckets_[bucket_pos];
+    Bucket &b = buckets_[bucket_pos];
     for (int64_t i = 0; OB_SUCC(ret) && i < BUCKET_SLOT_COUNT && !done; ++i) {
       bool occupied = b.occupied_[i];
       if (occupied) {
-        pair_type& pair = b.slots_[i];
+        pair_type &pair = b.slots_[i];
         STORAGE_LOG(DEBUG, "check key is equal", K(pair.first), K(*pkey));
         bool is_equal = equal_(pair.first, *pkey);
         if (is_equal) {
@@ -643,7 +782,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set_impl(const u
           }
         }
       } else {
-        pair_type& pair = b.slots_[i];
+        pair_type &pair = b.slots_[i];
         if (OB_FAIL(copy_assign(pair.first, *pkey))) {
           OB_LOG(WARN, "fail to copy data", K(ret));
         } else if (OB_FAIL(copy_assign(pair.second, *pvalue))) {
@@ -660,9 +799,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set_impl(const u
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::quick_set(
-    const _key_type* pkey, const _value_type* pvalue, const bool is_overwrite, bool& done)
+    const _key_type *pkey, const _value_type *pvalue, const bool is_overwrite, bool &done)
 {
   int ret = OB_SUCCESS;
   done = false;
@@ -671,11 +813,11 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::quick_set(
     OB_LOG(WARN, "ObCuckooHashMap has not been inited", K(ret));
   } else {
     uint64_t hash_val1 = hash1(*pkey);
-    if (OB_FAIL(set_impl(hash_val1, true /*first hash*/, pkey, pvalue, is_overwrite, done))) {
+    if (OB_FAIL(set_impl(hash_val1, true/*first hash*/, pkey, pvalue, is_overwrite, done))) {
       OB_LOG(WARN, "fail to set", K(ret));
     } else if (!done) {
       uint64_t hash_val2 = hash2(hash_val1);
-      if (OB_FAIL(set_impl(hash_val2, false /*second hash*/, pkey, pvalue, is_overwrite, done))) {
+      if (OB_FAIL(set_impl(hash_val2, false/*second hash*/, pkey, pvalue, is_overwrite, done))) {
         OB_LOG(WARN, "fail to set", K(ret));
       }
     }
@@ -699,7 +841,10 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::quick_set(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::rehash()
 {
   int ret = common::OB_SUCCESS;
@@ -715,10 +860,10 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::rehash()
       OB_LOG(WARN, "fail to create new hash map", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_num; ++i) {
-      Bucket& b = buckets_[i];
+      Bucket &b = buckets_[i];
       for (int64_t j = 0; OB_SUCC(ret) && j < BUCKET_SLOT_COUNT; ++j) {
         const bool occupied = b.occupied_[j];
-        pair_type& pair = b.slots_[j];
+        pair_type &pair = b.slots_[j];
         if (occupied) {
           if (OB_FAIL(new_hash_map.set(pair.first, pair.second))) {
             OB_LOG(WARN, "fail to set to new hash map", K(ret));
@@ -727,7 +872,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::rehash()
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < overflow_count_; ++i) {
-      pair_type& pair = overflow_array_[i];
+      pair_type &pair = overflow_array_[i];
       if (OB_FAIL(new_hash_map.set(pair.first, pair.second))) {
         OB_LOG(WARN, "fail to set to new hash map", K(ret));
       }
@@ -745,9 +890,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::rehash()
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::overflow_set(
-    const _key_type& key, const _value_type& value, bool& done)
+    const _key_type &key, const _value_type &value, bool &done)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -755,9 +903,8 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::overflow_set(
     OB_LOG(WARN, "ObCuckooHashMap has not been inited", K(ret));
   } else {
     if (overflow_count_ == overflow_capacity_) {
-      pair_type* new_overflow_array = nullptr;
-      if (OB_ISNULL(new_overflow_array = static_cast<pair_type*>(
-                        allocator_->alloc(sizeof(pair_type) * (overflow_capacity_ + OVERFLOW_EXPAND_COUNT))))) {
+      pair_type *new_overflow_array = nullptr;
+      if (OB_ISNULL(new_overflow_array = static_cast<pair_type *>(allocator_->alloc(sizeof(pair_type) * (overflow_capacity_ + OVERFLOW_EXPAND_COUNT))))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to allocate memory", K(ret));
       } else {
@@ -809,9 +956,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::overflow_set(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::copy_pair(
-    const _key_type& key, const _value_type& value, pair_type& pair)
+    const _key_type &key, const _value_type &value, pair_type &pair)
 {
   int ret = common::OB_SUCCESS;
   pair.~pair_type();
@@ -824,9 +974,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::copy_pair(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
-    const _key_type& key, const _value_type& value, const bool is_overwrite)
+    const _key_type &key, const _value_type &value, const bool is_overwrite)
 {
   int ret = common::OB_SUCCESS;
   SlotPos slot_p;
@@ -837,8 +990,8 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
     OB_LOG(WARN, "fail to get slot pos", K(ret));
   } else if (slot_p.is_valid()) {
     if (is_overwrite) {
-      Bucket& b = buckets_[slot_p.bucket_pos_];
-      pair_type& pair = b.slots_[slot_p.slot_pos_];
+      Bucket &b = buckets_[slot_p.bucket_pos_];
+      pair_type &pair = b.slots_[slot_p.slot_pos_];
       if (OB_FAIL(copy_pair(key, value, pair))) {
         OB_LOG(WARN, "fail to copy pair", K(ret));
       }
@@ -851,7 +1004,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
     } else {
       if (slot_p.is_valid()) {
         if (is_overwrite) {
-          pair_type& pair = overflow_array_[slot_p.slot_pos_];
+          pair_type &pair = overflow_array_[slot_p.slot_pos_];
           if (OB_FAIL(copy_pair(key, value, pair))) {
             OB_LOG(WARN, "fail to copy pair", K(ret));
           }
@@ -864,8 +1017,8 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
 
   if (OB_SUCC(ret) && !slot_p.is_valid()) {
     bool done = false;
-    const _key_type* pkey = &key;
-    const _value_type* pvalue = &value;
+    const _key_type *pkey = &key;
+    const _value_type *pvalue = &value;
     pair_type old_pair;
     while (OB_SUCC(ret) && !done) {
       if (OB_FAIL(quick_set(pkey, pvalue, is_overwrite, done))) {
@@ -877,11 +1030,7 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
           pkey = &old_pair.first;
           pvalue = &old_pair.second;
           if (occupied_count_ > 0 && bucket_num_ * BUCKET_SLOT_COUNT / occupied_count_ >= MIN_REQUIRED_LOAD_FACTOR) {
-            OB_LOG(DEBUG,
-                "do not need rehash",
-                K(bucket_num_),
-                K(occupied_count_),
-                K(bucket_num_ * BUCKET_SLOT_COUNT / occupied_count_));
+            OB_LOG(DEBUG, "do not need rehash", K(bucket_num_), K(occupied_count_), K(bucket_num_ * BUCKET_SLOT_COUNT / occupied_count_));
             break;
           } else if (OB_FAIL(rehash())) {
             OB_LOG(WARN, "fail to rehash", K(ret));
@@ -902,21 +1051,29 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::set(
   return ret;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::advised_bucket_num(const int64_t elem_count)
 {
   return elem_count * 12 / 10;  // advised load factor 0.8
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
 int64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::size() const
 {
   return occupied_count_ + overflow_count_;
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>
-    ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::begin()
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::begin()
 {
   int64_t bucket_pos = 0;
   int64_t slot_pos = 0;
@@ -926,7 +1083,7 @@ ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>
   } else {
     bool found = false;
     slot_count = BUCKET_SLOT_COUNT;
-    for (; bucket_pos < bucket_num_; ++bucket_pos) {
+    for ( ; bucket_pos < bucket_num_; ++bucket_pos) {
       for (slot_pos = 0; slot_pos < slot_count; ++slot_pos) {
         if (buckets_[bucket_pos].occupied_[slot_pos]) {
           found = true;
@@ -944,15 +1101,59 @@ ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>
   return iterator(*this, bucket_pos, slot_pos, slot_count);
 }
 
-template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
-ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>
-    ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::end()
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::end()
 {
   return iterator(*this, bucket_num_, overflow_count_, BUCKET_SLOT_COUNT);
 }
 
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+ObCuckooHashMapConstIterator<_key_type, _value_type, _hashfunc, _equal> ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::begin() const
+{
+  int64_t bucket_pos = 0;
+  int64_t slot_pos = 0;
+  int64_t slot_count = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    // do nothing
+  } else {
+    bool found = false;
+    slot_count = BUCKET_SLOT_COUNT;
+    for ( ; bucket_pos < bucket_num_; ++bucket_pos) {
+      for (slot_pos = 0; slot_pos < slot_count; ++slot_pos) {
+        if (buckets_[bucket_pos].occupied_[slot_pos]) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        break;
+      }
+    }
+    if (bucket_pos == bucket_num_) {
+      slot_pos = 0;
+    }
+  }
+  return const_iterator(*this, bucket_pos, slot_pos, slot_count);
+}
+
+template <typename _key_type,
+          typename _value_type,
+          typename _hashfunc,
+          typename _equal>
+ObCuckooHashMapConstIterator<_key_type, _value_type, _hashfunc, _equal> ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::end() const
+{
+  return const_iterator(*this, bucket_num_, overflow_count_, BUCKET_SLOT_COUNT);
+}
+
+
 }  // end namespace hash
 }  // end namespace common
-}  // namespace oceanbase
+}  // end namespace ocanbase
 
 #endif  // OB_CUCKOO_HASHMAP_H_

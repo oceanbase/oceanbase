@@ -14,43 +14,42 @@
 #include <pthread.h>
 #include "share/ob_rpc_struct.h"
 
-namespace oceanbase {
+
+namespace oceanbase
+{
 using namespace obrpc;
 using namespace common;
-namespace share {
+namespace share
+{
 
-class TestRPCStruct : public ::testing::Test {
+class TestRPCStruct: public ::testing::Test
+{
 public:
-  TestRPCStruct()
-  {}
-  virtual ~TestRPCStruct()
-  {}
+  TestRPCStruct() {}
+  virtual ~TestRPCStruct() {}
+
 };
 
-#define PRINT_SIZE(T)                                          \
-  do {                                                         \
-    const int64_t size = sizeof(T);                            \
-    const int64_t count = OB_MALLOC_BIG_BLOCK_SIZE / size;     \
-    STORAGE_LOG(INFO, "print size", K(#T), K(size), K(count)); \
-  } while (0);
+#define PRINT_SIZE(T) \
+do  \
+{ \
+  const int64_t size = sizeof(T); \
+  const int64_t count = OB_MALLOC_BIG_BLOCK_SIZE / size; \
+  STORAGE_LOG(INFO, "print size", K(#T), K(size), K(count)); \
+} while(0); 
 
 TEST(TestRPCStruct, print_size)
 {
-  PRINT_SIZE(ObAddReplicaArg);
-  PRINT_SIZE(ObAddReplicaArg);
-  PRINT_SIZE(ObAddReplicaRes);
-  PRINT_SIZE(ObRebuildReplicaArg);
-  PRINT_SIZE(ObRebuildReplicaRes);
   PRINT_SIZE(ObMigrateReplicaArg);
   PRINT_SIZE(ObMigrateReplicaRes);
   PRINT_SIZE(ObChangeReplicaArg);
   PRINT_SIZE(ObChangeReplicaRes);
 }
 
-}  // namespace share
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

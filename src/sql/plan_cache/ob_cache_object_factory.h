@@ -17,43 +17,138 @@
 #include "lib/objectpool/ob_global_factory.h"
 #include "lib/objectpool/ob_tc_factory.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace pl
+
+{
+class ObPLFunction;
+class ObPLPackage;
+}  // namespace pl
+namespace sql
+{
 class ObPhysicalPlan;
 class ObPlanCache;
-class ObCacheObjectFactory {
-  friend class ObCacheObject;
-  friend class ObPlanCacheManager;
-
+class ObCacheObjGuard;
+class ObSql;
+class ObCacheObjectFactory
+{
+friend class ObPlanCacheObject;
+friend class ObPlanCache;
 public:
-  static int alloc(ObCacheObject*& cache_obj, const CacheRefHandleID ref_handle, ObCacheObjType co_type,
-      uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
-  static int alloc(
-      ObPhysicalPlan*& plan, const CacheRefHandleID ref_handle, uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
-  /* The reason for designing the interface like this:
-   * The outer application will generally make a judgment when calling ObCacheObjectFactory::free:
-   * if (NULL != cache_obj) {ObCacheObjectFactory::free(cache_obj);}
-   * If cache_obj is not set to NULL after free, it may be freed again somewhere in the future
-   */
-#define DEF_FREE_CACHE_FUNC(CACHE_TYPE)                                              \
-  inline static void free(CACHE_TYPE*& cache_obj, const CacheRefHandleID ref_handle) \
-  {                                                                                  \
-    ObCacheObject* tmp_obj = (ObCacheObject*)cache_obj;                              \
-    common_free(tmp_obj, ref_handle);                                                \
-    cache_obj = NULL;                                                                \
+  static int alloc(ObCacheObjGuard& guard,
+                   ObLibCacheNameSpace ns,
+                   uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
+  static void inner_free(ObILibCacheObject *&cache_obj,
+                         const CacheRefHandleID ref_handle);
+  static void inner_free(ObPlanCache *pc,
+                         ObILibCacheObject *&cache_obj,
+                         const CacheRefHandleID ref_handle);
+  template<typename ClassT>
+  static void free(ClassT *&cache_obj, const CacheRefHandleID ref_handle)
+  {
+    ObILibCacheObject *tmp_obj = (ObILibCacheObject *)cache_obj;
+    inner_free(tmp_obj, ref_handle);
+    cache_obj = NULL;
+  }
+  template<typename ClassT>
+  static void free(ObPlanCache *pc, ClassT *&cache_obj, const CacheRefHandleID ref_handle)
+  {
+    ObILibCacheObject *tmp_obj = (ObILibCacheObject *)cache_obj;
+    inner_free(pc, tmp_obj, ref_handle);
+    cache_obj = NULL;
   }
 
-  DEF_FREE_CACHE_FUNC(ObPhysicalPlan)
-  DEF_FREE_CACHE_FUNC(ObCacheObject)
 private:
-  static void inner_free(ObCacheObject* cache_obj);
-  static ObPlanCache* get_plan_cache(const uint64_t tenant_id);
-
-  static void common_free(ObCacheObject* cache_obj, const CacheRefHandleID ref_handle);
-
-  static int destroy_cache_obj(const bool is_leaked, const uint64_t obj_id, ObPlanCache* plan_cache);
+  static int destroy_cache_obj(const bool is_leaked,
+                               const uint64_t obj_id,
+                               ObPlanCache *lib_cache);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+
+class ObCacheObjGuard {
+friend class ObPlanCache;
+friend class ObLCObjectManager;
+private:
+  // access only
+  ObILibCacheObject* cache_obj_;
+  // readable and writable
+  CacheRefHandleID ref_handle_;
+
+public:
+  ObCacheObjGuard()
+    : cache_obj_(NULL),
+    ref_handle_(MAX_HANDLE)
+  {
+  }
+  ObCacheObjGuard(CacheRefHandleID ref_handle)
+    : cache_obj_(NULL),
+    ref_handle_(ref_handle)
+  {
+  }
+
+  ~ObCacheObjGuard()
+  {
+    if (OB_ISNULL(cache_obj_)) {
+      // do nothing
+    } else {
+      ObCacheObjectFactory::free(cache_obj_, ref_handle_);
+      cache_obj_ = NULL;
+    }
+  }
+
+  void init(CacheRefHandleID ref_handle)
+  {
+    ref_handle_ = ref_handle;
+  }
+
+  ObILibCacheObject* get_cache_obj() const
+  {
+    return cache_obj_;
+  }
+
+  CacheRefHandleID get_ref_handle() const
+  {
+    return ref_handle_;
+  }
+
+  int force_early_release(ObPlanCache *pc);
+
+  // this function may be somewhat dangerous and may cause some memory leak.
+  // Before use this function, PLEASE CONCAT @Shengle or @Juehui
+  //
+  // Why we provide swap, rather than assign?
+  // We assume 'other' may be another stack variable, and it may be used by others
+  // and therefore we cannot directly deconstruct it in this function. However, swap
+  // need not destroy this variable in this function.
+  //
+  // Which scenario can use this function?
+  // Change life cycle of current guard.
+  void swap(ObCacheObjGuard& other)
+  {
+    ObCacheObjGuard tmp(MAX_HANDLE);
+
+    tmp.cache_obj_ = this->cache_obj_;
+    tmp.ref_handle_ = this->ref_handle_;
+
+    this->cache_obj_ = other.cache_obj_;
+    this->ref_handle_ = other.ref_handle_;
+
+    other.cache_obj_ = tmp.cache_obj_;
+    other.ref_handle_ = tmp.ref_handle_;
+
+    // If not reset tmp in this line, the reference count of current cache_obj_
+    //  will be mistakely decrease.
+    tmp.reset();
+  }
+  TO_STRING_KV(K_(cache_obj));
+private:
+  void reset(){
+    cache_obj_ = NULL;
+    ref_handle_ = MAX_HANDLE;
+  }
+};
+
+  }  // namespace sql
+} //namespace oceanbase
 #endif /* DEV_SRC_SQL_PLAN_CACHE_OB_CACHE_OBJECT_FACTORY_H_ */

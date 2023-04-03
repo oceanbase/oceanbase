@@ -10,19 +10,19 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_LIB_LOCK_OB_FCOND_H
-#define OCEANBASE_LIB_LOCK_OB_FCOND_H
+#ifndef OCENABASE_LIB_LOCK_OB_FCOND_H
+#define OCENABASE_LIB_LOCK_OB_FCOND_H
 #include "lib/thread_local/ob_tsi_utils.h"
-#include "lib/coro/co.h"
 
-namespace oceanbase {
-namespace common {
-struct ObFCond {
-public:
-  ObFCond() : seq_(0), n_waiters_(0)
-  {}
-  ~ObFCond()
-  {}
+namespace oceanbase
+{
+namespace common
+{
+struct ObFCond
+{
+  public:
+  ObFCond(): n_waiters_(0) {}
+  ~ObFCond() {}
   void signal()
   {
     (void)ATOMIC_FAA(&futex_.val(), 1);
@@ -42,12 +42,10 @@ public:
     (void)ATOMIC_FAA(&n_waiters_, -1);
     return err;
   }
-
 private:
-  lib::CoFutex futex_;
-  uint32_t seq_;
+  lib::ObFutex futex_;
   uint32_t n_waiters_;
 };
-};      // namespace common
-};      // end namespace oceanbase
-#endif  // OCEANBASE_LIB_LOCK_OB_FCOND_H
+}; // end namespace lock
+}; // end namespace oceanbase
+#endif //OCENABASE_LIB_LOCK_OB_FCOND_H

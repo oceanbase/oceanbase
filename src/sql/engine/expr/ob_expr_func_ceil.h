@@ -15,63 +15,72 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprCeilFloor : public ObFuncExprOperator {
+class ObExprCeilFloor : public ObFuncExprOperator
+{
   static const int16_t MAX_LIMIT_WITH_SCALE = 17;
   static const int16_t MAX_LIMIT_WITHOUT_SCALE = 18;
-
 public:
-  ObExprCeilFloor(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
-      int32_t dimension = NOT_ROW_DIMENSION);
+  ObExprCeilFloor(common::ObIAllocator &alloc,
+                  ObExprOperatorType type,
+                  const char *name,
+                  int32_t param_num,
+                  int32_t dimension = NOT_ROW_DIMENSION);
 
   virtual ~ObExprCeilFloor();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(
-      common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx, bool is_ceil) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const override;
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCeilFloor);
 };
 
-class ObExprFuncCeil : public ObExprCeilFloor {
+class ObExprFuncCeil : public ObExprCeilFloor
+{
 public:
-  explicit ObExprFuncCeil(common::ObIAllocator& alloc);
+  explicit  ObExprFuncCeil(common::ObIAllocator &alloc);
   virtual ~ObExprFuncCeil();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncCeil);
 };
 
-class ObExprFuncCeiling : public ObExprCeilFloor {
+class ObExprFuncCeiling : public ObExprCeilFloor
+{
 public:
-  explicit ObExprFuncCeiling(common::ObIAllocator& alloc);
+  explicit  ObExprFuncCeiling(common::ObIAllocator &alloc);
   virtual ~ObExprFuncCeiling();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncCeiling);
 };
 
-class ObExprFuncFloor : public ObExprCeilFloor {
+class ObExprFuncFloor : public ObExprCeilFloor
+{
 public:
-  explicit ObExprFuncFloor(common::ObIAllocator& alloc);
+  explicit  ObExprFuncFloor(common::ObIAllocator &alloc);
   virtual ~ObExprFuncFloor();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncFloor);
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_FUNC_CEIL_
+} // namespace sql
+} // namespace oceanbase
+#endif // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_FUNC_CEIL_

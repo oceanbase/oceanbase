@@ -14,19 +14,21 @@
 #define OCEABASE_COMMON_OB_LOG_PRINT_KV_H_
 #include <cstdarg>
 #include <cerrno>
+#include <type_traits>
 
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_template_utils.h"
-#include "lib/utility/ob_fast_convert.h"
 #include "lib/alloc/alloc_assist.h"
 
 #define LOG_N_TRUE "true"
 #define LOG_N_FLASE "false"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 #define COMMA_FORMAT ", "
-#define WITH_COMMA(format) (with_comma ? COMMA_FORMAT format : format)
+#define WITH_COMMA(format)  (with_comma ? COMMA_FORMAT format: format)
 
 #define LOG_MACRO_JOIN(x, y) LOG_MACRO_JOIN1(x, y)
 #define LOG_MACRO_JOIN1(x, y) x##y
@@ -35,28 +37,90 @@ namespace common {
 #define _LOG_MACRO_JOIN1(x, y) _##x##y
 
 /// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
-int logdata_printf(char* buf, const int64_t buf_len, int64_t& pos, const char* fmt, ...)
-    __attribute__((format(printf, 4, 5)));
-int logdata_vprintf(char* buf, const int64_t buf_len, int64_t& pos, const char* fmt, va_list args);
+int logdata_printf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, ...)
+__attribute__((format(printf, 4, 5)));
+int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
 
-#define LOG_STDERR(...)               \
-  do {                                \
-    if (1 == isatty(STDERR_FILENO)) { \
-      fprintf(stderr, __VA_ARGS__);   \
-    }                                 \
-  } while (0)
-#define LOG_STDOUT(...)               \
-  do {                                \
-    if (1 == isatty(STDOUT_FILENO)) { \
-      fprintf(stdout, __VA_ARGS__);   \
-    }                                 \
-  } while (0)
+#define LOG_STDERR(...) do {if(1 == isatty(STDERR_FILENO)) {fprintf(stderr, __VA_ARGS__); }} while(0)
+#define LOG_STDOUT(...) do {if(1 == isatty(STDOUT_FILENO)) {fprintf(stdout, __VA_ARGS__); }} while(0)
+
+/**
+ * used by macro K
+ * check the type of v is not one of char *, const char *, char[], char[N]
+ */
+template <typename T>
+constexpr const T & check_char_array(const T &v)
+{
+  #if 0
+  static_assert((false == std::is_array<T>::value
+		 || false == std::is_same<char, typename std::remove_all_extents<T>::type>::value
+		 )
+		&&
+		(false == std::is_pointer<T>::value
+		  || (false == std::is_same<char *, typename std::remove_cv<T>::type>::value
+		    && false == std::is_same<const char *, typename std::remove_cv<T>::type>::value)
+		 ),
+                "logging zero terminated string by K is not supported any more and use KCSTRING instead");
+  #endif
+  return v;
+}
+
+/**
+ * this is a simple wrapper of C string and used to print C string (string terminated with zero, sz) by macro KCSTRING
+ */
+class ObSzString
+{
+public:
+  explicit ObSzString(const char *s) : str_(s)
+  {}
+  ~ObSzString()
+  {}
+
+  int64_t to_string(char *buf, const int64_t len) const
+  {
+    int64_t pos = 0;
+    if (OB_ISNULL(str_)) {
+      (void)logdata_printf(buf, len, pos, "NULL");
+    } else {
+      (void)logdata_printf(buf, len, pos, "%s", str_);
+    }
+    return pos;
+  }
+private:
+  const char *str_;
+};
+
+/**
+ * used to print string that maybe not terminated by zero and has a max lenght
+ */
+class ObLenString
+{
+public:
+  explicit ObLenString(const char *s, int len) : str_(s), len_(len)
+  {}
+
+  int64_t to_string(char *buf, const int64_t len) const
+  {
+    int64_t pos = 0;
+    if (OB_LIKELY(NULL != buf && len > 0)) {
+      int64_t max_cpy = MIN(len, len_);
+      STRNCPY(buf, str_, max_cpy);
+      while (buf[pos] != '\0' && pos < max_cpy)
+	pos++;
+    }
+    return pos;
+  }
+private:
+  const char *str_;
+  int len_;
+};
 
 template <typename T>
-struct ObLogPrintPointerCnt {
+struct ObLogPrintPointerCnt
+{
   explicit ObLogPrintPointerCnt(T v) : v_(v)
-  {}
-  int64_t to_string(char* buf, const int64_t len) const
+  { }
+  int64_t to_string(char *buf, const int64_t len) const
   {
     int64_t pos = 0;
     if (OB_LIKELY(NULL != buf) && OB_LIKELY(len > 0)) {
@@ -71,9 +135,9 @@ struct ObLogPrintPointerCnt {
   T v_;
 };
 
-// FalseType not pointer
+//FalseType not pointer
 template <typename T>
-int logdata_print_name(char* buf, const int64_t buf_len, int64_t& pos, const T& obj, FalseType)
+int logdata_print_name(char *buf, const int64_t buf_len, int64_t &pos, const T &obj, FalseType)
 {
   int ret = OB_SUCCESS;
   ret = obj.get_name(buf, buf_len, pos);
@@ -81,7 +145,7 @@ int logdata_print_name(char* buf, const int64_t buf_len, int64_t& pos, const T& 
 }
 
 template <typename T>
-int logdata_print_name(char* buf, const int64_t buf_len, int64_t& pos, const T* obj, TrueType)
+int logdata_print_name(char *buf, const int64_t buf_len, int64_t &pos, const T *obj, TrueType)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -93,31 +157,32 @@ int logdata_print_name(char* buf, const int64_t buf_len, int64_t& pos, const T* 
 }
 
 template <typename T>
-struct ObLogPrintName {
-  explicit ObLogPrintName(const T& v) : v_(v)
-  {}
-  int64_t to_string(char* buf, const int64_t buf_len) const
+struct ObLogPrintName
+{
+  explicit ObLogPrintName(const T &v) : v_(v)
+  { }
+  int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
     int ret = OB_SUCCESS;
     if (OB_FAIL(logdata_printf(buf, buf_len, pos, "\""))) {
     } else if (OB_FAIL(logdata_print_name(buf, buf_len, pos, v_, IsPointer<T>()))) {
     } else if (OB_FAIL(logdata_printf(buf, buf_len, pos, "\""))) {
-    } else {
-    }  // do nothing
+    } else {}//do nothing
     return pos;
   }
-  const T& v_;
+  const T &v_;
 };
 
-// print errmsg of errno.As strerror not thread-safe, need
-// to call ERRMSG, KERRMSG which use this class.
-struct ObLogPrintErrMsg {
+//print errmsg of errno.As strerror not thread-safe, need
+//to call ERRMSG, KERRMSG which use this class.
+struct ObLogPrintErrMsg
+{
   ObLogPrintErrMsg()
   {}
   ~ObLogPrintErrMsg()
   {}
-  int64_t to_string(char* buf, const int64_t len) const
+  int64_t to_string(char *buf, const int64_t len) const
   {
     int64_t pos = 0;
     if (OB_LIKELY(NULL != buf) && OB_LIKELY(len > 0)) {
@@ -127,14 +192,15 @@ struct ObLogPrintErrMsg {
   }
 };
 
-// print errmsg of no specified. As strerror not thread-safe, need
-// to call ERRNOMSG, KERRNOMSG which use this class.
-struct ObLogPrintErrNoMsg {
+//print errmsg of no specified. As strerror not thread-safe, need
+//to call ERRNOMSG, KERRNOMSG which use this class.
+struct ObLogPrintErrNoMsg
+{
   explicit ObLogPrintErrNoMsg(int no) : errno_(no)
   {}
   ~ObLogPrintErrNoMsg()
   {}
-  int64_t to_string(char* buf, const int64_t len) const
+  int64_t to_string(char *buf, const int64_t len) const
   {
     int64_t pos = 0;
     int old_err = errno;
@@ -149,8 +215,8 @@ struct ObLogPrintErrNoMsg {
 };
 
 // print object with to_string() member
-template <class T>
-int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T& obj, FalseType)
+template<class T>
+int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const T &obj, FalseType)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(pos < 0)) {
@@ -163,14 +229,14 @@ int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T& o
   return ret;
 }
 // print enum object
-template <class T>
-int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T& obj, TrueType)
+template<class T>
+int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const T &obj, TrueType)
 {
   return logdata_printf(buf, buf_len, pos, "%ld", static_cast<int64_t>(obj));
 }
 // print object
-template <class T>
-int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T& obj)
+template<class T>
+int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const T &obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == &obj) {
@@ -180,18 +246,18 @@ int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T& o
   }
   return ret;
 }
-template <class T>
-int logdata_print_point_obj(char* buf, const int64_t buf_len, int64_t& pos, const T* obj, TrueType)
+template<class T>
+int logdata_print_point_obj(char *buf, const int64_t buf_len, int64_t &pos, const T *obj, TrueType)
 {
   return logdata_print_obj(buf, buf_len, pos, *obj);
 }
-template <class T>
-int logdata_print_point_obj(char* buf, const int64_t buf_len, int64_t& pos, const T* obj, FalseType)
+template<class T>
+int logdata_print_point_obj(char *buf, const int64_t buf_len, int64_t &pos, const T *obj, FalseType)
 {
   return logdata_printf(buf, buf_len, pos, "%p", obj);
 }
-template <class T>
-int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, T* obj)
+template<class T>
+int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, T *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -201,8 +267,8 @@ int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, T* obj)
   }
   return ret;
 }
-template <class T>
-int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T* obj)
+template<class T>
+int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const T *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -212,71 +278,52 @@ int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const T* o
   }
   return ret;
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const uint64_t obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(NULL != buf) && OB_LIKELY(0 <= pos) && OB_LIKELY(pos < buf_len) &&
-      OB_LIKELY(buf_len - pos >= ObFastFormatInt::MAX_DIGITS10_STR_SIZE)) {
-    pos += ObFastFormatInt::format_unsigned(obj, buf + pos);
-  } else {
-    ret = OB_SIZE_OVERFLOW;
-  }
-  return ret;
-}
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const int64_t obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(NULL != buf) && OB_LIKELY(0 <= pos) && OB_LIKELY(pos < buf_len) &&
-      OB_LIKELY(buf_len - pos >= ObFastFormatInt::MAX_DIGITS10_STR_SIZE)) {
-    pos += ObFastFormatInt::format_signed(obj, buf + pos);
-  } else {
-    ret = OB_SIZE_OVERFLOW;
-  }
-  return ret;
-}
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const uint32_t obj)
+extern int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const uint64_t obj);
+extern int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const int64_t obj);
+
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const uint32_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<uint64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const int32_t obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const int32_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<int64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const uint16_t obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const uint16_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<uint64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const int16_t obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const int16_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<int64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const uint8_t obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const uint8_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<uint64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const int8_t obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const int8_t obj)
 {
   return logdata_print_obj(buf, buf_len, pos, static_cast<int64_t>(obj));
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const char obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const char obj)
 {
   return logdata_printf(buf, buf_len, pos, "%c", obj);
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const float obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const float obj)
 {
   return logdata_printf(buf, buf_len, pos, "%.9e", obj);
-  //  return logdata_printf(buf, buf_len, pos, "%f", obj);
+//  return logdata_printf(buf, buf_len, pos, "%f", obj);
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const double obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const double obj)
 {
   return logdata_printf(buf, buf_len, pos, "%.18le", obj);
-  //  return logdata_printf(buf, buf_len, pos, "%.12f", obj);
+//  return logdata_printf(buf, buf_len, pos, "%.12f", obj);
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const bool obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const bool obj)
 {
   return logdata_printf(buf, buf_len, pos, "%s", obj ? LOG_N_TRUE : LOG_N_FLASE);
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, char* obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, char *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -286,7 +333,7 @@ inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, cha
   }
   return ret;
 }
-inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const char* obj)
+inline int logdata_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -296,7 +343,7 @@ inline int logdata_print_obj(char* buf, const int64_t buf_len, int64_t& pos, con
   }
   return ret;
 }
-inline int logdata_print_info(char* buf, const int64_t buf_len, int64_t& pos, const char* info)
+inline int logdata_print_info(char *buf, const int64_t buf_len, int64_t &pos, const char *info)
 {
   int ret = OB_SUCCESS;
   if (NULL == info) {
@@ -307,7 +354,7 @@ inline int logdata_print_info(char* buf, const int64_t buf_len, int64_t& pos, co
   return ret;
 }
 
-inline int logdata_print_info_begin(char* buf, const int64_t buf_len, int64_t& pos, const char* info)
+inline int logdata_print_info_begin(char *buf, const int64_t buf_len, int64_t &pos, const char *info)
 {
   int ret = OB_SUCCESS;
   if (NULL == info) {
@@ -319,9 +366,9 @@ inline int logdata_print_info_begin(char* buf, const int64_t buf_len, int64_t& p
 }
 
 // print object with to_string() member
-template <class T>
-int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const T& obj, FalseType)
+template<class T>
+int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                          const bool with_comma, const T &obj, FalseType)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(pos < 0)) {
@@ -336,16 +383,16 @@ int logdata_print_key_obj(
   return ret;
 }
 // print enum object
-template <class T>
-int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const T& obj, TrueType)
+template<class T>
+int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                          const bool with_comma, const T &obj, TrueType)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%ld"), key, static_cast<int64_t>(obj));
 }
 // print object
-template <class T>
-int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const T& obj)
+template<class T>
+int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                          const bool with_comma, const T &obj)
 {
   int ret = OB_SUCCESS;
   if (reinterpret_cast<const void*>(&obj) == nullptr) {
@@ -355,9 +402,9 @@ int logdata_print_key_obj(
   }
   return ret;
 }
-template <class T>
-int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, T* obj)
+template<class T>
+int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                          const bool with_comma, T *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -367,9 +414,9 @@ int logdata_print_key_obj(
   }
   return ret;
 }
-template <class T>
-int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const T* obj)
+template<class T>
+int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                          const bool with_comma, const T *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -379,68 +426,68 @@ int logdata_print_key_obj(
   }
   return ret;
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const uint64_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const uint64_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%lu"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const int64_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const int64_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%ld"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const uint32_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const uint32_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%u"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const int32_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const int32_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%d"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const uint16_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const uint16_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%u"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const int16_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const int16_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%d"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const uint8_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const uint8_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%u"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const int8_t obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const int8_t obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%d"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const char obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const char obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%c"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const float obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const float obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%.9e"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const double obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const double obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%.18le"), key, obj);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const bool obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const bool obj)
 {
   return logdata_printf(buf, buf_len, pos, WITH_COMMA("%s=%s"), key, obj ? LOG_N_TRUE : LOG_N_FLASE);
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, char* obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, char *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -450,8 +497,8 @@ inline int logdata_print_key_obj(
   }
   return ret;
 }
-inline int logdata_print_key_obj(
-    char* buf, const int64_t buf_len, int64_t& pos, const char* key, const bool with_comma, const char* obj)
+inline int logdata_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
+                                 const bool with_comma, const char *obj)
 {
   int ret = OB_SUCCESS;
   if (NULL == obj) {
@@ -463,37 +510,78 @@ inline int logdata_print_key_obj(
 }
 
 template <class T>
-int logdata_print_kv(char* buf, const int64_t buf_len, int64_t& pos, const char* key, const T& obj)
+int logdata_print_kv(char *buf, const int64_t buf_len, int64_t &pos, const char *key, const T &obj)
 {
   return logdata_print_key_obj(buf, buf_len, pos, key, false, obj);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+class ObILogKV
+{
+public:
+  virtual int print(char *buf, int64_t buf_len, int64_t &pos, const bool with_comma) const = 0;
+};
+
+template<typename T,  const bool is_rvalue>
+class ObLogKV;
+
+template<typename T>
+class ObLogKV<T, false> : public ObILogKV
+{
+public:
+  ObLogKV(const char *key, const T &value) : key_(key), value_(value) {}
+  int print(char *buf, int64_t buf_len, int64_t &pos, const bool with_comma) const override
+  {
+    return logdata_print_key_obj(buf, buf_len, pos, key_,
+                                 with_comma, value_);
+  }
+private:
+  const char *key_;
+  const T &value_;
+};
+
+template<typename T> T& unmove(T&& v) { return v; }
+
+template<typename T>
+class ObLogKV<T, true> : public ObILogKV
+{
+public:
+  ObLogKV(const char *key, const T &&value) : key_(key), value_(unmove(value)) {}
+  int print(char *buf, int64_t buf_len, int64_t &pos, const bool with_comma) const override
+  {
+    return logdata_print_key_obj(buf, buf_len, pos, key_,
+                                 with_comma, value_);
+  }
+private:
+  const char *key_;
+  const T &value_;
+};
+
+}
+}
 
 #define LOG_PRINT_INFO(obj)                                                      \
   if (OB_SUCC(ret)) {                                                            \
-    ret = ::oceanbase::common::logdata_print_info(data, MAX_LOG_SIZE, pos, obj); \
+    ret = ::oceanbase::common::logdata_print_info(data, buf_len, pos, obj);      \
   }
 
-#define LOG_PRINT_INFO_BEGIN(obj)                                                      \
-  if (OB_SUCC(ret)) {                                                                  \
-    ret = ::oceanbase::common::logdata_print_info_begin(data, MAX_LOG_SIZE, pos, obj); \
+#define LOG_PRINT_INFO_BEGIN(obj)                                                   \
+  if (OB_SUCC(ret)) {                                                               \
+    ret = ::oceanbase::common::logdata_print_info_begin(data, buf_len, pos, obj);   \
   }
 
 #define LOG_PRINT_KV(key, value)                                                      \
   if (OB_SUCC(ret)) {                                                                 \
-    ret = ::oceanbase::common::logdata_print_kv(data, MAX_LOG_SIZE, pos, key, value); \
+    ret = ::oceanbase::common::logdata_print_kv(data, buf_len, pos, key, value);      \
   }
 
-#define LOG_DATA_PRINTF(args...)                                                \
-  if (OB_SUCC(ret)) {                                                           \
-    ret = ::oceanbase::common::logdata_printf(data, MAX_LOG_SIZE, pos, ##args); \
+#define LOG_DATA_PRINTF(args...)                                                  \
+  if (OB_SUCC(ret)) {                                                             \
+    ret = ::oceanbase::common::logdata_printf(data, buf_len, pos, ##args);        \
   }
 
 #define LOG_COMMA() LOG_DATA_PRINTF(", ")
 #define LOG_KV_BEGIN() LOG_DATA_PRINTF("(")
-#define LOG_KV_END() LOG_DATA_PRINTF(")")
+#define LOG_KV_END()   LOG_DATA_PRINTF(")")
 
 #define LOG_TYPENAME_TN0
 #define LOG_TYPENAME_TN1 typename T1
@@ -519,7 +607,7 @@ int logdata_print_kv(char* buf, const int64_t buf_len, int64_t& pos, const char*
 #define LOG_TYPENAME_TN21 LOG_TYPENAME_TN20, typename T21
 #define LOG_TYPENAME_TN22 LOG_TYPENAME_TN21, typename T22
 
-#define LOG_FUNC_ARG_KV(n) const char *key##n, const T##n &obj##n
+#define LOG_FUNC_ARG_KV(n) const char* key##n, const T##n &obj##n
 #define LOG_PARAMETER_KV0
 #define LOG_PARAMETER_KV1 LOG_FUNC_ARG_KV(1)
 #define LOG_PARAMETER_KV2 LOG_PARAMETER_KV1, LOG_FUNC_ARG_KV(2)
@@ -568,270 +656,68 @@ int logdata_print_kv(char* buf, const int64_t buf_len, int64_t& pos, const char*
 #define EXPAND_ARGUMENT_21(x) EXPAND_ARGUMENT_20(x), LOG_MACRO_JOIN(x, 21)
 #define EXPAND_ARGUMENT_22(x) EXPAND_ARGUMENT_21(x), LOG_MACRO_JOIN(x, 22)
 
-#define FILL_LOG_BUFFER_BODY(n)                                                \
-  if (OB_SUCC(ret)) {                                                          \
-    const bool with_comma = (1 != n);                                          \
-    if (NULL == obj##n) {                                                      \
-      ret = logdata_printf(data, MAX_LOG_SIZE, pos, "buffer is NULL");         \
-    } else {                                                                   \
-      ret = logdata_printf(data, MAX_LOG_SIZE, pos, WITH_COMMA("%s"), obj##n); \
-    }                                                                          \
-  }
-
-#define FILL_LOG_BUFFER_BODY_0
-#define FILL_LOG_BUFFER_BODY_1 FILL_LOG_BUFFER_BODY(1)
-#define FILL_LOG_BUFFER_BODY_2 \
-  FILL_LOG_BUFFER_BODY_1;      \
-  FILL_LOG_BUFFER_BODY(2)
-#define FILL_LOG_BUFFER_BODY_3 \
-  FILL_LOG_BUFFER_BODY_2;      \
-  FILL_LOG_BUFFER_BODY(3)
-#define FILL_LOG_BUFFER_BODY_4 \
-  FILL_LOG_BUFFER_BODY_3;      \
-  FILL_LOG_BUFFER_BODY(4)
-#define FILL_LOG_BUFFER_BODY_5 \
-  FILL_LOG_BUFFER_BODY_4;      \
-  FILL_LOG_BUFFER_BODY(5)
-#define FILL_LOG_BUFFER_BODY_6 \
-  FILL_LOG_BUFFER_BODY_5;      \
-  FILL_LOG_BUFFER_BODY(6)
-#define FILL_LOG_BUFFER_BODY_7 \
-  FILL_LOG_BUFFER_BODY_6;      \
-  FILL_LOG_BUFFER_BODY(7)
-#define FILL_LOG_BUFFER_BODY_8 \
-  FILL_LOG_BUFFER_BODY_7;      \
-  FILL_LOG_BUFFER_BODY(8)
-#define FILL_LOG_BUFFER_BODY_9 \
-  FILL_LOG_BUFFER_BODY_8;      \
-  FILL_LOG_BUFFER_BODY(9)
-#define FILL_LOG_BUFFER_BODY_10 \
-  FILL_LOG_BUFFER_BODY_9;       \
-  FILL_LOG_BUFFER_BODY(10)
-#define FILL_LOG_BUFFER_BODY_11 \
-  FILL_LOG_BUFFER_BODY_10;      \
-  FILL_LOG_BUFFER_BODY(11)
-#define FILL_LOG_BUFFER_BODY_12 \
-  FILL_LOG_BUFFER_BODY_11;      \
-  FILL_LOG_BUFFER_BODY(12)
-#define FILL_LOG_BUFFER_BODY_13 \
-  FILL_LOG_BUFFER_BODY_12;      \
-  FILL_LOG_BUFFER_BODY(13)
-#define FILL_LOG_BUFFER_BODY_14 \
-  FILL_LOG_BUFFER_BODY_13;      \
-  FILL_LOG_BUFFER_BODY(14)
-#define FILL_LOG_BUFFER_BODY_15 \
-  FILL_LOG_BUFFER_BODY_14;      \
-  FILL_LOG_BUFFER_BODY(15)
-#define FILL_LOG_BUFFER_BODY_16 \
-  FILL_LOG_BUFFER_BODY_15;      \
-  FILL_LOG_BUFFER_BODY(16)
-#define FILL_LOG_BUFFER_BODY_17 \
-  FILL_LOG_BUFFER_BODY_16;      \
-  FILL_LOG_BUFFER_BODY(17)
-#define FILL_LOG_BUFFER_BODY_18 \
-  FILL_LOG_BUFFER_BODY_17;      \
-  FILL_LOG_BUFFER_BODY(18)
-#define FILL_LOG_BUFFER_BODY_19 \
-  FILL_LOG_BUFFER_BODY_18;      \
-  FILL_LOG_BUFFER_BODY(19)
-#define FILL_LOG_BUFFER_BODY_20 \
-  FILL_LOG_BUFFER_BODY_19;      \
-  FILL_LOG_BUFFER_BODY(20)
-#define FILL_LOG_BUFFER_BODY_21 \
-  FILL_LOG_BUFFER_BODY_20;      \
-  FILL_LOG_BUFFER_BODY(21)
-#define FILL_LOG_BUFFER_BODY_22 \
-  FILL_LOG_BUFFER_BODY_21;      \
-  FILL_LOG_BUFFER_BODY(22)
-
-#define LOG_BODY(n)                                                                                    \
-  if (OB_SUCC(ret)) {                                                                                  \
-    if (1 == n) {                                                                                      \
-      ret = ::oceanbase::common::logdata_print_kv(data, MAX_LOG_SIZE, pos, key##n, obj##n);            \
-    } else {                                                                                           \
-      ret = ::oceanbase::common::logdata_print_key_obj(data, MAX_LOG_SIZE, pos, key##n, true, obj##n); \
-    }                                                                                                  \
+#define LOG_BODY(n) \
+  if (OB_SUCC(ret)) { \
+    if (1 == n) {\
+      ret = ::oceanbase::common::logdata_print_kv(data, buf_len, pos, key##n, obj##n); \
+    } else {\
+      ret = ::oceanbase::common::logdata_print_key_obj(data, buf_len, pos, key##n, true, obj##n); \
+    }\
   }
 
 #define LOG_FUNC_BODY_0
 #define LOG_FUNC_BODY_1 LOG_BODY(1)
-#define LOG_FUNC_BODY_2 \
-  LOG_FUNC_BODY_1;      \
-  LOG_BODY(2)
-#define LOG_FUNC_BODY_3 \
-  LOG_FUNC_BODY_2;      \
-  LOG_BODY(3)
-#define LOG_FUNC_BODY_4 \
-  LOG_FUNC_BODY_3;      \
-  LOG_BODY(4)
-#define LOG_FUNC_BODY_5 \
-  LOG_FUNC_BODY_4;      \
-  LOG_BODY(5)
-#define LOG_FUNC_BODY_6 \
-  LOG_FUNC_BODY_5;      \
-  LOG_BODY(6)
-#define LOG_FUNC_BODY_7 \
-  LOG_FUNC_BODY_6;      \
-  LOG_BODY(7)
-#define LOG_FUNC_BODY_8 \
-  LOG_FUNC_BODY_7;      \
-  LOG_BODY(8)
-#define LOG_FUNC_BODY_9 \
-  LOG_FUNC_BODY_8;      \
-  LOG_BODY(9)
-#define LOG_FUNC_BODY_10 \
-  LOG_FUNC_BODY_9;       \
-  LOG_BODY(10)
-#define LOG_FUNC_BODY_11 \
-  LOG_FUNC_BODY_10;      \
-  LOG_BODY(11)
-#define LOG_FUNC_BODY_12 \
-  LOG_FUNC_BODY_11;      \
-  LOG_BODY(12)
-#define LOG_FUNC_BODY_13 \
-  LOG_FUNC_BODY_12;      \
-  LOG_BODY(13)
-#define LOG_FUNC_BODY_14 \
-  LOG_FUNC_BODY_13;      \
-  LOG_BODY(14)
-#define LOG_FUNC_BODY_15 \
-  LOG_FUNC_BODY_14;      \
-  LOG_BODY(15)
-#define LOG_FUNC_BODY_16 \
-  LOG_FUNC_BODY_15;      \
-  LOG_BODY(16)
-#define LOG_FUNC_BODY_17 \
-  LOG_FUNC_BODY_16;      \
-  LOG_BODY(17)
-#define LOG_FUNC_BODY_18 \
-  LOG_FUNC_BODY_17;      \
-  LOG_BODY(18)
-#define LOG_FUNC_BODY_19 \
-  LOG_FUNC_BODY_18;      \
-  LOG_BODY(19)
-#define LOG_FUNC_BODY_20 \
-  LOG_FUNC_BODY_19;      \
-  LOG_BODY(20)
-#define LOG_FUNC_BODY_21 \
-  LOG_FUNC_BODY_20;      \
-  LOG_BODY(21)
-#define LOG_FUNC_BODY_22 \
-  LOG_FUNC_BODY_21;      \
-  LOG_BODY(22)
+#define LOG_FUNC_BODY_2 LOG_FUNC_BODY_1; LOG_BODY(2)
+#define LOG_FUNC_BODY_3 LOG_FUNC_BODY_2; LOG_BODY(3)
+#define LOG_FUNC_BODY_4 LOG_FUNC_BODY_3; LOG_BODY(4)
+#define LOG_FUNC_BODY_5 LOG_FUNC_BODY_4; LOG_BODY(5)
+#define LOG_FUNC_BODY_6 LOG_FUNC_BODY_5; LOG_BODY(6)
+#define LOG_FUNC_BODY_7 LOG_FUNC_BODY_6; LOG_BODY(7)
+#define LOG_FUNC_BODY_8 LOG_FUNC_BODY_7; LOG_BODY(8)
+#define LOG_FUNC_BODY_9 LOG_FUNC_BODY_8; LOG_BODY(9)
+#define LOG_FUNC_BODY_10 LOG_FUNC_BODY_9; LOG_BODY(10)
+#define LOG_FUNC_BODY_11 LOG_FUNC_BODY_10; LOG_BODY(11)
+#define LOG_FUNC_BODY_12 LOG_FUNC_BODY_11; LOG_BODY(12)
+#define LOG_FUNC_BODY_13 LOG_FUNC_BODY_12; LOG_BODY(13)
+#define LOG_FUNC_BODY_14 LOG_FUNC_BODY_13; LOG_BODY(14)
+#define LOG_FUNC_BODY_15 LOG_FUNC_BODY_14; LOG_BODY(15)
+#define LOG_FUNC_BODY_16 LOG_FUNC_BODY_15; LOG_BODY(16)
+#define LOG_FUNC_BODY_17 LOG_FUNC_BODY_16; LOG_BODY(17)
+#define LOG_FUNC_BODY_18 LOG_FUNC_BODY_17; LOG_BODY(18)
+#define LOG_FUNC_BODY_19 LOG_FUNC_BODY_18; LOG_BODY(19)
+#define LOG_FUNC_BODY_20 LOG_FUNC_BODY_19; LOG_BODY(20)
+#define LOG_FUNC_BODY_21 LOG_FUNC_BODY_20; LOG_BODY(21)
+#define LOG_FUNC_BODY_22 LOG_FUNC_BODY_21; LOG_BODY(22)
 
-#define CHECK_LOG_END_AND_ERROR_LOG(log_item)              \
-  check_log_end(*log_item, pos);                           \
-  if (OB_UNLIKELY(OB_SIZE_OVERFLOW == ret)) {              \
-    log_item->set_size_overflow();                         \
-    ret = OB_SUCCESS;                                      \
-  }                                                        \
-  if (OB_SUCC(ret)) {                                      \
-    if (OB_FAIL(check_error_log(*log_item))) {             \
-      LOG_STDERR("check_error_log error ret = %d\n", ret); \
-    }                                                      \
-  }
+#define LOG_KV(key, obj) \
+  (::oceanbase::common::ObILogKV&&)::oceanbase::common::ObLogKV<decltype(obj), \
+  std::is_rvalue_reference<decltype((obj))&&>::value>(key, obj)
+#define LOG_KVS_0()
+#define LOG_KVS_1()
+#define LOG_KVS_2(key, obj)           , LOG_KV(key, obj)
+#define LOG_KVS_4(key, obj, args...)  , LOG_KV(key, obj) LOG_KVS_2(args)
+#define LOG_KVS_6(key, obj, args...)  , LOG_KV(key, obj) LOG_KVS_4(args)
+#define LOG_KVS_8(key, obj, args...)  , LOG_KV(key, obj) LOG_KVS_6(args)
+#define LOG_KVS_10(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_8(args)
+#define LOG_KVS_12(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_10(args)
+#define LOG_KVS_14(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_12(args)
+#define LOG_KVS_16(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_14(args)
+#define LOG_KVS_18(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_16(args)
+#define LOG_KVS_20(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_18(args)
+#define LOG_KVS_22(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_20(args)
+#define LOG_KVS_24(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_22(args)
+#define LOG_KVS_26(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_24(args)
+#define LOG_KVS_28(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_26(args)
+#define LOG_KVS_30(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_28(args)
+#define LOG_KVS_32(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_30(args)
+#define LOG_KVS_34(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_32(args)
+#define LOG_KVS_36(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_34(args)
+#define LOG_KVS_38(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_36(args)
+#define LOG_KVS_40(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_38(args)
+#define LOG_KVS_42(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_40(args)
+#define LOG_KVS_44(key, obj, args...) , LOG_KV(key, obj) LOG_KVS_42(args)
 
-// for ObLogger
-#define DEFINE_LOG_PRINT_KV(n)                                                                                   \
-  __attribute__((noinline, cold)) int fill_log_buffer(char* data,                                                \
-      const int64_t MAX_LOG_SIZE,                                                                                \
-      int64_t& pos,                                                                                              \
-      const char* info_string,                                                                                   \
-      EXPAND_ARGUMENT_##n(const char* obj))                                                                      \
-  {                                                                                                              \
-    int ret = OB_SUCCESS;                                                                                        \
-    LOG_PRINT_INFO_BEGIN(info_string);                                                                           \
-    FILL_LOG_BUFFER_BODY_##n;                                                                                    \
-    LOG_KV_END();                                                                                                \
-    return ret;                                                                                                  \
-  }                                                                                                              \
-  __attribute__((noinline, cold)) void log_message_kv(const char* mod_name,                                      \
-      const int32_t level,                                                                                       \
-      const char* file,                                                                                          \
-      const int32_t line,                                                                                        \
-      const char* function,                                                                                      \
-      const uint64_t location_hash_val,                                                                          \
-      const char* info_string,                                                                                   \
-      EXPAND_ARGUMENT_##n(const char* obj))                                                                      \
-  {                                                                                                              \
-    int ret = OB_SUCCESS;                                                                                        \
-    LogBuffer* log_buffer = NULL;                                                                                \
-    if (OB_LIKELY(level <= OB_LOG_LEVEL_DEBUG) && OB_LIKELY(level >= OB_LOG_LEVEL_ERROR) &&                      \
-        OB_LIKELY(is_enable_logging()) && OB_NOT_NULL(mod_name) && OB_NOT_NULL(file) && OB_NOT_NULL(function) && \
-        OB_NOT_NULL(function) && OB_NOT_NULL(info_string)) {                                                     \
-      if (is_trace_mode()) {                                                                                     \
-        if (OB_NOT_NULL(log_buffer = get_thread_buffer()) && OB_LIKELY(!log_buffer->is_oversize())) {            \
-          set_disable_logging(true);                                                                             \
-          log_head_info(mod_name, level, LogLocation(file, line, function), *log_buffer);                        \
-          int64_t& pos = log_buffer->pos_;                                                                       \
-          char* data = log_buffer->buffer_;                                                                      \
-          ret = fill_log_buffer(data, MAX_LOG_SIZE, pos, info_string, EXPAND_ARGUMENT_##n(obj));                 \
-          log_tail(level, *log_buffer);                                                                          \
-        }                                                                                                        \
-      } else if (!is_async_log_used()) {                                                                         \
-        if (OB_NOT_NULL(log_buffer = get_thread_buffer()) && OB_LIKELY(!log_buffer->is_oversize())) {            \
-          set_disable_logging(true);                                                                             \
-          int64_t& pos = log_buffer->pos_;                                                                       \
-          char* data = log_buffer->buffer_;                                                                      \
-          ret = fill_log_buffer(data, MAX_LOG_SIZE, pos, info_string, EXPAND_ARGUMENT_##n(obj));                 \
-          log_data(mod_name, level, LogLocation(file, line, function), *log_buffer);                             \
-        }                                                                                                        \
-      } else {                                                                                                   \
-        set_disable_logging(true);                                                                               \
-        auto log_data_func = [&](ObPLogItem* log_item) {                                                         \
-          int ret = OB_SUCCESS;                                                                                  \
-          int64_t MAX_LOG_SIZE = log_item->get_buf_size();                                                       \
-          int64_t pos = log_item->get_data_len();                                                                \
-          char* data = log_item->get_buf();                                                                      \
-          fill_log_buffer(data, MAX_LOG_SIZE, pos, info_string, EXPAND_ARGUMENT_##n(obj));                       \
-          CHECK_LOG_END_AND_ERROR_LOG(log_item);                                                                 \
-          return ret;                                                                                            \
-        };                                                                                                       \
-        do_async_log_message(mod_name, level, file, line, function, location_hash_val, log_data_func);           \
-      }                                                                                                          \
-      set_disable_logging(false);                                                                                \
-    }                                                                                                            \
-    UNUSED(ret);                                                                                                 \
-  }
-
-// for TraceLog
-#define DEFINE_FILL_LOG_KV(n)                                                                                        \
-  template <LOG_TYPENAME_TN##n>                                                                                      \
-  static void fill_log_kv(LogBuffer& log_buffer, const char* function, const char* info_string, LOG_PARAMETER_KV##n) \
-  {                                                                                                                  \
-    int ret = OB_SUCCESS;                                                                                            \
-    log_buffer.check_and_lock();                                                                                     \
-    int64_t MAX_LOG_SIZE = LogBuffer::LOG_BUFFER_SIZE - log_buffer.cur_pos_;                                         \
-    if (MAX_LOG_SIZE > 0) {                                                                                          \
-      char* data = log_buffer.buffer_ + log_buffer.cur_pos_;                                                         \
-      int64_t pos = 0;                                                                                               \
-      LOG_DATA_PRINTF("[%s] ", function);                                                                            \
-      ret = fill_log_buffer(data, MAX_LOG_SIZE, pos, info_string, EXPAND_ARGUMENT_##n(obj));                         \
-      if (pos >= 0 && pos < MAX_LOG_SIZE) {                                                                          \
-        log_buffer.cur_pos_ += pos;                                                                                  \
-        add_stamp(log_buffer, MAX_LOG_SIZE, pos);                                                                    \
-      } else {                                                                                                       \
-        if (log_buffer.cur_pos_ >= 0 && log_buffer.cur_pos_ < LogBuffer::LOG_BUFFER_SIZE) {                          \
-          log_buffer.buffer_[log_buffer.cur_pos_] = '\0';                                                            \
-        }                                                                                                            \
-        print_log(log_buffer);                                                                                       \
-        MAX_LOG_SIZE = LogBuffer::LOG_BUFFER_SIZE - log_buffer.cur_pos_;                                             \
-        data = log_buffer.buffer_ + log_buffer.cur_pos_;                                                             \
-        pos = 0;                                                                                                     \
-        LOG_DATA_PRINTF("[%s] ", function);                                                                          \
-        ret = fill_log_buffer(data, MAX_LOG_SIZE, pos, info_string, EXPAND_ARGUMENT_##n(obj));                       \
-        if (pos >= 0 && pos < MAX_LOG_SIZE) {                                                                        \
-          log_buffer.cur_pos_ += pos;                                                                                \
-          add_stamp(log_buffer, MAX_LOG_SIZE, pos);                                                                  \
-        } else {                                                                                                     \
-          print_log(log_buffer);                                                                                     \
-        }                                                                                                            \
-      }                                                                                                              \
-      if (log_buffer.cur_pos_ >= 0 && log_buffer.cur_pos_ < LogBuffer::LOG_BUFFER_SIZE) {                            \
-        log_buffer.buffer_[log_buffer.cur_pos_] = '\0';                                                              \
-      }                                                                                                              \
-    }                                                                                                                \
-    log_buffer.check_and_unlock();                                                                                   \
-  }
+#define LOG_KVS_(N, ...) CONCAT(LOG_KVS_, N)(__VA_ARGS__)
+#define LOG_KVS(...) "placeholder" LOG_KVS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
 
 #endif

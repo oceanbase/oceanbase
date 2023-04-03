@@ -17,8 +17,10 @@
 #include "ob_gmemstore_allocator.h"
 #include "ob_memstore_allocator_mgr.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 int ObTenantMutilAllocatorMgr::init()
 {
@@ -35,10 +37,11 @@ int ObTenantMutilAllocatorMgr::init()
 }
 
 // Get the log allocator for specified tenant, create it when tenant not exist
-int ObTenantMutilAllocatorMgr::get_tenant_log_allocator(const uint64_t tenant_id, ObILogAllocator*& out_allocator)
+int ObTenantMutilAllocatorMgr::get_tenant_log_allocator(const uint64_t tenant_id,
+                                                        ObILogAllocator *&out_allocator)
 {
   int ret = OB_SUCCESS;
-  ObTenantMutilAllocator* allocator = NULL;
+  ObTenantMutilAllocator *allocator = NULL;
   if (OB_FAIL(get_tenant_mutil_allocator(tenant_id, allocator))) {
   } else {
     out_allocator = allocator;
@@ -46,21 +49,8 @@ int ObTenantMutilAllocatorMgr::get_tenant_log_allocator(const uint64_t tenant_id
   return ret;
 }
 
-// Get the replay allocator for specified tenant, create it when tenant not exist
-int ObTenantMutilAllocatorMgr::get_tenant_replay_allocator(
-    const uint64_t tenant_id, ObIReplayTaskAllocator*& out_allocator)
-{
-  int ret = OB_SUCCESS;
-  ObTenantMutilAllocator* allocator = NULL;
-  if (OB_FAIL(get_tenant_mutil_allocator(tenant_id, allocator))) {
-  } else {
-    out_allocator = allocator;
-  }
-  return ret;
-}
-
-int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(
-    const uint64_t tenant_id, ObTenantMutilAllocator*& out_allocator)
+int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(const uint64_t tenant_id,
+                                                          ObTenantMutilAllocator *&out_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -82,8 +72,8 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(
     bool is_need_create = false;
     do {
       // rdlock
-      obsys::CRLockGuard guard(locks_[slot]);
-      TMA** cur = &tma_array_[slot];
+      obsys::ObRLockGuard guard(locks_[slot]);
+      TMA **cur = &tma_array_[slot];
       while ((NULL != cur) && (NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
         cur = &((*cur)->get_next());
       }
@@ -112,7 +102,8 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(
   return ret;
 }
 
-int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id, TMA*& out_allocator)
+int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id,
+                                                    TMA *&out_allocator)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -122,12 +113,12 @@ int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id, TM
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else {
     ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_TENANT_MUTIL_ALLOCATOR);
-    void* buf = ob_malloc(sizeof(TMA), attr);
+    void *buf = ob_malloc(sizeof(TMA), attr);
     if (NULL == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "failed to alloc memory", K(ret), K(tenant_id));
     } else {
-      TMA* allocator = new (buf) TMA(tenant_id);
+      TMA *allocator = new (buf) TMA(tenant_id);
       out_allocator = allocator;
       OB_LOG(INFO, "ObTenantMutilAllocator init success", K(tenant_id));
     }
@@ -135,7 +126,8 @@ int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id, TM
   return ret;
 }
 
-int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t tenant_id, TMA*& out_allocator)
+int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t tenant_id,
+                                                              TMA *&out_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -147,7 +139,7 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
   } else if (tenant_id < PRESERVED_TENANT_COUNT) {
     if (NULL != (out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
     } else {
-      TMA* tmp_tma = NULL;
+      TMA *tmp_tma = NULL;
       if (OB_FAIL(construct_allocator_(tenant_id, tmp_tma))) {
         OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(tenant_id));
       } else if (!ATOMIC_BCAS(&tma_array_[tenant_id], NULL, tmp_tma)) {
@@ -164,7 +156,7 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
     const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
     if (NULL == ATOMIC_LOAD(&tma_array_[slot])) {
       // slot's head node is NULL, need construct
-      TMA* tmp_tma = NULL;
+      TMA *tmp_tma = NULL;
       if (OB_FAIL(construct_allocator_(slot, tmp_tma))) {
         OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(slot));
       } else if (!ATOMIC_BCAS(&tma_array_[slot], NULL, tmp_tma)) {
@@ -172,15 +164,14 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
           tmp_tma->~TMA();
           ob_free(tmp_tma);
         }
-      } else {
-      }
+      } else {}
     }
     do {
       // Need lock when modify slog list
-      obsys::CWLockGuard guard(locks_[slot]);
+      obsys::ObWLockGuard guard(locks_[slot]);
       if (OB_SUCC(ret)) {
         bool is_need_create = false;
-        TMA** cur = &tma_array_[slot];
+        TMA **cur = &tma_array_[slot];
         while ((NULL != cur) && (NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
           cur = &((*cur)->get_next());
         }
@@ -192,11 +183,11 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
           }
         }
         if (is_need_create) {
-          TMA* tmp_tma = NULL;
+          TMA *tmp_tma = NULL;
           if (OB_FAIL(construct_allocator_(tenant_id, tmp_tma))) {
             OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(tenant_id));
           } else {
-            TMA* next_allocator = *cur;
+            TMA *next_allocator = *cur;
             *cur = tmp_tma;
             ((*cur)->get_next()) = next_allocator;
             out_allocator = tmp_tma;
@@ -209,16 +200,17 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
   return ret;
 }
 
-ObTenantMutilAllocatorMgr& ObTenantMutilAllocatorMgr::get_instance()
+ObTenantMutilAllocatorMgr &ObTenantMutilAllocatorMgr::get_instance()
 {
   static ObTenantMutilAllocatorMgr instance_;
   return instance_;
 }
 
-int ObTenantMutilAllocatorMgr::get_tenant_limit(const uint64_t tenant_id, int64_t& limit)
+int ObTenantMutilAllocatorMgr::get_tenant_limit(const uint64_t tenant_id,
+                                                int64_t &limit)
 {
   int ret = OB_SUCCESS;
-  ObTenantMutilAllocator* allocator = NULL;
+  ObTenantMutilAllocator *allocator = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -233,10 +225,11 @@ int ObTenantMutilAllocatorMgr::get_tenant_limit(const uint64_t tenant_id, int64_
   return ret;
 }
 
-int ObTenantMutilAllocatorMgr::set_tenant_limit(const uint64_t tenant_id, const int64_t new_limit)
+int ObTenantMutilAllocatorMgr::set_tenant_limit(const uint64_t tenant_id,
+                                                const int64_t new_limit)
 {
   int ret = OB_SUCCESS;
-  ObTenantMutilAllocator* allocator = NULL;
+  ObTenantMutilAllocator *allocator = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -251,23 +244,7 @@ int ObTenantMutilAllocatorMgr::set_tenant_limit(const uint64_t tenant_id, const 
 
   return ret;
 }
-
-void ObTenantMutilAllocatorMgr::free_log_task_buf(void* p)
-{
-  typedef ObBlockSlicer Block;
-  if (NULL != p) {
-    Block::Item* item = (Block::Item*)p - 1;
-    Block* blk = item->host_;
-    ObTenantMutilAllocator* tmallocator = static_cast<ObTenantMutilAllocator*>(blk->get_tmallocator());
-    if (NULL != tmallocator) {
-      tmallocator->free_log_task_buf(p);
-    } else {
-      OB_LOG(ERROR, "tmallocator is NULL, unexpected");
-    }
-  }
-}
-
-int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits& all_tenant_units)
+int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits &all_tenant_units)
 {
   // Update mem_limit for each tenant, called when the chane unit specifications or
   // memstore_limite_percentage
@@ -278,66 +255,54 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits&
   } else {
     int64_t unit_cnt = all_tenant_units.count();
     for (int64_t i = 0; i < unit_cnt && OB_SUCC(ret); ++i) {
-      const share::ObUnitInfoGetter::ObTenantConfig& tenant_config = all_tenant_units.at(i);
+      const share::ObUnitInfoGetter::ObTenantConfig &tenant_config = all_tenant_units.at(i);
       const uint64_t tenant_id = tenant_config.tenant_id_;
       const bool has_memstore = tenant_config.has_memstore_;
-      int32_t nway = (int32_t)(tenant_config.config_.max_cpu_);
+      int32_t nway = (int32_t)(tenant_config.config_.max_cpu());
       if (nway == 0) {
         nway = 1;
       }
-      const int64_t max_memory = tenant_config.config_.max_memory_;
-      if (max_memory <= 0) {
-        // tenant config is invalid, skip
+      const int64_t memory_size = tenant_config.config_.memory_size();
+      int64_t new_tma_limit = memory_size;
+      if (has_memstore) {
+        // If the unit type of tenant is not Log, need to subtract
+        // the reserved memory of memstore
+        if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
+          OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
+        } else {
+          new_tma_limit = memory_size / 100 * ( 100 - cur_memstore_limit_percent);
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      ObTenantMutilAllocator *tma= NULL;
+      if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator(tenant_id, tma))) {
+        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tmp_ret), K(tenant_id));
+      } else if (NULL == tma) {
+        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
       } else {
-        int64_t new_tma_limit = max_memory;
-        if (has_memstore) {
-          // If the unit type of tenant is not Log, need to subtract
-          // the reserved memory of memstore
-          if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
-            OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
-          } else {
-            new_tma_limit = max_memory / 100 * (100 - cur_memstore_limit_percent);
-          }
+        tma->set_nway(nway);
+        int64_t pre_tma_limit = tma->get_limit();
+        if (pre_tma_limit != new_tma_limit) {
+          tma->set_limit(new_tma_limit);
         }
-        int tmp_ret = OB_SUCCESS;
-        ObTenantMutilAllocator *tma = NULL;
-        if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator(tenant_id, tma))) {
-          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tmp_ret), K(tenant_id));
-        } else if (NULL == tma) {
-          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
-        } else {
-          tma->set_nway(nway);
-          int64_t pre_tma_limit = tma->get_limit();
-          if (pre_tma_limit != new_tma_limit) {
-            tma->set_limit(new_tma_limit);
-          }
-          OB_LOG(INFO,
-              "ObTenantMutilAllocator update tenant mem_limit finished",
-              K(ret),
-              K(tenant_id),
-              K(nway),
-              K(new_tma_limit),
-              K(pre_tma_limit),
-              K(cur_memstore_limit_percent),
-              K(tenant_config));
-        }
+        OB_LOG(INFO, "ObTenantMutilAllocator update tenant mem_limit finished", K(ret),
+            K(tenant_id),  K(nway), K(new_tma_limit), K(pre_tma_limit), K(cur_memstore_limit_percent), K(tenant_config));
+      }
 
-        // update memstore threshold of GmemstoreAllocator
-        ObGMemstoreAllocator *memstore_allocator = NULL;
-        if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
-                               tenant_id, memstore_allocator))) {
-        } else if (OB_ISNULL(memstore_allocator)) {
-          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
-        } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
-          OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
-        } else {
-          OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
-        }
+      //update memstore threshold of GmemstoreAllocator
+      ObGMemstoreAllocator* memstore_allocator = NULL;
+      if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(tenant_id, memstore_allocator))) {
+      } else if (OB_ISNULL(memstore_allocator)) {
+        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
+      } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
+        OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
+      } else {
+        OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
       }
     }
   }
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

@@ -13,7 +13,20 @@
 #ifndef OCEANBASE_COMMON_OB_ABORT_H_
 #define OCEANBASE_COMMON_OB_ABORT_H_
 #include <stdlib.h>
+#include "lib/utility/ob_macro_utils.h"
 
-extern void ob_abort(void) __THROW;
+extern void ob_abort (void) __THROW;
 
-#endif  // OCEANBASE_COMMON_OB_ABORT_H_
+// we use int instead of bool to compatible with c code.
+#ifdef __cplusplus
+static inline void abort_unless(bool result)
+#else
+static inline void abort_unless(int result)
+#endif
+{
+  if (OB_UNLIKELY(!result)) {
+    ob_abort();
+  }
+}
+
+#endif // OCEANBASE_COMMON_OB_ABORT_H_

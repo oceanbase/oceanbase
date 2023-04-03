@@ -15,28 +15,31 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprFromTz : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprFromTz : public ObFuncExprOperator
+{
 public:
-  explicit ObExprFromTz(common::ObIAllocator& alloc);
-  virtual ~ObExprFromTz()
-  {}
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& input1, ObExprResType& input2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(common::ObObj& result, const common::ObObj& input1, const common::ObObj& input2,
-      common::ObExprCtx& expr_ctx) const;
-
-  static int eval_from_tz_val(const common::ObOTimestampData& in_ts_val, const common::ObString& tz_str,
-      ObSQLSessionInfo& my_session, common::ObOTimestampData& out_ts_val);
-  static int eval_from_tz(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const override;
-
+  explicit  ObExprFromTz(common::ObIAllocator &alloc);
+  virtual ~ObExprFromTz() {}
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &input1,
+                                ObExprResType &input2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int eval_from_tz_val(const common::ObOTimestampData &in_ts_val,
+                              const common::ObString &tz_str,
+                              ObSQLSessionInfo &my_session,
+                              common::ObOTimestampData &out_ts_val);
+  static int eval_from_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &expr) const override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFromTz);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_FROM_TZ_H_
+} //sql
+} //oceanbase
+#endif //OCEANBASE_SQL_OB_EXPR_FROM_TZ_H_

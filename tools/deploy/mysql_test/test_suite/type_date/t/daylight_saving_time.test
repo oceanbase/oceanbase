@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL1
+# tags: datatype
+# Test of day light saving functions
+
+--disable_warnings
+drop table if exists test_table;
+--enable_warnings
+
+create table test_table(id int, d datetime(6), t  timestamp(6) default "2012-01-01 12:00:00", primary key(id));
+
+replace into test_table values(1, '1990-09-01', '1987-06-29'), (2, DATE '1990-09-01', DATE '1987-06-29'), (3, TIMESTAMP '1990-09-01 00:00:00', TIMESTAMP '1987-06-29 00:00:00'), (4, TIMESTAMP '1990-09-01 00:00:00.000000', TIMESTAMP '1987-06-29 00:00:00.000000');
+
+select * from test_table;
+
+drop table test_table;

@@ -17,38 +17,43 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 ObCreateDatabaseStmt::ObCreateDatabaseStmt()
     : ObDDLStmt(stmt::T_CREATE_DATABASE),
-      is_charset_specify_(false),
-      is_collation_specify_(false),
-      create_database_arg_()
-{}
+    is_charset_specify_(false),
+    is_collation_specify_(false),
+    create_database_arg_()
+  {
+  }
 
-ObCreateDatabaseStmt::ObCreateDatabaseStmt(common::ObIAllocator* name_pool)
+ObCreateDatabaseStmt::ObCreateDatabaseStmt(common::ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_CREATE_DATABASE),
-      is_charset_specify_(false),
-      is_collation_specify_(false),
-      create_database_arg_()
-{}
+    is_charset_specify_(false),
+    is_collation_specify_(false),
+    create_database_arg_()
+{
+}
 
 ObCreateDatabaseStmt::~ObCreateDatabaseStmt()
-{}
+{
+}
 
 void ObCreateDatabaseStmt::set_if_not_exists(bool if_not_exists)
 {
   create_database_arg_.if_not_exist_ = if_not_exists;
 }
 
-void ObCreateDatabaseStmt::add_zone(const common::ObString& zone)
+void ObCreateDatabaseStmt::add_zone(const common::ObString &zone)
 {
-  create_database_arg_.database_schema_.add_zone(zone);
+  // not supported
 }
 
-int ObCreateDatabaseStmt::set_primary_zone(const common::ObString& zone)
+int ObCreateDatabaseStmt::set_primary_zone(const common::ObString &zone)
 {
-  return create_database_arg_.database_schema_.set_primary_zone(zone);
+  return OB_SUCCESS; // not supported
 }
 
 void ObCreateDatabaseStmt::set_read_only(const bool read_only)
@@ -56,7 +61,7 @@ void ObCreateDatabaseStmt::set_read_only(const bool read_only)
   create_database_arg_.database_schema_.set_read_only(read_only);
 }
 
-int ObCreateDatabaseStmt::set_default_tablegroup_name(const common::ObString& tablegroup_name)
+int ObCreateDatabaseStmt::set_default_tablegroup_name(const common::ObString &tablegroup_name)
 {
   return create_database_arg_.database_schema_.set_default_tablegroup_name(tablegroup_name);
 }
@@ -66,7 +71,7 @@ void ObCreateDatabaseStmt::set_tenant_id(const uint64_t tenant_id)
   create_database_arg_.database_schema_.set_tenant_id(tenant_id);
 }
 
-int ObCreateDatabaseStmt::set_database_name(const ObString& database_name)
+int ObCreateDatabaseStmt::set_database_name(const ObString &database_name)
 {
   return create_database_arg_.database_schema_.set_database_name(database_name);
 }
@@ -76,7 +81,7 @@ void ObCreateDatabaseStmt::set_database_id(const uint64_t database_id)
   create_database_arg_.database_schema_.set_database_id(database_id);
 }
 
-const ObString& ObCreateDatabaseStmt::get_database_name() const
+const ObString &ObCreateDatabaseStmt::get_database_name() const
 {
   return create_database_arg_.database_schema_.get_database_name_str();
 }
@@ -110,5 +115,5 @@ obrpc::ObCreateDatabaseArg& ObCreateDatabaseStmt::get_create_database_arg()
 {
   return create_database_arg_;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase

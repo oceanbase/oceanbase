@@ -16,156 +16,277 @@
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObUpdateStmt;
-
-class ObTransformAggrSubquery : public ObTransformRule {
+/**
+ * ObTransformAggrSubquery实现JA类型的子查询的改写
+ * 改写的实现方式主要参考了如下一些论文：
+ * [Kim82]          W.Kim, "On Optimizing an SQL-like Nested Query"
+ * [Ganski87]       Richard A. Ganski and Harry K. T. Long, "Optimization of
+ *                  nested SQL queries Revisited"
+ * [Murlikrishna92] M.Murlikrishna, "Improved Unnesting Algorithms for Join
+ *                  Aggregate SQL queries"
+ * 改写的示例可以参看论文和mysqltest测试用例
+ */
+class ObTransformAggrSubquery : public ObTransformRule
+{
 public:
-  ObTransformAggrSubquery(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
+  ObTransformAggrSubquery(ObTransformerCtx *ctx)
+    : ObTransformRule(ctx, TransMethod::POST_ORDER, T_UNNEST),
+      join_first_happened_(false)
   {}
-  virtual ~ObTransformAggrSubquery()
-  {}
-  virtual int transform_one_stmt(
-      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
-
+  virtual ~ObTransformAggrSubquery() {}
+  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObDMLStmt *&stmt,
+                                 bool &trans_happened) override;
+protected:
+  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
+  virtual int transform_one_stmt_with_outline(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool &trans_happened) override;
+  virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 private:
-  enum PullupFlag { USE_OUTER_JOIN = 1, ADD_CASE_WHEN_EXPR = 2, JOIN_FIRST = 4, AGGR_FIRST = 8 };
+
+  enum PullupFlag {
+    USE_OUTER_JOIN = 1,
+    ADD_CASE_WHEN_EXPR = 2,
+    JOIN_FIRST = 4,
+    AGGR_FIRST = 8
+  };
 
   /**
    * @brief The TransformParam struct
    * a candidate ja query for transformation
    */
   struct TransformParam {
-    TransformParam() : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(0), not_null_expr_(NULL)
+    TransformParam() : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(0),
+                       not_null_expr_(NULL), parent_expr_of_query_ref(NULL)
     {}
 
-    TransformParam(int64_t trans_strategy)
-        : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(trans_strategy), not_null_expr_(NULL)
+    TransformParam(int64_t trans_strategy) 
+      : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(trans_strategy),
+        not_null_expr_(NULL), parent_expr_of_query_ref(NULL), limit_for_exists_(false),
+        limit_value_(0)
     {}
 
-    ObQueryRefRawExpr* ja_query_ref_;  // the ja query ref expr
-    ObSEArray<ObRawExpr*, 4> query_refs_;
-    ObSEArray<ObRawExpr*, 4> nested_conditions_;  // nested conditions in the ja query
-    ObSEArray<bool, 4> is_null_prop_;             // need case when for a expr
-    int64_t pullup_flag_;                         // the methods uesd when pulling up the ja query
-    ObRawExpr* not_null_expr_;                    //  not null expr of subquery if corelated join happened
-
-    TO_STRING_KV(
-        K_(ja_query_ref), K_(query_refs), K_(nested_conditions), K_(is_null_prop), K_(pullup_flag), K_(not_null_expr));
+    ObQueryRefRawExpr *ja_query_ref_;  // the ja query ref expr
+    ObSEArray<ObRawExpr *, 4> query_refs_;
+    ObSEArray<ObRawExpr *, 4> nested_conditions_; // nested conditions in the ja query
+    ObSEArray<bool, 4> is_null_prop_; // need case when for a expr
+    ObArray<ObRawExpr *> not_null_const_;
+    int64_t pullup_flag_; // the methods uesd when pulling up the ja query
+    ObRawExpr *not_null_expr_;  //  not null expr of subquery if corelated join happened
+    ObRawExpr *parent_expr_of_query_ref;  // parent expr need to be modified for vector subquery comparison
+    bool limit_for_exists_;
+    int64_t limit_value_;
+    ObSEArray<ObPCParamEqualInfo, 1, common::ModulePageAllocator, true> equal_param_info_;
+    TO_STRING_KV(K_(ja_query_ref),
+                 K_(query_refs),
+                 K_(nested_conditions),
+                 K_(is_null_prop),
+                 K_(pullup_flag),
+                 K_(not_null_expr),
+                 K_(limit_for_exists),
+                 K_(limit_value),
+                 K_(equal_param_info));
   };
 
-  int transform_with_aggregation_first(ObDMLStmt*& stmt, bool& trans_happened);
+  struct TransStmtInfo {
+    TransStmtInfo()
+    : qb_name_(), unnest_(nullptr) {}
+    int assign(const TransStmtInfo& other)
+    {
+      qb_name_ = other.qb_name_;
+      unnest_ = other.unnest_;
+      return common::OB_SUCCESS;
+    }
+    TO_STRING_KV(K_(qb_name), KPC_(unnest));
+    common::ObString qb_name_;
+    const ObHint *unnest_;
+  };
 
-  int do_aggr_first_transform(ObDMLStmt*& stmt, ObRawExpr* expr, bool& trans_happened);
+  int do_transform(ObDMLStmt *&stmt, bool &trans_happened);
+  int transform_with_aggregation_first(ObDMLStmt *&stmt,
+                                       bool &trans_happened);
 
-  int gather_transform_params(
-      ObRawExpr* root_expr, ObRawExpr* child_expr, int64_t pullup_strategy, ObIArray<TransformParam>& params);
+  int do_aggr_first_transform(ObDMLStmt *&stmt,
+                              ObRawExpr *expr,
+                              bool &trans_happened);
 
-  int check_subquery_validity(
-      ObSelectStmt* subquery, const bool is_vector_assign, ObIArray<ObRawExpr*>& nested_conditions, bool& is_valid);
+  int gather_transform_params(ObDMLStmt &stmt,
+                              ObRawExpr *root_expr,
+                              ObRawExpr *child_expr,
+                              int64_t pullup_strategy,
+                              const bool is_select_item_expr,
+                              ObIArray<TransformParam> &params);
 
-  int choose_pullup_method(ObIArray<ObRawExpr*>& conditions, TransformParam& param);
+  int check_aggr_first_validity(ObQueryRefRawExpr &query_ref,
+                                const bool is_vector_assign,
+                                ObIArray<ObRawExpr*> &nested_conditions,
+                                const bool is_select_item_expr,
+                                bool &is_valid,
+                                int64_t &limit_value,
+                                ObIArray<ObPCParamEqualInfo> &equal_param_info);
 
-  int fill_query_refs(ObDMLStmt* stmt, ObRawExpr* expr, TransformParam& param);
+  int choose_pullup_method(ObIArray<ObRawExpr *> &conditions,
+                           TransformParam &param);
 
-  int transform_child_stmt(ObDMLStmt* stmt, ObSelectStmt& subquery, TransformParam& param);
+  int fill_query_refs(ObDMLStmt *stmt, ObRawExpr *expr, TransformParam &param);
 
-  int deduce_query_values(ObDMLStmt& stmt, TransformParam& param, ObIArray<ObRawExpr*>& select_exprs,
-      ObIArray<ObRawExpr*>& view_columns, ObIArray<ObRawExpr*>& real_values);
+  int transform_child_stmt(ObDMLStmt *stmt,
+                           ObSelectStmt &subquery,
+                           TransformParam &param);
 
-  int transform_upper_stmt(ObDMLStmt& stmt, TransformParam& param);
+  int deduce_query_values(ObDMLStmt &stmt,
+                          TransformParam &param,
+                          ObIArray<ObRawExpr *> &select_exprs,
+                          ObIArray<ObRawExpr *> &view_columns,
+                          ObIArray<ObRawExpr *> &real_values);
 
-  int transform_from_list(
-      ObDMLStmt& stmt, TableItem* view_table_item, const ObIArray<ObRawExpr*>& joined_conds, const int64_t pullup_flag);
+  int transform_upper_stmt(ObDMLStmt &stmt, TransformParam &param);
 
-  int extract_nullable_exprs(const ObRawExpr* expr, ObIArray<const ObRawExpr*>& vars);
+  int transform_from_list(ObDMLStmt &stmt,
+                          TableItem *view_table_item,
+                          const ObIArray<ObRawExpr *> &joined_conds,
+                          const int64_t pullup_flag);
+
+  int extract_nullable_exprs(const ObRawExpr *expr,
+                             ObIArray<const ObRawExpr*> &vars);
 
   inline bool use_outer_join(int64_t flag)
-  {
-    return 0 != (flag & USE_OUTER_JOIN);
-  }
+  { return 0 != (flag & USE_OUTER_JOIN); }
 
   inline bool add_case_when_expr(int64_t flag)
-  {
-    return 0 != (flag & ADD_CASE_WHEN_EXPR);
-  }
+  { return 0 != (flag & ADD_CASE_WHEN_EXPR); }
 
   inline bool join_first(int64_t flag)
-  {
-    return 0 != (flag & JOIN_FIRST);
-  }
+  { return 0 != (flag & JOIN_FIRST); }
 
   inline bool aggr_first(int64_t flag)
-  {
-    return 0 != (flag & AGGR_FIRST);
-  }
+  { return 0 != (flag & AGGR_FIRST); }
 
-  int transform_with_join_first(ObDMLStmt*& stmt, bool& trans_happened);
+  int transform_with_join_first(ObDMLStmt *&stmt,
+                                bool &trans_happened);
 
-  int check_stmt_valid(ObDMLStmt& stmt, bool& is_valid);
+  int check_stmt_valid(ObDMLStmt &stmt, bool &is_valid);
 
-  int check_subquery_validity(
-      ObSelectStmt* subquery, const bool is_vector_assign, const bool in_exists, bool& is_valid);
+  int check_join_first_validity(ObQueryRefRawExpr &query_ref,
+                                const bool is_vector_assign,
+                                const bool in_exists,
+                                const bool is_vector_cmp,
+                                ObIArray<ObRawExpr *> &constraints,
+                                bool &add_limit_constraints,
+                                int64_t &limit_value,
+                                bool &is_valid,
+                                ObIArray<ObPCParamEqualInfo> &equal_param_info);
 
-  int choose_pullup_method_for_exists(
-      ObQueryRefRawExpr* query_ref, int64_t& pullup_flag, const bool with_not, bool& is_valid);
+  int choose_pullup_method_for_exists(ObQueryRefRawExpr *query_ref,
+                                      int64_t &pullup_flag,
+                                      const bool with_not,
+                                      bool &is_valid);
 
-  int get_trans_param(ObDMLStmt& stmt, TransformParam& trans_param, ObRawExpr*& root, bool& post_group_by);
+  int get_trans_param(ObDMLStmt &stmt,
+                      TransformParam &trans_param,
+                      ObRawExpr *&root,
+                      bool &post_group_by);
 
-  int get_trans_view(ObDMLStmt& stmt, ObSelectStmt*& view_stmt, ObRawExpr* root_expr, bool post_group_by);
+  int get_trans_view(ObDMLStmt &stmt,
+                     ObSelectStmt *&view_stmt,
+                     ObRawExpr *root_expr,
+                     bool post_group_by);
 
-  int do_join_first_transform(ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr, const bool is_first_trans);
+  int do_join_first_transform(ObSelectStmt &select_stmt,
+                             TransformParam &trans_param,
+                             ObRawExpr *root_expr,
+                             const bool is_first_trans);
 
-  int get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys, const bool is_first_trans);
+  int get_unique_keys(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pkeys, const bool is_first_trans);
 
-  int transform_from_list(ObDMLStmt& stmt, ObSelectStmt& subquery, const int64_t pullup_flag);
+  int transform_from_list(ObDMLStmt &stmt,
+                          ObSelectStmt &subquery,
+                          const int64_t pullup_flag);
 
-  int rebuild_conditon(ObSelectStmt& stmt, ObSelectStmt& subquery);
+  int rebuild_conditon(ObSelectStmt &stmt, ObSelectStmt &subquery);
 
-  int check_subquery_aggr_item(const ObSelectStmt& subquery, bool& is_valid);
+  int check_single_set_subquery(const ObSelectStmt &subquery,
+                                bool &is_valid,
+                                bool &limit_to_aggr,
+                                int64_t &limit_value,
+                                bool check_limit = true);
 
-  int check_count_const_validity(const ObSelectStmt& subquery, bool& is_valid);
+  int check_subquery_aggr_item(const ObSelectStmt &subquery,
+                               bool &is_valid);
 
-  int is_count_const_expr(const ObRawExpr* expr, bool& is_count_const);
+  int check_count_const_validity(const ObSelectStmt &subquery,
+                                 ObIArray<ObRawExpr *> &constraints,
+                                 bool &is_valid);
 
-  int is_const_null_value(const ObDMLStmt& stmt, const ObRawExpr* param_expr, bool& is_const_null);
+  int is_count_const_expr(const ObRawExpr *expr, bool &is_count_const);
 
-  int replace_count_const(ObAggFunRawExpr* agg_expr, ObRawExpr* not_null_expr);
+  int replace_count_const(ObAggFunRawExpr *agg_expr, ObRawExpr *not_null_expr);
 
-  int check_subquery_table_item(const ObSelectStmt& subquery, bool& is_valid);
+  int check_can_use_outer_join(TransformParam &param, bool &is_valid);
 
-  int check_can_use_outer_join(TransformParam& param, bool& is_valid);
+  int check_subquery_select(ObQueryRefRawExpr &query_ref, bool &is_valid);
 
-  int check_subquery_select(ObSelectStmt& subquery, bool& is_valid);
+  int check_subquery_select_for_limit_1(ObSelectStmt &subquery, bool &is_valid, ObIArray<ObPCParamEqualInfo>& equal_param_info);
 
-  int check_subquery_having(const ObSelectStmt& subquery, bool& is_valid);
+  int check_join_first_condition_for_limit_1(ObQueryRefRawExpr &query_ref,
+                                             ObSelectStmt &subquery,
+                                             bool &is_valid);
 
-  int check_subquery_on_conditions(ObSelectStmt& subquery, bool& is_valid);
+  int check_subquery_having(const ObQueryRefRawExpr &query_ref,
+                            const ObSelectStmt &subquery,
+                            bool &is_valid);
 
-  int check_subquery_conditions(ObSelectStmt& subquery, ObIArray<ObRawExpr*>& nested_conds, bool& is_valid);
+  int check_subquery_conditions(ObQueryRefRawExpr &query_ref,
+                                ObSelectStmt &subquery,
+                                ObIArray<ObRawExpr *> &nested_conds,
+                                const bool check_idx,
+                                bool &is_valid,
+                                bool &has_equal_correlation);
 
-  int replace_columns_and_aggrs(ObRawExpr*& expr, ObTransformerCtx* ctx);
+  int replace_columns_and_aggrs(ObRawExpr *&expr, ObTransformerCtx *ctx);
+
+  int modify_aggr_param_expr_for_outer_join(TransformParam& trans_param);
+
+  int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt, ObRawExprFactory *expr_factory, ObSEArray<ObRawExpr*, 4> &select_exprs, ObRawExpr *parent_expr_of_query_ref);
 
   inline bool is_exists_op(const ObItemType type)
-  {
-    return type == T_OP_EXISTS || type == T_OP_NOT_EXISTS;
-  }
+  { return type == T_OP_EXISTS || type == T_OP_NOT_EXISTS; }
 
-  bool check_is_filter(const ObDMLStmt& stmt, const ObRawExpr* expr);
+  bool check_is_filter(const ObDMLStmt &stmt, const ObRawExpr *expr);
 
-  int get_filters(ObDMLStmt& stmt, ObRawExpr* expr, ObIArray<ObRawExpr*>& filters);
+  int get_filters(ObDMLStmt &stmt, ObRawExpr *expr, ObIArray<ObRawExpr *> &filters);
 
-  int is_valid_group_by(const ObSelectStmt& subquery, bool& is_valid);
-  int extract_no_rewrite_select_exprs(ObDMLStmt*& stmt);
-  int extract_no_rewrite_expr(ObRawExpr* expr);
-  int check_subquery_semi_conditions(ObSelectStmt &subquery, bool &is_valid);
+  int is_valid_group_by(const ObSelectStmt &subquery, bool &is_valid);
+  int extract_no_rewrite_select_exprs(ObDMLStmt *&stmt);
+  int extract_no_rewrite_expr(ObRawExpr *expr);
+  int check_need_spj(ObDMLStmt *stmt, bool &is_valid);
+  int transform_with_aggr_first_for_having(ObDMLStmt *&stmt, bool &trans_happened);
+  int check_hint_allowed_unnest(ObDMLStmt &stmt,
+                                ObSelectStmt &subquery,
+                                bool &allowed);
+  int add_trans_stmt_info(ObSelectStmt &subquery);
+  int check_limit_validity(ObSelectStmt &subquery, 
+                           bool &add_limit_constraints,
+                           int64_t &limit_value, 
+                           bool &is_valid);
+  int add_constraints_for_limit(TransformParam &param);
 
+  int convert_limit_as_aggr(ObSelectStmt *subquery,
+                            TransformParam &trans_param);
 private:
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
+  common::ObSEArray<TransStmtInfo, 4, common::ModulePageAllocator, true> trans_stmt_infos_;
+  bool join_first_happened_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_TRANSFORM_AGGREGATION_SUBQUERY_H_ */
+

@@ -16,25 +16,28 @@
 #include "lib/net/ob_addr.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
-struct ObProposalID {
+namespace oceanbase
+{
+namespace common
+{
+class ObProposalID
+{
+public:
   const static int8_t PROPOSAL_ID_VERSION = 4;
   const static int8_t PROPOSAL_ID_VERSION6 = 6;
 
-  ObProposalID() : addr_(), ts_(OB_INVALID_TIMESTAMP)
-  {}
+  ObProposalID() : addr_(), ts_(OB_INVALID_TIMESTAMP) {}
   void reset();
   bool is_valid() const;
-  int to_yson(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
 
-  bool operator<(const ObProposalID& pid) const;
-  bool operator>(const ObProposalID& pid) const;
-  bool operator>=(const ObProposalID& pid) const;
-  bool operator<=(const ObProposalID& pid) const;
-  void operator=(const ObProposalID& pid);
-  bool operator==(const ObProposalID& pid) const;
-  bool operator!=(const ObProposalID& pid2) const;
+  bool operator < (const ObProposalID &pid) const;
+  bool operator > (const ObProposalID &pid) const;
+  bool operator >= (const ObProposalID &pid) const;
+  bool operator <= (const ObProposalID &pid) const;
+  void operator = (const ObProposalID &pid);
+  bool operator == (const ObProposalID &pid) const;
+  bool operator != (const ObProposalID &pid2) const;
 
   ObAddr addr_;
   int64_t ts_;
@@ -43,6 +46,6 @@ struct ObProposalID {
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
-#endif  // OCEANBASE_COMMON_OB_PROPOSAL_ID_
+}//end namespace common
+}//end namespace oceanbase
+#endif //OCEANBASE_COMMON_OB_PROPOSAL_ID_

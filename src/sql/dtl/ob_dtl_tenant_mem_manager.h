@@ -23,30 +23,25 @@ namespace dtl {
 
 // class ObDtlLinkedBuffer;
 
-class ObDtlTenantMemManager {
+
+class ObDtlTenantMemManager
+{
 public:
   ObDtlTenantMemManager(uint64_t tenant_id);
-  virtual ~ObDtlTenantMemManager()
-  {
-    destroy();
-  }
+  virtual ~ObDtlTenantMemManager() { destroy(); }
 
   int init();
   void destroy();
-  int auto_free_on_time(bool with_tenant_resource);
 
+  int auto_free_on_time();
 public:
-  ObDtlLinkedBuffer* alloc(int64_t chid, int64_t size);
-  int free(ObDtlLinkedBuffer* buf);
+  ObDtlLinkedBuffer *alloc(int64_t chid, int64_t size);
+  int free(ObDtlLinkedBuffer *buf);
   int64_t hash(int64_t chid);
   static int64_t hash(int64_t chid, int64_t ratio);
 
-  int get_channel_mem_manager(int64_t idx, ObDtlChannelMemManager*& mgr);
-  int64_t get_channel_mgr_count()
-  {
-    return mem_mgrs_.count();
-  }
-
+  int get_channel_mem_manager(int64_t idx, ObDtlChannelMemManager *&mgr);
+  int64_t get_channel_mgr_count() { return mem_mgrs_.count(); }
 private:
   void buffer_status();
 
@@ -56,10 +51,10 @@ private:
   int64_t avg_alloc_times();
 
 private:
+  //通过128个散列处理并发
   static const int64_t HASH_CNT = 128;
   uint64_t tenant_id_;
   common::ObSEArray<ObDtlChannelMemManager*, HASH_CNT> mem_mgrs_;
-
 private:
   common::ObSEArray<int64_t, HASH_CNT> times_;
   int64_t hash_cnt_;
@@ -77,8 +72,8 @@ OB_INLINE int64_t ObDtlTenantMemManager::hash(int64_t chid, int64_t ratio)
   return val % (HASH_CNT * ratio);
 }
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+} // dtl
+} // sql
+} // oceanbase
 
 #endif /* OB_DTL_TETANT_MEM_MANEGER_H */

@@ -18,28 +18,28 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_sql_expression.h"
 #include "sql/engine/ob_exec_context.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-// REGISTER_PHY_OPERATOR(ObLimit, PHY_LIMIT);
+namespace sql
+{
+//REGISTER_PHY_OPERATOR(ObLimit, PHY_LIMIT);
 
-class ObLimit::ObLimitCtx : public ObPhyOperatorCtx {
+class ObLimit::ObLimitCtx : public ObPhyOperatorCtx
+{
 public:
-  explicit ObLimitCtx(ObExecContext& ctx)
-      : ObPhyOperatorCtx(ctx),
-        limit_(-1),
-        offset_(0),
-        input_count_(0),
-        output_count_(0),
-        total_count_(0),
-        is_percent_first_(false),
-        limit_last_row_(NULL)
-  {}
-  virtual void destroy()
+  explicit ObLimitCtx(ObExecContext &ctx)
+    : ObPhyOperatorCtx(ctx),
+      limit_(-1),
+      offset_(0),
+      input_count_(0),
+      output_count_(0),
+      total_count_(0),
+      is_percent_first_(false),
+      limit_last_row_(NULL)
   {
-    ObPhyOperatorCtx::destroy_base();
   }
-
+  virtual void destroy() { ObPhyOperatorCtx::destroy_base(); }
 private:
   int64_t limit_;
   int64_t offset_;
@@ -47,12 +47,12 @@ private:
   int64_t output_count_;
   int64_t total_count_;
   bool is_percent_first_;
-  ObNewRow* limit_last_row_;
+  ObNewRow *limit_last_row_;
 
   friend class ObLimit;
 };
 
-ObLimit::ObLimit(ObIAllocator& alloc)
+ObLimit::ObLimit(ObIAllocator &alloc)
     : ObSingleChildPhyOperator(alloc),
       org_limit_(NULL),
       org_offset_(NULL),
@@ -61,7 +61,8 @@ ObLimit::ObLimit(ObIAllocator& alloc)
       is_top_limit_(false),
       is_fetch_with_ties_(false),
       sort_columns_(alloc)
-{}
+{
+}
 
 ObLimit::~ObLimit()
 {
@@ -85,7 +86,7 @@ void ObLimit::reuse()
   reset();
 }
 
-int ObLimit::set_limit(ObSqlExpression* limit, ObSqlExpression* offset, ObSqlExpression* percent)
+int ObLimit::set_limit(ObSqlExpression *limit, ObSqlExpression *offset, ObSqlExpression *percent)
 {
   int ret = OB_SUCCESS;
   if (limit) {
@@ -100,8 +101,10 @@ int ObLimit::set_limit(ObSqlExpression* limit, ObSqlExpression* offset, ObSqlExp
   return ret;
 }
 
-int ObLimit::get_int_value(
-    ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val, bool& is_null_value) const
+int ObLimit::get_int_value(ObExecContext &ctx,
+                           const ObSqlExpression *in_val,
+                           int64_t &out_val,
+                           bool &is_null_value) const
 {
   int ret = OB_SUCCESS;
   ObNewRow input_row;
@@ -131,7 +134,9 @@ int ObLimit::get_int_value(
   return ret;
 }
 
-int ObLimit::get_double_value(ObExecContext& ctx, const ObSqlExpression* double_val, double& out_val) const
+int ObLimit::get_double_value(ObExecContext &ctx,
+                              const ObSqlExpression *double_val,
+                              double &out_val) const
 {
   int ret = OB_SUCCESS;
   ObNewRow input_row;
@@ -159,7 +164,7 @@ int ObLimit::get_double_value(ObExecContext& ctx, const ObSqlExpression* double_
   return ret;
 }
 
-int ObLimit::get_limit(ObExecContext& ctx, int64_t& limit, int64_t& offset, bool& is_percent_first) const
+int ObLimit::get_limit(ObExecContext &ctx, int64_t &limit, int64_t &offset, bool &is_percent_first) const
 {
   int ret = OB_SUCCESS;
   double percent = 0.0;
@@ -174,11 +179,12 @@ int ObLimit::get_limit(ObExecContext& ctx, int64_t& limit, int64_t& offset, bool
     offset = 0;
     limit = 0;
   } else {
+    //由于下层的block算子大多数是在inner_get_next_row才计算出总的行数，因此这里也需要这样设置
     is_percent_first = (org_percent_ != NULL && !org_percent_->is_empty());
-    // revise limit, offset because rownum < -1 is rewritten as limit -1
-    // offset 2 rows fetch next -3 rows only --> is meaningless
+    //revise limit, offset because rownum < -1 is rewritten as limit -1
+    //offset 2 rows fetch next -3 rows only --> is meaningless
     offset = offset < 0 ? 0 : offset;
-    if (org_limit_ != NULL && !org_limit_->is_empty()) {
+    if (org_limit_ != NULL && !org_limit_->is_empty()) {//不能统一直接设置为0,因为需要支持仅仅只有offset情形
       limit = limit < 0 ? 0 : limit;
     }
   }
@@ -190,10 +196,10 @@ bool ObLimit::is_valid() const
   return (get_column_count() > 0 && child_op_ != NULL && child_op_->get_column_count() > 0);
 }
 
-int ObLimit::inner_open(ObExecContext& ctx) const
+int ObLimit::inner_open(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObLimitCtx* limit_ctx = NULL;
+  ObLimitCtx *limit_ctx = NULL;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -205,15 +211,14 @@ int ObLimit::inner_open(ObExecContext& ctx) const
     LOG_WARN("get physical operator context failed", K_(id));
   } else if (OB_FAIL(get_limit(ctx, limit_ctx->limit_, limit_ctx->offset_, limit_ctx->is_percent_first_))) {
     LOG_WARN("Failed to instantiate limit/offset", K(ret));
-  } else {
-  }
+  } else { }
   return ret;
 }
 
-int ObLimit::rescan(ObExecContext& ctx) const
+int ObLimit::rescan(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObLimitCtx* limit_ctx = NULL;
+  ObLimitCtx *limit_ctx = NULL;
   if (OB_FAIL(ObSingleChildPhyOperator::rescan(ctx))) {
     LOG_WARN("rescan child physical operator failed", K(ret));
   } else if (OB_ISNULL(limit_ctx = GET_PHY_OPERATOR_CTX(ObLimitCtx, ctx, get_id()))) {
@@ -226,17 +231,17 @@ int ObLimit::rescan(ObExecContext& ctx) const
   return ret;
 }
 
-int ObLimit::inner_close(ObExecContext& ctx) const
+int ObLimit::inner_close(ObExecContext &ctx) const
 {
   UNUSED(ctx);
   return OB_SUCCESS;
 }
 
-int ObLimit::init_op_ctx(ObExecContext& ctx) const
+int ObLimit::init_op_ctx(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  ObPhyOperatorCtx* op_ctx = NULL;
-  if (OB_FAIL(CREATE_PHY_OPERATOR_CTX(ObLimitCtx, ctx, get_id(), get_type(), op_ctx))) {
+  ObPhyOperatorCtx *op_ctx = NULL;
+  if(OB_FAIL(CREATE_PHY_OPERATOR_CTX(ObLimitCtx, ctx, get_id(), get_type(), op_ctx))) {
     LOG_WARN("failed to create LimitCtx", K(ret));
   } else if (OB_ISNULL(op_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -247,41 +252,50 @@ int ObLimit::init_op_ctx(ObExecContext& ctx) const
   return ret;
 }
 
-int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+int ObLimit::inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
 {
   int ret = OB_SUCCESS;
-  ObLimitCtx* limit_ctx = NULL;
-  ObSQLSessionInfo* my_session = NULL;
-  const ObNewRow* input_row = NULL;
+  ObLimitCtx *limit_ctx = NULL;
+  ObSQLSessionInfo *my_session = NULL;
+  const ObNewRow *input_row = NULL;
 
-  if (OB_FAIL(!is_valid())) {
+  if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("limit operator is invalid");
+    LOG_WARN("limit operator is invalid", K(ret));
   } else if (OB_ISNULL(limit_ctx = GET_PHY_OPERATOR_CTX(ObLimitCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get physical operator ctx failed");
   } else if (OB_ISNULL(my_session = GET_MY_SESSION(ctx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get my session", K(ret));
-  } else {
-  }
+  } else { }
   while (OB_SUCC(ret) && limit_ctx->input_count_ < limit_ctx->offset_) {
     if (OB_FAIL(child_op_->get_next_row(ctx, input_row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("child_op failed to get next row", K(limit_ctx->input_count_), K(limit_ctx->offset_), K(ret));
+        LOG_WARN("child_op failed to get next row",
+                 K(limit_ctx->input_count_), K(limit_ctx->offset_), K(ret));
       }
     } else if (limit_ctx->is_percent_first_ && OB_FAIL(convert_limit_percent(ctx, limit_ctx))) {
       LOG_WARN("failed to convert limit percent", K(ret));
     } else {
       ++limit_ctx->input_count_;
     }
-  }  // end while
+  } // end while
 
-  /*
-   * 1. is_percent_first_: for 'select * from t1 fetch next 50 percent rows only',
-   *    need set lower block operators like sort or agg, and then reset is_percent_first_ to false.
-   * 2. is_fetch_with_ties_: when we get enough rows as limit count, shall we keep fetching for
-   *    those rows which equal to the last row of specified order (by order by clause) ?
+  /*由于支持了oracle 12c的fetch功能，因此下面的执行流程比较复杂，这里简单解释一下：
+  * 1.is_percent_first_：代表的fetch是否指定的百分比取行数，比如：select * from t1 fetch next 50 percent rows only;
+  *   取总行数的50%出来，这个时候需要is_percent_first_来表明是否用的百分比，同时我们的下层block算子(sort、hash group by等)
+  *   都是在get_next_row时指定设置的，因此需要在第一次时去设置对应的limit数量，同时设置完后将is_percent_first_重新设置为false；
+  * 2.is_fetch_with_ties_：表示在拿到所需要的limit数量时，需要继续下探是否存在按照order by排序列值相等的情形，
+  *   比如表t1有3行数据 c1 c2 c3
+  *                   1  2  3
+  *                   1  2  4
+  *                   2  2  3
+  *   这个时候假如按照表t1的c1列排序，同时设置了只输出一列，但是指定了with ties(sql为:select * from t1 order by c1 fetch next 1 rows with ties);
+  *   那么需要将每次从child op拿取rows同时保存拿到的最后一行数据，等拿到了指定的数量之后，继续按照保存好的最后一行数据
+  *   下探child op的rows,直到拿到按照order by排序列的值不相等或者拿完了child op的rows为止；比如上述例子中拿到行：1 2 3
+  *   会继续下探行：1 2 4，发现排序列c1值相等，会继续下探拿行：2 2 3，这个时候排序列c1值不等，整个get_next_row结束。
+  *
    */
   int64_t left_count = 0;
   if (OB_SUCC(ret)) {
@@ -289,11 +303,8 @@ int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
       if (OB_FAIL(child_op_->get_next_row(ctx, input_row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("child_op failed to get next row",
-              K(ret),
-              K_(limit_ctx->limit),
-              K_(limit_ctx->offset),
-              K_(limit_ctx->input_count),
-              K_(limit_ctx->output_count));
+                   K(ret), K_(limit_ctx->limit), K_(limit_ctx->offset),
+                   K_(limit_ctx->input_count), K_(limit_ctx->output_count));
         }
       } else if (limit_ctx->is_percent_first_ && OB_FAIL(convert_limit_percent(ctx, limit_ctx))) {
         LOG_WARN("failed to convert limit percent", K(ret));
@@ -302,24 +313,22 @@ int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
       } else {
         ++limit_ctx->output_count_;
         row = input_row;
+        //如果需要支持fetch with ties功能，需要拷贝limit拿出的最后一行保存下来供后续使用
         if (is_fetch_with_ties_ && limit_ctx->output_count_ == limit_ctx->limit_ &&
             OB_FAIL(deep_copy_limit_last_rows(limit_ctx, *row))) {
           LOG_WARN("failed to deep copy limit last rows");
         } else if (OB_FAIL(copy_cur_row(*limit_ctx, row))) {
           LOG_WARN("copy current row failed", K(ret));
-        } else { /*do nothing*/
-        }
+        } else {/*do nothing*/}
       }
+    //说明需要继续判断input rows能否按照order by items等值输出
     } else if (limit_ctx->limit_ > 0 && is_fetch_with_ties_) {
       bool is_equal = false;
       if (OB_FAIL(child_op_->get_next_row(ctx, input_row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("child_op failed to get next row",
-              K(ret),
-              K_(limit_ctx->limit),
-              K_(limit_ctx->offset),
-              K_(limit_ctx->input_count),
-              K_(limit_ctx->output_count));
+                   K(ret), K_(limit_ctx->limit), K_(limit_ctx->offset),
+                   K_(limit_ctx->input_count), K_(limit_ctx->output_count));
         }
       } else if (OB_FAIL(is_row_order_by_item_value_equal(limit_ctx, input_row, is_equal))) {
         LOG_WARN("failed to is row order by item value equal", K(ret));
@@ -332,12 +341,14 @@ int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
           LOG_DEBUG("copy cur row", K(*row));
         }
       } else {
+        //溢出的按照order by排序相等的row已经找完
         ret = OB_ITER_END;
       }
     } else {
+      //结果条数已经满足
       ret = OB_ITER_END;
       if (is_calc_found_rows_) {
-        const ObNewRow* tmp_row = NULL;
+        const ObNewRow *tmp_row = NULL;
         while (OB_SUCC(child_op_->get_next_row(ctx, tmp_row))) {
           ++left_count;
         }
@@ -350,13 +361,13 @@ int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   if (OB_ITER_END == ret) {
     if (is_top_limit_) {
       limit_ctx->total_count_ = left_count + limit_ctx->output_count_ + limit_ctx->input_count_;
-      ObPhysicalPlanCtx* plan_ctx = NULL;
+      ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("get physical plan context failed");
       } else {
-        NG_TRACE_EXT(
-            found_rows, OB_ID(total_count), limit_ctx->total_count_, OB_ID(input_count), limit_ctx->input_count_);
+        NG_TRACE_EXT(found_rows, OB_ID(total_count), limit_ctx->total_count_,
+                     OB_ID(input_count), limit_ctx->input_count_);
         plan_ctx->set_found_rows(limit_ctx->total_count_);
       }
     }
@@ -364,7 +375,7 @@ int ObLimit::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   return ret;
 }
 
-int ObLimit::deep_copy_limit_last_rows(ObLimitCtx* limit_ctx, const ObNewRow row) const
+int ObLimit::deep_copy_limit_last_rows(ObLimitCtx *limit_ctx, const ObNewRow row) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(limit_ctx) || OB_ISNULL(limit_ctx->calc_buf_)) {
@@ -373,27 +384,29 @@ int ObLimit::deep_copy_limit_last_rows(ObLimitCtx* limit_ctx, const ObNewRow row
   } else {
     const int64_t buf_len = sizeof(ObNewRow) + row.get_deep_copy_size();
     int64_t pos = sizeof(ObNewRow);
-    char* buf = NULL;
-    if (OB_ISNULL(buf = static_cast<char*>(limit_ctx->calc_buf_->alloc(buf_len)))) {
+    char *buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char *>(limit_ctx->calc_buf_->alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc new row failed", K(ret), K(buf_len));
     } else if (OB_ISNULL(limit_ctx->limit_last_row_ = new (buf) ObNewRow())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new_row is null", K(ret), K(buf_len));
-    } else if (OB_FAIL(limit_ctx->limit_last_row_->deep_copy(row, buf, buf_len, pos))) {
+    } else if (OB_FAIL(limit_ctx->limit_last_row_ ->deep_copy(row, buf, buf_len, pos))) {
       LOG_WARN("deep copy row failed", K(ret), K(buf_len), K(pos));
-    } else { /*do nothing*/
-    }
+    } else {/*do nothing*/}
   }
   return ret;
 }
 
-int ObLimit::is_row_order_by_item_value_equal(ObLimitCtx* limit_ctx, const ObNewRow* input_row, bool& is_equal) const
+int ObLimit::is_row_order_by_item_value_equal(ObLimitCtx *limit_ctx,
+                                              const ObNewRow *input_row,
+                                              bool &is_equal) const
 {
   int ret = OB_SUCCESS;
-  ObNewRow* limit_last_row = NULL;
+  ObNewRow *limit_last_row = NULL;
   is_equal = false;
-  if (OB_ISNULL(limit_ctx) || OB_ISNULL(limit_last_row = limit_ctx->limit_last_row_) || OB_ISNULL(input_row)) {
+  if (OB_ISNULL(limit_ctx) || OB_ISNULL(limit_last_row = limit_ctx->limit_last_row_) ||
+      OB_ISNULL(input_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(limit_ctx), K(input_row), K(limit_last_row));
   } else {
@@ -402,21 +415,19 @@ int ObLimit::is_row_order_by_item_value_equal(ObLimitCtx* limit_ctx, const ObNew
       if (OB_UNLIKELY(sort_columns_.at(i).index_ >= input_row->count_ ||
                       sort_columns_.at(i).index_ >= limit_last_row->count_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("order by projector is invalid",
-            K(ret),
-            K(sort_columns_.at(i).index_),
-            K(input_row->count_),
-            K(limit_last_row->count_));
+        LOG_WARN("order by projector is invalid", K(ret), K(sort_columns_.at(i).index_),
+                                                  K(input_row->count_), K(limit_last_row->count_));
       } else {
         is_equal = 0 == input_row->cells_[sort_columns_.at(i).index_].compare(
-                            limit_last_row->cells_[sort_columns_.at(i).index_], sort_columns_.at(i).cs_type_);
+                                                limit_last_row->cells_[sort_columns_.at(i).index_],
+                                                sort_columns_.at(i).cs_type_);
       }
     }
   }
   return ret;
 }
 
-int64_t ObLimit::to_string_kv(char* buf, const int64_t buf_len) const
+int64_t ObLimit::to_string_kv(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (org_limit_ && org_offset_) {
@@ -429,19 +440,19 @@ int64_t ObLimit::to_string_kv(char* buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObLimit::add_filter(ObSqlExpression* expr)
+int ObLimit::add_filter(ObSqlExpression *expr)
 {
   UNUSED(expr);
-  LOG_ERROR("limit operator should have no filter expr");
+  LOG_ERROR_RET(OB_NOT_SUPPORTED, "limit operator should have no filter expr");
   return OB_NOT_SUPPORTED;
 }
 
-int ObLimit::add_sort_columns(ObSortColumn sort_column)
-{
+int ObLimit::add_sort_columns(ObSortColumn sort_column) {
   return sort_columns_.push_back(sort_column);
 }
 
-int ObLimit::convert_limit_percent(ObExecContext& ctx, ObLimitCtx* limit_ctx) const
+//针对percent需要这里根据总行数转换为对应的limit count
+int ObLimit::convert_limit_percent(ObExecContext &ctx, ObLimitCtx *limit_ctx) const
 {
   int ret = OB_SUCCESS;
   double percent = 0.0;
@@ -453,22 +464,24 @@ int ObLimit::convert_limit_percent(ObExecContext& ctx, ObLimitCtx* limit_ctx) co
   } else if (percent > 0) {
     int64_t tot_count = 0;
     if (OB_UNLIKELY(limit_ctx->limit_ != -1) || OB_ISNULL(child_op_) ||
-        OB_UNLIKELY(child_op_->get_type() != PHY_MATERIAL && child_op_->get_type() != PHY_SORT)) {
+        OB_UNLIKELY(child_op_->get_type() != PHY_MATERIAL &&
+                    child_op_->get_type() != PHY_SORT)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(limit_ctx->limit_), K(child_op_));
     } else if (child_op_->get_type() == PHY_MATERIAL &&
-               OB_FAIL(static_cast<ObMaterial*>(child_op_)->get_material_row_count(ctx, tot_count))) {
+               OB_FAIL(static_cast<ObMaterial *>(child_op_)->get_material_row_count(ctx, tot_count))) {
       LOG_WARN("failed to get op row count", K(ret));
     } else if (child_op_->get_type() == PHY_SORT &&
-               OB_FAIL(static_cast<ObSort*>(child_op_)->get_sort_row_count(ctx, tot_count))) {
+               OB_FAIL(static_cast<ObSort *>(child_op_)->get_sort_row_count(ctx, tot_count))) {
       LOG_WARN("failed to get op row count", K(ret));
     } else if (OB_UNLIKELY(tot_count < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid child op row count", K(tot_count), K(ret));
     } else if (percent < 100) {
+      //兼容oracle,向上取整
       int64_t percent_int64 = static_cast<int64_t>(percent);
       int64_t offset = (tot_count * percent / 100 - tot_count * percent_int64 / 100) > 0 ? 1 : 0;
-      limit_ctx->limit_ = tot_count * percent_int64 / 100 + offset;
+      limit_ctx->limit_ = tot_count * percent_int64 / 100 +  offset;
       limit_ctx->is_percent_first_ = false;
     } else {
       limit_ctx->limit_ = tot_count;

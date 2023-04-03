@@ -15,39 +15,39 @@
 #include <stdint.h>
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace rpc {
+namespace oceanbase
+{
+namespace rpc
+{
 class ObRequest;
-}  // namespace rpc
-namespace obrpc {
+} // end of namespace rp
+namespace obrpc
+{
 
 class ObRpcPacket;
 class ObRpcSessionHandler;
-class ObRpcStreamCond {
+class ObRpcStreamCond
+{
 public:
-  explicit ObRpcStreamCond(ObRpcSessionHandler& handle);
+  explicit ObRpcStreamCond(ObRpcSessionHandler &handle);
   virtual ~ObRpcStreamCond();
 
   virtual int prepare();
-  virtual int wait(rpc::ObRequest*& req, int64_t timeout);
-  virtual int wakeup(rpc::ObRequest& req);
+  virtual int wait(rpc::ObRequest *&req, int64_t timeout);
+  virtual int wakeup(rpc::ObRequest &req);
   virtual int destroy();
   virtual void reuse();
 
-  int64_t sessid() const
-  {
-    return sessid_;
-  }
+  int64_t sessid() const { return sessid_; }
 
 private:
   int64_t sessid_;
-  ObRpcSessionHandler& handler_;
-
+  ObRpcSessionHandler &handler_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcStreamCond);
-};  // end of class ObRpcStreamCond
+}; // end of class ObRpcStreamCond
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace rpc
+} // end of namespace oceanbase
 
 #endif

@@ -16,32 +16,28 @@
 #include "lib/string/ob_string.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprRegexpCount : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprRegexpCount : public ObFuncExprOperator
+{
 public:
-  explicit ObExprRegexpCount(common::ObIAllocator& alloc);
+  explicit ObExprRegexpCount(common::ObIAllocator &alloc);
   virtual ~ObExprRegexpCount();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int eval_regexp_count(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-  static int get_regexp_flags(
-      const common::ObCollationType calc_cs_type, const common::ObString& match_param, int& flags, int& multi_flag);
-
-private:
-  static int calc(int64_t& ret_count, const common::ObString& text, const common::ObString& pattern, int64_t position,
-      const common::ObCollationType calc_cs_type, const common::ObString& match_param, int64_t subexpr,
-      bool has_null_argument, ObExprRegexContext* regexp_ptr, common::ObExprStringBuf& string_buf);
-
+  static int eval_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpCount);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_REGEXP_SUBSTR_ */

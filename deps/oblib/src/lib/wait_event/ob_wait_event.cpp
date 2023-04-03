@@ -13,54 +13,33 @@
 #include "lib/wait_event/ob_wait_event.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const ObWaitEvent OB_WAIT_EVENTS[] = {
 #define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, display_name, is_phy) \
   {id, name, param1, param2, param3, ObWaitClassIds::wait_class, display_name, is_phy},
 #include "lib/wait_event/ob_wait_event.h"
 #undef WAIT_EVENT_DEF
 };
-int64_t ObWaitEventDesc::to_string(char* buf, const int64_t buf_len) const
+int64_t ObWaitEventDesc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (event_no_ >= 0 && event_no_ < ObWaitEventIds::WAIT_EVENT_END) {
-    J_KV(K_(event_no),
-        K_(p1),
-        K_(p2),
-        K_(p3),
-        K_(wait_begin_time),
-        K_(wait_end_time),
-        K_(wait_time),
-        K_(timeout_ms),
-        K_(level),
-        K_(parent),
-        "event_id",
-        OB_WAIT_EVENTS[event_no_].event_id_,
-        "event_name",
-        OB_WAIT_EVENTS[event_no_].event_name_,
-        "param1",
-        OB_WAIT_EVENTS[event_no_].param1_,
-        "param2",
-        OB_WAIT_EVENTS[event_no_].param2_,
-        "param3",
-        OB_WAIT_EVENTS[event_no_].param3_);
+    J_KV(K_(event_no), K_(p1), K_(p2), K_(p3), K_(wait_begin_time), K_(wait_end_time), K_(wait_time), K_(timeout_ms), K_(level), K_(parent),
+        "event_id", OB_WAIT_EVENTS[event_no_].event_id_,
+        "event_name", OB_WAIT_EVENTS[event_no_].event_name_,
+        "param1", OB_WAIT_EVENTS[event_no_].param1_,
+        "param2", OB_WAIT_EVENTS[event_no_].param2_,
+        "param3", OB_WAIT_EVENTS[event_no_].param3_);
   } else {
-    J_KV(K_(event_no),
-        K_(p1),
-        K_(p2),
-        K_(p3),
-        K_(wait_begin_time),
-        K_(wait_end_time),
-        K_(wait_time),
-        K_(timeout_ms),
-        K_(level),
-        K_(parent));
+    J_KV(K_(event_no), K_(p1), K_(p2), K_(p3), K_(wait_begin_time), K_(wait_end_time), K_(wait_time), K_(timeout_ms), K_(level), K_(parent));
   }
   return pos;
 }
 
-int ObWaitEventStat::add(const ObWaitEventStat& other)
+int ObWaitEventStat::add(const ObWaitEventStat &other)
 {
   int ret = OB_SUCCESS;
   if (other.is_valid()) {
@@ -76,12 +55,13 @@ int ObWaitEventStat::add(const ObWaitEventStat& other)
   return ret;
 }
 
-int64_t ObWaitEventStat::to_string(char* buf, const int64_t buf_len) const
+int64_t ObWaitEventStat::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_KV(K_(total_waits), K_(total_timeouts), K_(time_waited), K_(max_wait));
   return pos;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+

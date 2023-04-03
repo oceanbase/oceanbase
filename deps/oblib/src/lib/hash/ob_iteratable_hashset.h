@@ -16,26 +16,32 @@
 #include "lib/hash/ob_placement_hashset.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 template <class K, uint64_t N>
 class ObIteratableHashSet;
 
 template <typename HashSet>
-class ObIteratableHashSetConstIterator {
+class ObIteratableHashSetConstIterator
+{
   typedef typename HashSet::const_key_ref_t const_key_ref_t;
   typedef typename HashSet::inner_key_t inner_key_t;
   typedef ObIteratableHashSetConstIterator<HashSet> self_t;
-
 public:
-  ObIteratableHashSetConstIterator(const HashSet* set, const inner_key_t* cur) : set_(set), cur_(cur)
-  {}
-  virtual ~ObIteratableHashSetConstIterator()
-  {}
-  ObIteratableHashSetConstIterator(const self_t& other) : set_(other.set_), cur_(other.cur_)
-  {}
-  ObIteratableHashSetConstIterator& operator=(const self_t& other)
+  ObIteratableHashSetConstIterator(const HashSet *set, const inner_key_t *cur)
+      : set_(set), cur_(cur)
+  {
+  }
+  virtual ~ObIteratableHashSetConstIterator() {}
+  ObIteratableHashSetConstIterator(const self_t &other)
+      : set_(other.set_), cur_(other.cur_)
+  {
+  }
+  ObIteratableHashSetConstIterator &operator=(const self_t &other)
   {
     if (this != &other) {
       set_ = other.set_;
@@ -43,15 +49,15 @@ public:
     }
     return *this;
   }
-  bool operator==(const self_t& other) const
+  bool operator== (const self_t &other) const
   {
     return set_ == other.set_ && cur_ == other.cur_;
   }
-  bool operator!=(const self_t& other) const
+  bool operator!= (const self_t &other) const
   {
     return set_ != other.set_ || cur_ != other.cur_;
   }
-  self_t& operator++()
+  self_t &operator++()
   {
     cur_ = cur_->get_next();
     return *this;
@@ -60,36 +66,33 @@ public:
   {
     return cur_->get_data();
   }
-
 private:
   // data members
-  const HashSet* set_;
-  const inner_key_t* cur_;
+  const HashSet *set_;
+  const inner_key_t *cur_;
 };
 
 template <class K, uint64_t N = 1031>
-class ObIteratableHashSet : protected ObPlacementHashSet<ObDLinkNode<K>, N> {
+class ObIteratableHashSet: protected ObPlacementHashSet<ObDLinkNode<K>, N>
+{
 public:
-  typedef K* key_pointer_t;
-  typedef const K* const_key_pointer_t;
-  typedef K& key_ref_t;
-  typedef const K& const_key_ref_t;
+  typedef K *key_pointer_t;
+  typedef const K *const_key_pointer_t;
+  typedef K &key_ref_t;
+  typedef const K &const_key_ref_t;
   typedef ObDLinkNode<K> inner_key_t;
   typedef ObPlacementHashSet<ObDLinkNode<K>, N> parent_t;
   typedef ObIteratableHashSet<K, N> self_t;
   typedef ObIteratableHashSetConstIterator<self_t> const_iterator_t;
-
 public:
-  ObIteratableHashSet() : parent_t(), list_()
-  {}
-  virtual ~ObIteratableHashSet()
-  {}
+  ObIteratableHashSet(): parent_t(), list_() {}
+  virtual ~ObIteratableHashSet() {}
   /**
    * @retval OB_SUCCESS       insert new key succ
    * @retval OB_HASH_EXIST    key exist
    * @retval other            errors
    */
-  int set_refactored(const K& key)
+  int set_refactored(const K &key)
   {
     int ret = OB_SUCCESS;
     inner_key_t ikey;
@@ -110,25 +113,19 @@ public:
    * @retval OB_HASH_NOT_EXIST key does not exist
    * @retval other             errors
    */
-  int exist_refactored(const K& key) const
+  int exist_refactored(const K &key) const
   {
     inner_key_t ikey;
     ikey.get_data() = key;
     return parent_t::exist_refactored(ikey);
   }
-  void reset()
-  {
-    clear();
-  }
+  void reset() { clear(); }
   void clear()
   {
     parent_t::clear();
     list_.reset();
   }
-  int64_t count() const
-  {
-    return parent_t::count();
-  }
+  int64_t count() const {return parent_t::count();}
   const_iterator_t begin() const
   {
     return const_iterator_t(this, list_.get_first());
@@ -137,28 +134,28 @@ public:
   {
     return const_iterator_t(this, list_.get_header());
   }
-  ObIteratableHashSet& operator=(const ObIteratableHashSet& other)
+  ObIteratableHashSet &operator=(const ObIteratableHashSet &other)
   {
     int tmp_ret = OB_SUCCESS;
     clear();
-    for (const_iterator_t it = other.begin(); it != other.end(); ++it) {
+    for (const_iterator_t it = other.begin();
+         it != other.end();
+         ++it) {
       if (OB_SUCCESS != (tmp_ret = set_refactored(*it))) {
-        _OB_LOG(ERROR, "fail set value. tmp_ret=%d", tmp_ret);
+        _OB_LOG_RET(ERROR, tmp_ret, "fail set value. tmp_ret=%d", tmp_ret);
         break;
       }
     }
     return *this;
   }
   DECLARE_TO_STRING;
-
 private:
   // types and constants
   template <typename HashSet>
   friend class ObIteratableHashSetConstIterator;
-
 private:
   // disallow copy
-  ObIteratableHashSet(const ObIteratableHashSet& other);
+  ObIteratableHashSet(const ObIteratableHashSet &other);
   // function members
 protected:
   // data members
@@ -166,12 +163,14 @@ protected:
 };
 
 template <class K, uint64_t N>
-int64_t ObIteratableHashSet<K, N>::to_string(char* buf, const int64_t buf_len) const
+int64_t ObIteratableHashSet<K, N>::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_ARRAY_START();
   const_iterator_t beg = begin();
-  for (const_iterator_t it = beg; it != end(); ++it) {
+  for (const_iterator_t it = beg;
+       it != end();
+       ++it) {
     if (it != beg) {
       J_COMMA();
     }
@@ -180,8 +179,8 @@ int64_t ObIteratableHashSet<K, N>::to_string(char* buf, const int64_t buf_len) c
   J_ARRAY_END();
   return pos;
 }
-}  // end namespace hash
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace hash
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_HASH_OB_ITERATABLE_HASHSET_
+#endif // OCEANBASE_COMMON_HASH_OB_ITERATABLE_HASHSET_

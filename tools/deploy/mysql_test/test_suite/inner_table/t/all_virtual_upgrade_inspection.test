@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : zhenjiang.xzj
+#owner group : STORAGE
+#description : 测试虚拟表__all_virtual_upgrade_inspection
+
+--disable_abort_on_error
+--disable_warnings
+#检查表结构
+#login into the sys tenant
+connect (conn_admin,$OBMYSQL_MS0,admin@sys,admin,*NO-ONE*,$OBMYSQL_PORT);
+
+desc oceanbase.__all_virtual_upgrade_inspection;
+
+--disable_result_log
+
+--enable_result_log
+select * from oceanbase.__all_virtual_upgrade_inspection;

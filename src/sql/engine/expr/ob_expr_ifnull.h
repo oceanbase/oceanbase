@@ -15,26 +15,28 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprIfNull : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprIfNull : public ObFuncExprOperator
+{
 public:
-  explicit ObExprIfNull(common::ObIAllocator& alloc);
+  explicit  ObExprIfNull(common::ObIAllocator &alloc);
   virtual ~ObExprIfNull();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_ifnull_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const;
+  static int calc_ifnull_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIfNull);
-
 private:
   // data members
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_IFNULL_
+} // namespace sql
+} // namespace oceanbase
+#endif // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_IFNULL_

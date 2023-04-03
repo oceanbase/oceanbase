@@ -15,35 +15,33 @@
 
 #include "lib/hash/ob_placement_hashutils.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 template <class K, uint64_t N = 1031, bool auto_free = false>
-class ObPlacementHashSet {
+class ObPlacementHashSet
+{
 public:
-  ObPlacementHashSet() : count_(0)
-  {}
-  ~ObPlacementHashSet()
-  {}
+  ObPlacementHashSet(): count_(0) {}
+  ~ObPlacementHashSet() {}
   /**
    * @retval OB_SUCCESS       success
    * @retval OB_HASH_EXIST    key exist
    * @retval other            errors
    */
-  int set_refactored(const K& key);
+  int set_refactored(const K &key);
   /**
    * @retval OB_HASH_EXIST     key exists
    * @retval OB_HASH_NOT_EXIST key does not exist
    * @retval other             errors
    */
-  int exist_refactored(const K& key) const;
+  int  exist_refactored(const K &key) const;
   void clear();
   void reset();
-  int64_t count() const
-  {
-    return count_;
-  };
-
+  int64_t count() const {return count_;};
 protected:
   ObBitSet<N, ModulePageAllocator, auto_free> flags_;
   K keys_[N];
@@ -51,7 +49,7 @@ protected:
 };
 
 template <class K, uint64_t N, bool auto_free>
-int ObPlacementHashSet<K, N, auto_free>::set_refactored(const K& key)
+int ObPlacementHashSet<K, N, auto_free>::set_refactored(const K &key)
 {
   int ret = OB_SUCCESS;
   uint64_t pos = 0;
@@ -65,7 +63,7 @@ int ObPlacementHashSet<K, N, auto_free>::set_refactored(const K& key)
 }
 
 template <class K, uint64_t N, bool auto_free>
-int ObPlacementHashSet<K, N, auto_free>::exist_refactored(const K& key) const
+int ObPlacementHashSet<K, N, auto_free>::exist_refactored(const K &key) const
 {
   uint64_t pos = 0;
   int ret = placement_hash_search<K, N, ModulePageAllocator, auto_free>(keys_, flags_, key, pos);
@@ -89,8 +87,8 @@ void ObPlacementHashSet<K, N, auto_free>::reset()
   count_ = 0;
 }
 
-}  // namespace hash
-}  // namespace common
-}  // namespace oceanbase
+} // namespace hash
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_LIB_HASH_OB_PLACEMENT_HASH_SET_
+#endif //OCEANBASE_LIB_HASH_OB_PLACEMENT_HASH_SET_

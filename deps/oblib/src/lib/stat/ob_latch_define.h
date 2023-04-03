@@ -11,203 +11,304 @@
  */
 
 #ifdef LATCH_DEF
-LATCH_DEF(LATCH_WAIT_QUEUE_LOCK, 0, "latch wait queue lock", LATCH_FIFO, 2000, 0, LATCH_WAIT_QUEUE_LOCK_WAIT,
-    "latch wait queue lock")
+LATCH_DEF(LATCH_WAIT_QUEUE_LOCK, 0, "latch wait queue lock", LATCH_FIFO, 2000, 0, LATCH_WAIT_QUEUE_LOCK_WAIT, "latch wait queue lock")
 LATCH_DEF(DEFAULT_SPIN_LOCK, 1, "default spin lock", LATCH_FIFO, 2000, 0, DEFAULT_SPIN_LOCK_WAIT, "default spin lock")
-LATCH_DEF(
-    DEFAULT_SPIN_RWLOCK, 2, "default spin rwlock", LATCH_FIFO, 2000, 0, DEFAULT_SPIN_RWLOCK_WAIT, "default spin rwlock")
+LATCH_DEF(DEFAULT_SPIN_RWLOCK, 2, "default spin rwlock", LATCH_FIFO, 2000, 0, DEFAULT_SPIN_RWLOCK_WAIT, "default spin rwlock")
 LATCH_DEF(DEFAULT_MUTEX, 3, "default mutex", LATCH_FIFO, 2000, 0, DEFAULT_MUTEX_WAIT, "default mutex")
-LATCH_DEF(KV_CACHE_BUCKET_LOCK, 4, "kv cache bucket latch", LATCH_FIFO, 2000, 0, KV_CACHE_BUCKET_LOCK_WAIT,
-    "kv cache bucket latch")
-LATCH_DEF(TIME_WHEEL_TASK_LOCK, 5, "time wheel task latch", LATCH_FIFO, 2000, 0, TIME_WHEEL_TASK_LOCK_WAIT,
-    "time wheel task latch")
-LATCH_DEF(TIME_WHEEL_BUCKET_LOCK, 6, "time wheel bucket latch", LATCH_FIFO, 2000, 0, TIME_WHEEL_BUCKET_LOCK_WAIT,
-    "time wheel bucket latch")
+LATCH_DEF(KV_CACHE_BUCKET_LOCK, 4, "kv cache bucket latch", LATCH_FIFO, 2000, 0, KV_CACHE_BUCKET_LOCK_WAIT, "kv cache bucket latch")
+LATCH_DEF(TIME_WHEEL_TASK_LOCK, 5, "time wheel task latch", LATCH_FIFO, 2000, 0, TIME_WHEEL_TASK_LOCK_WAIT, "time wheel task latch")
+LATCH_DEF(TIME_WHEEL_BUCKET_LOCK, 6, "time wheel bucket latch", LATCH_FIFO, 2000, 0, TIME_WHEEL_BUCKET_LOCK_WAIT, "time wheel bucket latch")
 LATCH_DEF(ELECTION_LOCK, 7, "election latch", LATCH_FIFO, 20000000L, 0, ELECTION_LOCK_WAIT, "election latch")
 LATCH_DEF(TRANS_CTX_LOCK, 8, "trans ctx latch", LATCH_FIFO, 2000, 0, TRANS_CTX_LOCK_WAIT, "trans ctx latch")
-LATCH_DEF(
-    PARTITION_LOG_LOCK, 9, "partition log latch", LATCH_FIFO, 2000, 0, PARTITION_LOG_LOCK_WAIT, "partition log latch")
+LATCH_DEF(PARTITION_LOG_LOCK, 9, "partition log latch", LATCH_FIFO, 2000, 0, PARTITION_LOG_LOCK_WAIT, "partition log latch")
 LATCH_DEF(PCV_SET_LOCK, 10, "pcv set latch", LATCH_FIFO, 2000, 0, PCV_SET_LOCK_WAIT, "plan cache pcv set latch")
-LATCH_DEF(CLOG_HISTORY_REPORTER_LOCK, 11, "clog history reporter latch", LATCH_FIFO, 2000, 0,
-    CLOG_HISTORY_REPORTER_LOCK_WAIT, "plan cache value latch")
-LATCH_DEF(CLOG_EXTERNAL_EXEC_LOCK, 12, "clog external executor latch", LATCH_FIFO, 2000, 0,
-    CLOG_EXTERNAL_EXEC_LOCK_WAIT, "plan cache value latch")
-LATCH_DEF(CLOG_MEMBERSHIP_MGR_LOCK, 13, "clog member ship mgr latch", LATCH_FIFO, 2000, 0,
-    CLOG_MEMBERSHIP_MGR_LOCK_WAIT, "plan cache value latch")
-LATCH_DEF(CLOG_RECONFIRM_LOCK, 14, "clog reconfirm latch", LATCH_FIFO, 2000, 0, CLOG_RECONFIRM_LOCK_WAIT,
-    "plan cache value latch")
-LATCH_DEF(CLOG_SLIDING_WINDOW_LOCK, 15, "clog sliding window latch", LATCH_FIFO, 2000, 0, CLOG_SLIDING_WINDOW_LOCK_WAIT,
-    "plan cache value latch")
-LATCH_DEF(CLOG_STAT_MGR_LOCK, 16, "clog stat mgr latch", LATCH_FIFO, 2000, 0, CLOG_STAT_MGR_LOCK_WAIT,
-    "plan cache value latch")
-LATCH_DEF(
-    CLOG_TASK_LOCK, 17, "clog task latch", LATCH_FIFO, 20000000L, 0, CLOG_TASK_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_HISTORY_REPORTER_LOCK, 11, "clog history reporter latch", LATCH_FIFO, 2000, 0, CLOG_HISTORY_REPORTER_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_EXTERNAL_EXEC_LOCK, 12, "clog external executor latch", LATCH_FIFO, 2000, 0, CLOG_EXTERNAL_EXEC_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_MEMBERSHIP_MGR_LOCK, 13, "clog member ship mgr latch", LATCH_FIFO, 2000, 0, CLOG_MEMBERSHIP_MGR_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_RECONFIRM_LOCK, 14, "clog reconfirm latch", LATCH_FIFO, 2000, 0, CLOG_RECONFIRM_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_SLIDING_WINDOW_LOCK, 15, "clog sliding window latch", LATCH_FIFO, 2000, 0, CLOG_SLIDING_WINDOW_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_STAT_MGR_LOCK, 16, "clog stat mgr latch", LATCH_FIFO, 2000, 0, CLOG_STAT_MGR_LOCK_WAIT, "plan cache value latch")
+LATCH_DEF(CLOG_TASK_LOCK, 17, "clog task latch", LATCH_FIFO, 20000000L, 0, CLOG_TASK_LOCK_WAIT, "plan cache value latch")
 LATCH_DEF(CLOG_IDMGR_LOCK, 18, "clog id mgr latch", LATCH_FIFO, 2000, 0, CLOG_IDMGR_LOCK_WAIT, "plan cache value latch")
 LATCH_DEF(CLOG_CACHE_LOCK, 19, "clog cache latch", LATCH_FIFO, 2000, 0, CLOG_CACHE_LOCK_WAIT, "clog cache latch")
-LATCH_DEF(
-    ELECTION_MSG_LOCK, 20, "election msg latch", LATCH_FIFO, 2000, 0, ELECTION_MSG_LOCK_WAIT, "election msg latch")
+LATCH_DEF(ELECTION_MSG_LOCK, 20, "election msg latch", LATCH_FIFO, 2000, 0, ELECTION_MSG_LOCK_WAIT, "election msg latch")
 LATCH_DEF(PLAN_SET_LOCK, 21, "plan set latch", LATCH_FIFO, 2000, 0, PLAN_SET_LOCK_WAIT, "plan set latch")
 LATCH_DEF(PS_STORE_LOCK, 22, "ps store latch", LATCH_FIFO, 2000, 0, PS_STORE_LOCK_WAIT, "ps store latch")
-LATCH_DEF(
-    TRANS_CTX_MGR_LOCK, 23, "trans ctx mgr latch", LATCH_FIFO, 2000, 0, TRANS_CTX_MGR_LOCK_WAIT, "trans ctx mgr latch")
+LATCH_DEF(TRANS_CTX_MGR_LOCK, 23, "trans ctx mgr latch", LATCH_FIFO, 2000, 0, TRANS_CTX_MGR_LOCK_WAIT, "trans ctx mgr latch")
 LATCH_DEF(ROW_LOCK, 24, "row latch", LATCH_READ_PREFER, 200, 0, ROW_LOCK_WAIT, "row latch")
-LATCH_DEF(DEFAULT_RECURSIVE_MUTEX, 25, "default recursive mutex", LATCH_FIFO, 2000L, 0, DEFAULT_RECURSIVE_MUTEX_WAIT,
-    "default recursive mutex")
+LATCH_DEF(DEFAULT_RECURSIVE_MUTEX, 25, "default recursive mutex", LATCH_FIFO, 2000L, 0, DEFAULT_RECURSIVE_MUTEX_WAIT, "default recursive mutex")
 LATCH_DEF(DEFAULT_DRW_LOCK, 26, "default drw lock", LATCH_FIFO, 200000, 0, DEFAULT_DRW_LOCK_WAIT, "default drw lock")
-LATCH_DEF(DEFAULT_BUCKET_LOCK, 27, "default bucket lock", LATCH_FIFO, 2000, 0, DEFAULT_BUCKET_LOCK_WAIT,
-    "default bucket lock")
-LATCH_DEF(TRANS_CTX_BUCKET_LOCK, 28, "trans ctx bucket lock", LATCH_FIFO, 20000000L, 0, TRANS_CTX_BUCKET_LOCK_WAIT,
-    "trans ctx bucket lock")
-LATCH_DEF(MACRO_META_BUCKET_LOCK, 29, "macro meta bucket lock", LATCH_FIFO, 2000, 0, MACRO_META_BUCKET_LOCK_WAIT,
-    "macro meta bucket lock")
-LATCH_DEF(
-    TOKEN_BUCKET_LOCK, 30, "token bucket lock", LATCH_FIFO, 20000000L, 0, TOKEN_BUCKET_LOCK_WAIT, "token bucket lock")
-LATCH_DEF(LIGHTY_HASHMAP_BUCKET_LOCK, 31, "light hashmap bucket lock", LATCH_FIFO, 2000, 0,
-    LIGHTY_HASHMAP_BUCKET_LOCK_WAIT, "lighty hashmap bucket lock")
+LATCH_DEF(DEFAULT_BUCKET_LOCK, 27, "default bucket lock", LATCH_FIFO, 2000, 0, DEFAULT_BUCKET_LOCK_WAIT, "default bucket lock")
+LATCH_DEF(TRANS_CTX_BUCKET_LOCK, 28, "trans ctx bucket lock", LATCH_FIFO, 20000000L, 0, TRANS_CTX_BUCKET_LOCK_WAIT, "trans ctx bucket lock")
+LATCH_DEF(MACRO_WRITER_LOCK, 29, "macro writer lock", LATCH_FIFO, 2000, 0, MACRO_WRITER_LOCK_WAIT, "macro write lock")
+LATCH_DEF(TOKEN_BUCKET_LOCK, 30, "token bucket lock", LATCH_FIFO, 20000000L, 0, TOKEN_BUCKET_LOCK_WAIT, "token bucket lock")
+LATCH_DEF(LIGHTY_HASHMAP_BUCKET_LOCK, 31, "light hashmap bucket lock", LATCH_FIFO, 2000, 0, LIGHTY_HASHMAP_BUCKET_LOCK_WAIT, "lighty hashmap bucket lock")
 LATCH_DEF(ROW_CALLBACK_LOCK, 32, "row callback lock", LATCH_FIFO, 2000, 0, ROW_CALLBACK_LOCK_WAIT, "row callback lock")
-LATCH_DEF(PARTITION_LOCK, 33, "partition latch", LATCH_FIFO, 2000, 0, PARTITION_LOCK_WAIT, "partition latch")
+LATCH_DEF(LS_LOCK, 33, "ls latch", LATCH_READ_PREFER, 2000, 0, LS_LOCK_WAIT, "ls latch")
 LATCH_DEF(SWITCH_LEADER_LOCK, 35, "switch leader lock", LATCH_FIFO, 2000, 0, SWITCH_LEADER_WAIT, "switch leader lock")
-LATCH_DEF(PARTITION_FREEZE_LOCK, 36, "partition freeze lock", LATCH_FIFO, 2000, 0, PARTITION_FREEZE_WAIT,
-    "partition freeze lock")
-LATCH_DEF(SCHEMA_SERVICE_LOCK, 37, "schema service lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_SERVICE_LOCK_WAIT,
-    "schema service lock")
-LATCH_DEF(SCHEMA_SERVICE_STATS_LOCK, 38, "schema service stats lock", LATCH_READ_PREFER, 2000, 0,
-    SCHEMA_SERVICE_STATS_LOCK_WAIT, "schema service stats lock")
+LATCH_DEF(PARTITION_FREEZE_LOCK, 36, "partition freeze lock", LATCH_FIFO, 2000, 0, PARTITION_FREEZE_WAIT, "partition freeze lock")
+LATCH_DEF(SCHEMA_SERVICE_LOCK, 37, "schema service lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_SERVICE_LOCK_WAIT, "schema service lock")
+LATCH_DEF(SCHEMA_SERVICE_STATS_LOCK, 38, "schema service stats lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_SERVICE_STATS_LOCK_WAIT, "schema service stats lock")
 LATCH_DEF(TENANT_LOCK, 39, "tenant lock", LATCH_READ_PREFER, 2000, 0, TENANT_LOCK_WAIT, "tenant lock")
 LATCH_DEF(CONFIG_LOCK, 40, "config lock", LATCH_READ_PREFER, 2000, 0, CONFIG_LOCK_WAIT, "config lock")
-LATCH_DEF(
-    MAJOR_FREEZE_LOCK, 41, "major freeze lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_LOCK_WAIT, "major freeze lock")
-LATCH_DEF(PARTITION_TABLE_UPDATER_LOCK, 42, "partition table updater lock", LATCH_READ_PREFER, 2000, 0,
-    PARTITION_TABLE_UPDATER_LOCK_WAIT, "partition table updater lock")
-LATCH_DEF(
-    MULTI_TENANT_LOCK, 43, "multi tenant lock", LATCH_READ_PREFER, 2000, 0, MULTI_TENANT_LOCK_WAIT, "multi tenant lock")
-LATCH_DEF(LEADER_COORDINATOR_LOCK, 44, "leader coordinator lock", LATCH_READ_PREFER, 2000, 0,
-    LEADER_COORDINATOR_LOCK_WAIT, "leader coordinator lock")
-LATCH_DEF(
-    LEADER_STAT_LOCK, 45, "leader stat lock", LATCH_READ_PREFER, 2000, 0, LEADER_STAT_LOCK_WAIT, "leader stat lock")
-LATCH_DEF(ROOT_MAJOR_FREEZE_LOCK, 46, "root major freeze lock", LATCH_READ_PREFER, 2000, 0, ROOT_MAJOR_FREEZE_LOCK_WAIT,
-    "root major freeze lock")
-LATCH_DEF(
-    RS_BOOTSTRAP_LOCK, 47, "rs bootstrap lock", LATCH_READ_PREFER, 2000, 0, RS_BOOTSTRAP_LOCK_WAIT, "rs bootstrap lock")
-LATCH_DEF(SCHEMA_MGR_ITEM_LOCK, 48, "schema mgr item lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_MGR_ITEM_LOCK_WAIT,
-    "schema mgr item lock")
+LATCH_DEF(MAJOR_FREEZE_LOCK, 41, "major freeze lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_LOCK_WAIT, "major freeze lock")
+LATCH_DEF(PARTITION_TABLE_UPDATER_LOCK, 42, "partition table updater lock", LATCH_READ_PREFER, 2000, 0, PARTITION_TABLE_UPDATER_LOCK_WAIT, "partition table updater lock")
+LATCH_DEF(MULTI_TENANT_LOCK, 43, "multi tenant lock", LATCH_READ_PREFER, 2000, 0, MULTI_TENANT_LOCK_WAIT, "multi tenant lock")
+LATCH_DEF(LEADER_COORDINATOR_LOCK, 44, "leader coordinator lock", LATCH_READ_PREFER, 2000, 0, LEADER_COORDINATOR_LOCK_WAIT, "leader coordinator lock")
+LATCH_DEF(LEADER_STAT_LOCK, 45, "leader stat lock", LATCH_READ_PREFER, 2000, 0, LEADER_STAT_LOCK_WAIT, "leader stat lock")
+LATCH_DEF(MAJOR_FREEZE_SERVICE_LOCK, 46, "major freeze service lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_SERVICE_LOCK_WAIT, "major freeze service lock")
+LATCH_DEF(RS_BOOTSTRAP_LOCK, 47, "rs bootstrap lock", LATCH_READ_PREFER, 2000, 0, RS_BOOTSTRAP_LOCK_WAIT, "rs bootstrap lock")
+LATCH_DEF(SCHEMA_MGR_ITEM_LOCK, 48, "schema mgr item lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_MGR_ITEM_LOCK_WAIT, "schema mgr item lock")
 LATCH_DEF(SCHEMA_MGR_LOCK, 49, "schema mgr lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_MGR_LOCK_WAIT, "schema mgr lock")
 LATCH_DEF(SUPER_BLOCK_LOCK, 50, "super block lock", LATCH_FIFO, 2000, 0, SUPER_BLOCK_LOCK_WAIT, "super block lock")
-LATCH_DEF(FROZEN_VERSION_LOCK, 51, "frozen version lock", LATCH_READ_PREFER, 2000, 0, FROZEN_VERSION_LOCK_WAIT,
-    "frozen version lock")
-LATCH_DEF(
-    RS_BROADCAST_LOCK, 52, "rs broadcast lock", LATCH_READ_PREFER, 2000, 0, RS_BROADCAST_LOCK_WAIT, "rs broadcast lock")
-LATCH_DEF(SERVER_STATUS_LOCK, 53, "server status lock", LATCH_READ_PREFER, 2000, 0, SERVER_STATUS_LOCK_WAIT,
-    "server status lock")
-LATCH_DEF(SERVER_MAINTAINCE_LOCK, 54, "server maintaince lock", LATCH_READ_PREFER, 2000, 0, SERVER_MAINTAINCE_LOCK_WAIT,
-    "server maintaince lock")
-LATCH_DEF(
-    UNIT_MANAGER_LOCK, 55, "unit manager lock", LATCH_READ_PREFER, 2000, 0, UNIT_MANAGER_LOCK_WAIT, "unit manager lock")
-LATCH_DEF(ZONE_MANAGER_LOCK, 56, "zone manager maintaince lock", LATCH_READ_PREFER, 2000, 0, ZONE_MANAGER_LOCK_WAIT,
-    "zone manager maintaince lock")
-LATCH_DEF(
-    ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 2000, 0, ALLOC_OBJECT_LOCK_WAIT, "alloc object lock")
+LATCH_DEF(FROZEN_VERSION_LOCK, 51, "frozen version lock", LATCH_READ_PREFER, 2000, 0, FROZEN_VERSION_LOCK_WAIT, "frozen version lock")
+LATCH_DEF(RS_BROADCAST_LOCK, 52, "rs broadcast lock", LATCH_READ_PREFER, 2000, 0, RS_BROADCAST_LOCK_WAIT, "rs broadcast lock")
+LATCH_DEF(SERVER_STATUS_LOCK, 53, "server status lock", LATCH_READ_PREFER, 2000, 0, SERVER_STATUS_LOCK_WAIT, "server status lock")
+LATCH_DEF(SERVER_MAINTAINCE_LOCK, 54, "server maintaince lock", LATCH_READ_PREFER, 2000, 0, SERVER_MAINTAINCE_LOCK_WAIT, "server maintaince lock")
+LATCH_DEF(UNIT_MANAGER_LOCK, 55, "unit manager lock", LATCH_READ_PREFER, 2000, 0, UNIT_MANAGER_LOCK_WAIT, "unit manager lock")
+LATCH_DEF(ZONE_MANAGER_LOCK, 56, "zone manager maintaince lock", LATCH_READ_PREFER, 2000, 0, ZONE_MANAGER_LOCK_WAIT, "zone manager maintaince lock")
+LATCH_DEF(ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 2000, 0, ALLOC_OBJECT_LOCK_WAIT, "alloc object lock")
 LATCH_DEF(ALLOC_BLOCK_LOCK, 58, "block set lock", LATCH_READ_PREFER, 2000, 0, ALLOC_BLOCK_LOCK_WAIT, "alloc block lock")
-LATCH_DEF(TRACE_RECORDER_LOCK, 59, "normal trace recorder lock", LATCH_FIFO, 2000, 0, TRACE_RECORDER_LOCK_WAIT,
-    "normal trace recorder latch")
-LATCH_DEF(SESSION_TRACE_RECORDER_LOCK, 60, "session trace recorder lock", LATCH_FIFO, 2000, 0,
-    SESSION_TRACE_RECORDER_LOCK_WAIT, "session trace recorder latch")
-LATCH_DEF(TRANS_TRACE_RECORDER_LOCK, 61, "trans trace recorder lock", LATCH_FIFO, 2000, 0,
-    TRANS_TRACE_RECORDER_LOCK_WAIT, "trans trace recorder latch")
-LATCH_DEF(ELECT_TRACE_RECORDER_LOCK, 62, "election trace recorder lock", LATCH_FIFO, 2000, 0,
-    ELECT_TRACE_RECORDER_LOCK_WAIT, "election trace recorder latch")
-LATCH_DEF(ALIVE_SERVER_TRACER_LOCK, 63, "alive server tracer lock", LATCH_READ_PREFER, 2000, 0,
-    ALIVE_SERVER_TRACER_LOCK_WAIT, "alive server tracer lock")
-LATCH_DEF(
-    ALLOC_CHUNK_LOCK, 64, "allocate chunk lock", LATCH_FIFO, 2000, 0, ALLOC_CHUNK_LOCK_WAIT, "allocate chunk lock")
-LATCH_DEF(
-    ALLOC_TENANT_LOCK, 65, "allocate tenant lock", LATCH_FIFO, 2000, 0, ALLOC_TENANT_LOCK_WAIT, "allocate tenant lock")
+LATCH_DEF(TRACE_RECORDER_LOCK, 59, "normal trace recorder lock", LATCH_FIFO, 2000, 0, TRACE_RECORDER_LOCK_WAIT, "normal trace recorder latch")
+LATCH_DEF(SESSION_TRACE_RECORDER_LOCK, 60, "session trace recorder lock", LATCH_FIFO, 2000, 0, SESSION_TRACE_RECORDER_LOCK_WAIT, "session trace recorder latch")
+LATCH_DEF(TRANS_TRACE_RECORDER_LOCK, 61, "trans trace recorder lock", LATCH_FIFO, 2000, 0, TRANS_TRACE_RECORDER_LOCK_WAIT, "trans trace recorder latch")
+LATCH_DEF(ELECT_TRACE_RECORDER_LOCK, 62, "election trace recorder lock", LATCH_FIFO, 2000, 0, ELECT_TRACE_RECORDER_LOCK_WAIT, "election trace recorder latch")
+LATCH_DEF(ALIVE_SERVER_TRACER_LOCK, 63, "alive server tracer lock", LATCH_READ_PREFER, 2000, 0, ALIVE_SERVER_TRACER_LOCK_WAIT, "alive server tracer lock")
+LATCH_DEF(ALLOC_CHUNK_LOCK, 64, "allocate chunk lock", LATCH_FIFO, 2000, 0, ALLOC_CHUNK_LOCK_WAIT, "allocate chunk lock")
+LATCH_DEF(ALLOC_TENANT_LOCK, 65, "allocate tenant lock", LATCH_FIFO, 2000, 0, ALLOC_TENANT_LOCK_WAIT, "allocate tenant lock")
 LATCH_DEF(IO_QUEUE_LOCK, 66, "io queue lock", LATCH_FIFO, 2000, 0, IO_QUEUE_LOCK_WAIT, "io queue lock")
-LATCH_DEF(ZONE_INFO_RW_LOCK, 67, "zone infos rw lock", LATCH_READ_PREFER, 2000, 0, ZONE_INFO_RW_LOCK_WAIT,
-    "zone infos rw lock")
-LATCH_DEF(MT_TRACE_RECORDER_LOCK, 68, "memtable trace recorder lock", LATCH_READ_PREFER, 2000, 0,
-    MT_TRACE_RECORDER_LOCK_WAIT, "memtable trace recorder latch")
-LATCH_DEF(BANDWIDTH_THROTTLE_LOCK, 69, "bandwidth throttle lock", LATCH_FIFO, 2000, 0, BANDWIDTH_THROTTLE_LOCK_WAIT,
-    "bandwidth throttle latch")
-LATCH_DEF(RS_EVENT_TS_LOCK, 70, "rs event table timestamp lock", LATCH_FIFO, 2000, 0, RS_EVENT_TS_LOCK_WAIT,
-    "rs event table timestamp lock")
-LATCH_DEF(
-    CLOG_FD_CACHE_LOCK, 71, "clog fd cache lock", LATCH_FIFO, 2000, 0, CLOG_FD_CACHE_LOCK_WAIT, "clog fd cache lock")
+LATCH_DEF(ZONE_INFO_RW_LOCK, 67, "zone infos rw lock", LATCH_READ_PREFER, 2000, 0, ZONE_INFO_RW_LOCK_WAIT, "zone infos rw lock")
+LATCH_DEF(MT_TRACE_RECORDER_LOCK, 68, "memtable trace recorder lock", LATCH_READ_PREFER, 2000, 0, MT_TRACE_RECORDER_LOCK_WAIT, "memtable trace recorder latch")
+LATCH_DEF(BANDWIDTH_THROTTLE_LOCK, 69, "bandwidth throttle lock", LATCH_FIFO, 2000, 0, BANDWIDTH_THROTTLE_LOCK_WAIT, "bandwidth throttle latch")
+LATCH_DEF(RS_EVENT_TS_LOCK, 70, "rs event table timestamp lock", LATCH_FIFO, 2000, 0, RS_EVENT_TS_LOCK_WAIT, "rs event table timestamp lock")
+LATCH_DEF(CLOG_FD_CACHE_LOCK, 71, "clog fd cache lock", LATCH_FIFO, 2000, 0, CLOG_FD_CACHE_LOCK_WAIT, "clog fd cache lock")
 LATCH_DEF(MIGRATE_LOCK, 72, "migrate lock", LATCH_FIFO, 2000, 0, MIGRATE_LOCK_WAIT, "migrate lock")
-LATCH_DEF(CLOG_CASCADING_INFO_LOCK, 73, "clog cascading info lock", LATCH_FIFO, 2000, 0, CLOG_CASCADING_INFO_LOCK_WAIT,
-    "clog cascading info lock")
-LATCH_DEF(
-    CLOG_LOCALITY_LOCK, 74, "clog locality lock", LATCH_FIFO, 2000, 0, CLOG_LOCALITY_LOCK_WAIT, "clog locality lock")
+LATCH_DEF(CLOG_CASCADING_INFO_LOCK, 73, "clog cascading info lock", LATCH_FIFO, 2000, 0, CLOG_CASCADING_INFO_LOCK_WAIT, "clog cascading info lock")
+LATCH_DEF(CLOG_LOCALITY_LOCK, 74, "clog locality lock", LATCH_FIFO, 2000, 0, CLOG_LOCALITY_LOCK_WAIT, "clog locality lock")
 LATCH_DEF(DTL_CHANNEL_WAIT, 75, "DTL channel wait", LATCH_FIFO, 2000, 0, DEFAULT_COND_WAIT, "DTL channel wait")
-LATCH_DEF(
-    GROUP_MIGRATE_LOCK, 76, "group migrate lock", LATCH_FIFO, 2000, 0, GROUP_MIGRATE_LOCK_WAIT, "group migrate lock")
-LATCH_DEF(GROUP_MIGRATE_TASK_LOCK, 77, "group migrate task lock", LATCH_FIFO, 2000, 0, GROUP_MIGRATE_LOCK_WAIT,
-    "group migrate task lock")
-LATCH_DEF(LOG_ENGINE_ENV_SWITCH_LOCK, 78, "log engine env switch lock", LATCH_FIFO, 2000, 0,
-    LOG_ENGINE_ENV_SWITCH_LOCK_WAIT, "log engine env switch lock")
-LATCH_DEF(CLOG_CONSEC_INFO_MGR_LOCK, 79, "clog consec log info mgr latch", LATCH_FIFO, 2000, 0,
-    CLOG_CONSEC_INFO_MGR_LOCK_WAIT, "clog consec log info mgr latch")
+LATCH_DEF(GROUP_MIGRATE_LOCK, 76, "group migrate lock", LATCH_FIFO, 2000, 0, GROUP_MIGRATE_LOCK_WAIT, "group migrate lock")
+LATCH_DEF(GROUP_MIGRATE_TASK_LOCK, 77, "group migrate task lock", LATCH_FIFO, 2000, 0, GROUP_MIGRATE_LOCK_WAIT, "group migrate task lock")
+LATCH_DEF(LOG_ENGINE_ENV_SWITCH_LOCK, 78, "log engine env switch lock", LATCH_FIFO, 2000, 0, LOG_ENGINE_ENV_SWITCH_LOCK_WAIT, "log engine env switch lock")
+LATCH_DEF(CLOG_CONSEC_INFO_MGR_LOCK, 79, "clog consec log info mgr latch", LATCH_FIFO, 2000, 0, CLOG_CONSEC_INFO_MGR_LOCK_WAIT, "clog consec log info mgr latch")
 LATCH_DEF(RG_TRANSFER_LOCK, 80, "rg transfer lock", LATCH_FIFO, 2000, 0, RG_TRANSFER_LOCK_WAIT, "rg transfer lock")
 LATCH_DEF(TABLE_MGR_LOCK, 81, "table mgr lock", LATCH_FIFO, 2000, 0, TBALE_MGR_LOCK_WAIT, "table mgr lock")
-LATCH_DEF(PARTITION_STORE_LOCK, 82, "partition store lock", LATCH_FIFO, 2000, 0, PARTITION_STORE_LOCK_WAIT,
-    "partition store lock")
-LATCH_DEF(PARTITION_STORE_CHANGE_LOCK, 83, "partition store change lock", LATCH_FIFO, 2000, 0,
-    PARTITION_STORE_CHANGE_LOCK_WAIT, "partition store change lock")
-LATCH_DEF(PARTITION_STORE_NEW_MEMTABLE_LOCK, 84, "partition store new memtable lock", LATCH_FIFO, 2000, 0,
-    PARTITION_STORE_NEW_MEMTABLE_LOCK_WAIT, "partition store new memtable lock")
-LATCH_DEF(ELECTION_GROUP_LOCK, 85, "election group latch", LATCH_FIFO, 20000000L, 0, ELECTION_GROUP_LOCK_WAIT,
-    "election group latch")
-LATCH_DEF(ELECTION_GROUP_TRACE_RECORDER_LOCK, 86, "election group trace recorder lock", LATCH_FIFO, 2000, 0,
-    ELECTION_GROUP_TRACE_RECORDER_LOCK_WAIT, "election group trace recorder latch")
-LATCH_DEF(CACHE_LINE_SEGREGATED_ARRAY_BASE_LOCK, 87, "ObCacheLineSegregatedArrayBase alloc lock", LATCH_FIFO, 2000, 0,
-    CACHE_LINE_SEGREGATED_ARRAY_BASE_LOCK_WAIT, "ObCacheLineSegregatedArrayBase alloc lock")
-LATCH_DEF(SERVER_OBJECT_POOL_ARENA_LOCK, 88, "server object pool arena lock", LATCH_FIFO, 20000000L, 0,
-    SERVER_OBJECT_POOL_ARENA_LOCK_WAIT, "server object pool arena lock")
+LATCH_DEF(PARTITION_STORE_LOCK, 82, "partition store lock", LATCH_FIFO, 2000, 0, PARTITION_STORE_LOCK_WAIT, "partition store lock")
+LATCH_DEF(PARTITION_STORE_CHANGE_LOCK, 83, "partition store change lock", LATCH_FIFO, 2000, 0, PARTITION_STORE_CHANGE_LOCK_WAIT, "partition store change lock")
+LATCH_DEF(TABLET_MEMTABLE_LOCK, 84, "tablet memtable lock", LATCH_FIFO, 2000, 0, TABLET_MEMTABLE_LOCK_WAIT, "tablet memtable lock")
+LATCH_DEF(ELECTION_GROUP_LOCK, 85, "election group latch", LATCH_FIFO, 20000000L, 0, ELECTION_GROUP_LOCK_WAIT, "election group latch")
+LATCH_DEF(ELECTION_GROUP_TRACE_RECORDER_LOCK, 86, "election group trace recorder lock", LATCH_FIFO, 2000, 0, ELECTION_GROUP_TRACE_RECORDER_LOCK_WAIT, "election group trace recorder latch")
+LATCH_DEF(CACHE_LINE_SEGREGATED_ARRAY_BASE_LOCK, 87, "ObCacheLineSegregatedArrayBase alloc lock", LATCH_FIFO, 2000, 0, CACHE_LINE_SEGREGATED_ARRAY_BASE_LOCK_WAIT, "ObCacheLineSegregatedArrayBase alloc lock")
+LATCH_DEF(SERVER_OBJECT_POOL_ARENA_LOCK, 88, "server object pool arena lock", LATCH_FIFO, 20000000L, 0, SERVER_OBJECT_POOL_ARENA_LOCK_WAIT, "server object pool arena lock")
 LATCH_DEF(TABLE_MGR_MAP, 89, "table mgr map", LATCH_FIFO, 2000, 0, TBALE_MGR_MAP_WAIT, "table mgr map")
 LATCH_DEF(ID_MAP_NODE_LOCK, 90, "id map node lock", LATCH_FIFO, 2000, 0, ID_MAP_NODE_LOCK_WAIT, "id map nodelock")
-LATCH_DEF(EXTENT_STORAGE_MANAGER_LOCK, 91, "extent storage manager lock", LATCH_FIFO, 2000, 0,
-    EXTENT_STORAGE_MANAGER_LOCK_WAIT, "extent storage manager lock")
-LATCH_DEF(REBUILD_RETRY_LIST_LOCK, 93, "rebuild retry list lock", LATCH_FIFO, 2000, 0, REBUILD_RETRY_LIST_LOCK_WAIT,
-    "rebuild retry list lock")
-LATCH_DEF(PARTITION_AUDIT_SPIN_LOCK, 94, "partition audit spin lock", LATCH_FIFO, 20000000L, 0,
-    PARTITION_AUDIT_SPIN_LOCK_WAIT, "partition audit spin lock")
-LATCH_DEF(CLOG_SWITCH_INFO_LOCK, 95, "clog switch_info latch", LATCH_FIFO, 20000000L, 0, CLOG_SWITCH_INFO_LOCK_WAIT,
-    "clog switch_info latch")
-LATCH_DEF(PARTITION_GROUP_LOCK, 96, "partition group lock", LATCH_FIFO, 2000, 0, PARTITION_GROUP_LOCK_WAIT,
-    "partition group lock")
-LATCH_DEF(PX_WORKER_LEADER_LOCK, 97, "px worker leader lock", LATCH_FIFO, 2000, 0, PX_WORKER_LEADER_LOCK_WAIT,
-    "px worker leader lock")
+LATCH_DEF(EXTENT_STORAGE_MANAGER_LOCK, 91, "extent storage manager lock", LATCH_FIFO, 2000, 0, EXTENT_STORAGE_MANAGER_LOCK_WAIT, "extent storage manager lock")
+LATCH_DEF(BLOCK_MANAGER_LOCK, 92, "block manager lock", LATCH_FIFO, 2000, 0, BLOCK_MANAGER_LOCK_WAIT, "block manager lock")
+LATCH_DEF(REBUILD_RETRY_LIST_LOCK, 93, "rebuild retry list lock", LATCH_FIFO, 2000, 0, REBUILD_RETRY_LIST_LOCK_WAIT, "rebuild retry list lock")
+LATCH_DEF(PARTITION_AUDIT_SPIN_LOCK, 94, "partition audit spin lock", LATCH_FIFO, 20000000L, 0, PARTITION_AUDIT_SPIN_LOCK_WAIT, "partition audit spin lock")
+LATCH_DEF(CLOG_SWITCH_INFO_LOCK, 95, "clog switch_info latch", LATCH_FIFO, 20000000L, 0, CLOG_SWITCH_INFO_LOCK_WAIT, "clog switch_info latch")
+LATCH_DEF(PARTITION_GROUP_LOCK, 96, "partition group lock", LATCH_FIFO, 2000, 0, PARTITION_GROUP_LOCK_WAIT, "partition group lock")
+LATCH_DEF(PX_WORKER_LEADER_LOCK, 97, "px worker leader lock", LATCH_FIFO, 2000, 0, PX_WORKER_LEADER_LOCK_WAIT, "px worker leader lock")
 LATCH_DEF(CLOG_IDC_LOCK, 98, "clog idc lock", LATCH_FIFO, 2000, 0, CLOG_IDC_LOCK_WAIT, "clog idc lock")
-LATCH_DEF(PG_STORAGE_BUCKET_LOCK, 99, "pg_storage bucket lock", LATCH_FIFO, 2000, 0, PG_STORAGE_BUCKET_LOCK_WAIT,
-    "pg_storage bucket lock")
-LATCH_DEF(OB_ALLOCATOR_LOCK, 100, "ob allocator lock", LATCH_READ_PREFER, 2000, 0, OB_ALLOCATOR_LOCK_WAIT,
-    "ob allocator lock")
-LATCH_DEF(MACRO_META_MAJOR_KEY_MAP_LOCK, 101, "macro block meta major key map lock", LATCH_FIFO, 2000, 0,
-    MACRO_META_MAJOR_KEY_MAP_LOCK_WAIT, "macro block meta major key map lock")
+LATCH_DEF(TABLET_BUCKET_LOCK, 99, "tablet bucket lock", LATCH_FIFO, 2000, 0, TABLET_BUCKET_LOCK_WAIT, "tablet bucket lock")
+LATCH_DEF(OB_ALLOCATOR_LOCK, 100, "ob allocator lock", LATCH_READ_PREFER, 2000, 0, OB_ALLOCATOR_LOCK_WAIT, "ob allocator lock")
+LATCH_DEF(BLOCK_ID_GENERATOR_LOCK, 101, "block id generator lock", LATCH_FIFO, 2000, 0, BLOCK_ID_GENERATOR_LOCK_WAIT, "block id generator lock")
 LATCH_DEF(OB_CONTEXT_LOCK, 102, "ob context lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "ob context lock")
 LATCH_DEF(OB_PG_INDEX_LOCK, 103, "ob pg index lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "ob pg index lock")
-LATCH_DEF(OB_LOG_ARCHIVE_SCHEDULER_LOCK, 104, "ob log archive scheduler lock", LATCH_FIFO, 2000, 0,
-    OB_LOG_ARCHIVE_SCHEDULER_LOCK_WAIT, "ob log archive scheduler lock")
-LATCH_DEF(
-    MEM_DUMP_ITER_LOCK, 105, "mem dump iter lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "mem dump iter lock")
-LATCH_DEF(OB_REQ_TIMEINFO_LIST_LOCK, 106, "ob request timeinfo list lock", LATCH_FIFO, 2000, 0,
-    OB_REQ_TIMEINFO_LIST_WAIT, "ob request timeinfo list lock")
-LATCH_DEF(TRANS_BATCH_RPC_LOCK, 107, "trans batch rpc lock", LATCH_FIFO, 2000, 0, TRANS_BATCH_RPC_LOCK_WAIT,
-    "trans batch rpc latch")
-LATCH_DEF(BACKUP_INFO_MGR_LOCK, 108, "backup info mgr lock", LATCH_FIFO, 2000, 0, BACKUP_INFO_MGR_LOCK_WAIT,
-    "backup info mgr lock")
-LATCH_DEF(CLOG_RENEW_MS_TASK_LOCK, 109, "clog sw renew ms task spin lock", LATCH_FIFO, 20000000L, 0,
-    CLOG_RENEW_MS_TASK_LOCK_WAIT, "clog sw renew ms task spin lock")
+LATCH_DEF(OB_LOG_ARCHIVE_SCHEDULER_LOCK, 104, "ob log archive scheduler lock", LATCH_FIFO, 2000, 0, OB_LOG_ARCHIVE_SCHEDULER_LOCK_WAIT, "ob log archive scheduler lock")
+LATCH_DEF(MEM_DUMP_ITER_LOCK, 105, "mem dump iter lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "mem dump iter lock")
+LATCH_DEF(OB_REQ_TIMEINFO_LIST_LOCK, 106, "ob request timeinfo list lock",
+          LATCH_FIFO, 2000, 0, OB_REQ_TIMEINFO_LIST_WAIT, "ob request timeinfo list lock")
+LATCH_DEF(TRANS_BATCH_RPC_LOCK, 107, "trans batch rpc lock", LATCH_FIFO, 2000, 0, TRANS_BATCH_RPC_LOCK_WAIT, "trans batch rpc latch")
+LATCH_DEF(BACKUP_INFO_MGR_LOCK, 108, "backup info mgr lock", LATCH_FIFO, 2000, 0, BACKUP_INFO_MGR_LOCK_WAIT, "backup info mgr lock")
+LATCH_DEF(CLOG_RENEW_MS_TASK_LOCK, 109, "clog sw renew ms task spin lock", LATCH_FIFO, 20000000L, 0, CLOG_RENEW_MS_TASK_LOCK_WAIT, "clog sw renew ms task spin lock")
 LATCH_DEF(HASH_MAP_LOCK, 110, "hashmap latch lock", LATCH_FIFO, 2000L, 0, HASH_MAP_LOCK_WAIT, "hashmap latch lock")
 LATCH_DEF(FILE_REF_LOCK, 111, "file ref latch lock", LATCH_FIFO, 2000L, 0, FILE_REF_LOCK_WAIT, "file ref latch lock")
 LATCH_DEF(TIMEZONE_LOCK, 112, "timezone lock", LATCH_READ_PREFER, 2000, 0, TIMEZONE_LOCK_WAIT, "timezone lock")
 LATCH_DEF(UNDO_STATUS_LOCK, 113, "undo status lock", LATCH_FIFO, 2000, 0, UNDO_STATUS_LOCK_WAIT, "undo status lock")
-LATCH_DEF(FREEZE_ASYNC_WORKER_LOCK, 114, "freeze async worker lock", LATCH_FIFO, 2000, 0, FREEZE_ASYNC_WORKER_LOCK_WAIT,
-    "freeze async worker lock")
-LATCH_DEF(ARCHIVE_RESTORE_QUEUE_LOCK, 115, "archive restore queue lock", LATCH_FIFO, 2000, 0,
-    ARCHIVE_RESTORER_LOCK_WAIT, "archive restore queue lock")
-LATCH_DEF(XA_STMT_LOCK, 116, "xa stmt lock", LATCH_FIFO, 2000, 0, XA_STMT_LOCK_WAIT, "xa stmt lock")
-LATCH_DEF(XA_QUEUE_LOCK, 117, "xa queue lock", LATCH_FIFO, 2000, 0, XA_QUEUE_LOCK_WAIT, "xa queue lock")
+LATCH_DEF(FREEZE_ASYNC_WORKER_LOCK, 114, "freeze async worker lock", LATCH_FIFO, 2000, 0, FREEZE_ASYNC_WORKER_LOCK_WAIT, "freeze async worker lock")
+LATCH_DEF(XA_STMT_LOCK, 115, "xa stmt lock", LATCH_FIFO, 2000, 0, XA_STMT_LOCK_WAIT, "xa stmt lock")
+LATCH_DEF(XA_QUEUE_LOCK, 116, "xa queue lock", LATCH_FIFO, 2000, 0, XA_QUEUE_LOCK_WAIT, "xa queue lock")
+LATCH_DEF(MEMTABLE_CALLBACK_LIST_LOCK, 117, "memtable calback list lock", LATCH_FIFO, INT64_MAX, 0, MEMTABLE_CALLBACK_LIST_LOCK_WAIT, "memtable callback list lock")
+LATCH_DEF(MEMTABLE_CALLBACK_LIST_MGR_LOCK, 118, "memtable calback list mgr lock", LATCH_FIFO, INT64_MAX, 0, MEMTABLE_CALLBACK_LIST_MGR_LOCK_WAIT, "memtable callback list mgr lock")
+LATCH_DEF(XA_CTX_LOCK, 119, "xa queue lock", LATCH_FIFO, 2000, 0, XA_CTX_LOCK_WAIT, "xa ctx lock")
+LATCH_DEF(MASTER_KEY_LOCK, 120, "master key lock", LATCH_FIFO, 2000, 0, MASTER_KEY_LOCK_WAIT, "master key lock")
+LATCH_DEF(RATELIMIT_LOCK, 121, "ratelimit lock", LATCH_READ_PREFER, 2000, 0, RATELIMIT_LOCK_WAIT, "ratelimit lock")
+LATCH_DEF(TRX_EXEC_CTX_LOCK, 122, "transaction execution ctx lock", LATCH_FIFO, INT64_MAX, 0, TRX_EXEC_CTX_LOCK_WAIT, "transaction execution ctx lock")
+LATCH_DEF(TENANT_DISK_USAGE_LOCK, 123, "tenant disk usage lock", LATCH_FIFO, INT64_MAX, 0, TENANT_DISK_USAGE_LOCK_WAIT, "tenant disk usage lock")
+LATCH_DEF(LOG_OFFSET_ALLOC_LOCK, 124, "log_offset allocator latch", LATCH_FIFO, 2000, 0, LOG_OFFSET_ALLOC_LOCK_WAIT, "log_offset allocator latch")
+LATCH_DEF(TENANT_META_MEM_MGR_LOCK, 125, "tenant meta memory manager lock", LATCH_FIFO, 2000, 0, TENANT_META_MEM_MGR_LOCK_WAIT, "tenant meta memory manager lock")
+LATCH_DEF(GTI_SOURCE_LOCK, 126, "update trans id assignable interval lock", LATCH_FIFO, 2000, 0, GTI_SOURCE_LOCK_WAIT, "update trans id assignable interval lock")
+LATCH_DEF(APPLY_STATUS_LOCK, 127, "apply_status latch", LATCH_FIFO, 2000, 0, APPLY_STATUS_LOCK_WAIT, "apply_status latch")
+LATCH_DEF(ID_SOURCE_LOCK, 128, "ID allocator updates assignable interval lock", LATCH_FIFO, 2000, 0, ID_SOURCE_LOCK_WAIT, "ID allocator updates assignable interval lock")
+LATCH_DEF(TRANS_AUDIT_RECORD_LOCK, 129, "trans records audit information lock", LATCH_FIFO, 2000, 0, TRANS_AUDIT_RECORD_LOCK_WAIT, "trans records audit information lock")
+LATCH_DEF(TABLET_MULTI_SOURCE_DATA_LOCK, 130, "tablet multi source data lock", LATCH_FIFO, 2000, 0, TABLET_MULTI_SOURCE_DATA_WAIT, "tablet multi source data lock")
+LATCH_DEF(DTL_CHANNEL_MGR_LOCK, 131, "DTL channel mgr wait", LATCH_FIFO, 2000, 0, DTL_CHANNEL_MGR_WAIT, "DTL channel mgr wait")
+LATCH_DEF(PL_DEBUG_LOCK, 132, "PL DEBUG lock", LATCH_FIFO, 2000, 0, PL_DEBUG_WAIT, "PL DEBUG lock")
+LATCH_DEF(PL_SYS_BREAKPOINT_LOCK, 133, "PL sys breakpoint lock", LATCH_FIFO, 2000, 0, PL_SYS_BREAKPOINT_WAIT, "PL sys breakpoint lock")
+LATCH_DEF(DBMS_JOB_TASK_LOCK, 134, "dbms_job task lock", LATCH_FIFO, 2000, 0, DBMS_JOB_TASK_WAIT, "dbms_job task lock")
+LATCH_DEF(DBMS_JOB_MASTER_LOCK, 135, "dbms_job master lock", LATCH_FIFO, 2000, 0, DBMS_JOB_MASTER_WAIT, "dbms_job master lock")
+LATCH_DEF(DTL_CHANNEL_LIST_LOCK,136, "dtl channel list lock", LATCH_FIFO, 2000, 0, DTL_CHANNEL_LIST_LOCK_WAIT, "dtl channel list lock")
+LATCH_DEF(DTL_CACHED_BUFFER_LIST_LOCK,137, "dtl free buffer list lock", LATCH_FIFO, 2000, 0, DTL_CACHED_BUFFER_LIST_LOCK_WAIT, "dtl free buffer list lock")
+LATCH_DEF(PS_CACHE_EVICT_MUTEX_LOCK, 138, "plan cache evict lock", LATCH_FIFO, 2000, 0, PS_CACHE_EVICT_LOCK_WAIT, "plan cache evict lock")
+LATCH_DEF(SQL_SHARED_HJ_COND_LOCK, 139, "shared hash join lock",LATCH_FIFO, 2000, 0, SQL_SHARED_HJ_LOCK_WAIT, "shared hash join lock")
+LATCH_DEF(SQL_WA_PROFILE_LIST_LOCK, 140, "sql work area profile list lock",LATCH_FIFO, 2000, 0, SQL_WA_PROFILE_LIST_LOCK_WAIT, "sql work area profile list lock")
+LATCH_DEF(SQL_WA_STAT_MAP_LOCK, 141, "sql work area stat map lock",LATCH_FIFO, 2000, 0, SQL_WA_STAT_MAP_LOCK_WAIT, "sql work area stat map lock")
+LATCH_DEF(SQL_MEMORY_MGR_MUTEX_LOCK, 142, "sql memory manager mutex lock",LATCH_FIFO, 2000, 0, SQL_MEMORY_MGR_MUTEX_LOCK_WAIT, "sql memory manager mutex lock")
+LATCH_DEF(LOAD_DATA_RPC_CB_LOCK, 143, "load data rpc asyn callback lock",LATCH_FIFO, 2000, 0, LOAD_DATA_RPC_CB_LOCK_WAIT , "load data rpc asyn callback lock")
+LATCH_DEF(SQL_DYN_SAMPLE_MSG_LOCK, 144, "merge dynamic sampling piece message lock",LATCH_FIFO, 2000, 0, SQL_DYN_SAMPLE_MSG_LOCK_WAIT, "merge dynamic sampling piece message lock")
+LATCH_DEF(SQL_GI_SHARE_POOL_LOCK, 145, "granule iterator task queue lock",LATCH_FIFO, 2000, 0, SQL_GI_SHARE_POOL_LOCK_WAIT, "granule iterator task queue lock")
+LATCH_DEF(DTL_RECV_CHANNEL_PROVIDER_LOCK, 146, "dtl receive channel provider access lock", LATCH_FIFO, 2000, 0, DTL_RECV_CHANNEL_PROVIDER_LOCK_WAIT, "dtl receive channel provider access lock")
+LATCH_DEF(PX_TENANT_TARGET_LOCK, 147, "parralel execution tenant target lock", LATCH_FIFO, 2000, 0, PX_TENANT_TARGET_LOCK_WAIT, "parralel execution tenant target lock")
+LATCH_DEF(PX_WORKER_STAT_LOCK, 148, "parallel execution worker stat lock",LATCH_FIFO, 2000, 0, PX_WORKER_STAT_LOCK_WAIT, "parallel execution worker stat lock")
+LATCH_DEF(SESSION_QUERY_LOCK, 149, "session query lock", LATCH_FIFO, 2000, 0, SESSION_QUERY_LOCK_WAIT, "session query lock")
+LATCH_DEF(SESSION_THREAD_DATA_LOCK, 150, "session thread data lock", LATCH_FIFO, 2000, 0, SESSION_THREAD_DATA_LOCK_WAIT, "session thread data lock")
+LATCH_DEF(SESSION_POOL_MAP_LOCK, 151, "maintain session pool lock", LATCH_FIFO, 2000, 0, SESSION_POOL_MAP_LOCK_WAIT, "maintain session pool lock")
+LATCH_DEF(SEQUENCE_VALUE_ALLOC_LOCK, 152, "sequence value alloc lock", LATCH_FIFO, 2000, 0, SEQUENCE_VALUE_ALLOC_LOCK_WAIT, "sequence value alloc lock")
+LATCH_DEF(SEQUENCE_CACHE_LOCK, 153, "sequence cache lock", LATCH_FIFO, 2000, 0, SEQUENCE_CACHE_LOCK_WAIT, "sequence cache lock")
+LATCH_DEF(OBCDC_PROGRESS_RECYCLE_LOCK, 154, "obcdc progress recycle lock", LATCH_FIFO, 2000, 0, OBCDC_PROGRESS_RECYCLE_LOCK_WAIT, "obcdc progress recycle lock")
+LATCH_DEF(OBCDC_METAINFO_LOCK, 155, "obcdc metainfo lock", LATCH_FIFO, 2000, 0, OBCDC_METAINFO_LOCK_WAIT, "obcdc metainfo lock")
+LATCH_DEF(OBCDC_TRANS_CTX_LOCK, 156, "obcdc trans ctx lock", LATCH_FIFO, 2000, 0, OBCDC_TRANS_CTX_LOCK_WAIT, "obcdc trans ctx lock")
+LATCH_DEF(OBCDC_SVR_BLACKLIST_LOCK, 157, "obcdc svr blacklist lock", LATCH_FIFO, 2000, 0, OBCDC_SVR_BLACKLIST_LOCK_WAIT, "obcdc svr blacklist lock")
+LATCH_DEF(OBCDC_SQLSERVER_LOCK, 158, "obcdc sqlserver lock", LATCH_FIFO, 2000, 0, OBCDC_SQLSERVER_LOCK_WAIT, "obcdc sqlserver lock")
+LATCH_DEF(OBCDC_TIMEZONE_GETTER_LOCK, 159, "obcdc timezone getter lock", LATCH_FIFO, 2000, 0, OBCDC_TIMEZONE_GETTER_LOCK_WAIT, "obcdc time zone getter lock")
+LATCH_DEF(OBCDC_FETCHLOG_ARPC_LOCK, 160, "obcdc fetchlog arpc lock", LATCH_FIFO, 2000, 0, OBCDC_FETCHLOG_ARPC_LOCK_WAIT, "obcdc fetchlog arpc lock")
+LATCH_DEF(OBCDC_FETCHSREAM_CONTAINER_LOCK, 161, "obcdc fetchstream container lock", LATCH_FIFO, 2000, 0, OBCDC_FETCHSTREAM_CONTAINER_LOCK_WAIT, "obcdc fetchstream container lock")
+LATCH_DEF(INNER_CONN_POOL_LOCK, 162, "inner connection pool lock", LATCH_FIFO, 2000, 0, INNER_CONN_POOL_LOCK_WAIT, "inner connection pool lock")
+LATCH_DEF(TENANT_RES_MGR_LIST_LOCK, 163, "tenant resource mgr list lock", LATCH_FIFO, 2000, 0, TENANT_RES_MGR_LIST_LOCK_WAIT, "tenant resource mgr list lock")
+LATCH_DEF(TC_FREE_LIST_LOCK, 165, "tc free list lock", LATCH_FIFO, 2000, 0, TC_FREE_LIST_LOCK_WAIT, "tc free list lock")
+LATCH_DEF(DEDUP_QUEUE_LOCK, 166, "dedup queue lock", LATCH_FIFO, 2000, 0, DEDUP_QUEUE_LOCK_WAIT, "dedup queue lock")
+LATCH_DEF(SLOG_PROCESSING_MUTEX, 167, "slog processing mutex", LATCH_FIFO, INT64_MAX, 0, SLOG_PROCESSING_MUTEX_WAIT, "slog processing mutex")
+LATCH_DEF(TABLET_TABLE_STORE_LOCK, 168, "tablet table store lock", LATCH_FIFO, INT64_MAX, 0, TABLET_TABLE_STORE_LOCK_WAIT, "tablet table store lock")
+LATCH_DEF(TMP_FILE_LOCK, 169, "tmp file lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_LOCK_WAIT, "tmp file lock")
+LATCH_DEF(TMP_FILE_EXTENT_LOCK, 170, "tmp file extent lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_EXTENT_LOCK_WAIT, "tmp file extent lock")
+LATCH_DEF(TMP_FILE_MGR_LOCK, 171, "tmp file manager lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_MGR_LOCK_WAIT, "tmp file manager lock")
+LATCH_DEF(TMP_FILE_STORE_LOCK, 172, "tmp file store lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_STORE_LOCK_WAIT, "tmp file store lock")
+LATCH_DEF(TMP_FILE_MACRO_LOCK, 173, "tmp file macro lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_MACRO_LOCK_WAIT, "tmp file macro lock")
+LATCH_DEF(INDEX_BUILDER_LOCK, 174, "sstable index builder lock", LATCH_FIFO, INT64_MAX, 0, INDEX_BUILDER_LOCK_WAIT, "sstable index builder lock")
+LATCH_DEF(SLOG_CKPT_LOCK, 175, "slog checkpoint lock", LATCH_FIFO, INT64_MAX, 0, SLOG_CKPT_LOCK_WAIT, "slog checkpoint lock")
+LATCH_DEF(LOCAL_DEVICE_LOCK, 176, "local device lock", LATCH_FIFO, INT64_MAX, 0, LOCAL_DEVICE_LOCK_WAIT, "local device lock")
+LATCH_DEF(FIXED_SIZE_ALLOCATOR_LOCK, 177, "fixed size allocator lock", LATCH_FIFO, INT64_MAX, 0, FIXED_SIZE_ALLOCATOR_LOCK_WAIT, "fixed size allocator lock")
+LATCH_DEF(DBMS_SCHEDULER_TASK_LOCK, 178, "dbms_scheduler task lock", LATCH_FIFO, 2000, 0, DBMS_SCHEDULER_TASK_WAIT, "dbms_scheduler task lock")
+LATCH_DEF(DBMS_SCHEDULER_MASTER_LOCK, 179, "dbms_scheuler master lock", LATCH_FIFO, 2000, 0, DBMS_SCHEDULER_MASTER_WAIT, "dbms_scheduler master lock")
+LATCH_DEF(TENANT_WORKER_LOCK, 180, "tenant worker lock", LATCH_FIFO, 2000, 0, TENANT_WORKER_WAIT, "tenant worker lock")
+LATCH_DEF(SERVER_LOCALITY_CACHE_LOCK, 181, "server locality cache lock", LATCH_FIFO, 2000, 0, SERVER_LOCALITY_CACHE_LOCK_WAIT, "server locality cache lock")
+LATCH_DEF(MASTER_RS_CACHE_LOCK, 182, "master rs cache lock", LATCH_FIFO, 2000, 0, MASTER_RS_CACHE_LOCK_WAIT, "master rs cache lock")
+LATCH_DEF(SCHEMA_REFRESH_INFO_LOCK, 183, "schema refresh info lock", LATCH_FIFO, 2000, 0, SCHEMA_REFRESH_INFO_LOCK_WAIT, "schema refresh info lock")
+LATCH_DEF(REFRESH_SCHEMA_LOCK, 184, "refresh schema lock", LATCH_FIFO, 2000, 0, REFRESH_SCHEMA_LOCK_WAIT, "refresh schema lock")
+LATCH_DEF(REFRESHED_SCHEMA_CACHE_LOCK, 185, "refreshed schema cache lock", LATCH_FIFO, 2000, 0, REFRESHED_SCHEMA_CACHE_LOCK_WAIT, "refreshed schema cache lock")
+LATCH_DEF(SCHEMA_MGR_CACHE_LOCK, 186, "schema mgr cache lock", LATCH_FIFO, 2000, 0, SCHEMA_MGR_CACHE_LOCK_WAIT, "schema mgr cache lock")
+LATCH_DEF(RS_MASTER_KEY_RESPONSE_LOCK, 187, "rs master key respone lock", LATCH_FIFO, 2000, 0, RS_MASTER_KEY_RESPONSE_LOCK_WAIT, "rs master key respone lock")
+LATCH_DEF(RS_MASTER_KEY_REQUEST_LOCK, 188, "rs master key request lock", LATCH_FIFO, 2000, 0, RS_MASTER_KEY_REQUEST_LOCK_WAIT, "rs master key request lock")
+LATCH_DEF(RS_MASTER_KEY_MGR_LOCK, 189, "rs master key mgr lock", LATCH_FIFO, 2000, 0, RS_MASTER_KEY_MGR_LOCK_WAIT, "rs master key mgr lock")
+LATCH_DEF(THREAD_HANG_CHECKER_LOCK, 190, "thread hang checker lock", LATCH_FIFO, 2000, 0, THREAD_HANG_CHECKER_LOCK_WAIT, "check thread set lock")
+LATCH_DEF(CREATE_INNER_SCHEMA_EXECUTOR_LOCK, 191, "create inner schema executor lock", LATCH_FIFO, 2000, 0, CREATE_INNER_SCHEMA_EXECUTOR_LOCK_WAIT, "create inner schema executor lock")
+LATCH_DEF(WRS_SERVER_VERSION_LOCK, 192, "weak read server version lock", LATCH_FIFO, 2000, 0, WRS_SERVER_VERSION_WAIT, "weak read server version lock")
+LATCH_DEF(TX_LS_LOG_WRITER_LOCK, 193, "transaction ls log writer lock", LATCH_FIFO, 2000, 0, TX_LS_LOG_WRITER_WAIT, "transaction ls log writer lock")
+LATCH_DEF(TX_DESC_LOCK, 194, "transaction descriptor lock", LATCH_FIFO, 2000, 0, TX_DESC_WAIT, "transaction descriptor lock")
+LATCH_DEF(TX_DESC_COMMIT_LOCK, 196, "transaction descriptor commit lock", LATCH_FIFO, 2000, 0, TX_DESC_COMMIT_WAIT, "transaction descriptor commit lock")
+LATCH_DEF(WRS_CLUSTER_SERVICE_LOCK, 197, "weak read service cluster service lock", LATCH_FIFO, 2000, 0, WRS_CLUSTER_SERVICE_WAIT, "weak read service cluster service lock")
+LATCH_DEF(TX_STAT_ITEM_LOCK, 198, "transaction stat item lock", LATCH_FIFO, 2000, 0, TX_STAT_ITEM_WAIT, "transaction stat item lock")
+LATCH_DEF(WRS_CLUSTER_VERSION_MGR_LOCK, 199, "weak read service cluster version manager lock", LATCH_FIFO, 2000, 0, WRS_CLUSTER_VERSION_MGR_WAIT, "weak read service cluster version manager lock")
+LATCH_DEF(MAJOR_FREEZE_SWITCH_LOCK, 200, "major freeze switch lock", LATCH_FIFO, 2000, 0, MAJOR_FREEZE_SWITCH_LOCK_WAIT, "major freeze switch lock")
+LATCH_DEF(ZONE_MERGE_MANAGER_READ_LOCK, 201, "zone merge manager read lock", LATCH_FIFO, 2000, 0, ZONE_MERGE_MANAGER_READ_LOCK_WAIT, "zone merge manager read lock")
+LATCH_DEF(ZONE_MERGE_MANAGER_WRITE_LOCK, 202, "zone merge manager write lock", LATCH_FIFO, 2000, 0, ZONE_MERGE_MANAGER_WRITE_LOCK_WAIT, "zone merge manager write lock")
+LATCH_DEF(AUTO_INCREMENT_INIT_LOCK, 203, "auto increment init lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_INIT_LOCK_WAIT, "auto increment init lock")
+LATCH_DEF(AUTO_INCREMENT_ALLOC_LOCK, 204, "auto increment alloc lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_ALLOC_LOCK_WAIT, "auto increment alloc lock")
+LATCH_DEF(AUTO_INCREMENT_SYNC_LOCK, 205, "auto increment sync lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_SYNC_LOCK_WAIT, "auto increment sync lock")
+LATCH_DEF(AUTO_INCREMENT_GAIS_LOCK, 206, "auto increment GAIS lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_GAIS_LOCK_WAIT, "auto increment gais lock")
+LATCH_DEF(AUTO_INCREMENT_LEADER_LOCK, 207, "auto increment leader lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_LEADER_LOCK_WAIT, "auto increment leader lock")
+LATCH_DEF(ALLOC_MEM_DUMP_TASK_LOCK, 210, "alloc memory dump task lock", LATCH_FIFO, 2000, 0, ALLOC_MEM_DUMP_TASK_WAIT, "alloc memory dump task lock")
+LATCH_DEF(ALLOC_ESS_LOCK, 211, "alloc expand, shrink and segment lock", LATCH_FIFO, 2000, 0, ALLOC_ESS_WAIT, "alloc expand, shrink and segment lock")
+LATCH_DEF(CONCURRENT_BITSET_LOCK, 212, "concurrent bitset lock", LATCH_FIFO, 2000, 0, CONCURRENT_BITSET_WAIT, "concurrent bitset lock")
+LATCH_DEF(OB_SEG_ARRAY_LOCK, 213, "seg array lock", LATCH_FIFO, 2000, 0, OB_SEG_ARRAY_WAIT, "seg array lock")
+LATCH_DEF(OB_AREAN_ALLOCATOR_LOCK, 214, "arena allocator lock", LATCH_FIFO, 2000, 0, OB_AREAN_ALLOCATOR_WAIT, "arena allocator lock")
+LATCH_DEF(OB_CACHED_ALLOCATOR_LOCK, 215, "cached allocator lock", LATCH_FIFO, 2000, 0, OB_CACHED_ALLOCATOR_WAIT, "cached allocator lock")
+LATCH_DEF(OB_DELAY_FREE_ALLOCATOR_LOCK, 216, "delay free allocator lock", LATCH_FIFO, 2000, 0, OB_DELAY_FREE_ALLOCATOR_WAIT, "delay free allocator lock")
+LATCH_DEF(OB_FIFO_ALLOCATOR_LOCK, 217, "FIFO allocator lock", LATCH_FIFO, 2000, 0, OB_FIFO_ALLOCATOR_WAIT, "FIFO allocator lock")
+LATCH_DEF(PAGE_MANAGER_LOCK, 218, "page manager lock", LATCH_FIFO, 2000, 0, PAGE_MANAGER_WAIT, "page manager lock")
+LATCH_DEF(SIMPLE_FIFO_ALLOCATOR_LOCK, 219, "simple FIFO allocator lock", LATCH_FIFO, 2000, 0, SIMPLE_FIFO_ALLOCATOR_WAIT, "simple FIFO allocator lock")
+LATCH_DEF(OB_DLIST_LOCK, 220, "DList lock", LATCH_FIFO, 2000, 0, OB_DLIST_WAIT, "DList lock")
+LATCH_DEF(OB_GLOBAL_FREE_LIST_LOCK, 221, "global freelist lock", LATCH_FIFO, 2000, 0, OB_GLOBAL_FREE_LIST_WAIT, "global freelist lock")
+LATCH_DEF(OB_FREEZE_INFO_MANAGER_LOCK, 222, "freeze info manager lock", LATCH_FIFO, 2000, 0, OB_FREEZE_INFO_MANAGER_WAIT, "freeze info manager lock")
+LATCH_DEF(CHUNK_FREE_LIST_LOCK, 223, "chunk free list lock", LATCH_FIFO, 2000, 0, CHUNK_FREE_LIST_WAIT, "chunk free list lock")
+LATCH_DEF(CHUNK_USING_LIST_LOCK, 224, "chunk using list lock", LATCH_FIFO, 2000, 0, CHUNK_USING_LIST_WAIT, "chunk using list lock")
+LATCH_DEF(WORK_DAG_LOCK, 225, "work dag lock", LATCH_FIFO, 2000, 0, WORK_DAG_WAIT, "work dag lock")
+LATCH_DEF(WORK_DAG_NET_LOCK, 226, "work dag_net lock", LATCH_FIFO, 2000, 0, WORK_DAG_NET_WAIT, "work dag_net lock")
+LATCH_DEF(SYS_TASK_STAT_LOCK, 227, "sys task stat lock", LATCH_FIFO, 2000, 0, SYS_TASK_STAT_WAIT, "sys task stat lock")
+LATCH_DEF(INFO_MGR_LOCK, 228, "info mgr lock", LATCH_FIFO, 2000, 0, INFO_MGR_WAIT, "info mgr lock")
+LATCH_DEF(MERGER_DUMP_LOCK, 229, "merger dump lock", LATCH_FIFO, 2000, 0, MERGER_DUMP_WAIT, "merger dump lock")
+LATCH_DEF(TABLET_MERGE_INFO_LOCK, 230, "tablet merge info lock", LATCH_FIFO, 2000, 0, TABLET_MERGE_INFO_WAIT, "tablet merge info lock")
+LATCH_DEF(WASH_OUT_LOCK, 231, "wash out lock", LATCH_FIFO, 2000, 0, WASH_OUT_WAIT, "wash out lock")
+LATCH_DEF(KV_CACHE_INST_LOCK, 232, "kv cache inst lock", LATCH_FIFO, 2000, 0, KV_CACHE_INST_WAIT, "kv cache inst lock")
+LATCH_DEF(KV_CACHE_LIST_LOCK, 233, "kv cache list lock", LATCH_FIFO, 2000, 0, KV_CACHE_LIST_WAIT, "kv cache list lock")
+LATCH_DEF(THREAD_STORE_LOCK, 234, "thread store lock", LATCH_FIFO, 2000, 0, THREAD_STORE_WAIT, "thread store lock")
+LATCH_DEF(GLOBAL_KV_CACHE_CONFIG_LOCK, 235, "global kvcache config lock", LATCH_FIFO, 2000, 0, GLOBAL_KV_CACHE_CONFIG_WAIT, "global kvcache config lock")
+LATCH_DEF(BACKUP_LOCK, 236, "backup lock", LATCH_FIFO, 2000, 0, BACKUP_LOCK_WAIT, "backup lock")
+LATCH_DEF(RESTORE_LOCK, 237, "restore lock", LATCH_FIFO, 2000, 0, RESTORE_LOCK_WAIT, "restore lock")
+LATCH_DEF(OBJECT_DEVICE_LOCK, 238, "object device lock", LATCH_FIFO, 2000, 0, OBJECT_DEVICE_LOCK_WAIT, "object device lock")
+LATCH_DEF(GLOBAL_IO_CONFIG_LOCK, 239, "global io config lock", LATCH_FIFO, 2000, 0, GLOBAL_IO_CONFIG_WAIT, "global io config lock")
+LATCH_DEF(TENANT_IO_MANAGE_LOCK, 240, "tenant io manage lock", LATCH_FIFO, 2000, 0, TENANT_IO_MANAGE_WAIT, "tenant io manage lock")
+LATCH_DEF(IO_FAULT_DETECTOR_LOCK, 241, "io fault detector lock", LATCH_FIFO, 2000, 0, IO_FAULT_DETECTOR_WAIT, "io fault detector lock")
+LATCH_DEF(TABLE_API_LOCK, 242, "table api interface lock", LATCH_FIFO, 2000, 0, TABLE_API_LOCK_WAIT, "table api interface lock")
+LATCH_DEF(SERVER_LOCALITY_MGR_LOCK, 243, "server locality manager lock", LATCH_FIFO, 2000, 0, SERVER_LOCALITY_MGR_LOCK_WAIT, "server locality manager lock")
+LATCH_DEF(DDL_LOCK, 244, "ddl task lock", LATCH_FIFO, 2000, 0, DDL_LOCK_WAIT, "ddl task lock")
+LATCH_DEF(DEADLOCK_LOCK, 245, "deadlock lock", LATCH_FIFO, 2000, 0, DEADLOCK_LOCK_WAIT, "deadlock lock")
+LATCH_DEF(BG_THREAD_MONITOR_LOCK, 246, "background thread monitor lock", LATCH_FIFO, 2000, 0, BG_THREAD_MONITOR_LOCK_WAIT, "background thread monitor lock")
+LATCH_DEF(RPC_STAT_LOCK, 247, "rpc stat lock", LATCH_FIFO, 2000, 0, RPC_STAT_LOCK_WAIT, "rpc stat lock")
+LATCH_DEF(DBLINK_LOCK, 248, "dblink lock", LATCH_FIFO, 2000, 0, DBLINK_LOCK_WAIT, "dblink lock")
+LATCH_DEF(PALF_SW_SUBMIT_INFO_LOCK, 249, "palf sw last submit log info lock", LATCH_FIFO, 2000, 0, PALF_SW_SUBMIT_INFO_WAIT, "palf sw last submit log info lock")
+LATCH_DEF(PALF_SW_COMMITTED_INFO_LOCK, 250, "palf sw committed info lock", LATCH_FIFO, 2000, 0, PALF_SW_COMMITTED_INFO_WAIT, "palf sw committed info lock")
+LATCH_DEF(PALF_SW_SLIDE_INFO_LOCK, 251, "palf sw last slide log info lock", LATCH_FIFO, 2000, 0, PALF_SW_SLIDE_INFO_WAIT, "palf sw last slide log info lock")
+LATCH_DEF(PALF_SW_FETCH_INFO_LOCK, 252, "palf sw fetch log info lock", LATCH_FIFO, 2000, 0, PALF_SW_FETCH_INFO_WAIT, "palf sw fetch log info lock")
+LATCH_DEF(PALF_SW_MATCH_LSN_MAP_LOCK, 253, "palf sw match lsn map lock", LATCH_FIFO, 2000, 0, PALF_SW_MATCH_LSN_MAP_WAIT, "palf sw match lsn map lock")
+LATCH_DEF(PALF_SW_LOC_CB_LOCK, 254, "palf sw location cache cb lock", LATCH_FIFO, 2000, 0, PALF_SW_LOC_CB_WAIT, "palf sw location cache cb lock")
+LATCH_DEF(PALF_CM_CONFIG_LOCK, 255, "palf cm config data lock", LATCH_FIFO, 2000, 0, PALF_CM_CONFIG_WAIT, "palf cm config data lock")
+LATCH_DEF(PALF_CM_PARENT_LOCK, 256, "palf cm parent info lock", LATCH_FIFO, 2000, 0, PALF_CM_PARENT_WAIT, "palf cm parent info lock")
+LATCH_DEF(PALF_CM_CHILD_LOCK, 257, "palf cm child info lock", LATCH_FIFO, 2000, 0, PALF_CM_CHILD_WAIT, "palf cm child info lock")
+LATCH_DEF(PALF_HANDLE_IMPL_LOCK, 258, "palf handle impl lock", LATCH_FIFO, 2000, 0, PALF_HANDLE_IMPL_WAIT, "palf handle impl lock")
+LATCH_DEF(PALF_LOG_ENGINE_LOCK, 259, "log engine lock", LATCH_FIFO, 2000, 0, PALF_LOG_ENGINE_LOCK_WAIT, "log engine lock")
+LATCH_DEF(PALF_ENV_LOCK, 260, "palf env lock", LATCH_FIFO, 2000, 0, PALF_ENV_LOCK_WAIT, "palf env lock")
+LATCH_DEF(RCS_LOCK, 261, "role change service lock", LATCH_FIFO, 2000, 0, RCS_LOCK_WAIT, "role change service lock")
+LATCH_DEF(LS_ARCHIVE_TASK_LOCK, 262, "ls archive task lock", LATCH_FIFO, 2000, 0, LS_ARCHIVE_TASK_LOCK_WAIT, "ls archive task lock")
+LATCH_DEF(ARCHIVE_ROUND_MGR_LOCK, 263, "archive round mgr lock", LATCH_FIFO, 2000, 0, ARCHIVE_ROUND_MGR_LOCK_WAIT, "archive round mgr lock")
+LATCH_DEF(ARCHIVE_PERSIST_MGR_LOCK, 264, "archive persist mgr lock", LATCH_FIFO, 2000, 0, ARCHIVE_PERSIST_MGR_LOCK_WAIT, "archive persist mgr lock")
+LATCH_DEF(ARCHIVE_TASK_QUEUE_LOCK, 265, "archive task queue lock", LATCH_FIFO, 2000, 0, ARCHIVE_TASK_QUEUE_LOCK_WAIT, "archive task queue lock")
+LATCH_DEF(EXT_SVR_BLACKLIST_LOCK, 266, "external server blacklist lock", LATCH_FIFO, 2000, 0, EXT_SVR_BLACKLIST_LOCK_WAIT, "external server blacklist lock")
+LATCH_DEF(SSTABLE_INSERT_TABLE_CONTEXT_LOCK, 267, "direct insert table context lock", LATCH_FIFO, 2000, 0, SSTABLE_INSERT_TABLE_CONTEXT_WAIT, "direct insert table context lock")
+LATCH_DEF(SSTABLE_INSERT_TABLET_CONTEXT_LOCK, 268, "direct insert tablet context lock", LATCH_FIFO, 2000, 0, SSTABLE_INSERT_TABLET_CONTEXT_WAIT, "direct insert tablet context lock")
+LATCH_DEF(SSTABLE_INSERT_TABLE_MANAGER_LOCK, 269, "direct insert table manager lock", LATCH_FIFO, 2000, 0, SSTABLE_INSERT_TABLE_MANAGER_WAIT, "direct insert table manager lock")
+LATCH_DEF(COMPLEMENT_DATA_CONTEXT_LOCK, 270, "complement data context lock", LATCH_FIFO, 2000, 0, COMPLEMENT_DATA_CONTEXT_WAIT, "complement data context lock")
+LATCH_DEF(TABLET_DDL_KV_MGR_LOCK, 271, "tablet ddl kv mgr lock", LATCH_FIFO, 2000, 0, TABLET_DDL_KV_MGR_WAIT, "tablet ddl kv mgr lock")
+LATCH_DEF(TABLET_AUTO_INCREMENT_MGR_LOCK, 272, "tablet auto increment mgr lock", LATCH_FIFO, 2000, 0, TABLET_AUTO_INCREMENT_MGR_WAIT, "tablet auto increment mgr lock")
+LATCH_DEF(TABLET_AUTO_INCREMENT_SERVICE_LOCK, 273, "tablet auto increment service lock", LATCH_FIFO, 2000, 0, TABLET_AUTO_INCREMENT_SERVICE_WAIT, "tablet auto increment service lock")
+LATCH_DEF(ALL_SERVER_TRACER_LOCK, 274, "all server tracer lock", LATCH_FIFO, 2000, 0, ALL_SERVER_TRACER_WAIT, "all server tracer lock")
+LATCH_DEF(UPGRADE_STORAGE_FORMAT_VERSION_LOCK, 275, "upgrade storage format version lock", LATCH_FIFO, 2000, 0, UPGRADE_STORAGE_FORMAT_VERSION_WAIT, "upgrade storage format version lock")
+LATCH_DEF(REPLAY_STATUS_LOCK, 276, "replay status lock", LATCH_FIFO, 2000, 0, REPLAY_STATUS_WAIT, "replay status lock")
+LATCH_DEF(REPLAY_STATUS_TASK_LOCK, 277, "replay status task lock", LATCH_FIFO, 2000, 0, REPLAY_STATUS_TASK_WAIT, "replay status task lock")
+LATCH_DEF(MAX_APPLY_SCN_LOCK, 278, "max apply scn lock", LATCH_FIFO, 2000, 0, MAX_APPLY_SCN_WAIT, "max apply scn lock")
+LATCH_DEF(GC_HANDLER_LOCK, 279, "gc handler lock", LATCH_FIFO, 2000, 0, GC_HANDLER_WAIT, "gc handler lock")
+LATCH_DEF(MEMSTORE_ALLOCATOR_LOCK, 280, "memstore allocator lock", LATCH_FIFO, 2000, 0, MEMSTORE_ALLOCATOR_LOCK_WAIT, "memstore allocator lock")
+LATCH_DEF(THREAD_POOL_LOCK, 281, "thread pool lock", LATCH_FIFO, 2000, 0, THREAD_POOL_LOCK_WAIT, "thread pool lock")
+LATCH_DEF(CLOG_CKPT_LOCK, 282, "clog checkpoint lock", LATCH_FIFO, 2000, 0, CLOG_CKPT_LOCK_WAIT, "clog checkpoint lock")
+LATCH_DEF(LS_META_LOCK, 283, "ls meta lock", LATCH_FIFO, 2000, 0, LS_META_LOCK_WAIT, "ls meta lock")
+LATCH_DEF(LS_CHANGE_LOCK, 284, "ls change lock", LATCH_FIFO, 2000, 0, LS_CHANGE_LOCK_WAIT, "ls change lock")
+LATCH_DEF(TENANT_MEM_USAGE_LOCK, 285, "tenant memory usage lock" , LATCH_FIFO, 2000, 0, TENANT_MEM_USAGE_LOCK_WAIT, "tenant memory usage lock")
+LATCH_DEF(TX_TABLE_LOCK, 286, "tx table lock", LATCH_FIFO, 2000, 0, TX_TABLE_LOCK_WAIT, "tx table lock")
+LATCH_DEF(MEMTABLE_STAT_LOCK, 287, "metmable stat lock", LATCH_FIFO, 2000, 0, MEMTABLE_STAT_LOCK_WAIT, "memtable stat lock")
+LATCH_DEF(DEADLOCK_DETECT_LOCK, 288, "deadlock detect lock", LATCH_FIFO, 2000, 0, DEADLOCK_DETECT_LOCK_WAIT, "deadlock detect lock")
+LATCH_DEF(FREEZE_THREAD_POOL_LOCK, 289, "freeze thread pool lock", LATCH_FIFO, 2000, 0, FREEZE_THREAD_POOL_WAIT, "freeze thread pool lock")
+LATCH_DEF(DAS_ASYNC_RPC_LOCK, 290, "das wait remote response lock", LATCH_FIFO, 2000, 0, DAS_ASYNC_RPC_LOCK_WAIT, "das wait remote response lock")
+LATCH_DEF(CLOG_CKPT_RWLOCK, 291, "clog checkpoint rwlock", LATCH_READ_PREFER, 2000, 0, CLOG_CKPT_RWLOCK_WAIT, "clog checkpoint rwlock")
+LATCH_DEF(REWRITE_RULE_ITEM_LOCK, 292, "rewrite rule item lock", LATCH_FIFO, 2000, 0, REWRITE_RULE_ITEM_LOCK_WAIT, "rewrite rule item lock")
+
+// LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 290, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, "tenant mgr tenant bucket lock")
+LATCH_DEF(SRS_LOCK, 293, "srs lock", LATCH_READ_PREFER, 2000, 0, SRS_LOCK_WAIT, "srs lock")
+LATCH_DEF(DDL_EXECUTE_LOCK, 294, "ddl execute lock", LATCH_FIFO, 2000, 0, DDL_EXECUTE_LOCK_WAIT, "ddl execute lock")
+LATCH_DEF(TENANT_IO_CONFIG_LOCK, 295, "tenant io config lock", LATCH_FIFO, 2000, 0, TENANT_IO_CONFIG_WAIT, "tenant io config lock")
+LATCH_DEF(SQL_WF_PARTICIPATOR_COND_LOCK, 296, "window function participator lock", LATCH_FIFO, 2000, 0, SQL_WF_PARTICIPATOR_COND_WAIT, "window function participator lock")
+LATCH_DEF(ARB_SERVER_CONFIG_LOCK, 297, "arbserver config lock", LATCH_FIFO, 2000, 0, ARB_SERVER_CONFIG_WAIT, "arbserver config lock")
+LATCH_DEF(CDC_SERVICE_LS_CTX_LOCK, 298, "cdcservice clientlsctx lock", LATCH_FIFO, 2000, 0, CDC_SERVICE_LS_CTX_LOCK_WAIT, "cdcservice clientlsctx lock")
+LATCH_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK, 299, "major freeze diagnose lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, "major freeze diagnose lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
@@ -216,22 +317,32 @@ LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "l
 #define OB_LATCH_DEFINE_H_
 #include "lib/wait_event/ob_wait_event.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-struct ObLatchIds {
-  enum ObLatchIdEnum {
+struct ObLatchIds
+{
+  enum ObLatchIdEnum
+  {
 #define LATCH_DEF(def, id, name, policy, max_spin_cnt, max_yield_cnt, wait_event, display_name) def,
 #include "lib/stat/ob_latch_define.h"
 #undef LATCH_DEF
   };
 };
 
-struct ObLatchPolicy {
-  enum ObLatchPolicyEnum { LATCH_READ_PREFER = 0, LATCH_FIFO };
+struct ObLatchPolicy
+{
+  enum ObLatchPolicyEnum
+  {
+    LATCH_READ_PREFER = 0,
+    LATCH_FIFO
+  };
 };
 
-struct ObLatchDesc {
+struct ObLatchDesc
+{
   static const int64_t MAX_LATCH_NAME_LENGTH = 64;
   int64_t latch_id_;
   char latch_name_[MAX_LATCH_NAME_LENGTH];
@@ -244,6 +355,6 @@ struct ObLatchDesc {
 
 extern const ObLatchDesc OB_LATCHES[];
 
-}  // namespace common
-}  // namespace oceanbase
+}//common
+}//oceanbase
 #endif /* OB_LATCH_DEFINE_H_ */

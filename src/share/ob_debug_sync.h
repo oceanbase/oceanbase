@@ -21,27 +21,30 @@
 #include "lib/list/ob_dlist.h"
 #include "share/ob_debug_sync_point.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
-namespace common {
+namespace common
+{
 class ObString;
 typedef common::ObFixedLengthString<32> ObSyncEventName;
 
-struct ObDebugSyncAction {
+struct ObDebugSyncAction
+{
 public:
   OB_UNIS_VERSION(1);
 
 public:
-  ObDebugSyncAction() : sync_point_(INVALID_DEBUG_SYNC_POINT), timeout_(0), execute_(0), no_clear_()
+  ObDebugSyncAction() : sync_point_(INVALID_DEBUG_SYNC_POINT),
+    timeout_(0), execute_(0), no_clear_()
   {}
-  TO_STRING_KV(K_(sync_point), K_(timeout), K_(execute), K_(signal), K_(wait), K_(no_clear), K_(broadcast));
+  TO_STRING_KV(K_(sync_point), K_(timeout), K_(execute),
+      K_(signal), K_(wait), K_(no_clear), K_(broadcast));
 
-  void reset()
-  {
-    *this = ObDebugSyncAction();
-  }
+  void reset() { *this = ObDebugSyncAction(); }
   bool is_valid() const;
 
   ObDebugSyncPoint sync_point_;
@@ -50,10 +53,11 @@ public:
   ObSyncEventName signal_;
   ObSyncEventName broadcast_;
   ObSyncEventName wait_;
-  bool no_clear_;
+  bool  no_clear_;
 };
 
-class ObDSActionArray {
+class ObDSActionArray
+{
 public:
   OB_UNIS_VERSION(1);
 
@@ -61,24 +65,21 @@ public:
   // const action array will always be empty
   explicit ObDSActionArray(const bool is_const = false);
 
-  bool is_empty() const
-  {
-    return 0 >= active_cnt_;
-  }
+  bool is_empty() const { return 0 >= active_cnt_; }
 
   void clear(const ObDebugSyncPoint sync_point);
   void clear_all();
 
-  int add_action(const ObDebugSyncAction& action);
+  int add_action(const ObDebugSyncAction &action);
   // fetch action to execute,
   // return OB_SUCCESS for action exist, OB_ENTRY_NOT_EXIST for not exist
-  int fetch_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction& action);
+  int fetch_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction &action);
 
   bool is_active(const ObDebugSyncPoint sync_point) const;
-  int copy_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction& action) const;
+  int copy_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction &action) const;
 
 private:
-  ObDebugSyncAction* action_ptrs_[MAX_DEBUG_SYNC_POINT];
+  ObDebugSyncAction *action_ptrs_[MAX_DEBUG_SYNC_POINT];
   ObDebugSyncAction actions_[MAX_DEBUG_SYNC_POINT];
   volatile int64_t active_cnt_;
   const bool is_const_;
@@ -86,44 +87,41 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDSActionArray);
 };
 
-class ObDSActionNode : public ObDLinkBase<ObDSActionNode> {
+class ObDSActionNode : public ObDLinkBase<ObDSActionNode>
+{
 public:
   ObDebugSyncAction action_;
 };
 
-class ObDSSessionActions {
+class ObDSSessionActions
+{
 public:
   ObDSSessionActions() : inited_(false), block_head_(NULL), page_size_(0), allocator_(NULL)
-  {}
+  {
+  }
   virtual ~ObDSSessionActions();
 
-  int init(const int64_t page_size, ObIAllocator& allocator);
-  bool is_inited() const
-  {
-    return inited_;
-  }
+  int init(const int64_t page_size, ObIAllocator &allocator);
+  bool is_inited() const { return inited_; }
 
-  int add_action(const ObDebugSyncAction& action);
+  int add_action(const ObDebugSyncAction &action);
 
   void clear(const ObDebugSyncPoint sync_point);
-  void reset()
-  {
-    clear_all();
-  }
+  void reset() { clear_all(); }
   void clear_all();
 
-  int to_thread_local(ObDSActionArray& local) const;
-  int get_thread_local_result(const ObDSActionArray& local);
+  int to_thread_local(ObDSActionArray &local) const;
+  int get_thread_local_result(const ObDSActionArray &local);
 
 private:
-  ObDSActionNode* alloc_node();
-  void free_node(ObDSActionNode* node);
+  ObDSActionNode *alloc_node();
+  void free_node(ObDSActionNode *node);
 
 private:
   bool inited_;
-  void* block_head_;
+  void *block_head_;
   int64_t page_size_;
-  ObIAllocator* allocator_;
+  ObIAllocator *allocator_;
 
   ObDList<ObDSActionNode> actions_;
   ObDList<ObDSActionNode> free_list_;
@@ -131,13 +129,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDSSessionActions);
 };
 
-class ObDSEventControl {
+class ObDSEventControl
+{
 public:
   const static int64_t MIN_EVENT_CNT = 512;
-  const static int64_t MAX_EVENT_CNT =
-      MAX_DEBUG_SYNC_POINT <= MIN_EVENT_CNT / 10 ? MIN_EVENT_CNT : MAX_DEBUG_SYNC_POINT * 10;
+  const static int64_t MAX_EVENT_CNT = MAX_DEBUG_SYNC_POINT <= MIN_EVENT_CNT / 10
+      ? MIN_EVENT_CNT : MAX_DEBUG_SYNC_POINT * 10;
 
-  struct Event : ObDLinkBase<Event> {
+  struct Event : ObDLinkBase<Event>
+  {
     Event() : signal_cnt_(0), waiter_cnt_(0), name_()
     {}
 
@@ -151,9 +151,9 @@ public:
   ObDSEventControl();
   virtual ~ObDSEventControl();
 
-  int signal(const ObSyncEventName& name);
-  int broadcast(const ObSyncEventName& name);
-  int wait(const ObSyncEventName& name, const int64_t timeout_us, const bool clear);
+  int signal(const ObSyncEventName &name);
+  int broadcast(const ObSyncEventName &name);
+  int wait(const ObSyncEventName &name, const int64_t timeout_us, const bool clear);
 
   // clear events with no waiters.
   void clear_event();
@@ -162,12 +162,12 @@ public:
 
 private:
   // return NULL for alloc failed
-  Event* alloc_event();
-  void free_event(Event* e);
+  Event *alloc_event();
+  void free_event(Event *e);
   // find exist event, return OB_ENTRY_NOT_EXIST for not found
-  int find(const ObSyncEventName& name, Event*& e);
+  int find(const ObSyncEventName &name, Event *&e);
   // locate event by name (if not exist create one)
-  int locate(const ObSyncEventName& name, Event*& e);
+  int locate(const ObSyncEventName &name, Event *&e);
 
 private:
   volatile bool stop_;
@@ -181,48 +181,50 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDSEventControl);
 };
 
-class ObDebugSync {
+class ObDebugSync
+{
 public:
-  static ObDebugSync& instance();
+  static ObDebugSync &instance();
 
-  void set_rpc_proxy(obrpc::ObCommonRpcProxy* rpc_proxy);
+  void set_rpc_proxy(obrpc::ObCommonRpcProxy *rpc_proxy);
 
-  int add_debug_sync(const ObString& str, const bool is_global, ObDSSessionActions& session_actions);
+  int add_debug_sync(const ObString &str, const bool is_global,
+      ObDSSessionActions &session_actions);
 
-  int set_global_action(const bool reset, const bool clear, const ObDebugSyncAction& action);
+  int set_global_action(const bool reset, const bool clear, const ObDebugSyncAction &action);
 
   int execute(const ObDebugSyncPoint sync_point);
 
-  int set_thread_local_actions(const ObDSSessionActions& session_actions);
-  int collect_result_actions(ObDSSessionActions& session_actions);
+  int set_thread_local_actions(const ObDSSessionActions &session_actions);
+  int collect_result_actions(ObDSSessionActions &session_actions);
 
-  ObDSActionArray* thread_local_actions() const;
+  ObDSActionArray *thread_local_actions() const;
 
-  ObDSActionArray& rpc_spread_actions() const;
+  ObDSActionArray &rpc_spread_actions() const;
 
   void stop();
 
 private:
-  ObDebugSync() : stop_(false), rpc_proxy_(NULL)
+  ObDebugSync() : stop_(false), lock_(ObLatchIds::DEFAULT_SPIN_LOCK), rpc_proxy_(NULL)
   {}
 
-  int parse_action(const ObString& str, ObDebugSyncAction& action, bool& clear, bool& reset);
-  static ObString get_token(ObString& str);
+  int parse_action(const ObString &str, ObDebugSyncAction &action, bool &clear, bool &reset);
+  static ObString get_token(ObString &str);
 
 private:
   volatile bool stop_;
-  ObSpinLock lock_;  // protect global action access
+  ObSpinLock lock_; // protect global action access
   ObDSActionArray global_actions_;
   ObDSEventControl event_control_;
-  obrpc::ObCommonRpcProxy* rpc_proxy_;
+  obrpc::ObCommonRpcProxy *rpc_proxy_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDebugSync);
 };
 
 #define GDS oceanbase::common::ObDebugSync::instance()
-// TODO : empty macro for release version?
+// TODO baihua: empty macro for release version?
 #define DEBUG_SYNC(sync_point) GDS.execute((sync_point))
 
-}  // end namespace common
-}  // end namespace oceanbase
-#endif  // OCEANBASE_COMMON_OB_DEBUG_SYNC_H_
+} // end namespace common
+} // end namespace oceanbase
+#endif // OCEANBASE_COMMON_OB_DEBUG_SYNC_H_

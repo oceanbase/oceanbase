@@ -1,0 +1,6 @@
+create database xy_db;
+use xy_db;
+create table t(c1 varchar(100));
+create table dayincome(pubid bigint, settleamount bigint, settletype bigint, realamount bigint, transType varchar(100), subType bigint, earningsource bigint, earningtype bigint, commision bigint);
+create table jit(c1 tinyint, c2 bigint);
+create table type_t (bigint_c bigint, int_c int, varchar_c varchar(10));

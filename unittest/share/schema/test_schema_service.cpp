@@ -22,23 +22,23 @@
 #include "ob_schema_test_utils.cpp"
 #include "share/schema/ob_schema_service.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 using namespace common;
 
 const int64_t BUFF_SIZE = 10240;
 
-class TestSchemaService : public ::testing::Test {
-public:
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  static void SeuUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
+class TestSchemaService : public ::testing::Test
+{
+   public:
+     virtual void SetUp() {}
+     virtual void TearDown() {}
+     static void SeuUpTestCase() {}
+     static void TearDownTestCase() {}
 };
 
 TEST_F(TestSchemaService, ColumnSchema_test)
@@ -134,13 +134,13 @@ TEST_F(TestSchemaService, TableSchema_test)
   ret = table_schema.serialize(buff, BUFF_SIZE, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // TODO oushen ObPartitionExpr deserialize not supperted now
-  // TableSchema table_schema2;
-  // int64_t pos2 = 0;
-  // table_schema2.deserialize(buff, BUFF_SIZE, pos2);
-  // ObSchemaTestUtils::assert_table_equal(table_schema, table_schema2);
-  // ASSERT_EQ(pos, pos2);
-  // ASSERT_EQ(pos, table_schema.get_serialize_size());
+  //TODO oushen ObPartitionExpr deserialize not supperted now
+  //TableSchema table_schema2;
+  //int64_t pos2 = 0;
+  //table_schema2.deserialize(buff, BUFF_SIZE, pos2);
+  //ObSchemaTestUtils::assert_table_equal(table_schema, table_schema2);
+  //ASSERT_EQ(pos, pos2);
+  //ASSERT_EQ(pos, table_schema.get_serialize_size());
 };
 
 TEST_F(TestSchemaService, other_test)
@@ -207,7 +207,7 @@ TEST_F(TestSchemaService, test_operation)
 {
   const int64_t BUF_SIZE = 10240;
   int64_t pos = 0;
-  char* buf = static_cast<char*>(malloc(BUF_SIZE));
+  char *buf = static_cast<char *>(malloc(BUF_SIZE));
   ObSchemaOperation operation;
   operation.reset();
   ASSERT_EQ(-1, operation.schema_version_);
@@ -252,147 +252,159 @@ TEST_F(TestSchemaService, test_alter_table)
   ret = alter_table_schema.serialize(buf, BUF_SIZE, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // test serialize
+  //test serialize
   ASSERT_EQ(pos, alter_table_schema.get_serialize_size());
   buf_len = pos;
   pos = 0;
   ret = dest_table_schema.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(dest_table_schema.get_origin_database_name(), alter_table_schema.get_origin_database_name());
-  ASSERT_EQ(dest_table_schema.get_origin_table_name(), alter_table_schema.get_origin_table_name());
-  ASSERT_EQ(dest_table_schema.get_database_name(), alter_table_schema.get_database_name());
+  ASSERT_EQ(dest_table_schema.get_origin_database_name(),
+      alter_table_schema.get_origin_database_name());
+  ASSERT_EQ(dest_table_schema.get_origin_table_name(),
+      alter_table_schema.get_origin_table_name());
+  ASSERT_EQ(dest_table_schema.get_database_name(),
+      alter_table_schema.get_database_name());
   ASSERT_TRUE(0 < dest_table_schema.to_string(buf, BUF_SIZE));
   copy_table_schema = alter_table_schema;
-  ASSERT_EQ(copy_table_schema.get_origin_database_name(), alter_table_schema.get_origin_database_name());
-  ASSERT_EQ(copy_table_schema.get_origin_table_name(), alter_table_schema.get_origin_table_name());
-  ASSERT_EQ(copy_table_schema.get_database_name(), alter_table_schema.get_database_name());
+  ASSERT_EQ(copy_table_schema.get_origin_database_name(),
+      alter_table_schema.get_origin_database_name());
+  ASSERT_EQ(copy_table_schema.get_origin_table_name(),
+      alter_table_schema.get_origin_table_name());
+  ASSERT_EQ(copy_table_schema.get_database_name(),
+      alter_table_schema.get_database_name());
 }
 
 TEST_F(TestSchemaService, test_get_schema_operation_str)
 {
-  ObSchemaOperationType ops[] = {
-      OB_INVALID_DDL_OP,
-      OB_DDL_TABLE_OPERATION_BEGIN,
-      OB_DDL_DROP_TABLE,
-      OB_DDL_ALTER_TABLE,
-      OB_DDL_CREATE_TABLE,
-      OB_DDL_ADD_COLUMN,
-      OB_DDL_DROP_COLUMN,
-      OB_DDL_CHANGE_COLUMN,
-      OB_DDL_MODIFY_COLUMN,
-      OB_DDL_ALTER_COLUMN,
-      OB_DDL_MODIFY_META_TABLE_ID,
-      OB_DDL_KILL_INDEX,
-      OB_DDL_STOP_INDEX_WRITE,
-      OB_DDL_MODIFY_INDEX_STATUS,
-      OB_DDL_MODIFY_TABLE_SCHEMA_VERSION,
-      OB_DDL_MODIFY_TABLE_OPTION,
-      OB_DDL_TABLE_RENAME,
-      OB_DDL_MODIFY_DATA_TABLE_INDEX,
-      OB_DDL_TABLE_OPERATION_END,
-      OB_DDL_TENANT_OPERATION_BEGIN,
-      OB_DDL_ADD_TENANT,
-      OB_DDL_ALTER_TENANT,
-      OB_DDL_DEL_TENANT,
-      OB_DDL_TENANT_OPERATION_END,
-      OB_DDL_DATABASE_OPERATION_BEGIN,
-      OB_DDL_ADD_DATABASE,
-      OB_DDL_ALTER_DATABASE,
-      OB_DDL_DEL_DATABASE,
-      OB_DDL_RENAME_DATABASE,
-      OB_DDL_DATABASE_OPERATION_END,
-      OB_DDL_TABLEGROUP_OPERATION_BEGIN,
-      OB_DDL_ADD_TABLEGROUP,
-      OB_DDL_DEL_TABLEGROUP,
-      OB_DDL_RENAME_TABLEGROUP,
-      OB_DDL_TABLEGROUP_OPERATION_END,
-      OB_DDL_USER_OPERATION_BEGIN,
-      OB_DDL_CREATE_USER,
-      OB_DDL_DROP_USER,
-      OB_DDL_RENAME_USER,
-      OB_DDL_LOCK_USER,
-      OB_DDL_SET_PASSWD,
-      OB_DDL_GRANT_REVOKE_USER,
-      OB_DDL_ALTER_USER_REQUIRE,
-      OB_DDL_USER_OPERATION_END,
-      OB_DDL_DB_PRIV_OPERATION_BEGIN,
-      OB_DDL_GRANT_REVOKE_DB,
-      OB_DDL_DEL_DB_PRIV,
-      OB_DDL_DB_PRIV_OPERATION_END,
-      OB_DDL_TABLE_PRIV_OPERATION_BEGIN,
-      OB_DDL_GRANT_REVOKE_TABLE,
-      OB_DDL_DEL_TABLE_PRIV,
-      OB_DDL_TABLE_PRIV_OPERATION_END,
-      OB_DDL_MAX_OP,
+  ObSchemaOperationType ops[] =
+  {
+    OB_INVALID_DDL_OP,
+    OB_DDL_TABLE_OPERATION_BEGIN,
+    OB_DDL_DROP_TABLE,
+    OB_DDL_ALTER_TABLE,
+    OB_DDL_CREATE_TABLE,
+    OB_DDL_ADD_COLUMN,
+    OB_DDL_DROP_COLUMN,
+    OB_DDL_CHANGE_COLUMN,
+    OB_DDL_MODIFY_COLUMN,
+    OB_DDL_ALTER_COLUMN,
+    OB_DDL_MODIFY_META_TABLE_ID,
+    OB_DDL_KILL_INDEX,
+    OB_DDL_STOP_INDEX_WRITE,
+    OB_DDL_MODIFY_INDEX_STATUS,
+    OB_DDL_MODIFY_TABLE_SCHEMA_VERSION,
+    OB_DDL_MODIFY_TABLE_OPTION,
+    OB_DDL_TABLE_RENAME,
+    OB_DDL_MODIFY_DATA_TABLE_INDEX,
+    OB_DDL_TABLE_OPERATION_END,
+    OB_DDL_TENANT_OPERATION_BEGIN,
+    OB_DDL_ADD_TENANT,
+    OB_DDL_ALTER_TENANT,
+    OB_DDL_DEL_TENANT,
+    OB_DDL_TENANT_OPERATION_END,
+    OB_DDL_DATABASE_OPERATION_BEGIN,
+    OB_DDL_ADD_DATABASE,
+    OB_DDL_ALTER_DATABASE,
+    OB_DDL_DEL_DATABASE,
+    OB_DDL_RENAME_DATABASE,
+    OB_DDL_DATABASE_OPERATION_END,
+    OB_DDL_TABLEGROUP_OPERATION_BEGIN,
+    OB_DDL_ADD_TABLEGROUP,
+    OB_DDL_DEL_TABLEGROUP,
+    OB_DDL_RENAME_TABLEGROUP,
+    OB_DDL_TABLEGROUP_OPERATION_END,
+    OB_DDL_USER_OPERATION_BEGIN,
+    OB_DDL_CREATE_USER,
+    OB_DDL_DROP_USER,
+    OB_DDL_RENAME_USER,
+    OB_DDL_LOCK_USER,
+    OB_DDL_SET_PASSWD,
+    OB_DDL_GRANT_REVOKE_USER,
+    OB_DDL_ALTER_USER_REQUIRE,
+    OB_DDL_USER_OPERATION_END,
+    OB_DDL_DB_PRIV_OPERATION_BEGIN,
+    OB_DDL_GRANT_REVOKE_DB,
+    OB_DDL_DEL_DB_PRIV,
+    OB_DDL_DB_PRIV_OPERATION_END,
+    OB_DDL_TABLE_PRIV_OPERATION_BEGIN,
+    OB_DDL_GRANT_REVOKE_TABLE,
+    OB_DDL_DEL_TABLE_PRIV,
+    OB_DDL_TABLE_PRIV_OPERATION_END,
+    OB_DDL_ALTER_ROLE,
+    OB_DDL_MAX_OP
   };
-  static const char* ddl_op_str_array[] = {"OB_INVALID_DDL_OP",
-      "OB_DDL_TABLE_OPERATION_BEGIN",
-      "OB_DDL_DROP_TABLE",
-      "OB_DDL_ALTER_TABLE",
-      "OB_DDL_CREATE_TABLE",
-      "OB_DDL_ADD_COLUMN",
-      "OB_DDL_DROP_COLUMN",
-      "OB_DDL_CHANGE_COLUMN",
-      "OB_DDL_MODIFY_COLUMN",
-      "OB_DDL_ALTER_COLUMN",
-      "OB_DDL_MODIFY_META_TABLE_ID",
-      "OB_DDL_KILL_INDEX",
-      "OB_DDL_STOP_INDEX_WRITE",
-      "OB_DDL_MODIFY_INDEX_STATUS",
-      "OB_DDL_MODIFY_TABLE_SCHEMA_VERSION",
-      "OB_DDL_MODIFY_TABLE_OPTION",
-      "OB_DDL_TABLE_RENAME",
-      "OB_DDL_MODIFY_DATA_TABLE_INDEX",
-      "OB_DDL_TABLE_OPERATION_END",
-      "OB_DDL_TENANT_OPERATION_BEGIN",
-      "OB_DDL_ADD_TENANT",
-      "OB_DDL_ALTER_TENANT",
-      "OB_DDL_DEL_TENANT",
-      "OB_DDL_TENANT_OPERATION_END",
-      "OB_DDL_DATABASE_OPERATION_BEGIN",
-      "OB_DDL_ADD_DATABASE",
-      "OB_DDL_ALTER_DATABASE",
-      "OB_DDL_DEL_DATABASE",
-      "OB_DDL_RENAME_DATABASE",
-      "OB_DDL_DATABASE_OPERATION_END",
-      "OB_DDL_TABLEGROUP_OPERATION_BEGIN",
-      "OB_DDL_ADD_TABLEGROUP",
-      "OB_DDL_DEL_TABLEGROUP",
-      "OB_DDL_RENAME_TABLEGROUP",
-      "OB_DDL_TABLEGROUP_OPERATION_END",
-      "OB_DDL_USER_OPERATION_BEGIN",
-      "OB_DDL_CREATE_USER",
-      "OB_DDL_DROP_USER",
-      "OB_DDL_RENAME_USER",
-      "OB_DDL_LOCK_USER",
-      "OB_DDL_SET_PASSWD",
-      "OB_DDL_GRANT_REVOKE_USER",
-      "OB_DDL_ALTER_USER_REQUIRE",
-      "OB_DDL_USER_OPERATION_END",
-      "OB_DDL_DB_PRIV_OPERATION_BEGIN",
-      "OB_DDL_GRANT_REVOKE_DB",
-      "OB_DDL_DEL_DB_PRIV",
-      "OB_DDL_DB_PRIV_OPERATION_END",
-      "OB_DDL_TABLE_PRIV_OPERATION_BEGIN",
-      "OB_DDL_GRANT_REVOKE_TABLE",
-      "OB_DDL_DEL_TABLE_PRIV",
-      "OB_DDL_TABLE_PRIV_OPERATION_END",
-      "OB_DDL_MAX_OP"};
+  static const char *ddl_op_str_array[] =
+  {
+    "OB_INVALID_DDL_OP",
+    "OB_DDL_TABLE_OPERATION_BEGIN",
+    "OB_DDL_DROP_TABLE",
+    "OB_DDL_ALTER_TABLE",
+    "OB_DDL_CREATE_TABLE",
+    "OB_DDL_ADD_COLUMN",
+    "OB_DDL_DROP_COLUMN",
+    "OB_DDL_CHANGE_COLUMN",
+    "OB_DDL_MODIFY_COLUMN",
+    "OB_DDL_ALTER_COLUMN",
+    "OB_DDL_MODIFY_META_TABLE_ID",
+    "OB_DDL_KILL_INDEX",
+    "OB_DDL_STOP_INDEX_WRITE",
+    "OB_DDL_MODIFY_INDEX_STATUS",
+    "OB_DDL_MODIFY_TABLE_SCHEMA_VERSION",
+    "OB_DDL_MODIFY_TABLE_OPTION",
+    "OB_DDL_TABLE_RENAME",
+    "OB_DDL_MODIFY_DATA_TABLE_INDEX",
+    "OB_DDL_TABLE_OPERATION_END",
+    "OB_DDL_TENANT_OPERATION_BEGIN",
+    "OB_DDL_ADD_TENANT",
+    "OB_DDL_ALTER_TENANT",
+    "OB_DDL_DEL_TENANT",
+    "OB_DDL_TENANT_OPERATION_END",
+    "OB_DDL_DATABASE_OPERATION_BEGIN",
+    "OB_DDL_ADD_DATABASE",
+    "OB_DDL_ALTER_DATABASE",
+    "OB_DDL_DEL_DATABASE",
+    "OB_DDL_RENAME_DATABASE",
+    "OB_DDL_DATABASE_OPERATION_END",
+    "OB_DDL_TABLEGROUP_OPERATION_BEGIN",
+    "OB_DDL_ADD_TABLEGROUP",
+    "OB_DDL_DEL_TABLEGROUP",
+    "OB_DDL_RENAME_TABLEGROUP",
+    "OB_DDL_TABLEGROUP_OPERATION_END",
+    "OB_DDL_USER_OPERATION_BEGIN",
+    "OB_DDL_CREATE_USER",
+    "OB_DDL_DROP_USER",
+    "OB_DDL_RENAME_USER",
+    "OB_DDL_LOCK_USER",
+    "OB_DDL_SET_PASSWD",
+    "OB_DDL_GRANT_REVOKE_USER",
+    "OB_DDL_ALTER_USER_REQUIRE",
+    "OB_DDL_USER_OPERATION_END",
+    "OB_DDL_DB_PRIV_OPERATION_BEGIN",
+    "OB_DDL_GRANT_REVOKE_DB",
+    "OB_DDL_DEL_DB_PRIV",
+    "OB_DDL_DB_PRIV_OPERATION_END",
+    "OB_DDL_TABLE_PRIV_OPERATION_BEGIN",
+    "OB_DDL_GRANT_REVOKE_TABLE",
+    "OB_DDL_DEL_TABLE_PRIV",
+    "OB_DDL_TABLE_PRIV_OPERATION_END",
+    "OB_DDL_ALTER_ROLE",
+    "OB_DDL_MAX_OP"
+  };
 
   for (int64_t i = 0; i < ARRAYSIZEOF(ops); ++i) {
-    const char* op_str = ObSchemaOperation::type_str(ops[i]);
+    const char *op_str = ObSchemaOperation::type_str(ops[i]);
     ASSERT_STREQ(ddl_op_str_array[i], op_str);
   }
 }
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
+}
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("ERROR");
   OB_LOGGER.set_log_level("ERROR");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -17,123 +17,98 @@
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_common_config.h"
 #include "share/config/ob_config_helper.h"
+#include "lib/lock/ob_drw_lock.h"
 
 namespace oceanbase {
 
 namespace omt {
 
-using common::EditLevel;
 using common::ObCommonConfig;
-using common::ObParameterAttr;
-using common::Scope;
 using common::Section;
+using common::Scope;
 using common::Source;
+using common::EditLevel;
+using common::ObParameterAttr;
 class ObTenantConfigMgr;
 
-class ObTenantConfig : public ObCommonConfig {
+class ObTenantConfig : public ObCommonConfig
+{
 public:
-  class TenantConfigUpdateTask : public common::ObTimerTask {
+  static const int64_t INITIAL_TENANT_CONF_VERSION = 1;
+public:
+  class TenantConfigUpdateTask : public common::ObTimerTask
+  {
   public:
-    TenantConfigUpdateTask()
-        : config_mgr_(nullptr),
-          tenant_config_(nullptr),
-          version_(0),
-          scheduled_time_(0),
-          update_local_(false),
-          task_lock_(),
-          is_running_(false)
-    {}
-    int init(ObTenantConfigMgr* config_mgr, ObTenantConfig* config)
+    TenantConfigUpdateTask() : config_mgr_(nullptr), tenant_config_(nullptr),
+                               version_(0), scheduled_time_(0),
+                               update_local_(false),
+                               running_task_count_(0) {}
+    int init(ObTenantConfigMgr *config_mgr, ObTenantConfig *config)
     {
       config_mgr_ = config_mgr;
       tenant_config_ = config;
       return common::OB_SUCCESS;
     }
-    virtual ~TenantConfigUpdateTask()
-    {}
-    TenantConfigUpdateTask(const TenantConfigUpdateTask&) = delete;
-    TenantConfigUpdateTask& operator=(const TenantConfigUpdateTask&) = delete;
-    void cancelCallBack() override
-    {
-      is_running_ = false;
-    }
-    void set_tenant_config(ObTenantConfig* config)
-    {
-      tenant_config_ = config;
-    }
+    virtual ~TenantConfigUpdateTask() {}
+    TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
+    TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
+    void cancelCallBack() override {}
+    void set_tenant_config(ObTenantConfig *config) { tenant_config_ = config; }
     void runTimerTask(void) override;
-    ObTenantConfigMgr* config_mgr_;
-    ObTenantConfig* tenant_config_;
+    ObTenantConfigMgr *config_mgr_;
+    ObTenantConfig *tenant_config_;
     volatile int64_t version_;
     volatile int64_t scheduled_time_;
     bool update_local_;
-    tbutil::Mutex task_lock_;
-    bool is_running_;
+    volatile int64_t running_task_count_;
   };
   friend class TenantConfigUpdateTask;
-
+  static const int64_t LOCK_TIMEOUT = 1 * 1000 * 1000;
 public:
   ObTenantConfig();
   ObTenantConfig(uint64_t tenant_id);
-  int init(ObTenantConfigMgr* config_mgr);
-  virtual ~ObTenantConfig(){};
-  void set_tenant_config_mgr(ObTenantConfigMgr* config_mgr)
-  {
-    config_mgr_ = config_mgr;
-  };
-  void set_deleting(bool deleting = true)
-  {
-    is_deleting_ = deleting;
-  }
-  ObTenantConfig(const ObTenantConfig&) = delete;
-  ObTenantConfig& operator=(const ObTenantConfig&) = delete;
+  int init(ObTenantConfigMgr *config_mgr);
+  virtual ~ObTenantConfig() {};
+  void set_tenant_config_mgr(ObTenantConfigMgr *config_mgr) { config_mgr_ = config_mgr; };
+  void set_deleting(bool deleting = true) { is_deleting_ = deleting; }
+  ObTenantConfig(const ObTenantConfig &)=delete;
+  ObTenantConfig &operator=(const ObTenantConfig &)=delete;
 
   void print() const override;
   int check_all() const override;
-  common::ObServerRole get_server_type() const override
-  {
-    return common::OB_SERVER;
-  }
+  common::ObServerRole get_server_type() const override { return common::OB_SERVER; }
   int rdlock();
   int wrlock();
   int try_rdlock();
   int try_wrlock();
   int unlock();
+  int wrunlock();
 
   int read_config();
-  uint64_t get_tenant_id() const
-  {
-    return tenant_id_;
-  }
-  int64_t get_current_version() const
-  {
-    return current_version_;
-  }
-  int64_t get_newest_version() const
-  {
-    return newest_version_;
-  }
-  const TenantConfigUpdateTask& get_update_task() const
-  {
-    return update_task_;
-  }
+  int read_dump_config(int64_t tenant_id);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_current_version() const { return current_version_; }
+  const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
+  int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat);
-  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult& result, bool save2file = true);
+  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
+                   bool save2file = true);
+  int add_extra_config(const char *config_str,
+                       int64_t version = 0 ,
+                       bool check_name = false);
 
   OB_UNIS_VERSION(1);
-
 private:
   uint64_t tenant_id_;
-  int64_t current_version_;  // currently processed task version
-  int64_t newest_version_;
-  volatile int64_t running_task_count_;
-  tbutil::Mutex mutex_;
+  int64_t current_version_; // 当前 tenant config 正在被 task 更新中的版本
+  obutil::Mutex mutex_;
   TenantConfigUpdateTask update_task_;
   common::ObSystemConfig system_config_;
-  ObTenantConfigMgr* config_mgr_;
+  ObTenantConfigMgr *config_mgr_;
   // protect this object from being deleted in OTC_MGR.del_tenant_config
-  common::ObLatch lock_;
+  mutable common::DRWLock lock_;
   bool is_deleting_;
+  int64_t create_timestamp_;
 
 public:
 ///////////////////////////////////////////////////////////////////////////////
@@ -144,9 +119,10 @@ public:
 #define OB_TENANT_PARAMETER(args...) args
 #include "share/parameter/ob_parameter_seed.ipp"
 #undef OB_TENANT_PARAMETER
+
 };
 
-}  // namespace omt
-}  // namespace oceanbase
+} // omt
+} // oceanbase
 
 #endif

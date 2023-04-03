@@ -17,22 +17,19 @@
 #include "lib/thread/thread_pool.h"
 
 using namespace oceanbase::common;
-using obsys::CThread;
 using oceanbase::lib::ThreadPool;
 
-class TestRingBuffer : public ::testing::Test, public ThreadPool {
+class TestRingBuffer: public ::testing::Test, public ThreadPool
+{
 public:
-  struct RBData {
-    RBData() : valid_(0), val_(0)
-    {}
-    RBData(int64_t val) : valid_(1), val_(val)
-    {}
-    ~RBData()
-    {}
+  struct RBData
+  {
+    RBData(): valid_(0), val_(0) {}
+    RBData(int64_t val): valid_(1), val_(val) {}
+    ~RBData() {}
     int64_t valid_;
     int64_t val_;
-    int read_from(RBData* that)
-    {
+    int read_from(RBData* that) {
       int err = 0;
       if (that->valid_ == 0) {
         err = -ENOENT;
@@ -41,12 +38,11 @@ public:
       }
       return err;
     }
-    int write_to(RBData* that)
-    {
+    int write_to(RBData* that) {
       int err = 0;
       if (valid_ == 0) {
         err = -EINVAL;
-        // error("RBData invalid");
+        //error("RBData invalid");
       } else {
         *that = *this;
       }
@@ -54,24 +50,20 @@ public:
     }
   };
   typedef ObRingArray<RBData> RingArray;
-  TestRingBuffer() : seq_(0)
-  {
+  TestRingBuffer(): seq_(0) {
     set_thread_count(8);
     allocator_.init(4 * 1024 * 1024, 4 * 1024 * 1024, OB_MALLOC_NORMAL_BLOCK_SIZE);
     assert(0 == rbuffer_.init(0, &allocator_));
-    limit_ = atoll(getenv("limit") ?: "1000000");
+    limit_ = atoll(getenv("limit")?: "1000000");
   }
-  virtual ~TestRingBuffer()
-  {}
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  virtual ~TestRingBuffer() {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
   void do_stress()
   {
     start();
     int64_t last_seq = ATOMIC_LOAD(&seq_);
-    while (ATOMIC_LOAD(&seq_) < limit_) {
+    while(ATOMIC_LOAD(&seq_) < limit_) {
       sleep(1);
       int64_t cur_seq = ATOMIC_LOAD(&seq_);
       LIB_LOG(INFO, "ring_buffer", "tps", cur_seq - last_seq);
@@ -79,60 +71,55 @@ public:
     }
     wait();
   }
-  int64_t get_seq()
-  {
+  int64_t get_seq() {
     return ATOMIC_FAA(&seq_, 1);
   }
-  int insert(int64_t seq)
-  {
+  int insert(int64_t seq) {
     int err = 0;
     RBData data(seq);
     if (0 != (err = rbuffer_.set(seq, data))) {
-      // error("rbuffer.set fail: seq=%ld err=%d", seq, err);
+      //error("rbuffer.set fail: seq=%ld err=%d", seq, err);
     }
     return err;
   }
-  int del(int64_t seq)
-  {
+  int del(int64_t seq) {
     return rbuffer_.truncate(seq);
   }
 
-  int mix()
-  {
+  int mix() {
     int err = 0;
     int64_t stable_size = 1000000;
     int64_t seq = 0;
-    while ((seq = get_seq()) < limit_) {
+    while((seq = get_seq()) < limit_) {
       if (0 != (err = insert(seq))) {
-        // error("insert fail: err=%d seq=%ld", err, seq);
+        //error("insert fail: err=%d seq=%ld", err, seq);
       }
-      if (seq > stable_size && (0 != (err = del(seq - stable_size)))) {
-        // error("del fail: err=%d seq=%ld", err, seq - stable_size);
+      if (seq > stable_size
+          && (0 != (err = del(seq - stable_size)))) {
+        //error("del fail: err=%d seq=%ld", err, seq - stable_size);
       }
     }
     return err;
   }
-  void run1() final
-  {
+  void run1() final {
     mix();
   }
-
 private:
   int64_t seq_ CACHE_ALIGNED;
   int64_t limit_;
   RingArray rbuffer_;
   ObConcurrentFIFOAllocator allocator_;
-};  // end of class Consumer
+}; // end of class Consumer
 
 TEST_F(TestRingBuffer, stress)
 {
   do_stress();
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("debug");
-  testing::InitGoogleTest(&argc, argv);
-  // testing::FLAGS_gtest_filter = "DO_NOT_RUN";
+  testing::InitGoogleTest(&argc,argv);
+  //testing::FLAGS_gtest_filter = "DO_NOT_RUN";
   return RUN_ALL_TESTS();
 }

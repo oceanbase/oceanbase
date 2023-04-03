@@ -14,201 +14,143 @@
 #define OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_
 
 #include "share/backup/ob_backup_info_mgr.h"
-#include "rootserver/ob_rs_reentrant_thread.h"
-#include "rootserver/ob_thread_idling.h"
-#include "rootserver/restore/ob_restore_stat.h"
-#include "rootserver/restore/ob_restore_info.h"
 #include "rootserver/restore/ob_restore_util.h"
-#include "rootserver/ob_freeze_info_manager.h"
-#include "rootserver/ob_server_manager.h"
-#include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_primary_ls_service.h"//ObTenantThreadHelper
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_upgrade_utils.h"
 
-namespace oceanbase {
-namespace rootserver {
-class ObRestoreIdling : public ObThreadIdling {
-public:
-  explicit ObRestoreIdling(volatile bool& stop) : ObThreadIdling(stop)
-  {
-    reset();
-  }
-  virtual int64_t get_idle_interval_us();
-  void set_idle_interval_us(int64_t idle_us);
-  void reset();
-
-private:
-  int64_t idle_us_;
-};
-
-// Schedule daily merge (merge dynamic data to base line data).
+namespace oceanbase
+{
+namespace share
+{
+class SCN;
+class ObLSTableOperator;
+struct ObLSAttr;
+struct ObHisRestoreJobPersistInfo;
+}
+namespace rootserver
+{
 // Running in a single thread.
-class ObRestoreScheduler : public ObRsReentrantThread, public share::ObCheckStopProvider {
+// schedule restore job, register to sys ls of meta tenant
+class ObRestoreService : public ObTenantThreadHelper,
+  public logservice::ObICheckpointSubHandler, public logservice::ObIReplaySubHandler,
+  public share::ObCheckStopProvider
+{
 public:
   static const int64_t MAX_RESTORE_TASK_CNT = 10000;
-  enum SetMemberListAction { BALANCE, SET_MEMBER_LIST, DONE };
-
 public:
-  ObRestoreScheduler();
-  virtual ~ObRestoreScheduler();
-
-  int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
-      common::ObOracleSqlProxy& oracle_sql_proxy, obrpc::ObCommonRpcProxy& rpc_proxy,
-      obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObFreezeInfoManager& freeze_info_manager,
-      share::ObPartitionTableOperator& pt_operator, ObRebalanceTaskMgr& task_mgr, ObServerManager& server_manager,
-      ObZoneManager& zone_manager, ObUnitManager& unit_manager, ObDDLService& ddl_service,
-      const common::ObAddr& self_addr);
-  virtual void run3() override;
-  void wakeup();
-  void stop() override;
-  virtual int blocking_run() override
+  ObRestoreService();
+  virtual ~ObRestoreService();
+  int init();
+  virtual void do_work() override;
+  void destroy();
+  DEFINE_MTL_FUNC(ObRestoreService)
+public:
+  virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}
+  virtual int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) override
   {
-    BLOCKING_RUN_IMPLEMENT();
+    UNUSED(buffer);
+    UNUSED(nbytes);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
+  enum TenantRestoreStatus
+  {
+    IN_PROGRESS = 0,
+    SUCCESS,
+    FAILED
+  };
+  bool is_tenant_restore_finish(const TenantRestoreStatus tenant_restore_status) const
+  {
+    return SUCCESS == tenant_restore_status || FAILED == tenant_restore_status;
+  }
+  bool is_tenant_restore_success(const TenantRestoreStatus tenant_restore_status) const
+  {
+    return SUCCESS == tenant_restore_status;
+  }
+  bool is_tenant_restore_failed(const TenantRestoreStatus tenant_restore_status) const
+  {
+    return FAILED == tenant_restore_status;
   }
 
+
 public:
-  int mark_job_failed(const int64_t job_id, int return_ret, share::PhysicalRestoreMod mod,
-      const common::ObCurTraceId::TraceId& trace_id, const common::ObAddr& addr);
+  static int assign_pool_list(const char *str,
+                       common::ObIArray<common::ObString> &pool_list);
 
 private:
   int idle();
   int check_stop() const override;
 
-  int process_restore_job(const share::ObPhysicalRestoreJob& job);
-  int try_recycle_job(const share::ObPhysicalRestoreJob& job);
+  int process_restore_job(const share::ObPhysicalRestoreJob &job);
+  int process_sys_restore_job(const share::ObPhysicalRestoreJob &job);
+  int try_recycle_job(const share::ObPhysicalRestoreJob &job);
 
-  int restore_tenant(const share::ObPhysicalRestoreJob& job_info);
-  int restore_sys_replica(const share::ObPhysicalRestoreJob& job_info);
-  int upgrade_pre(const share::ObPhysicalRestoreJob& job_info);
-  int upgrade_post(const share::ObPhysicalRestoreJob& job_info);
-  int modify_schema(const share::ObPhysicalRestoreJob& job_info);
-  int create_user_partitions(const share::ObPhysicalRestoreJob& job_info);
-  int restore_user_replica(const share::ObPhysicalRestoreJob& job_info);
-  int rebuild_index(const share::ObPhysicalRestoreJob& job_info);
-  int post_check(const share::ObPhysicalRestoreJob& job_info);
-  int restore_success(const share::ObPhysicalRestoreJob& job_info);
-  int restore_fail(const share::ObPhysicalRestoreJob& job_info);
+  int restore_tenant(const share::ObPhysicalRestoreJob &job_info);
+  int restore_upgrade(const share::ObPhysicalRestoreJob &job_info);
+  int restore_pre(const share::ObPhysicalRestoreJob &job_info);
 
-  /* restore tenant related */
-  int fill_job_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
-  int fill_restore_backup_info_param(
-      share::ObPhysicalRestoreJob& job, share::ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam& param);
-  int fill_backup_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
-  int fill_pkeys_for_physical_restore_log(const share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
-  int fill_rs_info(share::ObPhysicalRestoreJob& job);
-  int fill_create_tenant_arg(const share::ObPhysicalRestoreJob& job_info, obrpc::ObCreateTenantArg& arg);
-  int fill_max_sys_table_id(
-      const common::ObIArray<common::ObPartitionKey>& pkey_list, share::ObPhysicalRestoreJob& job);
-  int assign_pool_list(const char* str, common::ObIArray<common::ObString>& pool_list);
-  int convert_restore_tenant_info(share::ObPhysicalRestoreJob& job_info);
-  /*------------------------*/
+  int post_check(const share::ObPhysicalRestoreJob &job_info);
+  int restore_finish(const share::ObPhysicalRestoreJob &job_info);
+  int tenant_restore_finish(const share::ObPhysicalRestoreJob &job_info);
+  int restore_init_ls(const share::ObPhysicalRestoreJob &job_info);
+  int restore_wait_ls_finish(const share::ObPhysicalRestoreJob &job_info);
+  int restore_wait_tenant_finish(const share::ObPhysicalRestoreJob &job_info);
 
-  /* modify schema related */
-  int force_drop_schema(const uint64_t tenant_id);
-  int filter_schema(const share::ObPhysicalRestoreJob& job_info);
-  int convert_schema_options(const uint64_t tenant_id);
-  int convert_database_options(const uint64_t tenant_id);
-  int convert_tablegroup_options(const uint64_t tenant_id);
-  int convert_table_options(const uint64_t tenant_id);
-  int convert_index_status(const share::ObPhysicalRestoreJob& job_info);
-  int update_index_status(const common::ObIArray<uint64_t>& index_ids, share::schema::ObIndexStatus index_status);
-  int convert_parameters(const share::ObPhysicalRestoreJob& job_info);
-  int log_nop_operation(const share::ObPhysicalRestoreJob& job_info);
-  /*------------------------*/
+  int fill_create_tenant_arg(const share::ObPhysicalRestoreJob &job_info,
+                             const ObSqlString &pool_list,
+                             obrpc::ObCreateTenantArg &arg);
+  int convert_parameters(const share::ObPhysicalRestoreJob &job_info);
 
-  /* filter schema */
-  int gen_white_list(const share::ObPhysicalRestoreJob& job_info,
-      const common::ObIArray<obrpc::ObTableItem>& table_items, common::hash::ObHashSet<uint64_t>& table_white_list,
-      common::hash::ObHashSet<uint64_t>& tablegroup_white_list);
-  int filter_recyclebin_objects(const uint64_t tenant_id);
-  int filter_view_and_foreign_key(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& table_white_list);
-  int filter_table(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& table_white_list);
-  int filter_tablegroup(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& tablegroup_white_list);
-  int try_drop_table(
-      share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObSimpleTableSchemaV2& table);
-  int try_drop_foreign_key(share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObSimpleTableSchemaV2& table, const common::hash::ObHashSet<uint64_t>& table_white_list);
-  int try_drop_tablegroup(const share::schema::ObSimpleTablegroupSchema& tablegroup);
-  /*---------------*/
-
-  /* restore replica related */
-  int schedule_restore_task(
-      const share::ObPhysicalRestoreJob& job_info, ObPhysicalRestoreStat& stat, int64_t& task_cnt);
-  int schedule_restore_task(const share::ObPhysicalRestoreJob& job_info, ObPhysicalRestoreStat& stat,
-      const PhysicalRestorePartition* partition, int64_t& task_cnt);
-  int schedule_leader_restore_task(const PhysicalRestorePartition& partition, const share::ObPartitionReplica& replica,
-      const share::ObPhysicalRestoreJob& job_info, const ObPhysicalRestoreStat& stat, int64_t& task_cnt);
-  int schedule_follower_restore_task(const PhysicalRestorePartition& partition,
-      const share::ObPartitionReplica& replica, const share::ObPhysicalRestoreJob& job_info,
-      const ObPhysicalRestoreStat& stat, int64_t& task_cnt);
-  int fill_restore_arg(
-      const common::ObPartitionKey& pg_key, const share::ObPhysicalRestoreJob& job, share::ObPhysicalRestoreArg& arg);
-  int choose_restore_data_source(
-      const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, ObReplicaMember& data_src);
-
-  int set_member_list(const share::ObPhysicalRestoreJob& job_info, const ObPhysicalRestoreStat& stat);
-  int get_set_member_list_action(
-      const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, SetMemberListAction& action);
-  int check_locality_match(
-      const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, bool& locality_match);
-  int add_member_list_pkey(const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat,
-      ObRecoveryHelper::ObMemberListPkeyList& partition_infos);
-  int add_member_list_pkey(const common::ObPartitionKey& pkey, const share::ObPartitionReplica::MemberList& member_list,
-      ObRecoveryHelper::ObMemberListPkeyList& partition_infos);
-  int batch_set_member_list(const ObRecoveryHelper::ObMemberListPkeyList& partition_infos);
-  int send_batch_set_member_list_rpc(obrpc::ObSetMemberListBatchArg& arg, ObSetMemberListBatchProxy& batch_rpc_proxy);
-  int build_member_list_map(const uint64_t tenant_id,
-      common::hash::ObHashMap<common::ObPartitionKey, share::ObPartitionReplica::MemberList>& member_list_map);
-  int batch_persist_member_list(
-      ObArray<const PhysicalRestorePartition*>& persist_partitions, const ObPhysicalRestoreStat& stat);
-  int fill_dml_splicer(
-      const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, share::ObDMLSqlSplicer& dml);
-  int clear_member_list_table(const uint64_t tenant_id);
-
-  int fill_restore_partition_arg(
-      const uint64_t schema_id, const share::schema::ObPartitionSchema* schema, obrpc::ObRestorePartitionsArg& arg);
-  /*------------------------*/
-
-  /* upgrade related */
-  int check_source_cluster_version(const uint64_t cluster_version);
-  int do_upgrade_pre(const share::ObPhysicalRestoreJob& job_info);
-  int do_upgrade_post(const share::ObPhysicalRestoreJob& job_info);
-  /* upgrade related end */
-
-  int check_locality_valid(const share::schema::ZoneLocalityIArray& locality);
-  int refresh_schema(const share::ObPhysicalRestoreJob& job_info);
-  int check_gts(const share::ObPhysicalRestoreJob& job_info);
-  int try_update_job_status(int return_ret, const share::ObPhysicalRestoreJob& job,
+  int check_locality_valid(const share::schema::ZoneLocalityIArray &locality);
+  int try_update_job_status(
+      int return_ret,
+      const share::ObPhysicalRestoreJob &job,
       share::PhysicalRestoreMod mod = share::PHYSICAL_RESTORE_MOD_RS);
-  void record_rs_event(const share::ObPhysicalRestoreJob& job, const share::PhysicalRestoreStatus next_status);
+  void record_rs_event(const share::ObPhysicalRestoreJob &job,
+                       const share::PhysicalRestoreStatus next_status);
   share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
-  int update_restore_schema_version(const share::ObPhysicalRestoreJob& job);
-
+  share::PhysicalRestoreStatus get_sys_next_status(share::PhysicalRestoreStatus current_status);
+  
+  int fill_restore_statistics(const share::ObPhysicalRestoreJob &job_info);
 private:
-  int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob& job_info);
+  int create_all_ls_(const share::schema::ObTenantSchema &tenant_schema,
+      const common::ObIArray<share::ObLSAttr> &ls_attr_array);
+  int wait_all_ls_created_(const share::schema::ObTenantSchema &tenant_schema,
+      const share::ObPhysicalRestoreJob &job);
+  int finish_create_ls_(const share::schema::ObTenantSchema &tenant_schema,
+      const common::ObIArray<share::ObLSAttr> &ls_attr_array);
+  int check_all_ls_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
+  int try_get_tenant_restore_history_(const share::ObPhysicalRestoreJob &job_info,
+                                      share::ObHisRestoreJobPersistInfo &history_info,
+                                      bool &restore_tenant_exist);
+  int check_tenant_can_restore_(const uint64_t tenant_id);
+  int reset_schema_status_(const uint64_t tenant_id);
+  int may_update_restore_concurrency_(const uint64_t new_tenant_id,
+      const share::ObPhysicalRestoreJob &job_info);
+  int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
+  int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
+      const int64_t restore_concurrency);
+private:
   bool inited_;
-  mutable ObRestoreIdling idling_;
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  common::ObMySQLProxy* sql_proxy_;
-  common::ObOracleSqlProxy* oracle_sql_proxy_;
-  obrpc::ObCommonRpcProxy* rpc_proxy_;
-  obrpc::ObSrvRpcProxy* srv_rpc_proxy_;
-  ObFreezeInfoManager* freeze_info_mgr_;
-  share::ObPartitionTableOperator* pt_operator_;
-  ObRebalanceTaskMgr* task_mgr_;
-  ObServerManager* server_manager_;
-  ObZoneManager* zone_mgr_;
-  ObUnitManager* unit_mgr_;
-  ObDDLService* ddl_service_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  common::ObMySQLProxy *sql_proxy_;
+  obrpc::ObCommonRpcProxy *rpc_proxy_;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
+  share::ObLSTableOperator *lst_operator_;
   share::ObUpgradeProcesserSet upgrade_processors_;
   common::ObAddr self_addr_;
-  DISALLOW_COPY_AND_ASSIGN(ObRestoreScheduler);
+  uint64_t tenant_id_;
+  int64_t idle_time_us_;
+  DISALLOW_COPY_AND_ASSIGN(ObRestoreService);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_
+#endif // OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_

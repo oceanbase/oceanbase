@@ -15,763 +15,458 @@
 #include "lib/string/ob_string.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_se_array.h"
-#include "common/ob_hint.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
+#include "sql/resolver/dml/ob_hint.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObDMLStmt;
 class ObSelectStmt;
 class ObSQLSessionInfo;
-class planText;
+struct PlanText;
+struct TableItem;
 
-struct ObTableInHint {
-  ObTableInHint()
-  {}
-  ObTableInHint(common::ObString& qb_name, common::ObString& db_name, common::ObString& table_name)
-      : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
-  {}
+struct ObHints
+{
+  ObHints () : stmt_id_(OB_INVALID_STMT_ID) {}
+  int assign(const ObHints &other);
+  int print_hints(PlanText &plan_text, bool ignore_trans_hint = false) const;
 
-  TO_STRING_KV(N_QB_NAME, qb_name_, N_DATABASE_NAME, db_name_, N_TABLE_NAME, table_name_);
-  common::ObString qb_name_;
-  common::ObString db_name_;
-  common::ObString table_name_;
+  TO_STRING_KV(K_(stmt_id), K_(qb_name), K_(hints));
+
+  int64_t stmt_id_;
+  ObString qb_name_;
+  ObSEArray<ObHint*, 8, common::ModulePageAllocator, true> hints_;
+  bool operator < (const ObHints &r_hints) const { return stmt_id_ < r_hints.stmt_id_; }
 };
 
-struct ObOrgIndexHint {
-  ObOrgIndexHint() : distributed_(false)
-  {}
-  ObTableInHint table_;
-  common::ObString index_name_;
-  bool distributed_;
-  TO_STRING_KV(N_TABLE_NAME, table_, N_INDEX_TABLE, index_name_);
+struct QbNames {
+  QbNames () : stmt_type_(stmt::StmtType::T_NONE),
+               is_set_stmt_(false),
+               is_from_hint_(false),
+               parent_name_(),
+               qb_names_() {}
+  void reset();
+  int print_qb_names(PlanText &plan_text) const;
+  TO_STRING_KV(K_(stmt_type), K_(is_set_stmt),
+                K_(is_from_hint), K_(parent_name),
+                K_(qb_names));
+
+  stmt::StmtType stmt_type_;
+  bool is_set_stmt_;
+  bool is_from_hint_; // true: qb_names_.at(0) is from qb_name hint
+  ObString parent_name_; // parent stmt qb name in transform, empty for origin stmt
+  ObSEArray<ObString, 1, common::ModulePageAllocator, true> qb_names_; // used qb names for one stmt
 };
-
-struct ObQNameIndexHint {
-  ObQNameIndexHint() : distributed_(false)
-  {}
-  ObQNameIndexHint(common::ObString& qb_name, ObOrgIndexHint& index_hint)
-      : qb_name_(qb_name), index_hint_(index_hint), distributed_(false)
-  {}
-  common::ObString qb_name_;
-  ObOrgIndexHint index_hint_;
-  bool distributed_;
-  TO_STRING_KV(N_QB_NAME, qb_name_, N_INDEX_TABLE, index_hint_);
-};
-
-struct ObIndexHint {
-  enum HintType {
-    UNINIT,
-    USE,
-    FORCE,
-    IGNORE,
-  };
-
-  ObIndexHint() : table_id_(common::OB_INVALID_ID), type_(USE), valid_index_ids_()
-  {}
-
-  uint64_t table_id_;
-  common::ObSEArray<common::ObString, 3> index_list_;
-  HintType type_;
-  common::ObSEArray<uint64_t, 3> valid_index_ids_;
-  TO_STRING_KV(N_TID, table_id_, N_INDEX_TABLE, index_list_, "type", type_, "valid_index_ids", valid_index_ids_);
-};
-
-struct ObPartHint {
-  ObPartHint() : table_id_(common::OB_INVALID_ID)
-  {}
-  uint64_t hash(uint64_t seed) const
-  {
-    seed = common::do_hash(table_id_, seed);
-    for (int64_t i = 0; i < part_ids_.count(); i++) {
-      seed = common::do_hash(part_ids_.at(i), seed);
-    }
-
-    return seed;
-  }
-  uint64_t table_id_;
-  common::ObSEArray<int64_t, 3> part_ids_;
-  common::ObSEArray<ObString, 3> part_names_;
-  TO_STRING_KV(K_(table_id), K_(part_ids), K_(part_names));
-};
-
-enum ObAccessPathMethod { USE_INDEX = 0, USE_SCAN };
-
-enum ObPlanCachePolicy {
-  OB_USE_PLAN_CACHE_INVALID = 0,  // policy not set
-  OB_USE_PLAN_CACHE_NONE,         // do not use plan cache
-  OB_USE_PLAN_CACHE_DEFAULT,      // use plan cache
-};
-
-enum ObUseJitPolicy {
-  OB_USE_JIT_INVALID = 0,
-  OB_USE_JIT_AUTO,
-  OB_USE_JIT_FORCE,
-  OB_NO_USE_JIT,
-};
-
-enum ObLateMaterializationMode {
-  OB_LATE_MATERIALIZATION_INVALID = -1,
-  OB_NO_USE_LATE_MATERIALIZATION = 0,
-  OB_USE_LATE_MATERIALIZATION,
-};
-
-const char* get_plan_cache_policy_str(ObPlanCachePolicy policy);
 
 struct ObQueryHint {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObQueryHint()
-      : read_consistency_(common::INVALID_CONSISTENCY),
-        dummy_(),
-        query_timeout_(-1),
-        frozen_version_(-1),
-        plan_cache_policy_(OB_USE_PLAN_CACHE_INVALID),
-        use_jit_policy_(OB_USE_JIT_INVALID),
-        force_trace_log_(false),
-        log_level_(),
-        parallel_(-1),
-        force_refresh_lc_(false)
-  {}
-
-  ObQueryHint(const common::ObConsistencyLevel read_consistency, const int64_t query_timeout,
-      const int64_t frozen_version, const ObPlanCachePolicy plan_cache_policy, const ObUseJitPolicy use_jit_policy,
-      const bool force_trace_log, const common::ObString& log_level, const int64_t parallel, bool force_refresh_lc)
-      : read_consistency_(read_consistency),
-        dummy_(),
-        query_timeout_(query_timeout),
-        frozen_version_(frozen_version),
-        plan_cache_policy_(plan_cache_policy),
-        use_jit_policy_(use_jit_policy),
-        force_trace_log_(force_trace_log),
-        log_level_(log_level),
-        parallel_(parallel),
-        force_refresh_lc_(force_refresh_lc)
-  {}
-
-  int deep_copy(const ObQueryHint& other, common::ObIAllocator& allocator);
-
+  ObQueryHint() { reset(); }
   void reset();
 
-  TO_STRING_KV(K_(read_consistency), K_(query_timeout), K_(frozen_version), K_(plan_cache_policy), K_(use_jit_policy),
-      K_(force_trace_log), K_(log_level), K_(parallel));
+  ObGlobalHint &get_global_hint() { return global_hint_; }
+  const ObGlobalHint &get_global_hint() const { return global_hint_; }
+  bool has_outline_data() const { return is_valid_outline_; }
+  bool has_user_def_outline() const { return user_def_outline_; }
 
-  common::ObConsistencyLevel read_consistency_;
-  lib::UNFDummy<1> dummy_;
-  int64_t query_timeout_;
-  int64_t frozen_version_;
-  ObPlanCachePolicy plan_cache_policy_;
-  ObUseJitPolicy use_jit_policy_;
-  bool force_trace_log_;
-  common::ObString log_level_;
-  int64_t parallel_;
-  bool force_refresh_lc_;
-};
+  int set_outline_data_hints(const ObGlobalHint &global_hint,
+                             const int64_t stmt_id,
+                             const ObIArray<ObHint*> &hints);
+  static int get_qb_name_source_hash_value(const ObString &src_qb_name,
+                                           const ObIArray<uint32_t> &src_hash_val,
+                                           uint32_t &hash_val);
+  int append_hints(int64_t stmt_id, const ObIArray<ObHint*> &hints);
+  const ObHints* get_qb_hints(const ObString &qb_name) const;
+  const ObHints* get_stmt_id_hints(int64_t stmt_id) const;
+  int add_stmt_id_map(const int64_t stmt_id, stmt::StmtType stmt_type);
+  int set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name);
+  int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, ObDMLStmt *stmt);
+  int check_and_set_params_from_hint(const ObResolverParams &params, const ObDMLStmt &stmt) const;
+  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const;
+  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
+                                         const ObDDLSchemaVersionHint& ddlSchemaVersionHint) const;
+  int distribute_hint_to_orig_stmt(ObDMLStmt *stmt);
+  int adjust_qb_name_for_stmt(ObIAllocator &allocator,
+                              ObDMLStmt &stmt,
+                              const ObString &src_qb_name,
+                              const ObIArray<uint32_t> &src_hash_val,
+                              int64_t *sub_num = NULL);
 
-static const int8_t OB_UNSET_AGGREGATE_TYPE = 0;
-static const int8_t OB_USE_HASH_AGGREGATE = 0x1 << 1;
-static const int8_t OB_NO_USE_HASH_AGGREGATE = 0x1 << 2;
+  int generate_orig_stmt_qb_name(ObIAllocator &allocator);
+  int generate_qb_name_for_stmt(ObIAllocator &allocator,
+                                const ObDMLStmt &stmt,
+                                const ObString &src_qb_name,
+                                const ObIArray<uint32_t> &src_hash_val,
+                                ObString &qb_name,
+                                int64_t *sub_num = NULL);
+  int try_add_new_qb_name(ObIAllocator &allocator,
+                          int64_t stmt_id,
+                          const char *ptr,
+                          int64_t length,
+                          int64_t &cnt,
+                          ObString &qb_name);
+  int reset_duplicate_qb_name();
+  const char *get_dml_stmt_name(stmt::StmtType stmt_type, bool is_set_stmt) const;
+  int append_id_to_stmt_name(char *buf, int64_t buf_len, int64_t &pos, int64_t &id_start);
+  int get_qb_name(int64_t stmt_id, ObString &qb_name) const;
+  int get_qb_name_counts(const int64_t stmt_count, ObIArray<int64_t> &qb_name_counts) const;
+  int recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count);
+  int fill_tables(const TableItem &table, ObIArray<ObTableInHint> &hint_tables) const;
+  bool is_valid_outline_transform(int64_t trans_list_loc, const ObHint *cur_hint) const;
+  const ObHint *get_outline_trans_hint(int64_t pos) const
+  { return pos < 0 || pos >= trans_list_.count() ? NULL : trans_list_.at(pos); }
+  bool all_trans_list_valid() const
+  { return outline_trans_hints_.count() == trans_list_.count(); }
 
-static const int8_t OB_MONITOR_TRACING = 0x1 << 1;
-static const int8_t OB_MONITOR_STAT = 0x1 << 2;
+  // check hint
+  int get_relids_from_hint_tables(const ObDMLStmt &stmt,
+                                  const ObIArray<ObTableInHint> &tables,
+                                  ObRelIds &rel_ids) const;
+  int get_table_bit_index_by_hint_table(const ObDMLStmt &stmt,
+                                        const ObTableInHint &table,
+                                        int32_t &idx) const;
+  int get_table_item_by_hint_table(const ObDMLStmt &stmt,
+                                   const ObTableInHint &table,
+                                   TableItem *&table_item) const;
+  int get_basic_table_without_index_by_hint_table(const ObDMLStmt &stmt,
+                                                  const ObTableInHint &table,
+                                                  TableItem *&table_item) const;
+  bool has_hint_exclude_concurrent() const {  return !qb_hints_.empty() || !stmt_id_hints_.empty()
+                                                     || global_hint_.has_hint_exclude_concurrent(); }
 
-struct ObMonitorHint {
-  ObMonitorHint() : id_(0), flags_(0){};
-  ~ObMonitorHint() = default;
-  uint64_t id_;
-  uint64_t flags_;
-  TO_STRING_KV(K_(id), K_(flags));
-};
-
-struct ObTablesInHint {
-  ObTablesInHint() : distributed_(false)
-  {}
-  common::ObString qb_name_;
-  common::ObSEArray<ObTableInHint, 3> tables_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> join_order_pairs_;  // record leading hint pairs
-  bool distributed_;
-  TO_STRING_KV(K_(qb_name), K_(tables));
-};
-
-struct ObTablesIndex {
-  ObTablesIndex()
-  {}
-  common::ObSEArray<uint64_t, 3> indexes_;
-  TO_STRING_KV(K_(indexes));
-};
-
-struct ObPQDistributeHintMethod {
-  bool is_join_ = false;
-  ObPQDistributeMethod::Type load_ = ObPQDistributeMethod::NONE;
-  ObPQDistributeMethod::Type outer_ = ObPQDistributeMethod::NONE;
-  ObPQDistributeMethod::Type inner_ = ObPQDistributeMethod::NONE;
-
-  VIRTUAL_TO_STRING_KV(K_(is_join), K_(load), K_(outer), K_(inner));
-};
-
-struct ObOrgPQDistributeHint : public ObPQDistributeHintMethod {
-  common::ObSEArray<ObTableInHint, 3> tables_;
-  INHERIT_TO_STRING_KV("method", ObPQDistributeHintMethod, K_(tables));
-};
-
-struct ObOrgPQMapHint {
-  ObOrgPQMapHint() : table_(), use_pq_map_(false)
-  {}
-  ObTableInHint table_;
-  bool use_pq_map_;
-  TO_STRING_KV(N_TABLE_NAME, table_, K_(use_pq_map));
-};
-
-struct ObQBNamePQMapHint : public ObOrgPQMapHint {
-  ObQBNamePQMapHint()
-  {}
-  ObQBNamePQMapHint(const common::ObString qb_name, const ObOrgPQMapHint& hint)
-      : ObOrgPQMapHint(hint), qb_name_(qb_name)
-  {}
-  bool distributed_ = false;
-  common::ObString qb_name_;
-  INHERIT_TO_STRING_KV("org_hint", ObOrgPQMapHint, K_(qb_name), K_(distributed));
-};
-
-struct ObQBNamePQDistributeHint : public ObOrgPQDistributeHint {
-  ObQBNamePQDistributeHint(){};
-  ObQBNamePQDistributeHint(const common::ObString qb_name, const ObOrgPQDistributeHint& hint)
-      : ObOrgPQDistributeHint(hint), qb_name_(qb_name)
-  {}
-  bool distributed_ = false;
-  common::ObString qb_name_;
-  INHERIT_TO_STRING_KV("org_hint", ObOrgPQDistributeHint, K_(qb_name), K_(distributed));
-};
-
-struct ObPQDistributeHint : public ObPQDistributeHintMethod {
-  common::ObSEArray<uint64_t, 3> table_ids_;
-  INHERIT_TO_STRING_KV("method", ObPQDistributeHintMethod, K_(table_ids));
-};
-
-struct ObPQDistributeIndex : public ObPQDistributeHintMethod {
-  ObRelIds rel_ids_;
-  INHERIT_TO_STRING_KV("method", ObPQDistributeHintMethod, K_(rel_ids));
-};
-
-struct ObPQMapHint {
-  uint64_t table_id_ = common::OB_INVALID_ID;
-  TO_STRING_KV(K_(table_id));
-};
-
-struct ObPQMapIndex {
-  ObRelIds rel_ids_;
-  TO_STRING_KV(K_(rel_ids));
-};
-
-struct ObStmtHint {
-  // TODO yangz.yz.rewrite, ObStmtHint should have a member ObQueryHint, not contain every member of
-  // query hint.
-  enum TablesHint {
-    LEADING = 0,
-    USE_MERGE,
-    NO_USE_MERGE,
-    USE_HASH,
-    NO_USE_HASH,
-    USE_NL,
-    NO_USE_NL,
-    USE_BNL,
-    NO_USE_BNL,
-    USE_NL_MATERIALIZATION,
-    NO_USE_NL_MATERIALIZATION,
-    PX_JOIN_FILTER,
-    NO_PX_JOIN_FILTER
-  };
-
-  enum RewriteHint {
-    NO_EXPAND = 0,
-    USE_CONCAT,
-    UNNEST,
-    NO_UNNEST,
-    MERGE,
-    NO_MERGE,
-    PLACE_GROUPBY,
-    NO_PLACE_GROUPBY,
-    NO_PRED_DEDUCE,
-  };
-
-  ObStmtHint()
-      : converted_(false),
-        read_static_(false),
-        no_rewrite_(false),
-        frozen_version_(-1),
-        topk_precision_(-1),
-        sharding_minimum_row_count_(0),
-        query_timeout_(-1),
-        hotspot_(false),
-        join_ordered_(false),
-        read_consistency_(common::INVALID_CONSISTENCY),
-        plan_cache_policy_(OB_USE_PLAN_CACHE_INVALID),
-        use_jit_policy_(OB_USE_JIT_INVALID),
-        dummy_(),
-        use_late_mat_(OB_LATE_MATERIALIZATION_INVALID),
-        force_trace_log_(false),
-        aggregate_(OB_UNSET_AGGREGATE_TYPE),
-        bnl_allowed_(false),
-        max_concurrent_(UNSET_MAX_CONCURRENT),
-        only_concurrent_hint_(false),
-        has_hint_exclude_concurrent_(false),
-        enable_lock_early_release_(false),
-        force_refresh_lc_(false),
-        log_level_(),
-        parallel_(UNSET_PARALLEL),
-        use_px_(ObUsePxHint::NOT_SET),
-        pdml_option_(ObPDMLOption::NOT_SPECIFIED),
-        has_px_hint_(false),
-        rewrite_hints_(),
-        no_expand_(),
-        use_concat_(),
-        v_merge_(),
-        no_v_merge_(),
-        unnest_(),
-        no_unnest_(),
-        place_groupby_(),
-        no_place_groupby_(),
-        no_pred_deduce_(),
-        use_expand_(ObUseRewriteHint::NOT_SET),
-        use_view_merge_(ObUseRewriteHint::NOT_SET),
-        use_unnest_(ObUseRewriteHint::NOT_SET),
-        use_place_groupby_(ObUseRewriteHint::NOT_SET),
-        use_pred_deduce_(ObUseRewriteHint::NOT_SET),
-        is_table_name_error_(false),
-        query_hint_conflict_map_(0),
-        org_indexes_(),
-        join_order_(),
-        join_order_pairs_(),
-        use_merge_(),
-        no_use_merge_(),
-        use_hash_(),
-        no_use_hash_(),
-        use_nl_(),
-        no_use_nl_(),
-        use_bnl_(),
-        no_use_bnl_(),
-        use_nl_materialization_(),
-        no_use_nl_materialization_(),
-        use_merge_order_pairs_(),
-        no_use_merge_order_pairs_(),
-        use_hash_order_pairs_(),
-        no_use_hash_order_pairs_(),
-        use_nl_order_pairs_(),
-        no_use_nl_order_pairs_(),
-        use_bnl_order_pairs_(),
-        no_use_bnl_order_pairs_(),
-        use_nl_materialization_order_pairs_(),
-        no_use_nl_materialization_order_pairs_(),
-        px_join_filter_order_pairs_(),
-        no_px_join_filter_order_pairs_(),
-        subquery_hints_(),
-        px_join_filter_(),
-        no_px_join_filter_(),
-        org_pq_distributes_(),
-        indexes_(),
-        join_order_ids_(),
-        use_merge_ids_(),
-        no_use_merge_ids_(),
-        use_hash_ids_(),
-        no_use_hash_ids_(),
-        use_nl_ids_(),
-        no_use_nl_ids_(),
-        use_bnl_ids_(),
-        no_use_bnl_ids_(),
-        use_nl_materialization_ids_(),
-        no_use_nl_materialization_ids_(),
-        part_hints_(),
-        access_paths_(),
-        pq_distributes_(),
-        px_join_filter_ids_(),
-        no_px_join_filter_ids_(),
-        use_merge_idxs_(),
-        no_use_merge_idxs_(),
-        use_hash_idxs_(),
-        no_use_hash_idxs_(),
-        use_nl_idxs_(),
-        no_use_nl_idxs_(),
-        use_bnl_idxs_(),
-        no_use_bnl_idxs_(),
-        use_nl_materialization_idxs_(),
-        no_use_nl_materialization_idxs_(),
-        pq_distributes_idxs_(),
-        pq_map_idxs_(),
-        px_join_filter_idxs_(),
-        no_px_join_filter_idxs_(),
-        valid_use_merge_idxs_(),
-        valid_no_use_merge_idxs_(),
-        valid_use_hash_idxs_(),
-        valid_no_use_hash_idxs_(),
-        valid_use_nl_idxs_(),
-        valid_no_use_nl_idxs_(),
-        valid_use_bnl_idxs_(),
-        valid_no_use_bnl_idxs_(),
-        valid_use_nl_materialization_idxs_(),
-        valid_no_use_nl_materialization_idxs_(),
-        valid_pq_distributes_idxs_(),
-        valid_pq_maps_idxs_()
-  {}
-
-  static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
-  static const int64_t UNSET_QUERY_TIMEOUT = -1;
-  static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const int64_t UNSET_PARALLEL = -1;
-  static const int64_t DEFAULT_PARALLEL = 1;
-
-  static const char* FULL_HINT;
-  static const char* INDEX_HINT;
-  static const char* NO_INDEX_HINT;
-  static const char* MULTILINE_INDENT;
-  static const char* ONELINE_INDENT;
-  static const char* QB_NAME;
-  static const char* LEADING_HINT;
-  static const char* ORDERED_HINT;
-  static const char* READ_CONSISTENCY;
-  static const char* HOTSPOT;
-  static const char* TOPK;
-  static const char* QUERY_TIMEOUT;
-  static const char* FROZEN_VERSION;
-  static const char* USE_PLAN_CACHE;
-  static const char* USE_JIT_AUTO;
-  static const char* USE_JIT_FORCE;
-  static const char* NO_USE_JIT;
-  static const char* NO_REWRITE;
-  static const char* TRACE_LOG;
-  static const char* LOG_LEVEL;
-  static const char* TRANS_PARAM_HINT;
-  static const char* USE_HASH_AGGREGATE;
-  static const char* NO_USE_HASH_AGGREGATE;
-  static const char* USE_LATE_MATERIALIZATION;
-  static const char* NO_USE_LATE_MATERIALIZATION;
-  static const char* MAX_CONCURRENT;
-  static const char* PRIMARY_KEY;
-  static const char* QB_NAME_HINT;
-  static const char* PARALLEL;
-  static const char* USE_PX;
-  static const char* NO_USE_PX;
-  static const char* PQ_DISTRIBUTE;
-  static const char* USE_NL_MATERIAL;
-  static const char* NO_USE_NL_MATERIAL;
-  static const char* PQ_MAP;
-  static const char* NO_EXPAND_HINT;
-  static const char* USE_CONCAT_HINT;
-  static const char* VIEW_MERGE_HINT;
-  static const char* NO_VIEW_MERGE_HINT;
-  static const char* UNNEST_HINT;
-  static const char* NO_UNNEST_HINT;
-  static const char* PLACE_GROUP_BY_HINT;
-  static const char* NO_PLACE_GROUP_BY_HINT;
-  static const char* ENABLE_PARALLEL_DML_HINT;
-  static const char* DISABLE_PARALLEL_DML_HINT;
-  static const char* TRACING_HINT;
-  static const char* STAT_HINT;
-  static const char* PX_JOIN_FILTER_HINT;
-  static const char* NO_PX_JOIN_FILTER_HINT;
-  static const char* NO_PRED_DEDUCE_HINT;
-  static const char* ENABLE_EARLY_LOCK_RELEASE_HINT;
-  static const char* FORCE_REFRESH_LOCATION_CACHE_HINT;
-  int assign(const ObStmtHint& other);
-  ObQueryHint get_query_hint() const
-  {
-    return ObQueryHint(read_consistency_,
-        query_timeout_,
-        frozen_version_,
-        plan_cache_policy_,
-        use_jit_policy_,
-        force_trace_log_,
-        log_level_,
-        parallel_,
-        force_refresh_lc_);
+  // print hint
+  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
+                      const bool is_root_stmt, const bool ignore_parallel) const;
+  int print_outline_data(PlanText &plan_text) const;
+  int print_qb_name_hints(PlanText &plan_text) const;
+  int print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const;
+  int print_transform_hints(PlanText &plan_text) const;
+  inline static const char *get_outline_indent(bool is_oneline)
+  { //6 space, align with 'Outputs & filters'
+    return is_oneline ? " " : "\n      ";
   }
-  const ObIndexHint* get_index_hint(const uint64_t table_id) const;
-  ObIndexHint* get_index_hint(const uint64_t table_id);
-  const ObPartHint* get_part_hint(const uint64_t table_id) const;
+  template <typename HintType>
+  static int create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint);
+  static int create_hint_table(ObIAllocator *allocator, ObTableInHint *&table);
+  static int create_leading_table(ObIAllocator *allocator, ObLeadingTable *&table);
 
-  // strategy to add whole hint from subquery
-  // TODO rewrite. Be a function of ObQueryHint.
-  static int add_whole_hint(ObDMLStmt* stmt);
+  TO_STRING_KV(K_(global_hint),
+               K_(outline_stmt_id),
+               K_(qb_hints),
+               K_(stmt_id_hints),
+               K_(trans_list),
+               K_(outline_trans_hints),
+               K_(used_trans_hints));
 
-  static int replace_name_in_hint(const ObSQLSessionInfo& session_info, ObDMLStmt& stmt,
-      common::ObIArray<ObTableInHint>& arr, uint64_t table_id, common::ObString& to_db_name,
-      common::ObString& to_table_name);
+  ObCollationType cs_type_; // used when compare table name in hint
 
-  static int add_single_table_view_hint(const ObSQLSessionInfo& session_info, ObDMLStmt* stmt, uint64_t table_id,
-      common::ObString& to_db_name, common::ObString& to_table_name);
-
-  int add_view_merge_hint(const ObStmtHint* view_hint);
-  bool is_only_concurrent_hint() const
-  {
-    return only_concurrent_hint_;
-  }
-
-  int merge_view_hints();
-
-  // add index hint as USE_TYPE
-  int add_index_hint(const uint64_t table_id, const common::ObString& index_name);
-  int print_global_hint_for_outline(planText& plan_text, const ObDMLStmt* stmt) const;
-  int print_rewrite_hints_for_outline(planText& plan_text, const char* rewrite_hint, const ObIArray<ObString>& qb_names,
-      const ObQueryCtx* query_ctx) const;
-  int print_rewrite_hint_for_outline(planText& plan_text, int64_t hint_type, const ObString& qb_name) const;
-  int print_outline_only_concurrent(common::ObIAllocator& allocator, common::ObString& outline);
-  inline static const char* get_outline_indent(bool is_oneline)
-  {
-    return is_oneline ? ONELINE_INDENT : MULTILINE_INDENT;
-  }
-  inline bool enable_use_px() const
-  {
-    return ObUsePxHint::ENABLE == use_px_;
-  }
-  inline bool enable_no_expand() const
-  {
-    return ObUseRewriteHint::NO_EXPAND == use_expand_;
-  }
-  inline bool enable_use_concat() const
-  {
-    return ObUseRewriteHint::USE_CONCAT == use_expand_;
-  }
-  inline bool enable_view_merge() const
-  {
-    return ObUseRewriteHint::V_MERGE == use_view_merge_;
-  }
-  inline bool enable_no_view_merge() const
-  {
-    return ObUseRewriteHint::NO_V_MERGE == use_view_merge_;
-  }
-  inline bool enable_unnest() const
-  {
-    return ObUseRewriteHint::UNNEST == use_unnest_;
-  }
-  inline bool enable_no_unnest() const
-  {
-    return ObUseRewriteHint::NO_UNNEST == use_unnest_;
-  }
-  inline bool enable_place_groupby() const
-  {
-    return ObUseRewriteHint::PLACE_GROUPBY == use_place_groupby_;
-  }
-  inline bool enable_no_place_groupby() const
-  {
-    return ObUseRewriteHint::NO_PLACE_GROUPBY == use_place_groupby_;
-  }
-  inline bool enable_no_pred_deduce() const
-  {
-    return ObUseRewriteHint::NO_PRED_DEDUCE == use_pred_deduce_ || no_rewrite_;
-  }
-  common::ObIArray<uint64_t>* get_join_ids(TablesHint hint);
-
-  inline bool disable_use_px() const
-  {
-    return ObUsePxHint::DISABLE == use_px_;
-  }
-  common::ObIArray<ObTableInHint>* get_join_tables(TablesHint hint);
-  void reset_valid_join_type();
-  int is_used_join_type(JoinAlgo join_algo, int32_t table_id_idx, bool& is_used) const;
-  int has_table_member(const common::ObIArray<ObRelIds>& use_idxs, int32_t table_id_idx, bool& is_used) const;
-  bool is_used_leading() const
-  {
-    return join_order_ids_.count() != 0;
-  }
-  bool is_topk_specified() const
-  {
-    return topk_precision_ > 0 || sharding_minimum_row_count_ > 0;
-  }
-  int is_used_in_leading(uint64_t table_id, bool& is_used) const;
-  int64_t get_parallel_hint() const
-  {
-    return parallel_;
-  }
-  bool has_parallel_hint() const
-  {
-    return UNSET_PARALLEL != parallel_;
-  }
-  int is_need_print_use_px(planText& plan_text, bool& is_need) const;
-  void set_table_name_error_flag(bool flag);
-  bool is_hints_all_worked() const;
-  ObPDMLOption get_pdml_option() const
-  {
-    return pdml_option_;
-  }
-  TO_STRING_KV("read_static", read_static_, "no_rewrite", no_rewrite_, "frozen_version", frozen_version_,
-      "topk_precision", topk_precision_, "sharding_minimum_row_count", sharding_minimum_row_count_, "query_timeout",
-      query_timeout_, "hotspot", hotspot_, N_INDEX, indexes_, "read_consistency", read_consistency_, "join_ordered",
-      join_ordered_, N_JOIN_ORDER, join_order_ids_, "merge_hint_ids", use_merge_ids_, "hash_hint_ids", use_hash_ids_,
-      "no_hash_hint_ids", no_use_hash_ids_, "nl_hint_ids", use_nl_ids_, "part_hints", part_hints_,
-      "use_late_materialization", use_late_mat_, "log_level", log_level_, "max_concurrent", max_concurrent_,
-      "only_concurrent_hint", only_concurrent_hint_, "has_hint_exclude_concurrent", has_hint_exclude_concurrent_,
-      "parallel", parallel_, "use_px", use_px_, "use_expand", use_expand_, "use_view_merge", use_view_merge_,
-      "use_unnest", use_unnest_, "use_place_groupby", use_place_groupby_, "use join filter", px_join_filter_,
-      K_(org_pq_distributes), K_(pq_distributes), K_(pdml_option));
-
-  bool converted_;
-  bool read_static_;
-  bool no_rewrite_;
-  int64_t frozen_version_;
-  int64_t topk_precision_;
-  int64_t sharding_minimum_row_count_;
-  int64_t query_timeout_;
-  bool hotspot_;
-  bool join_ordered_;
-  common::ObConsistencyLevel read_consistency_;
-  ObPlanCachePolicy plan_cache_policy_;  // this not used now
-  ObUseJitPolicy use_jit_policy_;
-  lib::UNFDummy<1> dummy_;  // replace obsolete `burried_point_'
-  ObLateMaterializationMode use_late_mat_;
-  bool force_trace_log_;  // if trace log is forced
-  int8_t aggregate_;
-  bool bnl_allowed_;
-  int64_t max_concurrent_;
-  bool only_concurrent_hint_;
-  bool has_hint_exclude_concurrent_;
-  bool enable_lock_early_release_;
-  bool force_refresh_lc_;
-  common::ObString log_level_;
-  int64_t parallel_;
-  ObUsePxHint::Type use_px_;
-  ObPDMLOption pdml_option_;
-  bool has_px_hint_;
-  common::ObSEArray<std::pair<int64_t, int64_t>, 3> rewrite_hints_;
-
-  common::ObSEArray<ObString, 4> no_expand_;
-  common::ObSEArray<ObString, 4> use_concat_;
-  common::ObSEArray<ObString, 4> v_merge_;
-  common::ObSEArray<ObString, 4> no_v_merge_;
-  common::ObSEArray<ObString, 4> unnest_;
-  common::ObSEArray<ObString, 4> no_unnest_;
-  common::ObSEArray<ObString, 4> place_groupby_;
-  common::ObSEArray<ObString, 4> no_place_groupby_;
-  common::ObSEArray<ObString, 4> no_pred_deduce_;
-
-  ObUseRewriteHint::Type use_expand_;
-  ObUseRewriteHint::Type use_view_merge_;
-  ObUseRewriteHint::Type use_unnest_;
-  ObUseRewriteHint::Type use_place_groupby_;
-  ObUseRewriteHint::Type use_pred_deduce_;
-
-  bool is_table_name_error_;
-
-  uint64_t query_hint_conflict_map_;
-
-  common::ObSEArray<ObOrgIndexHint, 3> org_indexes_;
-
-  common::ObSEArray<ObTableInHint, 3> join_order_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> join_order_pairs_;  // record leading hint pairs
-  common::ObSEArray<ObTableInHint, 3> use_merge_;                       // record table infos to use merge for join
-  common::ObSEArray<ObTableInHint, 3> no_use_merge_;                    // record table infos to no use merge for join
-  common::ObSEArray<ObTableInHint, 3> use_hash_;                        // record table infos to use hash for join
-  common::ObSEArray<ObTableInHint, 3> no_use_hash_;                     // record table infos to no use hash for join
-  common::ObSEArray<ObTableInHint, 3> use_nl_;                          // record table infos to use nestedloop for join
-  common::ObSEArray<ObTableInHint, 3> no_use_nl_;   // record table infos to no use nestedloop for join
-  common::ObSEArray<ObTableInHint, 3> use_bnl_;     // record table infos to use block-nestedloop for join
-  common::ObSEArray<ObTableInHint, 3> no_use_bnl_;  // record table infos to no use block-nestedloop for join
-  common::ObSEArray<ObTableInHint, 3> use_nl_materialization_;     // record table infos to use material before nl join
-  common::ObSEArray<ObTableInHint, 3> no_use_nl_materialization_;  // record table infos to no use material before nl
-                                                                   // join
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> use_merge_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_use_merge_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> use_hash_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_use_hash_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> use_nl_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_use_nl_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> use_bnl_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_use_bnl_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> use_nl_materialization_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_use_nl_materialization_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> px_join_filter_order_pairs_;
-  common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> no_px_join_filter_order_pairs_;
-  common::ObSEArray<const ObStmtHint*, 3> subquery_hints_;
-  common::ObSEArray<ObTableInHint, 3> px_join_filter_;     // record table infos to px join filter
-  common::ObSEArray<ObTableInHint, 3> no_px_join_filter_;  // record table infos to px join filter
-  common::ObSEArray<ObOrgPQDistributeHint, 2> org_pq_distributes_;
-  common::ObSEArray<ObOrgPQMapHint, 3> org_pq_maps_;
-
-  common::ObSEArray<ObIndexHint, 16> indexes_;
-  common::ObSEArray<uint64_t, 3> join_order_ids_;
-  common::ObSEArray<ObTablesIndex, 3> use_merge_ids_;     // record table ids to use merge for join
-  common::ObSEArray<ObTablesIndex, 3> no_use_merge_ids_;  // record table ids to no use merge for join
-  common::ObSEArray<ObTablesIndex, 3> use_hash_ids_;      // record table ids to use hash for join
-  common::ObSEArray<ObTablesIndex, 3> no_use_hash_ids_;   // record table ids to no use hash for join
-  common::ObSEArray<ObTablesIndex, 3> use_nl_ids_;        // record table ids to use nestedloop for join
-  common::ObSEArray<ObTablesIndex, 3> no_use_nl_ids_;     // record table ids to no use nestedloop for join
-  common::ObSEArray<ObTablesIndex, 3> use_bnl_ids_;       // record table ids to use block-nestedloop for join
-  common::ObSEArray<ObTablesIndex, 3> no_use_bnl_ids_;    // record table ids to no use block-nestedloop for join
-  common::ObSEArray<ObTablesIndex, 3> use_nl_materialization_ids_;  // record table ids to use material before nl join
-  common::ObSEArray<ObTablesIndex, 3> no_use_nl_materialization_ids_;  // record table ids to no use material before nl
-                                                                       // join
-  common::ObSEArray<ObPartHint, 3> part_hints_;                        // record partition ids for table
-  common::ObSEArray<std::pair<uint64_t, ObAccessPathMethod>, 5> access_paths_;
-  common::ObSEArray<ObPQDistributeHint, 2> pq_distributes_;
-  common::ObSEArray<ObPQMapHint, 2> pq_maps_;                  // record table ids to use pq map for partition wise join
-  common::ObSEArray<ObTablesIndex, 3> px_join_filter_ids_;     // record table ids to use px bloom filter
-  common::ObSEArray<ObTablesIndex, 3> no_px_join_filter_ids_;  // record table ids to no use px bloom filter
-
-  common::ObSEArray<ObRelIds, 3> use_merge_idxs_;  // for record in optimizer.
-  common::ObSEArray<ObRelIds, 3> no_use_merge_idxs_;
-  common::ObSEArray<ObRelIds, 3> use_hash_idxs_;
-  common::ObSEArray<ObRelIds, 3> no_use_hash_idxs_;
-  common::ObSEArray<ObRelIds, 3> use_nl_idxs_;
-  common::ObSEArray<ObRelIds, 3> no_use_nl_idxs_;
-  common::ObSEArray<ObRelIds, 3> use_bnl_idxs_;
-  common::ObSEArray<ObRelIds, 3> no_use_bnl_idxs_;
-  common::ObSEArray<ObRelIds, 3> use_nl_materialization_idxs_;
-  common::ObSEArray<ObRelIds, 3> no_use_nl_materialization_idxs_;
-  common::ObSEArray<ObPQDistributeIndex, 2> pq_distributes_idxs_;
-  ObRelIds pq_map_idxs_;
-  common::ObSEArray<ObRelIds, 3> px_join_filter_idxs_;
-  common::ObSEArray<ObRelIds, 3> no_px_join_filter_idxs_;
-
-  common::ObSEArray<ObRelIds, 3> valid_use_merge_idxs_;  // for record valid join type
-  common::ObSEArray<ObRelIds, 3> valid_no_use_merge_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_use_hash_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_no_use_hash_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_use_nl_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_no_use_nl_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_use_bnl_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_no_use_bnl_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_use_nl_materialization_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_no_use_nl_materialization_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_pq_distributes_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_px_join_filter_idxs_;
-  common::ObSEArray<ObRelIds, 3> valid_no_px_join_filter_idxs_;
-  ObRelIds valid_pq_maps_idxs_;
+  ObGlobalHint global_hint_;
+  bool is_valid_outline_;
+  bool user_def_outline_;
+  int64_t outline_stmt_id_;
+  ObSEArray<ObHints, 8, common::ModulePageAllocator, true> qb_hints_;  // hints with qb name
+  ObSEArray<ObHints, 8, common::ModulePageAllocator, true> stmt_id_hints_; // hints without qb name, used before transform
+  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> trans_list_; // tranform hints from outline data, need keep order
+  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> outline_trans_hints_; // tranform hints to generate outline data
+  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
+  ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
+  hash::ObHashMap<ObString, int64_t> qb_name_map_;	// qb name -> stmt id
 
 private:
+  DISALLOW_COPY_AND_ASSIGN(ObQueryHint);
+};
+
+template <typename HintType>
+int ObQueryHint::create_hint(ObIAllocator *allocator, ObItemType hint_type, HintType *&hint)
+{
+  int ret = common::OB_SUCCESS;
+  hint = NULL;
+  void *ptr = NULL;
+  if (OB_ISNULL(allocator) || OB_UNLIKELY(T_INVALID == hint_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "unexpected params",K(ret), K(allocator), K(hint_type));
+  } else if (OB_ISNULL(ptr = allocator->alloc(sizeof(HintType)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    SQL_RESV_LOG(ERROR, "no more memory to create hint");
+  } else {
+    hint = new(ptr) HintType(hint_type);
+  }
+  return ret;
+}
+
+// used in embedded hint transform
+struct ObStmtHint
+{
+  ObStmtHint() { reset(); }
+  void reset();
+  int assign(const ObStmtHint &other);
+  bool inited() const { return NULL != query_hint_; }
+  int init_stmt_hint(const ObDMLStmt &stmt,
+                     const ObQueryHint &query_hint,
+                     bool use_stmt_id_hints);
+  int print_stmt_hint(PlanText &plan_text, const bool ignore_parallel) const;
+  const ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL) const;
+  ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL);
+  void set_query_hint(const ObQueryHint *query_hint) { query_hint_ = query_hint; }
+  int replace_name_for_single_table_view(ObIAllocator *allocator,
+                                         const ObDMLStmt &stmt,
+                                         const TableItem &view_table);
+  int set_set_stmt_hint();
+  int set_simple_view_hint(const ObStmtHint *other = NULL);
+  int remove_normal_hints(const ObItemType *hint_array, const int64_t num);
+  int merge_stmt_hint(const ObStmtHint &other, ObHintMergePolicy policy = HINT_DOMINATED_EQUAL);
+  int merge_other_opt_hint(const ObIArray<ObHint*> &hints,
+                           const bool dominated,
+                           ObIArray<ObItemType> &hint_types,
+                           ObIArray<ObHint*> &final_hints);
+  int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
+  int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
+  int reset_explicit_trans_hint(ObItemType hint_type);
+  int get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const;
+
+
+  bool has_enable_hint(ObItemType hint_type) const;
+  bool has_disable_hint(ObItemType hint_type) const;
+  const ObHint *get_no_rewrite_hint() const { return get_normal_hint(T_NO_REWRITE); }
+  bool enable_no_rewrite() const { return has_enable_hint(T_NO_REWRITE); }
+  bool enable_no_pred_deduce() const { return has_enable_hint(T_NO_REWRITE) || has_enable_hint(T_NO_PRED_DEDUCE); }
+
+  DECLARE_TO_STRING;
+
+  const ObQueryHint *query_hint_;
+  ObSEArray<ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
+  ObSEArray<ObHint*, 8, common::ModulePageAllocator, true> other_opt_hints_;
+
+private:
+  int64_t get_hint_count() const {
+    return normal_hints_.count() + other_opt_hints_.count();
+  }
+  const ObHint *get_hint_by_idx(int64_t idx) const;
+  int set_hint(int64_t idx, ObHint *hint);
   DISALLOW_COPY_AND_ASSIGN(ObStmtHint);
 };
 
-struct ObLoctionSensitiveHint {
-  ObLateMaterializationMode use_late_mat_;
+struct LogJoinHint
+{
+  LogJoinHint() : join_tables_(),
+                  local_methods_(0),
+                  dist_methods_(0),
+                  slave_mapping_(NULL),
+                  nl_material_(NULL),
+                  local_method_hints_(),
+                  dist_method_hints_() {}
+  int assign(const LogJoinHint &other);
+  int add_join_hint(const ObJoinHint &join_hint);
+  int init_log_join_hint();
 
-  ObLoctionSensitiveHint()
-  {
-    use_late_mat_ = OB_LATE_MATERIALIZATION_INVALID;
-  }
+  TO_STRING_KV(K_(join_tables),
+               K_(local_methods),
+               K_(dist_methods),
+               K_(slave_mapping),
+               K_(nl_material),
+               K_(local_method_hints),
+               K_(dist_method_hints));
 
-  void reset()
-  {
-    use_late_mat_ = OB_LATE_MATERIALIZATION_INVALID;
-  }
-
-  void from(const ObStmtHint& hint)
-  {
-    if (hint.use_late_mat_ == OB_USE_LATE_MATERIALIZATION) {
-      use_late_mat_ = hint.use_late_mat_;
-    } else {
-      use_late_mat_ = OB_NO_USE_LATE_MATERIALIZATION;
-    }
-  }
-
-  void update_to(ObStmtHint& hint)
-  {
-    if (hint.use_late_mat_ == OB_LATE_MATERIALIZATION_INVALID) {
-      hint.use_late_mat_ = use_late_mat_;
-    }
-  }
+  ObRelIds join_tables_;
+  int64_t local_methods_;
+  int64_t dist_methods_;
+  const ObJoinHint *slave_mapping_;
+  const ObJoinHint *nl_material_;
+  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
+  ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> dist_method_hints_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+struct LogTableHint
+{
+  LogTableHint() :  table_(NULL),
+                    parallel_hint_(NULL),
+                    use_das_hint_(NULL) {}
+  LogTableHint(const TableItem *table) :  table_(table),
+                                          parallel_hint_(NULL),
+                                          use_das_hint_(NULL) {}
+  int assign(const LogTableHint &other);
+  int init_index_hints(ObSqlSchemaGuard &schema_guard);
+  bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
+                                          && index_hints_.at(0)->is_use_index_hint(); }
+  bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
+                                || NULL != use_das_hint_ || !join_filter_hints_.empty(); }
+  int get_join_filter_hint(const ObRelIds &left_tables,
+                           bool part_join_filter,
+                           const ObJoinFilterHint *&hint) const;
+  int get_join_filter_hints(const ObRelIds &left_tables,
+                            bool part_join_filter,
+                            ObIArray<const ObJoinFilterHint*> &hints) const;
+  int add_join_filter_hint(const ObDMLStmt &stmt,
+                           const ObQueryHint &query_hint,
+                           const ObJoinFilterHint &hint);
+  int allowed_skip_scan(const uint64_t index_id, bool &allowed) const;
+
+  TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
+               K_(parallel_hint), K_(use_das_hint),
+               K_(join_filter_hints), K_(left_tables));
+
+  const TableItem *table_;
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_list_;
+  common::ObSEArray<const ObIndexHint*, 4, common::ModulePageAllocator, true> index_hints_;
+  const ObTableParallelHint *parallel_hint_;
+  const ObIndexHint *use_das_hint_;
+  ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
+  ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
+};
+
+struct LeadingInfo {
+  TO_STRING_KV(K_(table_set),
+                 K_(left_table_set),
+                 K_(right_table_set));
+
+  ObRelIds table_set_;
+  ObRelIds left_table_set_;
+  ObRelIds right_table_set_;
+};
+
+struct JoinFilterPushdownHintInfo
+{
+  int check_use_join_filter(const ObDMLStmt &stmt,
+                            const ObQueryHint &query_hint,
+                            uint64_t filter_table_id,
+                            bool part_join_filter,
+                            bool &can_use,
+                            const ObJoinFilterHint *&force_hint) const;
+  TO_STRING_KV(K_(filter_table_id),
+                 K_(join_filter_hints),
+                 K_(part_join_filter_hints));
+
+  uint64_t filter_table_id_;
+  bool config_disable_;
+  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> join_filter_hints_;
+  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> part_join_filter_hints_;
+};
+
+struct LogLeadingHint
+{
+  void reset() {
+    leading_tables_.reuse();
+    leading_infos_.reuse();
+    hint_ = NULL;
+  }
+
+  int init_leading_info(const ObDMLStmt &stmt,
+                        const ObQueryHint &query_hint,
+                        const ObHint *hint);
+  int init_leading_info_from_leading_hint(const ObDMLStmt &stmt,
+                                          const ObQueryHint &query_hint,
+                                          const ObLeadingTable &cur_table,
+                                          ObRelIds& table_set);
+  int init_leading_info_from_ordered_hint(const ObDMLStmt &stmt);
+  int init_leading_info_from_table(const ObDMLStmt &stmt,
+                                   ObIArray<LeadingInfo> &leading_infos,
+                                   TableItem *table,
+                                   ObRelIds &table_set);
+
+  TO_STRING_KV(K_(leading_tables),
+               K_(leading_infos),
+               K_(hint));
+
+  ObRelIds leading_tables_;
+  common::ObSEArray<LeadingInfo, 8, common::ModulePageAllocator, true> leading_infos_;
+  const ObJoinOrderHint *hint_;
+};
+
+struct ObLogPlanHint
+{
+  ObLogPlanHint() { reset(); }
+  void reset();
+  int init_normal_hints(const ObIArray<ObHint*> &normal_hints);
+  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+                         const ObDMLStmt &stmt,
+                         const ObQueryHint &query_hint);
+  int init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
+                           const ObDMLStmt &stmt,
+                           const ObQueryHint &query_hint,
+                           const ObIArray<ObHint*> &hints);
+  int init_log_table_hints(ObSqlSchemaGuard &schema_guard);
+  int init_log_join_hints();
+  int add_join_filter_hint(const ObDMLStmt &stmt,
+                           const ObQueryHint &query_hint,
+                           const ObJoinFilterHint &join_filter_hint);
+  int add_table_parallel_hint(const ObDMLStmt &stmt,
+                              const ObQueryHint &query_hint,
+                              const ObTableParallelHint &table_parallel_hint);
+  int add_index_hint(const ObDMLStmt &stmt,
+                     const ObQueryHint &query_hint,
+                     const ObIndexHint &index_hint);
+  int add_join_hint(const ObDMLStmt &stmt,
+                    const ObQueryHint &query_hint,
+                    const ObJoinHint &join_hint);
+  int get_log_table_hint_for_update(const ObDMLStmt &stmt,
+                                    const ObQueryHint &query_hint,
+                                    const ObTableInHint &table,
+                                    const bool basic_table_only,
+                                    LogTableHint *&log_table_hint);
+  int check_status() const;
+  const LogTableHint* get_log_table_hint(uint64_t table_id) const;
+  const LogTableHint* get_index_hint(uint64_t table_id) const;
+  const ObTableParallelHint* get_parallel_hint(uint64_t table_id) const;
+  int check_use_join_filter(uint64_t filter_table_id,
+                            const ObRelIds &left_tables,
+                            bool part_join_filter,
+                            bool config_disable,
+                            bool &can_use,
+                            const ObJoinFilterHint *&force_hint) const;
+  int get_pushdown_join_filter_hints(uint64_t filter_table_id,
+                                     const ObRelIds &left_tables,
+                                     bool config_disable,
+                                     JoinFilterPushdownHintInfo& info) const;
+  int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
+  int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
+                          bool &force_skip_scan,
+                          bool &force_no_skip_scan) const;
+  const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
+  const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
+  SetAlgo get_valid_set_algo() const;
+  DistAlgo get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
+  int check_valid_set_left_branch(const ObSelectStmt *select_stmt,
+                                  bool &hint_valid,
+                                  bool &need_swap) const;
+  const ObHint* get_normal_hint(ObItemType hint_type) const;
+  bool has_enable_hint(ObItemType hint_type) const;
+  bool has_disable_hint(ObItemType hint_type) const;
+  bool use_join_filter(const ObRelIds &table_set) const;
+  bool no_use_join_filter(const ObRelIds &table_set) const;
+  int get_aggregation_info(bool &force_use_hash,
+                           bool &force_use_merge,
+                           bool &force_part_sort,
+                           bool &force_normal_sort) const;
+
+  bool use_late_material() const { return has_enable_hint(T_USE_LATE_MATERIALIZATION); }
+  bool no_use_late_material() const { return has_disable_hint(T_USE_LATE_MATERIALIZATION); }
+  bool use_hash_aggregate() const { return has_enable_hint(T_USE_HASH_AGGREGATE); }
+  bool use_merge_aggregate() const { return has_disable_hint(T_USE_HASH_AGGREGATE); }
+  bool pushdown_group_by() const { return has_enable_hint(T_GBY_PUSHDOWN); }
+  bool no_pushdown_group_by() const { return has_disable_hint(T_GBY_PUSHDOWN); }
+  bool use_hash_distinct() const { return has_enable_hint(T_USE_HASH_DISTINCT); }
+  bool use_merge_distinct() const { return has_disable_hint(T_USE_HASH_DISTINCT); }
+  bool pushdown_distinct() const { return has_enable_hint(T_DISTINCT_PUSHDOWN); }
+  bool no_pushdown_distinct() const { return has_disable_hint(T_DISTINCT_PUSHDOWN); }
+  bool use_distributed_dml() const { return has_enable_hint(T_USE_DISTRIBUTED_DML); }
+  bool no_use_distributed_dml() const { return has_disable_hint(T_NO_USE_DISTRIBUTED_DML); }
+
+  const ObWindowDistHint *get_window_dist() const;
+
+  TO_STRING_KV(K_(is_outline_data), K_(join_order),
+               K_(table_hints), K_(join_hints),
+               K_(normal_hints));
+
+  bool is_outline_data_;
+  LogLeadingHint join_order_;
+  common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
+  common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
+  common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
+};
+
+}
+}
 
 #endif

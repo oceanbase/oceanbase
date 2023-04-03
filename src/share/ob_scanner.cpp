@@ -18,14 +18,18 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-ObScanner::ObScanner(const char* label /*= ObModIds::OB_NEW_SCANNER*/, ObIAllocator* allocator /*= NULL*/,
-    int64_t mem_size_limit /*= DEFAULT_MAX_SERIALIZE_SIZE*/, uint64_t tenant_id /*= OB_INVALID_TENANT_ID*/,
-    bool use_row_compact /*= true*/)
+ObScanner::ObScanner(const char *label /*= ObModIds::OB_NEW_SCANNER*/,
+                     ObIAllocator *allocator /*= NULL*/,
+                     int64_t mem_size_limit /*= DEFAULT_MAX_SERIALIZE_SIZE*/,
+                     uint64_t tenant_id /*= OB_INVALID_TENANT_ID*/,
+                     bool use_row_compact/*= true*/)
     : row_store_(label, tenant_id, use_row_compact),
       mem_size_limit_(mem_size_limit),
       tenant_id_(tenant_id),
@@ -39,7 +43,9 @@ ObScanner::ObScanner(const char* label /*= ObModIds::OB_NEW_SCANNER*/, ObIAlloca
       is_inited_(false),
       row_matched_count_(0),
       row_duplicated_count_(0),
-      inner_allocator_(ObModIds::OB_SCANNER, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+      inner_allocator_(ObModIds::OB_SCANNER,
+                       OB_MALLOC_NORMAL_BLOCK_SIZE,
+                       tenant_id),
       is_result_accurate_(true),
       implicit_cursors_(inner_allocator_),
       datum_store_(),
@@ -48,8 +54,11 @@ ObScanner::ObScanner(const char* label /*= ObModIds::OB_NEW_SCANNER*/, ObIAlloca
   UNUSED(allocator);
 }
 
-ObScanner::ObScanner(
-    ObIAllocator& allocator, const char* label, int64_t mem_size_limit, uint64_t tenant_id, bool use_row_compact)
+ObScanner::ObScanner(ObIAllocator &allocator,
+                     const char *label,
+                     int64_t mem_size_limit,
+                     uint64_t tenant_id,
+                     bool use_row_compact)
     : row_store_(allocator, label, tenant_id, use_row_compact),
       mem_size_limit_(mem_size_limit),
       tenant_id_(tenant_id),
@@ -63,22 +72,25 @@ ObScanner::ObScanner(
       is_inited_(false),
       row_matched_count_(0),
       row_duplicated_count_(0),
-      inner_allocator_(ObModIds::OB_SCANNER, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+      inner_allocator_(ObModIds::OB_SCANNER,
+                       OB_MALLOC_NORMAL_BLOCK_SIZE,
+                       tenant_id),
       is_result_accurate_(true),
       implicit_cursors_(allocator),
       datum_store_(&allocator),
       rcode_()
-{}
+{
+}
 
 ObScanner::~ObScanner()
 {
   // empty
 }
 
-int ObScanner::set_extend_info(const ObString& extend_info)
+int ObScanner::set_extend_info(const ObString &extend_info)
 {
   int ret = OB_SUCCESS;
-  if OB_FAIL (ob_write_string(inner_allocator_, extend_info, extend_info_)) {
+  if OB_FAIL(ob_write_string(inner_allocator_, extend_info, extend_info_)) {
     COMMON_LOG(WARN, "fail to write extend info", K(ret));
   }
   return ret;
@@ -111,17 +123,17 @@ int ObScanner::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("user var map has been inited already", K(ret));
-  } else if (OB_FAIL(
-                 datum_store_.init(UINT64_MAX, tenant_id_, ObCtxIds::DEFAULT_CTX_ID, label_, false /*enable_dump*/))) {
+  } else if (OB_FAIL(datum_store_.init(UINT64_MAX, tenant_id_,
+                                       ObCtxIds::DEFAULT_CTX_ID, label_, false/*enable_dump*/))) {
     LOG_WARN("fail to init datum store", K(ret));
   } else {
-    // FIXME  is too big, optimized away
-    //    ret = user_var_map_.init(1024 * 1024 * 2, 256, NULL);
-    //    if (OB_FAIL(ret)) {
-    //      LOG_WARN("init user var map failed.", K(ret));
-    //    } else {
-    //      is_inited_ = true;
-    //    }
+    //FIXME qianfu is too big, optimized away
+//    ret = user_var_map_.init(1024 * 1024 * 2, 256, NULL);
+//    if (OB_FAIL(ret)) {
+//      LOG_WARN("init user var map failed.", K(ret));
+//    } else {
+//      is_inited_ = true;
+//    }
     is_inited_ = true;
   }
   return ret;
@@ -148,7 +160,7 @@ void ObScanner::reset()
   trans_result_.reset();
 }
 
-int ObScanner::add_row(const ObNewRow& row)
+int ObScanner::add_row(const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(row_store_.add_row(row))) {
@@ -164,7 +176,9 @@ int ObScanner::add_row(const ObNewRow& row)
   return ret;
 }
 
-int ObScanner::try_add_row(const common::ObIArray<sql::ObExpr*>& exprs, sql::ObEvalCtx* ctx, bool& row_added)
+int ObScanner::try_add_row(const common::ObIArray<sql::ObExpr *> &exprs,
+                           sql::ObEvalCtx *ctx,
+                           bool &row_added)
 {
   int ret = OB_SUCCESS;
   row_added = false;
@@ -175,7 +189,7 @@ int ObScanner::try_add_row(const common::ObIArray<sql::ObExpr*>& exprs, sql::ObE
   return ret;
 }
 
-int ObScanner::assign(const ObScanner& other)
+int ObScanner::assign(const ObScanner &other)
 {
   int ret = OB_SUCCESS;
   if (other.get_datum_store().get_row_cnt() > 0) {
@@ -194,7 +208,7 @@ int ObScanner::assign(const ObScanner& other)
   last_insert_id_to_client_ = other.last_insert_id_to_client_;
   last_insert_id_session_ = other.last_insert_id_session_;
   last_insert_id_changed_ = other.last_insert_id_changed_;
-  affected_rows_ = other.affected_rows_;
+  affected_rows_  = other.affected_rows_;
   found_rows_ = other.found_rows_;
   row_matched_count_ = other.row_matched_count_;
   row_duplicated_count_ = other.row_duplicated_count_;
@@ -215,26 +229,27 @@ int ObScanner::assign(const ObScanner& other)
   return ret;
 }
 
-int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo* p_session_info)
+int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo *p_session_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(p_session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session pointer is null", K(ret));
   } else {
-    const sql::ObSessionValMap& current_map = p_session_info->get_user_var_val_map();
+    const sql::ObSessionValMap &current_map = p_session_info->get_user_var_val_map();
     if (current_map.size() > 0) {
-      // Init user var map on demand when setting to avoid wasting CPU and memory when there is no user var
-      // synchronization
-      OZ(user_var_map_.init(1024 * 1024 * 2, 256, NULL));
+      //Init user var map on demand when setting to avoid wasting CPU and memory when there is no user var synchronization
+      if (!user_var_map_.get_val_map().created()) {
+        OZ (user_var_map_.init(1024 * 1024 * 2, 256, NULL));
+      }
       for (sql::ObSessionValMap::VarNameValMap::const_iterator iter = current_map.get_val_map().begin();
-           OB_SUCC(ret) && iter != current_map.get_val_map().end();
-           ++iter) {
-        if (iter->first.prefix_match("pkg.")  // For package variables, only changes will be synchronized
-            && !p_session_info->is_already_tracked(iter->first, p_session_info->get_changed_user_var())) {
+        OB_SUCC(ret) && iter != current_map.get_val_map().end(); ++iter) {
+        if (iter->first.prefix_match("pkg.") // For package variables, only changes will be synchronized
+            && !p_session_info->is_already_tracked(
+                  iter->first, p_session_info->get_changed_user_var())) {
           // do nothing ...
         } else {
-          OZ(user_var_map_.set_refactored(iter->first, iter->second));
+          OZ (user_var_map_.set_refactored(iter->first, iter->second));
         }
       }
     }
@@ -278,7 +293,7 @@ void ObScanner::log_user_error_and_warn() const
     FORWARD_USER_ERROR(rcode_.rcode_, rcode_.msg_);
   }
   for (int i = 0; i < rcode_.warnings_.count(); ++i) {
-    const common::ObWarningBuffer::WarningItem& warning_item = rcode_.warnings_.at(i);
+    const common::ObWarningBuffer::WarningItem &warning_item = rcode_.warnings_.at(i);
     if (ObLogger::USER_WARN == warning_item.log_level_) {
       FORWARD_USER_WARN(warning_item.code_, warning_item.msg_);
     } else if (ObLogger::USER_NOTE == warning_item.log_level_) {
@@ -287,12 +302,12 @@ void ObScanner::log_user_error_and_warn() const
   }
 }
 
-int ObScanner::store_warning_msg(const ObWarningBuffer& wb)
+int ObScanner::store_warning_msg(const ObWarningBuffer &wb)
 {
   int ret = OB_SUCCESS;
   bool not_null = true;
   for (uint32_t idx = 0; OB_SUCC(ret) && not_null && idx < wb.get_readable_warning_count(); idx++) {
-    const common::ObWarningBuffer::WarningItem* item = wb.get_warning_item(idx);
+    const common::ObWarningBuffer::WarningItem *item = wb.get_warning_item(idx);
     if (item != NULL) {
       if (OB_FAIL(rcode_.warnings_.push_back(*item))) {
         RPC_OBRPC_LOG(WARN, "Failed to add warning", K(ret));
@@ -308,26 +323,26 @@ OB_DEF_SERIALIZE(ObScanner)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
-      row_store_,
-      mem_size_limit_,
-      affected_rows_,
-      last_insert_id_to_client_,
-      last_insert_id_session_,
-      last_insert_id_changed_,
-      found_rows_,
-      rcode_.rcode_,
-      rcode_.msg_,
-      user_var_map_,
-      row_matched_count_,
-      row_duplicated_count_,
-      extend_info_,
-      is_result_accurate_,
-      trans_result_,
-      table_row_counts_,
-      implicit_cursors_,
-      rcode_.warnings_,
-      tenant_id_,
-      datum_store_);
+              row_store_,
+              mem_size_limit_,
+              affected_rows_,
+              last_insert_id_to_client_,
+              last_insert_id_session_,
+              last_insert_id_changed_,
+              found_rows_,
+              rcode_.rcode_,
+              rcode_.msg_,
+              user_var_map_,
+              row_matched_count_,
+              row_duplicated_count_,
+              extend_info_,
+              is_result_accurate_,
+              trans_result_,
+              table_row_counts_,
+              implicit_cursors_,
+              rcode_.warnings_,
+              tenant_id_,
+              datum_store_);
   return ret;
 }
 
@@ -335,26 +350,26 @@ OB_DEF_SERIALIZE_SIZE(ObScanner)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      row_store_,
-      mem_size_limit_,
-      affected_rows_,
-      last_insert_id_to_client_,
-      last_insert_id_session_,
-      last_insert_id_changed_,
-      found_rows_,
-      rcode_.rcode_,
-      rcode_.msg_,
-      user_var_map_,
-      row_matched_count_,
-      row_duplicated_count_,
-      extend_info_,
-      is_result_accurate_,
-      trans_result_,
-      table_row_counts_,
-      implicit_cursors_,
-      rcode_.warnings_,
-      tenant_id_,
-      datum_store_);
+              row_store_,
+              mem_size_limit_,
+              affected_rows_,
+              last_insert_id_to_client_,
+              last_insert_id_session_,
+              last_insert_id_changed_,
+              found_rows_,
+              rcode_.rcode_,
+              rcode_.msg_,
+              user_var_map_,
+              row_matched_count_,
+              row_duplicated_count_,
+              extend_info_,
+              is_result_accurate_,
+              trans_result_,
+              table_row_counts_,
+              implicit_cursors_,
+              rcode_.warnings_,
+              tenant_id_,
+              datum_store_);
   return len;
 }
 
@@ -363,31 +378,31 @@ OB_DEF_DESERIALIZE(ObScanner)
   int ret = OB_SUCCESS;
   ObString extend_info;
   LST_DO_CODE(OB_UNIS_DECODE,
-      row_store_,
-      mem_size_limit_,
-      affected_rows_,
-      last_insert_id_to_client_,
-      last_insert_id_session_,
-      last_insert_id_changed_,
-      found_rows_,
-      rcode_.rcode_,
-      rcode_.msg_,
-      user_var_map_,
-      row_matched_count_,
-      row_duplicated_count_,
-      extend_info,
-      is_result_accurate_,
-      trans_result_,
-      table_row_counts_,
-      implicit_cursors_,
-      rcode_.warnings_,
-      tenant_id_)
+              row_store_,
+              mem_size_limit_,
+              affected_rows_,
+              last_insert_id_to_client_,
+              last_insert_id_session_,
+              last_insert_id_changed_,
+              found_rows_,
+              rcode_.rcode_,
+              rcode_.msg_,
+              user_var_map_,
+              row_matched_count_,
+              row_duplicated_count_,
+              extend_info,
+              is_result_accurate_,
+              trans_result_,
+              table_row_counts_,
+              implicit_cursors_,
+              rcode_.warnings_,
+              tenant_id_)
   if (OB_SUCC(ret)) {
     if (!datum_store_.is_inited()) {
-      // When reverse serialization from ob_rpc_proxy, the init interface of obscanner is not called, datum_store_
-      // relies on init when deserializing, So here to judge, if there is no init, then init, the existing logic is not
-      // changed for the time being
-      if (OB_FAIL(datum_store_.init(UINT64_MAX, tenant_id_, ObCtxIds::DEFAULT_CTX_ID, label_, false /*enable_dump*/))) {
+      // When reverse serialization from ob_rpc_proxy, the init interface of obscanner is not called, datum_store_ relies on init when deserializing,
+      // So here to judge, if there is no init, then init, the existing logic is not changed for the time being
+      if (OB_FAIL(datum_store_.init(UINT64_MAX, tenant_id_,
+                                    ObCtxIds::DEFAULT_CTX_ID, label_, false/*enable_dump*/))) {
         LOG_WARN("fail to init datum store", K(ret));
       }
     }
@@ -401,5 +416,5 @@ OB_DEF_DESERIALIZE(ObScanner)
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

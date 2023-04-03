@@ -15,8 +15,10 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObColumnStat::ObColumnStat()
     : table_id_(0),
@@ -37,7 +39,7 @@ ObColumnStat::ObColumnStat()
   max_value_.set_max_value();
 }
 
-ObColumnStat::ObColumnStat(common::ObIAllocator& allocator)
+ObColumnStat::ObColumnStat(common::ObIAllocator &allocator)
     : table_id_(0),
       partition_id_(0),
       column_id_(0),
@@ -55,15 +57,16 @@ ObColumnStat::ObColumnStat(common::ObIAllocator& allocator)
   min_value_.set_min_value();
   max_value_.set_max_value();
   if (NULL == (llc_bitmap_ = static_cast<char*>(allocator.alloc(NUM_LLC_BUCKET)))) {
-    COMMON_LOG(WARN, "allocate memory for llc_bitmap_ failed.");
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for llc_bitmap_ failed.");
   } else if (NULL == (object_buf_ = static_cast<char*>(allocator.alloc(MAX_OBJECT_SERIALIZE_SIZE * 2)))) {
-    COMMON_LOG(WARN, "allocate memory for object_buf_ failed.");
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for object_buf_ failed.");
   } else {
     llc_bitmap_size_ = NUM_LLC_BUCKET;
     MEMSET(llc_bitmap_, 0, llc_bitmap_size_);
     MEMSET(object_buf_, 0, MAX_OBJECT_SERIALIZE_SIZE * 2);
   }
 }
+
 
 ObColumnStat::~ObColumnStat()
 {
@@ -92,14 +95,15 @@ int64_t ObColumnStat::size() const
   return get_deep_copy_size();
 }
 
-int ObColumnStat::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const
+int ObColumnStat::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
 {
   int ret = OB_SUCCESS;
   if (NULL == buf || buf_len < size()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(buf_len), K(size()), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(buf), K(buf_len), K(size()), K(ret));
   } else {
-    ObColumnStat* stat = new (buf) ObColumnStat();
+    ObColumnStat *stat = new (buf) ObColumnStat();
     int64_t pos = sizeof(*this);
     if (OB_FAIL(stat->deep_copy(*this, buf, buf_len, pos))) {
       COMMON_LOG(WARN, "deep copy column stat failed.", K(ret));
@@ -110,18 +114,14 @@ int ObColumnStat::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& 
   return ret;
 }
 
-int ObColumnStat::add_value(const common::ObObj& value)
+int ObColumnStat::add_value(const common::ObObj &value)
 {
   int ret = OB_SUCCESS;
 
   if (!is_writable()) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN,
-        "CAN NOT add value to column stat only for read.",
-        KP_(llc_bitmap),
-        K_(llc_bitmap_size),
-        KP_(object_buf),
-        K(ret));
+    COMMON_LOG(WARN, "CAN NOT add value to column stat only for read.",
+               KP_(llc_bitmap), K_(llc_bitmap_size), KP_(object_buf), K(ret));
   } else {
     if (value.is_null()) {
       is_modified_ = true;
@@ -157,20 +157,17 @@ int ObColumnStat::add_value(const common::ObObj& value)
   }
 
   return ret;
+
 }
 
-int ObColumnStat::add(const ObColumnStat& other)
+int ObColumnStat::add(const ObColumnStat &other)
 {
   int ret = OB_SUCCESS;
 
   if (!is_writable()) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN,
-        "CAN NOT add value to column stat only for read.",
-        KP_(llc_bitmap),
-        K_(llc_bitmap_size),
-        KP_(object_buf),
-        K(ret));
+    COMMON_LOG(WARN, "CAN NOT add value to column stat only for read.",
+               KP_(llc_bitmap), K_(llc_bitmap_size), KP_(object_buf), K(ret));
   } else {
     if (0 != other.num_null_) {
       is_modified_ = true;
@@ -186,7 +183,7 @@ int ObColumnStat::add(const ObColumnStat& other)
           }
         }
       } else if (other.max_value_.is_max_value() && max_value_.is_max_value()) {
-        // do nothing
+        //do nothing
       } else {
         if (max_value_.is_max_value()) {
           if (OB_FAIL(store_max_value(other.max_value_))) {
@@ -207,7 +204,7 @@ int ObColumnStat::add(const ObColumnStat& other)
           }
         }
       } else if (other.min_value_.is_min_value() && min_value_.is_min_value()) {
-        // do nothing
+        //do nothing
       } else {
         if (min_value_.is_min_value()) {
           if (OB_FAIL(store_min_value(other.min_value_))) {
@@ -229,6 +226,7 @@ int ObColumnStat::add(const ObColumnStat& other)
   }
 
   return ret;
+
 }
 
 int ObColumnStat::finish()
@@ -236,7 +234,8 @@ int ObColumnStat::finish()
   int ret = OB_SUCCESS;
   if (NULL == llc_bitmap_) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "CAN NOT set column stat only for read.", KP_(llc_bitmap), K(ret));
+    COMMON_LOG(WARN, "CAN NOT set column stat only for read.",
+               KP_(llc_bitmap), K(ret));
   } else if (is_modified_) {
     //  use HyperLogLog Counting estimate number of distinct values.
     double sum_of_pmax = 0;
@@ -249,24 +248,25 @@ int ObColumnStat::finish()
       }
     }
 
-    double estimate_ndv = (alpha * NUM_LLC_BUCKET * NUM_LLC_BUCKET) / sum_of_pmax;
+    double estimate_ndv = (alpha * NUM_LLC_BUCKET * NUM_LLC_BUCKET)  / sum_of_pmax;
     num_distinct_ = static_cast<int64_t>(estimate_ndv);
     // check if estimate result too tiny or large.
     if (estimate_ndv <= 5 * NUM_LLC_BUCKET / 2) {
       if (0 != empty_bucket_num) {
         // use linear count
-        num_distinct_ = static_cast<int64_t>(NUM_LLC_BUCKET * log(NUM_LLC_BUCKET / double(empty_bucket_num)));
+        num_distinct_ = static_cast<int64_t>(NUM_LLC_BUCKET
+            * log(NUM_LLC_BUCKET / double(empty_bucket_num)));
       }
     }
 
     if (estimate_ndv > (static_cast<double>(LARGE_NDV_NUMBER) / 30)) {
-      num_distinct_ = static_cast<int64_t>((0 - pow(2, 32)) * log(1 - estimate_ndv / LARGE_NDV_NUMBER));
+      num_distinct_ = static_cast<int64_t>((0-pow(2, 32)) * log(1 - estimate_ndv / LARGE_NDV_NUMBER));
     }
   }
   return ret;
 }
 
-int ObColumnStat::deep_copy(const ObColumnStat& src, char* buf, const int64_t size, int64_t& pos)
+int ObColumnStat::deep_copy(const ObColumnStat &src, char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
@@ -288,7 +288,8 @@ int ObColumnStat::deep_copy(const ObColumnStat& src, char* buf, const int64_t si
     COMMON_LOG(WARN, "deep copy max_value_ failed.", K_(src.max_value), K(ret));
   } else if (pos + src.llc_bitmap_size_ > size) {
     ret = OB_BUF_NOT_ENOUGH;
-    COMMON_LOG(WARN, "llc_bitmap_size_ overflow.", K_(src.llc_bitmap_size), K(ret));
+    COMMON_LOG(WARN, "llc_bitmap_size_ overflow.",
+               K_(src.llc_bitmap_size), K(ret));
   } else {
     // copy llc bitmap.
     llc_bitmap_ = buf + pos;
@@ -309,12 +310,14 @@ int64_t ObColumnStat::get_deep_copy_size() const
   return base_size;
 }
 
-int ObColumnStat::store_llc_bitmap(const char* bitmap, const int64_t size)
+int ObColumnStat::store_llc_bitmap(const char *bitmap, const int64_t size)
 {
   int ret = OB_SUCCESS;
   if (NULL == llc_bitmap_ || NULL == bitmap || size > llc_bitmap_size_) {
     ret = common::OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP_(llc_bitmap), K_(llc_bitmap_size), KP(bitmap), K(size), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP_(llc_bitmap), K_(llc_bitmap_size),
+               KP(bitmap), K(size), K(ret));
   } else {
     MEMCPY(llc_bitmap_, bitmap, size);
     llc_bitmap_size_ = size;
@@ -322,7 +325,7 @@ int ObColumnStat::store_llc_bitmap(const char* bitmap, const int64_t size)
   return ret;
 }
 
-int ObColumnStat::store_max_value(const common::ObObj& max)
+int ObColumnStat::store_max_value(const common::ObObj &max)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -330,15 +333,17 @@ int ObColumnStat::store_max_value(const common::ObObj& max)
     ret = common::OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP_(object_buf), K(ret));
   } else if (max.get_serialize_size() > MAX_OBJECT_SERIALIZE_SIZE) {
-    // ignore
-  } else if (OB_FAIL(
-                 max_value_.deep_copy(max, object_buf_ + MAX_OBJECT_SERIALIZE_SIZE, MAX_OBJECT_SERIALIZE_SIZE, pos))) {
-    COMMON_LOG(WARN, "deep copy max object failed.", KP_(object_buf), K(max), K(pos), K(ret));
+    //ignore
+  } else if (OB_FAIL(max_value_.deep_copy(
+      max, object_buf_ + MAX_OBJECT_SERIALIZE_SIZE,
+      MAX_OBJECT_SERIALIZE_SIZE, pos))) {
+    COMMON_LOG(WARN, "deep copy max object failed.",
+               KP_(object_buf), K(max), K(pos), K(ret));
   }
   return ret;
 }
 
-int ObColumnStat::store_min_value(const common::ObObj& min)
+int ObColumnStat::store_min_value(const common::ObObj &min)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -346,14 +351,16 @@ int ObColumnStat::store_min_value(const common::ObObj& min)
     ret = common::OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP_(object_buf), K(ret));
   } else if (min.get_serialize_size() > MAX_OBJECT_SERIALIZE_SIZE) {
-    // ignore
-  } else if (OB_FAIL(min_value_.deep_copy(min, object_buf_, MAX_OBJECT_SERIALIZE_SIZE, pos))) {
-    COMMON_LOG(WARN, "deep copy max object failed.", KP_(object_buf), K(min), K(pos), K(ret));
+    //ignore
+  } else if (OB_FAIL(min_value_.deep_copy(
+      min, object_buf_, MAX_OBJECT_SERIALIZE_SIZE, pos))) {
+    COMMON_LOG(WARN, "deep copy max object failed.",
+               KP_(object_buf), K(min), K(pos), K(ret));
   }
   return ret;
 }
 
-void ObColumnStat::calc_llc_value(const common::ObObj& value)
+void ObColumnStat::calc_llc_value(const common::ObObj &value)
 {
   uint64_t h = value.hash(0);
   //  Mask out the k least significant bits as bucket NO
@@ -361,12 +368,12 @@ void ObColumnStat::calc_llc_value(const common::ObObj& value)
   uint64_t total_bucket_bits = TOTAL_BUCKET_BITS;
   uint64_t bucket = 0;
   while (total_bucket_bits > 0) {
-    bucket ^= (hash_bucket & (NUM_LLC_BUCKET - 1));
+    bucket ^= (hash_bucket & (NUM_LLC_BUCKET -1));
     hash_bucket >>= BUCKET_BITS;
     total_bucket_bits -= BUCKET_BITS;
   }
 
-  const uint64_t pmax = trailing_zeroes(h >> BUCKET_BITS);  // pmax <= 64;
+  const uint64_t pmax = trailing_zeroes(h >> BUCKET_BITS); // pmax <= 64;
   if (pmax > static_cast<uint8_t>(llc_bitmap_[bucket])) {
     llc_bitmap_[bucket] = static_cast<uint8_t>(pmax);
     is_modified_ = true;
@@ -390,21 +397,22 @@ double ObColumnStat::select_alpha_value(const int64_t num_bucket)
 {
   double ret = 0.0;
   switch (num_bucket) {
-    case 16:
-      ret = 0.673;
-      break;
-    case 32:
-      ret = 0.697;
-      break;
-    case 64:
-      ret = 0.709;
-      break;
-    default:
-      ret = 0.7213 / (1 + 1.079 / double(num_bucket));
-      break;
+  case 16:
+    ret = 0.673;
+    break;
+  case 32:
+    ret = 0.697;
+    break;
+  case 64:
+    ret = 0.709;
+    break;
+  default:
+    ret = 0.7213 / (1 + 1.079 / double(num_bucket));
+    break;
   }
   return ret;
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
+

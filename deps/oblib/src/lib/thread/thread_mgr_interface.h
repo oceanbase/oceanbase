@@ -14,15 +14,19 @@
 #define OBLIB_THREAD_MGR_INTERFACE_H
 
 #include "lib/atomic/ob_atomic.h"
+#include "lib/thread/threads.h"
+#include "lib/lock/ob_thread_cond.h"
 
 namespace oceanbase {
 namespace lib {
 
-class TGRunnable {
+class TGRunnable
+{
 public:
   virtual void run1() = 0;
   bool has_set_stop() const
   {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     return ATOMIC_LOAD(&stop_);
   }
   void set_stop(bool stop)
@@ -37,15 +41,22 @@ public:
   {
     thread_idx_ = thread_idx;
   }
-
+public:
+  common::ObThreadCond *cond_ = nullptr;
 private:
   bool stop_ = true;
-  static __thread uint64_t thread_idx_;
+  static TLOCAL(uint64_t, thread_idx_);
 };
 
-class TGTaskHandler {
+class TGTaskHandler
+{
 public:
-  virtual void handle(void* task) = 0;
+  virtual void handle(void *task) = 0;
+  // when thread set stop left task will be process by handle_drop (default impl is handle)
+  // users should define it's behaviour to manage task memory or some what
+  virtual void handle_drop(void *task) {
+    handle(task);
+  };
   uint64_t get_thread_idx() const
   {
     return thread_idx_;
@@ -62,13 +73,12 @@ public:
   {
     return n_threads_;
   }
-
 private:
   int64_t n_threads_ = 0;
-  static __thread uint64_t thread_idx_;
+  static TLOCAL(uint64_t, thread_idx_);
 };
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+} // end of namespace lib
+} // end of namespace oceanbase
 
 #endif /* OBLIB_THREAD_MGR_INTERFACE_H */

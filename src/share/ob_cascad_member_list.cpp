@@ -14,11 +14,14 @@
 #include "lib/utility/ob_print_utils.h"
 #include "ob_cascad_member_list.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace share {
-ObCascadMemberList::ObCascadMemberList() : member_array_()
+namespace share
+{
+ObCascadMemberList::ObCascadMemberList()
+    : member_array_()
 {}
 
 ObCascadMemberList::~ObCascadMemberList()
@@ -34,7 +37,7 @@ bool ObCascadMemberList::is_valid() const
   return member_array_.count() > 0;
 }
 
-int ObCascadMemberList::add_member(const ObCascadMember& member)
+int ObCascadMemberList::add_member(const ObCascadMember &member)
 {
   int ret = OB_SUCCESS;
 
@@ -55,7 +58,7 @@ int ObCascadMemberList::add_member(const ObCascadMember& member)
   return ret;
 }
 
-int ObCascadMemberList::remove_member(const ObCascadMember& member)
+int ObCascadMemberList::remove_member(const ObCascadMember &member)
 {
   int ret = OB_SUCCESS;
   int64_t index = OB_INVALID_INDEX;
@@ -70,13 +73,8 @@ int ObCascadMemberList::remove_member(const ObCascadMember& member)
         index = i;
       } else if (member_array_[i].get_server() == member.get_server()) {
         ret = OB_ITEM_NOT_MATCH;
-        COMMON_LOG(WARN,
-            "ObCascadMemberList::remove_member member not match",
-            K(ret),
-            "Member in list",
-            member_array_[i],
-            "Argument member",
-            member);
+        COMMON_LOG(WARN, "ObCascadMemberList::remove_member member not match", K(ret), "Member in list",
+                   member_array_[i], "Argument member", member);
       }
     }
     if (OB_SUCCESS == ret && index == OB_INVALID_INDEX) {
@@ -91,7 +89,7 @@ int ObCascadMemberList::remove_member(const ObCascadMember& member)
   return ret;
 }
 
-int ObCascadMemberList::remove_server(const ObAddr& server)
+int ObCascadMemberList::remove_server(const ObAddr &server)
 {
   int ret = OB_SUCCESS;
   int64_t index = OB_INVALID_INDEX;
@@ -123,7 +121,7 @@ int64_t ObCascadMemberList::get_member_number() const
   return member_array_.count();
 }
 
-int ObCascadMemberList::get_server_by_index(const int64_t index, common::ObAddr& server) const
+int ObCascadMemberList::get_server_by_index(const int64_t index, common::ObAddr &server) const
 {
   int ret = OB_SUCCESS;
   if (index < 0 || index >= member_array_.count()) {
@@ -135,7 +133,7 @@ int ObCascadMemberList::get_server_by_index(const int64_t index, common::ObAddr&
   return ret;
 }
 
-int ObCascadMemberList::get_member_by_index(const int64_t index, ObCascadMember& member) const
+int ObCascadMemberList::get_member_by_index(const int64_t index, ObCascadMember &member) const
 {
   int ret = OB_SUCCESS;
   if (index < 0 || index >= member_array_.count()) {
@@ -147,7 +145,7 @@ int ObCascadMemberList::get_member_by_index(const int64_t index, ObCascadMember&
   return ret;
 }
 
-int ObCascadMemberList::get_member_by_addr(const common::ObAddr& server, ObCascadMember& member) const
+int ObCascadMemberList::get_member_by_addr(const common::ObAddr &server, ObCascadMember &member) const
 {
   int ret = OB_SUCCESS;
   int64_t i = 0;
@@ -168,7 +166,7 @@ int ObCascadMemberList::get_member_by_addr(const common::ObAddr& server, ObCasca
   return ret;
 }
 
-bool ObCascadMemberList::contains(const common::ObAddr& server) const
+bool ObCascadMemberList::contains(const common::ObAddr &server) const
 {
   int bool_ret = false;
   for (int64_t i = 0; i < member_array_.count(); ++i) {
@@ -180,7 +178,7 @@ bool ObCascadMemberList::contains(const common::ObAddr& server) const
   return bool_ret;
 }
 
-bool ObCascadMemberList::contains(const ObCascadMember& member) const
+bool ObCascadMemberList::contains(const ObCascadMember &member) const
 {
   int bool_ret = false;
   for (int64_t i = 0; i < member_array_.count(); ++i) {
@@ -192,7 +190,7 @@ bool ObCascadMemberList::contains(const ObCascadMember& member) const
   return bool_ret;
 }
 
-int ObCascadMemberList::deep_copy(const common::ObMemberList& member_list, const int64_t dst_cluster_id)
+int ObCascadMemberList::deep_copy(const common::ObMemberList &member_list, const int64_t dst_cluster_id)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -210,7 +208,7 @@ int ObCascadMemberList::deep_copy(const common::ObMemberList& member_list, const
   return ret;
 }
 
-int ObCascadMemberList::deep_copy(const ObCascadMemberList& member_list)
+int ObCascadMemberList::deep_copy(const ObCascadMemberList &member_list)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -225,18 +223,18 @@ int ObCascadMemberList::deep_copy(const ObCascadMemberList& member_list)
   return ret;
 }
 
-ObCascadMemberList& ObCascadMemberList::operator=(const ObCascadMemberList& member_list)
+ObCascadMemberList &ObCascadMemberList::operator=(const ObCascadMemberList &member_list)
 {
   if (this != &member_list) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = deep_copy(member_list))) {
-      COMMON_LOG(ERROR, "deep_copy failed", K(tmp_ret));
+    if (OB_SUCCESS != ( tmp_ret = deep_copy(member_list))) {
+      COMMON_LOG_RET(ERROR, tmp_ret, "deep_copy failed", K(tmp_ret));
     }
   }
   return *this;
 }
 
-bool ObCascadMemberList::member_addr_equal(const ObCascadMemberList& member_list) const
+bool ObCascadMemberList::member_addr_equal(const ObCascadMemberList &member_list) const
 {
   bool bool_ret = true;
   if (get_member_number() != member_list.get_member_number()) {
@@ -246,8 +244,7 @@ bool ObCascadMemberList::member_addr_equal(const ObCascadMemberList& member_list
     for (int64_t i = 0; true == bool_ret && i < get_member_number(); ++i) {
       if (!member_list.contains(member_array_[i].get_server())) {
         bool_ret = false;
-      } else {
-      }
+      } else {}
     }
   }
   return bool_ret;
@@ -308,5 +305,5 @@ OB_DEF_SERIALIZE_SIZE(ObCascadMemberList)
   return serialize_size;
 }
 
-}  // namespace share
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

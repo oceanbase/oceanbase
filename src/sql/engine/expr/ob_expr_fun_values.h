@@ -15,21 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprFunValues : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprFunValues : public ObFuncExprOperator
+{
 public:
-  explicit ObExprFunValues(common::ObIAllocator& alloc);
+  explicit  ObExprFunValues(common::ObIAllocator &alloc);
   virtual ~ObExprFunValues();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_values(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_values(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFunValues);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_FUN_VALUES_H_ */

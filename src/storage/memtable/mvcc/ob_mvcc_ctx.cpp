@@ -14,53 +14,80 @@
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/transaction/ob_trans_part_ctx.h"
-
-namespace oceanbase {
-using namespace common;
-using namespace storage;
-namespace memtable {
-
-int ObIMvccCtx::after_link_trans_node(const void* key, ObMvccRow* value)
+#include "common/storage/ob_sequence.h"
+#include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/memtable/ob_memtable_util.h"
+#include "storage/tablelock/ob_table_lock_callback.h"
+#include "storage/ls/ob_freezer.h"
+namespace oceanbase
 {
-  int ret = OB_SUCCESS;
-  UNUSED(key);
-  UNUSED(value);
-  return ret;
-}
+using namespace common;
+using namespace share;
+using namespace storage;
+using namespace transaction::tablelock;
+using namespace blocksstable;
+namespace memtable
+{
 
-void ObIMvccCtx::before_prepare()
+void ObIMvccCtx::before_prepare(const SCN version)
 {
 #ifdef TRANS_ERROR
   const int random = (int)ObRandom::rand(1, 1000);
-  usleep(random);
+  ob_usleep(random);
 #endif
-  set_trans_version(0);
+  set_trans_version(version);
 }
 
 bool ObIMvccCtx::is_prepared() const
 {
-  const int64_t prepare_version = ATOMIC_LOAD(&trans_version_);
-  return (prepare_version >= 0 && INT64_MAX != prepare_version);
+  const SCN prepare_version = trans_version_.atomic_get();
+  return (prepare_version >= SCN::min_scn() && SCN::max_scn() != prepare_version);
 }
 
-int ObIMvccCtx::register_row_lock_release_cb(
-    const ObMemtableKey* key, ObMvccRow* value, bool is_replay, ObMemtable* memtable, const int32_t sql_no)
+int ObIMvccCtx::inc_pending_log_size(const int64_t size)
+{
+  return trans_mgr_.inc_pending_log_size(size);
+}
+
+int ObIMvccCtx::register_row_commit_cb(
+    const ObMemtableKey *key,
+    ObMvccRow *value,
+    ObMvccTransNode *node,
+    const int64_t data_size,
+    const ObRowData *old_row,
+    ObMemtable *memtable,
+    const int64_t seq_no)
 {
   int ret = OB_SUCCESS;
-  ObMvccRowCallback* cb = NULL;
-  if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(memtable)) {
+  const bool is_replay = false;
+  ObMvccRowCallback *cb = NULL;
+
+  if (OB_ISNULL(key)
+      || OB_ISNULL(value)
+      || OB_ISNULL(node)
+      || data_size <= 0
+      || OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(memtable));
-  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable, false))) {
+    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable));
+  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else {
-    cb->set(key, NULL, 0, NULL, is_replay, false, sql_no);
-    if (!is_replay) {
-      cb->set_write_locked();
-    }
+    //统计当前trans_node占用的内存大小
+    add_trans_mem_total_size(data_size);
+    cb->set(key,
+            node,
+            data_size,
+            old_row,
+            is_replay,
+            seq_no);
+    cb->set_is_link();
+
     if (OB_FAIL(append_callback(cb))) {
+      TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
       callback_free(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
@@ -68,322 +95,222 @@ int ObIMvccCtx::register_row_lock_release_cb(
   return ret;
 }
 
-int ObIMvccCtx::register_row_commit_cb(const ObMemtableKey* key, ObMvccRow* value, ObMvccTransNode* node,
-    const int64_t data_size, const ObRowData* old_row, const bool is_stmt_committed, const bool need_fill_redo,
-    ObMemtable* memtable, const int32_t sql_no, const bool is_sequential_relocate)
-{
-  int ret = OB_SUCCESS;
-  const bool is_replay = false;
-  ObMvccRowCallback* cb = NULL;
-  common::ObTimeGuard tg("ObIMvccCtx::register_row_commit_cb", 1000 * 1000);
-  if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node) || data_size <= 0 || OB_ISNULL(memtable)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable));
-  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable, false))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc row callback failed", K(ret));
-  } else {
-    tg.click();
-    (void)check_row_callback_registration_between_stmt_();
-    tg.click();
-    add_trans_mem_total_size(data_size);
-    node->set_mvcc_row_cb(cb);
-    cb->set(key, node, data_size, old_row, is_replay, need_fill_redo, sql_no);
-    if (is_sequential_relocate) {
-      {
-        ObRowLatchGuard guard(value->latch_);
-        tg.click();
-        cb->link_trans_node();
-      }
-      // set stmt_committed flag of callback
-      // set stmt_committed true only if data relocation
-      cb->set_stmt_committed(is_stmt_committed);
-      if (OB_FAIL(append_callback(cb))) {
-        ObRowLatchGuard guard(value->latch_);
-        cb->unlink_trans_node();
-      }
-    } else {
-      if (value->latch_.try_lock()) {
-        tg.click();
-        cb->link_trans_node();
-        // set stmt_committed flag of callback
-        // set stmt_committed true only if data relocation
-        cb->set_stmt_committed(is_stmt_committed);
-        if (OB_FAIL(append_callback(cb))) {
-          cb->unlink_trans_node();
-          TRANS_LOG(WARN, "append callback failed", K(ret));
-        }
-      } else {
-        ret = OB_TRY_LOCK_ROW_CONFLICT;
-        TRANS_LOG(DEBUG,
-            "register_row_commit_cb try lock fail, need to retry",
-            K(*key),
-            K(*value),
-            K(memtable),
-            K(is_sequential_relocate));
-      }
-    }
-    tg.click();
-    if (OB_FAIL(ret)) {
-      callback_free(cb);
-      TRANS_LOG(WARN, "append callback failed", K(ret), K(is_sequential_relocate));
-    }
-  }
-  return ret;
-}
-
-int ObIMvccCtx::register_row_replay_cb(const ObMemtableKey* key, ObMvccRow* value, ObMvccTransNode* node,
-    const int64_t data_size, ObMemtable* memtable, const int32_t sql_no, const bool is_sequential_relocate,
-    const int64_t log_ts)
+int ObIMvccCtx::register_row_replay_cb(
+    const ObMemtableKey *key,
+    ObMvccRow *value,
+    ObMvccTransNode *node,
+    const int64_t data_size,
+    ObMemtable *memtable,
+    const int64_t seq_no,
+    const SCN scn)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
-  const bool need_fill_redo = false;
-  const ObRowData* old_row = NULL;
-  ObMvccRowCallback* cb = NULL;
-  common::ObTimeGuard tg("ObIMvccCtx::register_row_replay_cb", 1000 * 1000);
-  if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node) || data_size <= 0 || OB_ISNULL(memtable)) {
+  ObMvccRowCallback *cb = NULL;
+  common::ObTimeGuard timeguard("ObIMvccCtx::register_row_replay_cb", 5 * 1000);
+  if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node)
+      || data_size <= 0 || OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable));
-  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable, false))) {
+  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+  } else if (FALSE_IT(timeguard.click("alloc_row_callback"))) {
   } else {
-    tg.click();
-    node->set_mvcc_row_cb(cb);
-    cb->set(key, node, data_size, old_row, is_replay, need_fill_redo, sql_no);
-    if (is_sequential_relocate) {
+    cb->set(key,
+            node,
+            data_size,
+            NULL,
+            is_replay,
+            seq_no);
+    {
+      ObRowLatchGuard guard(value->latch_);
+      cb->link_trans_node();
+    }
+    timeguard.click("link_trans_node");
+
+    cb->set_scn(scn);
+    if (OB_FAIL(append_callback(cb))) {
       {
         ObRowLatchGuard guard(value->latch_);
-        tg.click();
-        cb->link_trans_node();
+        cb->unlink_trans_node();
       }
-      // all statement is finished when replaying log
-      cb->set_stmt_committed(true);
-      cb->set_log_ts(log_ts);
-      if (OB_FAIL(append_callback(cb))) {
-        {
-          ObRowLatchGuard guard(value->latch_);
-          cb->unlink_trans_node();
-        }
-        TRANS_LOG(WARN, "append callback failed", K(ret));
-      } else {
-        update_max_durable_sql_no(sql_no);
-        // TODO: defense inspection
-        int64_t redo_log_ts = (0 == lob_start_log_ts_ ? log_ts : lob_start_log_ts_);
-        if (redo_log_ts > memtable->get_freeze_log_ts()) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "replay should not overflow", K(ret), K(redo_log_ts), K(*memtable));
-        }
-      }
-    } else {
-      // try lock destination memstore row when relocating data from active memstore to frozen memstore
-      if (value->latch_.try_lock()) {
-        tg.click();
-        cb->link_trans_node();
-        // all statement is finished when replaying log
-        cb->set_stmt_committed(true);
-        cb->set_log_ts(log_ts);
-        if (OB_FAIL(append_callback(cb))) {
-          cb->unlink_trans_node();
-        }
-        value->latch_.unlock();
-      } else {
-        ret = OB_TRY_LOCK_ROW_CONFLICT;
-        TRANS_LOG(DEBUG,
-            "register_row_replay_cb try lock fail, need to retry",
-            K(*key),
-            K(*value),
-            K(memtable),
-            K(is_sequential_relocate));
-      }
+      TRANS_LOG(WARN, "append callback failed", K(ret));
     }
+    timeguard.click("append_callback");
+
     if (OB_FAIL(ret)) {
       callback_free(cb);
-      TRANS_LOG(WARN, "append callback failed", K(ret), K(is_sequential_relocate));
+      timeguard.click("callback_free");
+      TRANS_LOG(WARN, "append callback failed", K(ret));
     }
-    tg.click();
   }
   return ret;
 }
 
-int ObIMvccCtx::register_savepoint_cb(const ObMemtableKey* key, ObMvccRow* value, ObMvccTransNode* node,
-    const int64_t data_size, const ObRowData* old_row, const int32_t sql_no)
+int ObIMvccCtx::register_table_lock_cb_(
+    ObLockMemtable *memtable,
+    ObMemCtxLockOpLinkNode *lock_op,
+    ObOBJLockCallback *&cb)
 {
   int ret = OB_SUCCESS;
-  const bool is_replay = false;
-  const bool need_fill_redo = true;
-  const bool is_stmt_committed = false;
-  ObMvccRowCallback* cb = NULL;
-  if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node) || data_size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size));
-  } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, NULL, true))) {
+  static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
+  const ObStoreRowkey &rowkey = tablelock_fake_rowkey.get_rowkey();
+  ObMemtableKey mt_key;
+  cb = nullptr;
+  if (OB_ISNULL(cb = alloc_table_lock_callback(*this, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+  } else if (OB_FAIL(mt_key.encode(&rowkey))) {
+    TRANS_LOG(WARN, "encode memtable key failed", K(ret));
   } else {
-    // count up memory size of transaction node
-    add_trans_mem_total_size(data_size);
-    cb->set(key, node, data_size, old_row, is_replay, need_fill_redo, sql_no);
-    cb->set_stmt_committed(is_stmt_committed);
-    cb->set_savepoint();
-    cb->set_is_link();
+    cb->set(mt_key, lock_op);
     if (OB_FAIL(append_callback(cb))) {
-      TRANS_LOG(WARN, "append savepoint callback failed", K(ret), K(*cb));
+      TRANS_LOG(WARN, "append table lock callback failed", K(ret), K(*cb));
     } else {
-      TRANS_LOG(INFO, "append savepoint callback", K(*cb));
+      TRANS_LOG(DEBUG, "append table lock callback", K(*cb));
     }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
+    free_table_lock_callback(cb);
   }
   return ret;
 }
 
-int ObIMvccCtx::register_savepoint_cb(ObMvccRowCallback& cb, ObMemtable* memtable)
+int ObIMvccCtx::register_table_lock_cb(
+    ObLockMemtable *memtable,
+    ObMemCtxLockOpLinkNode *lock_op)
 {
   int ret = OB_SUCCESS;
-  ObMvccRowCallback* new_cb = NULL;
-  if (OB_ISNULL(new_cb = alloc_row_callback(cb, memtable, true))) {
+  ObOBJLockCallback *cb = nullptr;
+  if (OB_ISNULL(memtable) ||
+      OB_ISNULL(lock_op)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
+  } else if (OB_FAIL(register_table_lock_cb_(memtable,
+                                             lock_op,
+                                             cb))) {
+    TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObIMvccCtx::register_table_lock_replay_cb(
+    ObLockMemtable *memtable,
+    ObMemCtxLockOpLinkNode *lock_op,
+    const SCN scn)
+{
+  int ret = OB_SUCCESS;
+  ObOBJLockCallback *cb = nullptr;
+  if (OB_ISNULL(memtable) ||
+      OB_ISNULL(lock_op)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
+  } else if (OB_FAIL(register_table_lock_cb_(memtable,
+                                             lock_op,
+                                             cb))) {
+    TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
+  } else {
+    cb->set_scn(scn);
+    update_max_submitted_seq_no(cb->get_seq_no());
+    TRANS_LOG(DEBUG, "replay register table lock callback", K(*cb));
+  }
+  return ret;
+}
+
+ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable)
+{
+  int ret = OB_SUCCESS;
+  void *cb_buffer = NULL;
+  ObMvccRowCallback *cb = NULL;
+  if (NULL == (cb_buffer = callback_alloc(sizeof(*cb)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc row callback failed", K(ret));
-  } else {
-    if (OB_FAIL(append_callback(new_cb))) {
-      TRANS_LOG(WARN, "append savepoint callback failed", K(ret), K(*new_cb));
-    } else {
-      TRANS_LOG(INFO, "append savepoint callback", K(*new_cb));
-    }
-  }
-  return ret;
-}
-
-ObMvccRowCallback* ObIMvccCtx::alloc_row_callback(
-    ObIMvccCtx& ctx, ObMvccRow& value, ObMemtable* memtable, const bool is_savepoint)
-{
-  int ret = OB_SUCCESS;
-  void* cb_buffer = NULL;
-  ObMvccRowCallback* cb = NULL;
-  if (!is_savepoint) {
-    if (NULL == (cb_buffer = callback_alloc(sizeof(*cb)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
-    }
-  } else {
-    if (NULL == (cb_buffer = arena_alloc(sizeof(*cb)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
-    }
-  }
-  if (NULL != cb_buffer) {
-    if (NULL == (cb = new (cb_buffer) ObMvccRowCallback(ctx, value, memtable))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "construct ObRowCB object fail", K(ret), "cb_buffer", cb_buffer);
-    }
+    TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
+  } else if (NULL == (cb = new(cb_buffer) ObMvccRowCallback(ctx, value, memtable))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObRowCB object fail", K(ret), "cb_buffer", cb_buffer);
   }
   return cb;
 }
 
-ObMvccRowCallback* ObIMvccCtx::alloc_row_callback(ObMvccRowCallback& cb, ObMemtable* memtable, const bool is_savepoint)
+ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable)
 {
   int ret = OB_SUCCESS;
-  void* cb_buffer = NULL;
-  ObMvccRowCallback* new_cb = NULL;
-  if (!is_savepoint) {
-    if (NULL == (cb_buffer = callback_alloc(sizeof(*new_cb)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
-    }
-  } else {
-    if (NULL == (cb_buffer = arena_alloc(sizeof(*new_cb)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
-    }
-  }
-  if (NULL != cb_buffer) {
-    if (NULL == (new_cb = new (cb_buffer) ObMvccRowCallback(cb, memtable))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "construct ObRowCB object fail", K(ret), "cb_buffer", cb_buffer);
-    }
+  void *cb_buffer = NULL;
+  ObMvccRowCallback *new_cb = NULL;
+  if (NULL == (cb_buffer = callback_alloc(sizeof(*new_cb)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
+  } else if (NULL == (new_cb = new(cb_buffer) ObMvccRowCallback(cb, memtable))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObRowCB object fail", K(ret), "cb_buffer", cb_buffer);
   }
   return new_cb;
 }
 
-ObMemtableKey* ObIMvccCtx::alloc_memtable_key()
-{
-  int ret = OB_SUCCESS;
-  void* buffer = NULL;
-  ObMemtableKey* mt_key = NULL;
-  if (NULL == (buffer = arena_alloc(sizeof(*mt_key)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc memtable key fail", K(ret));
-  } else if (NULL == (mt_key = new (buffer) ObMemtableKey())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "construct memtable key fail", K(ret), KP(buffer));
-  } else {
-    // do nothing
-  }
-  return mt_key;
-}
-
-ObMvccRow* ObIMvccCtx::alloc_mvcc_row()
-{
-  int ret = OB_SUCCESS;
-  void* buffer = NULL;
-  ObMvccRow* row = NULL;
-  if (NULL == (buffer = arena_alloc(sizeof(*row)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc mvcc row fail", K(ret));
-  } else if (NULL == (row = new (buffer) ObMvccRow())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "construct mvcc row fail", K(ret), KP(buffer));
-  } else {
-    // do nothing
-  }
-  return row;
-}
-
-ObMvccTransNode* ObIMvccCtx::alloc_trans_node()
-{
-  int ret = OB_SUCCESS;
-  char* buffer = NULL;
-  ObMvccTransNode* node = NULL;
-  ObMemtableData* data = NULL;
-  if (NULL == (buffer = (char*)arena_alloc(sizeof(*node) + sizeof(*data)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc trans node fail", K(ret));
-  } else if (NULL == (node = new (buffer) ObMvccTransNode())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "construct trans node fail", K(ret), KP(buffer));
-  } else {
-    data = reinterpret_cast<ObMemtableData*>(node->buf_);
-    new (data) ObMemtableData(T_DML_UNKNOWN, 0, NULL);
-  }
-  return node;
-}
-
-int ObIMvccCtx::append_callback(ObITransCallback* cb)
+int ObIMvccCtx::append_callback(ObITransCallback *cb)
 {
   return trans_mgr_.append(cb);
 }
 
-int64_t ObIMvccCtx::get_query_abs_lock_wait_timeout(const int64_t lock_wait_start_ts) const
-{
-  int64_t abs_timeout = 0;
-
-  if (trx_lock_timeout_ < 0) {
-    abs_timeout = abs_lock_wait_timeout_;
-  } else {
-    abs_timeout = MIN(abs_lock_wait_timeout_, trx_lock_timeout_ + lock_wait_start_ts);
-  }
-
-  return abs_timeout;
-}
-
 void ObIMvccCtx::check_row_callback_registration_between_stmt_()
 {
-  ObIMemtableCtx* i_mem_ctx = (ObIMemtableCtx*)(this);
-  transaction::ObPartTransCtx* trans_ctx = (transaction::ObPartTransCtx*)(i_mem_ctx->get_trans_ctx());
-  if (NULL != trans_ctx && trans_ctx->is_task_match()) {
-    TRANS_LOG(ERROR, "register commit not match expection", K(*trans_ctx));
+  ObIMemtableCtx *i_mem_ctx = (ObIMemtableCtx *)(this);
+  transaction::ObPartTransCtx *trans_ctx =
+    (transaction::ObPartTransCtx *)(i_mem_ctx->get_trans_ctx());
+  if (NULL != trans_ctx && !trans_ctx->has_pending_write()) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "register commit not match expection", K(*trans_ctx));
+  }
+}
+}
+}
+
+#include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_trans_part_ctx.h"
+namespace oceanbase {
+namespace memtable {
+ObMvccWriteGuard::~ObMvccWriteGuard()
+{
+  if (NULL != ctx_) {
+    int ret = OB_SUCCESS;
+    auto tx_ctx = ctx_->get_trans_ctx();
+    ctx_->write_done();
+    if (OB_NOT_NULL(memtable_)) {
+      bool is_freeze = memtable_->is_frozen_memtable();
+      if (OB_FAIL(tx_ctx->submit_redo_log(is_freeze))) {
+        if (REACH_TIME_INTERVAL(100 * 1000)) {
+          TRANS_LOG(WARN, "failed to submit log if neccesary", K(ret), K(is_freeze), KPC(tx_ctx));
+        }
+        if (is_freeze) {
+          memtable_->get_freezer()->set_need_resubmit_log(true);
+        }
+      }
+    }
   }
 }
 
-}  // namespace memtable
-}  // namespace oceanbase
+int ObMvccWriteGuard::write_auth(storage::ObStoreCtx &store_ctx)
+{
+  int ret = common::OB_SUCCESS;
+  auto mem_ctx = store_ctx.mvcc_acc_ctx_.mem_ctx_;
+  if (!store_ctx.mvcc_acc_ctx_.is_write()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "store_ctx was not prepared for write", K(ret), K(store_ctx));
+  } else if (OB_FAIL(mem_ctx->write_auth(exclusive_))) {
+    TRANS_LOG(WARN, "tx ctx write auth fail", K(ret),
+              K(exclusive_), K(store_ctx), KPC(mem_ctx));
+  } else {
+    ctx_ = mem_ctx;
+  }
+  return ret;
+}
+
+void ObMvccAccessCtx::warn_tx_ctx_leaky_()
+{
+  int ret = OB_ERR_UNEXPECTED;
+  TRANS_LOG(ERROR, "tx_ctx_ not null, may be leaky reference", K(ret), KP_(tx_ctx), KPC(this));
+}
+} // memtable
+} // oceanbase

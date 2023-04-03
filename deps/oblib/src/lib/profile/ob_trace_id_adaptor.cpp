@@ -15,29 +15,11 @@
 
 using namespace oceanbase::common;
 
-OB_SERIALIZE_MEMBER(ObTraceIdAdaptor, uval_[0], uval_[1]);
+OB_SERIALIZE_MEMBER(ObTraceIdAdaptor, uval_[0], uval_[1], uval_[2], uval_[3]);
 
-int64_t ObTraceIdAdaptor::to_string(char* buf, const int64_t buf_len) const
+int64_t ObTraceIdAdaptor::to_string(char *buf, const int64_t buf_len) const
 {
   ObCurTraceId::TraceId trace_id;
   trace_id.set(uval_);
   return trace_id.to_string(buf, buf_len);
-}
-
-void ObTraceIdAdaptor::reset()
-{
-  uval_[0] = 0;
-  uval_[1] = 0;
-}
-
-bool ObTraceIdAdaptor::operator==(const ObTraceIdAdaptor& other) const
-{
-  return (uval_[0] == other.uval_[0]) && (uval_[1] == other.uval_[1]);
-}
-
-ObTraceIdAdaptor& ObTraceIdAdaptor::operator=(const ObTraceIdAdaptor& other)
-{
-  uval_[0] = other.uval_[0];
-  uval_[1] = other.uval_[1];
-  return *this;
 }

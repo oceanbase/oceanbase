@@ -17,82 +17,96 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 /**
  *  Print log info with expressions
  */
-#define EXPLAIN_PRINT_INSERT_VALUES(values, column_count, type)                          \
-  {                                                                                      \
-    if (OB_ISNULL(values)) {                                                             \
-      ret = OB_ERR_UNEXPECTED;                                                           \
-    } else if (OB_FAIL(BUF_PRINTF(#values "("))) {                                       \
-      LOG_WARN("fail to print to buf", K(ret));                                          \
-    } else {                                                                             \
-      int64_t N = values->count();                                                       \
-      int64_t M = column_count;                                                          \
-      if (N == 0) {                                                                      \
-        if (OB_FAIL(BUF_PRINTF("nil"))) {                                                \
-          LOG_WARN("fail to print to buf", K(ret));                                      \
-        }                                                                                \
-      } else if (OB_UNLIKELY(0 != N % M)) {                                              \
-        ret = OB_ERR_UNEXPECTED;                                                         \
-        LOG_WARN("invalid value count", K(ret), "value_count", N, "row_count", M);       \
-      } else {                                                                           \
-        for (int64_t i = 0; OB_SUCC(ret) && i < N / M; i++) {                            \
-          if (OB_FAIL(BUF_PRINTF("{"))) {                                                \
-            LOG_WARN("fail to print to buf", K(ret));                                    \
-          }                                                                              \
-          for (int64_t j = 0; OB_SUCC(ret) && j < M; j++) {                              \
-            int64_t expr_idx = i * M + j;                                                \
+#define EXPLAIN_PRINT_INSERT_VALUES(values, column_count, type)                    \
+  {                                                                                \
+    if (OB_ISNULL(values)) {                                                       \
+      ret = OB_ERR_UNEXPECTED;                                                     \
+    } else if (OB_FAIL(BUF_PRINTF(#values"("))) {                                  \
+      LOG_WARN("fail to print to buf", K(ret));                                    \
+    } else  {                                                                      \
+      int64_t N = values->count();                                                 \
+      int64_t M = column_count;                                                    \
+      if (N == 0 || M == 0) {                                                      \
+        if (OB_FAIL(BUF_PRINTF("nil"))) {                                          \
+          LOG_WARN("fail to print to buf", K(ret));                                \
+        }                                                                          \
+      } else if (OB_UNLIKELY(0 != N % M)) {                                        \
+        ret = OB_ERR_UNEXPECTED;                                                   \
+        LOG_WARN("invalid value count", K(ret), "value_count", N, "row_count", M); \
+      } else {                                                                     \
+        for (int64_t i = 0; OB_SUCC(ret) && i < N / M; i++) {                      \
+          if (OB_FAIL(BUF_PRINTF("{"))) {                                          \
+            LOG_WARN("fail to print to buf", K(ret));                              \
+          }                                                                        \
+          for (int64_t j = 0; OB_SUCC(ret) && j < M; j++) {                        \
+            int64_t expr_idx = i * M + j;                                          \
             if (OB_UNLIKELY(expr_idx >= values->count()) || OB_UNLIKELY(expr_idx < 0)) { \
-              ret = OB_ERR_UNEXPECTED;                                                   \
-            } else if (OB_ISNULL(values->at(expr_idx))) {                                \
-              ret = OB_ERR_UNEXPECTED;                                                   \
-            } else {                                                                     \
-              if (OB_FAIL(values->at(expr_idx)->get_name(buf, buf_len, pos, type))) {    \
-              } else {                                                                   \
-                if (j < M - 1) {                                                         \
-                  if (OB_FAIL(BUF_PRINTF(", "))) {                                       \
-                    LOG_WARN("fail to print to buf", K(ret));                            \
-                  }                                                                      \
-                }                                                                        \
-              }                                                                          \
-            }                                                                            \
-          }                                                                              \
-          if (OB_FAIL(BUF_PRINTF("}"))) {                                                \
-            LOG_WARN("fail to print to buf", K(ret));                                    \
-          } else if (i < N / M - 1) {                                                    \
-            if (OB_FAIL(BUF_PRINTF(", "))) {                                             \
-              LOG_WARN("fail to print to buf", K(ret));                                  \
-            }                                                                            \
-          }                                                                              \
-        }                                                                                \
-      }                                                                                  \
-      if (OB_SUCC(ret)) {                                                                \
-        if (OB_FAIL(BUF_PRINTF(")"))) {                                                  \
-          LOG_WARN("fail to print to buf", K(ret));                                      \
-        }                                                                                \
-      }                                                                                  \
-    }                                                                                    \
+              ret = OB_ERR_UNEXPECTED;                                             \
+            } else if (OB_ISNULL(values->at(expr_idx))) {                          \
+              ret = OB_ERR_UNEXPECTED;                                             \
+            } else {                                                               \
+              if (OB_FAIL(values->at(expr_idx)->get_name(buf, buf_len, pos, type))) { \
+              } else {                                                             \
+                if (j < M - 1) {                                                   \
+                  if (OB_FAIL(BUF_PRINTF(", "))) {                                 \
+                    LOG_WARN("fail to print to buf", K(ret));                      \
+                  }                                                                \
+                }                                                                  \
+              }                                                                    \
+            }                                                                      \
+          }                                                                        \
+          if (OB_FAIL(BUF_PRINTF("}"))) {                                          \
+            LOG_WARN("fail to print to buf", K(ret));                              \
+          } else if (i < N / M - 1) {                                              \
+            if (OB_FAIL(BUF_PRINTF(", "))) {                                       \
+              LOG_WARN("fail to print to buf", K(ret));                            \
+            }                                                                      \
+          }                                                                        \
+        }                                                                          \
+      }                                                                            \
+      if (OB_SUCC(ret)) {                                                          \
+        if (OB_FAIL(BUF_PRINTF(")"))) {                                            \
+          LOG_WARN("fail to print to buf", K(ret));                                \
+        }                                                                          \
+      }                                                                            \
+    }                                                                              \
   }
 
-int ObLogExprValues::allocate_exchange_post(AllocExchContext* ctx)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  sharding_info_.set_location_type(OB_TBL_LOCATION_ALL);
-  return ret;
-}
 
-int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr*>& value_exprs)
+int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr *> &value_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(value_exprs_, value_exprs))) {
     LOG_WARN("failed to append expr", K(ret));
+  } else if (get_stmt()->is_insert_stmt() && is_ins_values_batch_opt()) {
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
+    ObRawExpr *stmt_id_expr = NULL;
+    if (OB_ISNULL(stmt_id_expr = insert_stmt->get_ab_stmt_id_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stmt_id_expr is null", K(ret));
+    } else if (OB_FAIL(value_exprs_.push_back(stmt_id_expr))) {
+      LOG_WARN("fail to push stmt_id_expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogExprValues::add_values_desc(const common::ObIArray<ObColumnRefRawExpr *> &value_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(value_desc_, value_desc))) {
+    LOG_WARN("failed to append desc", K(ret));
   }
   return ret;
 }
@@ -100,38 +114,41 @@ int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr*>& value_e
 int ObLogExprValues::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 8> select_exprs;
-  int32_t stmt_level = -1;
-  ObFdItemSet* fd_item_set = NULL;
-  if (OB_ISNULL(my_plan_) || OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+  if (OB_ISNULL(my_plan_) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpect parameter", K(my_plan_), K(get_stmt()));
-  } else if (OB_FAIL(static_cast<ObSelectStmt*>(get_stmt())->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
-    LOG_WARN("failed to create fd item set", K(ret));
+  } else if (!get_stmt()->is_select_stmt()) {
+    set_fd_item_set(&empty_fd_item_set_);
   } else {
-    stmt_level = get_stmt()->get_current_level();
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-    ObSEArray<ObRawExpr*, 1> value_exprs;
-    ObExprFdItem* fd_item = NULL;
-    if (OB_FAIL(value_exprs.push_back(select_exprs.at(i)))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_expr_fd_item(
-                   fd_item, true, value_exprs, stmt_level, select_exprs))) {
-      LOG_WARN("failed to create fd item", K(ret));
-    } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
-      LOG_WARN("failed to push back fd item", K(ret));
+    ObFdItemSet *fd_item_set = NULL;
+    ObSEArray<ObRawExpr*, 8> select_exprs;
+    if (OB_FAIL(static_cast<const ObSelectStmt *>(get_stmt())->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
+      LOG_WARN("failed to create fd item set", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
+        ObSEArray<ObRawExpr *, 1> value_exprs;
+        ObExprFdItem *fd_item = NULL;
+        if (OB_FAIL(value_exprs.push_back(select_exprs.at(i)))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_expr_fd_item(fd_item,
+                                                                               true,
+                                                                               value_exprs,
+                                                                               select_exprs))) {
+          LOG_WARN("failed to create fd item", K(ret));
+        } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
+          LOG_WARN("failed to push back fd item", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        /*do nothing*/
+      } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
+        LOG_WARN("falied to deduce fd item set", K(ret));
+      } else {
+        set_fd_item_set(fd_item_set);
+      }
     }
-  }
-
-  if (OB_FAIL(ret)) {
-    /*do nothing*/
-  } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
-    LOG_WARN("falied to deduce fd item set", K(ret));
-  } else {
-    set_fd_item_set(fd_item_set);
   }
   return ret;
 }
@@ -139,8 +156,7 @@ int ObLogExprValues::compute_fd_item_set()
 int ObLogExprValues::compute_equal_set()
 {
   int ret = OB_SUCCESS;
-  set_ordering_output_equal_sets(&empty_expr_sets_);
-  set_sharding_output_equal_sets(&empty_expr_sets_);
+  set_output_equal_sets(&empty_expr_sets_);
   return ret;
 }
 
@@ -154,14 +170,19 @@ int ObLogExprValues::compute_table_set()
 int ObLogExprValues::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> select_exprs;
-  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+  if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is invalid", K(ret));
-  } else if (OB_FAIL(static_cast<ObSelectStmt*>(get_stmt())->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::copy_sort_keys(select_exprs, op_ordering_))) {
-    LOG_WARN("failed to copy sort keys", K(ret));
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!get_stmt()->is_select_stmt()) {
+    /*do nothing*/
+  } else {
+    ObSEArray<ObRawExpr*, 4> select_exprs;
+    if (OB_FAIL(static_cast<const ObSelectStmt *>(get_stmt())->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(select_exprs,
+                                                       op_ordering_))) {
+      LOG_WARN("failed to copy sort keys", K(ret));
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -169,13 +190,34 @@ int ObLogExprValues::compute_op_ordering()
 int ObLogExprValues::est_cost()
 {
   int ret = OB_SUCCESS;
-  // set cost and card
-  set_card(1.0);
-  set_cost(ObOptEstCost::get_cost_params().CPU_OPERATOR_COST *
-               static_cast<double>(get_stmt()->get_condition_exprs().count()) +
-           ObOptEstCost::get_cost_params().CPU_TUPLE_COST);
-  set_op_cost(get_cost());
-  // TODO
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (get_stmt()->is_insert_stmt()) {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
+    set_card(insert_stmt->get_insert_row_count());
+    set_op_cost(ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type()));
+    set_cost(get_op_cost());
+  } else {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    set_card(1.0);
+    set_op_cost(ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx.get_cost_model_type()));
+    set_cost(get_op_cost());
+  }
+  return ret;
+}
+
+int ObLogExprValues::compute_sharding_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
+  }
   return ret;
 }
 
@@ -187,7 +229,191 @@ int ObLogExprValues::compute_one_row_info()
     LOG_WARN("get unexpected null", K(ret));
   } else if (!get_stmt()->is_insert_stmt()) {
     is_at_most_one_row_ = true;
-  } else { /*do nothing*/
+  } else { /*do nothing*/ }
+
+  return ret;
+}
+
+int ObLogExprValues::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, value_exprs_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (get_stmt()->is_insert_stmt()) {
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
+    if (OB_FAIL(append(all_exprs, insert_stmt->get_values_desc()))) {
+      LOG_WARN("failed to append exprs", K(ret));
+    } else { /*do nothing*/ }
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
+  } else if (get_stmt()->is_insert_stmt()) {
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
+    const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt->get_values_desc();
+    for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
+      ObColumnRefRawExpr *value_col = values_desc.at(i);
+      if (OB_FAIL(mark_expr_produced(value_col, branch_id_, id_, ctx))) {
+        LOG_WARN("makr expr produced failed", K(ret));
+      } else if (!is_plan_root() && OB_FAIL(output_exprs_.push_back(value_col))) {
+        LOG_WARN("failed to push back exprs", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    /*do nothing*/
+  } else if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
+  } else if (contain_array_binding_param() && OB_FAIL(construct_array_binding_values())) {
+    LOG_WARN("construct array binding values failed", K(ret));
+  } else if (value_exprs_.empty() && OB_FAIL(append(value_exprs_, get_output_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (value_exprs_.empty() && OB_FAIL(allocate_dummy_output())) {
+    LOG_WARN("failed to allocate dummy output", K(ret));
+  } else if (OB_FAIL(construct_sequence_values())) {
+    LOG_WARN("failed to construct sequence values", K(ret));
+  } else if (OB_FAIL(mark_probably_local_exprs())) {
+    LOG_WARN("failed to mark local exprs", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogExprValues::construct_sequence_values()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (get_stmt()->is_insert_stmt() && !value_exprs_.empty() && output_exprs_.count() >= 2) {
+    int64_t seq_expr_idx = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); ++i) {
+      if (OB_ISNULL(output_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("output expr is null", K(ret));
+      } else if (T_FUN_SYS_SEQ_NEXTVAL == output_exprs_.at(i)->get_expr_type()) {
+        seq_expr_idx = i;
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && -1 != seq_expr_idx) {
+      ObRawExpr *seq_expr = output_exprs_.at(seq_expr_idx);
+      const int64_t value_count = value_exprs_.count();
+      const int64_t output_count = output_exprs_.count();
+      if (OB_UNLIKELY((0 != value_count % (output_count - 1)) || (0 == seq_expr_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected value count", K(value_count), K(output_count), K(seq_expr_idx));
+      } else {
+        const int64_t group_num = value_count / (output_count - 1);
+        ObSEArray<ObRawExpr*, 8> new_value_exprs;
+        if (OB_FAIL(new_value_exprs.reserve(group_num * output_count))) {
+          LOG_WARN("failed to reserve array", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
+            if (OB_FAIL(new_value_exprs.push_back(value_exprs_.at(i)))) {
+              LOG_WARN("failed to push back expr", K(ret));
+            } else if (((i + 1) % seq_expr_idx == 0) &&
+                          OB_FAIL(new_value_exprs.push_back(seq_expr))) {
+              LOG_WARN("failed to push back sequence expr", K(ret));
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(value_exprs_.assign(new_value_exprs))) {
+            LOG_WARN("failed to assign new value exprs", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogExprValues::construct_array_binding_values()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(get_plan()) ||
+      OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("array binding param only in select stmt", K(ret), KPC(get_stmt()));
+  } else {
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(get_stmt());
+    if (OB_FAIL(value_exprs_.assign(select_stmt->get_query_ctx()->ab_param_exprs_))) {
+      LOG_WARN("assign ab param exprs to value exprs failed", K(ret));
+    } else if (OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(value_exprs_))) {
+      LOG_WARN("fail to append ab param exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); ++i) {
+      ObRawExpr *raw_expr = NULL;
+      if (OB_ISNULL(raw_expr = output_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (raw_expr->get_expr_type() == T_PSEUDO_STMT_ID) {
+        if (OB_FAIL(value_exprs_.push_back(raw_expr))) {
+          LOG_WARN("failed to add expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogExprValues::extract_err_log_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!get_stmt()->is_insert_stmt()) {
+    // do nothing
+  } else if (OB_FAIL(ObLogDelUpd::generate_errlog_info(
+                       static_cast<const ObDelUpdStmt&>(*get_stmt()),
+                       get_err_log_define())))  {
+    LOG_WARN("failed to generate errlog info", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_err_log_define().err_log_value_exprs_.count(); ++i) {
+    ObRawExpr *&expr = get_err_log_define().err_log_value_exprs_.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret));
+    } else if (expr->get_expr_type() == T_FUN_COLUMN_CONV) {
+      expr = expr->get_param_expr(ObExprColumnConv::VALUE_EXPR);
+    }
+  }
+  return ret;
+}
+
+int ObLogExprValues::get_plan_item_info(PlanText &plan_text,
+                                        ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    const ObIArray<ObRawExpr*> *values = &get_value_exprs();
+    BEGIN_BUF_PRINT;
+    EXPLAIN_PRINT_INSERT_VALUES(values, output_exprs_.count(), type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
+  return ret;
+}
+
+int ObLogExprValues::mark_probably_local_exprs()
+{
+  int ret = OB_SUCCESS;
+  FOREACH_CNT_X(e, value_exprs_, OB_SUCC(ret)) {
+    CK(NULL != *e);
+    OZ((*e)->add_flag(IS_PROBABLY_LOCAL));
   }
 
   return ret;
@@ -196,165 +422,64 @@ int ObLogExprValues::compute_one_row_info()
 int ObLogExprValues::allocate_dummy_output()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogicalOperator::allocate_dummy_output())) {
-    LOG_WARN("fail to allocate dummy output", K(ret));
-  } else if (OB_FAIL(append(value_exprs_, output_exprs_))) {
+  ObConstRawExpr *dummy_expr = NULL;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (is_oracle_mode() && ObRawExprUtils::build_const_number_expr(
+                                   get_plan()->get_optimizer_context().get_expr_factory(),
+                                   ObNumberType, number::ObNumber::get_positive_one(),
+                                   dummy_expr)) {
+    LOG_WARN("failed to build const expr", K(ret));
+  } else if (!is_oracle_mode() && ObRawExprUtils::build_const_int_expr(
+                                  get_plan()->get_optimizer_context().get_expr_factory(),
+                                  ObIntType,
+                                  1,
+                                  dummy_expr)) {
+    LOG_WARN("failed to build const expr", K(ret));
+  } else if (OB_ISNULL(dummy_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(dummy_expr->extract_info())) {
+    LOG_WARN("failed to extract info for dummy expr", K(ret));
+  } else if (OB_FAIL(value_exprs_.push_back(dummy_expr))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (OB_FAIL(output_exprs_.push_back(dummy_expr))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(dummy_expr))) {
     LOG_WARN("failed to append exprs", K(ret));
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObLogExprValues::allocate_expr_post(ObAllocExprContext& ctx)
+bool ObLogExprValues::is_ins_values_batch_opt() const
+{
+  bool bret = false;
+  if (get_stmt() != nullptr && get_stmt()->is_insert_stmt()) {
+    bret = get_stmt()->get_query_ctx()->ins_values_batch_opt_;
+  }
+  return bret;
+}
+
+bool ObLogExprValues::contain_array_binding_param() const
+{
+  bool bret = false;
+  if (get_stmt() != nullptr && get_stmt()->is_select_stmt()) {
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(get_stmt());
+    bret = select_stmt->contain_ab_param();
+  }
+  return bret;
+}
+
+int ObLogExprValues::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("stmt is null");
-  } else if (get_stmt()->is_insert_stmt()) {
-    ObInsertStmt* insert_stmt = static_cast<ObInsertStmt*>(get_stmt());
-    ObIArray<ObColumnRefRawExpr*>& values_desc = insert_stmt->get_values_desc();
-    for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
-      ObColumnRefRawExpr* value_col = values_desc.at(i);
-      bool expr_is_required = false;
-      if (OB_FAIL(mark_expr_produced(value_col, branch_id_, id_, ctx, expr_is_required))) {
-        LOG_WARN("makr expr produced failed", K(ret));
-      } else if (!is_plan_root() && expr_is_required) {
-        if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, static_cast<ObRawExpr*>(value_col)))) {
-          LOG_WARN("add expr no duplicate key failed", K(ret));
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
-      LOG_WARN("failed to allocate expr post", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); i++) {
-        ObRawExpr* raw_expr = NULL;
-        if (OB_ISNULL(raw_expr = output_exprs_.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (raw_expr->has_flag(CNT_COLUMN)) {
-          /*do nothing*/
-        } else if (OB_FAIL(value_exprs_.push_back(raw_expr))) {
-          LOG_WARN("failed to add expr", K(ret));
-        } else { /*do nothing*/
-        }
-      }
-    }
+  if (OB_FAIL(replace_exprs_action(to_replace_exprs, value_exprs_))) {
+    LOG_WARN("failed to replace exprs", K(ret));
   }
   return ret;
 }
 
-int ObLogExprValues::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
-{
-  const ObIArray<ObRawExpr*>* values = &get_value_exprs();
-  int ret = OB_SUCCESS;
-  int64_t tmp_pos = pos;
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(buf));
-  } else if (OB_ISNULL(values)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get value expr", K(values));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("fail to do buf_print", K(ret));
-  } else {
-    EXPLAIN_PRINT_INSERT_VALUES(values, output_exprs_.count(), type);
-  }
-  if (OB_FAIL(ret)) {
-    pos = tmp_pos;
-  }
-  return ret;
-}
-
-uint64_t ObLogExprValues::hash(uint64_t seed) const
-{
-  seed = do_hash(need_columnlized_, seed);
-  seed = ObOptimizerUtil::hash_exprs(seed, value_exprs_);
-  seed = ObLogicalOperator::hash(seed);
-
-  return seed;
-}
-
-int ObLogExprValues::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("stmt is null", K(ret));
-  } else if (get_stmt()->is_insert_stmt()) {
-    const ObInsertStmt* insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
-    const ObIArray<ObColumnRefRawExpr*>& values_desc = insert_stmt->get_values_desc();
-    for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); i++) {
-      OZ(raw_exprs.append(static_cast<ObRawExpr*>(values_desc.at(i))));
-    }
-  }
-  OZ(raw_exprs.append(value_exprs_));
-
-  return ret;
-}
-
-int ObLogExprValues::check_range_param_continuous(bool& use_range_param) const
-{
-  int ret = OB_SUCCESS;
-  int64_t column_cnt = get_output_exprs().count();
-  int64_t last_param_index = OB_INVALID_INDEX;
-  if (column_cnt > 1 && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2230) {
-    use_range_param = true;
-    for (int64_t i = 0; OB_SUCC(ret) && use_range_param && i <= value_exprs_.count() - column_cnt; i += column_cnt) {
-      last_param_index = OB_INVALID_INDEX;
-      for (int64_t j = i; OB_SUCC(ret) && use_range_param && j < i + column_cnt; ++j) {
-        if (OB_ISNULL(value_exprs_.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("value expr is null", K(ret), K(value_exprs_), K(i), K(j));
-        } else if (!value_exprs_.at(j)->is_const_expr()) {
-          use_range_param = false;
-        } else {
-          const ObConstRawExpr* param_expr = static_cast<const ObConstRawExpr*>(value_exprs_.at(j));
-          if (!param_expr->get_value().is_unknown()) {
-            use_range_param = false;
-          } else if (param_expr->get_result_type().get_param().is_ext()) {
-            use_range_param = false;
-          } else if (param_expr->get_value().get_unknown() != last_param_index + 1 &&
-                     OB_INVALID_INDEX != last_param_index) {
-            use_range_param = false;
-          } else {
-            last_param_index = param_expr->get_value().get_unknown();
-          }
-        }
-        LOG_DEBUG("check range param continuous", K(use_range_param), K(last_param_index));
-      }
-    }
-  } else {
-    use_range_param = false;
-  }
-  return ret;
-}
-
-int ObLogExprValues::get_value_param_range(int64_t row_index, int64_t& param_idx_start, int64_t& param_idx_end) const
-{
-  int ret = OB_SUCCESS;
-  int64_t column_cnt = get_output_exprs().count();
-  int64_t value_idx_start = row_index * column_cnt;
-  if (OB_UNLIKELY(value_idx_start < 0) || OB_UNLIKELY(value_idx_start >= value_exprs_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("value index is invalid", K(row_index), K(column_cnt), K(value_idx_start), K(ret));
-  } else if (!value_exprs_.at(value_idx_start)->is_const_expr()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("value expr is invalid", K(ret), KPC(value_exprs_.at(value_idx_start)));
-  } else {
-    const ObConstRawExpr* param_expr = static_cast<const ObConstRawExpr*>(value_exprs_.at(value_idx_start));
-    if (OB_FAIL(param_expr->get_value().get_unknown(param_idx_start))) {
-      LOG_WARN("get param index start value failed", K(ret), K(param_expr->get_value()));
-    } else {
-      param_idx_end = param_idx_start + column_cnt - 1;
-      LOG_DEBUG("get value param range", K(row_index), K(param_idx_start), K(param_idx_end));
-    }
-  }
-  return ret;
-}
-
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+}// namespace oceanbase

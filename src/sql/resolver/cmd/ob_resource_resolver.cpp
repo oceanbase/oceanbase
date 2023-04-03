@@ -15,63 +15,99 @@
 #include "ob_resource_resolver.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::sql;
 
-ObCreateResourcePoolResolver::ObCreateResourcePoolResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObCreateResourcePoolResolver::ObCreateResourcePoolResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObCreateResourcePoolResolver::~ObCreateResourcePoolResolver()
-{}
+{
+}
 
-ObSplitResourcePoolResolver::ObSplitResourcePoolResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObSplitResourcePoolResolver::ObSplitResourcePoolResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObSplitResourcePoolResolver::~ObSplitResourcePoolResolver()
-{}
+{
+}
 
-ObMergeResourcePoolResolver::ObMergeResourcePoolResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObMergeResourcePoolResolver::ObMergeResourcePoolResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObMergeResourcePoolResolver::~ObMergeResourcePoolResolver()
-{}
+{
+}
 
-ObAlterResourcePoolResolver::ObAlterResourcePoolResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObAlterResourcePoolResolver::ObAlterResourcePoolResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObAlterResourcePoolResolver::~ObAlterResourcePoolResolver()
-{}
+{
+}
 
-ObDropResourcePoolResolver::ObDropResourcePoolResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObDropResourcePoolResolver::ObDropResourcePoolResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObDropResourcePoolResolver::~ObDropResourcePoolResolver()
-{}
+{
+}
 
-ObCreateResourceUnitResolver::ObCreateResourceUnitResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObAlterResourceTenantResolver::ObAlterResourceTenantResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
+
+ObAlterResourceTenantResolver::~ObAlterResourceTenantResolver()
+{
+}
+
+ObCreateResourceUnitResolver::ObCreateResourceUnitResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObCreateResourceUnitResolver::~ObCreateResourceUnitResolver()
-{}
+{
+}
 
-ObAlterResourceUnitResolver::ObAlterResourceUnitResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObAlterResourceUnitResolver::ObAlterResourceUnitResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObAlterResourceUnitResolver::~ObAlterResourceUnitResolver()
-{}
+{
+}
 
-ObDropResourceUnitResolver::ObDropResourceUnitResolver(ObResolverParams& params) : ObCMDResolver(params)
-{}
+ObDropResourceUnitResolver::ObDropResourceUnitResolver(ObResolverParams &params)
+  : ObCMDResolver(params)
+{
+}
 
 ObDropResourceUnitResolver::~ObDropResourceUnitResolver()
-{}
+{
+}
 
-int ObCreateResourcePoolResolver::resolve(const ParseNode& parse_tree)
+int ObCreateResourcePoolResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObCreateResourcePoolStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObCreateResourcePoolStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || T_CREATE_RESOURCE_POOL != node->type_ || OB_UNLIKELY(3 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || T_CREATE_RESOURCE_POOL != node->type_
+      || OB_UNLIKELY(3 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid parse node", K(ret));
   }
@@ -104,8 +140,8 @@ int ObCreateResourcePoolResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid node", "child", node->children_[1]);
     } else {
-      res_pool_name.assign_ptr(
-          (char*)(node->children_[1]->str_value_), static_cast<int32_t>(node->children_[1]->str_len_));
+      res_pool_name.assign_ptr((char *)(node->children_[1]->str_value_),
+                               static_cast<int32_t>(node->children_[1]->str_len_));
       mystmt->set_resource_pool_name(res_pool_name);
     }
   }
@@ -126,7 +162,9 @@ int ObCreateResourcePoolResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObSplitResourcePoolResolver::resolve_split_pool_list(ObSplitResourcePoolStmt* stmt, const ParseNode& parse_node)
+int ObSplitResourcePoolResolver::resolve_split_pool_list(
+    ObSplitResourcePoolStmt *stmt,
+    const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == stmt)) {
@@ -137,7 +175,7 @@ int ObSplitResourcePoolResolver::resolve_split_pool_list(ObSplitResourcePoolStmt
     LOG_WARN("unexpected node type", K(ret), "node_type", parse_node.type_);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_node.num_child_; ++i) {
-      ParseNode* element = parse_node.children_[i];
+      ParseNode *element = parse_node.children_[i];
       if (OB_UNLIKELY(NULL == element)) {
         ret = common::OB_ERR_PARSER_SYNTAX;
         LOG_WARN("unexpected zone node", K(ret));
@@ -156,7 +194,8 @@ int ObSplitResourcePoolResolver::resolve_split_pool_list(ObSplitResourcePoolStmt
 }
 
 int ObSplitResourcePoolResolver::resolve_corresponding_zone_list(
-    ObSplitResourcePoolStmt* stmt, const ParseNode& parse_node)
+    ObSplitResourcePoolStmt *stmt,
+    const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == stmt)) {
@@ -167,7 +206,7 @@ int ObSplitResourcePoolResolver::resolve_corresponding_zone_list(
     LOG_WARN("unexpected node type", K(ret), "node_type", parse_node.type_);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_node.num_child_; ++i) {
-      ParseNode* element = parse_node.children_[i];
+      ParseNode *element = parse_node.children_[i];
       if (OB_UNLIKELY(NULL == element)) {
         ret = common::OB_ERR_PARSER_SYNTAX;
         LOG_WARN("unexpected zone node", K(ret));
@@ -185,13 +224,15 @@ int ObSplitResourcePoolResolver::resolve_corresponding_zone_list(
   return ret;
 }
 
-int ObSplitResourcePoolResolver::resolve(const ParseNode& parse_tree)
+int ObSplitResourcePoolResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObSplitResourcePoolStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObSplitResourcePoolStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_SPLIT_RESOURCE_POOL != node->type_) || OB_UNLIKELY(3 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_SPLIT_RESOURCE_POOL != node->type_)
+      || OB_UNLIKELY(3 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node", K(node));
   } else if (OB_UNLIKELY(NULL == (mystmt = create_stmt<ObSplitResourcePoolStmt>()))) {
@@ -210,8 +251,8 @@ int ObSplitResourcePoolResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected node", K(ret), "node_type", node->children_[0]->type_);
     } else {
-      resource_pool_name.assign_ptr(
-          (char*)(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
+      resource_pool_name.assign_ptr((char *)(node->children_[0]->str_value_),
+                                    static_cast<int32_t>(node->children_[0]->str_len_));
       mystmt->set_resource_pool_name(resource_pool_name);
     }
   }
@@ -242,13 +283,125 @@ int ObSplitResourcePoolResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObMergeResourcePoolResolver::resolve(const ParseNode& parse_tree)
+int ObAlterResourceTenantResolver::resolve_resource_tenant_name(
+    ObAlterResourceTenantStmt *stmt,
+    const ParseNode *parse_node)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObMergeResourcePoolStmt* mystmt = NULL;
+  if (OB_UNLIKELY(nullptr == stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(stmt));
+  } else if (OB_UNLIKELY(T_IDENT != parse_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node type", KR(ret), "node_type", parse_node->type_);
+  } else {
+    ObString tenant_name;
+    tenant_name.assign_ptr((char *)(parse_node->str_value_),
+                           static_cast<int32_t>(parse_node->str_len_));
+    stmt->set_tenant_name(tenant_name);
+  }
+  return ret;
+}
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_MERGE_RESOURCE_POOL != node->type_) || OB_UNLIKELY(2 != node->num_child_)) {
+int ObAlterResourceTenantResolver::resolve_new_unit_num(
+    ObAlterResourceTenantStmt *stmt,
+    const ParseNode *parse_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(stmt));
+  } else if (OB_UNLIKELY(T_INT != parse_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node type", KR(ret));
+  } else {
+    const int64_t unit_num = static_cast<int64_t>(parse_node->value_);
+    stmt->set_unit_num(unit_num);
+  }
+  return ret;
+}
+
+int ObAlterResourceTenantResolver::resolve_unit_group_id_list(
+    ObAlterResourceTenantStmt *stmt,
+    const ParseNode *parse_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(stmt));
+  } else if (OB_UNLIKELY(T_UNIT_GROUP_ID_LIST != parse_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node type", KR(ret));
+  } else if (OB_UNLIKELY(parse_node->num_child_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num unexpected", KR(ret), "children_num", parse_node->num_child_);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < parse_node->num_child_; ++i) {
+      uint64_t unit_group_id = parse_node->children_[i]->value_;
+      if (OB_FAIL(stmt->fill_unit_group_id(unit_group_id))) {
+        LOG_WARN("fail to fill delete unit group id", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterResourceTenantResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *node = &parse_tree;
+  ObAlterResourceTenantStmt *mystmt = NULL;
+
+  if (OB_UNLIKELY(nullptr == node
+                  || T_ALTER_RESOURCE_TENANT != node->type_
+                  || 3 != node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid node", K(node));
+  } else if (OB_UNLIKELY(nullptr == (mystmt = create_stmt<ObAlterResourceTenantStmt>()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to create alter resource pool stmt", KR(ret));
+  } else {
+    stmt_ = mystmt;
+  }
+
+  // 1. resolve tenant name
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(nullptr == node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node child 0 ptr is null", KR(ret));
+    } else if (OB_FAIL(resolve_resource_tenant_name(mystmt, node->children_[0]))) {
+      LOG_WARN("fail to resolve resource tenant name", KR(ret));
+    }
+  }
+  // 2. resolve new unit num
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(nullptr == node->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node child 1 ptr is null", KR(ret));
+    } else if (OB_FAIL(resolve_new_unit_num(mystmt, node->children_[1]))) {
+      LOG_WARN("fail to resolve new unit num", KR(ret));
+    }
+  }
+  // 3. resolve unit_group id
+  if (OB_SUCC(ret)) {
+    if (nullptr == node->children_[2]) {
+      // bypass, unit_group id is not specified
+    } else if (OB_FAIL(resolve_unit_group_id_list(mystmt, node->children_[2]))) {
+      LOG_WARN("fail to resolve unit group id", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMergeResourcePoolResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObMergeResourcePoolStmt *mystmt = NULL;
+
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_MERGE_RESOURCE_POOL != node->type_)
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node", K(node));
   } else if (OB_UNLIKELY(NULL == (mystmt = create_stmt<ObMergeResourcePoolStmt>()))) {
@@ -258,7 +411,7 @@ int ObMergeResourcePoolResolver::resolve(const ParseNode& parse_tree)
     stmt_ = mystmt;
   }
 
-  // to be merged resource pool
+  //to be merged resource pool
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(NULL == node->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
@@ -270,7 +423,7 @@ int ObMergeResourcePoolResolver::resolve(const ParseNode& parse_tree)
       LOG_WARN("fail to resolve old merge pool list", K(ret));
     }
   }
-  // merge new resource pool
+  //merge new resource pool
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(NULL == node->children_[1])) {
       ret = OB_ERR_UNEXPECTED;
@@ -285,7 +438,9 @@ int ObMergeResourcePoolResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObMergeResourcePoolResolver::resolve_old_merge_pool_list(ObMergeResourcePoolStmt* stmt, const ParseNode& parse_node)
+int ObMergeResourcePoolResolver::resolve_old_merge_pool_list(
+    ObMergeResourcePoolStmt *stmt,
+    const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == stmt)) {
@@ -296,7 +451,7 @@ int ObMergeResourcePoolResolver::resolve_old_merge_pool_list(ObMergeResourcePool
     LOG_WARN("unexpected node type", K(ret), "node_type", parse_node.type_);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_node.num_child_; ++i) {
-      ParseNode* element = parse_node.children_[i];
+      ParseNode *element = parse_node.children_[i];
       if (OB_UNLIKELY(NULL == element)) {
         ret = common::OB_ERR_PARSER_SYNTAX;
         LOG_WARN("unexpected zone node", K(ret));
@@ -314,7 +469,9 @@ int ObMergeResourcePoolResolver::resolve_old_merge_pool_list(ObMergeResourcePool
   return ret;
 }
 
-int ObMergeResourcePoolResolver::resolve_new_merge_pool_list(ObMergeResourcePoolStmt* stmt, const ParseNode& parse_node)
+int ObMergeResourcePoolResolver::resolve_new_merge_pool_list(
+    ObMergeResourcePoolStmt *stmt,
+    const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == stmt)) {
@@ -325,7 +482,7 @@ int ObMergeResourcePoolResolver::resolve_new_merge_pool_list(ObMergeResourcePool
     LOG_WARN("unexpected node type", K(ret), "node_type", parse_node.type_);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_node.num_child_; ++i) {
-      ParseNode* element = parse_node.children_[i];
+      ParseNode *element = parse_node.children_[i];
       if (OB_UNLIKELY(NULL == element)) {
         ret = common::OB_ERR_PARSER_SYNTAX;
         LOG_WARN("unexpected zone node", K(ret));
@@ -343,13 +500,15 @@ int ObMergeResourcePoolResolver::resolve_new_merge_pool_list(ObMergeResourcePool
   return ret;
 }
 
-int ObAlterResourcePoolResolver::resolve(const ParseNode& parse_tree)
+int ObAlterResourcePoolResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObAlterResourcePoolStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObAlterResourcePoolStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_ALTER_RESOURCE_POOL != node->type_) || OB_UNLIKELY(2 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_ALTER_RESOURCE_POOL != node->type_)
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node", K(node));
   }
@@ -370,8 +529,8 @@ int ObAlterResourcePoolResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid node", K(ret));
     } else {
-      res_pool_name.assign_ptr(
-          (char*)(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
+      res_pool_name.assign_ptr((char *)(node->children_[0]->str_value_),
+                               static_cast<int32_t>(node->children_[0]->str_len_));
       mystmt->set_resource_pool_name(res_pool_name);
     }
   }
@@ -392,13 +551,15 @@ int ObAlterResourcePoolResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObDropResourcePoolResolver::resolve(const ParseNode& parse_tree)
+int ObDropResourcePoolResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObDropResourcePoolStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObDropResourcePoolStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_DROP_RESOURCE_POOL != node->type_) || OB_UNLIKELY(2 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_DROP_RESOURCE_POOL != node->type_)
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node", K(node));
   }
@@ -432,8 +593,8 @@ int ObDropResourcePoolResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("invalid node", K(ret));
     } else {
       ObString res_pool_name;
-      res_pool_name.assign_ptr(
-          (char*)(node->children_[1]->str_value_), static_cast<int32_t>(node->children_[1]->str_len_));
+      res_pool_name.assign_ptr((char *)(node->children_[1]->str_value_),
+                               static_cast<int32_t>(node->children_[1]->str_len_));
       mystmt->set_resource_pool_name(res_pool_name);
     }
   }
@@ -441,13 +602,18 @@ int ObDropResourcePoolResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObCreateResourceUnitResolver::resolve(const ParseNode& parse_tree)
+int ObCreateResourceUnitResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObCreateResourceUnitStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObCreateResourceUnitStmt *mystmt = NULL;
+  ObUnitResource ur;
+  bool if_not_exist = false;
+  ObString res_unit_name;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_CREATE_RESOURCE_UNIT != node->type_) || OB_UNLIKELY(3 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_CREATE_RESOURCE_UNIT != node->type_)
+      || OB_UNLIKELY(3 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid node", K(node));
   }
@@ -468,10 +634,10 @@ int ObCreateResourceUnitResolver::resolve(const ParseNode& parse_tree)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid node", K(ret));
       } else {
-        mystmt->set_if_not_exist(true);
+        if_not_exist = true;
       }
     } else {
-      mystmt->set_if_not_exist(false);
+      if_not_exist = false;
     }
   }
 
@@ -480,10 +646,8 @@ int ObCreateResourceUnitResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid node");
     } else {
-      ObString res_unit_name;
-      res_unit_name.assign_ptr(
-          (char*)(node->children_[1]->str_value_), static_cast<int32_t>(node->children_[1]->str_len_));
-      mystmt->set_resource_unit_name(res_unit_name);
+      res_unit_name.assign_ptr((char *)(node->children_[1]->str_value_),
+                               static_cast<int32_t>(node->children_[1]->str_len_));
     }
   }
 
@@ -495,21 +659,32 @@ int ObCreateResourceUnitResolver::resolve(const ParseNode& parse_tree)
         LOG_ERROR("invalid node", K(ret));
       } else {
         ObResourceUnitOptionResolver<ObCreateResourceUnitStmt> opt_resolver;
-        ret = opt_resolver.resolve_options(mystmt, node->children_[2]);
+        ret = opt_resolver.resolve_options(node->children_[2], ur);
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(mystmt->init(res_unit_name, ur, if_not_exist))) {
+      LOG_WARN("init ObCreateResourceUnitStmt fail", KR(ret), KPC(mystmt), K(res_unit_name),
+          K(ur), K(if_not_exist));
     }
   }
 
   return ret;
 }
 
-int ObAlterResourceUnitResolver::resolve(const ParseNode& parse_tree)
+int ObAlterResourceUnitResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObAlterResourceUnitStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObAlterResourceUnitStmt *mystmt = NULL;
+  ObString res_unit_name;
+  ObUnitResource ur;
 
-  if (OB_ISNULL(node) || T_ALTER_RESOURCE_UNIT != node->type_ || OB_UNLIKELY(2 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || T_ALTER_RESOURCE_UNIT != node->type_
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid parse node", K(ret));
   }
@@ -529,10 +704,8 @@ int ObAlterResourceUnitResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid node", K(ret));
     } else {
-      ObString res_unit_name;
-      res_unit_name.assign_ptr(
-          (char*)(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
-      mystmt->set_resource_unit_name(res_unit_name);
+      res_unit_name.assign_ptr((char *)(node->children_[0]->str_value_),
+                               static_cast<int32_t>(node->children_[0]->str_len_));
     }
   }
 
@@ -544,21 +717,30 @@ int ObAlterResourceUnitResolver::resolve(const ParseNode& parse_tree)
         LOG_ERROR("invalid node", K(ret));
       } else {
         ObResourceUnitOptionResolver<ObAlterResourceUnitStmt> opt_resolver;
-        ret = opt_resolver.resolve_options(mystmt, node->children_[1]);
+        ret = opt_resolver.resolve_options(node->children_[1], ur);
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(mystmt->init(res_unit_name, ur))) {
+      LOG_WARN("init ObAlterResourceUnitStmt fail", KR(ret), KPC(mystmt), K(res_unit_name),
+          K(ur));
     }
   }
 
   return ret;
 }
 
-int ObDropResourceUnitResolver::resolve(const ParseNode& parse_tree)
+int ObDropResourceUnitResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObDropResourceUnitStmt* mystmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObDropResourceUnitStmt *mystmt = NULL;
 
-  if (OB_ISNULL(node) || T_DROP_RESOURCE_UNIT != node->type_ || OB_UNLIKELY(2 != node->num_child_)) {
+  if (OB_ISNULL(node)
+      || T_DROP_RESOURCE_UNIT != node->type_
+      || OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid parse node", K(ret));
   }
@@ -591,11 +773,12 @@ int ObDropResourceUnitResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("invalid node", K(ret));
     } else {
       ObString res_unit_name;
-      res_unit_name.assign_ptr(
-          (char*)(node->children_[1]->str_value_), static_cast<int32_t>(node->children_[1]->str_len_));
+      res_unit_name.assign_ptr((char *)(node->children_[1]->str_value_),
+                               static_cast<int32_t>(node->children_[1]->str_len_));
       mystmt->set_resource_unit_name(res_unit_name);
     }
   }
 
   return ret;
 }
+

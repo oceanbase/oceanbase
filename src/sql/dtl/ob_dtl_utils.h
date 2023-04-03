@@ -21,21 +21,24 @@ namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-class ObPxControlChannelProc : public ObIDltChannelLoopPred {
+
+class ObPxControlChannelProc : public ObIDltChannelLoopPred
+{
 public:
   ObPxControlChannelProc()
   {}
-  virtual bool pred_process(int64_t idx, ObDtlChannel* chan) override
+  virtual bool pred_process(int64_t idx, ObDtlChannel *chan) override
   {
     UNUSED(idx);
     return nullptr == chan->get_dfc();
   }
 };
 
-class ObDtlAsynSender {
+class ObDtlAsynSender
+{
 public:
-  ObDtlAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit)
-      : channels_(channels), ch_info_(ch_info), is_transmit_(is_transmit)
+  ObDtlAsynSender(ObIArray<ObDtlChannel*> &channels, ObDtlChTotalInfo *ch_info, bool is_transmit) :
+    channels_(channels), ch_info_(ch_info), is_transmit_(is_transmit)
   {}
 
   int asyn_send();
@@ -43,63 +46,74 @@ public:
   virtual int action(ObDtlChannel* ch) = 0;
 
 private:
-  int calc_batch_buffer_cnt(int64_t& max_batch_size, int64_t& max_loop_cnt);
-
+  int calc_batch_buffer_cnt(int64_t &max_batch_size, int64_t &max_loop_cnt);
 private:
-  ObIArray<ObDtlChannel*>& channels_;
-  ObDtlChTotalInfo* ch_info_;
+  ObIArray<ObDtlChannel*> &channels_;
+  ObDtlChTotalInfo *ch_info_;
   bool is_transmit_;
 };
 
-class ObTransmitEofAsynSender : public ObDtlAsynSender {
+class ObTransmitEofAsynSender : public ObDtlAsynSender
+{
 public:
-  ObTransmitEofAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit,
-      int64_t timeout_ts, sql::ObEvalCtx* eval_ctx)
-      : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts), eval_ctx_(eval_ctx)
+  ObTransmitEofAsynSender(ObIArray<ObDtlChannel*> &channels,
+                          ObDtlChTotalInfo *ch_info,
+                          bool is_transmit,
+                          int64_t timeout_ts,
+                          sql::ObEvalCtx *eval_ctx) :
+    ObDtlAsynSender(channels, ch_info, is_transmit),
+    timeout_ts_(timeout_ts),
+    eval_ctx_(eval_ctx)
   {}
 
-  virtual int action(ObDtlChannel* ch);
+ virtual int action(ObDtlChannel *ch);
 
 private:
   int64_t timeout_ts_;
-  sql::ObEvalCtx* eval_ctx_;
+  sql::ObEvalCtx *eval_ctx_;
 };
 
-class ObDfcDrainAsynSender : public ObDtlAsynSender {
+
+class ObDfcDrainAsynSender : public ObDtlAsynSender
+{
 public:
-  ObDfcDrainAsynSender(
-      ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit, int64_t timeout_ts)
-      : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts)
+  ObDfcDrainAsynSender(ObIArray<ObDtlChannel*> &channels,
+                      ObDtlChTotalInfo *ch_info,
+                      bool is_transmit,
+                      int64_t timeout_ts) :
+    ObDtlAsynSender(channels, ch_info, is_transmit),
+    timeout_ts_(timeout_ts)
   {}
 
-  virtual int action(ObDtlChannel* ch);
+ virtual int action(ObDtlChannel *ch);
 
 private:
   int64_t timeout_ts_;
 };
 
-class ObDfcUnblockAsynSender : public ObDtlAsynSender {
+class ObDfcUnblockAsynSender : public ObDtlAsynSender
+{
 public:
-  ObDfcUnblockAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit,
-      int64_t timeout_ts, ObDtlFlowControl& dfc)
-      : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts), dfc_(dfc), unblock_cnt_(0)
+  ObDfcUnblockAsynSender(ObIArray<ObDtlChannel*> &channels,
+                      ObDtlChTotalInfo *ch_info,
+                      bool is_transmit,
+                      ObDtlFlowControl &dfc) :
+    ObDtlAsynSender(channels, ch_info, is_transmit),
+    dfc_(dfc),
+    unblock_cnt_(0)
   {}
 
-  virtual int action(ObDtlChannel* ch);
+ virtual int action(ObDtlChannel *ch);
 
-  int64_t get_unblocked_cnt()
-  {
-    return unblock_cnt_;
-  }
+ int64_t get_unblocked_cnt() { return unblock_cnt_; }
 
 private:
-  int64_t timeout_ts_;
-  ObDtlFlowControl& dfc_;
+  ObDtlFlowControl &dfc_;
   int64_t unblock_cnt_;
 };
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase
 
 #endif /* OB_DTL_UTILS_H */

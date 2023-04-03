@@ -17,17 +17,62 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
-ObCreateDbLinkStmt::ObCreateDbLinkStmt() : ObDDLStmt(stmt::T_CREATE_DBLINK), create_dblink_arg_()
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObCreateDbLinkStmt::ObCreateDbLinkStmt()
+   : ObDDLStmt(stmt::T_CREATE_DBLINK),
+    create_dblink_arg_()
+{
+}
 
-ObCreateDbLinkStmt::ObCreateDbLinkStmt(common::ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_CREATE_DBLINK), create_dblink_arg_()
-{}
+ObCreateDbLinkStmt::ObCreateDbLinkStmt(common::ObIAllocator *name_pool)
+  : ObDDLStmt(name_pool, stmt::T_CREATE_DBLINK),
+    create_dblink_arg_()
+{
+}
 
 ObCreateDbLinkStmt::~ObCreateDbLinkStmt()
-{}
+{
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObCreateDbLinkStmt::set_password(const common::ObString &pwd)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  uint64_t tenant_id = create_dblink_arg_.dblink_info_.get_tenant_id();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    if (OB_FAIL(create_dblink_arg_.dblink_info_.set_password(pwd))) {
+      LOG_WARN("failed to deep copy plain_password_", K(ret));
+    }
+  } else if (OB_FAIL(create_dblink_arg_.dblink_info_.set_plain_password(pwd))) {
+    LOG_WARN("failed to set plain password", K(ret));
+  } else if (OB_FAIL(create_dblink_arg_.dblink_info_.do_encrypt_password())) {
+    LOG_WARN("failed to encrypt password", K(ret), K(pwd));
+  }
+  return ret;
+}
+
+int ObCreateDbLinkStmt::set_reverse_password(const common::ObString &pwd)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  uint64_t tenant_id = create_dblink_arg_.dblink_info_.get_tenant_id();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only DATA_VERSION_4_1_0_0 or above suppprt reverse dblink", K(ret));
+  } else if (OB_FAIL(create_dblink_arg_.dblink_info_.set_plain_reverse_password(pwd))) {
+    LOG_WARN("failed to set plain_reverse_password", K(ret));
+  } else if (OB_FAIL(create_dblink_arg_.dblink_info_.do_encrypt_reverse_password())) {
+    LOG_WARN("failed to encrypt plain_reverse_password", K(ret), K(pwd));
+  }
+  return ret;
+}
+
+}//namespace sql
+}//namespace oceanbase

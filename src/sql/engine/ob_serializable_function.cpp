@@ -18,9 +18,11 @@
 #include "lib/hash_func/murmur_hash.h"
 #include "sql/engine/expr/ob_expr.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
 #define BOOL_EXTERN_DECLARE(id) CONCAT(extern bool g_reg_ser_func_, id)
 #define REG_UNUSED_SER_FUNC_ARRAY(id) CONCAT(bool g_reg_ser_func_, id)
@@ -32,18 +34,18 @@ LST_DO_CODE(REG_UNUSED_SER_FUNC_ARRAY, UNUSED_SER_FUNC_ARRAY_ID_ENUM);
 bool check_all_ser_func_registered()
 {
   bool all_registered = true;
-  bool all_reg_flags[] = {LST_DO(LIST_REGISTERED_FUNC_ARRAY, (, ), SER_FUNC_ARRAY_ID_ENUM)};
-  ObSerFuncArrayID unused_ids[] = {UNUSED_SER_FUNC_ARRAY_ID_ENUM};
+  bool all_reg_flags[] = { LST_DO(LIST_REGISTERED_FUNC_ARRAY, (,), SER_FUNC_ARRAY_ID_ENUM) };
+  ObSerFuncArrayID unused_ids[] = { UNUSED_SER_FUNC_ARRAY_ID_ENUM };
   for (int64_t i = 0; i < ARRAYSIZEOF(all_reg_flags); i++) {
     if (!all_reg_flags[i]) {
       bool found = false;
-      for (int64_t j = 0; !found && j < ARRAYSIZEOF(unused_ids); j++) {
+      for (int64_t j =0; !found && j < ARRAYSIZEOF(unused_ids); j++) {
         if (i == unused_ids[j]) {
           found = true;
         }
       }
       if (!found) {
-        LOG_ERROR("serialize function array not registered", "ObSerFuncArrayID", i);
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "serialize function array not registered", "ObSerFuncArrayID", i);
         all_registered = false;
       }
     }
@@ -56,7 +58,8 @@ bool check_all_ser_func_registered()
 
 ObFuncSerialization::FuncArray ObFuncSerialization::g_all_func_arrays[OB_SFA_MAX];
 
-bool ObFuncSerialization::reg_func_array(const ObSerFuncArrayID id, void** array, const int64_t size)
+bool ObFuncSerialization::reg_func_array(
+    const ObSerFuncArrayID id, void **array, const int64_t size)
 {
   bool succ = true;
   if (id < 0 || id >= OB_SFA_MAX || OB_ISNULL(array) || size < 0) {
@@ -69,17 +72,20 @@ bool ObFuncSerialization::reg_func_array(const ObSerFuncArrayID id, void** array
 }
 
 // All serializable functions should register here.
-void* g_all_misc_serializable_functions[] = {
-    NULL
-    // append only, only mark delete allowed.
+void *g_all_misc_serializable_functions[] = {
+  NULL
+  // append only, only mark delete allowed.
 };
 
-REG_SER_FUNC_ARRAY(OB_SFA_ALL_MISC, g_all_misc_serializable_functions, ARRAYSIZEOF(g_all_misc_serializable_functions));
+REG_SER_FUNC_ARRAY(OB_SFA_ALL_MISC, g_all_misc_serializable_functions,
+                   ARRAYSIZEOF(g_all_misc_serializable_functions));
+
 
 static ObFuncSerialization::FuncIdx g_def_func_table_bucket;
-static ObFuncSerialization::FuncIdxTable g_def_func_table = {&g_def_func_table_bucket, 1, 0};
+static ObFuncSerialization::FuncIdxTable g_def_func_table = {
+  &g_def_func_table_bucket, 1, 0 };
 
-ObFuncSerialization::FuncIdxTable& ObFuncSerialization::create_hash_table()
+ObFuncSerialization::FuncIdxTable &ObFuncSerialization::create_hash_table()
 {
   if (!check_all_ser_func_registered()) {
     ob_abort();
@@ -90,10 +96,10 @@ ObFuncSerialization::FuncIdxTable& ObFuncSerialization::create_hash_table()
   }
   const int64_t bucket_size = next_pow2(func_cnt * 2);
   ObMemAttr attr(OB_SERVER_TENANT_ID, "SerFuncRegHT");
-  FuncIdxTable* ht = static_cast<FuncIdxTable*>(ob_malloc(sizeof(FuncIdxTable), attr));
-  FuncIdx* buckets = static_cast<FuncIdx*>(ob_malloc(sizeof(FuncIdx) * bucket_size, attr));
+  FuncIdxTable *ht = static_cast<FuncIdxTable *>(ob_malloc(sizeof(FuncIdxTable), attr));
+  FuncIdx *buckets = static_cast<FuncIdx *>(ob_malloc(sizeof(FuncIdx) * bucket_size, attr));
   if (NULL == ht || NULL == buckets) {
-    LOG_ERROR("allocate memory failed");
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed");
     if (NULL != ht) {
       ob_free(ht);
     }
@@ -109,9 +115,9 @@ ObFuncSerialization::FuncIdxTable& ObFuncSerialization::create_hash_table()
     ht->bucket_size_ = bucket_size;
     ht->bucket_size_mask_ = bucket_size - 1;
     for (uint64_t array_idx = 0; array_idx < ARRAYSIZEOF(g_all_func_arrays); array_idx++) {
-      const FuncArray& array = g_all_func_arrays[array_idx];
+      const FuncArray &array = g_all_func_arrays[array_idx];
       for (uint64_t func_idx = 0; func_idx < array.size_; func_idx++) {
-        void* func = array.funcs_[func_idx];
+        void *func = array.funcs_[func_idx];
         if (NULL == func) {
           continue;
         }
@@ -131,13 +137,14 @@ ObFuncSerialization::FuncIdxTable& ObFuncSerialization::create_hash_table()
             conflicts += 1;
           }
           if (i + 1 == ht->bucket_size_) {
-            LOG_ERROR("hash table is full, impossible");
+            LOG_ERROR_RET(OB_ERROR, "hash table is full, impossible");
             ob_abort();
           }
         }
-      }  // end func loop
-    }    // end func array loop
-    LOG_INFO("function serialization hash table created", K(func_cnt), K(bucket_size), K(size), K(conflicts));
+      } // end func loop
+    } // end func array loop
+    LOG_INFO("function serialization hash table created",
+             K(func_cnt), K(bucket_size), K(size), K(conflicts));
   }
   return *ht;
 }
@@ -146,7 +153,7 @@ void ObFuncSerialization::check_hash_table_valid()
 {
   for (int64_t i = 0; i < ARRAYSIZEOF(g_all_func_arrays); i++) {
     for (int64_t j = 0; j < g_all_func_arrays[i].size_; j++) {
-      void* func = g_all_func_arrays[i].funcs_[j];
+      void *func = g_all_func_arrays[i].funcs_[j];
       if (NULL != func) {
         const uint64_t idx = get_serialize_index(func);
         OB_ASSERT(idx > 0 && OB_INVALID_INDEX != idx);
@@ -157,20 +164,23 @@ void ObFuncSerialization::check_hash_table_valid()
 }
 
 // define item[X][Y] offset in source array
-#define SRC_ITEM_OFF(X, Y) ((X)*n * row_size + (Y)*row_size)
+#define SRC_ITEM_OFF(X, Y) ((X) * n * row_size + (Y) * row_size)
 #define COPY_FUNCS
-bool ObFuncSerialization::convert_NxN_array(void** dst, void** src, const int64_t n,
-    const int64_t row_size,      // = 1
-    const int64_t copy_row_idx,  // = 0
-    const int64_t copy_row_cnt)  // = 1
+bool ObFuncSerialization::convert_NxN_array(
+    void **dst, void **src, const int64_t n,
+    const int64_t row_size, // = 1
+    const int64_t copy_row_idx, // = 0
+    const int64_t copy_row_cnt) // = 1
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dst) || OB_ISNULL(src) || n < 0 || row_size < 0 || copy_row_idx < 0 || copy_row_idx >= row_size ||
-      copy_row_cnt < 1 || copy_row_cnt > row_size) {
+  if (OB_ISNULL(dst) || OB_ISNULL(src) || n < 0 || row_size < 0
+      || copy_row_idx < 0 || copy_row_idx >= row_size
+      || copy_row_cnt < 1 || copy_row_cnt > row_size) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(ret), KP(dst), KP(src), K(n), K(row_size), K(copy_row_idx), K(copy_row_cnt));
+    LOG_ERROR("invalid argument", K(ret), KP(dst), KP(src), K(n),
+              K(row_size), K(copy_row_idx), K(copy_row_cnt));
   } else {
-    const int64_t mem_copy_size = copy_row_cnt * sizeof(void*);
+    const int64_t mem_copy_size = copy_row_cnt * sizeof(void *);
     int64_t idx = 0;
     for (int64_t i = 0; i < n; i++) {
       for (int64_t j = 0; j < i; j++) {
@@ -186,5 +196,5 @@ bool ObFuncSerialization::convert_NxN_array(void** dst, void** src, const int64_
   return OB_SUCCESS == ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

@@ -25,64 +25,54 @@ namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-class ObDtlInterruptProc {
+class ObDtlInterruptProc
+{
 public:
-  virtual int process(const common::ObInterruptCode& ic) = 0;
+  virtual int process(const common::ObInterruptCode &ic) = 0;
 };
 
-class ObDtlMsgIterator {
+class ObDtlMsgIterator
+{
 public:
   virtual bool has_next() = 0;
   virtual void set_iterator_end() = 0;
-  virtual int get_next_row(common::ObNewRow& row) = 0;
-  virtual int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) = 0;
+  virtual int get_next_row(common::ObNewRow &row) = 0;
+  virtual int get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx) = 0;
 };
 
-class ObDtlPacketProcBase {
+class ObDtlPacketProcBase
+{
 public:
   virtual ~ObDtlPacketProcBase() = default;
   virtual ObDtlMsgType get_proc_type() const = 0;
-  virtual OB_INLINE void set_iter(ObDtlMsgIterator* iter)
-  {
-    UNUSED(iter);
-  }
-  virtual OB_INLINE bool has_iter()
-  {
-    return false;
-  }
-  virtual int process(const ObDtlLinkedBuffer& buffer, ObDtlMsgIterator* iter = nullptr) = 0;
+  virtual int process(const ObDtlLinkedBuffer &buffer, bool &transferred) = 0;
 };
 
 template <class Packet>
-class ObDtlPacketProc : public ObDtlPacketProcBase {
+class ObDtlPacketProc
+    : public ObDtlPacketProcBase
+{
 public:
-  ObDtlMsgType get_proc_type() const override
-  {
-    return Packet::type();
-  }
-  int decode(const ObDtlLinkedBuffer& buffer);
-  int process(const ObDtlLinkedBuffer& buffer, ObDtlMsgIterator* iter = nullptr) override;
-  virtual int init(const ObDtlLinkedBuffer& buffer)
-  {
-    UNUSED(buffer);
-    return common::OB_SUCCESS;
-  }
+  ObDtlMsgType get_proc_type() const override { return Packet::type(); }
+  int decode(const ObDtlLinkedBuffer &buffer);
+  int process(const ObDtlLinkedBuffer &buffer, bool &transferred) override;
+  virtual int init(const ObDtlLinkedBuffer &buffer) { UNUSED(buffer); return common::OB_SUCCESS; }
 
 private:
-  virtual int process(const Packet& pkt) = 0;
+  virtual int process(const Packet &pkt) = 0;
 
 private:
   Packet pkt_;
 };
 
 template <class Packet>
-int ObDtlPacketProc<Packet>::decode(const ObDtlLinkedBuffer& buffer)
+int ObDtlPacketProc<Packet>::decode(const ObDtlLinkedBuffer &buffer)
 {
   using common::OB_SUCCESS;
   int ret = OB_SUCCESS;
-  const char* buf = buffer.buf();
+  const char *buf = buffer.buf();
   int64_t size = buffer.size();
-  int64_t& pos = buffer.pos();
+  int64_t &pos = buffer.pos();
   if (OB_FAIL(common::serialization::decode(buf, size, pos, pkt_))) {
     SQL_DTL_LOG(WARN, "decode DTL packet fail", K(size), K(pos));
   } else {
@@ -91,28 +81,26 @@ int ObDtlPacketProc<Packet>::decode(const ObDtlLinkedBuffer& buffer)
 }
 
 template <class Packet>
-int ObDtlPacketProc<Packet>::process(const ObDtlLinkedBuffer& buffer, ObDtlMsgIterator* iter)
+int ObDtlPacketProc<Packet>::process(const ObDtlLinkedBuffer &buffer, bool &transferred)
 {
   int ret = common::OB_SUCCESS;
-  if (nullptr != iter) {
-    set_iter(iter);
-    ret = process(pkt_);
-  } else {
-    if (buffer.pos() == buffer.size()) {
+  transferred = false;
+  if (buffer.pos() == buffer.size()) {
       // last row
-      ret = OB_ITER_END;
-    } else if (OB_SUCC(decode(buffer))) {
-      ret = process(pkt_);
-    }
+    ret = OB_ITER_END;
+  } else if (OB_SUCC(decode(buffer))) {
+    ret = process(pkt_);
   }
-  // need to free memory after packet processing or it might cause memory leak
-  // need to reset packet regardless success or failure
+  // packet 处理完成后需要释放内存
+  // 否则会有内存泄漏
+  //
+  // 无论处理是否成功，都需要reset对应的packet
   pkt_.reset();
   return ret;
 }
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase
 
 #endif /* OB_DTL_PROCESSOR_H */

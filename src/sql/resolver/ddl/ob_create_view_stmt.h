@@ -17,36 +17,34 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/parser/parse_node.h"
 
-namespace oceanbase {
-namespace sql {
-class ObCreateViewStmt : public ObStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCreateViewStmt : public ObStmt
+{
 public:
-  explicit ObCreateViewStmt(common::ObIAllocator* name_pool);
+  explicit ObCreateViewStmt(common::ObIAllocator *name_pool);
   ObCreateViewStmt();
   virtual ~ObCreateViewStmt();
 
-  void set_name_pool(common::ObIAllocator* name_pool);
-  int set_view_name(const common::ObString& view_name);
-  int set_view_definition(const common::ObString& view_definition);
-  void set_definition_stmt(ObSelectStmt* definition_stmt);
-  const common::ObString& get_view_name() const;
-  const common::ObString& get_view_definition() const;
-  const ObSelectStmt* get_definition_stmt() const;
-  virtual void print(FILE* fp, int32_t level, int32_t index = 0);
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
-
+  void set_name_pool(common::ObIAllocator *name_pool);
+  int set_view_name(const common::ObString &view_name);
+  int set_view_definition(const common::ObString &view_definition);
+  void set_definition_stmt(ObSelectStmt *definition_stmt);
+  const common::ObString &get_view_name() const;
+  const common::ObString &get_view_definition() const;
+  const ObSelectStmt *get_definition_stmt() const;
+  virtual void print(FILE *fp, int32_t level, int32_t index = 0);
+  virtual bool cause_implicit_commit() const { return true; }
 protected:
-  common::ObIAllocator* name_pool_;
-
+  common::ObIAllocator *name_pool_;
 private:
-  ObSelectStmt* definition_stmt_;
+  ObSelectStmt *definition_stmt_;
   common::ObString view_name_;
   common::ObString view_definition_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+} //sql
+} //oceanbase
 
-#endif  // OCEANBASE_SQL_OB_CREATE_VIEW_STMT_H
+#endif //OCEANBASE_SQL_OB_CREATE_VIEW_STMT_H

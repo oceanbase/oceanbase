@@ -16,30 +16,37 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_fixed_array.h"
 #include "lib/container/ob_se_array.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 
-namespace oceanbase {
-namespace sql {
-
+namespace oceanbase
+{
+namespace sql
+{
+class ObRawExpr;
 typedef common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ObRawExprSet;
 // NOTE: do not reuse on ObRawExprSets
 // reuse will not de-construct existed ObFixedArray
 // A ObFixedArray can not be reused because its size can not be adjusted.
 typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> ObRawExprSets;
-
-class ObRawExprSetUtils {
-public:
-  static int to_expr_set(
-      common::ObIAllocator* allocator, const common::ObIArray<ObRawExpr*>& exprs, ObRawExprSet& expr_set);
-
-  static int add_expr_set(
-      common::ObIAllocator* allocator, const common::ObIArray<ObRawExpr*>& exprs, ObRawExprSets& expr_sets);
-};
-
 typedef ObRawExprSet EqualSet;
 typedef ObRawExprSets EqualSets;
 
-}  // namespace sql
-}  // namespace oceanbase
+class ObRawExprSetUtils
+{
+public:
 
-#endif  // OB_RAW_EXPR_SETS_H
+  static int to_expr_set(common::ObIAllocator *allocator,
+                         const common::ObIArray<ObRawExpr *> &exprs,
+                         ObRawExprSet &expr_set);
+
+  static int add_expr_set(common::ObIAllocator *allocator,
+                          const common::ObIArray<ObRawExpr *> &exprs,
+                          ObRawExprSets &expr_sets);
+};
+
+
+
+}
+}
+
+
+#endif // OB_RAW_EXPR_SETS_H

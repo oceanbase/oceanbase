@@ -1,0 +1,210 @@
+drop database if exists union_db;
+create database union_db;
+use union_db;
+create table t1(c1 int primary key, c2 int, c3 varchar(10));
+create table t2(c1 int primary key, c2 int, c3 varchar(10));
+insert into t1 values
+(11,11,'l'),
+(19,19,'t'),
+(18,18,'s'),
+(17,17,'r'),
+(16,16,'q'),
+(5,5,'e'),
+(4,4,'d'),
+(3,3,'c'),
+(2,2,'b'),
+(10,10,'k');
+insert into t2 values
+(1,1,'a'),
+(9,9,'i'),
+(8,8,'h'),
+(7,7,'g'),
+(6,6,'f'),
+(15,15,'p'),
+(14,14,'o'),
+(13,13,'n'),
+(12,12,'m'),
+(20,20,'u');
+### test different limit  ###
+(select c2 from t1) union all (select c2 from t2) limit 1;
+c2
+2
+(select c2 from t1) union all (select c2 from t2) limit 5;
+c2
+2
+3
+4
+5
+10
+select found_rows();
+found_rows()
+5
+(select c2 from t1) union all (select c2 from t2) limit 10;
+c2
+2
+3
+4
+5
+10
+11
+16
+17
+18
+19
+(select c2 from t1) union all (select c2 from t2) limit 15;
+c2
+2
+3
+4
+5
+10
+11
+16
+17
+18
+19
+1
+6
+7
+8
+9
+select found_rows();
+found_rows()
+15
+(select c2 from t1 limit 2) union all (select c2 from t2) limit 15;
+c2
+2
+3
+1
+6
+7
+8
+9
+12
+13
+14
+15
+20
+(select c2 from t1) union all (select c2 from t2) limit 15;
+c2
+2
+3
+4
+5
+10
+11
+16
+17
+18
+19
+1
+6
+7
+8
+9
+(select c2 from t1 limit 2) union all (select c2 from t2 limit 2) limit 15;
+c2
+2
+3
+1
+6
+### test order by limit ###
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c3 limit 5;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+select found_rows();
+found_rows()
+5
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c2 limit 15;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+6	f
+7	g
+8	h
+9	i
+10	k
+11	l
+12	m
+13	n
+14	o
+15	p
+select found_rows();
+found_rows()
+15
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c3, c2 limit 5;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c2, c3 limit 15;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+6	f
+7	g
+8	h
+9	i
+10	k
+11	l
+12	m
+13	n
+14	o
+15	p
+(select c2, c3 from t1 order by c3) union all (select c2, c3 from t2) order by c2 limit 15;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+6	f
+7	g
+8	h
+9	i
+10	k
+11	l
+12	m
+13	n
+14	o
+15	p
+select found_rows();
+found_rows()
+15
+(select c2, c3 from t1) union all (select c2, c3 from t2 order by c2) order by c3, c2 limit 5;
+c2	c3
+1	a
+2	b
+3	c
+4	d
+5	e
+### test for found_rows() ###
+(select SQL_CALC_FOUND_ROWS c2 from t1) union all (select c2 from t2) limit 5;
+select found_rows();
+found_rows()
+20
+(select SQL_CALC_FOUND_ROWS c2 from t1) union all (select c2 from t2) limit 15;
+select found_rows();
+found_rows()
+20
+(select SQL_CALC_FOUND_ROWS c2, c3 from t1) union all (select c2, c3 from t2) order by c3 limit 5;
+select found_rows();
+found_rows()
+20
+(select SQL_CALC_FOUND_ROWS c2, c3 from t1) union all (select c2, c3 from t2) order by c2 limit 15;
+select found_rows();
+found_rows()
+20
+drop database union_db;

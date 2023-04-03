@@ -23,32 +23,17 @@ using namespace oceanbase::common;
 
 static const int64_t PAGE_SIZE = 64 * 1024;
 
-class TestC {
+class TestC
+{
 public:
-  TestC()
-  {}
-  virtual ~TestC()
-  {}
-
+  TestC() {}
+  virtual ~TestC() {}
 public:
   // a successful virtual function invoking represents a good vtable
-  virtual void set_mem_a(int64_t value)
-  {
-    mem_a_ = value;
-  }
-  virtual int64_t get_mem_a()
-  {
-    return mem_a_;
-  }
-  virtual void set_mem_b(int64_t value)
-  {
-    mem_b_ = value;
-  }
-  virtual int64_t get_mem_b()
-  {
-    return mem_b_;
-  }
-
+  virtual void set_mem_a(int64_t value) { mem_a_ = value; }
+  virtual int64_t get_mem_a() { return mem_a_; }
+  virtual void set_mem_b(int64_t value) { mem_b_ = value; }
+  virtual int64_t get_mem_b() { return mem_b_; }
 private:
   int64_t mem_a_;
   int64_t mem_b_;
@@ -58,16 +43,16 @@ TEST(TestLfFIFOAllocator, single_thread)
 {
   LIB_LOG(INFO, "start single thread test");
   static const int64_t loop = 4096;
-  TestC* ptr_buffer[loop];
+  TestC *ptr_buffer[loop];
   ObLfFIFOAllocator allocator;
   ASSERT_EQ(OB_SUCCESS, allocator.init(PAGE_SIZE, ObModIds::OB_PARTITION_STORAGE));
   for (int64_t i = 0; i < loop; ++i) {
     ptr_buffer[i] = NULL;
   }
   for (int64_t i = 0; i < loop; ++i) {
-    void* ptr = allocator.alloc(sizeof(TestC));
+    void *ptr = allocator.alloc(sizeof(TestC));
     ASSERT_TRUE(NULL != ptr);
-    TestC* test_c = new (ptr) TestC();
+    TestC *test_c = new (ptr) TestC();
     test_c->set_mem_a(i);
     test_c->set_mem_b(i);
     ptr_buffer[i] = test_c;
@@ -84,7 +69,7 @@ TEST(TestLfFIFOAllocator, single_thread2)
   LIB_LOG(INFO, "start single thread test2");
   static const int64_t MALLOC_PER_LOOP = 1024;
   static const int64_t LOOP = 32 * 512;
-  void* ptr_buffer[MALLOC_PER_LOOP];
+  void *ptr_buffer[MALLOC_PER_LOOP];
   ObLfFIFOAllocator allocator;
   ASSERT_EQ(OB_SUCCESS, allocator.init(PAGE_SIZE, ObModIds::OB_PARTITION_STORAGE));
   for (int64_t i = 0; i < MALLOC_PER_LOOP; ++i) {
@@ -92,7 +77,7 @@ TEST(TestLfFIFOAllocator, single_thread2)
   }
   for (int64_t loop = 0; loop < LOOP; ++loop) {
     for (int64_t i = 0; i < MALLOC_PER_LOOP; ++i) {
-      void* ptr = allocator.alloc(sizeof(TestC));
+      void *ptr = allocator.alloc(sizeof(TestC));
       ASSERT_TRUE(NULL != ptr);
       ptr_buffer[i] = ptr;
     }
@@ -105,22 +90,21 @@ TEST(TestLfFIFOAllocator, single_thread2)
 
 ObLfFIFOAllocator allocator1;
 pthread_barrier_t barrier1;
-// typedef common::ObConcurrentHashMap<int64_t, int64_t> PointerContainer;
+//typedef common::ObConcurrentHashMap<int64_t, int64_t> PointerContainer;
 typedef common::hash::ObHashMap<int64_t, int64_t> PointerContainer;
 PointerContainer pc;
 
-void* th_direct_alloc_func(void* arg)
+void *th_direct_alloc_func(void *arg)
 {
   UNUSED(arg);
   static const int64_t MALLOC_TIMES_PER_THREAD = 1024;
-  void* ptr_buffer[MALLOC_TIMES_PER_THREAD];
+  void *ptr_buffer[MALLOC_TIMES_PER_THREAD];
   for (int64_t i = 0; i < MALLOC_TIMES_PER_THREAD; ++i) {
-    ptr_buffer[i] = NULL;
-    ;
+    ptr_buffer[i] = NULL;;
   }
   pthread_barrier_wait(&barrier1);
   for (int64_t times = 0; times < MALLOC_TIMES_PER_THREAD; ++times) {
-    void* ptr = allocator1.alloc(65536);
+    void *ptr = allocator1.alloc(65536);
     EXPECT_TRUE(NULL != ptr);
     ptr_buffer[times] = ptr;
   }
@@ -149,19 +133,19 @@ TEST(TestLfFIFOAllocator, multipe_threads_direct_alloc)
   allocator1.destroy();
 }
 
-void* th_normal_alloc_func(void* arg)
+void *th_normal_alloc_func(void *arg)
 {
-  int64_t size = *(int64_t*)arg;
+  int64_t size = *(int64_t *)arg;
   static const int64_t MALLOC_PER_LOOP = 1024;
   static const int64_t LOOP = 8192;
-  void* ptr_buffer[MALLOC_PER_LOOP];
+  void *ptr_buffer[MALLOC_PER_LOOP];
   for (int64_t i = 0; i < MALLOC_PER_LOOP; ++i) {
     ptr_buffer[i] = NULL;
   }
   pthread_barrier_wait(&barrier1);
   for (int64_t i = 0; i < LOOP; ++i) {
     for (int64_t times = 0; times < MALLOC_PER_LOOP; ++times) {
-      void* ptr = allocator1.alloc(sizeof(size));
+      void *ptr = allocator1.alloc(sizeof(size));
       EXPECT_TRUE(NULL != ptr);
       ptr_buffer[times] = ptr;
     }
@@ -173,7 +157,7 @@ void* th_normal_alloc_func(void* arg)
   return NULL;
 }
 
-int book_alloc(const int64_t size, void*& ptr)
+int book_alloc(const int64_t size, void *&ptr)
 {
   ptr = allocator1.alloc(size);
   int64_t ptr_key = reinterpret_cast<int64_t>(ptr);
@@ -204,7 +188,7 @@ int book_alloc(const int64_t size, void*& ptr)
   return ret;
 }
 
-int book_free(void* ptr)
+int book_free(void *ptr)
 {
   int64_t ptr_key = reinterpret_cast<int64_t>(ptr);
   int64_t ptr_value = 0;
@@ -230,13 +214,13 @@ int book_free(void* ptr)
   return ret;
 }
 
-void* th_normal_alloc_free_func(void* arg)
+void *th_normal_alloc_free_func(void *arg)
 {
-  int64_t size = *(int64_t*)arg;
+  int64_t size = *(int64_t *)arg;
   UNUSED(size);
   static const int64_t MALLOC_PER_LOOP = 16;
   static const int64_t LOOP = 8192;
-  void* ptr_buffer[MALLOC_PER_LOOP];
+  void *ptr_buffer[MALLOC_PER_LOOP];
   int64_t alloc_time = 0;
   int64_t free_time = 0;
   int64_t start = 0;
@@ -249,7 +233,7 @@ void* th_normal_alloc_free_func(void* arg)
   for (int64_t i = 0; i < LOOP; ++i) {
     for (int64_t times = 0; times < MALLOC_PER_LOOP; ++times) {
       start = ObTimeUtility::current_time();
-      // ret = book_alloc(32, ptr_buffer[times]);
+      //ret = book_alloc(32, ptr_buffer[times]);
       ptr_buffer[times] = allocator1.alloc(32);
       end = ObTimeUtility::current_time();
       alloc_time += (end - start);
@@ -258,7 +242,7 @@ void* th_normal_alloc_free_func(void* arg)
     }
     for (int64_t times = 0; times < MALLOC_PER_LOOP; ++times) {
       start = ObTimeUtility::current_time();
-      // ret = book_free(ptr_buffer[times]);
+      //ret = book_free(ptr_buffer[times]);
       allocator1.free(ptr_buffer[times]);
       end = ObTimeUtility::current_time();
       free_time += (end - start);
@@ -266,7 +250,9 @@ void* th_normal_alloc_free_func(void* arg)
       ptr_buffer[times] = NULL;
     }
   }
-  printf("average alloc[%ld], free[%ld]\n", alloc_time / LOOP / MALLOC_PER_LOOP, free_time / LOOP / MALLOC_PER_LOOP);
+  printf("average alloc[%ld], free[%ld]\n",
+         alloc_time/LOOP/MALLOC_PER_LOOP,
+         free_time/LOOP/MALLOC_PER_LOOP);
   return NULL;
 }
 
@@ -374,7 +360,9 @@ TEST(TestLfFIFOAllocator, multiple_threads_normal_alloc_free_32B)
   ASSERT_EQ(OB_SUCCESS, allocator1.init(PAGE_SIZE, ObModIds::OB_PARTITION_STORAGE));
   ASSERT_EQ(0, pthread_barrier_init(&barrier1, NULL, THREAD_NUM));
 
-  cotesting::FlexPool([&] { th_normal_alloc_free_func(&ALLOC_SIZE); }, THREAD_NUM).start();
+  cotesting::FlexPool([&]{
+    th_normal_alloc_free_func(&ALLOC_SIZE);
+  }, THREAD_NUM).start();
   ASSERT_EQ(0, pthread_barrier_destroy(&barrier1));
   allocator1.destroy();
 }
@@ -382,9 +370,9 @@ TEST(TestLfFIFOAllocator, multiple_threads_normal_alloc_free_32B)
 int main(int argc, char** argv)
 {
   system("rm -f test_lf_fifo_allocator.log*");
-  ObLogger& logger = ObLogger::get_logger();
+  ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_lf_fifo_allocator.log", true);
   logger.set_log_level("info");
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

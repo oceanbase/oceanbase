@@ -16,25 +16,17 @@
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "common/object/ob_obj_compare.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
+namespace sql
+{
 
-ObExprGreaterEqual::ObExprGreaterEqual(ObIAllocator& alloc)
+ObExprGreaterEqual::ObExprGreaterEqual(ObIAllocator &alloc)
     : ObRelationalExprOperator(alloc, T_OP_GE, N_GREATER_EQUAL, 2)
-{}
-
-int ObExprGreaterEqual::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
 {
-  return ObRelationalExprOperator::calc_result2(result, obj1, obj2, expr_ctx, false, CO_GE);
 }
 
-int ObExprGreaterEqual::calc_resultN(
-    ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  return ObRelationalExprOperator::calc_resultN(result, objs_array, param_num, expr_ctx, false, CO_GE);
 }
-
-}  // namespace sql
-}  // namespace oceanbase
+}

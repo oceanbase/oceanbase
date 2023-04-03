@@ -14,24 +14,18 @@
 #define OCEANBASE_SRC_SQL_RESOLVER_EXPR_OB_EXPR_RELATION_ANALYZER_H_
 
 #include "lib/container/ob_se_array.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObRawExpr;
-class ObDMLStmt;
-class ObQueryRefRawExpr;
-class ObExprRelationAnalyzer {
+class ObExprRelationAnalyzer
+{
 public:
   explicit ObExprRelationAnalyzer();
-  int pull_expr_relation_id_and_levels(ObRawExpr* expr, int32_t cur_stmt_level);
-
+  int pull_expr_relation_id(ObRawExpr *expr);
 private:
-  int init_expr_info(ObRawExpr& expr);
-  int visit_expr(ObRawExpr& expr, int32_t stmt_level);
-  int visit_stmt(ObDMLStmt* stmt);
-
-private:
-  // auto_free = false, only used in function stack
-  common::ObSEArray<ObQueryRefRawExpr*, common::OB_MAX_SUBQUERY_LAYER_NUM> query_exprs_;
+  int visit_expr(ObRawExpr &expr);
 };
 }  // namespace sql
 }  // namespace oceanbase

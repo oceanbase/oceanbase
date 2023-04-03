@@ -29,7 +29,8 @@ OB_SERIALIZE_MEMBER(ObDtlUnblockingMsg);
 
 OB_SERIALIZE_MEMBER(ObDtlDrainMsg);
 
-int ObDtlUnblockingMsgP::process(const ObDtlUnblockingMsg& pkt)
+
+int ObDtlUnblockingMsgP::process(const ObDtlUnblockingMsg &pkt)
 {
   int ret = OB_SUCCESS;
   UNUSED(pkt);
@@ -38,7 +39,7 @@ int ObDtlUnblockingMsgP::process(const ObDtlUnblockingMsg& pkt)
   return ret;
 }
 
-int ObDtlDrainMsgP::process(const ObDtlDrainMsg& pkt)
+int ObDtlDrainMsgP::process(const ObDtlDrainMsg &pkt)
 {
   int ret = OB_SUCCESS;
   UNUSED(pkt);
@@ -78,7 +79,7 @@ bool ObDtlFlowControl::is_all_channel_act()
   bool all_act = true;
   for (int64_t i = 0; i < chans_.count(); ++i) {
     if (OB_NOT_NULL(chans_.at(i))) {
-      if ((static_cast<ObDtlBasicChannel*>(chans_.at(i)))->get_recv_buffer_cnt() == 0) {
+      if ((static_cast<ObDtlBasicChannel *>(chans_.at(i)))->get_recv_buffer_cnt() == 0) {
         all_act = false;
         break;
       }
@@ -143,6 +144,7 @@ int ObDtlFlowControl::unregister_all_channel()
 {
   int ret = OB_SUCCESS;
   ObDtlChannel* ch = nullptr;
+  // 这里不能同时pop出来，否则clean recv list时，根据ch去clean
   for (int i = 0; i < chans_.count(); ++i) {
     if (OB_ISNULL(ch = chans_.at(i))) {
       LOG_WARN("failed to unregister channel", K(ret));
@@ -156,25 +158,13 @@ int ObDtlFlowControl::unregister_all_channel()
     }
   }
   if (is_receive() && (0 != get_blocked_cnt() || 0 != get_total_buffer_cnt() || 0 != get_used())) {
-    LOG_ERROR("unexpected dfc status",
-        K(chans_.count()),
-        K(ret),
-        K(get_blocked_cnt()),
-        K(get_total_buffer_cnt()),
-        K(get_used()),
-        K(get_accumulated_blocked_cnt()));
+    LOG_WARN("unexpected dfc status", K(chans_.count()), K(ret), K(get_blocked_cnt()), K(get_total_buffer_cnt()), K(get_used()), K(get_accumulated_blocked_cnt()));
   }
-  LOG_TRACE("unregister all channel",
-      K(chans_.count()),
-      K(ret),
-      K(get_blocked_cnt()),
-      K(get_total_buffer_cnt()),
-      K(get_used()),
-      K(get_accumulated_blocked_cnt()));
+  LOG_TRACE("unregister all channel", K(chans_.count()), K(ret), K(get_blocked_cnt()), K(get_total_buffer_cnt()), K(get_used()), K(get_accumulated_blocked_cnt()));
   return ret;
 }
 
-int ObDtlFlowControl::get_channel(int64_t idx, ObDtlChannel*& ch)
+int ObDtlFlowControl::get_channel(int64_t idx, ObDtlChannel *&ch)
 {
   int ret = OB_SUCCESS;
   ch = nullptr;
@@ -187,19 +177,19 @@ int ObDtlFlowControl::get_channel(int64_t idx, ObDtlChannel*& ch)
   return ret;
 }
 
-int ObDtlFlowControl::find(ObDtlChannel* ch, int64_t& out_idx)
+int ObDtlFlowControl::find(ObDtlChannel* ch, int64_t &out_idx)
 {
   int ret = OB_SUCCESS;
   out_idx = OB_INVALID_ID;
-  ARRAY_FOREACH_X(chans_, idx, cnt, OB_INVALID_ID == out_idx)
-  {
+  ARRAY_FOREACH_X(chans_, idx, cnt, OB_INVALID_ID == out_idx) {
     if (ch == chans_.at(idx)) {
       out_idx = idx;
     }
   }
   if (OB_INVALID_ID == out_idx) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("channel not found", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(out_idx), K(chans_.count()));
+    LOG_WARN("channel not found", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(out_idx),
+      K(chans_.count()));
   }
   return ret;
 }
@@ -212,7 +202,7 @@ bool ObDtlFlowControl::is_block(ObDtlChannel* ch)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("channel is null", K(ret));
   } else {
-    int64_t idx = OB_INVALID_ID;
+    int64_t idx =  OB_INVALID_ID;
     if (OB_FAIL(find(ch, idx))) {
       LOG_WARN("channel not exists in channel loop", K(ret));
     } else {
@@ -252,20 +242,22 @@ int ObDtlFlowControl::unblock_channel(ObDtlChannel* ch)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("channel is null", K(ret), K(idx), KP(ch->get_id()), K(ch->get_peer()));
   } else {
-    // must wait for channel response before handling block msg. Otherwise it might cause unblocking
-    // msg to come first, been handled and then got the response
+    // 必须等待该channel的response先回包后才能处理block消息，否则可能导致unblocking msg先到达，处理后，response再到达
+    // 这样channel的状态是unblock，所以没有执行unblock状态，后面response到达时，发现response为is_block设置了block状态，之后永远等待不到unblocking msg
+    // 这里需要将response的is_block还原，即unblocking msg，则response的block状态应该清理掉
     if (OB_FAIL(ch->clear_response_block())) {
       LOG_WARN("failed to clear response block info", K(ret));
     } else if (is_block(idx)) {
       unblock(idx);
-      ch->set_blocked();
+      ch->unset_blocked();
     }
     LOG_TRACE("channel unblock", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(idx), K(is_block(idx)));
   }
   return ret;
 }
 
-int ObDtlFlowControl::notify_channel_unblocking(ObDtlChannel* ch, int64_t& block_cnt, bool asyn_send)
+int ObDtlFlowControl::notify_channel_unblocking(
+  ObDtlChannel *ch, int64_t &block_cnt, bool asyn_send)
 {
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_ID;
@@ -273,8 +265,8 @@ int ObDtlFlowControl::notify_channel_unblocking(ObDtlChannel* ch, int64_t& block
   if (OB_FAIL(find(ch, idx))) {
     LOG_WARN("failed to find channel", K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx), K(get_blocked_cnt()));
   } else if (!is_block(idx)) {
-    LOG_TRACE(
-        "channel is unblock", K(ret), KP(ch->get_id()), K(ch->get_peer()), K(get_nth_block(idx)), K(get_blocked_cnt()));
+    LOG_TRACE("channel is unblock", K(ret), KP(ch->get_id()), K(ch->get_peer()),
+        K(get_nth_block(idx)), K(get_blocked_cnt()));
   } else {
     if (OB_FAIL(ch->wait_response())) {
       if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret) {
@@ -283,14 +275,8 @@ int ObDtlFlowControl::notify_channel_unblocking(ObDtlChannel* ch, int64_t& block
     }
     ++block_cnt;
     unblock(idx);
-    LOG_TRACE("trace unblocking channel",
-        K(ret),
-        KP(ch->get_id()),
-        K(ch->get_peer()),
-        K(idx),
-        K(is_block(idx)),
-        K(get_nth_block(idx)),
-        K(get_blocked_cnt()));
+    LOG_TRACE("trace unblocking channel", K(ret), KP(ch->get_id()), K(ch->get_peer()),
+      K(idx), K(is_block(idx)), K(get_nth_block(idx)), K(get_blocked_cnt()));
     // control msg
     if (OB_FAIL(ret)) {
     } else if (ch->is_drain()) {
@@ -302,22 +288,16 @@ int ObDtlFlowControl::notify_channel_unblocking(ObDtlChannel* ch, int64_t& block
       LOG_TRACE("failed to wait response", K(ret), K(ch->get_peer()));
     }
   }
-  LOG_TRACE("channel status",
-      K(this),
-      K(ret),
-      KP(ch->get_id()),
-      K(ch->get_peer()),
-      K(idx),
-      K(is_block(idx)),
-      K(get_nth_block(idx)),
-      K(get_blocked_cnt()));
+  LOG_TRACE("channel status", K(this), K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx),
+    K(is_block(idx)), K(get_nth_block(idx)), K(get_blocked_cnt()));
+  // 之前通过OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER状态来决定是否结束，但可能收到msg后，下游可能还有线程没有起来，感觉有风险
   if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret) {
     ret = OB_SUCCESS;
   }
   return ret;
 }
 
-int ObDtlFlowControl::sync_send_drain(int64_t& unblock_cnt)
+int ObDtlFlowControl::sync_send_drain(int64_t &unblock_cnt)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -325,47 +305,31 @@ int ObDtlFlowControl::sync_send_drain(int64_t& unblock_cnt)
   LOG_TRACE("unblocking dfc", K(ret), K(is_block()));
   // broadcast send unblocking msg
   // if return OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER, channel already finish
-  ARRAY_FOREACH_X(chans_, idx, cnt, OB_SUCC(ret))
-  {
-    ObDtlChannel* ch = chans_.at(idx);
-    ObDtlUnblockingMsg unblocking_msg;
+  ARRAY_FOREACH_X(chans_, idx, cnt, OB_SUCC(ret)) {
+    ObDtlChannel *ch = chans_.at(idx);
     if (!is_block(idx)) {
       // it's no block
-      LOG_TRACE(
-          "channel unblock", K(ret), KP(ch->get_id()), K(ch->get_peer()), K(get_nth_block(idx)), K(get_blocked_cnt()));
+      LOG_TRACE("channel unblock", K(ret), KP(ch->get_id()), K(ch->get_peer()),
+        K(get_nth_block(idx)), K(get_blocked_cnt()));
     } else {
-      // need to set unblock first, then send unblocking msg
-      // otherwise it might cause problem
-      // e.g:
-      //  ch1 op                                                                ch2 op
-      //  ch1 send msg1 to ch2  blocked
+      // 这里必须先设置unblock，再发送unblocking消息
+      // 否则可能被覆盖：
+      // 如:
+      //  ch1 操作                                                                ch2操作
+      //  ch1 发送msg1 to ch2  blocked住
       //                                                                        ch2 unblocking msg to ch1
-      //  ch1 unblocked, send msg2 ,blocked
-      //                                                                        ch2 set unblock status
-      //  now ch1 is dead as ch2 won't unblock it
-      LOG_TRACE("unblocking channel",
-          K(ret),
-          KP(ch->get_id()),
-          K(ch->get_peer()),
-          K(idx),
-          K(cnt),
-          K(is_block(idx)),
-          K(get_nth_block(idx)),
-          K(get_blocked_cnt()));
+      //  ch1 unblock后再发送msg2 ,blocked
+      //                                                                        ch2 设置unblock状态
+      //  这样ch1的这个msg2的block就无法再收到ch2的unblocking msg，因为flag为false了
+      LOG_TRACE("unblocking channel", K(ret), KP(ch->get_id()), K(ch->get_peer()),
+        K(idx), K(cnt), K(is_block(idx)), K(get_nth_block(idx)), K(get_blocked_cnt()));
       if (OB_FAIL(notify_channel_unblocking(ch, unblock_cnt, false))) {
         LOG_WARN("failed to unblocking channel", K(ret), KP(ch->get_id()), K(ch->get_peer()));
       }
     }
-    LOG_TRACE("channel status",
-        K(this),
-        K(ret),
-        KP(ch->get_id()),
-        K(ch->get_peer()),
-        K(idx),
-        K(cnt),
-        K(is_block(idx)),
-        K(get_nth_block(idx)),
-        K(get_blocked_cnt()));
+    LOG_TRACE("channel status", K(this), K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx),
+      K(cnt), K(is_block(idx)), K(get_nth_block(idx)), K(get_blocked_cnt()));
+    // 之前通过OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER状态来决定是否结束，但可能收到msg后，下游可能还有线程没有起来，感觉有风险
     if (OB_FAIL(ret)) {
       tmp_ret = ret;
       ret = OB_SUCCESS;
@@ -377,7 +341,7 @@ int ObDtlFlowControl::sync_send_drain(int64_t& unblock_cnt)
   return ret;
 }
 
-int ObDtlFlowControl::notify_all_blocked_channels_unblocking(int64_t& unblock_cnt)
+int ObDtlFlowControl::notify_all_blocked_channels_unblocking(int64_t &unblock_cnt)
 {
   int ret = OB_SUCCESS;
   unblock_cnt = 0;
@@ -387,7 +351,7 @@ int ObDtlFlowControl::notify_all_blocked_channels_unblocking(int64_t& unblock_cn
       LOG_WARN("failed to sync send drain", K(ret));
     }
   } else {
-    ObDfcUnblockAsynSender asyn_sender(chans_, ch_info_, is_transmit(), timeout_ts_, *this);
+    ObDfcUnblockAsynSender asyn_sender(chans_, ch_info_, is_transmit(), *this);
     if (OB_FAIL(asyn_sender.asyn_send())) {
       LOG_WARN("failed to asyn send unblocking msg", K(ret));
     }
@@ -409,11 +373,15 @@ int ObDtlFlowControl::drain_all_channels()
       if (OB_FAIL(drain_asyn_sender.asyn_send())) {
         LOG_WARN("failed to asyn send drain", K(ret), K(lbt()));
       }
+      ARRAY_FOREACH_X(chans_, idx, cnt, OB_SUCC(ret)) {
+        ObDtlChannel *ch = chans_.at(idx);
+        LOG_TRACE("drain channel", K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx));
+        ch->set_drain();
+      }
     }
   } else {
-    ARRAY_FOREACH_X(chans_, idx, cnt, OB_SUCC(ret))
-    {
-      ObDtlChannel* ch = chans_.at(idx);
+    ARRAY_FOREACH_X(chans_, idx, cnt, OB_SUCC(ret)) {
+      ObDtlChannel *ch = chans_.at(idx);
       ObDtlDrainMsg drain_msg;
       LOG_TRACE("drain channel", K(ret), KP(ch->get_id()), K(ch->get_peer()), K(idx));
       if (OB_FAIL(ch->send(drain_msg, timeout_ts_))) {
@@ -421,6 +389,7 @@ int ObDtlFlowControl::drain_all_channels()
       } else if (OB_FAIL(ch->flush(true))) {
         LOG_WARN("failed to drain msg", K(ret));
       }
+      // 这里必须先发送，然后set因为channel如果已经drain不会再发数据了
       ch->set_drain();
       if (OB_FAIL(ret)) {
         tmp_ret = ret;
@@ -445,7 +414,7 @@ int ObDtlFlowControl::final_check()
   return ret;
 }
 
-int ObDtlFlowControl::set_drain(ObDtlBasicChannel* channel)
+int ObDtlFlowControl::set_drain(ObDtlBasicChannel *channel)
 {
   int ret = OB_SUCCESS;
   channel->set_drain();
@@ -453,7 +422,8 @@ int ObDtlFlowControl::set_drain(ObDtlBasicChannel* channel)
   return ret;
 }
 
-bool ObDtlFlowControl::is_drain(ObDtlBasicChannel* channel)
+bool ObDtlFlowControl::is_drain(ObDtlBasicChannel *channel)
 {
   return channel->is_drain();
 }
+

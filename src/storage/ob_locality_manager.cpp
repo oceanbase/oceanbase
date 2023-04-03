@@ -11,22 +11,24 @@
  */
 
 #include "storage/ob_locality_manager.h"
-#include "storage/ob_partition_service.h"
 #include "share/ob_locality_priority.h"
 #include "observer/ob_server_struct.h"
-#include "clog/ob_partition_log_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_remote_sql_proxy.h"
+#include "rpc/obmysql/obsm_struct.h"                // easy_connection_str
+#include "share/schema/ob_multi_version_schema_service.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
-namespace storage {
-ObLocalityManager::ObLocalityManager() : rwlock_(), ssl_invited_nodes_buf_(NULL)
+namespace storage
+{
+ObLocalityManager::ObLocalityManager()
+  : rwlock_(ObLatchIds::SERVER_LOCALITY_MGR_LOCK), ssl_invited_nodes_buf_(NULL)
 {
   reset();
   ssl_invited_nodes_buf_ = new (std::nothrow) char[common::OB_MAX_CONFIG_VALUE_LEN];
-  ssl_invited_nodes_buf_[0] = '\0';
+  ssl_invited_nodes_buf_[0]  = '\0';
 }
 
 void ObLocalityManager::reset()
@@ -36,8 +38,6 @@ void ObLocalityManager::reset()
   sql_proxy_ = NULL;
   locality_info_.reset();
   server_locality_cache_.reset();
-  remote_sql_proxy_ = NULL;
-  remote_server_locality_cache_.reset();
   is_loaded_ = false;
 }
 
@@ -49,32 +49,74 @@ void ObLocalityManager::destroy()
   }
   if (is_inited_) {
     is_inited_ = false;
+    TG_DESTROY(lib::TGDefIDs::LocalityReload);
     locality_info_.destroy();
     server_locality_cache_.destroy();
-    remote_server_locality_cache_.destroy();
     STORAGE_LOG(INFO, "ObLocalityManager destroy finished");
   }
 }
 
-int ObLocalityManager::init(const ObAddr& self, ObMySQLProxy* sql_proxy, ObRemoteSqlProxy* remote_sql_proxy)
+int ObLocalityManager::init(const ObAddr &self, ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObLocalityManager init twice", K(ret));
-  } else if (!self.is_valid() || OB_ISNULL(sql_proxy) || OB_ISNULL(remote_sql_proxy)) {
+  } else if (!self.is_valid() || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(self), KP(sql_proxy));
   } else if (OB_FAIL(server_locality_cache_.init())) {
     STORAGE_LOG(WARN, "server_locality_cache_ init failed", K(ret), K(self));
-  } else if (OB_FAIL(remote_server_locality_cache_.init())) {
-    STORAGE_LOG(WARN, "remote server locality cache init failed", KR(ret));
+  } else if (OB_FAIL(refresh_locality_task_queue_.init(1,
+                                                       "LocltyRefTask",
+                                                       REFRESH_LOCALITY_TASK_NUM,
+                                                       REFRESH_LOCALITY_TASK_NUM))) {
+    STORAGE_LOG(WARN, "fail to initialize refresh locality task queue", K(ret));
+  } else if (OB_FAIL(reload_locality_task_.init(this))) {
+    STORAGE_LOG(WARN, "init reload locality task failed", K(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::LocalityReload))) {
+    STORAGE_LOG(WARN, "fail to initialize locality timer");
   } else {
     self_ = self;
     sql_proxy_ = sql_proxy;
-    remote_sql_proxy_ = remote_sql_proxy;
     is_inited_ = true;
   }
+  return ret;
+}
+
+int ObLocalityManager::start()
+{
+  int ret = OB_SUCCESS;
+  bool repeat = true;
+  STORAGE_LOG(INFO, "start locality manager");
+  if (OB_UNLIKELY(!is_inited_)) {
+    STORAGE_LOG(ERROR, "locality manager not inited, cannot start.");
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::LocalityReload,
+                                 reload_locality_task_,
+                                 RELOAD_LOCALITY_INTERVAL,
+                                 repeat))) {
+    STORAGE_LOG(ERROR, "fail to schedule reload locality task");
+  }
+  return ret;
+}
+
+int ObLocalityManager::stop()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(ERROR, "locality manager not inited, cannot stop.", K(ret));
+  } else {
+    TG_STOP(lib::TGDefIDs::LocalityReload);
+  }
+  return ret;
+}
+
+int ObLocalityManager::wait()
+{
+  int ret = OB_SUCCESS;
+  TG_WAIT(lib::TGDefIDs::LocalityReload);
   return ret;
 }
 
@@ -88,7 +130,9 @@ int ObLocalityManager::is_server_legitimate(const ObAddr& addr, bool& is_valid)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(server_locality_array, has_readonly_zone))) {
+  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(
+                     server_locality_array,
+                     has_readonly_zone))) {
     STORAGE_LOG(WARN, "fail to get server locality array", K(ret));
   } else if (server_locality_array.count() <= 0) {
     STORAGE_LOG(INFO, "check server legitimate, wait load server list");
@@ -106,7 +150,7 @@ int ObLocalityManager::is_server_legitimate(const ObAddr& addr, bool& is_valid)
   return ret;
 }
 
-int ObLocalityManager::check_ssl_invited_nodes(easy_connection_t& c)
+int ObLocalityManager::check_ssl_invited_nodes(easy_connection_t &c)
 {
   int ret = OB_SUCCESS;
   bool use_ssl = false;
@@ -118,41 +162,37 @@ int ObLocalityManager::check_ssl_invited_nodes(easy_connection_t& c)
     ObString ssl_invited_nodes(ssl_invited_nodes_buf_);
     if (1 == c.handler->is_ssl && 0 == c.handler->is_ssl_opt) {
       if (ssl_invited_nodes.empty() || 0 == ssl_invited_nodes.case_compare("NONE")) {
-        // do nothing
+        //do nothing
       } else if (0 == ssl_invited_nodes.case_compare("ALL")) {
         use_ssl = true;
       } else {
         char ip_buffer[MAX_IP_ADDR_LENGTH] = {};
         easy_addr_t tmp_addr = c.addr;
-        tmp_addr.port = 0;  // mark it invalied, not care it
-        char* clinet_ip = easy_inet_addr_to_str(&tmp_addr, ip_buffer, 32);
-        if (NULL != strstr(ssl_invited_nodes.ptr(), clinet_ip) && self_.ip_to_string(ip_buffer, MAX_IP_ADDR_LENGTH) &&
-            NULL != strstr(ssl_invited_nodes.ptr(), ip_buffer))
-          use_ssl = true;
+        tmp_addr.port = 0;//mark it invalied, not care it
+        char *clinet_ip = easy_inet_addr_to_str(&tmp_addr, ip_buffer, 32);
+        if (NULL != strstr(ssl_invited_nodes.ptr(), clinet_ip)
+            && self_.ip_to_string(ip_buffer, MAX_IP_ADDR_LENGTH)
+            && NULL != strstr(ssl_invited_nodes.ptr(), ip_buffer))
+        use_ssl = true;
       }
     }
-    STORAGE_LOG(INFO,
-        "rpc connection accept",
-        "local_addr",
-        self_,
-        "dest",
-        easy_connection_str(&c),
-        K(use_ssl),
-        K(ssl_invited_nodes));
+    STORAGE_LOG(INFO, "rpc connection accept", "local_addr", self_, "dest", easy_connection_str(&c),
+             K(use_ssl), K(ssl_invited_nodes));
   }
-  c.ssl_sm_ = use_ssl ? SSM_USE_SSL : SSM_NONE;
+  c.ssl_sm_ = use_ssl ? SSM_USE_SSL: SSM_NONE;
   return ret;
 }
 
-void ObLocalityManager::set_ssl_invited_nodes(const common::ObString& new_value)
+void ObLocalityManager::set_ssl_invited_nodes(const common::ObString &new_value)
 {
-  if (OB_LIKELY(NULL != (ssl_invited_nodes_buf_)) && 0 != new_value.case_compare(ssl_invited_nodes_buf_)) {
+  if (OB_LIKELY(NULL != (ssl_invited_nodes_buf_))
+      && 0 != new_value.case_compare(ssl_invited_nodes_buf_)) {
     SpinWLockGuard guard(rwlock_);
     if (new_value.empty() || new_value.length() >= common::OB_MAX_CONFIG_VALUE_LEN - 1) {
       ssl_invited_nodes_buf_[0] = '\0';
     } else {
       MEMCPY(ssl_invited_nodes_buf_, new_value.ptr(), new_value.length());
-      ssl_invited_nodes_buf_[new_value.length()] = '\0';
+      ssl_invited_nodes_buf_[new_value.length()] =  '\0';
     }
   }
   STORAGE_LOG(INFO, "set_ssl_invited_nodes", K(new_value));
@@ -161,7 +201,7 @@ void ObLocalityManager::set_ssl_invited_nodes(const common::ObString& new_value)
 int ObLocalityManager::load_region()
 {
   int ret = OB_SUCCESS;
-  share::schema::ObMultiVersionSchemaService*& schema_service = GCTX.schema_service_;
+  share::schema::ObMultiVersionSchemaService *&schema_service = GCTX.schema_service_;
   int64_t schema_version = OB_INVALID_VERSION;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -172,143 +212,31 @@ int ObLocalityManager::load_region()
   } else if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(OB_SYS_TENANT_ID, schema_version))) {
     STORAGE_LOG(WARN, "failed to get schema guard", K(ret));
   } else {
-    // Firstly, check it's need to warn
+    //Firstly, check it's need to warn
     check_if_locality_has_been_loaded();
-    ObLocalityInfo locality_info;
-    ObAddr empty_addr;
-    ObLocalityInfo empty_locality_info;
-    bool is_self_cluster = true;
-    if (OB_FAIL(locality_operator_.load_region(
-            self_, is_self_cluster, *sql_proxy_, locality_info, server_locality_cache_))) {
-      STORAGE_LOG(WARN, "localitity operator load region error", K(ret));
-    } else if (GCTX.is_standby_cluster() && OB_FAIL(locality_operator_.load_region(empty_addr,
-                                                !is_self_cluster,
-                                                *remote_sql_proxy_,
-                                                empty_locality_info,
-                                                remote_server_locality_cache_))) {
-      STORAGE_LOG(WARN, "fail to load region", KR(ret));
-    } else if (OB_FAIL(set_locality_info(locality_info))) {
-      STORAGE_LOG(WARN, "set locality_info fail", K(ret), K(locality_info));
-    } else if (OB_FAIL(set_partition_region_priority())) {
-      STORAGE_LOG(WARN, "set region priority  fail", K(ret), K_(locality_info));
-    } else if (OB_FAIL(set_version(schema_version))) {
-      STORAGE_LOG(WARN, "set version fail", K(ret));
-    } else if (!is_loaded_) {
-      is_loaded_ = true;
-    }
-  }
-  return ret;
-}
-
-int ObLocalityManager::set_partition_region_priority()
-{
-  int ret = OB_SUCCESS;
-  int first_error_code = OB_SUCCESS;
-  ObIPartitionGroupIterator* iter = NULL;
-  ObIPartitionGroup* partition = NULL;
-  SpinRLockGuard guard(rwlock_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (!locality_info_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "locality_info is invalid", K(ret));
-  } else if (NULL == (iter = ObPartitionService::get_instance().alloc_pg_iter())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(ERROR, "fail to alloc partition scan iter", K(ret));
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter->get_next(partition))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          STORAGE_LOG(WARN, "scan next partition failed", K(ret));
-        }
-        break;
-      } else if (NULL == partition) {
-        ret = OB_PARTITION_NOT_EXIST;
-      } else {
-        clog::ObIPartitionLogService* pls = partition->get_log_service();
-        const uint64_t tenant_id = partition->get_partition_key().get_tenant_id();
-        uint64_t region_priority = UINT64_MAX;
-        if (OB_ISNULL(pls)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "partition log service is NULL", KP(pls));
-        } else if (OB_FAIL(locality_info_.get_region_priority(tenant_id, region_priority))) {
-          STORAGE_LOG(WARN, "ObLocalityInfo get_region_priority error", K(ret), K(tenant_id));
-        } else if (!locality_info_.local_region_.is_empty() && OB_FAIL(pls->set_region(locality_info_.local_region_))) {
-          STORAGE_LOG(WARN, "ObPartitionService set region error", K(ret), K_(locality_info));
-        } else if (!locality_info_.local_idc_.is_empty() && OB_FAIL(pls->set_idc(locality_info_.local_idc_))) {
-          STORAGE_LOG(WARN, "ObPartitionService set idc error", K(ret), K_(locality_info));
-        } else {
-          pls->set_zone_priority(region_priority);
-          STORAGE_LOG(DEBUG,
-              "ObPartitionService set_zone_priority success",
-              "pkey",
-              partition->get_partition_key(),
-              K(tenant_id),
-              K(region_priority));
-        }
-        // In order to avoid set single partition's region failed, can skip temporarily,
-        // and continue to execute, and return to the version of the error code when the first error was reported
-        if (OB_FAIL(ret)) {
-          if (OB_SUCCESS == first_error_code) {
-            first_error_code = ret;
-          }
-          ret = OB_SUCCESS;
-        }
+    HEAP_VARS_2((ObLocalityInfo, locality_info),
+                (ObLocalityInfo, empty_locality_info)) {
+      ObAddr empty_addr;
+      bool is_self_cluster = true;
+      if (OB_FAIL(locality_operator_.load_region(self_,
+                                                 is_self_cluster,
+                                                 *sql_proxy_,
+                                                 locality_info,
+                                                 server_locality_cache_))) {
+        STORAGE_LOG(WARN, "localitity operator load region error", K(ret));
+      } else if (OB_FAIL(set_locality_info(locality_info))) {
+        STORAGE_LOG(WARN, "set locality_info fail", K(ret), K(locality_info));
+      } else if (OB_FAIL(set_version(schema_version))) {
+        STORAGE_LOG(WARN, "set version fail", K(ret));
+      } else if (!is_loaded_) {
+        is_loaded_ = true;
       }
-    }  // while
-  }
-  if (NULL != iter) {
-    ObPartitionService::get_instance().revert_pg_iter(iter);
-  }
-  if (OB_SUCCESS != first_error_code) {
-    ret = first_error_code;
-  }
-  return ret;
-}
-
-int ObLocalityManager::load_zone()
-{
-  int ret = OB_SUCCESS;
-  ObLocalityInfo locality_info;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (OB_FAIL(locality_operator_.load_zone(self_, *sql_proxy_, locality_info))) {
-    STORAGE_LOG(WARN, "localitity operator load zone error", K(ret));
-  } else if (OB_FAIL(set_locality_info(locality_info))) {
-    STORAGE_LOG(WARN, "set locality_info fail", K(ret), K(locality_info));
-  } else {
-    STORAGE_LOG(INFO, "localitity operator load zone success", K_(locality_info));
-  }
-
-  return ret;
-}
-
-int ObLocalityManager::get_region_priority(const uint64_t tenant_id, uint64_t& region_priority)
-{
-  int ret = OB_SUCCESS;
-  SpinRLockGuard guard(rwlock_);
-  region_priority = UINT64_MAX;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (OB_FAIL(locality_info_.get_region_priority(tenant_id, region_priority))) {
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      STORAGE_LOG(WARN, "get_region_priority error", K(ret));
     }
-  } else {
-    // do nothing
   }
-
   return ret;
 }
 
-int ObLocalityManager::get_local_region(ObRegion& region) const
+int ObLocalityManager::get_local_region(ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -323,7 +251,7 @@ int ObLocalityManager::get_local_region(ObRegion& region) const
   return ret;
 }
 
-int ObLocalityManager::get_local_zone_type(ObZoneType& zone_type)
+int ObLocalityManager::get_local_zone_type(ObZoneType &zone_type)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -337,7 +265,7 @@ int ObLocalityManager::get_local_zone_type(ObZoneType& zone_type)
 
   return ret;
 }
-int ObLocalityManager::get_locality_zone(const uint64_t tenant_id, ObLocalityZone& locality_zone)
+int ObLocalityManager::get_locality_zone(const uint64_t tenant_id, ObLocalityZone &locality_zone)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -345,7 +273,7 @@ int ObLocalityManager::get_locality_zone(const uint64_t tenant_id, ObLocalityZon
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
   } else if (OB_FAIL(locality_info_.get_locality_zone(tenant_id, locality_zone))) {
-    // STORAGE_LOG(WARN, "get locality_item error", K(ret), K(tenant_id));
+    //STORAGE_LOG(WARN, "get locality_item error", K(ret), K(tenant_id));
   } else {
     // do nothing
   }
@@ -353,7 +281,7 @@ int ObLocalityManager::get_locality_zone(const uint64_t tenant_id, ObLocalityZon
   return ret;
 }
 
-int ObLocalityManager::get_version(int64_t& version) const
+int ObLocalityManager::get_version(int64_t &version) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -367,20 +295,24 @@ int ObLocalityManager::get_version(int64_t& version) const
 }
 
 int ObLocalityManager::get_server_locality_array(
-    ObIArray<ObServerLocality>& server_locality_array, bool& has_readonly_zone) const
+    ObIArray<ObServerLocality> &server_locality_array,
+    bool &has_readonly_zone) const
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(server_locality_array, has_readonly_zone))) {
+  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(
+                     server_locality_array,
+                     has_readonly_zone))) {
     STORAGE_LOG(WARN, "fail to get server locality array", K(ret));
   }
   return ret;
 }
 
-int ObLocalityManager::get_server_region(const common::ObAddr& server, common::ObRegion& region) const
+int ObLocalityManager::get_server_region(const common::ObAddr &server,
+                                         common::ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -395,28 +327,9 @@ int ObLocalityManager::get_server_region(const common::ObAddr& server, common::O
   return ret;
 }
 
-int ObLocalityManager::get_server_region_across_cluster(const common::ObAddr& server, common::ObRegion& region) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (!server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(server));
-  } else if (OB_FAIL(server_locality_cache_.get_server_region(server, region))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      STORAGE_LOG(WARN, "fail to get server region", K(ret), K(server));
-    } else if (!GCTX.is_standby_cluster()) {
-      // nothing todo
-    } else if (OB_FAIL(remote_server_locality_cache_.get_server_region(server, region))) {
-      STORAGE_LOG(WARN, "fail to get server region from remote_server_locality_cache", KR(ret), K(server));
-    }
-  }
-  return ret;
-}
-
-int ObLocalityManager::get_noempty_zone_region(const common::ObZone& zone, common::ObRegion& region) const
+int ObLocalityManager::get_noempty_zone_region(
+    const common::ObZone &zone,
+    common::ObRegion &region) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -428,7 +341,8 @@ int ObLocalityManager::get_noempty_zone_region(const common::ObZone& zone, commo
   return ret;
 }
 
-int ObLocalityManager::get_server_zone(const common::ObAddr& server, common::ObZone& zone) const
+int ObLocalityManager::get_server_zone(const common::ObAddr &server,
+                                       common::ObZone &zone) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -443,7 +357,7 @@ int ObLocalityManager::get_server_zone(const common::ObAddr& server, common::ObZ
   return ret;
 }
 
-int ObLocalityManager::record_server_region(const common::ObAddr& server, const common::ObRegion& region)
+int ObLocalityManager::record_server_region(const common::ObAddr &server, const common::ObRegion &region)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -460,7 +374,8 @@ int ObLocalityManager::record_server_region(const common::ObAddr& server, const 
   return ret;
 }
 
-int ObLocalityManager::get_server_idc(const common::ObAddr& server, common::ObIDC& idc) const
+int ObLocalityManager::get_server_idc(const common::ObAddr &server,
+                                      common::ObIDC &idc) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -477,7 +392,7 @@ int ObLocalityManager::get_server_idc(const common::ObAddr& server, common::ObID
   return ret;
 }
 
-int ObLocalityManager::record_server_idc(const common::ObAddr& server, const common::ObIDC& idc)
+int ObLocalityManager::record_server_idc(const common::ObAddr &server, const common::ObIDC &idc)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -494,7 +409,8 @@ int ObLocalityManager::record_server_idc(const common::ObAddr& server, const com
   return ret;
 }
 
-int ObLocalityManager::get_server_cluster_id(const common::ObAddr& server, int64_t& cluster_id) const
+int ObLocalityManager::get_server_cluster_id(const common::ObAddr &server,
+                                             int64_t &cluster_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -511,7 +427,7 @@ int ObLocalityManager::get_server_cluster_id(const common::ObAddr& server, int64
   return ret;
 }
 
-int ObLocalityManager::record_server_cluster_id(const common::ObAddr& server, const int64_t& cluster_id)
+int ObLocalityManager::record_server_cluster_id(const common::ObAddr &server, const int64_t &cluster_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -528,7 +444,7 @@ int ObLocalityManager::record_server_cluster_id(const common::ObAddr& server, co
   return ret;
 }
 
-int ObLocalityManager::is_local_server(const ObAddr& server, bool& is_local)
+int ObLocalityManager::is_local_server(const ObAddr &server, bool &is_local)
 {
   int ret = OB_SUCCESS;
   is_local = false;
@@ -539,7 +455,9 @@ int ObLocalityManager::is_local_server(const ObAddr& server, bool& is_local)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(server_locality_array, has_readonly_zone))) {
+  } else if (OB_FAIL(server_locality_cache_.get_server_locality_array(
+                     server_locality_array,
+                     has_readonly_zone))) {
     STORAGE_LOG(WARN, "fail to get server locality array", K(ret));
   } else {
     local_region = locality_info_.local_region_;
@@ -560,7 +478,7 @@ int ObLocalityManager::is_local_server(const ObAddr& server, bool& is_local)
   return ret;
 }
 
-int ObLocalityManager::is_same_zone(const common::ObAddr& server, bool& is_same_zone)
+int ObLocalityManager::is_same_zone(const common::ObAddr &server, bool &is_same_zone)
 {
   int ret = OB_SUCCESS;
   ObZone self_zone;
@@ -593,23 +511,18 @@ int ObLocalityManager::check_if_locality_has_been_loaded()
     const int64_t start_service_time = GCTX.start_service_time_;
     if (start_service_time > 0) {
       const int64_t now = ObTimeUtility::current_time();
-      // When the observer does not flash out the cache for a long time after starting,
-      // you need to report an error
+      //当observer启动后很长一段时间没刷出来cache，需要报error
       if (now - start_service_time > FAIL_TO_LOAD_LOCALITY_CACHE_TIMEOUT) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN,
-            "fail to load first cache since service started!",
-            K(ret),
-            K(now),
-            K(start_service_time),
-            K_(locality_info));
+        STORAGE_LOG(WARN, "fail to load first cache since service started!",
+                    K(ret), K(now), K(start_service_time), K_(locality_info));
       }
     }
   }
   return ret;
 }
 
-int ObLocalityManager::get_locality_info(share::ObLocalityInfo& locality_info)
+int ObLocalityManager::get_locality_info(share::ObLocalityInfo &locality_info)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -622,7 +535,7 @@ int ObLocalityManager::get_locality_info(share::ObLocalityInfo& locality_info)
   return ret;
 }
 
-int ObLocalityManager::set_locality_info(share::ObLocalityInfo& locality_info)
+int ObLocalityManager::set_locality_info(share::ObLocalityInfo &locality_info)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(rwlock_);
@@ -638,7 +551,7 @@ int ObLocalityManager::set_locality_info(share::ObLocalityInfo& locality_info)
   return ret;
 }
 
-int ObLocalityManager::is_local_zone_read_only(bool& is_readonly)
+int ObLocalityManager::is_local_zone_read_only(bool &is_readonly)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(rwlock_);
@@ -646,7 +559,7 @@ int ObLocalityManager::is_local_zone_read_only(bool& is_readonly)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
-  } else if (common::ObZoneType::ZONE_TYPE_READONLY == locality_info_.get_local_zone_type()) {
+  } else if (common::ObZoneType::ZONE_TYPE_READONLY == locality_info_.get_local_zone_type()){
     is_readonly = true;
   }
   return ret;
@@ -664,5 +577,119 @@ int ObLocalityManager::set_version(int64_t version)
   }
   return ret;
 }
-}  // namespace storage
-}  // namespace oceanbase
+
+int ObLocalityManager::add_refresh_locality_task()
+{
+  int ret = OB_SUCCESS;
+  ObRefreshLocalityTask task(this);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "locality is not initialized", K(ret));
+  } else if (OB_FAIL(refresh_locality_task_queue_.add_task(task))) {
+    if (OB_EAGAIN != ret) {
+      STORAGE_LOG(WARN, "add refresh locality task failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+ObLocalityManager::ReloadLocalityTask::ReloadLocalityTask()
+  : is_inited_(false),
+    locality_mgr_(NULL)
+{
+}
+
+int ObLocalityManager::ReloadLocalityTask::init(ObLocalityManager *locality_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "ReloadLocalityTask init twice", K(ret));
+  } else if (OB_ISNULL(locality_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(locality_mgr));
+  } else {
+    is_inited_ = true;
+    locality_mgr_ = locality_mgr;
+  }
+
+  return ret;
+}
+
+void ObLocalityManager::ReloadLocalityTask::destroy()
+{
+  is_inited_ = false;
+  locality_mgr_ = NULL;
+}
+
+void ObLocalityManager::ReloadLocalityTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ReloadLocalityTask not init", K(ret));
+  } else if (OB_FAIL(locality_mgr_->add_refresh_locality_task())) {
+    STORAGE_LOG(WARN, "runTimer to refresh locality_info fail", K(ret));
+  } else {
+    STORAGE_LOG(INFO, "runTimer to refresh locality_info", K(ret));
+  }
+}
+
+ObLocalityManager::ObRefreshLocalityTask::ObRefreshLocalityTask(
+    ObLocalityManager *locality_mgr)
+    : IObDedupTask(T_REFRESH_LOCALITY),
+      locality_mgr_(locality_mgr)
+{
+}
+
+ObLocalityManager::ObRefreshLocalityTask::~ObRefreshLocalityTask()
+{
+}
+
+int64_t ObLocalityManager::ObRefreshLocalityTask::hash() const
+{
+  uint64_t hash_val = 0;
+  return static_cast<int64_t>(hash_val);
+}
+
+bool ObLocalityManager::ObRefreshLocalityTask::operator ==(const IObDedupTask &other) const
+{
+  UNUSED(other);
+  bool b_ret = true;
+  return b_ret;
+}
+
+int64_t ObLocalityManager::ObRefreshLocalityTask::get_deep_copy_size() const
+{
+  return sizeof(*this);
+}
+
+IObDedupTask *ObLocalityManager::ObRefreshLocalityTask::deep_copy(
+    char *buffer,
+    const int64_t buf_size) const
+{
+  ObRefreshLocalityTask *task = NULL;
+  if (OB_UNLIKELY(OB_ISNULL(buffer))
+      || OB_UNLIKELY(buf_size < get_deep_copy_size())) {
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", KP(buffer), K(buf_size));
+  } else {
+    task = new(buffer) ObRefreshLocalityTask(locality_mgr_);
+  }
+  return task;
+}
+
+int ObLocalityManager::ObRefreshLocalityTask::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(locality_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "locality manager is null", K(ret));
+  } else if (OB_FAIL(locality_mgr_->load_region())) {
+    STORAGE_LOG(WARN, "process refresh locality task fail", K(ret));
+  }
+  return ret;
+}
+
+
+}// storage
+}// oceanbase

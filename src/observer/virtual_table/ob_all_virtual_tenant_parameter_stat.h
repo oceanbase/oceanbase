@@ -17,25 +17,39 @@
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualTenantParameterStat : public common::ObVirtualTableIterator {
+// __all_tenant_parameter_stat
+//
+// show all server parameter's, for every server:
+// 1. if effective tenant is SYS tenant: show all tenant parameter and cluster parameter
+// 2. if effective tenant is USER tenant: show self tenant parameter and cluster parameter
+class ObAllVirtualTenantParameterStat : public common::ObVirtualTableIterator
+{
 public:
   ObAllVirtualTenantParameterStat();
-  ObAllVirtualTenantParameterStat(uint64_t tenant_id);
-  void set_exec_tenant(uint64_t tenant_id);
-  void set_show_seed(bool show_seed);
   virtual ~ObAllVirtualTenantParameterStat();
+
+  // param[in] show_seed  whether to show seed config
+  int init(const bool show_seed);
+
   virtual int inner_open();
   virtual void reset();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  int inner_sys_get_next_row(common::ObNewRow*& row);
-  int inner_tenant_get_next_row(common::ObNewRow*& row);
+  typedef common::ObConfigContainer::const_iterator CfgIter;
+
+  int inner_sys_get_next_row(common::ObNewRow *&row);
+  int inner_tenant_get_next_row(common::ObNewRow *&row);
   int update_seed();
-  int inner_seed_get_next_row(common::ObNewRow*& row);
+  int inner_seed_get_next_row(common::ObNewRow *&row);
+  int fill_row_(common::ObNewRow *&row,
+      CfgIter &iter,
+      const common::ObConfigContainer &cfg_container,
+      const uint64_t *tenant_id_ptr);
   enum TENANT_PARAMETER_STAT_COLUMN {
     ZONE = common::OB_APP_MIN_COLUMN_ID,
     SERVER_TYPE,
@@ -49,16 +63,28 @@ private:
     SCOPE,
     SOURCE,
     EDIT_LEVEL,
+    TENANT_ID,
   };
-  uint64_t exec_tenant_id_;
-  common::ObConfigContainer::const_iterator sys_iter_;
-  omt::ObTenantConfigGuard tenant_config_;
-  common::ObConfigContainer::const_iterator tenant_iter_;
-  bool show_seed_;
-  omt::ObTenantConfig seed_config_;
+
+private:
+  static const int64_t DEFAULT_TENANT_COUNT = 100;
+
+  bool inited_;
+  bool show_seed_;                // whether to show seed config
+
+  CfgIter sys_iter_;              // iterator for cluster config
+  CfgIter tenant_iter_;           // iterator for every tenant
+  int64_t cur_tenant_idx_;        // current tenant index for tenant_id_list_
+  common::ObSEArray<uint64_t, DEFAULT_TENANT_COUNT> tenant_id_list_;  // all tenant in observer
+  omt::ObTenantConfigGuard tenant_config_;      // current tenant config
+
+  omt::ObTenantConfig seed_config_;   // seed config
+
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantParameterStat);
 };
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase
 
 #endif
+

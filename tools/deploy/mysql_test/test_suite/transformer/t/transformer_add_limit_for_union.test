@@ -1,0 +1,83 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: zhanyue.zzy
+# owner group: SQL1
+# tags: optimizer
+# description: if LIMIT appears in UNION ALL stmt, add the same LIMIT to inner stmt;
+#              use ob_enable_transformation to contrast with no transform version result
+
+--disable_warnings
+drop database if exists union_db;
+--enable_warnings
+create database union_db;
+use union_db;
+create table t1(c1 int primary key, c2 int, c3 varchar(10));
+create table t2(c1 int primary key, c2 int, c3 varchar(10));
+insert into t1 values
+(11,11,'l'),
+(19,19,'t'),
+(18,18,'s'),
+(17,17,'r'),
+(16,16,'q'),
+(5,5,'e'),
+(4,4,'d'),
+(3,3,'c'),
+(2,2,'b'),
+(10,10,'k');
+insert into t2 values
+(1,1,'a'),
+(9,9,'i'),
+(8,8,'h'),
+(7,7,'g'),
+(6,6,'f'),
+(15,15,'p'),
+(14,14,'o'),
+(13,13,'n'),
+(12,12,'m'),
+(20,20,'u');
+sleep 3;
+
+
+## set @@session.ob_enable_transformation = 0;
+--echo ### test different limit  ###
+(select c2 from t1) union all (select c2 from t2) limit 1;
+(select c2 from t1) union all (select c2 from t2) limit 5;
+select found_rows();
+(select c2 from t1) union all (select c2 from t2) limit 10;
+(select c2 from t1) union all (select c2 from t2) limit 15;
+select found_rows();
+(select c2 from t1 limit 2) union all (select c2 from t2) limit 15;
+(select c2 from t1) union all (select c2 from t2) limit 15;
+(select c2 from t1 limit 2) union all (select c2 from t2 limit 2) limit 15;
+
+--echo ### test order by limit ###
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c3 limit 5;
+select found_rows();
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c2 limit 15;
+select found_rows();
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c3, c2 limit 5;
+(select c2, c3 from t1) union all (select c2, c3 from t2) order by c2, c3 limit 15;
+(select c2, c3 from t1 order by c3) union all (select c2, c3 from t2) order by c2 limit 15;
+select found_rows();
+(select c2, c3 from t1) union all (select c2, c3 from t2 order by c2) order by c3, c2 limit 5;
+## set @@session.ob_enable_transformation = 1;
+
+--echo ### test for found_rows() ###
+--disable_result_log
+(select SQL_CALC_FOUND_ROWS c2 from t1) union all (select c2 from t2) limit 5;
+--enable_result_log
+select found_rows();
+--disable_result_log
+(select SQL_CALC_FOUND_ROWS c2 from t1) union all (select c2 from t2) limit 15;
+--enable_result_log
+select found_rows();
+--disable_result_log
+(select SQL_CALC_FOUND_ROWS c2, c3 from t1) union all (select c2, c3 from t2) order by c3 limit 5;
+--enable_result_log
+select found_rows();
+--disable_result_log
+(select SQL_CALC_FOUND_ROWS c2, c3 from t1) union all (select c2, c3 from t2) order by c2 limit 15;
+--enable_result_log
+select found_rows();
+drop database union_db;

@@ -12,13 +12,15 @@
 
 #ifndef _OB_ITEM_TYPE_STR_H
 #define _OB_ITEM_TYPE_STR_H 1
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 
-namespace oceanbase {
-namespace sql {
-inline const char* ob_aggr_func_str(ObItemType aggr_func)
+namespace oceanbase
 {
-  const char* ret = "UNKNOWN_AGGR";
+namespace sql
+{
+inline const char *ob_aggr_func_str(ObItemType aggr_func)
+{
+  const char *ret = "UNKNOWN_AGGR";
   switch (aggr_func) {
     case T_FUN_MAX:
       ret = "MAX";
@@ -39,7 +41,13 @@ inline const char* ob_aggr_func_str(ObItemType aggr_func)
       ret = "AVG";
       break;
     case T_FUN_GROUPING:
-      ret = "GROUPING";
+    	ret = "GROUPING";
+    	break;
+    case T_FUN_GROUPING_ID:
+      ret = "GROUPING_ID";
+      break;
+    case T_FUN_GROUP_ID:
+      ret = "GROUP_ID";
       break;
     case T_FUN_GROUP_CONCAT:
       ret = "GROUP_CONCAT";
@@ -59,13 +67,22 @@ inline const char* ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_STDDEV:
       ret = "STDDEV";
       break;
+    case T_FUN_SYS_BIT_AND:
+      ret = "BIT_AND";
+      break;
+    case T_FUN_SYS_BIT_OR:
+      ret = "BIT_OR";
+      break;
+    case T_FUN_SYS_BIT_XOR:
+      ret = "BIT_XOR";
+      break;
     default:
       break;
   }
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_ITEM_TYPE_STR_H */

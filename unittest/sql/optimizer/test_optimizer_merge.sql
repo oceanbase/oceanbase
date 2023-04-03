@@ -1,3 +1,7 @@
+## 测试点：
+## 0.计划层级结构是否正确
+## 1.columnv expr是否正确
+## 2.output expr是否正确
 
 ######### normal test ###############
 ## test for update clause

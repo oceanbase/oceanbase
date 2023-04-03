@@ -15,6 +15,7 @@
 /*trace_id=12QA  rpc_id=xxx*/ select * from t1;
   /*trace_id=12QA  rpc_id=xxx*/ select * from t1;
 
+# 不满足条件的
 select /*trace_id=xx*/ * from t1;
 /*trace_id= abc read*/ select * from t1;
 /*trace_id= abc select * from t1;

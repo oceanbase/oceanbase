@@ -16,14 +16,14 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_stat_manager.h"
 
 #include "sql/resolver/ob_schema_checker.h"
 
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "lib/timezone/ob_time_convert.h"
 
-namespace test {
+namespace test
+{
 // class MockOptTableStatService : public oceanbase::common::ObOptTableStatService
 // {
 // public:
@@ -38,7 +38,7 @@ namespace test {
 //     reset_table_stat();
 //   }
 //   virtual ~MockOptTableStatService() {}
-//
+// 
 //   void reset_table_stat()
 //   {
 //     stat_.set_data_size(DEFAULT_DATA_SIZE);
@@ -49,10 +49,10 @@ namespace test {
 //     stat_.set_sstable_avg_row_size(DEFAULT_ROW_SIZE);
 //     stat_.set_sstable_row_count(DEFAULT_SSTABLE_ROW_COUNT);
 //   }
-//
+// 
 //   void set_table_stat(ObOptTableStat &table_stat)
 //   { stat_ = table_stat; }
-//
+// 
 //   void set_table_row_count(int64_t row_count)
 //   {
 //     stat_.set_memtable_row_count(row_count);
@@ -61,7 +61,7 @@ namespace test {
 // private:
 //   ObOptTableStat stat_;
 // };
-//
+// 
 // class MockOptColumnStatService : public oceanbase::common::ObOptColumnStatService
 // {
 // public:
@@ -74,7 +74,7 @@ namespace test {
 //     UNUSED(handle);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   int get_column_stat(const ObColumnStat::Key &key, const bool force_new, ObColumnStat &cstat, ObIAllocator &alloc)
 //   {
 //     UNUSED(key);
@@ -83,7 +83,7 @@ namespace test {
 //     UNUSED(alloc);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   int get_batch_stat(const oceanbase::share::schema::ObTableSchema &table_schema,
 //                      const uint64_t partition_id,
 //                      ObIArray<ObColumnStat *> &stats,
@@ -93,10 +93,10 @@ namespace test {
 //     UNUSED(partition_id);
 //     UNUSED(stats);
 //     UNUSED(allocator);
-//
+// 
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   int update_column_stats(const ObIArray<ObColumnStat *> &column_stats)
 //   {
 //     UNUSED(column_stats);
@@ -107,15 +107,15 @@ namespace test {
 //     UNUSED(cstat);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   int refresh_column_stat(const int64_t data_version)
 //   {
 //     UNUSED(data_version);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 // };
-//
+// 
 // class MockOptStatManager : public oceanbase::common::ObOptStatManager
 // {
 //   static const uint64_t DEFAULT_TABLE1_ID = 1099511677777;
@@ -156,15 +156,15 @@ namespace test {
 //     default_stat_ = false;
 //   }
 //   ~MockOptStatManager() {}
-//
+// 
 //   void set_schema_checker(oceanbase::sql::ObSchemaChecker *schema_checker)
 //   { schema_checker_ = schema_checker; }
-//
+// 
 //   void set_default_stat(bool is_default)
 //   {
 //     default_stat_ = is_default;
 //   }
-//
+// 
 //   int get_table_stat(const ObPartitionKey &pkey, ObOptTableStat &tstat)
 //   {
 //     int ret = OB_SUCCESS;
@@ -182,7 +182,7 @@ namespace test {
 //     }
 //     return ret;
 //   }
-//
+// 
 //   virtual int get_column_stat(const uint64_t table_id,
 //                               const uint64_t partition_id,
 //                               const uint64_t column_id,
@@ -244,7 +244,7 @@ namespace test {
 //           }
 //         default: break;
 //         }
-//       } else {
+//       } else {//分更多种类型,default
 //         min = int_info_.min_;
 //         max = int_info_.max_;
 //       }
@@ -255,14 +255,14 @@ namespace test {
 //     handle.stat_ = &column_stat_;
 //     return ret;
 //   }
-//
+// 
 //   virtual int get_column_stat(const ObOptColumnStat::Key &key, ObOptColumnStatHandle &handle)
 //   {
 //     UNUSED(key);
 //     UNUSED(handle);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   int get_batch_stat(const oceanbase::share::schema::ObTableSchema &table_schema,
 //                      const uint64_t partition_id,
 //                      ObIArray<ObOptColumnStat *> &stats,
@@ -274,7 +274,7 @@ namespace test {
 //     UNUSED(allocator);
 //     return OB_SUCCESS;
 //   }
-//
+// 
 //   void set_column_stat(int64_t distinct, ObObj min, ObObj max, int64_t null_num)
 //   {
 //     if (ObStringTC == min.get_type_class()) {
@@ -283,18 +283,18 @@ namespace test {
 //       int_info_.set_column_info(min, max, distinct, null_num);
 //     }
 //   }
-//
+// 
 //   void set_table_stat(int64_t table1_row_count, int64_t table2_row_count)
 //   {
 //     table1_row_count_ = table1_row_count;
 //     table2_row_count_ = table2_row_count;
 //   }
-//
+// 
 //   void set_histogram(ObHistogram *hist)
 //   {
 //     hist_ = hist;
 //   }
-//
+// 
 // private:
 //   oceanbase::sql::ObSchemaChecker *schema_checker_;
 //   ObOptColumnStat column_stat_;
@@ -306,131 +306,136 @@ namespace test {
 //   bool default_stat_;
 // };
 
-class MockOptStatService : public oceanbase::common::ObOptStatService {
+class MockOptStatService : public oceanbase::common::ObOptStatService
+{
 public:
-  static MockOptStatService& get_instance()
+  static MockOptStatService &get_instance() 
   {
     static MockOptStatService instance_;
     return instance_;
   }
 
-  MockOptStatService()
-  {
+  MockOptStatService() {
     reset_table_stat();
   }
-  virtual ~MockOptStatService()
-  {}
-  virtual int init(oceanbase::common::ObMySQLProxy* proxy, ObServerConfig* config)
+  virtual ~MockOptStatService() {}
+  virtual int init(oceanbase::common::ObMySQLProxy *proxy, ObServerConfig *config)
   {
     UNUSED(proxy);
     UNUSED(config);
     return OB_SUCCESS;
   }
 
-  virtual int get_table_stat(const ObOptTableStat::Key& key, ObOptTableStat& tstat)
+  virtual int get_table_stat(const ObOptTableStat::Key &key, ObOptTableStat &tstat) 
   {
     UNUSED(key);
     // UNUSED now;
     tstat = tstat_;
     return OB_SUCCESS;
   }
-  virtual int get_column_stat(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle)
+  virtual int get_column_stat(const ObOptColumnStat::Key &key, ObOptColumnStatHandle &handle)
   {
     UNUSED(key);
     handle.stat_ = &cstat_;
     return OB_SUCCESS;
   }
-  virtual int load_column_stat_and_put_cache(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle)
-  {
-    UNUSED(key);
-    UNUSED(handle);
-    return OB_SUCCESS;
-  }
-  virtual int load_table_stat_and_put_cache(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle)
+  virtual int load_table_stat_and_put_cache(const ObOptTableStat::Key &key, ObOptTableStatHandle &handle)
   {
     UNUSED(key);
     UNUSED(handle);
     return OB_SUCCESS;
   }
 
-  ObOptColumnStat& get_column_stat()
-  {
-    return cstat_;
-  }
-  ObHistogram& get_histogram()
-  {
-    return hist_;
-  }
-  void use_histogram()
-  {
-    cstat_.set_histogram(&hist_);
-  }
-  void no_use_histogram()
-  {
-    cstat_.set_histogram(NULL);
-  }
+  ObOptColumnStat &get_column_stat() { return cstat_; }
+  ObHistogram &get_histogram() { return hist_; }
+  void use_histogram() { cstat_.get_histogram() = hist_; }
+  void no_use_histogram() { cstat_.get_histogram().set_type(ObHistType::INVALID_TYPE); }
 
   void reset_table_stat()
   {
-    tstat_ = oceanbase::common::ObOptStatManager::get_default_table_stat();
+    tstat_.set_row_count(1.0);
+    tstat_.set_data_size(
+          oceanbase::common::ObOptStatManager::get_default_data_size());
+    tstat_.set_avg_row_size(
+          oceanbase::common::ObOptStatManager::get_default_avg_row_size());
+    tstat_.set_last_analyzed(1);
+    cstat_.set_last_analyzed(1);
   }
-
 private:
   ObOptTableStat tstat_;
   ObOptColumnStat cstat_;
   ObHistogram hist_;
 };
 
-class MockOptStatManager : public oceanbase::common::ObOptStatManager {
-public:
-  static MockOptStatManager& get_instance()
+class MockOptStatManager : public oceanbase::common::ObOptStatManager
+{
+ public:
+  static MockOptStatManager &get_instance() 
   {
     static MockOptStatManager instance_;
     return instance_;
   }
 
-  virtual int init(ObOptStatService* stat_service, ObMySQLProxy* proxy, ObServerConfig* config)
+  virtual int init(ObOptStatService *stat_service,
+                   ObMySQLProxy *proxy,
+                   ObServerConfig *config)
   {
     inited_ = true;
-    stat_service_ = stat_service;
-    if (NULL != stat_service_) {
-      stat_service_->init(NULL, NULL);
-    }
+    UNUSED(stat_service);
     UNUSED(proxy);
     UNUSED(config);
+    mock_stat_service_ = stat_service;
+    if (NULL != mock_stat_service_) {
+      mock_stat_service_->init(NULL, NULL);
+    }
     return OB_SUCCESS;
   }
 
+  // virtual int get_column_stat(const ObOptColumnStat::Key &key, ObOptColumnStatHandle &handle)
+  // {
+  //   return mock_stat_service_->get_column_stat(key, handle);
+  // }
+
+  // virtual int get_table_stat(const ObOptTableStat::Key &key, ObOptTableStat &tstat)
+  // {
+  //   int ret = OB_SUCCESS;
+  //   return mock_stat_service_->get_table_stat(key, tstat);
+  //   return ret;
+  // }
+
   // virtual int get_column_stat(const ObOptColumnStat::Key &key, ObOptColumnStatHandle &handle);
-  virtual int update_column_stat(const oceanbase::common::ObIArray<ObOptColumnStat*>& column_stats)
+  virtual int update_column_stat(const oceanbase::common::ObIArray<ObOptColumnStat *> &column_stats) 
   {
     UNUSED(column_stats);
     return OB_SUCCESS;
   }
-  virtual int delete_column_stat(const oceanbase::common::ObIArray<ObOptColumnStat*>& column_stats)
+  virtual int delete_column_stat(const oceanbase::common::ObIArray<ObOptColumnStat *> &column_stats) 
   {
     UNUSED(column_stats);
     return OB_SUCCESS;
   }
-  virtual int refresh_column_stat(const ObOptColumnStat::Key& key)
+  virtual int refresh_column_stat(const ObOptColumnStat::Key &key) 
   {
     UNUSED(key);
     return OB_SUCCESS;
   }
-  virtual int refresh_table_stat(const ObOptTableStat::Key& key)
+  virtual int refresh_table_stat(const ObOptTableStat::Key &key) 
   {
     UNUSED(key);
     return OB_SUCCESS;
   }
 
   // virtual int get_table_stat(const ObOptTableStat::Key &key, ObOptTableStat &tstat);
-  virtual int add_refresh_stat_task(const oceanbase::obrpc::ObUpdateStatCacheArg& analyze_arg)
+  virtual int add_refresh_stat_task(const oceanbase::obrpc::ObUpdateStatCacheArg &analyze_arg) 
   {
     UNUSED(analyze_arg);
     return OB_SUCCESS;
   }
+  
+  ObOptStatService *mock_stat_service_;
 };
 
-}  // end namespace test
+} // end namespace test
 
 #endif /* _OB_MOCK_OPT_STAT_MANAGER_H */
+

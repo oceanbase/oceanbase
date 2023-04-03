@@ -10,54 +10,45 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__
-#define __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__
+#ifndef __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__
+#define __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__
 
 #include "share/ob_kv_parser.h"
 #include "rootserver/ob_balance_info.h"
 
-namespace oceanbase {
-namespace rootserver {
-class ObResourceWeightParser {
+namespace oceanbase
+{
+namespace rootserver
+{
+class ObResourceWeightParser
+{
 public:
   /*
    * if weight doesn't not sum to 1, return OB_INVALID_CONFIG
    */
-  static int parse(const char* str, ObResourceWeight& weight);
-
+  static int parse(const char *str, ObResourceWeight &weight);
 private:
-  class MyCb : public share::ObKVMatchCb {
+  class MyCb : public share::ObKVMatchCb
+  {
   public:
-    MyCb(ObResourceWeight& weight) : weight_(weight){};
-    int match(const char* key, const char* value);
-
+    MyCb(ObResourceWeight &weight) : weight_(weight) {};
+    int match(const char *key, const char *value);
   private:
     /* functions */
-    typedef void (*WeightSetter)(ObResourceWeight& weight, double);
-    static void set_iops(ObResourceWeight& weight, double val)
-    {
-      weight.iops_weight_ = val;
-    }
-    static void set_cpu(ObResourceWeight& weight, double val)
-    {
-      weight.cpu_weight_ = val;
-    }
-    static void set_memory(ObResourceWeight& weight, double val)
-    {
-      weight.memory_weight_ = val;
-    }
-    static void set_disk(ObResourceWeight& weight, double val)
-    {
-      weight.disk_weight_ = val;
-    }
-    ObResourceWeight& weight_;
+    typedef void (*WeightSetter)(ObResourceWeight &weight, double);
+    static void set_iops(ObResourceWeight &weight, double val) { weight.iops_weight_ = val; }
+    static void set_cpu(ObResourceWeight &weight, double val) { weight.cpu_weight_ = val; }
+    static void set_memory(ObResourceWeight &weight, double val) { weight.memory_weight_ = val; }
+    static void set_disk(ObResourceWeight &weight, double val) { weight.disk_weight_ = val; }
+    ObResourceWeight &weight_;
   };
-
 private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObResourceWeightParser);
 };
-}  // namespace rootserver
-}  // namespace oceanbase
-#endif /* __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__ */
+}
+}
+#endif /* __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__ */
 //// end of header file
+
+

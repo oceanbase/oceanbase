@@ -1,0 +1,81 @@
+#owner: luofan.zp
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn_admin;
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30),
+    c23 varchar(30) charset utf8,
+    c24 varchar(30) charset utf16,
+    c25 varchar(30) charset gbk);
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
+
+--sleep 1
+
+#--explain_protocol 2
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select c$left, charset(c$left), collation(c$left), coercibility(c$left) from t1;
+  inc $left;
+}
+
+--echo // test set_collation expr
+--echo // set_collation表达式检查charset与collate不匹配，报错
+--error 1253
+select _utf8mb4'a' collate gbk_bin;
+--echo // 下面的是等号表达式在类型推导时，进行aggregate collation发现collation不一致报错
+--error 1267
+select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_bin;
+select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_general_ci;
+select _utf8mb4'a' collate utf8mb4_bin = _utf8mb4'A' collate utf8mb4_bin;
+
+
+drop table t1;
+--sleep 2

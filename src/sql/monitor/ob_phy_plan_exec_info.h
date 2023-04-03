@@ -14,7 +14,7 @@
 PLAN_MONITOR_INFO_DEF(QUERY_TYPE, query_type)
 PLAN_MONITOR_INFO_DEF(TOTAL_WAIT_TIME, total_wait_time)
 PLAN_MONITOR_INFO_DEF(TOTAL_WAIT_COUNT, total_wait_count)
-// timestamp
+//timestamp
 PLAN_MONITOR_INFO_DEF(RPC_SEND_TIME, rpc_send_time)
 PLAN_MONITOR_INFO_DEF(RECEIVE_TIME, receive_time)
 PLAN_MONITOR_INFO_DEF(ENTER_QUEUE_TIME, enter_queue_time)
@@ -30,16 +30,19 @@ PLAN_MONITOR_INFO_DEF(EXECUTOR_END_TIME, executor_end_time)
 #include "share/ob_time_utility2.h"
 #include "sql/monitor/ob_phy_operator_monitor_info.h"
 #include "sql/monitor/ob_exec_stat.h"
-namespace oceanbase {
-namespace sql {
-enum ObPlanMonitorInfoIds {
+namespace oceanbase
+{
+namespace sql
+{
+enum ObPlanMonitorInfoIds
+{
 #define PLAN_MONITOR_INFO_DEF(def, name) def,
 #include "ob_phy_plan_exec_info.h"
 #undef PLAN_MONITOR_INFO_DEF
 #define EVENT_INFO(def, name) def,
 #include "ob_exec_stat.h"
 #undef EVENT_INFO
-  MAX_EVENT_ID
+MAX_EVENT_ID
 };
 
 static const MonitorName OB_PLAN_MONITOR_INFOS[] = {
@@ -49,20 +52,20 @@ static const MonitorName OB_PLAN_MONITOR_INFOS[] = {
 #define EVENT_INFO(def, name) {def, #name},
 #include "ob_exec_stat.h"
 #undef EVENT_INFO
-    {MAX_EVENT_ID, "max_event"}};
+{MAX_EVENT_ID, "max_event"}
+};
 
-class ObPhyPlanExecInfo final : public ObPhyOperatorMonitorInfo {
+class ObPhyPlanExecInfo final : public ObPhyOperatorMonitorInfo
+{
 public:
-  ObPhyPlanExecInfo()
-  {}
-  inline virtual int64_t print_info(char* buf, int64_t buf_len) const;
-  inline int add_exec_record(const ObExecRecord& exec_record);
-  inline int add_exec_timestamp(const ObExecTimestamp& exec_timestamp);
-  int64_t to_string(char* buf, int64_t buf_len) const
+  ObPhyPlanExecInfo() {}
+  inline virtual int64_t print_info(char *buf, int64_t buf_len) const;
+  inline int add_exec_record(const ObExecRecord &exec_record);
+  inline int add_exec_timestamp(const ObExecTimestamp &exec_timestamp);
+  int64_t to_string(char *buf, int64_t buf_len) const
   {
     return print_info(buf, buf_len);
   }
-
 private:
   void set_value(ObPlanMonitorInfoIds index, int64_t value)
   {
@@ -73,13 +76,12 @@ private:
     return (index >= RPC_SEND_TIME) && (index <= EXECUTOR_END_TIME);
   }
   DISALLOW_COPY_AND_ASSIGN(ObPhyPlanExecInfo);
-
 private:
   common::ObWaitEventDesc max_wait_event_;
   int64_t plan_info_array_[MAX_EVENT_ID];
 };
 
-int64_t ObPhyPlanExecInfo::print_info(char* buf, int64_t buf_len) const
+int64_t ObPhyPlanExecInfo::print_info(char *buf, int64_t buf_len) const
 {
   int64_t pos = 0;
   const int64_t time_buf_len = 128;
@@ -101,9 +103,8 @@ int64_t ObPhyPlanExecInfo::print_info(char* buf, int64_t buf_len) const
       }
       J_OBJ_START();
       if (is_timestamp(i)) {
-        if (common::OB_SUCCESS !=
-            share::ObTimeUtility2::usec_to_str(plan_info_array_[i], timebuf, time_buf_len, time_buf_pos)) {
-          SQL_MONITOR_LOG(WARN, "fail to print time as str", K(i));
+        if (common::OB_SUCCESS != share::ObTimeUtility2::usec_to_str(plan_info_array_[i], timebuf, time_buf_len, time_buf_pos)) {
+          SQL_MONITOR_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "fail to print time as str", K(i));
           J_KV(OB_PLAN_MONITOR_INFOS[i].info_name_, plan_info_array_[i]);
         } else {
           timebuf[time_buf_pos] = '\0';
@@ -119,7 +120,7 @@ int64_t ObPhyPlanExecInfo::print_info(char* buf, int64_t buf_len) const
   return pos;
 }
 
-int ObPhyPlanExecInfo::add_exec_record(const ObExecRecord& exec_record)
+int ObPhyPlanExecInfo::add_exec_record(const ObExecRecord &exec_record)
 {
   int ret = common::OB_SUCCESS;
   op_id_ = -1;
@@ -129,24 +130,23 @@ int ObPhyPlanExecInfo::add_exec_record(const ObExecRecord& exec_record)
   set_value(TOTAL_WAIT_TIME, exec_record.wait_time_end_);
   set_value(TOTAL_WAIT_COUNT, exec_record.wait_count_end_);
 
-#define EVENT_INFO(def, name) set_value(def, exec_record.get_##name());
+#define EVENT_INFO(def, name) \
+  set_value(def, exec_record.get_##name());
 #include "ob_exec_stat.h"
 #undef EVENT_INFO
   return ret;
 }
-int ObPhyPlanExecInfo::add_exec_timestamp(const ObExecTimestamp& exec_timestamp)
+int ObPhyPlanExecInfo::add_exec_timestamp(const ObExecTimestamp &exec_timestamp)
 {
   int ret = common::OB_SUCCESS;
-  SQL_MONITOR_LOG(DEBUG,
-      "add exec timestamp",
-      K(exec_timestamp.exec_type_),
-      K(exec_timestamp.before_process_ts_),
-      K(exec_timestamp.process_executor_ts_),
-      K(exec_timestamp.executor_end_ts_),
-      K(exec_timestamp.receive_ts_),
-      K(exec_timestamp.enter_queue_ts_),
-      K(exec_timestamp.run_ts_),
-      K(exec_timestamp.single_process_ts_));
+  SQL_MONITOR_LOG(DEBUG, "add exec timestamp", K(exec_timestamp.exec_type_),
+           K(exec_timestamp.before_process_ts_),
+           K(exec_timestamp.process_executor_ts_),
+           K(exec_timestamp.executor_end_ts_),
+           K(exec_timestamp.receive_ts_),
+           K(exec_timestamp.enter_queue_ts_),
+           K(exec_timestamp.run_ts_),
+           K(exec_timestamp.single_process_ts_));
   set_value(QUERY_TYPE, exec_timestamp.exec_type_);
   set_value(BEFORE_PROCESS_TIME, exec_timestamp.before_process_ts_);
   set_value(PROCESS_EXECUTOR_TIME, exec_timestamp.process_executor_ts_);
@@ -156,7 +156,10 @@ int ObPhyPlanExecInfo::add_exec_timestamp(const ObExecTimestamp& exec_timestamp)
     set_value(ENTER_QUEUE_TIME, exec_timestamp.enter_queue_ts_);
     set_value(RUN_TIME, exec_timestamp.run_ts_);
   }
-  if (MpQuery == exec_timestamp.exec_type_) {
+  if (MpQuery == exec_timestamp.exec_type_
+        || PSCursor == exec_timestamp.exec_type_
+        || DbmsCursor == exec_timestamp.exec_type_
+        || CursorFetch == exec_timestamp.exec_type_) {
     set_value(SINGLE_PROCESS_TIME, exec_timestamp.single_process_ts_);
   }
   if (RpcProcessor == exec_timestamp.exec_type_) {
@@ -164,6 +167,6 @@ int ObPhyPlanExecInfo::add_exec_timestamp(const ObExecTimestamp& exec_timestamp)
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
 #endif

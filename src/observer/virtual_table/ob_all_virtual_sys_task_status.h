@@ -19,15 +19,18 @@
 #include "lib/container/ob_se_array.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 
-namespace oceanbase {
-namespace observer {
-class ObAllVirtualSysTaskStatus : public common::ObVirtualTableScannerIterator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualSysTaskStatus: public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualSysTaskStatus();
   virtual ~ObAllVirtualSysTaskStatus();
 
-  int init(share::ObSysTaskStatMgr& status_mgr);
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  int init (share::ObSysTaskStatMgr &status_mgr);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
 private:
@@ -36,9 +39,11 @@ private:
   char svr_ip_[common::MAX_IP_ADDR_LENGTH];
   char comment_[common::OB_MAX_TASK_COMMENT_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSysTaskStatus);
+
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+} // observer
+} // oceanbase
+
 
 #endif /* SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_SYS_TASK_STATUS_H_ */

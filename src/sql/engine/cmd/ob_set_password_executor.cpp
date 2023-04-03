@@ -21,28 +21,32 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
 using namespace common;
 using namespace obrpc;
 using namespace share;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
 ObSetPasswordExecutor::ObSetPasswordExecutor()
-{}
+{
+}
 
 ObSetPasswordExecutor::~ObSetPasswordExecutor()
-{}
+{
+}
 
-int ObSetPasswordExecutor::execute(ObExecContext& ctx, ObSetPasswordStmt& stmt)
+int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session = NULL;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObSQLSessionInfo *session = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
-  const common::ObStrings* user_passwd = NULL;
+  const common::ObStrings *user_passwd = NULL;
   const int64_t FIX_MEMBER_CNT = 7;
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -60,8 +64,7 @@ int ObSetPasswordExecutor::execute(ObExecContext& ctx, ObSetPasswordStmt& stmt)
     ret = OB_NOT_INIT;
     LOG_WARN("common_rpc_proxy is null", K(ret));
   } else if (OB_UNLIKELY(FIX_MEMBER_CNT != user_passwd->count())) {
-    ret = OB_ERR_UNEXPECTED;
-    ;
+    ret = OB_ERR_UNEXPECTED;;
     LOG_WARN("invalid set pwd stmt, wrong user passwd count", K(ret));
   } else {
     ObString user_name;
@@ -112,7 +115,7 @@ int ObSetPasswordExecutor::execute(ObExecContext& ctx, ObSetPasswordStmt& stmt)
         arg.passwd_ = passwd;
       }
       if (OB_SUCC(ret) && OB_FAIL(common_rpc_proxy->set_passwd(arg))) {
-        LOG_WARN("Set password failed", K(ret));
+          LOG_WARN("Set password failed", K(ret));
       } else if (0 == user_name.case_compare(session->get_user_name())) {
         session->set_password_expired(false);
       }
@@ -121,5 +124,7 @@ int ObSetPasswordExecutor::execute(ObExecContext& ctx, ObSetPasswordStmt& stmt)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+
+}/* ns sql*/
+}/* ns oceanbase */

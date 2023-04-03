@@ -27,20 +27,26 @@
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "sql/engine/join/join_data_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
 #include <thread>
 #include <vector>
 #include <gtest/gtest.h>
 
+
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
+static ObSimpleMemLimitGetter getter;
 
-class TestSortImpl : public blocksstable::TestDataFilePrepare {
+class TestSortImpl : public blocksstable::TestDataFilePrepare
+{
 public:
-  TestSortImpl() : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 1000), data_(alloc_)
-  {}
+  TestSortImpl() : blocksstable::TestDataFilePrepare(&getter,
+                                                     "TestDiskIR", 2<<20, 1000), data_(alloc_)
+  {
+  }
   void set_sort_area_size(int64_t size)
   {
     int ret = OB_SUCCESS;
@@ -60,9 +66,8 @@ public:
     ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
     blocksstable::TestDataFilePrepare::SetUp();
     ASSERT_EQ(OB_SUCCESS, blocksstable::ObTmpFileManager::get_instance().init());
-    ASSERT_EQ(OB_SUCCESS, blocksstable::ObTmpFileManager::get_instance().start());
     for (int64_t i = 0; i < ARRAYSIZEOF(cols_); i++) {
-      ObSortColumn& sc = cols_[i];
+      ObSortColumn &sc = cols_[i];
       sc.cs_type_ = CS_TYPE_UTF8MB4_BIN;
       sc.set_is_ascending(true);
     }
@@ -84,7 +89,6 @@ public:
   int init_tenant_mgr()
   {
     int ret = OB_SUCCESS;
-    ObTenantManager& tm = ObTenantManager::get_instance();
     ObAddr self;
     oceanbase::rpc::frame::ObReqTransport req_transport(NULL, NULL);
     oceanbase::obrpc::ObSrvRpcProxy rpc_proxy;
@@ -93,19 +97,14 @@ public:
     self.set_ip_addr("127.0.0.1", 8086);
     ret = ObTenantConfigMgr::get_instance().add_tenant_config(tenant_id_);
     EXPECT_EQ(OB_SUCCESS, ret);
-    ret = tm.init(self, rpc_proxy, rs_rpc_proxy, rs_mgr, &req_transport, &ObServerConfig::get_instance());
-    EXPECT_EQ(OB_SUCCESS, ret);
-    ret = tm.add_tenant(tenant_id_);
-    EXPECT_EQ(OB_SUCCESS, ret);
-    ret = tm.set_tenant_mem_limit(tenant_id_, 2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
-    EXPECT_EQ(OB_SUCCESS, ret);
-    ret = tm.add_tenant(OB_SYS_TENANT_ID);
-    EXPECT_EQ(OB_SUCCESS, ret);
-    ret = tm.add_tenant(OB_SERVER_TENANT_ID);
+    ret = getter.add_tenant(tenant_id_,
+                            2L * 1024L * 1024L * 1024L, 4L * 1024L * 1024L * 1024L);
     EXPECT_EQ(OB_SUCCESS, ret);
     const int64_t ulmt = 128LL << 30;
     const int64_t llmt = 128LL << 30;
-    ret = tm.set_tenant_mem_limit(OB_SYS_TENANT_ID, ulmt, llmt);
+    ret = getter.add_tenant(OB_SERVER_TENANT_ID,
+                            ulmt,
+                            llmt);
     EXPECT_EQ(OB_SUCCESS, ret);
     oceanbase::lib::set_memory_limit(128LL << 32);
     return ret;
@@ -113,14 +112,13 @@ public:
 
   void destroy_tenant_mgr()
   {
-    ObTenantManager::get_instance().destroy();
   }
 
   template <typename T>
-  void verify_sort(T& sort, int64_t cols, bool unique)
+  void verify_sort(T &sort, int64_t cols, bool unique)
   {
     ObExecContext ctx;
-    const ObNewRow* r = NULL;
+    const ObNewRow *r = NULL;
     int64_t rows = data_.row_cnt_;
     for (int64_t i = 0; i < rows; i++) {
       ASSERT_EQ(OB_SUCCESS, data_.get_next_row(ctx, r));
@@ -162,7 +160,7 @@ public:
           if (i > 0) {
             int cmp = 0;
             for (int64_t i = 0; cmp == 0 && i < cols; i++) {
-              auto& col = cols_[i];
+              auto &col = cols_[i];
               cmp = prev.get_cell(col.index_).compare(r->get_cell(col.index_), col.cs_type_);
               if (cmp != 0) {
                 if (!col.is_ascending()) {
@@ -188,86 +186,86 @@ public:
   ObArenaAllocator alloc_;
   JoinDataGenerator data_;
   ObSortColumn cols_[3];
-  uint64_t tenant_id_ = 1;
+  uint64_t tenant_id_ = OB_SYS_TENANT_ID;
 };
 
 TEST_F(TestSortImpl, sort_impl)
 {
-  ObSortImpl sort;
-  data_.row_cnt_ = 100;
-  data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 20; };
-  data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
-  data_.idx_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
-  data_.test_init();
+	ObSortImpl sort;
+	data_.row_cnt_ = 100;
+	data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 20; };
+	data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
+	data_.idx_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
+	data_.test_init();
 
-  ObArrayHelper<ObSortColumn> helper;
-  helper.init(2, cols_, 2);
-  ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, false, true));
-  verify_sort(sort, 2, false);
-  ASSERT_FALSE(HasFatalFailure());
+	ObArrayHelper<ObSortColumn> helper;
+	helper.init(2, cols_, 2);
+	ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, false, true));
+	verify_sort(sort, 2, false);
+	ASSERT_FALSE(HasFatalFailure());
 
-  // test external disk merge sort
-  data_.row_cnt_ = (100L << 20) / data_.string_size_;
-  data_.test_init();
+	// test external disk merge sort
+	data_.row_cnt_ = (100L << 20) / data_.string_size_;
+	data_.test_init();
 
-  sort.reuse();
-  verify_sort(sort, 2, false);
-  ASSERT_FALSE(HasFatalFailure());
+	sort.reuse();
+	verify_sort(sort, 2, false);
+	ASSERT_FALSE(HasFatalFailure());
 }
 
 TEST_F(TestSortImpl, local_order)
 {
-  ObSortImpl sort;
-  data_.row_cnt_ = 100;
-  data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 20; };
-  data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
-  data_.test_init();
+	ObSortImpl sort;
+	data_.row_cnt_ = 100;
+	data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 20; };
+	data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
+	data_.test_init();
 
-  ObArrayHelper<ObSortColumn> helper;
-  helper.init(2, cols_, 2);
-  ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, true, true));
-  verify_sort(sort, 2, false);
-  ASSERT_FALSE(HasFatalFailure());
+	ObArrayHelper<ObSortColumn> helper;
+	helper.init(2, cols_, 2);
+	ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, true, true));
+	verify_sort(sort, 2, false);
+	ASSERT_FALSE(HasFatalFailure());
 
-  // test external disk merge sort
-  data_.row_cnt_ = (100L << 20) / data_.string_size_;
-  data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 10000; };
-  data_.test_init();
+	// test external disk merge sort
+	data_.row_cnt_ = (100L << 20) / data_.string_size_;
+	data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 10000; };
+	data_.test_init();
 
-  sort.reset();
-  ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, true, true));
-  verify_sort(sort, 2, false);
-  ASSERT_FALSE(HasFatalFailure());
+	sort.reset();
+	ASSERT_EQ(0, sort.init(tenant_id_, helper, NULL, true, true));
+	verify_sort(sort, 2, false);
+	ASSERT_FALSE(HasFatalFailure());
 }
 
 TEST_F(TestSortImpl, unique)
 {
-  ObUniqueSort sort;
-  data_.row_cnt_ = 100;
-  data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 3; };
-  data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
-  data_.idx_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
-  data_.test_init();
+	ObUniqueSort sort;
+	data_.row_cnt_ = 100;
+	data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 3; };
+	data_.row_id_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
+	data_.idx_val_ = [](const int64_t v) { return murmurhash64A(&v, sizeof(v), 0); };
+	data_.test_init();
 
-  ObArrayHelper<ObSortColumn> helper;
-  helper.init(1, cols_, 1);
-  ASSERT_EQ(0, sort.init(tenant_id_, helper, true));
-  verify_sort(sort, 1, true);
-  ASSERT_FALSE(HasFatalFailure());
+	ObArrayHelper<ObSortColumn> helper;
+	helper.init(1, cols_, 1);
+	ASSERT_EQ(0, sort.init(tenant_id_, helper, true));
+	verify_sort(sort, 1, true);
+	ASSERT_FALSE(HasFatalFailure());
 
-  // test external disk merge sort
-  data_.row_cnt_ = (100L << 20) / data_.string_size_;
-  data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 50000; };
-  data_.test_init();
-  cols_[0].index_ = JoinDataGenerator::IDX_CELL;
+	// test external disk merge sort
+	data_.row_cnt_ = (100L << 20) / data_.string_size_;
+	data_.idx_cnt_func_ = [](const int64_t, const int64_t) { return 50000; };
+	data_.test_init();
+	cols_[0].index_ = JoinDataGenerator::IDX_CELL;
 
-  sort.reset();
-  ASSERT_EQ(0, sort.init(tenant_id_, helper, true));
-  verify_sort(sort, 1, true);
-  ASSERT_FALSE(HasFatalFailure());
+	sort.reset();
+	ASSERT_EQ(0, sort.init(tenant_id_, helper, true));
+	verify_sort(sort, 1, true);
+	ASSERT_FALSE(HasFatalFailure());
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ObClockGenerator::init();
 
@@ -279,7 +277,7 @@ int main(int argc, char** argv)
   oceanbase::observer::ObSignalHandle::change_signal_mask();
   signal_handle.start();
 
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   return RUN_ALL_TESTS();
 }

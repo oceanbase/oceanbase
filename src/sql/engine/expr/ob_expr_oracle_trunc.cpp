@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "ob_expr_oracle_trunc.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
@@ -21,84 +21,33 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
-namespace oceanbase {
+
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-#define GET_SCALE_FOR_CALC(scale) \
-  (scale < 0 ? max(number::ObNumber::MIN_SCALE, scale) : min(number::ObNumber::MAX_SCALE, scale))
+namespace sql
+{
+#define GET_SCALE_FOR_CALC(scale) (scale < 0 ? max(static_cast<int64_t>(number::ObNumber::MIN_SCALE), scale) : min(static_cast<int64_t>(number::ObNumber::MAX_SCALE), scale))
 
-ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator& alloc)
+ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, N_ORA_TRUNC, ONE_OR_TWO, NOT_ROW_DIMENSION)
-{}
+{
+}
 
-ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator& alloc, const char* name)
+ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator &alloc, const char *name)
     : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, name, ONE_OR_TWO, NOT_ROW_DIMENSION)
-{}
-
-ObExprTrunc::ObExprTrunc(ObIAllocator& alloc) : ObExprOracleTrunc(alloc, N_TRUNC)
-{}
-
-int ObExprOracleTrunc::calc_result1(ObObj& result, const ObObj& input, ObExprCtx& expr_ctx) const
 {
-  int ret = OB_SUCCESS;
-  if (input.is_null()) {
-    result.set_null();
-  } else if (input.is_number()) {
-    ObObj default_format;
-    number::ObNumber zero_num;
-    zero_num.set_zero();
-    default_format.set_number(zero_num);
-    ret = calc_with_decimal(result, input, default_format, expr_ctx);
-  } else if (input.is_datetime()) {
-    ObObj default_format;
-    default_format.set_varchar("DD");
-    ret = calc_with_date(result, input, default_format, expr_ctx);
-  } else if (input.is_float()) {
-    result.set_float(truncf(input.get_float()));
-  } else if (input.is_double()) {
-    result.set_double(trunc(input.get_double()));
-  } else {
-    ret = OB_INVALID_NUMERIC;
-    LOG_WARN("invalid numeric. number is expected", K(ret), K(input));
-  }
-  return ret;
 }
 
-int ObExprOracleTrunc::calc_result2(ObObj& result, const ObObj& input, const ObObj& param, ObExprCtx& expr_ctx) const
+ObExprTrunc::ObExprTrunc(ObIAllocator &alloc)
+    : ObExprOracleTrunc(alloc, N_TRUNC)
 {
-  int ret = OB_SUCCESS;
-  if (input.is_null() || param.is_null()) {
-    result.set_null();
-  } else if (input.is_datetime()) {
-    ret = calc_with_date(result, input, param, expr_ctx);
-  } else if (input.is_number()) {
-    ret = calc_with_decimal(result, input, param, expr_ctx);
-  } else {
-    ret = OB_INVALID_NUMERIC;
-    LOG_WARN("Invalid numeric. trunc expected number or date", K(ret), K(input), K(param));
-  }
-  return ret;
 }
 
-int ObExprOracleTrunc::calc_resultN(ObObj& result, const ObObj* params, int64_t params_count, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == params || params_count <= 0 || params_count > 2)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument.", K(ret), K(params), K(params_count));
-  } else if (1 == params_count) {
-    ret = calc_result1(result, params[0], expr_ctx);
-  } else if (2 == params_count) {
-    ret = calc_result2(result, params[0], params[1], expr_ctx);
-  } else {
-    ret = OB_INVALID_NUMERIC;
-    LOG_WARN("Invalid numeric. trunc expected number or date", K(ret), K(params[0]), K(params_count));
-  }
-  return ret;
-}
-
-int ObExprOracleTrunc::calc_with_date(
-    ObObj& result, const ObObj& source, const ObObj& format, ObExprCtx& expr_ctx) const
+int ObExprOracleTrunc::calc_with_date(ObObj &result,
+                                      const ObObj &source,
+                                      const ObObj &format,
+                                      ObExprCtx &expr_ctx) const
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
@@ -113,9 +62,9 @@ int ObExprOracleTrunc::calc_with_date(
     LOG_WARN("inconsistent datatypes", K(ret), K(format));
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(source.get_type()), ob_obj_type_str(format.get_type()));
   } else if (OB_FAIL(ob_obj_to_ob_time_with_date(source,
-                 get_timezone_info(expr_ctx.my_session_),
-                 ob_time,
-                 get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
+                                      get_timezone_info(expr_ctx.my_session_),
+                                      ob_time,
+                                      get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
     LOG_WARN("failed to convert obj to ob time", K(ret), K(source), K(format));
   } else {
     LOG_DEBUG("succ to get ob_time", K(ob_time), K(source));
@@ -132,11 +81,14 @@ int ObExprOracleTrunc::calc_with_date(
   return ret;
 }
 
-int ObExprOracleTrunc::calc_with_decimal(
-    ObObj& result, const ObObj& source, const ObObj& format, ObExprCtx& expr_ctx) const
+int ObExprOracleTrunc::calc_with_decimal(ObObj &result,
+                                         const ObObj &source,
+                                         const ObObj &format,
+                                         ObExprCtx &expr_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!source.is_number()) || OB_UNLIKELY(!format.is_number()) || OB_ISNULL(expr_ctx.calc_buf_)) {
+  if (OB_UNLIKELY(!source.is_number()) || OB_UNLIKELY(!format.is_number()) ||
+      OB_ISNULL(expr_ctx.calc_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(source), K(format));
   } else {
@@ -148,23 +100,28 @@ int ObExprOracleTrunc::calc_with_decimal(
       LOG_WARN("deep copy failed", K(ret), K(source.get_number()));
     } else if (OB_FAIL(nmb.trunc(GET_SCALE_FOR_CALC(scale)))) {
       LOG_WARN("round number failed", K(ret), K(source), K(scale), K(format));
-    } else if (OB_FAIL(ObExprTruncate::set_trunc_val(result, nmb, expr_ctx, result_type_.get_type()))) {
+    } else if (OB_FAIL(ObExprTruncate::set_trunc_val(result,
+            nmb, expr_ctx, result_type_.get_type()))) {
       LOG_WARN("set trunc val failed", K(ret), K(nmb), K(result_type_));
     }
   }
   return ret;
 }
 
-int ObExprOracleTrunc::calc_result_typeN(
-    ObExprResType& type, ObExprResType* params, int64_t params_count, ObExprTypeCtx& type_ctx) const
+int ObExprOracleTrunc::calc_result_typeN(ObExprResType &type,
+                                         ObExprResType *params,
+                                         int64_t params_count,
+                                         ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
-  const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
+  const ObSQLSessionInfo *session =
+    dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cast basic session to sql session failed", K(ret));
-  } else if (OB_UNLIKELY(NULL == params) || OB_UNLIKELY(params_count <= 0) || OB_UNLIKELY(params_count > 2)) {
+  } else if (OB_UNLIKELY(NULL == params) || OB_UNLIKELY(params_count <= 0) ||
+             OB_UNLIKELY(params_count > 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument.", K(ret), K(params), K(params_count));
   } else {
@@ -173,7 +130,7 @@ int ObExprOracleTrunc::calc_result_typeN(
       LOG_WARN("fail to get_round_result_type", K(ret), K(params[0].get_type()));
     } else {
       if (!lib::is_oracle_mode() && ObDateTimeTC == params[0].get_type_class()) {
-        // for mysql mode
+        //for mysql mode
         result_type = ObDateTimeType;
       }
       if (ObDateTimeType == result_type) {
@@ -199,12 +156,12 @@ int ObExprOracleTrunc::calc_result_typeN(
   return ret;
 }
 
-int calc_trunc_expr_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   // trunc(x, d)
-  ObDatum* x_datum = NULL;
-  ObDatum* d_datum = NULL;
+  ObDatum *x_datum = NULL;
+  ObDatum *d_datum = NULL;
   const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
   const ObObjType res_type = expr.datum_meta_.type_;
   if (OB_UNLIKELY(1 != expr.arg_cnt_ && 2 != expr.arg_cnt_)) {
@@ -229,31 +186,57 @@ int calc_trunc_expr_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
       if (OB_UNLIKELY(ObStringTC != ob_obj_type_class(fmt_type))) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(ret), K(fmt_type));
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(arg_type), ob_obj_type_str(fmt_type));
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(arg_type),
+            ob_obj_type_str(fmt_type));
       } else {
         fmt_str = d_datum->get_string();
       }
     }
-    ObSQLSessionInfo* session = NULL;
+    while (OB_SUCC(ret) && fmt_str.length() > 2) {
+      if (0 == strncmp(fmt_str.ptr(), "fm", 2)) {
+        fmt_str.assign(fmt_str.ptr() + 2, fmt_str.length() - 2);
+      } else if (0 == strncmp(fmt_str.ptr() + fmt_str.length() - 2, "fm", 2)) {
+        fmt_str.assign(fmt_str.ptr(), fmt_str.length() - 2);
+      } else {
+        break;
+      }
+    }
+    ObSQLSessionInfo *session = NULL;
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
-      } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*x_datum,
-                     arg_type,
-                     get_timezone_info(session),
-                     ob_time,
-                     get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx())))) {
+      } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*x_datum, arg_type,
+                 get_timezone_info(session), ob_time,
+                 get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
+                 expr.args_[0]->obj_meta_.has_lob_header()))) {
         LOG_WARN("failed to convert obj to ob time", K(ret), K(*x_datum));
       } else {
         int64_t dt = 0;
         ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
-        if (OB_FAIL(ObExprTRDateFormat::trunc_new_obtime(ob_time, fmt_str))) {
-          LOG_WARN("fail to calc datetime", K(ret), K(fmt_str));
-        } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
-          LOG_WARN("fail to cast ob_time to datetime", K(ret), K(fmt_str), K(ob_time));
+        if (expr.arg_cnt_ > 1 && !!(expr.args_[1]->is_static_const_)) {
+          auto rt_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+          ObExprSingleFormatCtx *single_fmt_ctx = NULL;
+          if (NULL == (single_fmt_ctx = static_cast<ObExprSingleFormatCtx *>
+                       (ctx.exec_ctx_.get_expr_op_ctx(rt_ctx_id)))) {
+            if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(rt_ctx_id, single_fmt_ctx))) {
+              LOG_WARN("failed to create operator ctx", K(ret));
+            } else if (OB_FAIL(ObExprTRDateFormat::get_format_id_by_format_string(
+                                 fmt_str, single_fmt_ctx->fmt_id_))) {
+              LOG_WARN("fail to get format id by format string", K(ret));
+            }
+            LOG_DEBUG("new single format ctx", K(ret), KPC(single_fmt_ctx));
+          }
+          OZ (ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ob_time, single_fmt_ctx->fmt_id_));
         } else {
-          res_datum.set_datetime(dt);
+          OZ (ObExprTRDateFormat::trunc_new_obtime(ob_time, fmt_str));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
+            LOG_WARN("fail to cast ob_time to datetime", K(ret), K(fmt_str), K(ob_time));
+          } else {
+            res_datum.set_datetime(dt);
+          }
         }
       }
     }
@@ -261,12 +244,12 @@ int calc_trunc_expr_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
   return ret;
 }
 
-int calc_trunc_expr_numeric(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_trunc_expr_numeric(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   // trunc(x, d)
-  ObDatum* x_datum = NULL;
-  ObDatum* d_datum = NULL;
+  ObDatum *x_datum = NULL;
+  ObDatum *d_datum = NULL;
   const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
   const ObObjType res_type = expr.datum_meta_.type_;
   if (OB_UNLIKELY(1 != expr.arg_cnt_ && 2 != expr.arg_cnt_)) {
@@ -346,7 +329,8 @@ int calc_trunc_expr_numeric(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_dat
   return ret;
 }
 
-int ObExprOracleTrunc::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprOracleTrunc::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -359,5 +343,7 @@ int ObExprOracleTrunc::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_ex
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+#undef GET_SCALE_FOR_CALC
+
+} //namespace sql
+} //namespace oceanbase

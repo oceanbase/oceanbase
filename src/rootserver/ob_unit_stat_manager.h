@@ -15,36 +15,45 @@
 
 #include "share/ob_unit_stat.h"
 #include "rootserver/ob_root_utils.h"
-namespace oceanbase {
-namespace share {
+#include "share/ob_unit_getter.h"
+namespace oceanbase
+{
+namespace share
+{
 class ObUnitStatGetter;
-namespace schema {
+namespace schema
+{
 class ObMultiVersionSchemaService;
 }
-}  // namespace share
-namespace rootserver {
+}
+namespace rootserver
+{
 class ObUnitManager;
-class ObUnitStatManager {
+class ObUnitStatManager
+{
 public:
   ObUnitStatManager();
   virtual ~ObUnitStatManager() = default;
 
-  virtual int init(share::schema::ObMultiVersionSchemaService& schema_service, ObUnitManager& unit_mgr,
-      share::ObUnitStatGetter& unit_stat_getter);
+  virtual int init(share::schema::ObMultiVersionSchemaService &schema_service,
+                   ObUnitManager &unit_mgr,
+                   share::ObCheckStopProvider &check_stop_provider);
   void reuse();
   virtual int gather_stat();
-  virtual int get_unit_stat(uint64_t unit_id, share::ObUnitStat& unit_stat);
-
+  virtual int get_unit_stat(
+      uint64_t unit_id,
+      const common::ObZone &zone,
+      share::ObUnitStat &unit_stat);
 private:
   bool inited_;
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  ObUnitManager* unit_mgr_;
-  share::ObUnitStatGetter* unit_stat_getter_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  ObUnitManager *unit_mgr_;
+  share::ObUnitStatGetter unit_stat_getter_;
   share::ObUnitStatMap unit_stat_map_;
   DISALLOW_COPY_AND_ASSIGN(ObUnitStatManager);
 };
 
-}  // namespace rootserver
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_UNIT_STAT__MANAGER_H_
+#endif //OCEANBASE_SHARE_OB_UNIT_STAT__MANAGER_H_

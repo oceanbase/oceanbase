@@ -1,15 +1,9 @@
 # -*- coding: utf-8 -*-
-#
-# Copyright (c) 2021 OceanBase
-# OceanBase CE is licensed under Mulan PubL v2.
-# You can use this software according to the terms and conditions of the Mulan PubL v2.
-# You may obtain a copy of Mulan PubL v2 at:
-#          http://license.coscl.org.cn/MulanPubL-2.0
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-# See the Mulan PubL v2 for more details.
 
+# Copyright 2014 - 2018 Alibaba Inc. All Rights Reserved.
+# Author:
+
+# __all_privilege
 def gen_all_privilege_init_data(h_f):
   h_f.write('// initial data for __all_privilege\n')
   h_f.write("""struct PrivilegeRow {
@@ -34,7 +28,7 @@ def gen_all_privilege_init_data(h_f):
   const char* const SUPER_MSG = "To use KILL thread, SET GLOBAL, CHANGE MASTER, etc.";
   const char* const UPDATE_MSG = "To update existing rows";
   const char* const USAGE_MSG = "No privileges - allow connect only";
-""")
+""") 
   h_f.write("""static const PrivilegeRow all_privileges[] =
 {
   {"Alter", "Tables",  ALTER_TB_MSG},

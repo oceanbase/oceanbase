@@ -13,39 +13,38 @@
 #include "rpc/ob_request.h"
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace rpc {
-
-char* ObRequest::easy_alloc(int64_t size) const
+namespace oceanbase
 {
-  void* buf = NULL;
-  if (OB_ISNULL(ez_req_) || OB_ISNULL(ez_req_->ms) || OB_ISNULL(ez_req_->ms->pool)) {
-    RPC_LOG(ERROR, "ez_req_ is not corret");
-  } else {
-    buf = easy_pool_alloc(ez_req_->ms->pool, static_cast<uint32_t>(size));
+namespace rpc
+{
+void __attribute__((weak)) response_rpc_error_packet(ObRequest* req, int ret)
+{
+  UNUSED(ret);
+  RPC_REQ_OP.response_result(req, NULL);
+}
+
+void on_translate_fail(ObRequest* req, int ret)
+{
+  ObRequest::Type req_type = req->get_type();
+  if (ObRequest::OB_RPC == req_type) {
+    response_rpc_error_packet(req, ret);
+  } else if (ObRequest::OB_MYSQL == req_type) {
+    SQL_REQ_OP.disconnect_sql_conn(req);
+    SQL_REQ_OP.finish_sql_request(req);
   }
-  return static_cast<char*>(buf);
 }
 
-void ObRequest::on_process_begin()
+int ObRequest::set_trace_point(int trace_point)
 {
-  reusable_mem_.reuse();
-}
-
-char* ObRequest::easy_reusable_alloc(int64_t size) const
-{
-  void* buf = NULL;
-  if (OB_ISNULL(ez_req_) || OB_ISNULL(ez_req_->ms) || OB_ISNULL(ez_req_->ms->pool)) {
-    RPC_LOG(ERROR, "ez_req_ is not corret");
-  } else {
-    if (NULL == (buf = reusable_mem_.alloc(size))) {
-      buf = easy_pool_alloc(ez_req_->ms->pool, static_cast<uint32_t>(size));
-      if (NULL != buf) {
-        reusable_mem_.add(buf, size);
-      }
+  if (ez_req_ != NULL) {
+    if (trace_point != 0) {
+      ez_req_->trace_point = trace_point;
+    } else {
+      snprintf(ez_req_->trace_bt, EASY_REQ_TRACE_BT_SIZE, "%s", lbt());
     }
   }
-  return static_cast<char*>(buf);
+  return OB_SUCCESS;
 }
-}  // end of namespace rpc
-}  // end of namespace oceanbase
+
+} //end of namespace rpc
+} //end of namespace oceanbase

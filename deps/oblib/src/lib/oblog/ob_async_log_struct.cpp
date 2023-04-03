@@ -13,55 +13,40 @@
 #include "ob_async_log_struct.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
 
-namespace oceanbase {
-namespace common {
-ObPLogItem::ObPLogItem()
-    : ObIBaseLogItem(),
-      fd_type_(MAX_FD_FILE),
-      log_level_(OB_LOG_LEVEL_NONE),
-      tl_type_(common::OB_INVALID_INDEX),
-      is_force_allow_(false),
-      is_size_overflow_(false),
-      timestamp_(0),
-      header_pos_(0),
-      buf_size_(0),
-      pos_(0)
-{}
 
-void ObPLogItem::deep_copy_header_only(const ObPLogItem& other)
+namespace oceanbase
 {
-  tl_type_ = other.get_tl_type();
-  is_force_allow_ = other.is_force_allow();
-  fd_type_ = other.get_fd_type();
-  log_level_ = other.get_log_level();
-  is_size_overflow_ = false;
-  timestamp_ = other.get_timestamp();
-  header_pos_ = other.get_header_len();
-  pos_ = other.get_header_len();  // use header pos
-  memcpy(buf_, other.get_buf(), other.get_header_len());
+namespace common
+{
+ObPLogItem::ObPLogItem()
+  : ObIBaseLogItem(), fd_type_(MAX_FD_FILE),
+    log_level_(OB_LOG_LEVEL_NONE), tl_type_(common::OB_INVALID_INDEX), is_force_allow_(false),
+    is_size_overflow_(false), timestamp_(0), header_pos_(0), buf_size_(0), pos_(0)
+{
 }
 
 ObPLogFileStruct::ObPLogFileStruct()
-    : fd_(STDERR_FILENO), wf_fd_(STDERR_FILENO), write_count_(0), write_size_(0), file_size_(0)
+  : fd_(STDERR_FILENO), wf_fd_(STDERR_FILENO), write_count_(0), write_size_(0),
+    file_size_(0)
 {
   filename_[0] = '\0';
   MEMSET(&stat_, 0, sizeof(stat_));
   MEMSET(&wf_stat_, 0, sizeof(wf_stat_));
 }
 
-int ObPLogFileStruct::open(const char* file_name, const bool open_wf_flag, const bool redirect_flag)
+int ObPLogFileStruct::open(const char *file_name, const bool open_wf_flag, const bool redirect_flag)
 {
   int ret = OB_SUCCESS;
   size_t fname_len = 0;
   if (OB_ISNULL(file_name)) {
     LOG_STDERR("invalid argument log_file = %p\n", file_name);
     ret = OB_INVALID_ARGUMENT;
-    // need care .wf.??
+  //need care .wf.??
   } else if (OB_UNLIKELY((fname_len = strlen(file_name)) > MAX_LOG_FILE_NAME_SIZE - 5)) {
     LOG_STDERR("fname' size is overflow, log_file = %p\n", file_name);
     ret = OB_SIZE_OVERFLOW;
   } else {
-    if (OB_UNLIKELY(is_opened()) && OB_UNLIKELY(NULL != filename_)) {
+    if (OB_UNLIKELY(is_opened())) {
       LOG_STDOUT("old log_file need close, old = %s new = %s\n", filename_, file_name);
     }
     MEMCPY(filename_, file_name, fname_len);
@@ -77,6 +62,7 @@ int ObPLogFileStruct::open(const char* file_name, const bool open_wf_flag, const
   return ret;
 }
 
+
 int ObPLogFileStruct::reopen(const bool redirect_flag)
 {
   int ret = OB_SUCCESS;
@@ -84,7 +70,7 @@ int ObPLogFileStruct::reopen(const bool redirect_flag)
   if (OB_UNLIKELY(strlen(filename_) <= 0)) {
     LOG_STDERR("invalid argument log_file = %p\n", filename_);
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_UNLIKELY((tmp_fd = ::open(filename_, O_WRONLY | O_CREAT | O_APPEND, LOG_FILE_MODE)) < 0)) {
+  } else if (OB_UNLIKELY((tmp_fd = ::open(filename_, O_WRONLY | O_CREAT | O_APPEND , LOG_FILE_MODE)) < 0)) {
     LOG_STDERR("open file = %s errno = %d error = %m\n", filename_, errno);
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_UNLIKELY(0 != fstat(tmp_fd, &stat_))) {
@@ -126,7 +112,7 @@ int ObPLogFileStruct::reopen_wf()
   } else {
     char tmp_file_name[MAX_LOG_FILE_NAME_SIZE];
     (void)snprintf(tmp_file_name, sizeof(tmp_file_name), "%s.wf", filename_);
-    if (OB_UNLIKELY((tmp_fd = ::open(tmp_file_name, O_WRONLY | O_CREAT | O_APPEND, LOG_FILE_MODE)) < 0)) {
+    if (OB_UNLIKELY((tmp_fd = ::open(tmp_file_name, O_WRONLY | O_CREAT | O_APPEND , LOG_FILE_MODE)) < 0)) {
       LOG_STDERR("open file = %s errno = %d error = %m\n", tmp_file_name, errno);
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_UNLIKELY(0 != fstat(tmp_fd, &wf_stat_))) {
@@ -160,5 +146,5 @@ int ObPLogFileStruct::close_all()
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // end common
+} // end oceanbase

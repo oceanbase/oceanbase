@@ -14,66 +14,56 @@
 #include <stdio.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
-#include "zstd.h"
+#include "zstd_src/zstd.h"
 
 using namespace oceanbase;
 using namespace common;
 using namespace zstd_1_3_8;
 
-constexpr int OB_SUCCESS = 0;
-constexpr int OB_INVALID_ARGUMENT = -4002;
-constexpr int OB_ALLOCATE_MEMORY_FAILED = -4013;
-constexpr int OB_ERR_COMPRESS_DECOMPRESS_DATA = -4257;
-constexpr int OB_IO_ERROR = -4009;
-constexpr int OB_ZSTD_VERSION_138 = 138;
+constexpr int OB_SUCCESS                             = 0;
+constexpr int OB_INVALID_ARGUMENT                    = -4002;
+constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
+constexpr int OB_ERR_COMPRESS_DECOMPRESS_DATA        = -4257;
+constexpr int OB_IO_ERROR                            = -4009;
+constexpr int OB_ZSTD_VERSION_138                    = 138;
 
 static const int OB_ZSTD_COMPRESS_LEVEL = 1;
 
-int ObZstdWrapper::compress(OB_ZSTD_customMem& ob_zstd_mem, const char* src_buffer, const size_t src_data_size,
-    char* dst_buffer, const size_t dst_buffer_size, size_t& compress_ret_size)
+int ObZstdWrapper::compress(
+    OB_ZSTD_customMem &ob_zstd_mem,
+    const char *src_buffer,
+    const size_t src_data_size,
+    char *dst_buffer,
+    const size_t dst_buffer_size,
+    size_t &compress_ret_size)
 {
   int ret = OB_SUCCESS;
-  ZSTD_CCtx* zstd_cctx = NULL;
+  ZSTD_CCtx *zstd_cctx = NULL;
   ZSTD_customMem zstd_mem;
   int zstd_version = 0;
   zstd_mem.customAlloc = ob_zstd_mem.customAlloc;
   zstd_mem.customFree = ob_zstd_mem.customFree;
   zstd_mem.opaque = ob_zstd_mem.opaque;
 
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+  if (NULL == src_buffer
+      || 0 >= src_data_size
+      || NULL == dst_buffer
+      || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
-    fprintf(stderr,
-        __FILE__ ": invalid args, ret=%d src_buffer=%p src_data_size=%lu dst_buffer=%p dst_buffer_size=%lu\n",
-        ret,
-        src_buffer,
-        src_data_size,
-        dst_buffer,
-        dst_buffer_size);
   } else if (NULL == (zstd_cctx = ZSTD_createCCtx_advanced(zstd_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    fprintf(stderr, __FILE__ ": failed to create cctx\n");
   } else {
-    compress_ret_size = ZSTD_compressCCtx(
-        zstd_cctx, dst_buffer, dst_buffer_size, src_buffer, src_data_size, OB_ZSTD_COMPRESS_LEVEL, &zstd_version);
+    compress_ret_size = ZSTD_compressCCtx(zstd_cctx,
+                                          dst_buffer,
+                                          dst_buffer_size,
+                                          src_buffer,
+                                          src_data_size,
+                                          OB_ZSTD_COMPRESS_LEVEL,
+                                          &zstd_version);
     if (0 != ZSTD_isError(compress_ret_size)) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-      fprintf(stderr,
-          __FILE__ ": fail to compress data, ret=%d compress_ret_size=%lu src_buffer=%p src_data_size=%lu  "
-                   "dst_buffer=%p dst_buffer_size=%lu compress_level=%d\n",
-          ret,
-          compress_ret_size,
-          src_buffer,
-          src_data_size,
-          dst_buffer,
-          dst_buffer_size,
-          OB_ZSTD_COMPRESS_LEVEL);
     } else if (OB_ZSTD_VERSION_138 != zstd_version) {
       ret = OB_IO_ERROR;
-      fprintf(stderr,
-          __FILE__ ": invalid ZSTD_compressCCtx version, ret=%d lib version=%d expect version=%d",
-          ret,
-          zstd_version,
-          OB_ZSTD_VERSION_138);
     }
   }
 
@@ -82,13 +72,19 @@ int ObZstdWrapper::compress(OB_ZSTD_customMem& ob_zstd_mem, const char* src_buff
     zstd_cctx = NULL;
   }
   return ret;
+
 }
 
-int ObZstdWrapper::decompress(OB_ZSTD_customMem& ob_zstd_mem, const char* src_buffer, const size_t src_data_size,
-    char* dst_buffer, const size_t dst_buffer_size, size_t& dst_data_size)
+int ObZstdWrapper::decompress(
+    OB_ZSTD_customMem &ob_zstd_mem,
+    const char *src_buffer,
+    const size_t src_data_size,
+    char *dst_buffer,
+    const size_t dst_buffer_size,
+    size_t &dst_data_size)
 {
   int ret = OB_SUCCESS;
-  ZSTD_DCtx* zstd_dctx = NULL;
+  ZSTD_DCtx *zstd_dctx = NULL;
   ZSTD_customMem zstd_mem;
   int zstd_version = 0;
   zstd_mem.customAlloc = ob_zstd_mem.customAlloc;
@@ -96,39 +92,25 @@ int ObZstdWrapper::decompress(OB_ZSTD_customMem& ob_zstd_mem, const char* src_bu
   zstd_mem.opaque = ob_zstd_mem.opaque;
   dst_data_size = 0;
 
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+
+  if (NULL == src_buffer
+      || 0 >= src_data_size
+      || NULL == dst_buffer
+      || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
-    fprintf(stderr,
-        __FILE__ ": invalid args, ret=%d src_buffer=%p src_data_size=%lu dst_buffer=%p dst_buffer_size=%lu\n",
-        ret,
-        src_buffer,
-        src_data_size,
-        dst_buffer,
-        dst_buffer_size);
   } else if (NULL == (zstd_dctx = ZSTD_createDCtx_advanced(zstd_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    fprintf(stderr, __FILE__ ": failed to create dctx\n");
   } else {
-    dst_data_size =
-        ZSTD_decompressDCtx(zstd_dctx, dst_buffer, dst_buffer_size, src_buffer, src_data_size, &zstd_version);
+    dst_data_size = ZSTD_decompressDCtx(zstd_dctx,
+                                              dst_buffer,
+                                              dst_buffer_size,
+                                              src_buffer,
+                                              src_data_size,
+                                              &zstd_version);
     if (0 != ZSTD_isError(dst_data_size)) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-      fprintf(stderr,
-          __FILE__ ": failed to decompress data, ret=%d src_buffer=%p src_data_size=%lu dst_buffer=%p "
-                   "dst_buffer_size=%lu dst_data_size =%lu\n",
-          ret,
-          src_buffer,
-          src_data_size,
-          dst_buffer,
-          dst_buffer_size,
-          dst_data_size);
     } else if (OB_ZSTD_VERSION_138 != zstd_version) {
       ret = OB_IO_ERROR;
-      fprintf(stderr,
-          __FILE__ ": invalid ZSTD_decompressDCtx version, ret=%d lib version=%d expect version=%d",
-          ret,
-          zstd_version,
-          OB_ZSTD_VERSION_138);
     }
   }
 
@@ -139,11 +121,12 @@ int ObZstdWrapper::decompress(OB_ZSTD_customMem& ob_zstd_mem, const char* src_bu
   return ret;
 }
 
-int ObZstdWrapper::create_cctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
+
+int ObZstdWrapper::create_cctx(OB_ZSTD_customMem &ob_zstd_mem, void *&ctx)
 {
   int ret = OB_SUCCESS;
   size_t ret_code = 0;
-  ZSTD_CCtx* cctx = NULL;
+  ZSTD_CCtx *cctx = NULL;
   ZSTD_customMem zstd_mem;
   zstd_mem.customAlloc = ob_zstd_mem.customAlloc;
   zstd_mem.customFree = ob_zstd_mem.customFree;
@@ -153,10 +136,8 @@ int ObZstdWrapper::create_cctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
 
   if (NULL == (cctx = ZSTD_createCCtx_advanced(zstd_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    fprintf(stderr, __FILE__ ": failed to create cctx\n");
   } else if (0 != ZSTD_isError(ret_code = ZSTD_compressBegin(cctx, OB_ZSTD_COMPRESS_LEVEL))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    fprintf(stderr, __FILE__ ": failed to begin compress, ret=%d ret_code=%lu\n", ret, ret_code);
     ZSTD_freeCCtx(cctx);
     cctx = NULL;
   } else {
@@ -165,45 +146,37 @@ int ObZstdWrapper::create_cctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
   return ret;
 }
 
-void ObZstdWrapper::free_cctx(void*& ctx)
+
+void ObZstdWrapper::free_cctx(void *&ctx)
 {
-  ZSTD_CCtx* cctx = static_cast<ZSTD_CCtx*>(ctx);
+  ZSTD_CCtx *cctx = static_cast<ZSTD_CCtx *>(ctx);
   ZSTD_freeCCtx(cctx);
 }
 
-int ObZstdWrapper::compress_block(
-    void* ctx, const char* src, const size_t src_size, char* dest, const size_t dest_capacity, size_t& compressed_size)
+int ObZstdWrapper::compress_block(void *ctx, const char *src, const size_t src_size,
+    char *dest, const size_t dest_capacity, size_t &compressed_size)
 {
   int ret = OB_SUCCESS;
-  ZSTD_CCtx* cctx = static_cast<ZSTD_CCtx*>(ctx);
+  ZSTD_CCtx *cctx = static_cast<ZSTD_CCtx *>(ctx);
   compressed_size = 0;
 
   if (NULL == ctx || NULL == src || NULL == dest) {
     ret = OB_INVALID_ARGUMENT;
-    fprintf(stderr, __FILE__ ":invalid args, ret=%d ctx=%p src=%p dest=%p\n", ret, ctx, src, dest);
   } else {
     compressed_size = ZSTD_compressBlock(cctx, dest, dest_capacity, src, src_size);
     if (0 != ZSTD_isError(compressed_size)) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-      fprintf(stderr,
-          __FILE__ ": failed to compress block, ret=%d src=%p src_size=%lu dest=%p dest=%lu compressed_size=%lu\n",
-          ret,
-          src,
-          src_size,
-          dest,
-          dest_capacity,
-          compressed_size);
     }
   }
 
   return ret;
 }
 
-int ObZstdWrapper::create_dctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
+int ObZstdWrapper::create_dctx(OB_ZSTD_customMem &ob_zstd_mem, void *&ctx)
 {
   int ret = OB_SUCCESS;
   size_t ret_code = 0;
-  ZSTD_DCtx* dctx = NULL;
+  ZSTD_DCtx *dctx = NULL;
   ZSTD_customMem zstd_mem;
   zstd_mem.customAlloc = ob_zstd_mem.customAlloc;
   zstd_mem.customFree = ob_zstd_mem.customFree;
@@ -212,10 +185,8 @@ int ObZstdWrapper::create_dctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
 
   if (NULL == (dctx = ZSTD_createDCtx_advanced(zstd_mem))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    fprintf(stderr, __FILE__ ": failed to create dctx\n");
   } else if (ZSTD_isError(ret_code = ZSTD_decompressBegin(dctx))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    fprintf(stderr, __FILE__ ": failed to begin decompress, ret=%d ret_code=%lu\n", ret, ret_code);
     ZSTD_freeDCtx(dctx);
     dctx = NULL;
   } else {
@@ -224,46 +195,33 @@ int ObZstdWrapper::create_dctx(OB_ZSTD_customMem& ob_zstd_mem, void*& ctx)
   return ret;
 }
 
-void ObZstdWrapper::free_dctx(void*& ctx)
+void ObZstdWrapper::free_dctx(void *&ctx)
 {
-  ZSTD_DCtx* dctx = static_cast<ZSTD_DCtx*>(ctx);
+  ZSTD_DCtx *dctx = static_cast<ZSTD_DCtx *>(ctx);
   ZSTD_freeDCtx(dctx);
 }
 
-int ObZstdWrapper::decompress_block(void* ctx, const char* src, const size_t src_size, char* dest,
-    const size_t dest_capacity, size_t& decompressed_size)
+int ObZstdWrapper::decompress_block(void *ctx, const char *src, const size_t src_size,
+    char *dest, const size_t dest_capacity, size_t &decompressed_size)
 {
   int ret = OB_SUCCESS;
   decompressed_size = 0;
 
-  if (NULL == ctx || NULL == src || NULL == dest || src_size <= 0 || dest_capacity <= 0) {
+  if (NULL == ctx
+      || NULL == src
+      || NULL == dest
+      || src_size <= 0
+      || dest_capacity <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    fprintf(stderr,
-        __FILE__ ": invalid args, ret=%d ctx=%p src=%p src_size=%lu dest=%p dest_capacity=%lu\n",
-        ret,
-        ctx,
-        src,
-        src_size,
-        dest,
-        dest_capacity);
   } else {
-    ZSTD_DCtx* dctx = static_cast<ZSTD_DCtx*>(ctx);
+    ZSTD_DCtx *dctx = static_cast<ZSTD_DCtx *>(ctx);
     decompressed_size = ZSTD_decompressBlock(dctx, dest, dest_capacity, src, src_size);
     if (0 != ZSTD_isError(decompressed_size)) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-      fprintf(stderr,
-          __FILE__ ": failed to decompress block, ret=%d ctx=%p src=%p src_size=%lu dest=%p dest_capacity=%lu "
-                   "decompressed_size-%lu\n",
-          ret,
-          ctx,
-          src,
-          src_size,
-          dest,
-          dest_capacity,
-          decompressed_size);
     }
   }
   return ret;
+
 }
 
 size_t ObZstdWrapper::compress_bound(const size_t src_size)
@@ -271,15 +229,18 @@ size_t ObZstdWrapper::compress_bound(const size_t src_size)
   return ZSTD_compressBound(src_size);
 }
 
-int ObZstdWrapper::insert_block(void* ctx, const void* block, const size_t block_size)
+int ObZstdWrapper::insert_block(void *ctx, const void *block, const size_t block_size)
 {
   int ret = OB_SUCCESS;
   if (NULL == ctx || NULL == block || 0 >= block_size) {
     ret = OB_INVALID_ARGUMENT;
-    fprintf(stderr, __FILE__ ": invalid args, ret=%d ctx=%p block=%p block_size=%lu\n", ret, ctx, block, block_size);
   } else {
-    ZSTD_DCtx* dctx = static_cast<ZSTD_DCtx*>(ctx);
+    ZSTD_DCtx *dctx = static_cast<ZSTD_DCtx *>(ctx);
     ZSTD_insertBlock(dctx, block, block_size);
   }
   return ret;
 }
+
+
+
+

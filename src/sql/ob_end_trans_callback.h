@@ -19,39 +19,40 @@
 #include "lib/objectpool/ob_tc_factory.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "sql/ob_i_end_trans_callback.h"
-#include "storage/transaction/ob_trans_result.h"
-#include "storage/transaction/ob_trans_define.h"
+#include "storage/tx/ob_trans_result.h"
+#include "storage/tx/ob_trans_define.h"
 #include "observer/mysql/ob_mysql_end_trans_cb.h"
 
-namespace oceanbase {
-namespace sql {
-class ObSharedEndTransCallback : public ObIEndTransCallback {
+namespace oceanbase
+{
+namespace sql
+{
+// 同一个对象可能在同一时间被多个end trans函数共享，可能会发生并发地调用同一个对象的callback函数的情况
+// deprecated, only used in NullEndTransCallback and will be removed in 4.0
+class ObSharedEndTransCallback : public ObIEndTransCallback
+{
 public:
   ObSharedEndTransCallback();
   virtual ~ObSharedEndTransCallback();
 
-  virtual bool is_shared() const override final
-  {
-    return true;
-  }
+  virtual bool is_shared() const override final { return true; }
 };
 
-class ObExclusiveEndTransCallback : public ObIEndTransCallback {
+// 一个对象同一时间只能被一个end trans函数独享，同一个对象只可能被串行地调用callback函数
+class ObExclusiveEndTransCallback : public ObIEndTransCallback
+{
 public:
-  enum EndTransType {
+  enum EndTransType
+  {
     END_TRANS_TYPE_INVALID,
-    END_TRANS_TYPE_EXPLICIT,  // Explicit commit
-    END_TRANS_TYPE_IMPLICIT,  // Implicit commit
+    END_TRANS_TYPE_EXPLICIT, // 显式提交
+    END_TRANS_TYPE_IMPLICIT, // 隐式提交
   };
-
 public:
   ObExclusiveEndTransCallback();
   virtual ~ObExclusiveEndTransCallback();
 
-  virtual bool is_shared() const override final
-  {
-    return false;
-  }
+  virtual bool is_shared() const override final { return false; }
 
   void set_is_need_rollback(bool is_need_rollback)
   {
@@ -66,10 +67,7 @@ public:
   {
     is_txs_end_trans_called_ = is_txs_end_trans_called;
   }
-  bool is_txs_end_trans_called() const
-  {
-    return is_txs_end_trans_called_;
-  }
+  bool is_txs_end_trans_called() const { return is_txs_end_trans_called_; }
   void reset()
   {
     ObIEndTransCallback::reset();
@@ -78,108 +76,37 @@ public:
     is_need_rollback_ = false;
     is_txs_end_trans_called_ = false;
   }
-
 protected:
-  ObExclusiveEndTransCallback::EndTransType end_trans_type_;
+  ObExclusiveEndTransCallback::EndTransType end_trans_type_; // 表示是显式还是隐式的commit或rollback
   bool has_set_need_rollback_;
   bool is_need_rollback_;
-  bool is_txs_end_trans_called_;
+  bool is_txs_end_trans_called_; // 事务模块的end trans接口是否已经调用了（正在调用过程中也算，并且调用参数不一定传的是本callback对象）
 };
 
-class ObEndTransSyncCallback : public ObExclusiveEndTransCallback {
-public:
-  ObEndTransSyncCallback();
-  virtual ~ObEndTransSyncCallback();
-  virtual void callback(int cb_param);
-  virtual void callback(int cb_param, const transaction::ObTransID& trans_id);
-  virtual const char* get_type() const
-  {
-    return "ObEndTransSyncCallback";
-  }
-  virtual ObEndTransCallbackType get_callback_type() const
-  {
-    return SYNC_CALLBACK_TYPE;
-  }
-  int wait();
-  int init(const transaction::ObTransDesc* trans_desc, ObSQLSessionInfo* session);
-  void reset();
-
-private:
-  /* functions */
-
-  /* variables */
-  static const int64_t PUSH_POP_TIMEOUT = 1000 * 1000 * 10L;
-  transaction::ObTransCond queue_;
-  const transaction::ObTransDesc* trans_desc_;
-  ObSQLSessionInfo* session_;
-  /* macro */
-  DISALLOW_COPY_AND_ASSIGN(ObEndTransSyncCallback);
-};
-
-class ObEndTransAsyncCallback : public ObExclusiveEndTransCallback {
+class ObEndTransAsyncCallback : public ObExclusiveEndTransCallback
+{
 public:
   ObEndTransAsyncCallback();
   virtual ~ObEndTransAsyncCallback();
   virtual void callback(int cb_param);
-  virtual void callback(int cb_param, const transaction::ObTransID& trans_id);
-  virtual const char* get_type() const
-  {
-    return "ObEndTransAsyncCallback";
-  }
-  virtual ObEndTransCallbackType get_callback_type() const
-  {
-    return ASYNC_CALLBACK_TYPE;
-  }
-  observer::ObSqlEndTransCb& get_mysql_end_trans_cb()
-  {
-    return mysql_end_trans_cb_;
-  }
+  virtual void callback(int cb_param, const transaction::ObTransID &trans_id);
+  virtual const char *get_type() const { return "ObEndTransAsyncCallback"; }
+  virtual ObEndTransCallbackType get_callback_type() const { return ASYNC_CALLBACK_TYPE; }
+  observer::ObSqlEndTransCb &get_mysql_end_trans_cb() { return mysql_end_trans_cb_; }
   void reset()
   {
     ObExclusiveEndTransCallback::reset();
     mysql_end_trans_cb_.reset();
   }
-
 private:
   /* macro */
   observer::ObSqlEndTransCb mysql_end_trans_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObEndTransAsyncCallback);
 };
 
-class ObNullEndTransCallback : public ObSharedEndTransCallback {
-public:
-  ObNullEndTransCallback() : ObSharedEndTransCallback()
-  {}
-  virtual ~ObNullEndTransCallback()
-  {}
-  virtual void callback(int cb_param)
-  {
-    UNUSED(cb_param);
-  }
-  virtual void callback(int cb_param, const transaction::ObTransID& trans_id)
-  {
-    UNUSED(cb_param);
-    UNUSED(trans_id);
-  }
-  virtual const char* get_type() const
-  {
-    return "ObNullEndTransCallback";
-  }
-  virtual ObEndTransCallbackType get_callback_type() const
-  {
-    return NULL_CALLBACK_TYPE;
-  }
-  virtual int init(const transaction::ObTransID& trans_id);
+}
+}
 
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObNullEndTransCallback);
-
-private:
-  transaction::ObTransID trans_id_;
-};
-
-}  // namespace sql
-}  // namespace oceanbase
 
 #endif /* __OB_SQL_END_TRANS_CALLBACK_H__ */
 //// end of header file

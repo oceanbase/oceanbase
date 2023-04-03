@@ -5659,7 +5659,7 @@ with cte as (select count(*) as k from t1) select * from cte where k = 1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -5734,9 +5734,9 @@ with cte as (select count(*) as k from t1) select * from cte where k = 1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -6170,7 +6170,7 @@ with cte (k1) as (select count(*) as k from t1) select * from cte where k1 = 1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -6245,9 +6245,9 @@ with cte (k1) as (select count(*) as k from t1) select * from cte where k1 = 1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -6784,7 +6784,7 @@ with  cte1 (c22, c21) AS (select c1, c2 from t1) select c22 as c21, c21 from cte
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -6859,9 +6859,9 @@ with  cte1 (c22, c21) AS (select c1, c2 from t1) select c22 as c21, c21 from cte
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -13472,7 +13472,7 @@ WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n+1 from cte where n < 10) se
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -13547,9 +13547,9 @@ WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n+1 from cte where n < 10) se
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -14351,10 +14351,10 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -14845,7 +14845,7 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -14920,9 +14920,9 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -15876,10 +15876,10 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -16370,7 +16370,7 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -16445,9 +16445,9 @@ with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) se
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -22149,10 +22149,10 @@ WITH fibonacci (n, fib_n, next_fib_n) AS (   SELECT 1, 0, 1 from dual   UNION AL
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -22228,10 +22228,10 @@ WITH fibonacci (n, fib_n, next_fib_n) AS (   SELECT 1, 0, 1 from dual   UNION AL
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -23173,7 +23173,7 @@ WITH fibonacci (n, fib_n, next_fib_n) AS (   SELECT 1, 0, 1 from dual   UNION AL
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -23248,9 +23248,9 @@ WITH fibonacci (n, fib_n, next_fib_n) AS (   SELECT 1, 0, 1 from dual   UNION AL
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -27004,7 +27004,7 @@ WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello+1 from cte where he
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -27079,9 +27079,9 @@ WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello+1 from cte where he
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -28426,7 +28426,7 @@ with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union a
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_SIMPLE_COND"
             ],
             "rel_id": [
@@ -28501,9 +28501,9 @@ with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union a
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -30508,7 +30508,7 @@ with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union a
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_SIMPLE_COND"
             ],
             "rel_id": [
@@ -30583,9 +30583,9 @@ with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union a
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -34671,7 +34671,7 @@ with cte (a,b,c) as  (     select id, name, leaderid from emp where emp.id = 1  
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_SIMPLE_COND"
             ],
             "rel_id": [
@@ -34746,9 +34746,9 @@ with cte (a,b,c) as  (     select id, name, leaderid from emp where emp.id = 1  
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -40903,10 +40903,10 @@ with cte(n) as (select 1 union all select n+1 from cte where n < 23) select n fr
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -41397,7 +41397,7 @@ with cte(n) as (select 1 union all select n+1 from cte where n < 23) select n fr
             "expr_info": [
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "IS_RANGE_COND"
             ],
             "rel_id": [
@@ -41472,9 +41472,9 @@ with cte(n) as (select 1 union all select n+1 from cte where n < 23) select n fr
                 },
                 "expr_info": [
                   "IS_CONST",
-                  "IS_PARAM",
+                  "IS_STATIC_PARAM",
                   "CNT_CONST",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                 ],
@@ -43608,7 +43608,7 @@ with cte_recursive (a,b,c) as ( select id, name, leaderid from emp where emp.id 
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM",
+                  "CNT_STATIC_PARAM",
                   "IS_SIMPLE_COND"
                 ],
                 "rel_id": [
@@ -43683,9 +43683,9 @@ with cte_recursive (a,b,c) as ( select id, name, leaderid from emp where emp.id 
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],

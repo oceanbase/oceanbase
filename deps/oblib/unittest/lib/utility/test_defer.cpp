@@ -18,8 +18,7 @@ using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;
 
-TEST(ScopedLambda, Basic)
-{
+TEST(ScopedLambda, Basic) {
   bool mybool = false;
   {
     auto exec = MakeScopedLambda([&]() { mybool = true; });  // NOLINT
@@ -54,8 +53,7 @@ TEST(ScopedLambda, Basic)
   EXPECT_EQ(1, counter);  // should not have executed upon scope exit.
 }
 
-TEST(ScopedLambda, Defer)
-{
+TEST(ScopedLambda, Defer) {
   bool mybool = false;
   {
     DEFER(mybool = true);
@@ -90,8 +88,7 @@ TEST(ScopedLambda, Defer)
   EXPECT_EQ(1, counter);  // should not have executed upon scope exit.
 }
 
-TEST(Defer, InitializerLists)
-{
+TEST(Defer, InitializerLists) {
   struct S {
     int a;
     int b;
@@ -106,8 +103,8 @@ TEST(Defer, InitializerLists)
   EXPECT_EQ(20, x);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

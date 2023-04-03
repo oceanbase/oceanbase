@@ -13,18 +13,26 @@
 #include "sql/engine/expr/ob_expr_merging_frozen_time.h"
 #include "lib/ob_name_def.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprMergingFrozenTime::ObExprMergingFrozenTime(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MERGING_FROZEN_TIME, N_MERGING_FROZEN_TIME, 0, NOT_ROW_DIMENSION)
-{}
+ObExprMergingFrozenTime::ObExprMergingFrozenTime(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MERGING_FROZEN_TIME,
+                         N_MERGING_FROZEN_TIME,
+                         0,
+                         NOT_ROW_DIMENSION,
+                         INTERNAL_IN_MYSQL_MODE)
+{
+}
 
 ObExprMergingFrozenTime::~ObExprMergingFrozenTime()
-{}
+{
+}
 
-int ObExprMergingFrozenTime::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprMergingFrozenTime::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_timestamp();
@@ -32,5 +40,5 @@ int ObExprMergingFrozenTime::calc_result_type0(ObExprResType& type, ObExprTypeCt
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

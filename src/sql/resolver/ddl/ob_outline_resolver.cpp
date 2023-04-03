@@ -22,17 +22,20 @@
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-int ObOutlineResolver::resolve_outline_name(const ParseNode* node, ObString& db_name, ObString& outline_name)
+namespace sql
+{
+int ObOutlineResolver::resolve_outline_name(const ParseNode *node, ObString &db_name, ObString &outline_name)
 {
   int ret = OB_SUCCESS;
   ObNameCaseMode mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
 
-  if (OB_ISNULL(node) || OB_UNLIKELY(T_RELATION_FACTOR != node->type_) ||
-      OB_UNLIKELY(RELATION_FACTOR_CHILD_COUNT > node->num_child_)) {
+  if (OB_ISNULL(node)
+      || OB_UNLIKELY(T_RELATION_FACTOR != node->type_)
+      || OB_UNLIKELY(RELATION_FACTOR_CHILD_COUNT > node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
   } else if (OB_ISNULL(node->children_)) {
@@ -49,15 +52,15 @@ int ObOutlineResolver::resolve_outline_name(const ParseNode* node, ObString& db_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL", K(ret));
   } else {
-    const ParseNode* db_name_node = node->children_[0];
-    const ParseNode* outline_name_node = node->children_[1];
+    const ParseNode *db_name_node = node->children_[0];
+    const ParseNode *outline_name_node = node->children_[1];
 
-    // get outline name, TODO:check outline_name length
-    outline_name.assign_ptr(
-        outline_name_node->str_value_, static_cast<ObString::obstr_size_t>(outline_name_node->str_len_));
+    //get outline name, TODO(tingshuai.yts):check outline_name length
+    outline_name.assign_ptr(outline_name_node->str_value_, static_cast<ObString::obstr_size_t>(outline_name_node->str_len_));
 
-    // get database name
-    bool perserve_lettercase = share::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
+    //get database name
+    bool perserve_lettercase = lib::is_oracle_mode() ?
+        true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
     if (NULL == db_name_node) {
       if (session_info_->get_database_name().empty()) {
         db_name = OB_OUTLINE_DEFAULT_DATABASE_NAME;
@@ -69,26 +72,31 @@ int ObOutlineResolver::resolve_outline_name(const ParseNode* node, ObString& db_
       if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, db_name))) {
         LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
       } else {
-        CK(OB_NOT_NULL(schema_checker_));
-        CK(OB_NOT_NULL(schema_checker_->get_schema_guard()));
-        OZ(ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(), session_info_, db_name));
+        CK (OB_NOT_NULL(schema_checker_));
+        CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
+        OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
+                                           session_info_,
+                                           db_name));
       }
     }
   }
   return ret;
 }
 
-int ObOutlineResolver::resolve_outline_stmt(const ParseNode* node, ObStmt*& out_stmt, ObString& out_sql)
+int ObOutlineResolver::resolve_outline_stmt(const ParseNode *node, ObStmt *&out_stmt, ObString &out_sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret), K(node), K(stmt_));
   } else {
-    ObStmt* outline_stmt = NULL;
+    ObStmt *outline_stmt = NULL;
     ObResolver resolver(params_);
-    if (node->type_ != T_SELECT && node->type_ != T_INSERT && node->type_ != T_REPLACE && node->type_ != T_DELETE &&
-        node->type_ != T_UPDATE) {
+    if (node->type_ != T_SELECT
+        && node->type_ != T_INSERT
+        && node->type_ != T_REPLACE
+        && node->type_ != T_DELETE
+        && node->type_ != T_UPDATE) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected node type", K(node->type_), K(ret));
     } else if (OB_FAIL(resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *node, outline_stmt))) {
@@ -99,22 +107,30 @@ int ObOutlineResolver::resolve_outline_stmt(const ParseNode* node, ObStmt*& out_
     } else {
       out_stmt = outline_stmt;
       out_sql.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+      if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+              *allocator_, session_info_->get_dtc_params(), out_sql))) {
+        LOG_WARN("fail to convert sql text", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObOutlineResolver::resolve_outline_target(const ParseNode* target_node, ObString& outline_target)
+int ObOutlineResolver::resolve_outline_target(const ParseNode *target_node, ObString &outline_target)
 {
   int ret = OB_SUCCESS;
   if (NULL == target_node) {
-    // has no outline_target, keep empty
+    //has no outline_target, keep empty
     outline_target.reset();
   } else {
     outline_target.assign_ptr(target_node->str_value_, static_cast<int32_t>(target_node->str_len_));
+    if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+            *allocator_, session_info_->get_dtc_params(), outline_target))) {
+      LOG_WARN("fail to convert sql text", K(ret));
+    }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase

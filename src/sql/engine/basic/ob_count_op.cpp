@@ -16,17 +16,25 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObCountSpec::ObCountSpec(ObIAllocator& alloc, const ObPhyOperatorType type)
-    : ObOpSpec(alloc, type), rownum_limit_(NULL), anti_monotone_filters_(alloc)
+ObCountSpec::ObCountSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+    rownum_limit_(NULL),
+    anti_monotone_filters_(alloc)
 
-{}
+{
+}
 
-OB_SERIALIZE_MEMBER((ObCountSpec, ObOpSpec), rownum_limit_, anti_monotone_filters_);
+OB_SERIALIZE_MEMBER((ObCountSpec, ObOpSpec),
+                    rownum_limit_,
+                    anti_monotone_filters_);
 
-ObCountOp::ObCountOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
+
+ObCountOp::ObCountOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input)
 {
   reset_default();
@@ -37,6 +45,7 @@ void ObCountOp::reset_default()
   cur_rownum_ = 0;
   rownum_limit_ = INT64_MAX;
 }
+
 
 int ObCountOp::inner_open()
 {
@@ -53,9 +62,9 @@ int ObCountOp::inner_open()
 int ObCountOp::get_rownum_limit()
 {
   int ret = OB_SUCCESS;
-  ObExpr* expr = MY_SPEC.rownum_limit_;
+  ObExpr *expr = MY_SPEC.rownum_limit_;
   if (NULL != expr) {
-    ObDatum* datum = NULL;
+    ObDatum *datum = NULL;
     if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
       LOG_WARN("limit expr evaluate failed", K(ret));
     } else {
@@ -70,11 +79,11 @@ int ObCountOp::get_rownum_limit()
   return ret;
 }
 
-int ObCountOp::rescan()
+int ObCountOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(ObOperator::rescan())) {
+  if (OB_FAIL(ObOperator::inner_rescan())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("operator rescan fail", K(ret));
     }
@@ -85,13 +94,11 @@ int ObCountOp::rescan()
   return ret;
 }
 
-int ObCountOp::switch_iterator()
+int ObCountOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOperator::switch_iterator())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("operator switch iterator fail", K(ret));
-    }
+  if (OB_FAIL(ObOperator::inner_switch_iterator())) {
+    LOG_WARN("operator switch iterator fail", K(ret));
   } else {
     reset_default();
     OZ(get_rownum_limit());
@@ -139,5 +146,5 @@ int ObCountOp::inner_get_next_row()
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

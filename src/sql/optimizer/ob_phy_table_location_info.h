@@ -16,243 +16,171 @@
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/optimizer/ob_route_policy.h"
-namespace oceanbase {
-namespace sql {
-
-class ObOptPartLoc {
+namespace oceanbase
+{
+namespace sql
+{
+class DASRelatedTabletMap;
+class ObOptTabletLoc
+{
   OB_UNIS_VERSION(1);
-  // friend class ObPartitionReplicaLocation;
+  //friend class ObPartitionReplicaLocation;
 public:
-  typedef common::ObSEArray<ObRoutePolicy::CandidateReplica, common::OB_MAX_MEMBER_NUMBER, common::ModulePageAllocator,
-      true>
-      ObSmartReplicaLocationArray;
+  typedef common::ObSEArray<ObRoutePolicy::CandidateReplica,
+                            common::OB_MAX_MEMBER_NUMBER, common::ModulePageAllocator,
+                            true> ObSmartReplicaLocationArray;
 
-  ObOptPartLoc();
-  virtual ~ObOptPartLoc();
+  ObOptTabletLoc();
+  virtual ~ObOptTabletLoc();
 
   void reset();
-  int assign(const ObOptPartLoc& partition_location);
+  int assign(const ObOptTabletLoc &partition_location);
   int assign_with_only_readable_replica(
-      const share::ObPartitionLocation& partition_location, const common::ObIArray<common::ObAddr>& invalid_servers);
+                                        const ObObjectID &partition_id,
+                                        const common::ObTabletID &tablet_id,
+                                        const share::ObLSLocation &partition_location,
+                                        const common::ObIArray<common::ObAddr> &invalid_servers);
 
   bool is_valid() const;
-  bool operator==(const ObOptPartLoc& other) const;
+  bool operator==(const ObOptTabletLoc &other) const;
 
-  // return OB_LOCATION_LEADER_NOT_EXIST for leader not exist.
-  int get_strong_leader(share::ObReplicaLocation& replica_location, int64_t& replica_idx) const;
-  int get_strong_leader(share::ObReplicaLocation& replica_location) const;
+  // return OB_LS_LOCATION_LEADER_NOT_EXIST for leader not exist.
+  int get_strong_leader(share::ObLSReplicaLocation &replica_location, int64_t &replica_idx) const;
+  int get_strong_leader(share::ObLSReplicaLocation &replica_location) const;
 
-  inline uint64_t get_table_id() const
+  void set_tablet_info(common::ObTabletID tablet_id,
+                       common::ObPartID part_id)
   {
-    return table_id_;
+    tablet_id_ = tablet_id;
+    partition_id_ = part_id;
   }
-  // inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  inline int64_t get_partition_id() const { return partition_id_; }
 
-  inline int64_t get_partition_id() const
-  {
-    return partition_id_;
-  }
-  // inline void set_partition_id(const int64_t partition_id) { partition_id_ = partition_id; }
+  inline common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
-  inline int64_t get_partition_cnt() const
-  {
-    return partition_cnt_;
-  }
-  // inline void set_partition_cnt(const int64_t partition_cnt) { partition_cnt_ = partition_cnt; }
+  inline const share::ObLSID &get_ls_id() const { return ls_id_; }
 
-  inline int64_t get_renew_time() const
-  {
-    return renew_time_;
-  }
-  // inline void set_renew_time(const int64_t renew_time) { renew_time_ = renew_time; }
+  inline int64_t get_renew_time() const { return renew_time_; }
 
-  inline const common::ObIArray<ObRoutePolicy::CandidateReplica>& get_replica_locations() const
-  {
-    return replica_locations_;
-  }
+  inline const common::ObIArray<ObRoutePolicy::CandidateReplica> &get_replica_locations() const { return replica_locations_; }
 
-  inline common::ObIArray<ObRoutePolicy::CandidateReplica>& get_replica_locations()
-  {
-    return replica_locations_;
-  }
+  inline common::ObIArray<ObRoutePolicy::CandidateReplica> &get_replica_locations() { return replica_locations_; }
 
-  inline int get_partition_key(common::ObPartitionKey& key) const
-  {
-    return key.init(table_id_, partition_id_, partition_cnt_);
-  }
-  inline const common::ObPGKey& get_pg_key() const
-  {
-    return pg_key_;
-  }
-
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),
-      K_(is_mark_fail));
+  TO_STRING_KV(K(partition_id_), K_(replica_locations), K_(renew_time));
 
 private:
-  uint64_t table_id_;
   int64_t partition_id_;
-  int64_t partition_cnt_;
+  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
   ObSmartReplicaLocationArray replica_locations_;
   int64_t renew_time_;
-  bool is_mark_fail_;
-  common::ObPGKey pg_key_;
 };
 
-class ObPhyPartitionLocationInfo {
+class ObCandiTabletLoc
+{
 public:
-  ObPhyPartitionLocationInfo();
-  virtual ~ObPhyPartitionLocationInfo();
+  ObCandiTabletLoc();
+  ~ObCandiTabletLoc();
 
   void reset();
-  int assign(const ObPhyPartitionLocationInfo& other);
+  int assign(const ObCandiTabletLoc &other);
 
   int set_selected_replica_idx(int64_t selected_replica_idx);
   int set_selected_replica_idx_with_priority();
   int add_priority_replica_idx(int64_t priority_replica_idx);
-  int64_t get_selected_replica_idx() const
-  {
-    return selected_replica_idx_;
-  }
-  bool has_selected_replica() const
-  {
-    return common::OB_INVALID_INDEX != selected_replica_idx_;
-  }
-
-  int get_selected_replica(share::ObReplicaLocation& replica_loc) const;
-  int get_selected_replica(ObRoutePolicy::CandidateReplica& replica_loc) const;
-  int get_priority_replica(int64_t idx, share::ObReplicaLocation& replica_loc) const;
-  int get_priority_replica(int64_t idx, ObRoutePolicy::CandidateReplica& replica_loc) const;
-  template <class T>
-  int get_priority_replica_base(int64_t selected_replica_idx, T& replica_loc) const;
+  int64_t get_selected_replica_idx() const { return selected_replica_idx_; }
+  bool has_selected_replica() const { return common::OB_INVALID_INDEX != selected_replica_idx_; }
+  const share::ObLSID &get_ls_id() const { return opt_tablet_loc_.get_ls_id(); }
+  int get_selected_replica(share::ObLSReplicaLocation &replica_loc) const;
+  int get_selected_replica(ObRoutePolicy::CandidateReplica &replica_loc) const;
+  int get_priority_replica(int64_t idx, share::ObLSReplicaLocation &replica_loc) const;
+  int get_priority_replica(int64_t idx, ObRoutePolicy::CandidateReplica &replica_loc) const;
+  template<class T>
+  int get_priority_replica_base(int64_t selected_replica_idx, T &replica_loc) const;
   int set_part_loc_with_only_readable_replica(
-      const share::ObPartitionLocation& partition_location, const common::ObIArray<common::ObAddr>& invalid_servers);
-  const ObOptPartLoc& get_partition_location() const
-  {
-    return partition_location_;
-  }
-  ObOptPartLoc& get_partition_location()
-  {
-    return partition_location_;
-  }
-  const common::ObIArray<int64_t>& get_priority_replica_idxs() const
-  {
-    return priority_replica_idxs_;
-  }
-  static int reselect_duplicate_table_best_replica(const common::ObAddr& server, ObPhyPartitionLocationInfo& l,
-      bool l_can_reselect, ObPhyPartitionLocationInfo& r, bool r_can_reselect);
-  int reset_duplicate_table_best_replica(const common::ObIArray<int64_t>& new_replic_idxs);
-  bool is_server_in_replica(const common::ObAddr& server, int64_t& idx) const;
-  TO_STRING_KV(K_(partition_location), K_(selected_replica_idx), K_(priority_replica_idxs));
+      const ObObjectID &partition_id,
+      const common::ObTabletID &tablet_id,
+      const share::ObLSLocation &partition_location,
+      const common::ObIArray<common::ObAddr> &invalid_servers);
+  const ObOptTabletLoc &get_partition_location() const { return opt_tablet_loc_; }
+  ObOptTabletLoc &get_partition_location() { return opt_tablet_loc_; }
+  const common::ObIArray<int64_t> &get_priority_replica_idxs() const { return priority_replica_idxs_; }
+  bool is_server_in_replica(const common::ObAddr &server, int64_t &idx) const;
+  TO_STRING_KV(K_(opt_tablet_loc), K_(selected_replica_idx), K_(priority_replica_idxs));
 
 private:
-  ObOptPartLoc partition_location_;
-
+  ObOptTabletLoc opt_tablet_loc_;
+  //对所有partition求完交集后的结果，是最终选定的replica的index
   int64_t selected_replica_idx_;
-
+  //对当前partition的所有副本进行优先级判断后，将最高优先级的replica index存到这里
   common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> priority_replica_idxs_;
-
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObPhyPartitionLocationInfo);
+  DISALLOW_COPY_AND_ASSIGN(ObCandiTabletLoc);
 };
 
-typedef common::ObIArray<ObPhyPartitionLocationInfo> ObPhyPartitionLocationInfoIArray;
-typedef common::ObSEArray<ObPhyPartitionLocationInfo, 2, common::ModulePageAllocator, true>
-    ObPhyPartitionLocationInfoSEArray;
+typedef common::ObIArray<ObCandiTabletLoc> ObCandiTabletLocIArray;
+typedef common::ObSEArray<ObCandiTabletLoc, 2, common::ModulePageAllocator, true> ObCandiTabletLocSEArray;
 
-class ObPhyTableLocationInfo {
+class ObCandiTableLoc
+{
 public:
-  ObPhyTableLocationInfo();
-  virtual ~ObPhyTableLocationInfo();
-
+  ObCandiTableLoc();
+  virtual ~ObCandiTableLoc();
 public:
   void reset();
-  int assign(const ObPhyTableLocationInfo& other);
+  int assign(const ObCandiTableLoc &other);
 
-  inline void set_table_location_key(uint64_t table_location_key, uint64_t ref_table_id)
-  {
-    table_location_key_ = table_location_key;
-    ref_table_id_ = ref_table_id;
-  }
-  inline uint64_t get_table_location_key() const
-  {
-    return table_location_key_;
-  }
-  inline uint64_t get_ref_table_id() const
-  {
-    return ref_table_id_;
-  }
+  void set_table_location_key(uint64_t table_location_key, uint64_t ref_table_id);
+  int replace_local_index_loc(DASRelatedTabletMap &map, common::ObTableID ref_table_id);
+  inline uint64_t get_table_location_key() const { return table_location_key_; }
+  inline uint64_t get_ref_table_id() const { return ref_table_id_; }
 
-  inline const ObPhyPartitionLocationInfoIArray& get_phy_part_loc_info_list() const
+  inline const ObCandiTabletLocIArray &get_phy_part_loc_info_list() const
   {
-    return phy_part_loc_info_list_;
+    return candi_tablet_locs_;
   }
-  inline ObPhyPartitionLocationInfoIArray& get_phy_part_loc_info_list_for_update()
+  inline ObCandiTabletLocIArray &get_phy_part_loc_info_list_for_update()
   {
-    return phy_part_loc_info_list_;
+    return candi_tablet_locs_;
   }
-  int64_t get_partition_cnt() const
-  {
-    return phy_part_loc_info_list_.count();
-  }
-  const common::ObIArray<ObSplittedRanges>& get_splitted_ranges() const
-  {
-    return splitted_range_list_;
-  }
-  common::ObIArray<ObSplittedRanges>& get_splitted_ranges_for_update()
-  {
-    return splitted_range_list_;
-  }
+  int64_t get_partition_cnt() const { return candi_tablet_locs_.count(); }
 
-  int all_select_leader(bool& is_on_same_server, common::ObAddr& same_server);
-  int all_select_local_replica_or_leader(
-      bool& is_on_same_server, common::ObAddr& same_server, const common::ObAddr& local_server);
-  int all_select_fixed_server(const common::ObAddr& fixed_server);
-
-  int set_direction(const ObOrderDirection& direction);
-  const ObOrderDirection& get_direction() const
-  {
-    return direction_;
-  }
-  bool is_duplicate_table() const
-  {
-    return ObDuplicateType::NOT_DUPLICATE != duplicate_type_;
-  }
-  bool is_duplicate_table_not_in_dml() const
-  {
-    return ObDuplicateType::DUPLICATE == duplicate_type_;
-  }
-  void set_duplicate_type(ObDuplicateType v)
-  {
-    duplicate_type_ = v;
-  }
-  ObDuplicateType get_duplicate_type() const
-  {
-    return duplicate_type_;
-  }
-  int reset_duplicate_table_best_replica(const common::ObIArray<int64_t>& new_replic_idxs);
-  bool is_server_in_replica(const common::ObAddr& server, common::ObIArray<int64_t>& new_replic_idxs) const;
-  static int is_server_in_replica(const ObPhyTableLocationInfo& l_phy_loc,
-      const ObPhyPartitionLocationInfo& part_loc_info, bool& is_same, common::ObAddr& the_server, int64_t& new_idx);
-  TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(phy_part_loc_info_list), K_(splitted_range_list),
-      K_(duplicate_type));
+  int all_select_leader(bool &is_on_same_server,
+                        common::ObAddr &same_server);
+  int all_select_local_replica_or_leader(bool &is_on_same_server,
+                                         common::ObAddr &same_server,
+                                         const common::ObAddr &local_server);
+  int all_select_fixed_server(const common::ObAddr &fixed_server);
+  int get_all_servers(common::ObIArray<common::ObAddr> &servers) const;
+  bool is_duplicate_table() const { return ObDuplicateType::NOT_DUPLICATE != duplicate_type_; }
+  bool is_duplicate_table_not_in_dml() const { return ObDuplicateType::DUPLICATE == duplicate_type_; }
+  void set_duplicate_type(ObDuplicateType v) { duplicate_type_ = v; }
+  ObDuplicateType get_duplicate_type() const { return duplicate_type_; }
+  bool is_server_in_replica(const common::ObAddr &server, common::ObIArray<int64_t> &new_replic_idxs) const;
+  static int is_server_in_replica(const ObCandiTableLoc &l_phy_loc,
+                                  const ObCandiTabletLoc &part_loc_info,
+                                  bool &is_same,
+                                  common::ObAddr &the_server,
+                                  int64_t &new_idx);
+  TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(candi_tablet_locs),
+               K_(duplicate_type));
 
 private:
+  /* 用于表ID(可能是generated alias id)寻址location */
   uint64_t table_location_key_;
-
+  /* 用于获取实际的物理表ID */
   uint64_t ref_table_id_;
   /* location order */
   ObOrderDirection direction_;
   /* locations */
-  ObPhyPartitionLocationInfoSEArray phy_part_loc_info_list_;
-  common::ObSEArray<ObSplittedRanges, 2> splitted_range_list_;  // corresponding to partition list
-
+  ObCandiTabletLocSEArray candi_tablet_locs_;
+  //复制表类型, 如果是复制表且未被更改则可以在分配exg算子时挑选更合适的副本
   ObDuplicateType duplicate_type_;
-
 private:
   /* functions */
   /* variables */
-  DISALLOW_COPY_AND_ASSIGN(ObPhyTableLocationInfo);
+  DISALLOW_COPY_AND_ASSIGN(ObCandiTableLoc);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_OPTIMIZER_OB_PHY_TABLE_LOCATION_INFO_ */

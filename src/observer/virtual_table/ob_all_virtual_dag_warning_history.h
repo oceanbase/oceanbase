@@ -14,19 +14,19 @@
 #define OB_ALL_VIRTUAL_DAG_WARNING_HISTORY_H_
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "lib/container/ob_array.h"
-#include "storage/ob_dag_warning_history_mgr.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 
-namespace oceanbase {
-namespace storage {
-class ObPartitionService;
-class ObSSTable;
-}  // namespace storage
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualDagWarningHistory : public common::ObVirtualTableScannerIterator {
+class ObAllVirtualDagWarningHistory : public common::ObVirtualTableScannerIterator
+{
 public:
-  enum COLUMN_ID_LIST {
-    SVR_IP = common::OB_APP_MIN_COLUMN_ID,
+  enum COLUMN_ID_LIST
+  {
+    SVR_IP  = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     TENANT_ID,
     TASK_ID,
@@ -36,22 +36,21 @@ public:
     STATUS,
     GMT_CREATE,
     GMT_MODIFIED,
+    RETRY_CNT,
     WARNING_INFO,
   };
   ObAllVirtualDagWarningHistory();
   virtual ~ObAllVirtualDagWarningHistory();
   int init();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-
 protected:
-  int fill_cells(storage::ObDagWarningInfo& dag_warning_info);
-
+  int fill_cells(share::ObDagWarningInfo &dag_warning_info);
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char task_id_buf_[common::OB_TRACE_STAT_BUFFER_SIZE];
-  storage::ObDagWarningInfo dag_warning_info_;
-  storage::ObDagWarningInfoIterator dag_warning_info_iter_;
+  share::ObDagWarningInfo dag_warning_info_;
+  share::ObDagWarningInfoIterator dag_warning_info_iter_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDagWarningHistory);
 };

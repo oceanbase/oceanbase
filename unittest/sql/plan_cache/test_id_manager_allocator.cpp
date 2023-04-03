@@ -16,36 +16,41 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObIdManagerAllocatorTest : public ::testing::Test {
+class ObIdManagerAllocatorTest : public ::testing::Test
+{
 public:
   ObIdManagerAllocatorTest();
   virtual ~ObIdManagerAllocatorTest();
   void SetUp();
   void TearDown();
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIdManagerAllocatorTest);
 };
 
 ObIdManagerAllocatorTest::ObIdManagerAllocatorTest()
-{}
+{
+}
 
-ObIdManagerAllocatorTest::~ObIdManagerAllocatorTest(){};
+ObIdManagerAllocatorTest::~ObIdManagerAllocatorTest()
+{
+};
 
 void ObIdManagerAllocatorTest::SetUp()
-{}
+{
+}
 
 void ObIdManagerAllocatorTest::TearDown()
-{}
+{
+}
 
 TEST_F(ObIdManagerAllocatorTest, basic_test)
 {
   const int64_t size_cnt = 5;
   const int64_t loop_cnt = 1024;
-  int64_t sizes[size_cnt] = {1, 128, 1024, 1024 * 6, 1024 * 1024};
-  void* ptr[loop_cnt];
+  int64_t sizes[size_cnt] = { 1, 128, 1024, 1024 * 6, 1024 * 1024 };
+  void *ptr[loop_cnt];
 
-  for (int64_t i = 0; i < 3; ++i) {
+  for(int64_t i = 0; i < 3; ++i) {
     ObIdManagerAllocator alloc_impl;
     alloc_impl.init(sizes[i], 0, OB_SYS_TENANT_ID);
     for (int64_t idx = 0; idx < size_cnt; ++idx) {
@@ -54,7 +59,7 @@ TEST_F(ObIdManagerAllocatorTest, basic_test)
         ptr[loop] = alloc_impl.alloc(sizes[idx]);
         ASSERT_TRUE(NULL != ptr[loop]);
       }
-      for (int64_t loop = 0; loop < loop_cnt; ++loop) {
+      for(int64_t loop = 0; loop <loop_cnt; ++loop) {
         alloc_impl.free(ptr[loop]);
         ptr[loop] = NULL;
       }
@@ -66,10 +71,10 @@ TEST_F(ObIdManagerAllocatorTest, failure_test)
 {
   const int64_t size_cnt = 5;
   const int64_t loop_cnt = 1024;
-  int64_t sizes[size_cnt] = {1, 128, 1024, 1024 * 6, 1024 * 1024};
-  void* ptr[loop_cnt];
+  int64_t sizes[size_cnt] = { 1, 128, 1024, 1024 * 6, 1024 * 1024 };
+  void *ptr[loop_cnt];
 
-  for (int64_t i = 0; i < size_cnt; ++i) {
+  for(int64_t i = 0; i < size_cnt; ++i) {
     ObIdManagerAllocator alloc_impl;
     for (int64_t idx = 0; idx < size_cnt; ++idx) {
       for (int64_t loop = 0; loop < loop_cnt; ++loop) {
@@ -77,7 +82,7 @@ TEST_F(ObIdManagerAllocatorTest, failure_test)
         ptr[loop] = alloc_impl.alloc(sizes[idx]);
         ASSERT_TRUE(NULL == ptr[loop]);
       }
-      for (int64_t loop = 0; loop < loop_cnt; ++loop) {
+      for(int64_t loop = 0; loop <loop_cnt; ++loop) {
         alloc_impl.free(ptr[loop]);
         ptr[loop] = NULL;
       }

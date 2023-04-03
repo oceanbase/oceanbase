@@ -14,27 +14,40 @@
 #include "sql/engine/expr/ob_expr_trim.h"
 #include <string.h>
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_util.h"
-namespace oceanbase {
+#include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprTrim::ObExprTrim(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_TRIM, N_TRIM, MORE_THAN_ZERO)
+ObExprTrim::ObExprTrim(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TRIM, N_TRIM, MORE_THAN_ZERO)
 {
   need_charset_convert_ = false;
 }
 
-ObExprTrim::ObExprTrim(ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num)
+ObExprTrim::ObExprTrim(ObIAllocator &alloc,
+                       ObExprOperatorType type,
+                       const char *name,
+                       int32_t param_num)
     : ObStringExprOperator(alloc, type, name, param_num)
-{}
+{
+}
 
 ObExprTrim::~ObExprTrim()
-{}
+{
+}
 
-int ObExprTrim::trim(ObString& result, const int64_t trim_type, const ObString& pattern, const ObString& text)
+int ObExprTrim::trim(ObString &result,
+                     const int64_t trim_type,
+                     const ObString &pattern,
+                     const ObString &text)
 {
   int ret = OB_SUCCESS;
   int32_t start = 0;
@@ -44,21 +57,21 @@ int ObExprTrim::trim(ObString& result, const int64_t trim_type, const ObString& 
     end = text.length();
   } else {
     switch (trim_type) {
-      case TYPE_LRTRIM: {
+    case TYPE_LRTRIM: {
         ret = lrtrim(text, pattern, start, end);
         break;
       }
-      case TYPE_LTRIM: {
+    case TYPE_LTRIM: {
         end = text.length();
         ret = ltrim(text, pattern, start);
         break;
       }
-      case TYPE_RTRIM: {
+    case TYPE_RTRIM: {
         start = 0;
         ret = rtrim(text, pattern, end);
         break;
       }
-      default: {
+    default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid type", K(trim_type), K(ret));
         break;
@@ -66,16 +79,20 @@ int ObExprTrim::trim(ObString& result, const int64_t trim_type, const ObString& 
     }
   }
   if (OB_SUCC(ret)) {
-    result = ObString(end - start, end - start, const_cast<char*>(text.ptr() + start));
+    result = ObString(end - start, end - start,
+                      const_cast<char *>(text.ptr() + start));
   }
   return ret;
 }
 
 // for func Ltrim/Rtrim which has 2 string param
-int ObExprTrim::trim2(common::ObString& result, const int64_t trim_type, const common::ObString& pattern,
-    const common::ObString& text, const ObCollationType& cs_type,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_num,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_offset)
+int ObExprTrim::trim2(common::ObString &result,
+                  const int64_t trim_type,
+                  const common::ObString &pattern,
+                  const common::ObString &text,
+                  const ObCollationType &cs_type,
+                  const ObFixedArray<size_t, ObIAllocator> &pattern_byte_num,
+                  const ObFixedArray<size_t, ObIAllocator> &pattern_byte_offset)
 {
   int ret = OB_SUCCESS;
   int32_t start = 0;
@@ -85,17 +102,17 @@ int ObExprTrim::trim2(common::ObString& result, const int64_t trim_type, const c
     end = text.length();
   } else {
     switch (trim_type) {
-      case TYPE_LTRIM: {
+    case TYPE_LTRIM: {
         end = text.length();
         ret = ltrim2(text, pattern, start, cs_type, pattern_byte_num, pattern_byte_offset);
         break;
       }
-      case TYPE_RTRIM: {
+    case TYPE_RTRIM: {
         start = 0;
         ret = rtrim2(text, pattern, end, cs_type, pattern_byte_num, pattern_byte_offset);
         break;
       }
-      default: {
+    default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid type", K(trim_type), K(ret));
         break;
@@ -103,115 +120,13 @@ int ObExprTrim::trim2(common::ObString& result, const int64_t trim_type, const c
     }
   }
   if (OB_SUCC(ret)) {
-    result = ObString(end - start, end - start, const_cast<char*>(text.ptr() + start));
+    result = ObString(end - start, end - start,
+                      const_cast<char *>(text.ptr() + start));
   }
   return ret;
 }
 
-int ObExprTrim::calc(ObObj& result, const int64_t trim_type, const ObString& pattern, const ObString& text,
-    const ObObjType& res_type, ObExprCtx& expr_ctx)
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-  ObString varchar;
-  if (OB_FAIL(trim(varchar, trim_type, pattern, text))) {
-    LOG_WARN("do trim failed", K(ret));
-  } else {
-    if (share::is_oracle_mode() && (0 == varchar.length()) && !ob_is_text_tc(res_type)) {
-      result.set_null();
-    } else if (ob_is_text_tc(res_type)) {
-      result.set_lob_value(res_type, varchar.ptr(), varchar.length());
-    } else {
-      result.set_varchar(varchar);
-    }
-  }
-  return ret;
-}
-
-int ObExprTrim::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  int64_t trim_type_val = TYPE_LRTRIM;
-  ObString pattern_val;
-  char default_pattern_buffer[8];  // 8 is enough for all charset
-  ObString text_val;
-  bool is_result_null = false;
-  if (OB_ISNULL(expr_ctx.calc_buf_) || OB_UNLIKELY(param_num <= 0 || param_num > 3) || OB_ISNULL(objs_array)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param_num), K(expr_ctx.calc_buf_), K(objs_array));
-  } else if (param_num == 1) {
-    if (objs_array[0].is_null()) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      trim_type_val = TYPE_LRTRIM;
-      int64_t out_len = 0;
-      ObCollationType cs_type = (lib::is_oracle_mode() && !(expr_ctx.my_session_->use_static_typing_engine()))
-                                    ? expr_ctx.my_session_->get_nls_collation()
-                                    : result_type_.get_collation_type();
-      if (OB_FAIL(fill_default_pattern(default_pattern_buffer, sizeof(default_pattern_buffer), cs_type, out_len))) {
-      } else if (out_len <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected out length", K(ret), K(out_len));
-      } else {
-        pattern_val.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
-      }
-      text_val = objs_array[0].get_string();
-    }
-  } else if (param_num == 2) {
-    if (OB_UNLIKELY(objs_array[0].is_null()) || OB_UNLIKELY(objs_array[1].is_null())) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      int64_t out_len = 0;
-      ObCollationType cs_type = (lib::is_oracle_mode() && !(expr_ctx.my_session_->use_static_typing_engine()))
-                                    ? expr_ctx.my_session_->get_nls_collation()
-                                    : result_type_.get_collation_type();
-      if (OB_FAIL(fill_default_pattern(default_pattern_buffer, sizeof(default_pattern_buffer), cs_type, out_len))) {
-      } else if (out_len <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected out length", K(ret), K(out_len));
-      } else {
-        pattern_val.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
-      }
-      trim_type_val = objs_array[0].get_int();
-      text_val = objs_array[1].get_string();
-    }
-  } else if (param_num == 3) {
-    if (OB_UNLIKELY(objs_array[0].is_null()) || OB_UNLIKELY(objs_array[1].is_null()) ||
-        OB_UNLIKELY(objs_array[2].is_null())) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      trim_type_val = objs_array[0].get_int();
-      pattern_val = objs_array[1].get_string();
-      text_val = objs_array[2].get_string();
-    }
-  }
-  if (OB_LIKELY(OB_SUCC(ret) && !is_result_null)) {
-    ObCollationType cs_type = result_type_.get_collation_type();
-    if (share::is_oracle_mode() && ObCharset::strlen_char(cs_type, pattern_val.ptr(), pattern_val.length()) > 1) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("trim set should have only one character", K(ret), K(pattern_val));
-    } else {
-      ret = calc(result, trim_type_val, pattern_val, text_val, get_result_type().get_type(), expr_ctx);
-      if (OB_LIKELY(OB_SUCC(ret) && !result.is_null())) {
-        if (share::is_oracle_mode()) {
-          if (OB_NOT_NULL(expr_ctx.my_session_)) {
-            result.set_collation_type(expr_ctx.my_session_->get_nls_collation());
-          }
-          if (OB_FAIL(convert_result_collation(result_type_, result, expr_ctx.calc_buf_))) {
-            LOG_WARN("fail to convert result collation", K(ret));
-          }
-        }
-        result.set_collation(result_type_);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprTrim::lrtrim(const ObString src, const ObString pattern, int32_t& start, int32_t& end)
+int ObExprTrim::lrtrim(const ObString src, const ObString pattern, int32_t &start, int32_t &end)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(pattern.length() <= 0)) {
@@ -223,26 +138,30 @@ int ObExprTrim::lrtrim(const ObString src, const ObString pattern, int32_t& star
     end = src.length();
     int32_t src_len = src.length();
     int32_t pattern_len = pattern.length();
-    for (i = 0; OB_SUCC(ret) && i <= src_len - pattern_len; i += pattern_len) {
+    for (i = 0;
+        OB_SUCC(ret) && i <=  src_len - pattern_len;
+        i += pattern_len) {
       if (0 == MEMCMP(src.ptr() + i, pattern.ptr(), pattern_len)) {
         start += pattern_len;
       } else {
         break;
       }
-    }  // end for
-    for (i = src_len - pattern_len; OB_SUCC(ret) && i >= start; i -= pattern_len) {
+    } //end for
+    for (i = src_len - pattern_len;
+        OB_SUCC(ret) && i >= start;
+        i -= pattern_len) {
       if (0 == MEMCMP(src.ptr() + i, pattern.ptr(), pattern_len)) {
         end -= pattern_len;
       } else {
         break;
       }
-    }  // end for
+    } //end for
   }
   return ret;
 }
 
 // NOTE: pattern.length() MUST > 0
-int ObExprTrim::ltrim(const ObString src, const ObString pattern, int32_t& start)
+int ObExprTrim::ltrim(const ObString src, const ObString pattern, int32_t &start)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(pattern.length() <= 0)) {
@@ -252,19 +171,21 @@ int ObExprTrim::ltrim(const ObString src, const ObString pattern, int32_t& start
     start = 0;
     int32_t src_len = src.length();
     int32_t pattern_len = pattern.length();
-    for (int32_t i = 0; OB_SUCC(ret) && i <= src_len - pattern_len; i += pattern_len) {
+    for (int32_t i = 0;
+        OB_SUCC(ret) && i <= src_len - pattern_len;
+        i += pattern_len) {
       if (0 == MEMCMP(src.ptr() + i, pattern.ptr(), pattern_len)) {
         start += pattern_len;
       } else {
         break;
       }
-    }  // end for
+    }//end for
   }
   return ret;
 }
 
 // NOTE: pattern.length() MUST > 0
-int ObExprTrim::rtrim(const ObString src, const ObString pattern, int32_t& end)
+int ObExprTrim::rtrim(const ObString src, const ObString pattern, int32_t &end)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(pattern.length() <= 0)) {
@@ -274,7 +195,9 @@ int ObExprTrim::rtrim(const ObString src, const ObString pattern, int32_t& end)
     end = src.length();
     int32_t src_len = src.length();
     int32_t pattern_len = pattern.length();
-    for (int32_t i = src_len - pattern_len; OB_SUCC(ret) && i >= 0; i -= pattern_len) {
+    for (int32_t i = src_len - pattern_len;
+        OB_SUCC(ret) && i >= 0;
+        i -= pattern_len) {
       if (0 == MEMCMP(src.ptr() + i, pattern.ptr(), pattern_len)) {
         end -= pattern_len;
       } else {
@@ -285,9 +208,13 @@ int ObExprTrim::rtrim(const ObString src, const ObString pattern, int32_t& end)
   return ret;
 }
 
-int ObExprTrim::ltrim2(const ObString src, const ObString pattern, int32_t& start, const ObCollationType& cs_type,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_num,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_offset)
+
+int ObExprTrim::ltrim2(const ObString src,
+                       const ObString pattern,
+                       int32_t &start,
+                       const ObCollationType &cs_type,
+                       const ObFixedArray<size_t, ObIAllocator> &pattern_byte_num,
+                       const ObFixedArray<size_t, ObIAllocator> &pattern_byte_offset)
 {
   UNUSED(cs_type);
   int ret = OB_SUCCESS;
@@ -298,14 +225,18 @@ int ObExprTrim::ltrim2(const ObString src, const ObString pattern, int32_t& star
     int32_t i = 0;
     start = 0;
     int32_t src_len = src.length();
-    int32_t pattern_len = pattern.length();
+
+
+    //对于pattern中的每个字符，首先检查src_len - start是否有足够的长度，如果有则，在src左端进行MEMCMP，match后
+    //start+=char_len进入下一轮，遍历pattern无法满足则ret
     bool is_match = false;
     do {
       is_match = false;
-      for (i = 0; OB_SUCC(ret) && i < pattern_byte_num.count() && !is_match; ++i) {
+      for (i=0; OB_SUCC(ret) && i < pattern_byte_num.count() && !is_match; ++i) {
         int32_t char_len = pattern_byte_num[i];
         int32_t pattern_offset = pattern_byte_offset[i];
         if (src_len - start < char_len) {
+        //src字符串当前长度不到一个字符，不进行此次匹配，与下一个pattern字符进行比较，下个字符字节长度可能满足需求
         } else if (0 == MEMCMP(src.ptr() + start, pattern.ptr() + pattern_offset, char_len)) {
           start += char_len;
           is_match = true;
@@ -315,12 +246,15 @@ int ObExprTrim::ltrim2(const ObString src, const ObString pattern, int32_t& star
       }
     } while (is_match);
   }
-  return ret;
+    return ret;
 }
 
-int ObExprTrim::rtrim2(const ObString src, const ObString pattern, int32_t& end, const ObCollationType& cs_type,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_num,
-    const ObFixedArray<size_t, ObIAllocator>& pattern_byte_offset)
+int ObExprTrim::rtrim2(const ObString src,
+                       const ObString pattern,
+                       int32_t &end,
+                       const ObCollationType &cs_type,
+                       const ObFixedArray<size_t, ObIAllocator> &pattern_byte_num,
+                       const ObFixedArray<size_t, ObIAllocator> &pattern_byte_offset)
 {
   UNUSED(cs_type);
   int ret = OB_SUCCESS;
@@ -331,16 +265,19 @@ int ObExprTrim::rtrim2(const ObString src, const ObString pattern, int32_t& end,
     int32_t i = 0;
     int32_t src_len = src.length();
     end = src_len;
-    int32_t pattern_len = pattern.length();
 
+    //对于pattern中的每个字符，首先检查end是否有足够的长度，如果有则在src右端进行MEMCMP，match后
+    //end-=char_len进入下轮，遍历pattern无法满足则ret
     bool is_match = false;
     do {
       is_match = false;
-      for (i = 0; OB_SUCC(ret) && i < pattern_byte_num.count() && !is_match; ++i) {
+      for (i=0; OB_SUCC(ret) && i < pattern_byte_num.count() && !is_match; ++i) {
         int32_t char_len = pattern_byte_num[i];
         int32_t pattern_offset = pattern_byte_offset[i];
-        if (end < char_len) {
-        } else if (0 == MEMCMP(src.ptr() + end - char_len, pattern.ptr() + pattern_offset, char_len)) {
+        if (end  < char_len) {
+        //src字符串当前长度不到一个字符，不进行此次匹配，与下一个pattern字符进行比较，下个字符字节长度可能满足需求
+        } else if (0 ==
+                   MEMCMP(src.ptr() + end - char_len, pattern.ptr() + pattern_offset, char_len)) {
           end -= char_len;
           is_match = true;
         } else {
@@ -348,38 +285,40 @@ int ObExprTrim::rtrim2(const ObString src, const ObString pattern, int32_t& end,
         }
       }
     } while (is_match);
+
   }
   return ret;
 }
 
-inline int ObExprTrim::deduce_result_type(
-    ObExprResType& type, ObExprResType* types, int64_t param_num, ObExprTypeCtx& type_ctx)
+
+inline int ObExprTrim::deduce_result_type(ObExprResType &type,
+                                          ObExprResType *types,
+                                          int64_t param_num,
+                                          ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
   CK(NULL != types);
   CK(NULL != type_ctx.get_session());
   CK(param_num >= 1 && param_num <= 3);
 
-  ObExprResType* str_type = &types[param_num - 1];
+  ObExprResType *str_type = &types[param_num - 1];
   type.set_length(types[param_num - 1].get_length());
-  ObExprResType* pattern_type = (3 == param_num) ? &types[1] : NULL;
+  ObExprResType *pattern_type = (3 == param_num) ? &types[1] : NULL;
   if (param_num > 2) {
     types[0].set_calc_type(ObIntType);
   }
 
-  if (lib::is_oracle_mode() && type_ctx.get_session()->use_static_typing_engine()) {
-    auto str_params = make_const_carray(str_type);
+  if (lib::is_oracle_mode()) {//这里Oracle模式步骤是否有区别
+    ObSEArray<ObExprResType*, 2, ObNullAllocator> str_params;
+    OZ(str_params.push_back(str_type));
     LOG_DEBUG("str_type is", K(str_type));
-    if (str_type->is_null()) {
-      type.set_meta(*str_type);
-    } else {
-      OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params,
-                                                  type, true)); // prefer varchar
-      OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
-      if (OB_SUCC(ret) && NULL != pattern_type) {
-        pattern_type->set_calc_meta(type);
-      }
+    OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params,
+                                                type, PREFER_VAR_LEN_CHAR)); // prefer varchar
+    if (NULL != pattern_type) {
+      OZ(str_params.push_back(pattern_type));
     }
+    OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
+    OX(type.set_length(str_type->get_calc_length()));
   } else {
     if (str_type->is_lob()) {
       type.set_type(str_type->get_type());
@@ -389,20 +328,21 @@ inline int ObExprTrim::deduce_result_type(
       }
     } else if (str_type->is_nstring()) {
       type.set_meta(*str_type);
+      //兼容Oracle行为
       type.set_type_simple(ObNVarchar2Type);
+      type.set_length_semantics(LS_CHAR);
       str_type->set_calc_type(ObVarcharType);
       if (NULL != pattern_type) {
         pattern_type->set_calc_type(ObVarcharType);
       }
-    } else if (str_type->is_null()) {
-      type.set_meta(*str_type);
     } else {
       const common::ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
-                                               : common::LS_BYTE);
+                   (OB_NOT_NULL(type_ctx.get_session())
+                   ? type_ctx.get_session()->get_actual_nls_length_semantics()
+                   : common::LS_BYTE);
       type.set_varchar();
-      type.set_length_semantics(
-          types[0].is_varchar_or_char() ? types[0].get_length_semantics() : default_length_semantics);
+      type.set_length_semantics(types[0].is_varchar_or_char()
+                               ? types[0].get_length_semantics() : default_length_semantics);
       str_type->set_calc_type(ObVarcharType);
       if (NULL != pattern_type) {
         pattern_type->set_calc_type(ObVarcharType);
@@ -411,27 +351,34 @@ inline int ObExprTrim::deduce_result_type(
     // deduce charset
     ObSEArray<ObExprResType, 2> tmp_types;
     OZ(tmp_types.push_back(*str_type));
-    if (NULL != pattern_type) {
-      OZ(tmp_types.push_back(*pattern_type));
-    }
+    //if (NULL != pattern_type && !lib::is_oracle_mode()) {
+    //  OZ(tmp_types.push_back(*pattern_type));
+    //}
     OZ(aggregate_charsets_for_string_result_with_comparison(
-        type, &tmp_types.at(0), tmp_types.count(), type_ctx.get_coll_type()));
+            type, &tmp_types.at(0), tmp_types.count(), type_ctx.get_coll_type()));
     str_type->set_calc_collation_type(type.get_collation_type());
     str_type->set_calc_collation_level(type.get_collation_level());
     if (NULL != pattern_type) {
       pattern_type->set_calc_collation_type(type.get_collation_type());
       pattern_type->set_calc_collation_level(type.get_collation_level());
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      ObLength res_length = 0;
+      OZ(ObExprResultTypeUtil::deduce_max_string_length_oracle(
+        type_ctx.get_session()->get_dtc_params(), *str_type, type, res_length));
+      OX(type.set_length(res_length));
+    }
   }
 
   return ret;
 }
 
-int ObExprTrim::fill_default_pattern(char* buf, const int64_t in_len, ObCollationType cs_type, int64_t& out_len)
+int ObExprTrim::fill_default_pattern(char *buf, const int64_t in_len,
+                                     ObCollationType cs_type, int64_t &out_len)
 {
   int ret = OB_SUCCESS;
   char default_pattern = ' ';
-  const ObCharsetInfo* cs = ObCharset::get_charset(cs_type);
+  const ObCharsetInfo *cs = ObCharset::get_charset(cs_type);
   if (OB_ISNULL(cs) || OB_ISNULL(cs->cset)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected collation type", K(ret), K(cs_type), K(cs));
@@ -449,7 +396,7 @@ int ObExprTrim::fill_default_pattern(char* buf, const int64_t in_len, ObCollatio
   return ret;
 }
 
-int ObExprTrim::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
+int ObExprTrim::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   CK(1 <= rt_expr.arg_cnt_ && rt_expr.arg_cnt_ <= 3);
@@ -457,7 +404,339 @@ int ObExprTrim::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
   return ret;
 }
 
-int ObExprTrim::eval_trim(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+static int text_trim2(ObTextStringIter &str_iter,
+                      ObTextStringDatumResult &output_result,
+                      int64_t trim_type,
+                      const common::ObString &pattern,
+                      const size_t &pattern_len_in_char,
+                      const ObCollationType &cs_type,
+                      const ObFixedArray<size_t, ObIAllocator> &pattern_byte_num,
+                      const ObFixedArray<size_t, ObIAllocator> &pattern_byte_offset)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  int64_t total_byte_len = 0;
+  if (OB_FAIL(str_iter.get_byte_len(total_byte_len))) {
+    LOG_WARN("get str_iter byte len failed", K(ret));
+  } else {
+    ObTextStringIterState state;
+    ObString str_data;
+    str_iter.set_reserved_len(pattern_len_in_char);
+    if (trim_type == ObExprTrim::TYPE_LTRIM) {
+      bool found_start = false;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_start) {
+          if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                        str_data, cs_type, pattern_byte_num, pattern_byte_offset))) {
+            LOG_WARN("do trim2 failed", K(ret));
+          } else if (output.length() != 0) {
+            found_start = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else {
+              output_result.append(output);
+            }
+          }
+        } else {
+          output_result.append(str_data);
+        }
+      }
+    } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
+      bool found_end = false;
+      str_iter.set_backward();
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      int64_t buf_pos = 0;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_end) {
+          if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                        str_data, cs_type, pattern_byte_num, pattern_byte_offset))) {
+            LOG_WARN("do trim2 failed", K(ret));
+          } else if (output.length() != 0) {
+            found_end = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+              LOG_WARN("stringtext result reserve buffer failed", K(ret));
+            } else if (OB_FAIL(output_result.lseek(result_len, 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              buf_pos = buf_size - output.length();
+              MEMCPY(buf + buf_pos, output.ptr(), output.length());
+            }
+          }
+        } else {
+          buf_pos -= str_data.length();
+          MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        OB_ASSERT(buf_pos == 0);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type", K(trim_type), K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
+    } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
+      LOG_WARN("init stringtext result for empty lob failed", K(ret));
+    } else {
+      output_result.set_result();
+    }
+  }
+  return ret;
+}
+
+static int text_trim(ObTextStringIter &str_iter,
+                     ObTextStringIter &str_backward_iter,
+                     ObIAllocator &calc_alloc,
+                     ObTextStringDatumResult &output_result,
+                     int64_t trim_type,
+                     const common::ObString &pattern)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  int64_t total_byte_len = 0;
+  if (OB_FAIL(str_iter.init(0, NULL, &calc_alloc))) {
+    LOG_WARN("init str_iter failed ", K(ret), K(str_iter));
+  } else if (OB_FAIL(str_iter.get_byte_len(total_byte_len))) {
+    LOG_WARN("get str_iter byte len failed", K(ret));
+  } else {
+    ObTextStringIterState state;
+    ObString str_data;
+    str_iter.set_reserved_byte_len(pattern.length());
+    if (trim_type == ObExprTrim::TYPE_LTRIM) {
+      bool found_start = false;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_start) {
+          if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+            LOG_WARN("do trim failed", K(ret));
+          } else if (output.length() != 0) {
+            found_start = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else {
+              output_result.append(output);
+            }
+          }
+        } else {
+          output_result.append(str_data);
+        }
+      }
+    } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
+      bool found_end = false;
+      str_iter.set_backward();
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      int64_t buf_pos = 0;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_end) {
+          if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+            LOG_WARN("do trim failed", K(ret));
+          } else if (output.length() != 0) {
+            found_end = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+              LOG_WARN("stringtext result reserve buffer failed", K(ret));
+            } else if (OB_FAIL(output_result.lseek(result_len, 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              buf_pos = buf_size - output.length();
+              MEMCPY(buf + buf_pos, output.ptr(), output.length());
+            }
+          }
+        } else {
+          buf_pos -= str_data.length();
+          MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        OB_ASSERT(buf_pos == 0);
+      }
+    } else if (trim_type == ObExprTrim::TYPE_LRTRIM) {
+      // find start, if access total length, end
+      bool found_start = false;
+      bool is_finished = false;
+      int64_t start_pos = 0;
+      int64_t end_pos = 0;
+      while (OB_SUCC(ret)
+             && found_start == false
+             && is_finished == false
+             && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+          LOG_WARN("do trim failed", K(ret));
+        } else if (str_iter.get_accessed_byte_len() == total_byte_len) { // accessed to the end of data
+          is_finished = true;
+          if (OB_FAIL(output_result.init(output.length()))) {
+            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
+          } else {
+            output_result.append(output);
+          }
+        } else if (output.length() != 0) {
+          found_start = true;
+          str_iter.reset_reserve_len();
+          start_pos = total_byte_len - str_iter.get_accessed_byte_len() + str_data.length();
+          // output not copied
+        }
+      }
+      if (OB_FAIL(ret) || is_finished) {
+      } else {
+        OB_ASSERT(found_start);
+        // find end
+        ObTextStringIterState back_state;
+        if (OB_FAIL(str_backward_iter.init(0, NULL, &calc_alloc))) {
+          LOG_WARN("init str_iter failed ", K(ret), K(str_backward_iter));
+        } else {
+          ObString backward_str_data;
+          ObString backward_output;
+          str_backward_iter.set_backward();
+          str_backward_iter.set_reserved_byte_len(pattern.length());
+          bool found_end = false;
+          while (OB_SUCC(ret)
+             && found_end == false
+             && (back_state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+            if (OB_FAIL(ObExprTrim::trim(backward_output, ObExprTrim::TYPE_RTRIM, pattern, backward_str_data))) {
+              LOG_WARN("do trim failed", K(ret));
+            } else if (backward_output.length() != 0) {
+              found_end = true;
+              end_pos = total_byte_len - str_backward_iter.get_accessed_byte_len() + backward_output.length();
+            }
+          }
+          // copy from start to end
+          int result_len = end_pos - start_pos;
+          if (OB_FAIL(ret)) {
+          } else if (result_len < 0) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("init stringtext result failed", K(ret), K(start_pos), K(end_pos));
+          // } else if (result_len == total_byte_len) {
+          // the same as input if it is a temp lob?
+          } else if (OB_FAIL(output_result.init(result_len))) {
+            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
+          } else if (OB_FAIL(output_result.append(output))) {
+            // error log
+          } else {
+            result_len -= output.length();
+            while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+              if (str_data.length() > result_len) {
+                if (OB_FAIL(output_result.append(str_data.ptr(), result_len))) {
+                  // error log
+                } else {
+                  result_len = 0;
+                }
+              } else if (OB_FAIL(output_result.append(str_data))) {
+                // error log
+              } else {
+                result_len -= str_data.length();
+              }
+            }
+            if (OB_SUCC(ret)) {
+              OB_ASSERT(result_len = 0);
+            }
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
+    } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
+      LOG_WARN("init stringtext result for empty lob failed", K(ret));
+    } else {
+      output_result.set_result();
+    }
+  }
+  return ret;
+}
+
+static int eval_trim_inner(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
+                           const int64_t &trim_type, ObString &pattern, bool &res_is_clob,
+                           const ObDatumMeta &str_meta, const bool str_has_lob_header,
+                           const ObDatum &str_datum)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    ObCollationType cs_type = expr.datum_meta_.cs_type_;
+    size_t pattern_len_in_char  =
+                  ObCharset::strlen_char(cs_type, pattern.ptr(), pattern.length());
+    ObFixedArray<size_t, ObIAllocator> pattern_byte_num(calc_alloc,  pattern_len_in_char);
+    ObFixedArray<size_t, ObIAllocator> pattern_byte_offset(calc_alloc,  pattern_len_in_char +1);
+    if (OB_FAIL(ObExprUtil::get_mb_str_info(pattern, cs_type,
+                                            pattern_byte_num, pattern_byte_offset))) {
+      LOG_WARN("get_mb_str_info failed", K(ret), K(pattern), K(cs_type), K(pattern_len_in_char));
+    } else if (!res_is_clob && (pattern_byte_num.count() + 1 != pattern_byte_offset.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("size of pattern_byte_num and size of pattern_byte_offset should be same",
+                K(ret), K(pattern_byte_num), K(pattern_byte_offset));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!ob_is_text_tc(str_meta.type_)) {
+      if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                    str_datum.get_string(), cs_type,
+                                    pattern_byte_num, pattern_byte_offset))) {
+        LOG_WARN("do trim2 failed", K(ret));
+      } else {
+        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(output);
+        }
+      }
+    } else { // is text tc, trim left or right
+      ObTextStringIter str_iter(str_meta.type_, str_meta.cs_type_, str_datum.get_string(), str_has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+      if (OB_FAIL(str_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init str_iter failed ", K(ret), K(str_iter));
+      } else if (OB_FAIL(text_trim2(str_iter, output_result, trim_type, pattern, pattern_len_in_char,
+                                    cs_type, pattern_byte_num,  pattern_byte_offset))) {
+        LOG_WARN("text_trim2 failed", K(ret));
+      }
+    }
+  } else {
+    if (!ob_is_text_tc(str_meta.type_)) {
+      if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_datum.get_string()))) {
+        LOG_WARN("do trim failed", K(ret));
+      } else {
+        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(output);
+        }
+      }
+    } else { // is text tc, trim left or right or both
+      // Notice: need to access with byte length
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter str_forward_iter(str_meta.type_, CS_TYPE_BINARY, str_datum.get_string(), str_has_lob_header);
+      ObTextStringIter str_backward_iter(str_meta.type_, CS_TYPE_BINARY, str_datum.get_string(), str_has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+      if (OB_FAIL(text_trim(str_forward_iter, str_backward_iter, calc_alloc, output_result,
+                            trim_type, pattern))) {
+        LOG_WARN("text_trim failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprTrim::eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   bool has_null = false;
@@ -498,75 +777,88 @@ int ObExprTrim::eval_trim(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datu
       trim_type = expr.locate_param_datum(ctx, 0).get_int();
     }
 
-    ObString str;
     char default_pattern_buffer[8];
     ObString pattern;
     bool res_is_clob = false;
     if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
-      str = expr.locate_param_datum(ctx, expr.arg_cnt_ - 2).get_string();
+      const ObDatumMeta &str_meta = expr.args_[expr.arg_cnt_ - 2]->datum_meta_;
+      const ObDatum &str_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 2);
+      const bool str_has_lob_header = expr.args_[expr.arg_cnt_ - 2]->obj_meta_.has_lob_header();
       pattern = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1).get_string();
-      res_is_clob = lib::is_oracle_mode() && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 2]->datum_meta_.type_) &&
-                    (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 2]->datum_meta_.cs_type_);
+      res_is_clob = lib::is_oracle_mode()
+                    && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 2]->datum_meta_.type_)
+                    && (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 2]->datum_meta_.cs_type_);
+      const ObDatumMeta &pattern_meta = expr.args_[expr.arg_cnt_ - 1]->datum_meta_;
+      const bool pattern_has_lob_header = expr.args_[expr.arg_cnt_ - 1]->obj_meta_.has_lob_header();
+      if (!ob_is_text_tc(pattern_meta.type_)) { // pattern not text tc
+        if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                    res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 1", K(ret));
+        }
+      } else { // pattern is text tc
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        const ObDatum &pattern_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1);
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(calc_alloc, pattern_datum,
+                                                              pattern_meta, pattern_has_lob_header, pattern))) {
+          LOG_WARN("failed to read real pattern", K(ret), K(pattern));
+        } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                           res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 1 for text tc pattern", K(ret));
+        }
+      }
     } else {
-      str = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1).get_string();
-      res_is_clob = lib::is_oracle_mode() && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 1]->datum_meta_.type_) &&
-                    (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 1]->datum_meta_.cs_type_);
+      const ObDatumMeta &str_meta = expr.args_[expr.arg_cnt_ - 1]->datum_meta_;
+      const ObDatum &str_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1);
+      const bool str_has_lob_header = expr.args_[expr.arg_cnt_ - 1]->obj_meta_.has_lob_header();
+      res_is_clob = lib::is_oracle_mode()
+                    && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 1]->datum_meta_.type_)
+                    && (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 1]->datum_meta_.cs_type_);
       if (3 == expr.arg_cnt_) {
-        pattern = expr.locate_param_datum(ctx, 1).get_string();
-        if (lib::is_oracle_mode() &&
-            1 < ObCharset::strlen_char(expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("trim set should have only one character", K(ret), K(pattern));
+        const ObDatumMeta &pattern_meta = expr.args_[1]->datum_meta_;
+        const bool pattern_has_lob_header = expr.args_[1]->obj_meta_.has_lob_header();
+        if (!ob_is_text_tc(pattern_meta.type_)) { // pattern not text tc
+          pattern = expr.locate_param_datum(ctx, 1).get_string();
+          if (lib::is_oracle_mode() && 1 < ObCharset::strlen_char(
+                  expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
+            ret = OB_ERR_IN_TRIM_SET;
+            LOG_USER_ERROR(OB_ERR_IN_TRIM_SET);
+          } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                             res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+            LOG_WARN("failed to eval trim case 2", K(ret));
+          }
+        } else {
+          ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+          ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+          const ObDatum &pattern_datum = expr.locate_param_datum(ctx, 1);
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(calc_alloc, pattern_datum,
+                                                                pattern_meta, pattern_has_lob_header, pattern))) {
+            LOG_WARN("failed to read real pattern", K(ret), K(pattern));
+          } else if (lib::is_oracle_mode() && 1 < ObCharset::strlen_char(
+                  expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
+            ret = OB_ERR_IN_TRIM_SET;
+            LOG_USER_ERROR(OB_ERR_IN_TRIM_SET);
+          } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                             res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+            LOG_WARN("failed to eval trim case 2 for text tc pattern", K(ret));
+          }
         }
       } else {
         int64_t out_len = 0;
-        if (OB_FAIL(fill_default_pattern(
-                default_pattern_buffer, sizeof(default_pattern_buffer), expr.datum_meta_.cs_type_, out_len))) {
+        if (OB_FAIL(fill_default_pattern(default_pattern_buffer,
+                                         sizeof(default_pattern_buffer),
+                                         expr.datum_meta_.cs_type_,
+                                         out_len))) {
         } else if (out_len <= 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected out length", K(ret), K(out_len));
         } else {
           pattern.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
         }
-      }
-    }
-
-    ObString output;
-    // 2 param for Ltrim or Rtrim
-    if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
-      ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
-      ObCollationType cs_type = expr.datum_meta_.cs_type_;
-      size_t pattern_len_in_char = ObCharset::strlen_char(cs_type, pattern.ptr(), pattern.length());
-      ObFixedArray<size_t, ObIAllocator> pattern_byte_num(calc_alloc, pattern_len_in_char);
-      ObFixedArray<size_t, ObIAllocator> pattern_byte_offset(calc_alloc, pattern_len_in_char + 1);
-      if (OB_FAIL(ObExprUtil::get_mb_str_info(pattern, cs_type, pattern_byte_num, pattern_byte_offset))) {
-        LOG_WARN("get_mb_str_info failed", K(ret), K(pattern), K(cs_type), K(pattern_len_in_char));
-      } else if (!res_is_clob && (pattern_byte_num.count() + 1 != pattern_byte_offset.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("size of pattern_byte_num and size of pattern_byte_offset should be same",
-            K(ret),
-            K(pattern_byte_num),
-            K(pattern_byte_offset));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(trim2(output, trim_type, pattern, str, cs_type, pattern_byte_num, pattern_byte_offset))) {
-        LOG_WARN("do trim2 failed", K(ret));
-      } else {
-        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
-          expr_datum.set_null();
-        } else {
-          expr_datum.set_string(output);
-        }
-      }
-    } else {
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(trim(output, trim_type, pattern, str))) {
-        LOG_WARN("do trim failed", K(ret));
-      } else {
-        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
-          expr_datum.set_null();
-        } else {
-          expr_datum.set_string(output);
+        if (OB_SUCC(ret)
+            && OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                       res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 3", K(ret));
         }
       }
     }
@@ -575,70 +867,58 @@ int ObExprTrim::eval_trim(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datu
 }
 
 // Ltrim start
-ObExprLtrim::ObExprLtrim(ObIAllocator& alloc)
-    : ObExprTrim(alloc, T_FUN_SYS_LTRIM, N_LTRIM, (share::is_oracle_mode()) ? ONE_OR_TWO : 1)
-{}
+ObExprLtrim::ObExprLtrim(ObIAllocator &alloc)
+    : ObExprTrim(alloc, T_FUN_SYS_LTRIM, N_LTRIM, (lib::is_oracle_mode()) ? ONE_OR_TWO : 1)
+{
+}
 
-ObExprLtrim::ObExprLtrim(ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num)
+ObExprLtrim::ObExprLtrim(ObIAllocator &alloc,
+                         ObExprOperatorType type,
+                         const char *name,
+                         int32_t param_num)
     : ObExprTrim(alloc, type, name, param_num)
-{}
+{
+}
 
 ObExprLtrim::~ObExprLtrim()
-{}
+{
+}
 
-inline int ObExprLtrim::calc_result_type1(ObExprResType& res_type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+inline int ObExprLtrim::calc_result_type1(ObExprResType &res_type,
+                                          ObExprResType &type1,
+                                          ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  CK(NULL != type_ctx.get_session());
-  // old engine, keep old logic.
-  if (OB_SUCC(ret) && !type_ctx.get_session()->use_static_typing_engine()) {
-    if (type1.is_lob()) {
-      res_type.set_type(type1.get_type());
-    } else if (type1.is_nstring()) {
-      res_type.set_meta(type1);
-    } else {
-      res_type.set_varchar();
-      const common::ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
-                                               : common::LS_BYTE);
-      res_type.set_length_semantics(
-          type1.is_varchar_or_char() ? type1.get_length_semantics() : default_length_semantics);
-    }
-    if (type1.is_null()) {
-      res_type.set_null();
-    } else {
-      res_type.set_length(type1.get_length());
-      type1.set_calc_type(ObVarcharType);
-      ret = aggregate_charsets_for_string_result_with_comparison(res_type, &type1, 1, type_ctx.get_coll_type());
-    }
-  }
-
-  // static typing engine
-  if (OB_SUCC(ret) && type_ctx.get_session()->use_static_typing_engine()) {
+  if (OB_SUCC(ret)) {
     OZ(ObExprTrim::deduce_result_type(res_type, &type1, 1, type_ctx));
   }
   return ret;
 }
 
-inline int ObExprLtrim::deduce_result_type(
-    ObExprResType& type, ObExprResType* types, int64_t param_num, ObExprTypeCtx& type_ctx)
+inline int ObExprLtrim::deduce_result_type(ObExprResType &type,
+                                          ObExprResType *types,
+                                          int64_t param_num,
+                                          ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
   CK(NULL != types);
   CK(NULL != type_ctx.get_session());
   CK(param_num >= 1 && param_num <= 2);
 
-  ObExprResType* str_type = &types[0];
+  ObExprResType *str_type = &types[0];
   type.set_length(types[0].get_length());
-  ObExprResType* pattern_type = (2 == param_num) ? &types[1] : NULL;
+  ObExprResType *pattern_type = (2 == param_num) ? &types[1] : NULL;
 
-  if (lib::is_oracle_mode() && type_ctx.get_session()->use_static_typing_engine()) {
-    auto str_params = make_const_carray(str_type);
-    OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params, type, true));  // prefer varchar
-    OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
+  if (lib::is_oracle_mode()) {
+    ObSEArray<ObExprResType*, 2, ObNullAllocator> str_params;
+    OZ(str_params.push_back(str_type));
+    OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params,
+                                                type, PREFER_VAR_LEN_CHAR)); // prefer varchar
     if (NULL != pattern_type) {
-      pattern_type->set_calc_meta(type);
+      OZ(str_params.push_back(pattern_type));
     }
+    OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
+    OX(type.set_length(str_type->get_calc_length()));
   } else {
     if (str_type->is_lob()) {
       type.set_type(str_type->get_type());
@@ -649,17 +929,18 @@ inline int ObExprLtrim::deduce_result_type(
     } else if (str_type->is_nstring()) {
       type.set_meta(*str_type);
       type.set_type_simple(ObNVarchar2Type);
+      type.set_length_semantics(LS_CHAR);
       str_type->set_calc_type(ObVarcharType);
       if (NULL != pattern_type) {
         pattern_type->set_calc_type(ObVarcharType);
       }
     } else {
-      const common::ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
-                                               : common::LS_BYTE);
+      const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
+                                                                  ? type_ctx.get_session()->get_actual_nls_length_semantics()
+                                                                  : common::LS_BYTE);
       type.set_varchar();
-      type.set_length_semantics(
-          types[0].is_varchar_or_char() ? types[0].get_length_semantics() : default_length_semantics);
+      type.set_length_semantics(types[0].is_varchar_or_char()
+                                ? types[0].get_length_semantics() : default_length_semantics);
       str_type->set_calc_type(ObVarcharType);
       if (NULL != pattern_type) {
         pattern_type->set_calc_type(ObVarcharType);
@@ -668,184 +949,29 @@ inline int ObExprLtrim::deduce_result_type(
     // deduce charset
     ObSEArray<ObExprResType, 2> tmp_types;
     OZ(tmp_types.push_back(*str_type));
-    if (NULL != pattern_type) {
+    if (NULL != pattern_type && !lib::is_oracle_mode()) {
       OZ(tmp_types.push_back(*pattern_type));
     }
     OZ(aggregate_charsets_for_string_result_with_comparison(
-        type, &tmp_types.at(0), tmp_types.count(), type_ctx.get_coll_type()));
+            type, &tmp_types.at(0), tmp_types.count(), type_ctx.get_coll_type()));
     str_type->set_calc_collation_type(type.get_collation_type());
     str_type->set_calc_collation_level(type.get_collation_level());
     if (NULL != pattern_type) {
       pattern_type->set_calc_collation_type(type.get_collation_type());
       pattern_type->set_calc_collation_level(type.get_collation_level());
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      ObLength res_length = 0;
+      OZ(ObExprResultTypeUtil::deduce_max_string_length_oracle(
+        type_ctx.get_session()->get_dtc_params(), *str_type, type, res_length));
+      OX(type.set_length(res_length));
+    }
   }
   return ret;
 }
 
-int ObExprLtrim::calc_result1(ObObj& res_obj, const ObObj& obj1, ObExprCtx& expr_ctx) const
-{
-  return calc(res_obj, obj1, expr_ctx, TYPE_LTRIM);
-}
 
-// @param: trim_type_use
-//  1: LTRIM or 2: RTRIM
-int ObExprLtrim::calc(ObObj& res_obj, const ObObj& obj1, ObExprCtx& expr_ctx, int64_t trim_type_use) const
-{
-  int ret = OB_SUCCESS;
-  ObString pattern_val;
-  char default_pattern_buffer[8];  // 8 is enough for all charset
-  ObString text_val;
-  bool is_result_null = false;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("calc_buf in not init", K(ret), K(expr_ctx.calc_buf_));
-  } else {
-    if (obj1.is_null()) {
-      res_obj.set_null();
-      is_result_null = true;
-    } else {
-      int64_t out_len = 0;
-      ObCollationType cs_type = (lib::is_oracle_mode() && !(expr_ctx.my_session_->use_static_typing_engine()))
-                                    ? expr_ctx.my_session_->get_nls_collation()
-                                    : result_type_.get_collation_type();
-      if (OB_FAIL(fill_default_pattern(default_pattern_buffer, sizeof(default_pattern_buffer), cs_type, out_len))) {
-      } else if (out_len <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected out length", K(ret), K(out_len));
-      } else {
-        pattern_val.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
-      }
-      text_val = obj1.get_string();
-    }
-  }
-
-  if (OB_LIKELY(OB_SUCC(ret) && !is_result_null)) {
-    ret = ObExprTrim::calc(res_obj, trim_type_use, pattern_val, text_val, get_result_type().get_type(), expr_ctx);
-    if (OB_LIKELY(OB_SUCC(ret) && !res_obj.is_null())) {
-      if (share::is_oracle_mode()) {
-        if (OB_NOT_NULL(expr_ctx.my_session_)) {
-          res_obj.set_collation_type(expr_ctx.my_session_->get_nls_collation());
-        }
-        if (OB_FAIL(convert_result_collation(result_type_, res_obj, expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to convert result collation", K(ret));
-        }
-      }
-      res_obj.set_collation(result_type_);
-    }
-  }
-
-  return ret;
-}
-
-int ObExprLtrim::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  int64_t trim_type_val = TYPE_LTRIM;
-  ObString pattern_val;
-  char default_pattern_buffer[8];  // 8 is enough for all charset
-  ObString text_val;
-  bool is_result_null = false;
-  if (OB_ISNULL(expr_ctx.calc_buf_) || OB_UNLIKELY(param_num <= 0 || param_num > 2 || OB_ISNULL(objs_array))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param_num), K(expr_ctx.calc_buf_), K(objs_array));
-  } else if (1 == param_num) {
-    if (objs_array[0].is_null()) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      int64_t out_len = 0;
-      ObCollationType cs_type = (lib::is_oracle_mode() && !(expr_ctx.my_session_->use_static_typing_engine()))
-                                    ? expr_ctx.my_session_->get_nls_collation()
-                                    : result_type_.get_collation_type();
-      if (OB_FAIL(fill_default_pattern(default_pattern_buffer, sizeof(default_pattern_buffer), cs_type, out_len))) {
-      } else if (out_len <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected out length", K(ret), K(out_len));
-      } else {
-        pattern_val.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
-      }
-    }
-    text_val = objs_array[0].get_string();
-  } else if (param_num == 2) {
-    if (OB_UNLIKELY(objs_array[0].is_null()) || OB_UNLIKELY(objs_array[1].is_null())) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      pattern_val = objs_array[1].get_string();
-      text_val = objs_array[0].get_string();
-    }
-  }
-  if (OB_LIKELY(OB_SUCCESS == ret && !is_result_null)) {
-    ObCollationType cs_type = result_type_.get_collation_type();
-    ret = calc_oracle_mode(
-        result, trim_type_val, pattern_val, text_val, get_result_type().get_type(), expr_ctx, param_num, cs_type);
-    if (OB_LIKELY(OB_SUCCESS == ret && !result.is_null())) {
-      if (share::is_oracle_mode()) {
-        if (OB_NOT_NULL(expr_ctx.my_session_)) {
-          result.set_collation_type(expr_ctx.my_session_->get_nls_collation());
-        }
-        if (OB_FAIL(convert_result_collation(result_type_, result, expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to convert result collation", K(ret));
-        }
-      }
-      result.set_collation(result_type_);
-    }
-  }
-
-  return ret;
-}
-
-int ObExprLtrim::calc_oracle_mode(ObObj& result, const int64_t trim_type, const ObString& pattern, const ObString& text,
-    const ObObjType& res_type, ObExprCtx& expr_ctx, const int64_t param_num, const ObCollationType& cs_type)
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-  ObString varchar;
-  if (1 == param_num) {
-    if (OB_FAIL(trim(varchar, trim_type, pattern, text))) {
-      LOG_WARN("do trim failed", K(ret));
-    } else {
-      if (share::is_oracle_mode() && (0 == varchar.length()) && !ob_is_text_tc(res_type)) {
-        result.set_null();
-      } else if (ob_is_text_tc(res_type)) {
-        result.set_lob_value(res_type, varchar.ptr(), varchar.length());
-      } else {
-        result.set_varchar(varchar);
-      }
-    }
-  } else if (2 == param_num) {
-    size_t pattern_len_in_char = ObCharset::strlen_char(cs_type, pattern.ptr(), pattern.length());
-    ObFixedArray<size_t, ObIAllocator> pattern_byte_num(expr_ctx.calc_buf_, pattern_len_in_char);
-    ObFixedArray<size_t, ObIAllocator> pattern_byte_offset(expr_ctx.calc_buf_, pattern_len_in_char + 1);
-    if (OB_FAIL(ObExprUtil::get_mb_str_info(pattern, cs_type, pattern_byte_num, pattern_byte_offset))) {
-      LOG_WARN("get_mb_str_info failed", K(ret), K(pattern), K(cs_type), K(pattern_len_in_char));
-    } else if (!ob_is_text_tc(res_type) && (pattern_byte_num.count() + 1 != pattern_byte_offset.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("size of pattern_byte_num and size of pattern_byte_offset should be same",
-          K(ret),
-          K(pattern_byte_num),
-          K(pattern_byte_offset));
-    }
-    if (OB_FAIL(trim2(varchar, trim_type, pattern, text, cs_type, pattern_byte_num, pattern_byte_offset))) {
-      LOG_WARN("do trim2 failed", K(ret));
-    } else {
-      if (share::is_oracle_mode() && 0 == varchar.length() && !ob_is_text_tc(res_type)) {
-        result.set_null();
-      } else if (ob_is_text_tc(res_type)) {
-        result.set_lob_value(res_type, varchar.ptr(), varchar.length());
-      } else {
-        result.set_varchar(varchar);
-      }
-    }
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param_num));
-  }
-  return ret;
-}
-
-int ObExprLtrim::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
+int ObExprLtrim::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   CK(1 == rt_expr.arg_cnt_ || 2 == rt_expr.arg_cnt_);
@@ -855,81 +981,22 @@ int ObExprLtrim::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
 }
 
 // Rtrim start
-ObExprRtrim::ObExprRtrim(ObIAllocator& alloc)
-    : ObExprLtrim(alloc, T_FUN_SYS_RTRIM, N_RTRIM, (share::is_oracle_mode()) ? ONE_OR_TWO : 1)
-{}
+ObExprRtrim::ObExprRtrim(ObIAllocator &alloc)
+    : ObExprLtrim(alloc, T_FUN_SYS_RTRIM, N_RTRIM, (lib::is_oracle_mode()) ? ONE_OR_TWO :1)
+{
+}
 
 ObExprRtrim::~ObExprRtrim()
-{}
+{
+}
 
-inline int ObExprRtrim::calc_result_type1(ObExprResType& res_type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+inline int ObExprRtrim::calc_result_type1(ObExprResType &res_type,
+                                          ObExprResType &type1,
+                                          ObExprTypeCtx &type_ctx) const
 {
   return ObExprLtrim::calc_result_type1(res_type, type1, type_ctx);
 }
 
-inline int ObExprRtrim::calc_result1(ObObj& res_obj, const ObObj& obj1, ObExprCtx& expr_ctx) const
-{
-  return ObExprLtrim::calc(res_obj, obj1, expr_ctx, TYPE_RTRIM);
-}
 
-int ObExprRtrim::calc_resultN(ObObj& result, const ObObj* objs_array, int64_t param_num, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  int64_t trim_type_val = TYPE_RTRIM;
-  ObString pattern_val;
-  char default_pattern_buffer[8];  // 8 is enough for all charset
-  ObString text_val;
-  bool is_result_null = false;
-  if (OB_ISNULL(expr_ctx.calc_buf_) || OB_UNLIKELY(param_num <= 0 || param_num > 2 || OB_ISNULL(objs_array))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param_num), K(expr_ctx.calc_buf_), K(objs_array));
-  } else if (1 == param_num) {
-    if (objs_array[0].is_null()) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      int64_t out_len = 0;
-      ObCollationType cs_type = (lib::is_oracle_mode() && !(expr_ctx.my_session_->use_static_typing_engine()))
-                                    ? expr_ctx.my_session_->get_nls_collation()
-                                    : result_type_.get_collation_type();
-      if (OB_FAIL(fill_default_pattern(default_pattern_buffer, sizeof(default_pattern_buffer), cs_type, out_len))) {
-      } else if (out_len <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected out length", K(ret), K(out_len));
-      } else {
-        pattern_val.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
-      }
-    }
-    text_val = objs_array[0].get_string();
-  } else if (param_num == 2) {
-    if (OB_UNLIKELY(objs_array[0].is_null()) || OB_UNLIKELY(objs_array[1].is_null())) {
-      result.set_null();
-      is_result_null = true;
-    } else {
-      pattern_val = objs_array[1].get_string();
-      text_val = objs_array[0].get_string();
-    }
-  }
-
-  if (OB_LIKELY(OB_SUCCESS == ret && !is_result_null)) {
-    ObCollationType cs_type = result_type_.get_collation_type();
-    ret = ObExprLtrim::calc_oracle_mode(
-        result, trim_type_val, pattern_val, text_val, get_result_type().get_type(), expr_ctx, param_num, cs_type);
-    if (OB_LIKELY(OB_SUCCESS == ret && !result.is_null())) {
-      if (share::is_oracle_mode()) {
-        if (OB_NOT_NULL(expr_ctx.my_session_)) {
-          result.set_collation_type(expr_ctx.my_session_->get_nls_collation());
-        }
-        if (OB_FAIL(convert_result_collation(result_type_, result, expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to convert result collation", K(ret));
-        }
-      }
-      result.set_collation(result_type_);
-    }
-  }
-
-  return ret;
-}
-
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // oceanbase

@@ -14,15 +14,29 @@
 #define OB_SESSION_STAT_H_
 
 #include "lib/stat/ob_di_cache.h"
-#include "lib/stat/ob_di_tls.h"
+#include "lib/thread_local/ob_tsi_factory.h"
 
-namespace oceanbase {
-namespace common {
-struct ObSysSessionIds {
-  enum ObSysSessionIdEnum { DEFAULT = 1, MERGE, DUMP, MIGRATE, BLOOM_FILTER_BUILD, NETWORK, OMT, MAX_RESERVED };
+namespace oceanbase
+{
+namespace common
+{
+struct ObSysSessionIds
+{
+  enum ObSysSessionIdEnum
+  {
+    DEFAULT = 1,
+    MERGE,
+    DUMP,
+    MIGRATE,
+    BLOOM_FILTER_BUILD,
+    NETWORK,
+    OMT,
+    MAX_RESERVED
+  };
 };
 
-class ObSessionDIBuffer {
+class ObSessionDIBuffer
+{
 public:
   ObSessionDIBuffer();
   virtual ~ObSessionDIBuffer();
@@ -31,52 +45,62 @@ public:
   int switch_tenant(const uint64_t tenant_id);
   uint64_t get_tenant_id();
   void reset_session();
-  inline ObDISessionCollect* get_curr_session()
-  {
-    return session_collect_;
-  }
-  inline ObDITenantCollect* get_curr_tenant()
-  {
-    return curr_tenant_collect_;
-  }
-  inline ObDIThreadTenantCache& get_tenant_cache()
-  {
-    return tenant_cache_;
-  }
-
+  inline ObDISessionCollect *get_curr_session() {return session_collect_;}
+  inline ObDITenantCollect *get_curr_tenant() {return curr_tenant_collect_;}
+  inline ObDIThreadTenantCache &get_tenant_cache() {return tenant_cache_;}
 private:
   ObDIThreadTenantCache tenant_cache_;
   ObDISessionCollect local_session_collect_;
-  ObDISessionCollect* session_collect_;
-  ObDITenantCollect* sys_tenant_collect_;
-  ObDITenantCollect* curr_tenant_collect_;
-  ObDITenantCollect* not_sys_tenant_collect_;
+  ObDISessionCollect *session_collect_;
+  ObDITenantCollect *sys_tenant_collect_;
+  ObDITenantCollect *curr_tenant_collect_;
+  ObDITenantCollect *not_sys_tenant_collect_;
 };
 
-class ObSessionStatEstGuard {
+class ObSessionStatEstGuard
+{
 public:
   ObSessionStatEstGuard(const uint64_t tenant_id = OB_SYS_TENANT_ID,
-      const uint64_t session_id = ObSysSessionIds::DEFAULT, const bool is_multi_thread_plan = false);
+                        const uint64_t session_id = ObSysSessionIds::DEFAULT,
+                        const bool is_multi_thread_plan = false);
   virtual ~ObSessionStatEstGuard();
-
 private:
   uint64_t prev_tenant_id_;
   uint64_t prev_session_id_;
-  ObSessionDIBuffer* buffer_;
+  ObSessionDIBuffer *buffer_;
 };
 
-class ObTenantStatEstGuard {
+class ObTenantStatEstGuard
+{
 public:
-  explicit ObTenantStatEstGuard(uint64_t tenant_id = OB_SYS_TENANT_ID);
-  virtual ~ObTenantStatEstGuard();
-
+  explicit ObTenantStatEstGuard(uint64_t tenant_id = OB_SYS_TENANT_ID)
+      : prev_tenant_id_(OB_SYS_TENANT_ID)
+  {
+    if (oceanbase::lib::is_diagnose_info_enabled()) {
+      buffer_ = GET_TSI(ObSessionDIBuffer);
+      if (NULL != buffer_) {
+        prev_tenant_id_ = buffer_->get_tenant_id();
+        if (0 < tenant_id) {
+          buffer_->switch_tenant(tenant_id);
+        }
+      }
+    } else {
+      buffer_ = nullptr;
+    }
+  }
+  virtual ~ObTenantStatEstGuard()
+  {
+    if (NULL != buffer_) {
+      buffer_->switch_tenant(prev_tenant_id_);
+    }
+  }
 private:
   uint64_t prev_tenant_id_;
-  ObSessionDIBuffer* buffer_;
+  ObSessionDIBuffer *buffer_;
 };
 
-inline int ObSessionDIBuffer::switch_both(
-    const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan)
+inline int ObSessionDIBuffer::switch_both(const uint64_t tenant_id,
+    const uint64_t session_id, const bool is_multi_thread_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS != (ret = switch_session(session_id, is_multi_thread_plan))) {
@@ -138,7 +162,7 @@ inline void ObSessionDIBuffer::reset_session()
     // Summarize the thread-local session collect into the session cache
     if (session_collect_ == &local_session_collect_) {
       const uint64_t session_id = session_collect_->session_id_;
-      ObDISessionCollect* collect = NULL;
+      ObDISessionCollect *collect = NULL;
       ObDISessionCache::get_instance().get_node(session_id, collect);
       if (NULL != collect) {
         collect->base_value_.add(session_collect_->base_value_);
@@ -151,6 +175,7 @@ inline void ObSessionDIBuffer::reset_session()
     session_collect_ = NULL;
   }
 }
+
 
 } /* namespace common */
 } /* namespace oceanbase */

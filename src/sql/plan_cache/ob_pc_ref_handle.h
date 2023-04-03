@@ -16,18 +16,22 @@
 #include "lib/atomic/ob_atomic.h"
 #include "share/config/ob_server_config.h"
 
-namespace oceanbase {
-namespace lib {
-struct ObMemAttr;
+namespace oceanbase
+{
+namespace lib
+{
+  struct ObMemAttr;
 }
 
-namespace common {
+namespace common
+{
 class ObIAllocator;
 class ObString;
 class ObArenaAllocator;
-}  // namespace common
-namespace sql {
-class ObPreCalcExprFrameInfo;
+}
+namespace sql
+{
+struct ObPreCalcExprFrameInfo;
 class ObSqlExpression;
 // pre-calculable expression list reference handler
 class PreCalcExprHandler {
@@ -42,8 +46,14 @@ public:
   common::ObDList<ObSqlExpression>* pre_calc_exprs_;
   volatile int64_t ref_cnt_;
 
-  PreCalcExprHandler() : pc_alloc_(NULL), alloc_(), pre_calc_frames_(NULL), pre_calc_exprs_(NULL), ref_cnt_(1)
-  {}
+  PreCalcExprHandler()
+  : pc_alloc_(NULL),
+    alloc_(),
+    pre_calc_frames_(NULL),
+    pre_calc_exprs_(NULL),
+    ref_cnt_(1)
+  {
+  }
   ~PreCalcExprHandler()
   {
     alloc_.reset();
@@ -61,14 +71,13 @@ public:
     alloc_.set_attr(attr);
     pc_alloc_ = pc_alloc;
   }
-
 public:
-  int64_t get_ref_count() const
+  int64_t get_ref_count() const 
   {
     return ATOMIC_LOAD64(&ref_cnt_);
   }
 
-  void inc_ref_cnt()
+  void inc_ref_cnt() 
   {
     ATOMIC_AAF(&ref_cnt_, 1);
   }
@@ -79,7 +88,8 @@ public:
   }
 };
 
-enum CacheRefHandleID {
+enum CacheRefHandleID
+{
   PC_REF_PLAN_LOCAL_HANDLE = 0,
   PC_REF_PLAN_REMOTE_HANDLE,
   PC_REF_PLAN_DIST_HANDLE,
@@ -91,7 +101,7 @@ enum CacheRefHandleID {
   CLI_QUERY_HANDLE,
   OUTLINE_EXEC_HANDLE,
   PLAN_EXPLAIN_HANDLE,
-  ASYN_BASELINE_HANDLE,
+  CHECK_EVOLUTION_PLAN_HANDLE,
   LOAD_BASELINE_HANDLE,
   PS_EXEC_HANDLE,
   GV_SQL_HANDLE,
@@ -111,14 +121,22 @@ enum CacheRefHandleID {
   PCV_GET_PL_KEY_HANDLE,
   PCV_EXPIRE_BY_USED_HANDLE,
   PCV_EXPIRE_BY_MEM_HANDLE,
+  LC_REF_CACHE_NODE_HANDLE,
+  LC_NODE_HANDLE,
+  LC_NODE_RD_HANDLE,
+  LC_NODE_WR_HANDLE,
+  LC_REF_CACHE_OBJ_STAT_HANDLE,
+  PLAN_BASELINE_HANDLE,
+  TABLEAPI_NODE_HANDLE,
   MAX_HANDLE
 };
 
-class ObCacheRefHandleMgr {
-  friend class ObAllPlanCacheStat;
-
+class ObCacheRefHandleMgr
+{
+friend class ObAllPlanCacheStat;
 public:
-  ObCacheRefHandleMgr() : tenant_id_(common::OB_INVALID_ID)
+  ObCacheRefHandleMgr()
+    :tenant_id_(common::OB_INVALID_ID)
   {
     clear_ref_handles();
   }
@@ -145,20 +163,15 @@ public:
     }
   }
 
-  inline void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-  uint64_t get_tenant_id() const
-  {
-    return tenant_id_;
-  }
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
 
-  int dump_handle_info(common::ObIAllocator& allocator, common::ObString& dump_info);
+  int dump_handle_info(common::ObIAllocator &allocator,
+                              common::ObString &dump_info);
 
   void clear_ref_handles()
   {
-    for (uint64_t i = 0; i < MAX_HANDLE; i++) {
+    for(uint64_t i = 0; i < MAX_HANDLE; i++) {
       ATOMIC_STORE(&CACHE_REF_HANDLES[i], 0);
     }
   }
@@ -167,7 +180,6 @@ public:
   {
     return ATOMIC_LOAD(&CACHE_REF_HANDLES[ref_handle]);
   }
-
 private:
   static const char* handle_name(const CacheRefHandleID handle);
 
@@ -175,6 +187,6 @@ private:
   volatile int64_t CACHE_REF_HANDLES[MAX_HANDLE];
   uint64_t tenant_id_;
 };
-}  // end namespace sql
-}  // namespace oceanbase
-#endif  // !OCEANBASE_PC_REF_HANDLE_H_
+} // end namespace sql
+} // end namespace oceanbases
+#endif // !OCEANBASE_PC_REF_HANDLE_H_

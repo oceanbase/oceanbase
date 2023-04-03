@@ -15,10 +15,12 @@
 #include "lib/charset/ob_charset.h"
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-int ObTenantVirtualCollation::inner_get_next_row(common::ObNewRow*& row)
+int ObTenantVirtualCollation::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!start_to_read_) {
@@ -43,74 +45,88 @@ int ObTenantVirtualCollation::inner_get_next_row(common::ObNewRow*& row)
 int ObTenantVirtualCollation::fill_scanner()
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = NULL;
-  const ObCollationWrapper* collation_wrap_arr = NULL;
+  ObObj *cells = NULL;
+  const ObCollationWrapper *collation_wrap_arr = NULL;
   int64_t collation_wrap_arr_len = 0;
   ObCharset::get_collation_wrap_arr(collation_wrap_arr, collation_wrap_arr_len);
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("allocator is NULL", K(ret));
-  } else if (OB_ISNULL(cells = cur_row_.cells_)) {
+  } else if (output_column_ids_.count() > 0 &&
+             OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cur row cell is NULL", K(ret));
   } else if (OB_ISNULL(collation_wrap_arr) ||
-             OB_UNLIKELY(ObCharset::COLLATION_WRAPPER_COUNT != collation_wrap_arr_len)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("collation wrap array is NULL or collation_wrap_arr_len is not COLLATION_WRAPPER_COUNT",
-        K(ret),
-        K(collation_wrap_arr),
-        K(collation_wrap_arr_len));
+        OB_UNLIKELY(ObCharset::VALID_COLLATION_TYPES != collation_wrap_arr_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("collation wrap array is NULL or collation_wrap_arr_len is not COLLATION_WRAPPER_COUNT",
+                K(ret), K(collation_wrap_arr), K(collation_wrap_arr_len));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < collation_wrap_arr_len; ++i) {
     int cell_idx = 0;
     ObCollationWrapper collation_wrap = collation_wrap_arr[i];
-    for (int64_t j = 0; OB_SUCC(ret) && j < output_column_ids_.count(); ++j) {
-      int64_t col_id = output_column_ids_.at(j);
-      switch (col_id) {
-        case COLLATION: {
-          cells[cell_idx].set_varchar(ObString::make_string(ObCharset::collation_name(collation_wrap.collation_)));
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          break;
+    if (CS_TYPE_INVALID != collation_wrap.collation_) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < output_column_ids_.count(); ++j) {
+        int64_t col_id = output_column_ids_.at(j);
+        switch(col_id) {
+          case COLLATION_TYPE: {
+            cells[cell_idx].set_int(collation_wrap.collation_);
+            break;
+          }
+          case COLLATION: {
+            cells[cell_idx].set_varchar(
+                ObString::make_string(ObCharset::collation_name(collation_wrap.collation_)));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case CHARSET: {
+            cells[cell_idx].set_varchar(
+                ObString::make_string(ObCharset::charset_name(collation_wrap.charset_)));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case ID: {
+            cells[cell_idx].set_int(collation_wrap.id_);
+            break;
+          }
+          case IS_DEFAULT: {
+            const char* is_default = (true == collation_wrap.default_) ? "Yes" : "";
+            cells[cell_idx].set_varchar(
+                ObString::make_string(is_default));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case IS_COMPILED: {
+            const char* is_compiled = (true == collation_wrap.compiled_) ? "Yes" : "";
+            cells[cell_idx].set_varchar(
+                ObString::make_string(is_compiled));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case SORTLEN: {
+            cells[cell_idx].set_int(collation_wrap.sortlen_);
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(ERROR, "invalid column id", K(ret), K(cell_idx), K(j),
+                      K(output_column_ids_), K(col_id));
+            break;
+          }
         }
-        case CHARSET: {
-          cells[cell_idx].set_varchar(ObString::make_string(ObCharset::charset_name(collation_wrap.charset_)));
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          break;
+        if (OB_SUCC(ret)) {
+          cell_idx++;
         }
-        case ID: {
-          cells[cell_idx].set_int(collation_wrap.id_);
-          break;
-        }
-        case IS_DEFAULT: {
-          const char* is_default = (true == collation_wrap.default_) ? "Yes" : "";
-          cells[cell_idx].set_varchar(ObString::make_string(is_default));
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          break;
-        }
-        case IS_COMPILED: {
-          const char* is_compiled = (true == collation_wrap.compiled_) ? "Yes" : "";
-          cells[cell_idx].set_varchar(ObString::make_string(is_compiled));
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          break;
-        }
-        case SORTLEN: {
-          cells[cell_idx].set_int(collation_wrap.sortlen_);
-          break;
-        }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(ERROR, "invalid column id", K(ret), K(cell_idx), K(j), K(output_column_ids_), K(col_id));
-          break;
-        }
+      }//for
+      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+        LOG_WARN("fail to add row", K(ret), K(cur_row_));
       }
-      if (OB_SUCC(ret)) {
-        cell_idx++;
-      }
-    }  // for
-    if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
-      LOG_WARN("fail to add row", K(ret), K(cur_row_));
-    }
-  }  // for
+    }//for
+  }
   if (OB_SUCC(ret)) {
     scanner_it_ = scanner_.begin();
     start_to_read_ = true;
@@ -118,5 +134,5 @@ int ObTenantVirtualCollation::fill_scanner()
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}

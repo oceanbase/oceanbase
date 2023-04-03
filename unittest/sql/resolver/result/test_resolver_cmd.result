@@ -5938,13 +5938,13 @@ drop database dbcmd;
 }
 ***************   Case 13   ***************
 alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
-{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":1}}
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_role":1}}
 ***************   Case 14   ***************
 alter system bootstrap CLUSTER primary REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
-{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":1}}
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_role":1}}
 ***************   Case 15   ***************
 alter system bootstrap cluster standby REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
-{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":2}}
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_role":2}}
 ***************   Case 16   ***************
 alter system set cluster_id = 3;
 {

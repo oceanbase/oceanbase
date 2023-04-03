@@ -1,0 +1,30 @@
+# 描述oceanbase各个版本升级依赖关系
+# 参考文档 release/ptw5y7
+
+# 对于每一个正式发布的ob版本，在下面的yaml文档中添加一项，包括如下属性：
+#  * version: 待升级的版本，或者升级过程中经过的版本；一般用A.B.C的版本号，如果是A.B.C-D的形式，表示build号必须大于等于D
+#  * can_be_upgraded_to: 表示该版本经过OB QA兼容性测试，可以*直接*升级到的ob版本号，是一个列表可以包括多个版本
+#  * deprecated: 缺省为False。如果为True，表示这个版本已经废除。可以作
+#     为升级的起点，可以作为升级过度版本，但是不能作为升级目标版本。
+#  * require_from_binary: 缺省为False。如果为True，表示升级过程中如果作为中间版本，除了运行upgrade脚本，还需要把observer也升级到该版本
+#
+
+# OCP的OB升级模块会读取本文件，给定升级的起始版本和目标版本，自动在满
+# 足上述约束的情况下寻找一个升级的最短路径。基本算法是：
+# 基于如下描述构建一个图，每个版本一个结点，can_be_upgraded_to关系定义
+# 一条边，寻找起始版本和升级目标两个版本之间的最短路径。除了起始点，其
+# 他节点不能是deprecated。如果有A.B.C和A.B.C-D两种节点匹配，优先选择后
+# 者。
+#
+
+- version: 4.0.0.0
+  can_be_upgraded_to:
+      - 4.1.0.0
+  require_from_binary:
+    value: True
+    when_come_from: [4.0.0.0]
+
+- version: 4.1.0.0
+  require_from_binary:
+    value: True
+    when_come_from: [4.0.0.0, 4.1.0.0]

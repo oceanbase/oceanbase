@@ -42,4 +42,11 @@ static ObObjType ROUND_RESULT_TYPE[ObMaxType] =
     ObDoubleType,     /* ObRawType  */
     ObMaxType,        /* ObIntervalYMType  */
     ObMaxType,        /* ObIntervalDSType  */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /* ObGeometryType */
 };

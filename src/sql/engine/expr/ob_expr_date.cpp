@@ -10,36 +10,30 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 #include "ob_expr_date.h"
 #include "lib/timezone/ob_time_convert.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-
-ObExprDate::ObExprDate(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_DATE, N_DATE, 1, NOT_ROW_DIMENSION)
-{}
-
-ObExprDate::~ObExprDate()
-{}
-
-int ObExprDate::calc_result1(ObObj& result, const ObObj& date, ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  int ret = OB_SUCCESS;
-  if (date.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(date, ObDateType);
-    result.set_date(date.get_date());
-  }
-  UNUSED(expr_ctx);
-  return ret;
+namespace sql
+{
+
+ObExprDate::ObExprDate(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_DATE, N_DATE, 1, NOT_ROW_DIMENSION)
+{
 }
 
-int ObExprDate::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+ObExprDate::~ObExprDate()
+{
+}
+
+int ObExprDate::cg_expr(ObExprCGCtx &op_cg_ctx,
+                            const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(op_cg_ctx);
@@ -49,10 +43,10 @@ int ObExprDate::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExp
   return ret;
 }
 
-int ObExprDate::eval_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int ObExprDate::eval_date(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param = NULL;
+  ObDatum *param = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, param))) {
     LOG_WARN("fail to eval conv", K(ret), K(expr));
   } else if (param->is_null()) {
@@ -64,5 +58,5 @@ int ObExprDate::eval_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

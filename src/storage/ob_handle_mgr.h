@@ -15,18 +15,23 @@
 
 #include "storage/ob_handle_cache.h"
 
-namespace oceanbase {
-namespace storage {
+namespace oceanbase
+{
+namespace storage
+{
 
-template <typename Handle, typename Key, int64_t N>
-class ObHandleMgr {
+template<typename Handle, typename Key, int64_t N>
+class ObHandleMgr
+{
 public:
-  ObHandleMgr() : is_inited_(false), is_multi_(false), is_ordered_(false), last_handle_(NULL), handle_cache_(NULL)
+  ObHandleMgr()
+    : is_inited_(false),
+      is_multi_(false),
+      is_ordered_(false),
+      last_handle_(NULL),
+      handle_cache_(NULL)
   {}
-  virtual ~ObHandleMgr()
-  {
-    reset();
-  }
+  virtual ~ObHandleMgr() { reset(); }
   void reset()
   {
     is_multi_ = false;
@@ -41,10 +46,10 @@ public:
     }
     is_inited_ = false;
   }
-  int init(const bool is_multi, const bool is_ordered, common::ObArenaAllocator& allocator)
+  int init(const bool is_multi, const bool is_ordered, common::ObIAllocator &allocator)
   {
     int ret = common::OB_SUCCESS;
-    void* buf = NULL;
+    void *buf = NULL;
     if (OB_UNLIKELY(is_inited_)) {
       ret = common::OB_INIT_TWICE;
       STORAGE_LOG(WARN, "handle mgr is inited twice", K(ret));
@@ -72,21 +77,17 @@ public:
     }
     return ret;
   }
-  inline bool is_inited()
-  {
-    return is_inited_;
-  }
+  inline bool is_inited() { return is_inited_; }
   TO_STRING_KV(KP_(last_handle), KP_(handle_cache));
-
 protected:
   typedef ObHandleCache<Key, Handle, N> HandleCache;
   bool is_inited_;
   bool is_multi_;
   bool is_ordered_;
-  Handle* last_handle_;
-  HandleCache* handle_cache_;
+  Handle *last_handle_;
+  HandleCache *handle_cache_;
 };
 
-}  // namespace storage
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_STORAGE_OB_HANDLE_MGR_H */

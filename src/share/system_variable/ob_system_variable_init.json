@@ -96,7 +96,7 @@
     "value": "45",
     "data_type": "int",
     "info": "The character set which server should translate to before shipping result sets or error message back to the client",
-    "flags": "GLOBAL | SESSION | NULL",
+    "flags": "GLOBAL | SESSION | NULL | INFLUENCE_PLAN",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_charset",
     "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
     "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_charset",
@@ -239,7 +239,7 @@
   "sql_mode": {
     "id": 15,
     "name": "sql_mode",
-    "value": "4194304",
+    "value": "12582912",
     "data_type": "uint",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_sql_mode",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_sql_mode",
@@ -261,6 +261,7 @@
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_time_zone",
     "base_class": "ObTimeZoneSysVar",
     "publish_version": "",
     "info_cn": "",
@@ -426,7 +427,7 @@
     "name": "identity",
     "value": "0",
     "data_type": "uint",
-    "info": " ",
+    "info": "This variable is a synonym for the last_insert_id variable. It exists for compatibility with other database systems.",
     "flags": "SESSION",
     "session_special_update_func": "ObSysVarSessionSpecialUpdateFuncs::update_identity",
     "min_val": "0",
@@ -550,10 +551,10 @@
   "version": {
     "id": 37,
     "name": "version",
-    "value": "5.6.25",
+    "value": "",
     "data_type": "varchar",
     "info": " ",
-    "flags": "READONLY | GLOBAL",
+    "flags": "GLOBAL",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -640,10 +641,10 @@
   "query_cache_size": {
     "id": 44,
     "name": "query_cache_size",
-    "value": "1048576",
+    "value": "0",
     "data_type": "uint",
     "info": "The memory allocated to store results from old queries(not used yet)",
-    "flags": "GLOBAL",
+    "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "0",
     "max_val": "18446744073709551615",
     "publish_version": "",
@@ -657,7 +658,7 @@
     "value": "0",
     "data_type": "enum",
     "info": "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)",
-    "flags": "GLOBAL | SESSION",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
     "enum_names": [
       "OFF",
       "ON",
@@ -868,12 +869,12 @@
   "max_connections": {
     "id": 62,
     "name": "max_connections",
-    "value": "4294967295",
+    "value": "2147483647",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1",
-    "max_val": "4294967295",
+    "max_val": "2147483647",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -906,10 +907,10 @@
   "server_id": {
     "id": 65,
     "name": "server_id",
-    "value": "0",
+    "value": "1",
     "data_type": "int",
-    "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "info": "This variable specifies the server ID(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "0",
     "max_val": "4294967295",
     "publish_version": "",
@@ -1031,7 +1032,7 @@
     "value": "16777216",
     "data_type": "uint",
     "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "flags": "GLOBAL | SESSION",
     "min_val": "1024",
     "max_val": "18446744073709551615",
     "publish_version": "",
@@ -1099,14 +1100,209 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "ob_default_replica_num": {
-    "id": 10000,
-    "name": "ob_default_replica_num",
+  "session_track_schema": {
+    "id": 81,
+    "name": "session_track_schema",
     "value": "1",
+    "data_type": "bool",
+    "info": "specifies whether return schema change info in ok packet",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "312",
+    "info_cn": "控制返回的ok包中是否包含schema变更的信息",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "session_track_system_variables": {
+    "id": 82,
+    "name": "session_track_system_variables",
+    "value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection",
+    "data_type": "varchar",
+    "info": "specifies whether return system variables change info in ok packet",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "312",
+    "info_cn": "控制返回的ok包中是否包含系统变量变更的信息",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "session_track_state_change": {
+    "id": 83,
+    "name": "session_track_state_change",
+    "value": "0",
+    "data_type": "bool",
+    "info": "specifies whether return session state change info in ok packet",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "312",
+    "info_cn": "控制返回的ok包中是否包含session状态变更的信息",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "have_query_cache": {
+    "id": 84,
+    "name": "have_query_cache",
+    "value": "NO",
+    "data_type": "varchar",
+    "info": "Whether to have query cache or not(not used yet, only compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "323",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "query_cache_limit": {
+    "id": 85,
+    "name": "query_cache_limit",
+    "value": "0",
+    "data_type": "uint",
+    "info": "The maximum query result set that can be cached by the query cache(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "18446744073709551615",
+    "publish_version": "323",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "query_cache_min_res_unit": {
+    "id": 86,
+    "name": "query_cache_min_res_unit",
+    "value": "0",
+    "data_type": "uint",
+    "info": "The smallest unit of memory allocated by the query cache(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "18446744073709551615",
+    "publish_version": "323",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "query_cache_wlock_invalidate": {
+    "id": 87,
+    "name": "query_cache_wlock_invalidate",
+    "value": "0",
+    "data_type": "bool",
+    "info": "query cache wirte lock for MyISAM engine (not used yet, only sys var compatible)",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "323",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "binlog_format": {
+    "id": 88,
+    "name": "binlog_format",
+    "value": "2",
+    "data_type": "enum",
+    "info": "set the binary logging format(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY | READONLY",
+    "enum_names": [
+      "MIXED",
+      "STATEMENT",
+      "ROW"
+    ],
+    "publish_version": "324",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "binlog_checksum": {
+    "id": 89,
+    "name": "binlog_checksum",
+    "value": "CRC32",
+    "data_type": "varchar",
+    "info": "this variable causes the source to write a checksum for each event in the binary log(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "324",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "binlog_rows_query_log_events": {
+    "id": 90,
+    "name": "binlog_rows_query_log_events",
+    "value": "0",
+    "data_type": "bool",
+    "info": "This system variable affects row-based logging only(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY | READONLY",
+    "publish_version": "324",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "log_bin": {
+    "id": 91,
+    "name": "log_bin",
+    "value": "1",
+    "data_type": "bool",
+    "info": "This variable reports only on the status of binary logging(not used yet, only sys var compatible)",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "324",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "server_uuid": {
+    "id": 92,
+    "name": "server_uuid",
+    "value": "ObExprUuid::gen_server_uuid",
+    "data_type": "varchar",
+    "info": "server uuid",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "324",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "default_storage_engine": {
+    "id": 93,
+    "name": "default_storage_engine",
+    "value": "OceanBase",
+    "data_type": "varchar",
+    "info": "The default storage engine of OceanBase",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "400",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "cte_max_recursion_depth": {
+    "id": 94,
+    "name": "cte_max_recursion_depth",
+    "value": "1000",
+    "data_type": "uint",
+    "info": "Abort a recursive common table expression if it does more than this number of iterations.",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "4294967295",
+    "publish_version": "400",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "regexp_stack_limit": {
+    "id": 95,
+    "name": "regexp_stack_limit",
+    "value": "8000000",
     "data_type": "int",
-    "info": "The default replica number of table per zone if not specified when creating table.",
-    "flags": "GLOBAL | SESSION",
-    "publish_version": "",
+    "info": "The maximum available memory in bytes for the internal stack used for regular expression matching operations",
+    "flags": "GLOBAL",
+    "min_val": "0",
+    "max_val": "2147483647",
+    "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "regexp_time_limit": {
+    "id": 96,
+    "name": "regexp_time_limit",
+    "value": "32",
+    "data_type": "int",
+    "info": "The time limit for regular expression matching operations, default unit is milliseconds",
+    "flags": "GLOBAL",
+    "min_val": "0",
+    "max_val": "2147483647",
+    "publish_version": "410",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -1142,18 +1338,6 @@
     "data_type": "varchar",
     "info": "log level in session",
     "flags": "GLOBAL | SESSION",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_max_parallel_degree": {
-    "id": 10004,
-    "name": "ob_max_parallel_degree",
-    "value": "16",
-    "data_type": "int",
-    "info": "Max parellel sub request to chunkservers for one request",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1205,7 +1389,7 @@
   "ob_trx_timeout": {
     "id": 10008,
     "name": "ob_trx_timeout",
-    "value": "100000000",
+    "value": "86400000000",
     "data_type": "int",
     "info": "The max duration of one transaction",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1299,37 +1483,13 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "ob_enable_trace_log": {
+  "ob_enable_show_trace": {
     "id": 10016,
-    "name": "ob_enable_trace_log",
+    "name": "ob_enable_show_trace",
     "value": "0",
     "data_type": "bool",
-    "info": "control whether use trace log",
-    "flags": "Global | SESSION | NEED_SERIALIZE",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_enable_hash_group_by": {
-    "id": 10017,
-    "name": "ob_enable_hash_group_by",
-    "value": "1",
-    "data_type": "bool",
-    "info": "",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_enable_blk_nestedloop_join": {
-    "id": 10018,
-    "name": "ob_enable_blk_nestedloop_join",
-    "value": "0",
-    "data_type": "bool",
-    "info": "",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
+    "info": "control whether use show trace",
+    "flags": "SESSION | NEED_SERIALIZE",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1447,20 +1607,6 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "ob_stmt_parallel_degree": {
-    "id": 10027,
-    "name": "ob_stmt_parallel_degree",
-    "value": "1",
-    "data_type": "int",
-    "info": "The parallel degree of a job in a query, which represent how many tasks of a job can be run parallelly",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
-    "min_val": "1",
-    "max_val": "10240",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
   "is_result_accurate": {
     "id": 10028,
     "name": "is_result_accurate",
@@ -1496,18 +1642,6 @@
       "MYSQL",
       "ORACLE"
     ],
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_create_table_strict_mode": {
-    "id": 10031,
-    "name": "ob_create_table_strict_mode",
-    "value": "1",
-    "data_type": "bool",
-    "info": "If set true, create all the replicas according to the locality or the operation will fail.",
-    "flags": "GLOBAL | SESSION",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1749,36 +1883,6 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "_optimizer_adaptive_cursor_sharing": {
-    "id": 10050,
-    "name": "_optimizer_adaptive_cursor_sharing",
-    "value": "0",
-    "data_type": "bool",
-    "info": "Enable use of adaptive cursor sharing",
-    "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_timestamp_service": {
-    "id": 10051,
-    "name": "ob_timestamp_service",
-    "value": "1",
-    "data_type": "enum",
-    "info": "the type of timestamp service",
-    "flags": "GLOBAL | NEED_SERIALIZE",
-    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_timestamp_service",
-    "enum_names": [
-      "LTS",
-      "GTS",
-      "HA_GTS"
-    ],
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
   "plugin_dir": {
     "id": 10052,
     "name": "plugin_dir",
@@ -1786,32 +1890,6 @@
     "data_type": "varchar",
     "info": "the dir to place plugin dll",
     "flags": "GLOBAL | READONLY",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "undo_retention": {
-    "id": 10053,
-    "name": "undo_retention",
-    "value": "0",
-    "data_type": "int",
-    "info": "specifies (in seconds) the low threshold value of undo retention.",
-    "flags": "GLOBAL",
-    "min_val": "0",
-    "max_val": "4294967295",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "_ob_use_parallel_execution": {
-    "id": 10054,
-    "name": "_ob_use_parallel_execution",
-    "value": "1",
-    "data_type": "bool",
-    "info": "auto use parallel execution",
-    "flags": "NEED_SERIALIZE | GLOBAL | SESSION | INFLUENCE_PLAN | INVISIBLE",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1825,7 +1903,7 @@
     "info": "The limited percentage of tenant memory for sql audit",
     "flags": "GLOBAL | NEED_SERIALIZE",
     "min_val": "0",
-    "max_val": "100",
+    "max_val": "80",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1846,7 +1924,7 @@
   "optimizer_use_sql_plan_baselines": {
     "id": 10057,
     "name": "optimizer_use_sql_plan_baselines",
-    "value": "1",
+    "value": "0",
     "data_type": "bool",
     "info": "Enable use sql plan baseline",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1858,24 +1936,10 @@
   "optimizer_capture_sql_plan_baselines": {
     "id": 10058,
     "name": "optimizer_capture_sql_plan_baselines",
-    "value": "1",
+    "value": "0",
     "data_type": "bool",
     "info": "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline.",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "parallel_max_servers": {
-    "id": 10059,
-    "name": "parallel_max_servers",
-    "value": "0",
-    "data_type": "int",
-    "flags": "GLOBAL | NEED_SERIALIZE",
-    "info": "number of threads created to run parallel statements for each observer.",
-    "min_val": "0",
-    "max_val": "1800",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -1910,7 +1974,7 @@
   "ob_trx_idle_timeout": {
     "id": 10062,
     "name": "ob_trx_idle_timeout",
-    "value": "120000000",
+    "value": "86400000000",
     "data_type": "int",
     "info": "The stmt interval timeout of transaction(us)",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -2076,7 +2140,7 @@
   "nls_nchar_characterset": {
     "id": 10074,
     "name": "nls_nchar_characterset",
-    "value": "AL32UTF8",
+    "value": "AL16UTF16",
     "data_type": "varchar",
     "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table.",
     "flags": "GLOBAL | NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
@@ -2103,6 +2167,7 @@
     "value": "BYTE",
     "data_type": "varchar",
     "info": "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS.",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_nls_length_semantics_is_valid",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
     "publish_version": "",
     "info_cn": "",
@@ -2190,18 +2255,6 @@
     "flags": "SESSION | INVISIBLE | INFLUENCE_PLAN",
     "min_val": "0",
     "max_val": "100",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "_primary_zone_entity_count": {
-    "id": 10084,
-    "name": "_primary_zone_entity_count",
-    "value": "-1",
-    "data_type": "int",
-    "info": "statistic primary zone entity(table/tablegroup/database) count under tenant.",
-    "flags": "GLOBAL | READONLY | INVISIBLE",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2337,6 +2390,18 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "_ob_ols_policy_session_labels": {
+    "id": 10094,
+    "name": "_ob_ols_policy_session_labels",
+    "value": "",
+    "data_type": "varchar",
+    "info": "store all session labels for all label security policy.",
+    "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "ob_trace_info": {
     "id": 10095,
     "name": "ob_trace_info",
@@ -2344,18 +2409,6 @@
     "data_type": "varchar",
     "info": "store trace info",
     "flags": "SESSION",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "ob_enable_batched_multi_statement": {
-    "id": 10096,
-    "name": "ob_enable_batched_multi_statement",
-    "value": "0",
-    "data_type": "bool",
-    "info": "enable use of batched multi statement",
-    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2441,7 +2494,7 @@
     "publish_version": "226",
     "info_cn": "限制导入导出功能访问的路径",
     "background_cn": "导入导出功能未限制文件访问可能存在漏洞",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/sxwpug"
+    "ref_url": ""
   },
   "plsql_warnings": {
     "id": 10103,
@@ -2452,9 +2505,9 @@
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings",
     "publish_version": "3.1.0",
-    "info_cn": "控制pl/sql编译器的报错行为, 可以指定某类型或某个warning码的状态为:enable, disable, error",
-    "background_cn": "pl/sql编译器的警告信息分成了几个分类, 这个系统参数可以控制这些警告信息的行为",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/xxibln"
+    "info_cn": "控制pl/sql编译器的报错行为，可以指定某类型或某个warning码的状态为：enable，disable，error",
+    "background_cn": "pl/sql编译器的警告信息分成了几个分类，这个系统参数可以控制这些警告信息的行为",
+    "ref_url": ""
   },
   "_enable_parallel_query": {
     "id": 10104,
@@ -2464,9 +2517,9 @@
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
     "publish_version": "227",
-    "info_cn": "在session上打开parallel query配置项, 查询默认情况下才可以被并行执行(parallel>=2)",
-    "background_cn": "px上控制parallel的方式有很多, session上有对应的parallel的控制开关, 这个开关用于控制session级别的默认并行度是否可以大于等于2",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/tblezn"
+    "info_cn": "在session上打开parallel query配置项，查询默认情况下才可以被并行执行（parallel>=2)",
+    "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个开关用于控制session级别的默认并行度是否可以大于等于2",
+    "ref_url": ""
   },
   "_force_parallel_query_dop": {
     "id": 10105,
@@ -2476,9 +2529,9 @@
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
     "publish_version": "310",
-    "info_cn": "在session上打开parallel query配置项, 并指定默认并行度",
-    "background_cn": "px上控制parallel的方式有很多, session上有对应的parallel的控制开关, 这个变量用于设置session级别的 query 默认并行度大小",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bpv992"
+    "info_cn": "在session上打开parallel query配置项，并指定默认并行度",
+    "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 query 默认并行度大小",
+    "ref_url": ""
   },
   "_force_parallel_dml_dop": {
     "id": 10106,
@@ -2488,9 +2541,9 @@
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
     "publish_version": "310",
-    "info_cn": "在session上打开parallel dml配置项, 并指定默认并行度.当未通过 hint 指定 dml 并行度时, 会使用本变量值作为默认并行度",
-    "background_cn": "px上控制parallel的方式有很多, session上有对应的parallel的控制开关, 这个变量用于设置session级别的 dml 默认并行度大小",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bpv992"
+    "info_cn": "在session上打开parallel dml配置项，并指定默认并行度。当未通过 hint 指定 dml 并行度时，会使用本变量值作为默认并行度",
+    "background_cn": "px上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 dml 默认并行度大小",
+    "ref_url": ""
   },
   "ob_pl_block_timeout": {
     "id": 10107,
@@ -2505,7 +2558,7 @@
     "publish_version": "227",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/gry0a1"
+    "ref_url": ""
   },
   "transaction_read_only": {
     "id": 10108,
@@ -2520,20 +2573,21 @@
     "base_class": "ObSessionSpecialBoolSysVar",
     "publish_version": "320",
     "info_cn": "控制是否只允许开启只读事务",
-    "background_cn": "用户可以通过这两个变量访问或者设置事务的访问模式, 当transaction_read_only设置为true时, 不允许执行dml语句",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/qcneoc"
+    "background_cn": "用户可以通过这两个变量访问或者设置事务的访问模式，当transaction_read_only设置为true时，不允许执行dml语句",
+    "ref_url": ""
   },
   "resource_manager_plan": {
     "id": 10109,
     "name": "resource_manager_plan",
     "value": "",
     "data_type": "varchar",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_update_resource_manager_plan",
     "info": "specifies tenant resource plan.",
     "flags": "GLOBAL",
     "publish_version": "320",
     "info_cn": "指定租户的资源隔离计划",
-    "background_cn": "租户内的普通线程和并行执行线程会相互抢占CPU资源, 通过给租户指定资源隔离计划, 可以控制资源抢占策略, 隔离资源使用量",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/do11tp"
+    "background_cn": "租户内的普通线程和并行执行线程会相互抢占CPU资源，通过给租户指定资源隔离计划，可以控制资源抢占策略，隔离资源使用量",
+    "ref_url": ""
   },
   "performance_schema": {
     "id": 10110,
@@ -2544,8 +2598,8 @@
     "flags": "GLOBAL",
     "publish_version": "227",
     "info_cn": "向客户端声明是否支持 performance 信息查询",
-    "background_cn": "纯兼容性变量.不支持 performance_schema 系统变量, 导致 8.0 JDBC 驱动在连接认证后初始化系统变量阶段执行 select @performance_schema 抛出异常",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/mg0sbv"
+    "background_cn": "纯兼容性变量。不支持 performance_schema 系统变量，导致 8.0 JDBC 驱动在连接认证后初始化系统变量阶段执行 select @performance_schema 抛出异常",
+    "ref_url": ""
   },
   "nls_currency": {
     "id": 10111,
@@ -2554,10 +2608,11 @@
     "data_type": "varchar",
     "info": "specifies the string to use as the local currency symbol for the L number format element. The default value of this parameter is determined by NLS_TERRITORY.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long",
     "publish_version": "320",
     "info_cn": "L数字格式元素的本地货币符号",
     "background_cn": "兼容 oracle number format model L 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": ""
   },
   "nls_iso_currency": {
     "id": 10112,
@@ -2566,10 +2621,11 @@
     "data_type": "varchar",
     "info": "specifies the string to use as the international currency symbol for the C number format element. The default value of this parameter is determined by NLS_TERRITORY",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_nls_iso_currency_is_valid",
     "publish_version": "320",
     "info_cn": "C数字格式元素的国际货币符号",
     "background_cn": "兼容 oracle number format model C 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": ""
   },
   "nls_dual_currency": {
     "id": 10113,
@@ -2578,10 +2634,24 @@
     "data_type": "varchar",
     "info": "specifies the dual currency symbol for the territory. The default is the dual currency symbol defined in the territory of your current language environment.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long",
     "publish_version": "320",
     "info_cn": "U数字格式元素的双货币符号",
     "background_cn": "兼容 oracle number format model U 数字格式元素",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+    "ref_url": ""
+  },
+  "plsql_ccflags" : {
+    "id": 10115,
+    "name": "plsql_ccflags",
+    "value": "",
+    "data_type": "varchar",
+    "info": "Lets you control conditional compilation of each PL/SQL unit independently.",
+    "flags": "NEED_SERIALIZE | GLOBAL | SESSION | ORACLE_ONLY",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_plsql_ccflags",
+    "publish_version": "330",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   },
   "_ob_proxy_session_temporary_table_used": {
     "id": 10116,
@@ -2593,6 +2663,286 @@
     "publish_version": "310",
     "info_cn": "标记当前Session是否使用过Session级别临时表，用于告知proxy并修改路由决策",
     "background_cn": "为了解决Session临时表断链接时可能导致的问题，当Session临时表第一次使用后，后续请求Proxy只会路由到同一个Session",
-    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/hinq1e"
+    "ref_url": ""
+  },
+  "_enable_parallel_ddl": {
+    "id": 10117,
+    "name": "_enable_parallel_ddl",
+    "value": "1",
+    "data_type": "bool",
+    "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.",
+    "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
+    "publish_version": "330",
+    "info_cn": "标记Session上并行DDL是否被打开",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_force_parallel_ddl_dop": {
+    "id": 10118,
+    "name": "_force_parallel_ddl_dop",
+    "value": "1",
+    "data_type": "uint",
+    "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.",
+    "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
+    "publish_version": "330",
+    "info_cn": "在session上打开parallel ddl配置项，并指定默认并行度。当未通过 hint 指定 ddl 并行度时，会使用本变量值作为默认并行度",
+    "background_cn": "ddl上控制parallel的方式有很多，session上有对应的parallel的控制开关，这个变量用于设置session级别的 ddl 默认并行度大小",
+    "ref_url": ""
+  },
+  "cursor_sharing": {
+    "id": 10119,
+    "name": "cursor_sharing",
+    "value": "0",
+    "data_type": "enum",
+    "info": "whether needs to do parameterization? EXACT - query will not do parameterization; FORCE - query will do parameterization.",
+    "flags": "GLOBAL | SESSION",
+    "enum_names": [
+      "FORCE",
+      "EXACT"
+    ],
+    "publish_version": "330",
+    "info_cn": "在session上打开控制是否参数化的配置项。当处于exact模式时,不进行参数化;处于Force模式时,进行参数化。默认进行参数化。",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_optimizer_null_aware_antijoin": {
+    "id": 10120,
+    "name": "_optimizer_null_aware_antijoin",
+    "value": "1",
+    "data_type": "bool",
+    "info": "specifies whether null aware anti join plan allow generated",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "330",
+    "info_cn": "控制优化器能否生成null aware anti join 的计划",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_px_partial_rollup_pushdown": {
+    "id": 10121,
+    "name": "_px_partial_rollup_pushdown",
+    "value": "1",
+    "data_type": "enum",
+    "info": "enable partial rollup push down optimization.",
+    "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
+    "enum_names": [
+      "OFF",
+      "ADAPTIVE"
+    ],
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_px_dist_agg_partial_rollup_pushdown": {
+    "id": 10122,
+    "name": "_px_dist_agg_partial_rollup_pushdown",
+    "value": "1",
+    "data_type": "enum",
+    "info": "enable distinct aggregate function to partial rollup push down optimization.",
+    "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
+    "enum_names": [
+      "OFF",
+      "ADAPTIVE"
+    ],
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_create_audit_purge_job": {
+    "id": 10123,
+    "name": "_create_audit_purge_job",
+    "value": "",
+    "data_type":"varchar",
+    "info": "control audit log trail job in mysql mode",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "创建mysql模式的审计日志定期清理任务",
+    "background_cn": "示例: create_audit_purge_job='trail_type:interval:jobname:use_last_archive_timestamp'",
+    "ref_url": ""
+  },
+  "_drop_audit_purge_job": {
+    "id": 10124,
+    "name": "_drop_audit_purge_job",
+    "value": "",
+    "data_type":"varchar",
+    "info": "drop audit log trail job in mysql mode",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "删除mysql模式的审计日志定期清理任务",
+    "background_cn": "示例: drop_audit_purge_job='jobname'",
+    "ref_url": ""
+  },
+  "_set_purge_job_interval": {
+    "id": 10125,
+    "name": "_set_purge_job_interval",
+    "value": "",
+    "data_type":"varchar",
+    "info": "set purge job interval in mysql mode, range in 1-999 days",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "更新purge job的interval时间",
+    "background_cn": "示例: set_purge_job_interval='jobname:interval'",
+    "ref_url": ""
+  },
+  "_set_purge_job_status": {
+    "id": 10126,
+    "name": "_set_purge_job_status",
+    "value": "",
+    "data_type":"varchar",
+    "info": "set purge job status in mysql mode, range: true/false",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "更新purge job的状态，控制job是否生效",
+    "background_cn": "示例: set_purge_job_status='jobname:status'",
+    "ref_url": ""
+  },
+  "_set_last_archive_timestamp": {
+    "id": 10127,
+    "name": "_set_last_archive_timestamp",
+    "value": "",
+    "data_type":"varchar",
+    "info": "set last archive timestamp in mysql mode, must utc time in usec from 1970",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "设置删除的时间点信息，需要使用从1970开始的utc时间，微妙为单位",
+    "background_cn": "示例: set_last_archive_timestamp='trail_type:timestamp'",
+    "ref_url": ""
+  },
+  "_clear_last_archive_timestamp": {
+    "id": 10128,
+    "name": "_clear_last_archive_timestamp",
+    "value": "",
+    "data_type":"varchar",
+    "info": "clear last archive timestamp in mysql mode",
+    "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "330",
+    "info_cn": "清除删除的时间点信息",
+    "background_cn": "示例: clear_last_archive_timestamp='trail_type'",
+    "ref_url": ""
+  },
+  "_aggregation_optimization_settings": {
+    "id": 10129,
+    "name": "_aggregation_optimization_settings",
+    "value": "0",
+    "data_type": "uint",
+    "info": "Manually control some behaviors of aggregation",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "330",
+    "info_cn": "",
+    "background_cn": "用于调优group by 和distinct的执行行为",
+    "ref_url": ""
+  },
+  "_px_shared_hash_join": {
+    "id": 10130,
+    "name": "_px_shared_hash_join",
+    "value": "1",
+    "data_type": "bool",
+    "info": "enable shared hash table hash join optimization.",
+    "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "sql_notes": {
+    "id": 10131,
+    "name": "sql_notes",
+    "value": "0",
+    "data_type": "bool",
+    "info": " ",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_strict_mode": {
+    "id": 10132,
+    "name": "innodb_strict_mode",
+    "value": "1",
+    "data_type": "bool",
+    "info": "in certain case, warnings would be transformed to errors",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "400",
+    "info_cn": "特定场合下，警告会当成错误返回",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_windowfunc_optimization_settings": {
+    "id": 10133,
+    "name": "_windowfunc_optimization_settings",
+    "value": "0",
+    "data_type": "uint",
+    "min_val": "0",
+    "max_val": "9223372036854775807",
+    "info": "settings for window function optimizations",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "400",
+    "info_cn": "window function优化设置",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_enable_rich_error_msg": {
+    "id": 10134,
+    "name": "ob_enable_rich_error_msg",
+    "value": "0",
+    "data_type": "bool",
+    "info": "control whether print svr_ip,execute_time,trace_id",
+    "flags": "Global | SESSION",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "log_row_value_options": {
+    "id": 10136,
+    "name": "log_row_value_options",
+    "value": "",
+    "data_type": "varchar",
+    "info": "control whether lob use partial update",
+    "flags": "Global | SESSION",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_max_read_stale_time": {
+    "id": 10137,
+    "name": "ob_max_read_stale_time",
+    "value": "5000000",
+    "data_type": "int",
+    "info": "max stale time(us) for weak read query ",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large",
+    "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_optimizer_gather_stats_on_load": {
+    "id": 10138,
+    "name": "_optimizer_gather_stats_on_load",
+    "value": "1",
+    "data_type": "bool",
+    "info": "control wether we need to gather optimizer stats on insert into select/create table as select",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "400",
+    "info_cn": "控制在insert into select下是否默认收集统计信息",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_set_reverse_dblink_infos": {
+    "id": 10139,
+    "name": "_set_reverse_dblink_infos",
+    "value": "",
+    "data_type": "varchar",
+    "info": "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables",
+    "flags": "SESSION | ORACLE_ONLY",
+    "publish_version": "410",
+    "info_cn": "用于dblink写事务中, TM端通过设置系统变量的方式告知RM端关于建立反向dblink的必要信息",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

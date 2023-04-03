@@ -21,7 +21,7 @@ using namespace oceanbase::common;
 
 bool eq(double a, double b)
 {
-  return std::abs(a - b) < OB_DOUBLE_EPSINON;
+  return std::abs(a-b) < OB_DOUBLE_EPSINON;
 }
 
 TEST(ObEMA, equal_test)
@@ -90,6 +90,7 @@ TEST(ObEMA, serial_recent_first_test)
   COMMON_LOG(INFO, "acc value", "val", acc.get_value());
 }
 
+
 // serial: 1,2,3, alpha = 0.1, so the historical value has a big impact
 TEST(ObEMA, serial_old_first_test)
 {
@@ -117,9 +118,11 @@ TEST(ObEMA, serial_old_first_test)
   COMMON_LOG(INFO, "acc value", "val", acc.get_value());
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

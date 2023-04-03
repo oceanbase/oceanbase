@@ -15,24 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprSysExtractUtc : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprSysExtractUtc : public ObFuncExprOperator
+{
 public:
-  explicit ObExprSysExtractUtc(common::ObIAllocator& alloc);
-  virtual ~ObExprSysExtractUtc()
-  {}
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& date, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_sys_extract_utc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-
+  explicit  ObExprSysExtractUtc(common::ObIAllocator &alloc);
+  virtual ~ObExprSysExtractUtc() {}
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &date,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const;
+  static int calc_sys_extract_utc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSysExtractUtc);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_SYS_EXTRACT_UTC_H_
+} //sql
+} //oceanbase
+#endif //OCEANBASE_SQL_OB_EXPR_SYS_EXTRACT_UTC_H_

@@ -17,17 +17,20 @@
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "share/ob_rpc_struct.h"
 
-namespace oceanbase {
-namespace sql {
-class ObAlterUserPrimaryZoneResolver : public ObDCLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObAlterUserPrimaryZoneResolver: public ObDCLResolver
+{
 public:
-  explicit ObAlterUserPrimaryZoneResolver(ObResolverParams& params);
+  explicit ObAlterUserPrimaryZoneResolver(ObResolverParams &params);
   virtual ~ObAlterUserPrimaryZoneResolver();
-  virtual int resolve(const ParseNode& parse_tree);
+  virtual int resolve(const ParseNode &parse_tree);
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserPrimaryZoneResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif

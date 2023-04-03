@@ -1,0 +1,1625 @@
+# owner: dachuan.sdc
+--echo # owner group: sql2
+--echo # tags: optimizer
+
+--result_format 4
+--disable_warnings
+drop database if exists cte_st;
+--enable_warnings
+create database cte_st;
+use cte_st;
+
+create table t1(a int, b int, c int);
+insert into t1 values(null,null,null),(2,3,4);
+
+--echo # two query names
+--echo # duplicate query names
+--error 1066
+with RECURSIVE qn AS (SELECT a FROM t1), qn as (select b from t1)
+SELECT 1 FROM qn;
+
+--echo #  multiple refs
+with RECURSIVE qn AS (SELECT b as a FROM t1)
+SELECT qn.a, qn2.a  FROM qn, qn qn2;
+
+with RECURSIVE qn AS (SELECT b as a FROM t1),
+qn2 AS (SELECT c FROM t1 WHERE a IS NULL or a>0)
+SELECT qn.a, qn2.c  FROM qn, qn2;
+
+--echo # qn2 ref qn:
+with RECURSIVE qn AS (SELECT 10*a as a FROM t1),
+qn2 AS (SELECT 3*a FROM qn)
+SELECT * from qn2;
+
+
+with RECURSIVE qn AS (SELECT a FROM t1), qn2 AS (SELECT a FROM qn)
+SELECT * from qn2;
+
+
+with RECURSIVE qn AS (SELECT b as a FROM t1),
+qn2 AS (SELECT a FROM qn WHERE a IS NULL or a>0)
+SELECT qn.a, qn2.a  FROM qn, qn2;
+
+--error 1146
+with RECURSIVE qn2 AS (SELECT a FROM qn WHERE a IS NULL or a>0),
+qn AS (SELECT b as a FROM t1)
+SELECT qn2.a  FROM qn2;
+
+--echo # This is valid; it is to test moving boundaries.
+--echo # When we resolve qn3, resolving qn1 moves the right bound to
+--echo # qn0, but the bound is properly restored so that we can later
+--echo # resolve qn2.
+with RECURSIVE qn0 as (select 1 from dual), qn1 as (select * from qn0), qn2 as (select 1 from dual), qn3 as (select 1 from qn1, qn2) select 1 from qn3;
+
+--echo # No ref
+with RECURSIVE qn as (select 1 from dual) select 2 from dual;
+
+--error 1146
+with RECURSIVE qn2 AS (SELECT a FROM qn WHERE a IS NULL or a>0),
+qn AS (SELECT b as a FROM qn2)
+SELECT qn.a  FROM qn;
+
+--echo # recursive
+--error 3573
+with recursive qn AS (SELECT a FROM qn)
+SELECT qn.a FROM qn;
+
+--error 1146
+with RECURSIVE qn1 AS (SELECT a FROM qn3),
+qn2 AS (SELECT a FROM qn1),
+qn3 AS (SELECT a FROM t1),
+qn4 AS (SELECT a FROM qn2)
+SELECT a FROM qn4;
+
+--echo # ref from subq
+with RECURSIVE qn as (select * from t1) select (select max(a) from qn) from dual;
+
+--echo # QN defined in subq
+SELECT (with RECURSIVE qn AS (SELECT 10*a as a FROM t1),
+        qn2 AS (SELECT 3*a AS b FROM qn)
+        SELECT * from qn2 limit 1)
+FROM t1;
+
+SELECT *
+FROM (with RECURSIVE qn AS (SELECT 10*a as a FROM t1),
+      qn2 AS (SELECT 3*a AS b FROM qn)
+      SELECT * from qn2) dt;
+
+--echo # with RECURSIVE in with RECURSIVE
+--echo # outer ref to a table, placed in a QN in a subq (later)
+
+--echo # QN defined in view
+CREATE VIEW v AS
+with RECURSIVE qn AS (SELECT 10*a as a FROM t1),
+      qn2 AS (SELECT 3*a AS b FROM qn)
+      SELECT * from qn2;
+SELECT * FROM v;
+DROP VIEW v;
+
+--echo # CREATE INSERT SELECT
+CREATE TABLE t2 (c1 int);
+SELECT * FROM t2;
+
+
+INSERT INTO t2
+with RECURSIVE qn AS (SELECT 10*a as a FROM t1),
+      qn2 AS (SELECT 3*a AS b FROM qn)
+      SELECT * from qn2;
+SELECT * FROM t2;
+DROP TABLE t2;
+
+
+--echo # when QN, when table.
+create table qn (a varchar(50));
+
+insert into qn values('base');
+
+select * from qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn;
+
+--echo # In a non-recursive with RECURSIVE, the scope of the QN doesnot extend to its
+--echo # subquery, so "qn" inside AS() is the base table.
+--echo # View doesnot look out to external QNs
+create view v as select * from qn;
+
+select * from v;
+
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from v;
+
+with RECURSIVE qn as (select * from v) select * from qn;
+
+--echo # Even if the base table is temporarily dropped
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from v;
+with RECURSIVE qn as (select * from v) select * from qn;
+--echo # Neither does SP
+--echo # QN shadows tmp table
+drop view v;
+
+--echo # DT shadows QN:
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from (select 'dt' from dual)  qn;
+
+--echo # QN of subq shadows outer QN
+with RECURSIVE qn AS (select 'outer' as a from dual)
+SELECT (with RECURSIVE qn AS (SELECT 'inner' as a from dual) SELECT a from qn),
+       qn.a
+FROM qn;
+
+--echo # Qualified name is not allowed after with RECURSIVE:
+--error 1064
+with RECURSIVE cte_st.qn as (select 'with RECURSIVE') select * from cte_st.qn;
+
+--echo # OTOH, db. prefix in FROM doesnot resolve to QN, which is good
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn;
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select a from qn;
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select qn.a from qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select a from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select qn.a from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select cte_st.qn.a from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select a from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select qn.a from cte_st.qn;
+
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select cte_st.qn.a from cte_st.qn;
+
+drop table qn;
+
+--error 1146
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select a from cte_st.qn;
+--error 1146
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select qn.a from cte_st.qn;
+--error 1146
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual) select cte_st.qn.a from cte_st.qn;
+
+--echo # Unions
+with RECURSIVE qn AS (SELECT b as a FROM t1 UNION all SELECT b+5 FROM t1),
+qn2 AS (SELECT a FROM qn WHERE a IS NULL or a>0)
+SELECT qn.a FROM qn
+UNION SELECT qn2.a FROM qn2 WHERE qn2.a>3;
+
+--echo # No double with RECURSIVE
+--error 1064
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual)
+with RECURSIVE qn2 as (select 'with RECURSIVE' as a from dual)
+select a from cte_st.qn;
+
+--echo # with RECURSIVE comma
+--error 1064
+with RECURSIVE qn as (select 'with RECURSIVE' as a from dual),
+with RECURSIVE qn2 as (select 'with RECURSIVE' as a from dual)
+select a from cte_st.qn;
+
+--echo # ORDER BY removed unless there is LIMIT or single table (check "Using filesort")
+with RECURSIVE qn as (select a from t1 order by 1)
+select a from qn;
+
+with RECURSIVE qn as (select a from t1 order by 1)
+select qn.a from qn, t1  t2;
+
+
+--echo # Merge hint
+with RECURSIVE qn as (select a from t1),
+     qn2 as (select b from t1)
+select /*+ merge(qn) no_merge(qn2) */ qn.a,qn2.b from qn, qn2;
+
+with RECURSIVE qn as (select a from t1)
+select /*+ merge(qn) no_merge(qn2) */ qn2.a from qn, qn  qn2;
+
+--echo # FD detection
+with RECURSIVE qn as (select a, b from t1)
+select b from qn group by a;
+
+with RECURSIVE qn as (select a, b from t1 where a=b)
+select b from qn group by a;
+
+
+with RECURSIVE qn as (select a, sum(b) as s from t1 group by a)
+select s from qn group by a;
+
+--echo # CTEs work if used in SET
+--echo # CTE works with RECURSIVE semijoin
+
+with RECURSIVE cte as (select * from t1 t2)
+select * from t1 where t1.a in (select a+0 from cte);
+
+--echo # Column names
+--echo # empty list
+--error 1064
+with RECURSIVE qn () as (select 1) select * from qn, qn qn1;
+--echo # Materialization
+--error 1353
+with RECURSIVE qn (foo, bar) as (select 1 from dual) select * from qn, qn qn1;
+
+with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from dual union all
+                       select a,b from t1) select qn1.bar from qn qn1;
+
+
+--echo # Merge
+--error 1353
+with RECURSIVE qn (foo, bar) as (select 1 from t1) select * from qn, qn qn1;
+with RECURSIVE qn (foo, bar) as (select 1, 2 from t1) select * from qn, qn qn1;
+
+with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from t1) select * from qn, qn qn1;
+
+with RECURSIVE qn (foo, bar) as (select a, b from t1) select qn1.bar,foo from qn qn1;
+
+--echo # Disambiguates same-name expressions
+--error 1060
+with RECURSIVE qn as (select 1,1 from dual) select * from qn;
+with RECURSIVE qn (foo, bar) as (select 1,1 from dual) select * from qn;
+--error 1060
+with RECURSIVE qn as (select 1,1 from t1) select * from qn;
+with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
+--error 5751
+with RECURSIVE qn (foo, foo) as (select 1,2 from dual) select * from qn;
+
+--echo # Derived tables support this too
+--echo # Column names for QN/DT are printed
+create view v1 as
+ with RECURSIVE qn (foo, bar) as (select 1,1 from dual) select * from qn;
+show create view v1;
+
+select * from v1;
+drop view v1;
+create view v1 as
+ with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
+show create view v1;
+select * from v1;
+drop view v1;
+--echo # printing with RECURSIVE back-quoting is necessary, when using a
+--echo # reserved word as column name.
+drop table t1;
+
+--echo # Prove that a materialized QN is shared among all references:
+create table t1(a int);
+insert into t1 values(1),(2),(3),(4);
+with RECURSIVE qn as (select 123 as col from dual)
+select * from qn;
+with RECURSIVE qn as (select 123 as col from dual)
+select * from qn, qn  qn1;
+create view qn as select 123 as col from dual;
+select * from qn, qn  qn1;
+drop view qn;
+
+drop table t1;
+
+--echo # Printing of with RECURSIVE to DD for view
+create view v as
+select (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn)  scal_subq
+from dual;
+show create view v;
+select * from v;
+drop view v;
+create view v as select * from (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn)  dt;
+show create view v;
+select * from v;
+drop view v;
+
+
+--echo # Automatic index creation if materialized
+create table t1 (a int);
+
+insert into t1(a) values (1);
+insert into t1(a) values (2);
+insert into t1(a) values (3);
+insert into t1(a) values (4);
+insert into t1(a) values (5);
+insert into t1(a) values (6);
+insert into t1(a) values (7);
+insert into t1(a) values (8);
+insert into t1(a) values (9);
+insert into t1(a) values (0);
+
+--echo # One merged, one materialized: index creation on the second
+--echo # should of course ignore the first
+with RECURSIVE q as (select * from t1)
+select /*+ merge(q) no_merge(q1) */ * from q, q q1 where q.a=1 and q1.a=2;
+
+drop table t1;
+
+--echo # Choice between two auto_key:
+create table t1(a int, b int);
+insert into t1 values (null, 6);
+insert into t1 values (null, 10);
+--echo # Test the covering key; note that MEMORY doesnot use a
+--echo # covering key (always reads the "data file"). But InnoDB does.
+with RECURSIVE t2 as
+ (select * from t1)
+SELECT /*+ no_merge(t2) */ * FROM t2
+WHERE (a = a OR b <= 6) AND (a IS NULL);
+drop table t1;
+
+--echo # QN referencing view of same name isnot a "recursive view",
+--echo # shouldnot cause ER_VIEW_RECURSIVE
+--echo # QN inside view
+create view v1 as
+with RECURSIVE qn as (select 1 as col from dual) select * from qn;
+select * from v1;
+drop view v1;
+create table t1(a int, b int);
+
+--echo # Alas merge hints are ignored in views (filed Bug#23017428)
+create view v1 as
+with RECURSIVE qn as (select a from t1),
+     qn2 as (select b from t1)
+select /*+ merge(qn) no_merge(qn2) */ qn.a,qn2.b from qn, qn2;
+drop view v1;
+
+--echo # Materializing view doesnot impose materializing query name
+drop table t1;
+
+--echo # CTE referenced four times, including in subqueries in other CTEs
+create table sales_days(day_of_sale DATE, amount INT);
+insert into sales_days values ('2015-01-02', 100);
+insert into sales_days values ('2015-01-05', 200);
+insert into sales_days values ('2015-02-02', 10);
+insert into sales_days values ('2015-02-10', 100);
+insert into sales_days values ('2015-03-02', 10);
+insert into sales_days values ('2015-03-18', 1);
+
+with RECURSIVE
+ -- first CTE: one row per month, with RECURSIVE amount sold on all days of month
+ sales_by_month(month,total) as
+ (select substr(date_format(day_of_sale,'%Y-%m-%d'), 6,2), sum(amount) from sales_days
+  where substr(date_format(day_of_sale,'%Y-%m-%d'), 1, 4)='2015'
+  group by substr(date_format(day_of_sale,'%Y-%m-%d'), 6,2)),
+ -- second CTE: best month
+ best_month(month, total, award) as
+ (select month, total, 'best' from sales_by_month
+  where total=(select max(total) from sales_by_month)),
+ -- 3rd CTE: worst month
+ worst_month(month, total, award) as
+ (select month, total, 'worst' from sales_by_month
+  where total=(select min(total) from sales_by_month))
+ -- Now show results:
+ select * from best_month union all select * from worst_month;
+
+drop table sales_days;
+
+--echo # Special parser command not allowed to users.
+--error 1064
+parse_cte ( select 1 ) ;
+
+--echo # the workaround works if the temp table life is necessary
+--echo # only for a single statement:
+with RECURSIVE qn as (select 1 from dual) select * from qn, qn qn1;
+
+--echo # If the tmp table is necessary, wrapping it in a query name doesnot
+--echo # help:
+--echo # Using a query name in UPDATE
+create table t1(a int, b int);
+insert into t1 values(1,2);
+insert into t1 values(3,4);
+create table t2(a int, b int);
+insert into t2 values(1,2);
+insert into t2 values(3,4);
+set autocommit=0;
+
+--echo # Multi-table syntax
+drop table t1;
+drop table t2;
+set autocommit=default;
+
+
+--echo # Syntax which wasnot accepted
+create table t1 (i int);
+with RECURSIVE cte as (select * from t1) (select * from cte);
+
+with RECURSIVE cte as (select * from t1) (select * from cte) ORDER BY i;
+
+
+with RECURSIVE cte as (select * from t1) (select * from cte UNION select * from cte);
+
+with RECURSIVE cte as (select * from t1) (select * from cte UNION select * from cte) ORDER BY i;
+
+
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+
+create table t_emp (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+ -- foreign key (deptno) references t_dept (deptno),
+ -- foreign key (ename) references t_bonus (ename)
+) ;
+
+create table DEPT(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39)
+) ;
+
+create table t_dept(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39),
+  primary key (DEPTNO)
+) ;
+
+create table SALGRADE (
+  GRADE number,
+  LOSAL number,
+  HISAL number ) ;
+
+create table BONUS (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number ) ;
+
+create table t_bonus (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number,
+  primary key (ENAME) ) ;
+
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-06-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+insert into DEPT VALUES(10,'ACCOUNTING','NEW YORK') ;
+INSERT INTO DEPT VALUES(20,'RESEARCH','DALLAS') ;
+INSERT INTO DEPT VALUES(30,'SALES','CHICAGO') ;
+INSERT INTO DEPT VALUES(40, 'OPERATIONS','BOSTON') ;
+
+insert into SALGRADE values(1, 700, 1200) ;
+insert into SALGRADE values(2, 1201, 1400) ;
+insert into SALGRADE values(3, 1401, 2000) ;
+insert into SALGRADE values(4, 2001, 3000) ;
+insert into SALGRADE values(5, 3001, 9999) ;
+
+--echo ########-
+--echo ########-
+select count(*)
+from emp emp1, emp emp2, emp emp3
+where emp1.empno in (
+  select deptno / 10 + 7900 col1
+  from dept, salgrade
+  where (salgrade.grade * 5 = dept.deptno or
+      salgrade.grade * 4 = dept.deptno) and
+    emp2.empno > dept.deptno + 7700
+  ) and
+  emp1.mgr = emp2.mgr and
+  emp3.mgr = emp1.mgr;
+
+with RECURSIVE wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept ),
+  wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+  wc_salgrade as
+  ( select /*+ MATERIALIZE */ * from salgrade )
+select count(*)
+from wc_emp emp1, wc_emp emp2, wc_emp emp3
+where emp1.empno in (
+  select deptno / 10 + 7900 col1
+  from wc_dept dept, wc_salgrade salgrade
+  where (salgrade.grade * 5 = dept.deptno or
+      salgrade.grade * 4 = dept.deptno) and
+    emp2.empno > dept.deptno + 7700
+  ) and
+  emp1.mgr = emp2.mgr and
+  emp3.mgr = emp1.mgr;
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE */ count(*)
+    from emp emp1, emp emp2, emp emp3
+    where emp1.empno in (
+      select deptno / 10 + 7900 col1
+      from dept, salgrade
+      where (salgrade.grade * 5 = dept.deptno or
+          salgrade.grade * 4 = dept.deptno) and
+        emp2.empno > dept.deptno + 7700
+      ) and
+      emp1.mgr = emp2.mgr and
+      emp3.mgr = emp1.mgr
+  ),
+  wc2 as
+  ( select /*+ INLINE NO_MERGE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1;
+
+--echo #########
+--echo #########
+select dept.dname, dept.loc, v.sum_sal
+from dept,
+  ( select sum(sal) sum_sal, deptno
+    from emp
+    group by deptno
+  ) v
+where
+  v.deptno = dept.deptno and
+  dept.deptno * 2 = 30 * 2
+order by 1, 2, 3;
+
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp )
+select dept.dname, dept.loc, v.sum_sal
+from dept,
+  ( select sum(sal) sum_sal, deptno
+    from wc_emp emp
+    group by deptno
+  ) v
+where
+  v.deptno = dept.deptno and
+  dept.deptno * 2 = 30 * 2
+order by 1, 2, 3;
+
+with RECURSIVE wc1 as
+  ( select dept.dname, dept.loc, v.sum_sal
+    from dept,
+      ( select sum(sal) sum_sal, deptno
+        from emp
+        group by deptno
+      ) v
+    where
+      v.deptno = dept.deptno and
+      dept.deptno * 2 = 30 * 2 ),
+  wc2 as
+  ( select /*+ INLINE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1, 2, 3;
+
+--echo #########-
+--echo #########-
+select /*+ push_pred(emp_v) */ emp_v.ename
+from
+  ( select /*+ no_merge */ ename, deptno - 20 deptno
+    from emp e
+    union select concat(ename, 'test'), deptno + 30
+    from emp e
+  ) emp_v,
+  dept
+where emp_v.deptno = dept.deptno
+order by 1;
+
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+  wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept )
+select /*+ push_pred(emp_v) */ emp_v.ename
+from
+  ( select /*+ no_merge */ ename, deptno - 20 deptno
+    from wc_emp e
+    union select concat(ename, 'test'), deptno + 30
+    from wc_emp e
+  ) emp_v,
+  wc_dept dept
+where emp_v.deptno = dept.deptno
+order by 1;
+
+with RECURSIVE wc1 as
+  ( select /*+ push_pred(emp_v) */ emp_v.ename
+    from
+      ( select /*+ no_merge */ ename, deptno - 20 deptno
+        from emp e
+        union all select concat(ename, 'test'), deptno + 30
+        from emp e
+      ) emp_v,
+      dept
+    where emp_v.deptno = dept.deptno
+  ),
+  wc2 as
+  ( select /*+ INLINE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1;
+
+
+--echo #########
+--echo #########
+select /*+ PLACE_GROUP_BY((emp)) */ dept.deptno, dept.dname, dept.loc,
+   sum(emp.sal) vw1_col
+from emp, dept
+where emp.deptno = dept.deptno
+group by dept.dname, dept.deptno, dept.loc
+order by 1, 2, 3;
+
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept)
+select /*+ PLACE_GROUP_BY((emp)) */ dept.deptno, dept.dname, dept.loc,
+   sum(emp.sal) vw1_col
+from wc_emp emp, wc_dept dept
+where emp.deptno = dept.deptno
+group by dept.dname, dept.deptno, dept.loc
+order by 1, 2, 3;
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE PLACE_GROUP_BY((emp)) */ dept.deptno, dept.dname,
+       dept.loc, sum(emp.sal) vw1_col
+    from emp, dept
+    where emp.deptno = dept.deptno
+    group by dept.dname, dept.deptno, dept.loc
+    order by dept.deptno, dept.dname, dept.loc
+  ),
+  wc2 as
+  ( select /*+ INLINE NO_MERGE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1, 2, 3;
+
+--echo ################-
+--echo ################-
+select /*+ FACTORIZE_JOIN(#set$1) */ e.empno
+from emp e, dept d
+where e.deptno = d.deptno and
+  d.deptno > 20 and
+  e.ename = 'WARD'
+union all
+select e.empno
+from emp e, dept d
+where e.deptno = d.deptno and
+  d.deptno > 30 and
+  e.ename = 'WARD';
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE FACTORIZE_JOIN(#set$1) */ e.empno
+    from emp e, dept d
+    where e.deptno = d.deptno and
+      d.deptno > 20 and
+      e.ename = 'WARD'
+    union all
+    select e.empno
+    from emp e, dept d
+    where e.deptno = d.deptno and
+      d.deptno > 30 and
+      e.ename = 'WARD'
+  ),
+  wc2 as
+  ( select /*+ INLINE NO_MERGE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2;
+
+--echo #################
+--echo #################
+insert into t_emp with RECURSIVE cte as (select * from emp) SELECT * FROM cte;
+insert into t_dept with RECURSIVE cte as (select * from dept) SELECT * FROM cte;
+insert into t_bonus with RECURSIVE cte as (select * from bonus) SELECT * FROM cte;
+
+insert into t_bonus values ('SMITH', 'text', 1, 2);
+insert into t_bonus values ('ALLEN', 'text', 1, 2);
+insert into t_bonus values ('WARD', 'text', 1, 2);
+insert into t_bonus values ('JONES', 'text', 1, 2);
+insert into t_bonus values ('MARTIN', 'text', 1, 2);
+insert into t_bonus values ('BLAKE', 'text', 1, 2);
+insert into t_bonus values ('CLARK', 'text', 1, 2);
+insert into t_bonus values ('SCOTT', 'text', 1, 2);
+insert into t_bonus values ('KING', 'text', 1, 2);
+insert into t_bonus values ('TURNER', 'text', 1, 2);
+insert into t_bonus values ('ADAMS', 'text', 1, 2);
+insert into t_bonus values ('JAMES', 'text', 1, 2);
+insert into t_bonus values ('FORD', 'text', 1, 2);
+insert into t_bonus values ('MILLER', 'text', 1, 2);
+
+commit;
+
+create index t_emp_idx1 on t_emp (deptno);
+create index t_emp_idx2 on t_emp (ename);
+select /*+ STAR_TRANSFORMATION FACT(emp) */ sum(emp.sal) sum_sal,
+  dept.dname, bonus.job
+from t_emp emp, t_dept dept, t_bonus bonus
+where emp.deptno = dept.deptno and
+  emp.ename = bonus.ename
+group by dept.dname, bonus.job
+order by 2, 3, 1;
+
+with RECURSIVE
+  wc_dept as
+  ( select /*+ MATERIALIZE */ * from t_dept ),
+  wc_bonus as
+  ( select /*+ MATERIALIZE */ * from t_bonus )
+select /*+ STAR_TRANSFORMATION FACT(emp) */ sum(emp.sal) sum_sal,
+  dept.dname, bonus.job
+from t_emp emp, wc_dept dept, wc_bonus bonus
+where emp.deptno = dept.deptno and
+  emp.ename = bonus.ename
+group by dept.dname, bonus.job
+order by 2, 3, 1;
+
+with RECURSIVE
+  wc_dept as
+  ( select /*+ MATERIALIZE */ * from t_dept ),
+  wc_bonus as
+  ( select /*+ MATERIALIZE */ * from t_bonus )
+select *
+from
+  ( select /*+ NO_MERGE STAR_TRANSFORMATION NO_PLACE_GROUP_BY FACT(emp) */
+      sum(emp.sal) sum_sal,
+      dept.dname, bonus.job
+    from t_emp emp, wc_dept dept, wc_bonus bonus
+    where emp.deptno = dept.deptno and
+      emp.ename = bonus.ename
+    group by dept.dname, bonus.job
+  ) v
+order by 2, 3, 1;
+
+select /*+ STAR_TRANSFORMATION FACT(emp) */ sum(emp.sal) sum_sal,
+  dept.dname, bonus.job
+from
+  t_emp emp,
+  ( with RECURSIVE wc_dept as
+    ( select /*+ MATERIALIZE */ * from t_dept )
+    select * from wc_dept
+  ) dept,
+  ( with RECURSIVE wc_bonus as
+    ( select /*+ MATERIALIZE */ * from t_bonus )
+    select * from wc_bonus
+  ) bonus
+where emp.deptno = dept.deptno and
+  emp.ename = bonus.ename
+group by dept.dname, bonus.job
+order by 2, 3, 1;
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE STAR_TRANSFORMATION FACT(emp) */
+      sum(emp.sal) sum_sal,
+      dept.dname, bonus.job
+    from t_emp emp, t_dept dept, t_bonus bonus
+    where emp.deptno = dept.deptno and
+      emp.ename = bonus.ename
+    group by dept.dname, bonus.job
+  ),
+  wc2 as
+  ( select /*+ INLINE NO_MERGE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 2, 3, 1;
+
+--echo #####################################-
+--echo #####################################-
+--echo ######################################-
+--echo ######################################-
+drop table t_emp;
+drop table t_dept;
+drop table t_bonus;
+
+--echo ###############
+--echo ###############
+create table t_dept
+( deptno int, dname VARCHAR(14), loc varchar(13) )
+partition by range (deptno)
+( partition p1 values less than (25),
+  partition p2 values less than (MAXVALUE) );
+
+create index t_dept_idx1 on t_dept(dname) local;
+insert into t_DEPT VALUES(10,'ACCOUNTING','NEW YORK') ;
+INSERT INTO t_DEPT VALUES(20,'RESEARCH','DALLAS') ;
+INSERT INTO t_DEPT VALUES(30,'SALES','CHICAGO') ;
+INSERT INTO t_DEPT VALUES(40, 'OPERATIONS','BOSTON') ;
+
+commit;
+
+select /*+ EXPAND_TABLE(dept) */ deptno, dname
+from t_dept dept
+order by 1, 2;
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE EXPAND_TABLE(dept) */ deptno, dname
+    from t_dept dept
+  ),
+  wc2 as
+  ( select /*+ INLINE NO_MERGE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1, 2;
+
+
+--echo ########-
+--echo ########-
+select /*+ PLACE_DISTINCT(dept) */ distinct emp.empno
+from emp, dept
+where emp.deptno = dept.deptno and
+  emp.empno < 7500
+order by 1;
+
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept)
+select /*+ PLACE_DISTINCT(dept) */ distinct emp.empno
+from wc_emp emp, wc_dept dept
+where emp.deptno = dept.deptno and
+  emp.empno < 7500
+order by 1;
+
+with RECURSIVE wc1 as
+  ( select /*+ MATERIALIZE PLACE_DISTINCT(dept) */ distinct emp.empno
+    from emp, dept
+    where emp.deptno = dept.deptno and
+      emp.empno < 7500
+  ),
+  wc2 as
+  ( select /*+ INLINE */ * from wc1 )
+select wc1.*
+from wc1
+union
+select wc2.*
+from wc2
+order by 1;
+
+--echo ########-
+--echo ########-
+--echo ###############################-
+--echo ###############################-
+--echo ###################
+--echo ###################
+with RECURSIVE with_vw as
+  ( select /*+ MATERIALIZE */ * from
+    ( select /*+ FACTORIZE_JOIN(emp) */
+      emp.ename, emp.deptno, bonus.sal
+    from emp emp, bonus bonus
+    where emp.ename = bonus.ename and
+          bonus.sal < 100
+    union all
+    select /*+ FACTORIZE_JOIN(emp) */
+      emp.ename, emp.deptno, bonus.sal
+    from emp emp, bonus bonus
+    where emp.ename = bonus.ename and
+          bonus.sal > 200
+    )
+  )
+select /*+ EXPAND_TABLE(dept) */
+  dept.deptno, dept.dname
+from t_dept dept, with_vw v
+where
+  v.deptno = dept.deptno
+order by 1, 2;
+
+
+drop table t_dept;
+
+--echo #####################
+--echo #####################
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+  wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept )
+select *
+from
+  ( select e.ename, d.dname
+    from wc_emp e FULL OUTER JOIN wc_dept d ON (e.empno = d.deptno)
+  ) vw
+order by 1, 2;
+
+select e.ename, d.dname
+from
+  ( with RECURSIVE wc_emp as
+      ( select /*+ MATERIALIZE */ * from emp )
+    select * from wc_emp
+  ) e FULL OUTER JOIN
+  ( with RECURSIVE wc_dept as
+      ( select /*+ MATERIALIZE */ * from dept )
+    select * from wc_dept
+  ) d ON (e.empno = d.deptno)
+order by 1, 2;
+
+--echo ##########################-
+--echo ##########################-
+--echo ##########################-
+--echo ##########################-
+with RECURSIVE wc_bonus as
+  ( select /*+ MATERIALIZE */ * from bonus )
+select d.dname, e.ename
+from dept d, emp e
+where d.deptno = e.deptno and
+  e.job not in
+    ( select job
+      from wc_bonus b
+    ) and
+  e.job is not null
+order by 1, 2;
+
+select d.dname, e.ename
+from
+  ( with RECURSIVE wc_dept as
+      ( select /*+ MATERIALIZE */ * from dept )
+    select * from wc_dept
+  ) d,
+  emp e
+where d.deptno = e.deptno and
+  e.job not in
+    ( select job
+      from
+        ( with RECURSIVE wc_bonus as
+            ( select /*+ MATERIALIZE */ * from bonus )
+          select * from wc_bonus
+        ) b
+    ) and
+  e.job is not null
+order by 1, 2;
+
+--echo #########################-
+--echo #########################-
+--echo ###########################
+--echo ###########################
+select V.dname, V.subq_col
+from
+  ( select /*+ merge */
+   ( select max(e.sal)
+   from ( select /*+ MATERIALIZE */ * from emp ) e
+    where e.deptno = d.deptno) subq_col,
+   d.dname dname
+   from ( select /*+ MATERIALIZE */ * from dept ) d
+  ) V
+where V.subq_col < 5000
+and V.subq_col > 0
+order by 1, 2;
+
+with RECURSIVE wc_emp as
+  ( select /*+ MATERIALIZE */ * from emp ),
+  wc_dept as
+  ( select /*+ MATERIALIZE */ * from dept )
+select V.dname, V.subq_col
+from
+  ( select /*+ merge */
+      ( select max(e.sal)
+        from wc_emp e
+        where e.deptno = d.deptno) subq_col,
+      d.dname dname
+    from wc_dept d
+  ) V
+where V.subq_col < 5000
+and V.subq_col > 0
+order by 1, 2;
+
+drop table emp;
+drop table t1;
+create table emp (id int, name varchar(20), leaderid int);
+create table dsemp (id int, name varchar(20), leaderid int) partition by hash (id) partitions 3;
+create table t1(c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+create table t44 (c1 int, c2 int, c3 int);
+create table insert_t (c1 int, c2 int, c3 int);
+create table t4(id int, value char(10), parent_id int);
+
+with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a+1 < 10) select * from t4;
+--error 5751
+with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
+with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
+--error 1353
+with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
+--error 1353
+with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
+--error 1054
+with RECURSIVE cte(a,b,c) as
+(
+  select c1,c2,c3 from t1 where t1.c1 < 20
+  union all
+  select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
+) select c1,c2,c3 from cte;
+
+
+with RECURSIVE cte as (select * from t1) ,
+     cte_recursive (n) as (select 1 from dual union all select n+1 from cte_recursive where n < 23)
+select (select count(*) from cte_recursive) from t1;
+
+
+with RECURSIVE cte(n) as (select c1 from t1) ,
+     cte_recursive (n) as (select 1 from dual union all select n+1 from cte where n < 23)
+select * from cte_recursive;
+
+with RECURSIVE cte(n) as (select c1 from t1) ,
+     cte_recursive (n) as (select 1 from dual union all select n+1 from cte where n < 23)
+select (select count(*) from cte_recursive) from t1;
+
+
+--error 1146
+with RECURSIVE
+cte1 (a, b) AS
+(
+SELECT c, d FROM cte2
+),
+cte2 (c, d) AS
+(
+SELECT 1,2 from dual union all select c+1, d+1 from cte2 where c < 10
+)
+SELECT b, d FROM cte1 JOIN cte2
+on cte1.a = cte2.c;
+
+--error 1054
+with RECURSIVE
+  cte1 AS (
+           with RECURSIVE cte2 AS (select c1, c2 from t1 union all select c+1, d+1 from cte2 where c < 100)
+           select c1 from cte2
+          )
+select c1 from cte1;
+--error 1054
+with RECURSIVE cte(a,b) as (select * from (with RECURSIVE cteb(a, b) as (select c1, c2 from t1 union all select c+1, d+1 from cteb where c < 100) select * from cteb) bac) select * from cte;
+with RECURSIVE cteb(a,b) as
+(
+select c1, c2 from t1 union all select a+1, b+1 from cteb where a < 100
+),
+cte(c,d) as
+(
+select * from cteb bac
+)
+select * from cte;
+
+
+with RECURSIVE cte(a) as (select 1 from dual union all select 2 from dual), cte_1(b) as (select 1 from dual union all select * from cte) select * from cte_1;
+--error 5743
+with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
+--error 3573
+with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
+set @@ob_query_timeout=1000000;
+--error 3575
+with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
+set @@ob_query_timeout=10000000;
+--error 5743
+with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
+--error 5746
+with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
+with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte where n < 100) select * from cte;
+
+--error 3577
+with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
+set @@ob_query_timeout=1000000;
+--error 3576
+with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
+--error 3576
+with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
+--error 3576
+with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
+--error 3576
+with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
+set @@ob_query_timeout=10000000;
+
+--error 1054
+with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
+--error 1146
+with RECURSIVE cte(a,b,c) as (
+  select c1,c2,c3 from not_exist where not_exist.c1 < 20
+  union all
+  select c1,c2,c3 from not_exist, cte where cte.a = not_exist.c1 and cte.c < 10
+)
+select * from cte;
+with RECURSIVE
+  cte2(c,d) AS (SELECT c1,c2 from t1 where c1 < 3 union all select c+1, d+1 from cte2 where c < 10)
+select c,d from cte2;
+
+
+with RECURSIVE
+  cte2(c,d) AS (SELECT c1,c2 from t1 where c1+'1' <= 3 union all select c+1, d+1 from cte2 where c < 10)
+select c,d from cte2;
+
+
+with RECURSIVE
+  cte2(c,d) AS (SELECT c1,c2 from t1 group by c1,c2 union all select c+1, d+1 from cte2 where c < 10)
+select c,d from cte2;
+
+
+with RECURSIVE
+  cte2(c,d) AS (SELECT c1,c2 from t1 where t1.c1 > 5 union all select c+1, d+1 from cte2 where c < 30)
+select c,d from cte2;
+
+
+with RECURSIVE
+  cte2(c,d) AS (select c1, c2 + 1 as c3 from t1 order by c2 union all select c+1, d+1 from cte2 where c < 30)
+select c,d from cte2;
+
+--error 1353
+explain basic with RECURSIVE
+  cte2(c,d) AS (select * from t1 left join t2 on t1.c1=t2.c1 order by t1.c1 union all select c+1, d+1 from cte2 where c < 30)
+select c1 from cte2;
+
+with RECURSIVE
+  cte2(c,d) AS (select t1.c1, t2.c2 from t1 left join t2 on t1.c1=t2.c1 order by t1.c1 union all select c+1, d+1 from cte2 where c < 30)
+select c from cte2;
+
+
+with RECURSIVE
+  cte(c,d) AS (SELECT c1,c2 from t1 where c1 < 3 union all select c+1, d+1 from cte, t2 where t2.c1 = c and t2.c2 > some (select c1 from t44  t99 group by c1))
+select * from cte;
+
+
+with RECURSIVE
+  cte(c,d) AS (SELECT c1,c2 from t1 where c1 < 3 union all select c+1, d+1 from cte, t2 where t2.c1 = c and t2.c2 > some (select c1 from t44  t99 group by c1))
+select * from cte;
+
+
+create table ex (c1 int, c2 int);
+with RECURSIVE ex(c1, c2) as (select 1, 1 from dual union all select c1+1, c2+1 from ex where c1 < 5) select * from ex;
+
+with RECURSIVE ex(c1, c2) as (select 1, 1 from dual union all select c1+1, c2+1 from ex where c1 < 5) select * from ex;
+
+with RECURSIVE cte(n) as (select 1 from dual union all select n+1 from cte where n < 23) select n from cte;
+
+
+
+with RECURSIVE cte(a,b,c) as
+(
+  select c1,c2,c3 from t1 where t1.c1 < 20
+  union all
+  select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10)
+select count(distinct cte.a), avg(distinct cte.b) from cte where cte.c < 10;
+
+
+with RECURSIVE cte(n) as (select 1 from dual union all select n+1 from cte where n < 23) select (select count(*) from cte) from cte;
+
+
+create table cte1 (a int, b int, c int);
+
+
+set ob_query_timeout = 100000000;
+with RECURSIVE cte1(a,b,c) as
+(
+select 1,1,1 from dual
+union all
+select a+1,b+1,c+1 from cte1 where cte1.a < 10
+),
+cte2 (a,b,c) as
+(
+select cte1.a,cte1.b,cte1.c from cte1
+union all
+select a+1,b+1,c+1 from cte2 where cte2.a < 10
+),
+cte3 (a,b,c) as
+(
+select cte2.a,cte2.b,cte2.c from cte2
+union all
+select cte3.a+1,cte3.b+1,cte3.c+1 from cte3, cte2 where cte2.a < 3 and cte3.a < cte2.b and cte3.a < 10
+)
+SELECT cte1.a, cte1.b FROM cte1 JOIN cte3
+on cte1.a < cte3.c;
+
+
+with RECURSIVE fibonacci (n, fib_n, next_fib_n) AS
+(
+  SELECT 1, 0, 1 from dual
+  UNION ALL
+  SELECT n + 1, next_fib_n, fib_n + next_fib_n
+  FROM fibonacci WHERE n < 10
+)
+SELECT * FROM fibonacci;
+
+with RECURSIVE cte as (select 18 d from dual),
+     prod (lastnum, lastprod) as (
+          select 1, 1 from dual
+          union all
+          select lastnum+1, (lastnum+1)*lastprod from prod, cte where lastnum < d)
+select * from prod, cte where lastnum = d;
+
+
+insert into insert_t with RECURSIVE cte(a,b,c) as (select 1,2,3 from dual union all select a+1,b+1,c+1 from cte where a < 10) SELECT * FROM cte;
+select * from insert_t;
+
+
+with RECURSIVE cte(c1, c2, c3) as (select 1,1,1 from dual union all select c1+1,c2+1,c3+1 from cte where cte.c1 < 50) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
+delete from t1 where c1 = ( with RECURSIVE cte(c1, c2, c3) as (select 1,1,1 from dual union all select c1+1,c2+1,c3+1 from cte where cte.c1 < 50) select c1 from cte where c2 = 3);
+
+drop table emp,dept;
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+create table DEPT(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39)
+) ;
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-06-23','%Y-%m-%d'), 1300,NULL, 10) ;
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+--echo ## =======================================================================
+--echo ## Test Case 1:
+--echo ## - recursive with RECURSIVE Query: no cycle clause used in query in acyclic data
+--echo ## =======================================================================
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+drop table emp1;
+drop table emp2;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+--echo ## =======================================================================
+--echo ## Test Case 2:
+--echo ## - recursive with RECURSIVE Query(Negative): cycle clause not used in query with RECURSIVE
+--echo ##    cyclic data
+--echo ## =======================================================================
+/* add loop from scott back to king  in emp */
+update emp set mgr = 7788 where ename = 'KING';
+--error 5746
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+
+drop table emp1;
+drop table emp2;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+CREATE TABLE emp2 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-06-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (LPAD('8100',400,'5'), 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8101',3000,'5'), 'Eve1', 'MANAGER', LPAD('8100',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8102',3000,'5'), 'Eve2', 'MANAGER', LPAD('8101',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8103',3000,'5'), 'Eve3', 'MANAGER', LPAD('8102',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8104',3000,'5'), 'Eve4', 'MANAGER', LPAD('8103',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8105',3000,'5'), 'Eve5', 'MANAGER', LPAD('8104',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8106',3000,'5'), 'Eve6', 'MANAGER', LPAD('8105',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8107',400,'5'), 'Eve7', 'MANAGER', LPAD('8106',3000,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8108',400,'5'), 'Eve8', 'MANAGER', LPAD('8107',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8109',400,'5'), 'Eve9', 'MANAGER', LPAD('8108',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8110',400,'5'), 'Eve10', 'MANAGER', LPAD('8109',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8111',400,'5'), 'Eve11', 'MANAGER', LPAD('8110',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8112',400,'5'), 'Eve12', 'MANAGER', LPAD('8111',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8113',400,'5'), 'Eve13', 'MANAGER', LPAD('8112',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8114',400,'5'), 'Eve14', 'MANAGER', LPAD('8113',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8115',400,'5'), 'Eve15', 'MANAGER', LPAD('8114',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8116',400,'5'), 'Eve16', 'MANAGER', LPAD('8115',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8117',400,'5'), 'Eve17', 'MANAGER', LPAD('8116',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8118',400,'5'), 'Eve18', 'MANAGER', LPAD('8117',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (LPAD('8119',400,'5'), 'Eve19', 'CLERK', LPAD('8118',400,'5'), str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+INSERT INTO emp2 values (4002, 'SMITH', 'CLERK', 5002, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp2 values (5003, 'ALLEN', 'SALESMAN', 6002, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp2 values (5004, 'WARD', 'SALESMAN', 6002, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp2 values (6001, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp2 values (5005, 'MARTIN', 'SALESMAN', 6002, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp2 values (6002, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp2 values (6003, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp2 values (5001, 'SCOTT', 'ANALYST', 6001, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1987-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp2 values (5006, 'TURNER', 'SALESMAN', 6002, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp2 values (4001, 'ADAMS', 'CLERK', 5001, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp2 values (5007, 'JAMES', 'CLERK', 6002, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp2 values (5002, 'FORD', 'ANALYST', 6001, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+
+
+
+
+--echo ## =======================================================================
+--echo ## Test Case 3:
+--echo ## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+--echo ##  Pruning predicate added that results in no cycles e.mgr < e.empno
+--echo ## =======================================================================
+update emp2 set mgr = 5001 where ename = 'KING';
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and e.mgr < e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--echo ## =======================================================================
+--echo ## Test Case 4:
+--echo ## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+--echo ##  Pruning predicate added that results in no cycles e.mgr > e.empno
+--echo ## =======================================================================
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and e.mgr > e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--echo ## =======================================================================
+--echo ## Test Case 5:
+--echo ## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+--echo ##  Pruning predicate added that results in no cycles r.empno < e.empno
+--echo ## =======================================================================
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and r.empno < e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--echo ## =======================================================================
+--echo ## Test Case 6:
+--echo ## - recursive with RECURSIVE Query: Cycle Pruning with RECURSIVE Cycle clause not used in the query
+--echo ##  Pruning predicate added that results in no cycles r.empno > e.empno
+--echo ## =======================================================================
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp2 e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp2 e
+    WHERE r.empno = e.mgr and r.empno > e.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+drop database cte_st;

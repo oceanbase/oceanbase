@@ -466,7 +466,7 @@ update ts set c3=c1+10, c2=now();
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -620,7 +620,7 @@ update ts set c3=c1+10, c2=now();
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                   1
@@ -695,9 +695,9 @@ update ts set c3=c1+10, c2=now();
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -781,10 +781,10 @@ update ts set c3=c1+10, c2=now();
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -1478,7 +1478,7 @@ update ts set c3=c1+10;
               "IS_FUNC",
               "CNT_CONST",
               "CNT_COLUMN",
-              "CNT_PARAM",
+              "CNT_STATIC_PARAM",
               "CNT_FUNC"
             ],
             "rel_id": [
@@ -1632,7 +1632,7 @@ update ts set c3=c1+10;
                 "expr_info": [
                   "CNT_CONST",
                   "CNT_COLUMN",
-                  "CNT_PARAM"
+                  "CNT_STATIC_PARAM"
                 ],
                 "rel_id": [
                   1
@@ -1707,9 +1707,9 @@ update ts set c3=c1+10;
                     },
                     "expr_info": [
                       "IS_CONST",
-                      "IS_PARAM",
+                      "IS_STATIC_PARAM",
                       "CNT_CONST",
-                      "CNT_PARAM"
+                      "CNT_STATIC_PARAM"
                     ],
                     "rel_id": [
                     ],
@@ -1793,10 +1793,10 @@ update ts set c3=c1+10;
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -2464,10 +2464,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2948,7 +2948,7 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -3100,9 +3100,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3345,9 +3345,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -3377,9 +3377,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -3471,10 +3471,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -3552,10 +3552,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -3970,10 +3970,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -4454,7 +4454,7 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -4606,9 +4606,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -4851,9 +4851,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -4883,9 +4883,9 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -4977,10 +4977,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -5058,10 +5058,10 @@ insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],

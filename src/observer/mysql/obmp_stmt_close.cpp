@@ -18,14 +18,18 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/plan_cache/ob_prepare_stmt_struct.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "observer/mysql/obmp_utils.h"
+#include "observer/omt/ob_tenant.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace rpc;
 using namespace obmysql;
 using namespace sql;
 
-namespace observer {
+namespace observer
+{
 
 int ObMPStmtClose::deserialize()
 {
@@ -37,9 +41,9 @@ int ObMPStmtClose::deserialize()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid packet", K(ret), K_(req), K(req_->get_type()));
   } else {
-    const ObMySQLRawPacket& pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    uint32_t stmt_id = -1;  // INVALID_STMT_ID
+    uint32_t stmt_id = -1; //INVALID_STMT_ID
     ObMySQLUtil::get_uint4(pos, stmt_id);
     stmt_id_ = stmt_id;
   }
@@ -49,8 +53,9 @@ int ObMPStmtClose::deserialize()
 int ObMPStmtClose::process()
 {
   int ret = OB_SUCCESS;
-  sql::ObSQLSessionInfo* session = NULL;
-  if (OB_ISNULL(req_)) {
+  sql::ObSQLSessionInfo *session = NULL;
+  trace::UUID ps_close_span_id;
+  if (OB_ISNULL(req_) || OB_ISNULL(get_conn())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid packet", K(ret), KP(req_));
   } else if (OB_INVALID_STMT_ID == stmt_id_) {
@@ -64,26 +69,40 @@ int ObMPStmtClose::process()
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
-    const ObMySQLRawPacket& pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
+    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    session->set_use_static_typing_engine(false);
-    LOG_INFO("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
-    if (is_cursor_close()) {
-      ret = OB_NOT_SUPPORTED;
+    ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session->get_sessid());
+    LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
+    if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), *session,
+                     get_conn()->proxy_cap_flags_.is_full_link_trace_support()))) {
+      LOG_WARN("failed to init flt extra info", K(ret));
+    }
+    FLTSpanGuard(ps_close);
+    if (OB_FAIL(ret)) {
+    } else if (is_cursor_close()) {
+      if (OB_FAIL(session->close_cursor(stmt_id_))) {
+        LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+      }
     } else {
       int tmp_ret = OB_SUCCESS;
+      if (OB_NOT_NULL(session->get_cursor(stmt_id_))) {
+        if (OB_FAIL(session->close_cursor(stmt_id_))) {
+          tmp_ret = ret;
+          LOG_WARN("fail to close cursor", K(ret), K_(stmt_id), K(session->get_sessid()));
+        }
+      }
       if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
         LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_sessid()));
       }
       if (OB_SUCCESS != tmp_ret) {
-        // When close_cursor fails, the priority of the error code is higher than close_ps_stmt,
-        // which is covered here
+        // close_cursor 失败时错误码的优先级比 close_ps_stmt 高，此处进行覆盖
         ret = tmp_ret;
       }
     }
     if (OB_SUCC(ret)) {
-      if (pkt.exist_trace_info() &&
-          OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRACE_INFO, pkt.get_trace_info()))) {
+      if (pkt.exist_trace_info()
+          && OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_TRACE_INFO,
+                                                  pkt.get_trace_info()))) {
         LOG_WARN("fail to update trace info", K(ret));
       }
     }
@@ -100,5 +119,5 @@ int ObMPStmtClose::process()
   return ret;
 }
 
-}  // namespace observer
-}  // end of namespace oceanbase
+} //end of namespace sql
+} //end of namespace oceanbase

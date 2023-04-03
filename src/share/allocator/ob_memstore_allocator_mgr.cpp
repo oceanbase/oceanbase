@@ -25,7 +25,11 @@ int64_t ObMemstoreAllocatorMgr::get_all_tenants_memstore_used()
 }
 
 ObMemstoreAllocatorMgr::ObMemstoreAllocatorMgr()
-    : is_inited_(false), allocators_(), allocator_map_(), malloc_allocator_(NULL), all_tenants_memstore_used_(0)
+  : is_inited_(false),
+    allocators_(),
+    allocator_map_(),
+    malloc_allocator_(NULL),
+    all_tenants_memstore_used_(0)
 {
   set_malloc_allocator(ObMallocAllocator::get_instance());
 }
@@ -44,7 +48,8 @@ int ObMemstoreAllocatorMgr::init()
   return ret;
 }
 
-int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_id, TAllocator*& out_allocator)
+int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_id,
+                                                          TAllocator *&out_allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id <= 0)) {
@@ -55,9 +60,9 @@ int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_
       ObMemAttr attr;
       attr.tenant_id_ = OB_SERVER_TENANT_ID;
       attr.label_ = ObModIds::OB_MEMSTORE_ALLOCATOR;
-      void* buf = ob_malloc(sizeof(TAllocator), attr);
+      void *buf = ob_malloc(sizeof(TAllocator), attr);
       if (NULL != buf) {
-        TAllocator* allocator = new (buf) TAllocator();
+        TAllocator *allocator = new (buf) TAllocator();
         bool cas_succeed = false;
         if (OB_SUCC(ret)) {
           if (OB_FAIL(allocator->init(tenant_id))) {
@@ -88,9 +93,9 @@ int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_
       ObMemAttr attr;
       attr.tenant_id_ = OB_SERVER_TENANT_ID;
       attr.label_ = ObModIds::OB_MEMSTORE_ALLOCATOR;
-      void* buf = ob_malloc(sizeof(TAllocator), attr);
+      void *buf = ob_malloc(sizeof(TAllocator), attr);
       if (NULL != buf) {
-        TAllocator* new_allocator = new (buf) TAllocator();
+        TAllocator *new_allocator = new (buf) TAllocator();
         if (OB_FAIL(new_allocator->init(tenant_id))) {
           LOG_WARN("failed to init tenant memstore allocator", K(tenant_id), K(ret));
         } else if (OB_FAIL(allocator_map_.set_refactored(tenant_id, new_allocator))) {
@@ -118,7 +123,7 @@ int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_
   return ret;
 }
 
-ObMemstoreAllocatorMgr& ObMemstoreAllocatorMgr::get_instance()
+ObMemstoreAllocatorMgr &ObMemstoreAllocatorMgr::get_instance()
 {
   static ObMemstoreAllocatorMgr instance_;
   return instance_;

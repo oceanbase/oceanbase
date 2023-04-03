@@ -17,8 +17,6 @@
 #include "sql/engine/px/ob_dfo_mgr.h"
 #include "sql/engine/px/ob_px_rpc_proxy.h"
 #include "sql/engine/px/ob_px_data_ch_provider.h"
-#include "sql/engine/px/exchange/ob_px_receive.h"
-#include "sql/engine/px/ob_px_coord.h"
 #include "sql/engine/px/ob_px_dtl_proc.h"
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
@@ -26,46 +24,49 @@
 #include "sql/engine/px/ob_dfo_scheduler.h"
 #include "sql/engine/px/datahub/components/ob_dh_barrier.h"
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
+#include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
+#include "sql/engine/px/datahub/components/ob_dh_sample.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
+#include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObPxFifoCoordOpInput : public ObPxReceiveOpInput {
+class ObPxFifoCoordOpInput : public ObPxReceiveOpInput
+{
 public:
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObPxFifoCoordOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxReceiveOpInput(ctx, spec)
+  ObPxFifoCoordOpInput(ObExecContext &ctx, const ObOpSpec &spec)
+    : ObPxReceiveOpInput(ctx, spec)
   {}
   virtual ~ObPxFifoCoordOpInput()
   {}
 };
 
-class ObPxFifoCoordSpec : public ObPxCoordSpec {
+class ObPxFifoCoordSpec : public ObPxCoordSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObPxFifoCoordSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObPxCoordSpec(alloc, type)
+  ObPxFifoCoordSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+  : ObPxCoordSpec(alloc, type)
   {}
-  ~ObPxFifoCoordSpec()
-  {}
+  ~ObPxFifoCoordSpec() {}
 };
 
-class ObPxFifoCoordOp : public ObPxCoordOp {
+class ObPxFifoCoordOp : public ObPxCoordOp
+{
 public:
-  ObPxFifoCoordOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
-  virtual ~ObPxFifoCoordOp()
-  {}
-
+  ObPxFifoCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
+  virtual ~ObPxFifoCoordOp() {}
 public:
-  class ObPxFifoCoordOpEventListener : public ObIPxCoordEventListener {
+  class ObPxFifoCoordOpEventListener : public ObIPxCoordEventListener
+  {
   public:
-    virtual int on_root_data_channel_setup()
-    {
-      return common::OB_SUCCESS;
-    }
+    virtual int on_root_data_channel_setup() { return common::OB_SUCCESS; }
   };
-
 public:
   virtual int inner_open() override;
   virtual void destroy() override
@@ -80,28 +81,34 @@ public:
   virtual int inner_close() override;
   virtual int inner_get_next_row() override;
 
-  virtual ObIPxCoordEventListener& get_listenner() override
-  {
-    return listener_;
-  }
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
 
+  virtual ObIPxCoordEventListener &get_listenner() override { return listener_; }
 private:
-  int next_row(bool& wait_next_msg);
-  int setup_loop_proc() override;
 
+  // fetch next rows for inner_get_next_row() or inner_get_next_batch()
+  int fetch_rows(const int64_t row_cnt);
+
+  int setup_loop_proc() override;
 private:
   ObPxFifoCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;
   ObParallelDfoScheduler parallel_scheduler_;
-  ObPxMsgProc msg_proc_;  // msg_loop call back function for dealing with msg
+  ObPxMsgProc msg_proc_; // msg_loop 处理消息的回调函数
   ObPxFinishSqcResultP sqc_finish_msg_proc_;
   ObPxInitSqcResultP sqc_init_msg_proc_;
   ObBarrierPieceMsgP barrier_piece_msg_proc_;
   ObWinbufPieceMsgP winbuf_piece_msg_proc_;
   ObPxQcInterruptedP interrupt_proc_;
+  ObDynamicSamplePieceMsgP sample_piece_msg_proc_;
+  ObRollupKeyPieceMsgP rollup_key_piece_msg_proc_;
+  ObRDWFPieceMsgP rd_wf_piece_msg_proc_;
+  ObInitChannelPieceMsgP init_channel_piece_msg_proc_;
+  ObReportingWFPieceMsgP reporting_wf_piece_msg_proc_;
+  ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ENGINE_PX_EXCHANGE_OB_PX_FIFO_COORD_OP_H_
+#endif // OCEANBASE_ENGINE_PX_EXCHANGE_OB_PX_FIFO_COORD_OP_H_

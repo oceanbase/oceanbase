@@ -18,10 +18,13 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/oblog/ob_warning_buffer.h"
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
-struct ObRpcResultCode {
+struct ObRpcResultCode
+{
   OB_UNIS_VERSION(1);
 
 public:
@@ -42,10 +45,10 @@ public:
 
   int32_t rcode_;
   char msg_[common::OB_MAX_ERROR_MSG_LEN];
-  common::ObSEArray<common::ObWarningBuffer::WarningItem, 4> warnings_;
+  common::ObSEArray<common::ObWarningBuffer::WarningItem, 2> warnings_;
 };
 
-}  // end of namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace obrpc
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_OB_RPC_RESULT_CODE_
+#endif //OCEANBASE_RPC_OBRPC_OB_RPC_RESULT_CODE_

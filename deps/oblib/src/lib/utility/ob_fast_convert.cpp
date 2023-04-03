@@ -15,17 +15,20 @@
 #include "lib/utility/ob_fast_convert.h"
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
-const char ObFastFormatInt::DIGITS[] = "0001020304050607080910111213141516171819"
-                                       "2021222324252627282930313233343536373839"
-                                       "4041424344454647484950515253545556575859"
-                                       "6061626364656667686970717273747576777879"
-                                       "8081828384858687888990919293949596979899";
-
-char* ObFastFormatInt::format_unsigned(uint64_t value)
+namespace oceanbase
 {
-  char* ptr = buf_ + (MAX_DIGITS10_STR_SIZE - 1);
+namespace common
+{
+const char ObFastFormatInt::DIGITS[] =
+    "0001020304050607080910111213141516171819"
+    "2021222324252627282930313233343536373839"
+    "4041424344454647484950515253545556575859"
+    "6061626364656667686970717273747576777879"
+    "8081828384858687888990919293949596979899";
+
+char *ObFastFormatInt::format_unsigned(uint64_t value)
+{
+  char *ptr = buf_ + (MAX_DIGITS10_STR_SIZE - 1);
   uint32_t index = 0;
   while (value >= 100) {
     index = static_cast<uint32_t>(value % 100) << 1;
@@ -56,7 +59,7 @@ void ObFastFormatInt::format_signed(int64_t value)
   len_ = buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1;
 }
 
-int64_t ObFastFormatInt::format_unsigned(uint64_t value, char* buf)
+int64_t ObFastFormatInt::format_unsigned(uint64_t value, char *buf)
 {
   int64_t len = ob_fast_digits10(value);
   buf += len;
@@ -79,7 +82,7 @@ int64_t ObFastFormatInt::format_unsigned(uint64_t value, char* buf)
   return len;
 }
 
-int64_t ObFastFormatInt::format_signed(int64_t value, char* buf)
+int64_t ObFastFormatInt::format_signed(int64_t value, char *buf)
 {
   int64_t len = 0;
   uint64_t abs_value = static_cast<uint64_t>(value);
@@ -92,5 +95,5 @@ int64_t ObFastFormatInt::format_signed(int64_t value, char* buf)
   return len;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

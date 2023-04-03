@@ -19,13 +19,16 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
-ObSetPasswordResolver::ObSetPasswordResolver(ObResolverParams& params) : ObDCLResolver(params)
-{}
+ObSetPasswordResolver::ObSetPasswordResolver(ObResolverParams &params)
+    : ObDCLResolver(params)
+{
+}
 
 ObSetPasswordResolver::~ObSetPasswordResolver()
-{}
+{
+}
 
-bool ObSetPasswordResolver::is_hex_literal(const ObString& str)
+bool ObSetPasswordResolver::is_hex_literal(const ObString &str)
 {
   bool bool_ret = true;
   for (int i = 0; bool_ret && i < str.length(); ++i) {
@@ -37,7 +40,7 @@ bool ObSetPasswordResolver::is_hex_literal(const ObString& str)
   return bool_ret;
 }
 
-bool ObSetPasswordResolver::is_valid_mysql41_passwd(const ObString& str)
+bool ObSetPasswordResolver::is_valid_mysql41_passwd(const ObString &str)
 {
   bool bret = true;
   if (str.length() != 41) {
@@ -52,11 +55,12 @@ bool ObSetPasswordResolver::is_valid_mysql41_passwd(const ObString& str)
   return bret;
 }
 
-int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
+
+int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObSetPasswordStmt* set_pwd_stmt = NULL;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObSetPasswordStmt *set_pwd_stmt = NULL;
   if (OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
@@ -72,23 +76,30 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
       set_pwd_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
       ObString user_name;
       ObString host_name;
-      const ObString& session_user_name = session_info_->get_user_name();
-      const ObString& session_host_name = session_info_->get_host_name();
+      const ObString &session_user_name = session_info_->get_user_name();
+      const ObString &session_host_name = session_info_->get_host_name();
+      bool is_valid = false;
       if (NULL != node->children_[0]) {
-        ParseNode* user_hostname_node = node->children_[0];
-        if (OB_ISNULL(user_hostname_node->children_[0])) {
+        ParseNode *user_hostname_node = node->children_[0];
+        if (OB_FAIL(check_role_as_user(user_hostname_node, is_valid))) {
+          LOG_WARN("failed to check role as user", K(ret));
+        } else if (!is_valid) {
+          ret = OB_USER_NOT_EXIST;
+          LOG_ORACLE_USER_ERROR(OB_USER_NOT_EXIST, int(user_hostname_node->str_len_), user_hostname_node->str_value_);
+        } else if (OB_ISNULL(user_hostname_node->children_[0])) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("username should not be NULL", K(ret));
         } else {
           user_name.assign_ptr(user_hostname_node->children_[0]->str_value_,
-              static_cast<int32_t>(user_hostname_node->children_[0]->str_len_));
+                        static_cast<int32_t>(user_hostname_node->children_[0]->str_len_));
           if (NULL == user_hostname_node->children_[1]) {
             host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
           } else {
             host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
-                static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
+                                 static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
           }
-          if (0 == user_name.compare(session_user_name) && 0 == host_name.compare(session_host_name)) {
+          if (0 == user_name.compare(session_user_name)
+              && 0 == host_name.compare(session_host_name)) {
             set_pwd_stmt->set_for_current_user(true);
           }
         }
@@ -98,6 +109,18 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
         set_pwd_stmt->set_for_current_user(true);
       }
 
+      if (OB_SUCC(ret)) {
+        // replace password to *** in query_string for audit
+        ObString masked_sql;
+        if (session_info_->is_inner()) {
+          // do nothing in inner_sql
+        } else if (OB_FAIL(mask_password_for_single_user(allocator_,
+            session_info_->get_current_query_string(), node, 1, masked_sql))) {
+          LOG_WARN("fail to mask_password_for_single_user", K(ret));
+        } else {
+          set_pwd_stmt->set_masked_sql(masked_sql);
+        }
+      }
       if (OB_SUCC(ret)) {
         ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
         ObString infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
@@ -125,9 +148,9 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
         } else {
           ObString password(static_cast<int32_t>(node->children_[1]->str_len_),
                             node->children_[1]->str_value_);
-          if (!share::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
+          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
             LOG_WARN("fail to check password strength", K(ret));
-          } else if (share::is_oracle_mode() && OB_FAIL(
+          } else if (lib::is_oracle_mode() && OB_FAIL(
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 != password.length()) {//set password
@@ -283,21 +306,47 @@ int ObSetPasswordResolver::resolve_resource_option_node(const ParseNode &resourc
   return ret;
 }
 
-int ObSetPasswordResolver::resolve_oracle_password_strength(
-    common::ObString& user_name, common::ObString& hostname, common::ObString& password)
+int ObSetPasswordResolver::resolve_oracle_password_strength(common::ObString &user_name,
+                                                            common::ObString &hostname,
+                                                            common::ObString &password)
 {
   int ret = OB_SUCCESS;
-  const share::schema::ObUserInfo* user = NULL;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+  const share::schema::ObUserInfo *user = NULL;
+  if (OB_ISNULL(session_info_) ||
+      OB_ISNULL(schema_checker_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info or schema checker should not be NULL", K(ret));
-  } else if (schema_checker_->get_user_info(session_info_->get_effective_tenant_id(), user_name, hostname, user)) {
+  } else if (schema_checker_->get_user_info(session_info_->get_effective_tenant_id(),
+    user_name, hostname, user)) {
     LOG_WARN("fail to get user info", K(ret));
   } else {
     int64_t profile_id = user->get_profile_id();
-    if (OB_FAIL(check_oracle_password_strength(
-            session_info_->get_effective_tenant_id(), profile_id, password, user_name))) {
+    if (OB_FAIL(check_oracle_password_strength(session_info_->get_effective_tenant_id(),
+      profile_id, password, user_name))) {
       LOG_WARN("fail to check oracle password strength", K(ret));
+    }
+  }
+  return ret; 
+}
+
+/*
+bugfix :
+alter user resource identified by password core cause by invalid memory access
+*/
+int ObSetPasswordResolver::check_role_as_user(ParseNode *user_hostname_node, bool &is_valid) {
+  is_valid = false;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(user_hostname_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to check_role_as_user, user_hostname_node is NULL", K(ret));
+  } else if (!lib::is_oracle_mode() || T_VARCHAR != user_hostname_node->type_) {
+    is_valid = true;
+  } else {
+    ObString node_str(user_hostname_node->str_len_, user_hostname_node->str_value_);
+    if (0 != node_str.case_compare(OB_ORA_RESOURCE_ROLE_NAME) &&
+        0 != node_str.case_compare(OB_ORA_PUBLIC_ROLE_NAME) &&
+        0 != node_str.case_compare(OB_ORA_CONNECT_ROLE_NAME)) {
+      is_valid = true;
     }
   }
   return ret;

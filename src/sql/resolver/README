@@ -1,0 +1,16 @@
+See `ob_resolver.h' for the interface of this module.
+
+SQL commands are instructions used to communicate with the database to perform specific task that work with data. SQL commands can be used not only for searching the database but also to perform various other functions like, for example, you can create tables, add data to tables, or modify data, drop the table, set permissions for users. SQL commands are grouped into four major categories depending on their functionality:
+
+Data Definition Language (DDL) - Data definition language (DDL) commands enable you to perform the following tasks:
+·         Create, alter, and drop schema objects
+·         Grant and revoke privileges and roles
+·         Add comments to the data dictionary
+
+The CREATE, ALTER, and DROP commands require exclusive access to the object being acted upon. For example, an ALTER TABLE command fails if another user has an open transaction on the specified table.
+
+Data Manipulation Language (DML) - These SQL commands are used for storing, retrieving, modifying, and deleting data. These commands are SELECT, INSERT, UPDATE, and DELETE.
+
+Transaction Control Language (TCL) -  Transaction control commands manage changes made by DML commands. These SQL commands are used for managing changes affecting the data. These commands are COMMIT, ROLLBACK, and SAVEPOINT.
+
+Data Control Language (DCL) -  It is used to create roles, permissions, and referential integrity as well it is used to control access to database by securing it. These SQL commands are used for providing security to database objects. These commands are GRANT and REVOKE.

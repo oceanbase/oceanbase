@@ -20,21 +20,22 @@
 #include "sql/engine/basic/ob_ra_row_store.h"
 #include "share/config/ob_server_config.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
-class TestEnv : public ::testing::Environment {
+class TestEnv : public ::testing::Environment
+{
 public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
     lib::AChunkMgr::instance().set_max_chunk_cache_cnt(0);
     int ret = OB_SUCCESS;
-    lib::ObMallocAllocator* malloc_allocator = lib::ObMallocAllocator::get_instance();
-    ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID, common::ObCtxIds::WORK_AREA);
+    lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
+    ret = malloc_allocator->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
     LOG_INFO("initial setup random seed", K(s));
@@ -42,24 +43,25 @@ public:
   }
 
   virtual void TearDown() override
-  {}
+  {
+  }
 };
 
-#define CALL(func, ...) \
-  func(__VA_ARGS__);    \
-  ASSERT_FALSE(HasFatalFailure());
+#define CALL(func, ...) func(__VA_ARGS__); ASSERT_FALSE(HasFatalFailure());
 
-class TestRARowStore : public blocksstable::TestDataFilePrepare {
+class TestRARowStore : public blocksstable::TestDataFilePrepare
+{
 public:
-  TestRARowStore() : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 1000)
-  {}
+  TestRARowStore() : blocksstable::TestDataFilePrepare("TestDiskIR", 2<<20, 1000)
+  {
+  }
 
   virtual void SetUp() override
   {
     int ret = OB_SUCCESS;
     blocksstable::TestDataFilePrepare::SetUp();
-    ret = blocksstable::ObMacroFileManager::get_instance().init();
-    ASSERT_EQ(OB_SUCCESS, ret);
+		ret = blocksstable::ObMacroFileManager::get_instance().init();
+		ASSERT_EQ(OB_SUCCESS, ret);
 
     row_.count_ = COLS;
     row_.cells_ = cells_;
@@ -80,7 +82,7 @@ public:
     common::ObModItem mod;
   }
 
-  ObNewRow& gen_row(int64_t row_id)
+  ObNewRow &gen_row(int64_t row_id)
   {
     cells_[0].set_int(row_id);
     int64_t max_size = 512;
@@ -93,9 +95,9 @@ public:
   }
 
   template <typename T>
-  void verify_row(T& reader, int64_t id, bool verify_all = false)
+  void verify_row(T &reader, int64_t id, bool verify_all = false)
   {
-    const ObNewRow* r = NULL;
+    const ObNewRow *r = NULL;
     int ret = reader.get_row(id, r);
     ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -114,7 +116,8 @@ public:
     return verify_row(rs_, id, verify_all);
   }
 
-  void verify_rows(int64_t begin, int64_t end, const char* mode = "scan", int64_t cnt = 0, bool verify_all = false)
+  void verify_rows(int64_t begin, int64_t end,
+      const char *mode =  "scan", int64_t cnt = 0, bool verify_all = false)
   {
     if (strcmp(mode, "scan") == 0) {
       for (int64_t i = begin; i < end; i++) {
@@ -143,6 +146,7 @@ public:
   }
 
 protected:
+
   const static int64_t COLS = 3;
   bool enable_big_row_ = false;
   ObObj cells_[COLS];
@@ -151,7 +155,7 @@ protected:
 
   int64_t tenant_id_ = OB_SYS_TENANT_ID;
   int64_t ctx_id_ = ObCtxIds::WORK_AREA;
-  const char* label_ = ObModIds::OB_SQL_ROW_STORE;
+  const char *label_ = ObModIds::OB_SQL_ROW_STORE;
 
   const static int64_t BUF_SIZE = 2 << 20;
   char str_buf_[BUF_SIZE];
@@ -159,7 +163,7 @@ protected:
 
 TEST_F(TestRARowStore, basic)
 {
-  CALL(append_rows, 3000);  // approximate 1MB, index block not needed
+  CALL(append_rows, 3000); // approximate 1MB, index block not needed
   CALL(verify_rows, 0, rs_.get_row_cnt(), "scan", 0, true);
   CALL(verify_rows, 0, rs_.get_row_cnt(), "rscan", 0, true);
   CALL(verify_rows, 0, rs_.get_row_cnt(), "get", rs_.get_row_cnt(), true);
@@ -172,7 +176,7 @@ TEST_F(TestRARowStore, basic)
   }
 
   int ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ret = rs_.get_row(-1, row);
   ASSERT_NE(OB_SUCCESS, ret);
   ret = rs_.get_row(rs_.get_row_cnt(), row);
@@ -257,6 +261,7 @@ TEST_F(TestRARowStore, finish_add_row)
   CALL(verify_rows, 0, rs_.get_row_cnt(), "scan");
   CALL(verify_rows, 0, rs_.get_row_cnt(), "get", 1000);
 
+
   rs_.reset();
   ret = rs_.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -289,7 +294,7 @@ TEST_F(TestRARowStore, multi_reader)
   ObRARowStore::Reader reader1(rs_);
   ObRARowStore::Reader reader2(rs_);
 
-  ObRARowStore::Reader* readers[] = {&reader0, &reader1, &reader2};
+  ObRARowStore::Reader *readers[] = { &reader0, &reader1, &reader2 };
   for (int64_t i = 0; i < 10000; ++i) {
     int64_t row_id = random() % rs_.get_row_cnt();
     CALL(verify_row, rs_, row_id);
@@ -414,7 +419,7 @@ TEST_F(TestRARowStore, start_dump_by_total_mem_used)
   int64_t avg_row_size = rs_.get_mem_hold() / rs_.get_row_cnt();
   LOG_INFO("average row size", K(avg_row_size));
 
-  lib::ObMallocAllocator* malloc_allocator = lib::ObMallocAllocator::get_instance();
+  lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
   malloc_allocator->set_tenant_limit(OB_SYS_TENANT_ID, 1L << 30);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 50MB for work area
@@ -424,6 +429,7 @@ TEST_F(TestRARowStore, start_dump_by_total_mem_used)
   rs_.reset();
   ret = rs_.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
+
 
   // case1: trigger dump by memory mod usage (60% of limit, 30MB)
   // write 28MB, all in memory
@@ -443,7 +449,7 @@ TEST_F(TestRARowStore, start_dump_by_total_mem_used)
   attr.tenant_id_ = tenant_id_;
   attr.ctx_id_ = ctx_id_;
   // memory ctx hold 20MB
-  void* mem = ob_malloc(20L << 20, attr);
+  void *mem = ob_malloc(20L << 20, attr);
 
   // write 15MB, in memory
   CALL(append_rows, (15L << 20) / avg_row_size);
@@ -482,20 +488,21 @@ TEST_F(TestRARowStore, start_dump_by_total_mem_used)
   ASSERT_EQ(rs_.get_file_size(), 0);
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
+
 
 void ignore_sig(int sig)
 {
   UNUSED(sig);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   signal(49, ignore_sig);
   oceanbase::common::ObLogger::get_logger().set_log_level("TRACE");
   testing::InitGoogleTest(&argc, argv);
-  auto* env = new (oceanbase::sql::TestEnv);
+  auto *env = new (oceanbase::sql::TestEnv);
   testing::AddGlobalTestEnvironment(env);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();

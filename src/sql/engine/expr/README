@@ -1,0 +1,102 @@
+See `ob_expr_operator.h' for the interface of this module.
+
+collation etc. support status of each system function:
+<Length> <Null> <ResultType> <PrecisionScale> <Collation> <Decimals> <FunctionName>
+
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_abs.h
+<LengthChecked> <NullChecked> <ResultTypeTemp> <PrecisionScale> <CollationNone> <Decimals> ob_expr_add.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_and.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_arg_case.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_between.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_case.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_cast.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_coalesce.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_collation.h - 这里面有好几个函数
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_concat.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_concat_ws.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_conv.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_current_user.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_cur_time.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_database.h
+<LengthChecked> <NullChecked> <ResultType> <PrecisionScale> <CollationNone> <Decimals> ob_expr_date_add.h - 超级恶心，select DATE_SUB(DateType, interval 1 year) from matrix; select DATE_SUB(DateType, interval 1 hour) from matrix;返回的类型是不同的, 前Date,后Datetime
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_date_format.h
+<LengthChecked> <NullChecked> <ResultType> <PrecisionScale> <CollationNode> <Decimals> ob_expr_date_sub.h - 同date_add，目前实现为返回timestamp类型。
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_div.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_effective_tenant.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_effective_tenant_id.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_equal.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_exists.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_extract.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_addr_to_part_id.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_ceil.h   - impl inefficient, by peiwei
+<LengthObOnly> <NullChecked> <ResultTypeOracleOnly> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_func_dump.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_floor.h - impl inefficient, by peiwei
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_part_hash.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_partition_key.h
+<Length> <NullChecked> <ResultType> <PrecisionScale> <CollationNone> <Decimals> ob_expr_func_round.h - result type should vary, by yubai
+<LengthNoNeed> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_fun_values.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_greater_equal.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_greater_than.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_greatest.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_hex.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_in.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_instr.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_int2ip.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_int_div.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_ip2int.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_is.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_is_not.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_last_insert_id.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_least.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_length.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_less_equal.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_less_than.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_like.h
+<Length> <NullObOnly> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_lnnvl.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_locate.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_lower.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_md5.h
+<Length> <NullObOnly> <ResultType> <PrecisionScale> <CollationNone> <Decimals> ob_expr_merging_frozen_time.h -- discarded function
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_minus.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_mod.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_mul.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_neg.h
+<LengthObOnly> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_autoinc_nextval.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_not_between.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_not_equal.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_not_exists.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_not.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_not_in.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <Collation> <Decimals> ob_expr_null_safe_equal.h
+<LengthChecked> <NullChecked> <ResultTypeObOnly> <PrecisionScale> <Collation> <Decimals> ob_expr_nvl.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_or.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_pow.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_quote.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_regexp.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_repeat.h
+<LengthMore> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_replace.h
+<LengthChecked> <NullChecked> <ResultType> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_reverse.h
+<LengthChecked> <NullChecked> <ResultType> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_right.h
+<LengthMore> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_rpad.h - LengthMore这种跟数值有关
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_sign.h
+<Length> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_str_to_date.h  - ResultType非常复杂，跟输入值相关, 例如SELECT STR_TO_DATE('abc','%s');SELECT STR_TO_DATE('abc','a');目前实现简单一些，统一返回timestamp
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_equal.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_greater_equal.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_greater_than.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_less_equal.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_less_than.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_not_equal.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_ns_equal.h
+<LengthChecked> <Null> <ResultTypeNone> <PrecisionScale> <Collation> <Decimals> ob_expr_subquery_ref.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_substr.h
+<LengthMore> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_insert.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_substring_index.h
+<LengthChecked> <NullObOnly> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_sys_view_bigint_param.h
+<LengthChecked> <NullObOnly> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_time_to_usec.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_trim.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_unhex.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_upper.h
+<LengthChecked> <NullObOnly> <ResultTypeObOnly> <PrecisionScale> <CollationNone> <Decimals> ob_expr_usec_to_time.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_user.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationChecked> <Decimals> ob_expr_version.h
+<LengthChecked> <NullChecked> <ResultTypeChecked> <PrecisionScale> <CollationNone> <Decimals> ob_expr_xor.h - (1^-1 out of range bug @jiuren)

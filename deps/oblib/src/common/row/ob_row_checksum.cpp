@@ -17,8 +17,10 @@
 #include "lib/utility/ob_print_utils.h"
 #include "common/row/ob_row.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 DEFINE_GET_SERIALIZE_SIZE(ObRowChecksumValue)
 {
@@ -54,7 +56,8 @@ DEFINE_SERIALIZE(ObRowChecksumValue)
 DEFINE_DESERIALIZE(ObRowChecksumValue)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, reinterpret_cast<int64_t*>(&checksum_)))) {
+  if (OB_FAIL(serialization::decode_i64(buf, data_len, pos,
+      reinterpret_cast<int64_t *>(&checksum_)))) {
     LOG_WARN("decode int failed", K(ret));
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &column_count_))) {
     LOG_WARN("decode int failed", K(ret));
@@ -65,7 +68,8 @@ DEFINE_DESERIALIZE(ObRowChecksumValue)
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("serialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
     } else {
-      column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum*>(const_cast<char*>(buf + pos));
+      column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum *>(
+          const_cast<char *>(buf + pos));
       pos += n;
     }
   }
@@ -73,7 +77,8 @@ DEFINE_DESERIALIZE(ObRowChecksumValue)
   return ret;
 }
 
-int ObRowChecksumValue::column_checksum2string(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObRowChecksumValue::column_checksum2string(char *buf, const int64_t buf_len,
+                                               int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || buf_len <= 0) {
@@ -91,8 +96,8 @@ int ObRowChecksumValue::column_checksum2string(char* buf, const int64_t buf_len,
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(databuff_printf(
-                buf, buf_len, pos, "%lu:%lu", column_checksum_array_[i].first, column_checksum_array_[i].second))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%lu:%lu",
+            column_checksum_array_[i].first, column_checksum_array_[i].second))) {
           LOG_WARN("print to buffer failed", K(ret), K(buf_len), K(pos));
         }
       }
@@ -136,7 +141,7 @@ void ObRowChecksumValue::sort()
   }
 }
 
-int64_t ObRowChecksumValue::to_string(char* buf, const int64_t buf_len) const
+int64_t ObRowChecksumValue::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   int ret = OB_SUCCESS;
@@ -146,19 +151,23 @@ int64_t ObRowChecksumValue::to_string(char* buf, const int64_t buf_len) const
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "row:[%lu]", checksum_))) {
   } else {
     if (column_count_ > 0) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",columns:["))) {}
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",columns:["))) {
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; i++) {
-      if (OB_FAIL(databuff_printf(
-              buf, buf_len, pos, "%lu:%lu,", column_checksum_array_[i].first, column_checksum_array_[i].second))) {}
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%lu:%lu,",
+          column_checksum_array_[i].first, column_checksum_array_[i].second))) {
+      }
     }
     if (OB_SUCC(ret) && column_count_ > 0) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "]"))) {}
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "]"))) {
+      }
     }
   }
 
   return pos;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
+

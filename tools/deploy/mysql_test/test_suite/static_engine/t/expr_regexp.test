@@ -1,0 +1,44 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(50), c2 varchar(50));
+insert into t1 (c1, c2) values ('abc1', '^abc[0-9]?$');
+insert into t1 (c1, c2) values ('abc1', '^abd');
+
+drop table if exists t2;
+create table t2 (a varchar(50));
+insert into t2 values ("abc1");
+--enable_warnings
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select 'abcdef' regexp '^abc.*';
+select 'abcdef' regexp '^abd.*';
+
+select '' regexp '^$';
+select 'a' regexp '';
+select NULL regexp 'a';
+select 'a' regexp NULL;
+
+# pattern is const string
+select c2, c2 regexp 'abc' from t1;
+# pattern exec param
+select c2, (select a regexp c2 from t2) from t1;
+# pattern not const
+select c1, c2, c1 regexp c2 from t1;
+
+connection syscon;
+--sleep 2

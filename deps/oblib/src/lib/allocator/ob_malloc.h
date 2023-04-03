@@ -19,50 +19,62 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 
-namespace oceanbase {
-namespace common {
-inline void ob_print_mod_memory_usage(bool print_to_std = false, bool print_glibc_malloc_stats = false)
+namespace oceanbase
+{
+namespace common
+{
+inline void ob_print_mod_memory_usage(bool print_to_std = false,
+                                      bool print_glibc_malloc_stats = false)
 {
   UNUSEDx(print_to_std, print_glibc_malloc_stats);
 }
 
 extern ObMemAttr default_memattr;
-inline void* ob_malloc(const int64_t nbyte, const ObMemAttr& attr = default_memattr)
+inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr = default_memattr)
 {
-  void* ptr = NULL;
-  ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
+  void *ptr = NULL;
+  auto allocator = lib::ObMallocAllocator::get_instance();
   if (!OB_ISNULL(allocator)) {
     ptr = allocator->alloc(nbyte, attr);
-  }
-  if (OB_ISNULL(ptr)) {
-    LIB_LOG(ERROR, "allocate memory fail", K(attr), K(nbyte));
+    if (OB_ISNULL(ptr)) {
+      LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(attr), K(nbyte));
+    }
   }
   return ptr;
 }
 
-inline void ob_free(void* ptr)
+inline void ob_free(void *ptr)
 {
-  ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
-  abort_unless(!OB_ISNULL(allocator));
-  allocator->free(ptr);
-  ptr = NULL;
+  if (OB_LIKELY(lib::ObMallocAllocator::is_inited_)) {
+    auto *allocator = lib::ObMallocAllocator::get_instance();
+    abort_unless(!OB_ISNULL(allocator));
+    allocator->free(ptr);
+    ptr = NULL;
+  }
 }
 
-inline void* ob_realloc(void* ptr, const int64_t nbyte, const ObMemAttr& attr)
+inline void *ob_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr)
 {
-  void* nptr = NULL;
-  ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
-  if (!OB_ISNULL(allocator)) {
-    nptr = allocator->realloc(ptr, nbyte, attr);
+  void *nptr = NULL;
+  if (OB_LIKELY(lib::ObMallocAllocator::is_inited_)) {
+    auto *allocator = lib::ObMallocAllocator::get_instance();
+    if (!OB_ISNULL(allocator)) {
+      nptr = allocator->realloc(ptr, nbyte, attr);
+      if (OB_ISNULL(nptr)) {
+        LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(attr), K(nbyte));
+      }
+    }
   }
   return nptr;
 }
 
-void* ob_malloc_align(const int64_t alignment, const int64_t nbyte, const ObMemAttr& attr = default_memattr);
-void ob_free_align(void* ptr);
+void *ob_malloc_align(
+    const int64_t alignment, const int64_t nbyte,
+    const ObMemAttr &attr = default_memattr);
+void ob_free_align(void *ptr);
 
 // Deprecated interface
-inline void* ob_malloc(const int64_t nbyte, const lib::ObLabel& label)
+inline void *ob_malloc(const int64_t nbyte, const lib::ObLabel &label)
 {
   ObMemAttr attr;
   attr.label_ = label;
@@ -70,55 +82,58 @@ inline void* ob_malloc(const int64_t nbyte, const lib::ObLabel& label)
 }
 
 // Deprecated interface
-void* ob_malloc_align(const int64_t alignment, const int64_t nbyte, const lib::ObLabel& label);
+void *ob_malloc_align(
+    const int64_t alignment,
+    const int64_t nbyte, const lib::ObLabel &label);
 
 ////////////////////////////////////////////////////////////////
-class ObMalloc : public ObIAllocator {
+class ObMalloc : public ObIAllocator
+{
 public:
-  ObMalloc(){};
-  explicit ObMalloc(const lib::ObLabel& label)
+  ObMalloc() {};
+  explicit ObMalloc(const lib::ObLabel &label)
   {
     memattr_.label_ = label;
   };
-  explicit ObMalloc(ObMemAttr attr) : memattr_(attr)
+  explicit ObMalloc(ObMemAttr attr)
+    : memattr_(attr)
   {}
-  virtual ~ObMalloc(){};
-
+  virtual ~ObMalloc() {};
 public:
-  void set_label(const lib::ObLabel& label)
-  {
-    memattr_.label_ = label;
-  };
-  void set_attr(const ObMemAttr& attr)
-  {
-    memattr_ = attr;
-  }
-  void* alloc(const int64_t sz)
+  void set_label(const lib::ObLabel &label) {memattr_.label_ = label;};
+  void set_attr(const ObMemAttr &attr) { memattr_ = attr; }
+  void *alloc(const int64_t sz)
   {
     return ob_malloc(sz, memattr_);
   }
-  void* alloc(const int64_t size, const ObMemAttr& attr)
+  void *alloc(const int64_t size, const ObMemAttr &attr)
   {
     return ob_malloc(size, attr);
   }
-  void free(void* ptr)
-  {
-    ob_free(ptr);
-  };
-
+  void free(void *ptr) { ob_free(ptr); };
 private:
   ObMemAttr memattr_;
 };
 typedef ObMalloc ObTCMalloc;
 
-class ObMemBuf {
+class ObMemBuf
+{
 public:
-  ObMemBuf() : buf_ptr_(NULL), buf_size_(OB_MALLOC_NORMAL_BLOCK_SIZE), label_(ObModIds::OB_MOD_DO_NOT_USE_ME)
-  {}
+  ObMemBuf()
+    : buf_ptr_(NULL),
+      buf_size_(OB_MALLOC_NORMAL_BLOCK_SIZE),
+      label_(ObModIds::OB_MOD_DO_NOT_USE_ME)
+  {
+
+  }
 
   explicit ObMemBuf(const int64_t default_size)
-      : buf_ptr_(NULL), buf_size_(default_size), label_(ObModIds::OB_MOD_DO_NOT_USE_ME)
-  {}
+    : buf_ptr_(NULL),
+      buf_size_(default_size),
+      label_(ObModIds::OB_MOD_DO_NOT_USE_ME)
+  {
+
+  }
 
   virtual ~ObMemBuf()
   {
@@ -128,7 +143,7 @@ public:
     }
   }
 
-  inline char* get_buffer()
+  inline char *get_buffer()
   {
     return buf_ptr_;
   }
@@ -138,74 +153,73 @@ public:
     return buf_size_;
   }
 
-  int ensure_space(const int64_t size, const lib::ObLabel& label = nullptr);
+  int ensure_space(const int64_t size, const lib::ObLabel &label = nullptr);
 
 private:
-  char* buf_ptr_;
+  char *buf_ptr_;
   int64_t buf_size_;
   lib::ObLabel label_;
 };
 
-class ObMemBufAllocatorWrapper : public ObIAllocator {
+class ObMemBufAllocatorWrapper : public ObIAllocator
+{
 public:
-  ObMemBufAllocatorWrapper(ObMemBuf& mem_buf, const lib::ObLabel& label = nullptr) : mem_buf_(mem_buf), label_(label)
-  {}
-
+  ObMemBufAllocatorWrapper(ObMemBuf &mem_buf, const lib::ObLabel &label = nullptr)
+      : mem_buf_(mem_buf), label_(label) {}
 public:
-  virtual void* alloc(int64_t sz)
+  virtual void *alloc(int64_t sz) override
   {
-    char* ptr = NULL;
+    char *ptr = NULL;
     if (OB_SUCCESS == mem_buf_.ensure_space(sz, label_)) {
       ptr = mem_buf_.get_buffer();
     }
     return ptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void *alloc(int64_t sz, const ObMemAttr &attr) override
   {
     UNUSEDx(attr);
     return alloc(sz);
   }
-  virtual void free(char* ptr)
+  virtual void free(void *ptr) override
   {
     UNUSED(ptr);
   }
-
 private:
-  ObMemBuf& mem_buf_;
+  ObMemBuf &mem_buf_;
   lib::ObLabel label_;
 };
 
-class ObRawBufAllocatorWrapper : public ObIAllocator {
-public:
-  ObRawBufAllocatorWrapper(char* mem_buf, int64_t mem_buf_len) : mem_buf_(mem_buf), mem_buf_len_(mem_buf_len)
-  {}
 
+class ObRawBufAllocatorWrapper : public ObIAllocator
+{
 public:
-  virtual void* alloc(int64_t sz)
+  ObRawBufAllocatorWrapper(char *mem_buf, int64_t mem_buf_len) : mem_buf_(mem_buf),
+                                                                 mem_buf_len_(mem_buf_len) {}
+public:
+  virtual void *alloc(int64_t sz) override
   {
-    char* ptr = NULL;
+    char *ptr = NULL;
     if (mem_buf_len_ >= sz) {
       ptr = mem_buf_;
     }
     return ptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void *alloc(int64_t sz, const ObMemAttr &attr) override
   {
     UNUSEDx(attr);
     return alloc(sz);
   }
-  virtual void free(char* ptr)
+  virtual void free(void *ptr) override
   {
     UNUSED(ptr);
   }
-
 private:
-  char* mem_buf_;
+  char *mem_buf_;
   int64_t mem_buf_len_;
 };
 
 template <typename T>
-void ob_delete(T*& ptr)
+void ob_delete(T *&ptr)
 {
   if (NULL != ptr) {
     ptr->~T();
@@ -214,60 +228,67 @@ void ob_delete(T*& ptr)
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-extern "C" void* ob_zalloc(const int64_t nbyte);
-extern "C" void ob_zfree(void* ptr);
+extern "C" void *ob_zalloc(const int64_t nbyte);
+extern "C" void ob_zfree(void *ptr);
 
-#define OB_NEW(T, label, ...)                                   \
-  ({                                                            \
-    T* ret = NULL;                                              \
-    void* buf = oceanbase::common::ob_malloc(sizeof(T), label); \
-    if (OB_NOT_NULL(buf)) {                                     \
-      ret = new (buf) T(__VA_ARGS__);                           \
-    }                                                           \
-    ret;                                                        \
+#define OB_NEW(T, label, ...)                  \
+  ({                                            \
+    T* ret = NULL;                              \
+    void *buf = oceanbase::common::ob_malloc(sizeof(T), label); \
+    if (OB_NOT_NULL(buf))                       \
+    {                                           \
+      ret = new(buf) T(__VA_ARGS__);            \
+    }                                           \
+    ret;                                        \
   })
 
-#define OB_NEW_ALIGN32(T, label, ...)                  \
-  ({                                                   \
-    T* ret = NULL;                                     \
-    void* buf = ob_malloc_align(32, sizeof(T), label); \
-    if (OB_NOT_NULL(buf)) {                            \
-      ret = new (buf) T(__VA_ARGS__);                  \
-    }                                                  \
-    ret;                                               \
+#define OB_NEW_ALIGN32(T, label, ...)          \
+  ({                                            \
+    T* ret = NULL;                              \
+    void *buf = ob_malloc_align(32, sizeof(T), label);   \
+    if (OB_NOT_NULL(buf))                       \
+    {                                           \
+      ret = new(buf) T(__VA_ARGS__);            \
+    }                                           \
+    ret;                                        \
   })
 
-#define OB_NEWx(T, pool, ...)             \
-  ({                                      \
-    T* ret = NULL;                        \
-    if (OB_NOT_NULL(pool)) {              \
-      void* buf = pool->alloc(sizeof(T)); \
-      if (OB_NOT_NULL(buf)) {             \
-        ret = new (buf) T(__VA_ARGS__);   \
-      }                                   \
-    }                                     \
-    ret;                                  \
+#define OB_NEWx(T, pool, ...)                   \
+  ({                                            \
+    T* ret = NULL;                              \
+    if (OB_NOT_NULL(pool)) {                    \
+      void *buf = (pool)->alloc(sizeof(T));       \
+      if (OB_NOT_NULL(buf))                     \
+      {                                         \
+        ret = new(buf) T(__VA_ARGS__);          \
+      }                                         \
+    }                                           \
+    ret;                                        \
   })
 
-#define OB_DELETE(T, label, ptr) \
-  do {                           \
-    if (NULL != ptr) {           \
-      ptr->~T();                 \
-      ob_free(ptr);              \
-      ptr = NULL;                \
-    }                            \
-  } while (0)
+#define OB_DELETE(T, label, ptr)               \
+  do{                                           \
+    if (NULL != ptr)                            \
+    {                                           \
+      ptr->~T();                                \
+      ob_free(ptr);                             \
+      ptr = NULL;                               \
+    }                                           \
+  } while(0)
 
-#define OB_DELETE_ALIGN32(T, label, ptr) \
-  do {                                   \
-    if (NULL != ptr) {                   \
-      ptr->~T();                         \
-      ob_free_align(ptr);                \
-      ptr = NULL;                        \
-    }                                    \
-  } while (0)
+#define OB_DELETE_ALIGN32(T, label, ptr)       \
+  do{                                           \
+    if (NULL != ptr)                            \
+    {                                           \
+      ptr->~T();                                \
+      ob_free_align(ptr);                       \
+      ptr = NULL;                               \
+    }                                           \
+  } while(0)
+
+
 
 #endif /* OCEANBASE_SRC_COMMON_OB_MALLOC_H_ */

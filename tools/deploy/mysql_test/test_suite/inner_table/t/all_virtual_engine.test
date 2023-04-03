@@ -1,0 +1,17 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : nijia.nj
+#owner group : sql2
+#description : test oceanbase.__all_virtual_engine
+
+use oceanbase;
+
+#basic
+select * from __all_virtual_engine;
+select Engine, Support, Comment, Transactions, XA, Savepoints from __all_virtual_engine;
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table __all_virtual_engine;
+desc __all_virtual_engine;

@@ -12,37 +12,32 @@
 
 #include <gtest/gtest.h>
 #include "lib/allocator/page_arena.h"
-
+#include "lib/random/ob_random.h"
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-struct MyPageAllocator : public ObIAllocator {
-  void* alloc(const int64_t sz)
+struct MyPageAllocator: public ObIAllocator
+{
+  void* alloc(const int64_t sz, const ObMemAttr &attr)
+  {
+    UNUSED(attr);
+    alloc_count_++;
+    return ob_malloc(sz);
+  }
+  void *alloc(const int64_t sz)
   {
     alloc_count_++;
     return ob_malloc(sz);
   }
-  void free(void* p)
+  void free(void *p)
   {
     free_count_++;
     ob_free(p);
   }
-  void freed(const int64_t sz)
-  {
-    UNUSED(sz);
-  }
-  void set_label(const lib::ObLabel& label)
-  {
-    UNUSED(label);
-  }
-  void set_tenant_id(uint64_t tenant_id)
-  {
-    UNUSED(tenant_id);
-  }
-  lib::ObLabel get_label() const
-  {
-    return 0;
-  }
+  void freed(const int64_t sz) { UNUSED(sz); }
+  void set_label(const oceanbase::lib::ObLabel &label) { UNUSED(label); }
+  void set_tenant_id(uint64_t tenant_id) { UNUSED(tenant_id); }
+  oceanbase::lib::ObLabel get_label() const { return 0; }
 
   static int64_t alloc_count_;
   static int64_t free_count_;
@@ -52,20 +47,20 @@ typedef PageArena<char, MyPageAllocator> MyModuleArena;
 int64_t MyPageAllocator::alloc_count_;
 int64_t MyPageAllocator::free_count_;
 
-#define CHECK(expect_ac, expect_fc)              \
-  do {                                           \
-    int64_t& ac = MyPageAllocator::alloc_count_; \
-    int64_t& fc = MyPageAllocator::free_count_;  \
-    EXPECT_EQ(expect_ac, ac);                    \
-    EXPECT_EQ(expect_fc, fc);                    \
+#define CHECK(expect_ac, expect_fc)                     \
+  do {                                                  \
+    int64_t &ac = MyPageAllocator::alloc_count_;        \
+    int64_t &fc = MyPageAllocator::free_count_;         \
+    EXPECT_EQ(expect_ac, ac);                           \
+    EXPECT_EQ(expect_fc, fc);                           \
   } while (0)
 
-#define RESET()                                  \
-  do {                                           \
-    int64_t& ac = MyPageAllocator::alloc_count_; \
-    int64_t& fc = MyPageAllocator::free_count_;  \
-    EXPECT_EQ(ac, fc);                           \
-    ac = fc = 0;                                 \
+#define RESET()                                         \
+  do {                                                  \
+    int64_t &ac = MyPageAllocator::alloc_count_;        \
+    int64_t &fc = MyPageAllocator::free_count_;         \
+    EXPECT_EQ(ac, fc);                                  \
+    ac = fc = 0;                                        \
   } while (0)
 
 TEST(TestPageArena, Basic)
@@ -73,18 +68,15 @@ TEST(TestPageArena, Basic)
   {
     CHECK(0, 0);
     MyModuleArena ma;
-    // Weird!! Default page size is 8K-32, and meta size for each page
-    // is 32 bytes. So if we alloc 8K-32-31 which less than 8K-32-32
-    // it will allocate a default normal page, and a big page.
-    ma.alloc(8192 - 32 - 31);
-    CHECK(2, 0);
+    ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE-32-31);
+    CHECK(1, 0);
     ma.free();
-    CHECK(2, 2);
+    CHECK(1, 1);
     RESET();
 
     // If we allocate memory with size 8K-32-32, it can be hold in the
     // first normal page.
-    ma.alloc(8192 - 32 - 32);
+    ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE-32-32);
     CHECK(1, 0);
   }
   CHECK(1, 1);
@@ -99,12 +91,12 @@ TEST(TestPageArena, Tracer1)
   CHECK(1, 0);
 
   EXPECT_TRUE(ma.set_tracer());
-  ma.alloc(8192);
-  ma.alloc(8192);
-  ma.alloc(8192);
+  ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE);
   CHECK(4, 0);
 
-  constexpr auto N = 8192 - 32 - 32;
+  constexpr auto N = OB_MALLOC_NORMAL_BLOCK_SIZE-32-32;
   for (int i = 0; i < N; i++) {
     ma.alloc(1);
   }
@@ -123,27 +115,47 @@ TEST(TestPageArena, Tracer2)
 
   for (int i = 0; i < 2; i++) {
     EXPECT_TRUE(ma.set_tracer());
-    CHECK(3 * i, 3 * i);
+    CHECK(3*i, 3*i);
 
     // some small allocates
-    constexpr auto N = 8192 - 32 - 32;
+    constexpr auto N = OB_MALLOC_NORMAL_BLOCK_SIZE-32-32;
     for (int i = 0; i < N; i++) {
       ma.alloc(1);
     }
-    CHECK(1 + 3 * i, 3 * i);
+    CHECK(1+3*i, 3*i);
 
     // some big allocates
-    ma.alloc(8192);
-    ma.alloc(8192);
+    ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE);
+    ma.alloc(OB_MALLOC_NORMAL_BLOCK_SIZE);
 
     EXPECT_TRUE(ma.revert_tracer());
-    CHECK(3 + 3 * i, 3 + 3 * i);
+    CHECK(3+3*i, 3+3*i);
   }
   ma.free();
   RESET();
 }
 
-int main(int argc, char** argv)
+TEST(TestPageArena, aligned_alloc_bf)
+{
+  {
+    ObAlignedArenaAllocator alloc(64);
+    for (int i = 0; i < 1000; ++i) {
+      const int64_t sz = ObRandom::rand(1000, 4000000);
+      void *p = alloc.alloc(sz);
+      ASSERT_EQ(0, (uint64_t)p % 32);
+    }
+  }
+  {
+    ObAlignedArenaAllocator alloc(64);
+    for (int i = 0; i < 1000; ++i) {
+      const int64_t sz = ObRandom::rand(100, 4000000);
+      void *p = alloc.alloc(sz);
+      ASSERT_EQ(0, (uint64_t)p % 64);
+    }
+  }
+}
+
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

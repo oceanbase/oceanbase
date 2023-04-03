@@ -20,10 +20,13 @@
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/ob_running_mode.h"
 
-namespace oceanbase {
-namespace common {
-struct ObFixedSizeBufAllocInfo {
-  void* start_;
+namespace oceanbase
+{
+namespace common
+{
+struct ObFixedSizeBufAllocInfo
+{
+  void * start_;
   uint64_t len_;
 };
 
@@ -32,29 +35,24 @@ struct ObFixedSizeBufAllocInfo {
 // It maintains a large memory buffer and divided by the fixed block size.
 // All the free block buffer are recorded in a queue where
 // caller can acquire and release the pre divided block buffer.
-template <int64_t SIZE>
-class ObFixedSizeBlockAllocator {
+template<int64_t SIZE>
+class ObFixedSizeBlockAllocator
+{
 public:
   virtual ~ObFixedSizeBlockAllocator();
-  int init(const int64_t block_num, const lib::ObLabel& label = ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR);
+  int init(const int64_t block_num, const lib::ObLabel &label = ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR);
   void destroy();
 
-  static ObFixedSizeBlockAllocator& get_instance();
+  static ObFixedSizeBlockAllocator &get_instance();
 
-  void* alloc();
-  void free(void* ptr);
+  void *alloc();
+  void free(void *ptr);
 
   // return if the given point is in the allocator range
   bool contains(void* ptr);
   int64_t get_free_block_num() const;
-  OB_INLINE int64_t get_total_block_num() const
-  {
-    return total_block_num_;
-  }
-  OB_INLINE int64_t get_max_block_num() const
-  {
-    return max_block_num_;
-  }
+  OB_INLINE int64_t get_total_block_num() const { return total_block_num_; }
+  OB_INLINE int64_t get_max_block_num() const { return max_block_num_; }
 
 private:
   ObFixedSizeBlockAllocator();
@@ -63,10 +61,12 @@ private:
   bool contains_internal(void* ptr) const;
 
 public:
-  static const int64_t MAX_MEMORY_ALLOCATION = OB_MAX_SYS_BKGD_THREAD_NUM * 6 * OB_DEFAULT_MACRO_BLOCK_SIZE;
+  static const int64_t MAX_MEMORY_ALLOCATION = OB_MAX_SYS_BKGD_THREAD_NUM * 6
+      * OB_DEFAULT_MACRO_BLOCK_SIZE;
 
 private:
-  static const int64_t MAX_MEMORY_IN_MINI_MODE = 128 * 1024 * 1024;  // 128MB
+  // TODO(zhuixin.gsy) reduce 128*2M size to 64*2M, which is expanded temporarily for generating index blocks
+  static const int64_t MAX_MEMORY_IN_MINI_MODE = 64 * OB_DEFAULT_MACRO_BLOCK_SIZE; //128MB
 
   bool is_inited_;
   ObSpinLock lock_;
@@ -76,17 +76,17 @@ private:
   ObFixedQueue<void> free_blocks_;
   ObList<ObFixedSizeBufAllocInfo, ObArenaAllocator> block_buf_list_;
 
-  DISALLOW_COPY_AND_ASSIGN(ObFixedSizeBlockAllocator);
+  DISALLOW_COPY_AND_ASSIGN (ObFixedSizeBlockAllocator);
 };
 
 // In old days, ObPartitionBaseDataObReader acquires 2MB memory buffer without
 // calling free() explicitly. Memory is released only in destructor. While now,
 // ObFixedSizeBlockAllocator is a singleton class, we need a Guard class to help
 // free memory automatically.
-template <int64_t SIZE>
-class ObFixedSizeBlockMemoryContext {
+template<int64_t SIZE>
+class ObFixedSizeBlockMemoryContext
+{
   static constexpr int INIT_BLOCK_NUM = 8;
-
 public:
   ObFixedSizeBlockMemoryContext();
   virtual ~ObFixedSizeBlockMemoryContext();
@@ -94,13 +94,14 @@ public:
   int init();
   void destroy();
 
-  void* alloc();
-  void free(void* ptr);
+  void *alloc();
+  void free(void *ptr);
 
-  inline ObFixedSizeBlockAllocator<SIZE>& get_allocator() const
+  inline ObFixedSizeBlockAllocator<SIZE> & get_allocator() const
   {
     return fsb_allocator_;
-  };
+  }
+  ;
   inline int64_t get_block_size() const
   {
     return SIZE;
@@ -110,9 +111,9 @@ public:
 private:
   bool is_inited_;
   int64_t used_block_num_;
-  ObFixedSizeBlockAllocator<SIZE>& fsb_allocator_;
+  ObFixedSizeBlockAllocator<SIZE> & fsb_allocator_;
 
-  DISALLOW_COPY_AND_ASSIGN(ObFixedSizeBlockMemoryContext);
+  DISALLOW_COPY_AND_ASSIGN (ObFixedSizeBlockMemoryContext);
 };
 
 typedef ObFixedSizeBlockAllocator<OB_DEFAULT_MACRO_BLOCK_SIZE> ObMacroBlockSizeMemoryAllocator;
@@ -120,24 +121,25 @@ typedef ObFixedSizeBlockMemoryContext<OB_DEFAULT_MACRO_BLOCK_SIZE> ObMacroBlockS
 
 // ======== Implementation of ObFixedSizeBlockAllocator ========
 
-template <int64_t SIZE>
-ObFixedSizeBlockAllocator<SIZE>::ObFixedSizeBlockAllocator()
-    : is_inited_(false),
-      lock_(),
-      total_block_num_(0),
-      max_block_num_(0),
-      allocator_(ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR),
-      free_blocks_(),
-      block_buf_list_(allocator_)
-{}
+template<int64_t SIZE>
+ObFixedSizeBlockAllocator<SIZE>::ObFixedSizeBlockAllocator() :
+    is_inited_(false),
+    lock_(common::ObLatchIds::FIXED_SIZE_ALLOCATOR_LOCK),
+    total_block_num_(0),
+    max_block_num_(0),
+    allocator_(ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR),
+    free_blocks_(),
+    block_buf_list_(allocator_)
+{
+}
 
-template <int64_t SIZE>
-int ObFixedSizeBlockAllocator<SIZE>::init(const int64_t block_num, const lib::ObLabel& label)
+template<int64_t SIZE>
+int ObFixedSizeBlockAllocator<SIZE>::init(const int64_t block_num, const lib::ObLabel &label)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    // COMMON_LOG(WARN, "fixed size block allocator is inited twice", K(ret));
+    //COMMON_LOG(WARN, "fixed size block allocator is inited twice", K(ret));
   } else if (block_num <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), K(block_num));
@@ -167,13 +169,13 @@ int ObFixedSizeBlockAllocator<SIZE>::init(const int64_t block_num, const lib::Ob
   return ret;
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 ObFixedSizeBlockAllocator<SIZE>::~ObFixedSizeBlockAllocator()
 {
   destroy();
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 void ObFixedSizeBlockAllocator<SIZE>::destroy()
 {
   free_blocks_.destroy();
@@ -184,15 +186,15 @@ void ObFixedSizeBlockAllocator<SIZE>::destroy()
   is_inited_ = false;
 }
 
-template <int64_t SIZE>
-ObFixedSizeBlockAllocator<SIZE>& ObFixedSizeBlockAllocator<SIZE>::get_instance()
+template<int64_t SIZE>
+ObFixedSizeBlockAllocator<SIZE> &ObFixedSizeBlockAllocator<SIZE>::get_instance()
 {
   static ObFixedSizeBlockAllocator<SIZE> instance_;
   return instance_;
 }
 
-template <int64_t SIZE>
-void* ObFixedSizeBlockAllocator<SIZE>::alloc()
+template<int64_t SIZE>
+void *ObFixedSizeBlockAllocator<SIZE>::alloc()
 {
   void* ret_buf = NULL;
   int ret = OB_SUCCESS;
@@ -222,8 +224,8 @@ void* ObFixedSizeBlockAllocator<SIZE>::alloc()
   return ret_buf;
 }
 
-template <int64_t SIZE>
-void ObFixedSizeBlockAllocator<SIZE>::free(void* ptr)
+template<int64_t SIZE>
+void ObFixedSizeBlockAllocator<SIZE>::free(void *ptr)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -244,7 +246,7 @@ void ObFixedSizeBlockAllocator<SIZE>::free(void* ptr)
   }
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 int64_t ObFixedSizeBlockAllocator<SIZE>::get_free_block_num() const
 {
   int64_t ret_num = 0;
@@ -258,7 +260,7 @@ int64_t ObFixedSizeBlockAllocator<SIZE>::get_free_block_num() const
   return ret_num;
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 bool ObFixedSizeBlockAllocator<SIZE>::contains(void* ptr)
 {
   bool ret_contains = false;
@@ -273,7 +275,7 @@ bool ObFixedSizeBlockAllocator<SIZE>::contains(void* ptr)
   return ret_contains;
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 int ObFixedSizeBlockAllocator<SIZE>::init_max_block_num()
 {
   int ret = OB_SUCCESS;
@@ -287,7 +289,7 @@ int ObFixedSizeBlockAllocator<SIZE>::init_max_block_num()
   return ret;
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 int ObFixedSizeBlockAllocator<SIZE>::expand(const int64_t block_num)
 {
   // private method used internally, no need to check is_inited_
@@ -296,7 +298,8 @@ int ObFixedSizeBlockAllocator<SIZE>::expand(const int64_t block_num)
     // do nothing
   } else if (max_block_num_ == total_block_num_) {
     ret = OB_EXCEED_MEM_LIMIT;
-    COMMON_LOG(WARN, "reach maximum block num, ", K(ret), K_(total_block_num), K(max_block_num_), K(SIZE));
+    COMMON_LOG(WARN, "reach maximum block num, ", K(ret), K_(total_block_num),
+        K(max_block_num_), K(SIZE));
   } else {
     int64_t expand_num = 0;
     if (block_num > max_block_num_) {
@@ -307,16 +310,18 @@ int ObFixedSizeBlockAllocator<SIZE>::expand(const int64_t block_num)
     }
 
     uint64_t expand_len = expand_num * SIZE;
-    void* expand_start = NULL;
+    void *expand_start = NULL;
 
     if (OB_ISNULL(expand_start = allocator_.alloc(expand_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "failed to allocate block buffer, ", K(ret));
-    } else if (OB_FAIL(block_buf_list_.push_back(ObFixedSizeBufAllocInfo{expand_start, expand_len}))) {
-      COMMON_LOG(ERROR, "failed to push back cached block buffer, ", K(ret), K(expand_start), K(expand_len));
+    } else if (OB_FAIL(
+        block_buf_list_.push_back(ObFixedSizeBufAllocInfo { expand_start, expand_len }))) {
+      COMMON_LOG(ERROR, "failed to push back cached block buffer, ", K(ret), K(expand_start),
+          K(expand_len));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < expand_num; ++i) {
-        void* ptr = (void*)((uint64_t)expand_start + i * SIZE);
+        void * ptr = (void*) ((uint64_t) expand_start + i * SIZE);
         if (OB_FAIL(free_blocks_.push(ptr))) {
           COMMON_LOG(WARN, "fail to push cached block ptr, ", K(ret), K(ptr));
         }
@@ -334,18 +339,19 @@ int ObFixedSizeBlockAllocator<SIZE>::expand(const int64_t block_num)
   return ret;
 }
 
-template <int64_t SIZE>
+
+template<int64_t SIZE>
 bool ObFixedSizeBlockAllocator<SIZE>::contains_internal(void* ptr) const
 {
   // internal use, no need to check is_inited_
   bool ret_contains = false;
   ObList<ObFixedSizeBufAllocInfo, ObArenaAllocator>::const_iterator it = block_buf_list_.begin();
   for (; !ret_contains && it != block_buf_list_.end(); it++) {
-    void* start = it->start_;
+    void *start = it->start_;
     uint64_t len = it->len_;
     // check ptr is in any cached buf range and can align with the block_size
-    if (((uint64_t)ptr) >= ((uint64_t)start) && ((uint64_t)ptr) < ((uint64_t)start) + len &&
-        0 == ((uint64_t)ptr - (uint64_t)start) % SIZE) {
+    if (((uint64_t) ptr) >= ((uint64_t) start) && ((uint64_t) ptr) < ((uint64_t) start) + len
+        && 0 == ((uint64_t) ptr - (uint64_t) start) % SIZE) {
       ret_contains = true;
     }
   }
@@ -354,18 +360,21 @@ bool ObFixedSizeBlockAllocator<SIZE>::contains_internal(void* ptr) const
 
 // ======== Implementation of ObFixedSizeBlockAllocatorGuard ========
 
-template <int64_t SIZE>
-ObFixedSizeBlockMemoryContext<SIZE>::ObFixedSizeBlockMemoryContext()
-    : is_inited_(false), used_block_num_(0), fsb_allocator_(ObFixedSizeBlockAllocator<SIZE>::get_instance())
-{}
+template<int64_t SIZE>
+ObFixedSizeBlockMemoryContext<SIZE>::ObFixedSizeBlockMemoryContext() :
+    is_inited_(false),
+    used_block_num_(0),
+    fsb_allocator_(ObFixedSizeBlockAllocator<SIZE>::get_instance())
+{
+}
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 ObFixedSizeBlockMemoryContext<SIZE>::~ObFixedSizeBlockMemoryContext()
 {
   destroy();
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 int ObFixedSizeBlockMemoryContext<SIZE>::init()
 {
   int ret = OB_SUCCESS;
@@ -393,18 +402,18 @@ int ObFixedSizeBlockMemoryContext<SIZE>::init()
   return ret;
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 void ObFixedSizeBlockMemoryContext<SIZE>::destroy()
 {
   if (0 != used_block_num_) {
-    COMMON_LOG(ERROR, "not all block be freed, potential memory leak!", K(used_block_num_));
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "not all block be freed, potential memory leak!", K(used_block_num_));
   }
   used_block_num_ = 0;
   is_inited_ = false;
 }
 
-template <int64_t SIZE>
-void* ObFixedSizeBlockMemoryContext<SIZE>::alloc()
+template<int64_t SIZE>
+void *ObFixedSizeBlockMemoryContext<SIZE>::alloc()
 {
   void* ret_buf = NULL;
   int ret = OB_SUCCESS;
@@ -421,8 +430,8 @@ void* ObFixedSizeBlockMemoryContext<SIZE>::alloc()
   return ret_buf;
 }
 
-template <int64_t SIZE>
-void ObFixedSizeBlockMemoryContext<SIZE>::free(void* ptr)
+template<int64_t SIZE>
+void ObFixedSizeBlockMemoryContext<SIZE>::free(void *ptr)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -437,7 +446,7 @@ void ObFixedSizeBlockMemoryContext<SIZE>::free(void* ptr)
   }
 }
 
-template <int64_t SIZE>
+template<int64_t SIZE>
 int64_t ObFixedSizeBlockMemoryContext<SIZE>::get_used_block_num()
 {
   int ret = OB_SUCCESS;

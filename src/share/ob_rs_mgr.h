@@ -14,54 +14,67 @@
 #define OCEANBASE_SHARE_HEARTBEAT_OB_RS_MGR_H_
 
 #include "lib/container/ob_se_array.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/net/ob_addr.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_lease_struct.h"
 #include "share/ob_inner_config_root_addr.h"
 #include "share/ob_web_service_root_addr.h"
-#include "share/ob_cluster_type.h"  // ObClusterType
+#include "share/ob_cluster_role.h"              // ObClusterRole
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObCommonRpcProxy;
-class ObGetRootserverRoleResult;
-}  // namespace obrpc
-namespace common {
+class ObSrvRpcProxy;
+struct ObDetectMasterRsLSResult;
+}
+namespace common
+{
 class ObCommonConfig;
 class ObMySQLProxy;
-}  // namespace common
+}
 
-namespace share {
+namespace rootserver
+{
+class ObRootService;
+}
+
+namespace share
+{
 class IHeartBeatProcess;
+class ObLSInfo;
 
-class ObUnifiedAddrAgent : public ObRootAddrAgent {
+class ObUnifiedAddrAgent : public ObRootAddrAgent
+{
+public:
+  enum AgentType {
+    INNER_CONFIG_AGENT = 0,
+    WEB_SERVICE_AGENT = 1,
+    MAX_AGENT_NUM
+  };
 public:
   ObUnifiedAddrAgent();
-  int init(common::ObMySQLProxy& sql_proxy, common::ObServerConfig& config);
-  virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp) override;
-  virtual int fetch(
-      ObIAddrList& addr_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ) override;
-  virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
-      common::ObClusterType& cluster_type) override;
-  int fetch_rslist_by_agent_idx(const int64_t index, const int64_t cluster_id, ObIAddrList& addr_list,
-      ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_type);
+  int init(common::ObMySQLProxy &sql_proxy, common::ObServerConfig &config);
+  virtual int store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                    const bool force, const common::ObClusterRole cluster_role,
+                    const int64_t timestamp);
+  virtual int fetch(ObIAddrList &addr_list,
+                    ObIAddrList &readonly_addr_list);
   int64_t get_agent_num() const
   {
-    return AGENT_NUM;
+    return MAX_AGENT_NUM;
   }
-  virtual int delete_cluster(const int64_t cluster_id) override;
   int reload();
-  bool is_valid() override;
-
+  bool is_valid();
 private:
-  const static int64_t AGENT_NUM = 3;
+  virtual int check_inner_stat() const;
+private:
   bool is_inited_;
   // ObWebServiceRootAddr and ObInnerConfigRootAddr
-  // double write, at least one success is considered to be a success.
-  // read alone, at least one success, imediately return to success.
-  share::ObRootAddrAgent* agents_[AGENT_NUM];
+  share::ObRootAddrAgent *agents_[MAX_AGENT_NUM];
   share::ObWebServiceRootAddr web_service_root_addr_;
   share::ObInnerConfigRootAddr inner_config_root_addr_;
 
@@ -75,51 +88,91 @@ private:
  *    1   maintain rs pool
  *    2   detect master rs if needed
  */
-class ObRsMgr {
+class ObRsMgr
+{
 public:
   friend class ObLeaseStateMgr;
   ObRsMgr();
   virtual ~ObRsMgr();
 
-  int init(obrpc::ObCommonRpcProxy* rpc_proxy, common::ObServerConfig* config, common::ObMySQLProxy* sql_proxy);
-  bool is_inited() const
-  {
-    return inited_;
-  }
+  int init(obrpc::ObSrvRpcProxy *srv_rpc_proxy, common::ObServerConfig *config,
+      common::ObMySQLProxy *sql_proxy);
+  bool is_inited() const { return inited_; }
 
-  virtual int get_master_root_server(common::ObAddr& addr) const;
-  int get_all_rs_list(common::ObIArray<common::ObAddr>& list);
+  ObUnifiedAddrAgent &get_addr_agent() { return addr_agent_; }
+
+  //get master rootserver by cluster id
+  //@param [in] cluster_id
+  //@param [out] master rs of the cluster
+  int get_master_root_server(const int64_t cluster_id, common::ObAddr &addr) const;
+
+  //get master rootserver of local cluster
+  //@param [out] master rs of local cluster
+  int get_master_root_server(common::ObAddr &addr) const;
+
+  //renew master rootserver by cluster_id
+  //@param [in] cluster_id
+  int renew_master_rootserver(const int64_t cluster_id);
+
+  //renew master rootserver of local cluster
   int renew_master_rootserver();
-  int get_primary_cluster_master_rs(common::ObAddr& addr);
-  int get_remote_cluster_master_rs(const int64_t cluster_id, common::ObAddr& addr);
-  int force_set_master_rs(const common::ObAddr master_rs);
-  int do_detect_master_rs_v3(const common::ObIArray<common::ObAddr>& server_list, ObPartitionInfo& partition_info);
-  int fetch_rs_list(ObIAddrList& addr_list, ObIAddrList& readonly_addr_list);
+
+  //only local cluster
+  int force_set_master_rs(const common::ObAddr &master_rs);
+
+  //for remote cluster renew master rs and remove unused cluster
+  int renew_remote_master_rootserver();
+
+
+  // build a server_list to ask informations
+  // @param [in] check_ls_service: if is true, try get rs_list from ls service.
+  // @param [out] server_list, build from:
+  //              (1) get master_rs from ObRsMgr
+  //              (2) get rs_list from local configure
+  //              (3) get member_list from ObLSService
+  int construct_initial_server_list(
+      const bool check_ls_service,
+      common::ObIArray<common::ObAddr> &server_list);
+  // build a broader list to ask informations
+  // @param [in] rs_list, servers belongs to rs
+  // @param [out] server_list, all servers except rs_list
+  int construct_all_server_list(
+      const common::ObIArray<common::ObAddr> &rs_list,
+      common::ObIArray<common::ObAddr> &server_list);
 
 private:
-  int renew_master_rootserver_v2();
-  int do_detect_master_rs_v2(common::ObIArray<common::ObAddr>& rs_list);
-  int renew_master_rootserver_v3();
-  int do_detect_master_rs_v3(const common::ObAddr& dst_server, const int64_t cluster_id, const int64_t rpc_timeout,
-      obrpc::ObGetRootserverRoleResult& result);
-
+  class ObRemoteClusterIdGetter
+  {
+  public:
+    ObRemoteClusterIdGetter() : cluster_id_list_() {}
+    ~ObRemoteClusterIdGetter() {}
+    int operator() (common::hash::HashMapPair<int64_t, common::ObAddr> &entry);
+    const ObIArray<int64_t> &get_cluster_id_list() const { return cluster_id_list_; }
+  private:
+    common::ObArray<int64_t> cluster_id_list_;
+    DISALLOW_COPY_AND_ASSIGN(ObRemoteClusterIdGetter);
+  };
 private:
-  static const int64_t DETECT_MASTER_TIMEOUT = 1 * 1000 * 1000;  // 1s
-  typedef common::ObSEArray<common::ObAddr, common::MAX_ZONE_NUM> RsList;
-
+  int check_inner_stat() const;
+  int remove_unused_remote_master_rs_(const common::ObIArray<int64_t> &remote_cluster_id_list);
+  int convert_addr_array(
+          const ObIAddrList &root_addr_list,
+          common::ObIArray<common::ObAddr> &addr_list);
+  int get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &addr_list);
+private:
   bool inited_;
-  obrpc::ObCommonRpcProxy* rpc_proxy_;
-  common::ObCommonConfig* config_;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
+  common::ObCommonConfig *config_;
   ObUnifiedAddrAgent addr_agent_;
-  ObRootAddrAgent& root_addr_agent_;
 
-  mutable common::ObSpinLock lock_;  // protect master_rs_
+  mutable common::ObSpinLock lock_; //protect master_rs_
   common::ObAddr master_rs_;
+  common::hash::ObHashMap<int64_t, common::ObAddr, common::hash::ReadWriteDefendMode> remote_master_rs_map_;
 
   DISALLOW_COPY_AND_ASSIGN(ObRsMgr);
 };
 
-}  // namespace share
-}  // namespace oceanbase
+}//namespace share
+}//namespace oceanbase
 
-#endif  //__OB_COMMON_OB_RS_INFO_H__
+#endif //__OB_COMMON_OB_RS_INFO_H__

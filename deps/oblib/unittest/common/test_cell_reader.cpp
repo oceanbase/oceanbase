@@ -15,34 +15,32 @@
 #include "common/cell/ob_cell_reader.h"
 #include "common/object/ob_object.h"
 #include "lib/number/ob_number_v2.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace number;
-namespace unittest {
-class TestCellReader : public ::testing::Test {
+namespace unittest
+{
+class TestCellReader : public ::testing::Test
+{
 public:
   TestCellReader();
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  static void SetUpTestCase()
-  {}
-  static void TearDownTestCase()
-  {}
-  void alloc(char*& ptr, const int64_t size);
-  ModuleArena* get_arena()
-  {
-    return &arena_;
-  }
-
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
+  void alloc(char *&ptr, const int64_t size);
+  ModuleArena *get_arena() { return &arena_; }
 private:
   ModulePageAllocator alloc_;
   ModuleArena arena_;
 };
-TestCellReader::TestCellReader() : alloc_(ObModIds::TEST), arena_(ModuleArena::DEFAULT_BIG_PAGE_SIZE, alloc_)
-{}
-void TestCellReader::alloc(char*& ptr, const int64_t size)
+TestCellReader::TestCellReader()
+  :alloc_(ObModIds::TEST),
+   arena_(ModuleArena::DEFAULT_BIG_PAGE_SIZE, alloc_)
+{
+}
+void TestCellReader::alloc(char *&ptr, const int64_t size)
 {
   ptr = reinterpret_cast<char*>(arena_.alloc(size));
   ASSERT_TRUE(NULL != ptr);
@@ -51,9 +49,9 @@ TEST_F(TestCellReader, test_null)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj;
-  const ObObj* r_obj = NULL;
+  const ObObj *r_obj = NULL;
   w_obj.set_null();
-  char* w_buf = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -75,8 +73,8 @@ TEST_F(TestCellReader, test_int)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[10];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -125,7 +123,7 @@ TEST_F(TestCellReader, test_int)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 10; ++i) {
+  for (int64_t i = 0; i < 10; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -138,8 +136,8 @@ TEST_F(TestCellReader, test_float_double)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[4];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -164,7 +162,7 @@ TEST_F(TestCellReader, test_float_double)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 4; ++i) {
+  for (int64_t i = 0; i < 4; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -177,8 +175,8 @@ TEST_F(TestCellReader, test_number)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[2];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -186,9 +184,9 @@ TEST_F(TestCellReader, test_number)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObNumber number;
-  char* buf = NULL;
+  char *buf = NULL;
   alloc(buf, 1024);
-  ModuleArena* arena = get_arena();
+  ModuleArena *arena = get_arena();
   sprintf(buf, "100");
   ret = number.from(buf, *arena);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -205,7 +203,7 @@ TEST_F(TestCellReader, test_number)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 2; ++i) {
+  for (int64_t i = 0; i < 2; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -218,8 +216,8 @@ TEST_F(TestCellReader, test_time)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[5];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -248,7 +246,7 @@ TEST_F(TestCellReader, test_time)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 5; ++i) {
+  for (int64_t i = 0; i < 5; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -261,8 +259,8 @@ TEST_F(TestCellReader, test_char)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[2];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -270,9 +268,9 @@ TEST_F(TestCellReader, test_char)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObNumber number;
-  char* buf1 = NULL;
+  char *buf1 = NULL;
   alloc(buf1, 1024);
-  char* buf2 = NULL;
+  char *buf2 = NULL;
   alloc(buf2, 1024);
   ObString str;
 
@@ -292,7 +290,7 @@ TEST_F(TestCellReader, test_char)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 2; ++i) {
+  for (int64_t i = 0; i < 2; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -305,8 +303,8 @@ TEST_F(TestCellReader, test_binary)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[2];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -314,9 +312,9 @@ TEST_F(TestCellReader, test_binary)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObNumber number;
-  char* buf1 = NULL;
+  char *buf1 = NULL;
   alloc(buf1, 1024);
-  char* buf2 = NULL;
+  char *buf2 = NULL;
   alloc(buf2, 1024);
   ObString str;
 
@@ -334,7 +332,7 @@ TEST_F(TestCellReader, test_binary)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 2; ++i) {
+  for (int64_t i = 0; i < 2; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -347,8 +345,8 @@ TEST_F(TestCellReader, test_extend)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[6];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -381,7 +379,7 @@ TEST_F(TestCellReader, test_extend)
 
   ret = reader.init(w_buf, 1024, DENSE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < 6; ++i) {
+  for (int64_t i = 0; i < 6; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(r_obj);
@@ -394,8 +392,8 @@ TEST_F(TestCellReader, test_column)
 {
   int ret = OB_SUCCESS;
   ObObj w_obj[2];
-  const ObObj* r_obj = NULL;
-  char* w_buf = NULL;
+  const ObObj *r_obj = NULL;
+  char *w_buf = NULL;
   alloc(w_buf, 1024);
   ObCellWriter writer;
   ObCellReader reader;
@@ -413,7 +411,7 @@ TEST_F(TestCellReader, test_column)
   ret = reader.init(w_buf, 1024, SPARSE);
   ASSERT_EQ(OB_SUCCESS, ret);
   uint64_t column_id = 0;
-  for (int64_t i = 0; i < 2; ++i) {
+  for (int64_t i = 0; i < 2; ++ i) {
     ret = reader.next_cell();
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = reader.get_cell(column_id, r_obj);
@@ -422,9 +420,9 @@ TEST_F(TestCellReader, test_column)
     ASSERT_EQ(i + 1, static_cast<int64_t>(column_id));
   }
 }
-}  // end namespace unittest
-}  // end namespace oceanbase
-int main(int argc, char** argv)
+}//end namespace unittest
+}//end namespace oceanbase
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

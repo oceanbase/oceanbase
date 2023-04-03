@@ -26,13 +26,12 @@ using namespace oceanbase::observer;
 
 void ObVirtualChannelInfo::get_info(ObDtlChannel* dtl_ch)
 {
-  ObDtlBasicChannel* ch = reinterpret_cast<ObDtlBasicChannel*>(dtl_ch);
+  ObDtlBasicChannel *ch = reinterpret_cast<ObDtlBasicChannel*>(dtl_ch);
   is_local_ = ObDtlChannel::DtlChannelType::LOCAL_CHANNEL == ch->get_channel_type();
   is_data_ = ch->is_data_channel();
   is_transmit_ = ch->belong_to_transmit_data();
   channel_id_ = ch->get_id();
-  peer_id_ = ch->get_peer_id();
-  ;
+  peer_id_ = ch->get_peer_id();;
   tenant_id_ = ch->get_tenant_id();
   alloc_buffer_cnt_ = ch->get_alloc_buffer_cnt();
   free_buffer_cnt_ = ch->get_free_buffer_cnt();
@@ -41,19 +40,23 @@ void ObVirtualChannelInfo::get_info(ObDtlChannel* dtl_ch)
   processed_buffer_cnt_ = ch->get_processed_buffer_cnt();
   send_buffer_size_ = ch->get_send_buffer_size();
   hash_val_ = ch->get_hash_val();
-  buffer_pool_id_ =
-      ObDtlTenantMemManager::hash(hash_val_, common::ObServerConfig::get_instance()._px_chunklist_count_ratio);
+  buffer_pool_id_ = ObDtlTenantMemManager::hash(hash_val_,
+    common::ObServerConfig::get_instance()._px_chunklist_count_ratio);
   pins_ = ch->get_pins();
-  ObOpMetric& metric = ch->get_op_metric();
+  ObOpMetric &metric = ch->get_op_metric();
   first_in_ts_ = metric.get_first_in_ts();
   first_out_ts_ = metric.get_first_out_ts();
   last_in_ts_ = metric.get_last_in_ts();
   last_out_ts_ = metric.get_last_out_ts();
   state_ = ch->get_state();
   op_id_ = ch->get_op_id();
+  thread_id_ = ch->get_thread_id();
+  owner_mod_ = ch->get_owner_mod();
+  peer_ = ch->get_peer();
+  eof_ = metric.get_eof();
 }
 
-int ObVirtualDtlChannelOp::operator()(ObDtlChannel* ch)
+int ObVirtualDtlChannelOp::operator()(ObDtlChannel *ch)
 {
   int ret = OB_SUCCESS;
   ObVirtualChannelInfo chan_info;
@@ -66,8 +69,10 @@ int ObVirtualDtlChannelOp::operator()(ObDtlChannel* ch)
   return ret;
 }
 
-ObVirtualDtlChannelIterator::ObVirtualDtlChannelIterator(ObArenaAllocator* allocator)
-    : iter_allocator_(allocator), channels_(), cur_nth_channel_(0)
+ObVirtualDtlChannelIterator::ObVirtualDtlChannelIterator(ObArenaAllocator *allocator) :
+    iter_allocator_(allocator),
+    channels_(),
+    cur_nth_channel_(0)
 {}
 
 int ObVirtualDtlChannelIterator::init()
@@ -90,7 +95,7 @@ int ObVirtualDtlChannelIterator::get_all_channels()
   return ret;
 }
 
-int ObVirtualDtlChannelIterator::get_next_channel(ObVirtualChannelInfo& chan_info)
+int ObVirtualDtlChannelIterator::get_next_channel(ObVirtualChannelInfo &chan_info)
 {
   int ret = OB_SUCCESS;
   if (cur_nth_channel_ < channels_.count()) {
@@ -102,8 +107,11 @@ int ObVirtualDtlChannelIterator::get_next_channel(ObVirtualChannelInfo& chan_inf
   return ret;
 }
 
-ObAllVirtualDtlChannel::ObAllVirtualDtlChannel()
-    : ipstr_(), port_(0), arena_allocator_(ObModIds::OB_SQL_DTL), iter_(&arena_allocator_)
+ObAllVirtualDtlChannel::ObAllVirtualDtlChannel() :
+  ipstr_(),
+  port_(0),
+  arena_allocator_(ObModIds::OB_SQL_DTL),
+  iter_(&arena_allocator_)
 {}
 
 void ObAllVirtualDtlChannel::destroy()
@@ -131,7 +139,7 @@ int ObAllVirtualDtlChannel::inner_open()
     } else {
       start_to_read_ = true;
       char ipbuf[common::OB_IP_STR_BUFF];
-      common::ObAddr& addr = GCTX.self_addr_;
+      const common::ObAddr &addr = GCTX.self_addr();
       if (!addr.ip_to_string(ipbuf, sizeof(ipbuf))) {
         SERVER_LOG(ERROR, "ip to string failed");
         ret = OB_ERR_UNEXPECTED;
@@ -147,13 +155,13 @@ int ObAllVirtualDtlChannel::inner_open()
   return ret;
 }
 
-int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& row)
+int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo &chan_info, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
     uint64_t col_id = output_column_ids_.at(cell_idx);
-    switch (col_id) {
+    switch(col_id) {
       case SVR_IP: {
         cells[cell_idx].set_varchar(ipstr_);
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -179,11 +187,11 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         cells[cell_idx].set_int(chan_info.peer_id_);
         break;
       }
-      case TENANT_ID: {
+      case TENANT_ID: {// OB_APP_MIN_COLUMN_ID + 5
         cells[cell_idx].set_int(chan_info.tenant_id_);
         break;
       }
-      case IS_LOCAL: {  // OB_APP_MIN_COLUMN_ID + 5
+      case IS_LOCAL: {
         cells[cell_idx].set_bool(chan_info.is_local_);
         break;
       }
@@ -199,7 +207,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         cells[cell_idx].set_int(chan_info.alloc_buffer_cnt_);
         break;
       }
-      case FREE_BUFFER_CNT: {
+      case FREE_BUFFER_CNT: {// OB_APP_MIN_COLUMN_ID + 10
         cells[cell_idx].set_int(chan_info.free_buffer_cnt_);
         break;
       }
@@ -211,7 +219,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         cells[cell_idx].set_int(chan_info.recv_buffer_cnt_);
         break;
       }
-      case PROCESSED_BUFFER_CNT: {  // OB_APP_MIN_COLUMN_ID + 10
+      case PROCESSED_BUFFER_CNT: {
         cells[cell_idx].set_int(chan_info.processed_buffer_cnt_);
         break;
       }
@@ -219,11 +227,11 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         cells[cell_idx].set_int(chan_info.send_buffer_size_);
         break;
       }
-      case HASH_VAL: {
+      case HASH_VAL: {// OB_APP_MIN_COLUMN_ID + 15
         cells[cell_idx].set_int(chan_info.hash_val_);
         break;
       }
-      case BUFFER_POOL_ID: {
+      case BUFFER_POOL_ID:{
         cells[cell_idx].set_int(chan_info.buffer_pool_id_);
         break;
       }
@@ -231,7 +239,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         cells[cell_idx].set_int(chan_info.pins_);
         break;
       }
-      case FIRST_IN_TS: {  // OB_APP_MIN_COLUMN_ID + 15
+      case FIRST_IN_TS: {
         if (0 != chan_info.first_in_ts_) {
           cells[cell_idx].set_timestamp(chan_info.first_in_ts_);
         } else {
@@ -247,7 +255,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         }
         break;
       }
-      case LAST_IN_TS: {
+      case LAST_IN_TS: {// OB_APP_MIN_COLUMN_ID + 20
         if (0 != chan_info.last_in_ts_) {
           cells[cell_idx].set_timestamp(chan_info.last_in_ts_);
         } else {
@@ -255,7 +263,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         }
         break;
       }
-      case LAST_OUT_TS: {  // OB_APP_MIN_COLUMN_ID + 18
+      case LAST_OUT_TS: {
         if (0 != chan_info.last_out_ts_) {
           cells[cell_idx].set_timestamp(chan_info.last_out_ts_);
         } else {
@@ -263,8 +271,35 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
         }
         break;
       }
-      case STATE: {  // OB_APP_MIN_COLUMN_ID + 18
+      case STATE: {
         cells[cell_idx].set_int(chan_info.state_);
+        break;
+      }
+      case THREAD_ID: {
+        cells[cell_idx].set_int(chan_info.thread_id_);
+        break;
+      }
+      case OWNER_MOD: {
+        cells[cell_idx].set_int(chan_info.owner_mod_);
+        break;
+      }
+      case PEER_IP: {// OB_APP_MIN_COLUMN_ID + 25
+        const common::ObAddr &addr = chan_info.peer_;
+        if (!addr.ip_to_string(peer_ip_buf_, sizeof(peer_ip_buf_))) {
+          SERVER_LOG(ERROR, "ip to string failed");
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          ObString ipstr = ObString::make_string(peer_ip_buf_);
+          cells[cell_idx].set_varchar(ipstr);
+        }
+        break;
+      }
+      case PEER_PORT: {// OB_APP_MIN_COLUMN_ID + 26
+        cells[cell_idx].set_int(chan_info.peer_.get_port());
+        break;
+      }
+      case DTL_EOF: {
+        cells[cell_idx].set_bool(chan_info.eof_);
         break;
       }
       default: {
@@ -279,7 +314,7 @@ int ObAllVirtualDtlChannel::get_row(ObVirtualChannelInfo& chan_info, ObNewRow*& 
   return ret;
 }
 
-int ObAllVirtualDtlChannel::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualDtlChannel::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObVirtualChannelInfo ch_info;

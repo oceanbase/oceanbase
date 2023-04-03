@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/packet/ompk_handshake_response.h"
-
 #include "rpc/obmysql/ob_mysql_util.h"
 
 using namespace oceanbase::common;
@@ -34,27 +33,31 @@ void OMPKHandshakeResponse::reset()
 int OMPKHandshakeResponse::decode()
 {
   int ret = OB_SUCCESS;
-  const char* pos = cdata_;
+  const char *pos = cdata_;
   const int64_t len = hdr_.len_;
-  const char* end = pos + len;
+  const char *end = pos + len;
 
-  // OB_ASSERT(NULL != cdata_);
+  //OB_ASSERT(NULL != cdata_);
   if (OB_ISNULL(cdata_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("null input", K(ret), K(cdata_));
+    LOG_ERROR("null input", K(ret), KP(cdata_));
   } else if (OB_UNLIKELY(len < HANDSHAKE_RESPONSE_MIN_SIZE)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error handshake response packet", K(len), K(ret));
   } else {
-    capability_.capability_ = ob_uint2korr(pos);
+    capability_.capability_ = uint2korr(pos);
     if (!capability_.cap_flags_.OB_CLIENT_PROTOCOL_41) {
       ret = OB_NOT_SUPPORTED;
-      LOG_ERROR("ob only support mysql client protocol 4.1", K(ret));
+      LOG_WARN("ob only support mysql client protocol 4.1", K(ret));
     } else {
       ObMySQLUtil::get_uint4(pos, capability_.capability_);
-      ObMySQLUtil::get_uint4(pos, max_packet_size_);  // 16MB
+      // When the driver establishes a connection, it decides whether to open the CLIENT_MULTI_RESULTS
+      // capability according to the capability returned by the sever. Both mysql 5.6 and 8.0 versions
+      // are opened by default, and this behavior is compatible here by default.
+      capability_.cap_flags_.OB_CLIENT_MULTI_STATEMENTS = 1;
+      ObMySQLUtil::get_uint4(pos, max_packet_size_); //16MB
       ObMySQLUtil::get_uint1(pos, character_set_);
-      pos += HANDSHAKE_RESPONSE_RESERVED_SIZE;  // 23 bytes reserved
+      pos += HANDSHAKE_RESPONSE_RESERVED_SIZE;//23 bytes reserved
     }
   }
 
@@ -85,7 +88,7 @@ int OMPKHandshakeResponse::decode()
       auth_response_.assign_ptr(pos, auth_response_len);
       pos += auth_response_len;
     } else {
-      // string[NUL]    auth-response
+      //string[NUL]    auth-response
       auth_response_ = ObString::make_string(pos);
       pos += strlen(pos) + 1;
     }
@@ -112,7 +115,7 @@ int OMPKHandshakeResponse::decode()
     if (capability_.cap_flags_.OB_CLIENT_CONNECT_ATTRS) {
       uint64_t all_attrs_len = 0;
       ret = ObMySQLUtil::get_length(pos, all_attrs_len);
-      // OB_ASSERT(OB_SUCC(ret));
+      //OB_ASSERT(OB_SUCC(ret));
       if (OB_SUCC(ret)) {
         ObStringKV str_kv;
         while (all_attrs_len > 0 && OB_SUCC(ret) && pos < end) {
@@ -120,46 +123,46 @@ int OMPKHandshakeResponse::decode()
           uint64_t key_inc_len = 0;
           uint64_t key_len = 0;
           ret = ObMySQLUtil::get_length(pos, key_len, key_inc_len);
-          // OB_ASSERT(OB_SUCC(ret) && all_attrs_len > key_inc_len);
+          //OB_ASSERT(OB_SUCC(ret) && all_attrs_len > key_inc_len);
           if (OB_SUCC(ret) && all_attrs_len > key_inc_len && pos < end) {
             all_attrs_len -= key_inc_len;
             str_kv.key_.assign_ptr(pos, static_cast<int32_t>(key_len));
-            // OB_ASSERT(all_attrs_len > key_len);
+            //OB_ASSERT(all_attrs_len > key_len);
             if (all_attrs_len > key_len) {
               all_attrs_len -= key_len;
               if (end - pos > key_len) {
-                pos += key_len;
-                // get value
-                uint64_t value_inc_len = 0;
-                uint64_t value_len = 0;
-                ret = ObMySQLUtil::get_length(pos, value_len, value_inc_len);
-                // OB_ASSERT(OB_SUCC(ret) && all_attrs_len > value_inc_len);
-                if (OB_SUCC(ret) && all_attrs_len > value_inc_len && pos < end) {
-                  all_attrs_len -= value_inc_len;
-                  str_kv.value_.assign_ptr(pos, static_cast<int32_t>(value_len));
-                  // OB_ASSERT(all_attrs_len >= value_len);
-                  if (all_attrs_len >= value_len) {
-                    all_attrs_len -= value_len;
-                    if (end - pos >= value_len) {
-                      pos += value_len;
-                      if (OB_FAIL(connect_attrs_.push_back(str_kv))) {
-                        LOG_WARN("fail to push back str_kv", K(str_kv), K(ret));
+                  pos += key_len;
+                  // get value
+                  uint64_t value_inc_len = 0;
+                  uint64_t value_len = 0;
+                  ret = ObMySQLUtil::get_length(pos, value_len, value_inc_len);
+                  //OB_ASSERT(OB_SUCC(ret) && all_attrs_len > value_inc_len);
+                  if (OB_SUCC(ret) && all_attrs_len > value_inc_len && pos < end) {
+                    all_attrs_len -= value_inc_len;
+                    str_kv.value_.assign_ptr(pos, static_cast<int32_t>(value_len));
+                    //OB_ASSERT(all_attrs_len >= value_len);
+                    if (all_attrs_len >= value_len) {
+                      all_attrs_len -= value_len;
+                      if (end - pos >= value_len) {
+                          pos += value_len;
+                          if (OB_FAIL(connect_attrs_.push_back(str_kv))) {
+                            LOG_WARN("fail to push back str_kv", K(str_kv), K(ret));
+                          }
+                      } else {
+                          ret = OB_INVALID_ARGUMENT;
+                          LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len), K((end -pos)));
                       }
                     } else {
                       ret = OB_INVALID_ARGUMENT;
-                      LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len), K((end - pos)));
+                      LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len));
                     }
                   } else {
                     ret = OB_INVALID_ARGUMENT;
-                    LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len));
+                    LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_inc_len));
                   }
-                } else {
-                  ret = OB_INVALID_ARGUMENT;
-                  LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_inc_len));
-                }
               } else {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(key_len), K((end - pos)));
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(key_len), K((end - pos)));
               }
             } else {
               ret = OB_INVALID_ARGUMENT;
@@ -172,7 +175,7 @@ int OMPKHandshakeResponse::decode()
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("get len fail", K(ret), K(pos), K(all_attrs_len));
+        LOG_ERROR("get len fail", K(ret), KP(pos), K(all_attrs_len));
       }
     }
   }
@@ -189,11 +192,11 @@ int OMPKHandshakeResponse::decode()
 int64_t OMPKHandshakeResponse::get_serialize_size() const
 {
   int64_t len = HANDSHAKE_RESPONSE_MIN_SIZE;
-  len += username_.length() + 1;  // username
+  len += username_.length() + 1; // username
   if ((capability_.cap_flags_.OB_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) != 0) {
     len += ObMySQLUtil::get_number_store_len(auth_response_.length());
     len += auth_response_.length();
-  } else if (capability_.cap_flags_.OB_CLIENT_SECURE_CONNECTION) {
+  } else if (capability_.cap_flags_.OB_CLIENT_SECURE_CONNECTION ) {
     len += 1;
     len += auth_response_.length();
   } else {
@@ -213,66 +216,67 @@ int64_t OMPKHandshakeResponse::get_serialize_size() const
   return len;
 }
 
-int OMPKHandshakeResponse::serialize(char* buffer, const int64_t length, int64_t& pos) const
+int OMPKHandshakeResponse::serialize(char *buffer, const int64_t length, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buffer) || OB_UNLIKELY(length - pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(buffer), K(length), K(pos), K(ret));
+    LOG_WARN("invalid argument", KP(buffer), K(length), K(pos), K(ret));
   } else if (OB_UNLIKELY(length - pos < static_cast<int64_t>(get_serialize_size()))) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size is overflow", K(length), K(pos), "need_size", get_serialize_size(), K(ret));
+    LOG_WARN("size is overflow",  K(length), K(pos), "need_size", get_serialize_size(), K(ret));
   } else {
-    if (OB_FAIL(ObMySQLUtil::store_int4(buffer, length, capability_.capability_, pos))) {
-      LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+    if (OB_FAIL(ObMySQLUtil::store_int4(buffer, length, capability_ .capability_, pos))) {
+      LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int4(buffer, length, max_packet_size_, pos))) {
-      LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+      LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, character_set_, pos))) {
-      LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+      LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
     } else {
       char reserved[HANDSHAKE_RESPONSE_RESERVED_SIZE];
-      memset(reserved, 0, sizeof(reserved));
-      if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, length, reserved, sizeof(reserved), pos))) {
-        LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+      memset(reserved, 0, sizeof (reserved));
+      if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, length, reserved, sizeof (reserved), pos))) {
+        LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, length, username_, pos))) {
-          LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+          LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
         }
       }
       if (capability_.cap_flags_.OB_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, auth_response_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
-      } else if (capability_.cap_flags_.OB_CLIENT_SECURE_CONNECTION) {
+      } else if (capability_.cap_flags_.OB_CLIENT_SECURE_CONNECTION ) {
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, static_cast<uint8_t>(auth_response_.length()), pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
-          } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(
-                         buffer, length, auth_response_.ptr(), auth_response_.length(), pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+          if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length,
+              static_cast<uint8_t>(auth_response_.length()), pos))) {
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
+          } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, length,
+              auth_response_.ptr(), auth_response_.length(), pos))) {
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
       } else {
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, length, auth_response_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
       }
       if (capability_.cap_flags_.OB_CLIENT_CONNECT_WITH_DB) {
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, length, database_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
       }
       if (capability_.cap_flags_.OB_CLIENT_PLUGIN_AUTH) {
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, length, auth_plugin_name_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+          if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, length, auth_plugin_name_, pos)))  {
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
       }
@@ -280,26 +284,27 @@ int OMPKHandshakeResponse::serialize(char* buffer, const int64_t length, int64_t
         uint64_t all_attr_len = get_connect_attrs_len();
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, all_attr_len, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
 
         ObStringKV string_kv;
-        for (int64_t i = 0; OB_SUCC(ret) && i < connect_attrs_.count(); ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && i <  connect_attrs_.count(); ++i) {
           string_kv = connect_attrs_.at(i);
           if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, string_kv.key_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           } else if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, string_kv.value_, pos))) {
-            LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+            LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
           }
         }
       }
     }
   }
   return ret;
+
 }
 
-int OMPKHandshakeResponse::add_connect_attr(const ObStringKV& string_kv)
+int OMPKHandshakeResponse::add_connect_attr(const ObStringKV &string_kv)
 {
   int ret = OB_SUCCESS;
   if (string_kv.key_.empty()) {
@@ -332,15 +337,15 @@ bool OMPKHandshakeResponse::is_obproxy_client_mode() const
   bool obproxy_mod = false;
   ObStringKV mod_kv;
   mod_kv.key_.assign_ptr(OB_MYSQL_CLIENT_MODE, static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_MODE)));
-  mod_kv.value_.assign_ptr(
-      OB_MYSQL_CLIENT_OBPROXY_MODE_NAME, static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_OBPROXY_MODE_NAME)));
+  mod_kv.value_.assign_ptr(OB_MYSQL_CLIENT_OBPROXY_MODE_NAME,
+      static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_OBPROXY_MODE_NAME)));
 
   ObStringKV kv;
   for (int64_t i = 0; !obproxy_mod && i < connect_attrs_.count(); ++i) {
     kv = connect_attrs_.at(i);
     if (mod_kv.key_ == kv.key_ && mod_kv.value_ == kv.value_) {
       obproxy_mod = true;
-      // break;
+      //break;
     }
   }
   return obproxy_mod;
@@ -351,16 +356,85 @@ bool OMPKHandshakeResponse::is_java_client_mode() const
   bool java_client_mod = false;
   ObStringKV mod_kv;
   mod_kv.key_.assign_ptr(OB_MYSQL_CLIENT_MODE, static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_MODE)));
-  mod_kv.value_.assign_ptr(
-      OB_MYSQL_JAVA_CLIENT_MODE_NAME, static_cast<int32_t>(strlen(OB_MYSQL_JAVA_CLIENT_MODE_NAME)));
+  mod_kv.value_.assign_ptr(OB_MYSQL_JAVA_CLIENT_MODE_NAME,
+      static_cast<int32_t>(strlen(OB_MYSQL_JAVA_CLIENT_MODE_NAME)));
 
   ObStringKV kv;
   for (int64_t i = 0; !java_client_mod && i < connect_attrs_.count(); ++i) {
     kv = connect_attrs_.at(i);
     if (mod_kv.key_ == kv.key_ && mod_kv.value_ == kv.value_) {
       java_client_mod = true;
-      // break;
+      //break;
     }
   }
   return java_client_mod;
 }
+
+int64_t OMPKHandshakeResponse::get_sql_request_level() const
+{
+  int64_t sql_req_level = 0; // share::OBCG_DEFAULT
+  ObString sql_req_level_key;
+  ObString sql_req_l0;
+  ObString sql_req_l1;
+  ObString sql_req_l2;
+  ObString sql_req_l3;
+  sql_req_level_key.assign_ptr(OB_SQL_REQUEST_LEVEL, static_cast<int32_t>(strlen(OB_SQL_REQUEST_LEVEL)));
+  sql_req_l0.assign_ptr(OB_SQL_REQUEST_LEVEL0, static_cast<int32_t>(strlen(OB_SQL_REQUEST_LEVEL0)));
+  sql_req_l1.assign_ptr(OB_SQL_REQUEST_LEVEL1, static_cast<int32_t>(strlen(OB_SQL_REQUEST_LEVEL1)));
+  sql_req_l2.assign_ptr(OB_SQL_REQUEST_LEVEL2, static_cast<int32_t>(strlen(OB_SQL_REQUEST_LEVEL2)));
+  sql_req_l3.assign_ptr(OB_SQL_REQUEST_LEVEL3, static_cast<int32_t>(strlen(OB_SQL_REQUEST_LEVEL3)));
+  ObStringKV kv;
+  for (int64_t i = 0; i < connect_attrs_.count(); ++i) {
+    kv = connect_attrs_.at(i);
+    if (sql_req_level_key == kv.key_) {
+      if (sql_req_l1 == kv.value_) {
+        sql_req_level = 1;
+      } else if (sql_req_l2 == kv.value_) {
+        sql_req_level = 2;
+      } else if (sql_req_l3 == kv.value_) {
+        sql_req_level = 3;
+      }
+      break;
+    }
+  }
+  return sql_req_level;
+}
+
+bool OMPKHandshakeResponse::is_oci_client_mode() const
+{
+  bool oci_client_mod = false;
+  ObStringKV mod_kv;
+  mod_kv.key_.assign_ptr(OB_MYSQL_CLIENT_MODE, static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_MODE)));
+  mod_kv.value_.assign_ptr(OB_MYSQL_OCI_CLIENT_MODE_NAME,
+      static_cast<int32_t>(strlen(OB_MYSQL_OCI_CLIENT_MODE_NAME)));
+
+  ObStringKV kv;
+  for (int64_t i = 0; !oci_client_mod && i < connect_attrs_.count(); ++i) {
+    kv = connect_attrs_.at(i);
+    if (mod_kv.key_ == kv.key_ && mod_kv.value_ == kv.value_) {
+      oci_client_mod = true;
+      //break;
+    }
+  }
+  return oci_client_mod;
+}
+
+bool OMPKHandshakeResponse::is_jdbc_client_mode() const
+{
+  bool jdbc_client_mod = false;
+  ObStringKV mod_kv;
+  mod_kv.key_.assign_ptr(OB_MYSQL_CLIENT_MODE, static_cast<int32_t>(strlen(OB_MYSQL_CLIENT_MODE)));
+  mod_kv.value_.assign_ptr(OB_MYSQL_JDBC_CLIENT_MODE_NAME,
+      static_cast<int32_t>(strlen(OB_MYSQL_JDBC_CLIENT_MODE_NAME)));
+
+  ObStringKV kv;
+  for (int64_t i = 0; !jdbc_client_mod && i < connect_attrs_.count(); ++i) {
+    kv = connect_attrs_.at(i);
+    if (mod_kv.key_ == kv.key_ && mod_kv.value_ == kv.value_) {
+      jdbc_client_mod = true;
+      //break;
+    }
+  }
+  return jdbc_client_mod;
+}
+

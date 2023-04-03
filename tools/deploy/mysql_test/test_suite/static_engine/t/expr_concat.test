@@ -1,0 +1,82 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+--sleep 2
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(2000), c2 varchar(2000));
+insert into t1 (c1, c2) values ('a', 'b');
+insert into t1 (c1, c2) values (repeat('a', 50), repeat('b', 50));
+insert into t1 (c1, c2) values (repeat('a', 100), repeat('b', 100));
+insert into t1 (c1, c2) values (repeat('a', 200), repeat('b', 300));
+insert into t1 (c1, c2) values (repeat('a', 1000), repeat('b', 800));
+insert into t1 (c1, c2) values ('a', 'b');
+insert into t1 (c1, c2) values (repeat('a', 50), repeat('b', 50));
+insert into t1 (c1, c2) values (repeat('a', 100), repeat('b', 100));
+insert into t1 (c1, c2) values (repeat('a', 200), repeat('b', 300));
+--enable_warnings
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select concat('abc') from dual;
+select concat(NULL) from dual;
+select concat('abc', NULL) from dual;
+select concat(NULL, 'abc') from dual;
+select concat('def', 'abc') from dual;
+select concat(NULL, 'def', 'abc') from dual;
+select concat('ABC', 'def', 'abc') from dual;
+
+select concat(c1, c2) from t1;
+
+--disable_warnings
+set group_concat_max_len=9223372036854775807;
+select group_concat('x') UNION ALL select 1;
+
+set group_concat_max_len=20;
+select group_concat(c1) from (select 'abcdefg' c1 union select '012345678910123456789' c1)a;
+select group_concat(c1) from (select 'abcdefg' c1 union select '012345678910123456' c1)a;
+
+drop table if exists t111_var;
+create table t111_var(c0 bigint ,c1 varchar(4000), c2 varchar(4000), c3 varchar(4000), c4 varchar(4000));
+insert into t111_var values(1,repeat('ab',2000),repeat('ab',2000),repeat('ab',2000),repeat('ab',2000));
+insert into t111_var select c0+1,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+10,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+100,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+1000,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+10000,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+100000,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+1000000,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+10000000,c1,c2,c3,c4 from t111_var;
+insert into t111_var select c0+100000000,c1,c2,c3,c4 from t111_var;
+insert into t111_var values(null,null,null,null,null);
+insert into t111_var select * from t111_var;
+commit;
+
+set group_concat_max_len=10485;
+select length(group_concat(c1)) from t111_var;
+select group_concat(c1) from t111_var;
+
+set group_concat_max_len=29;
+select group_concat('中文' separator '分隔') from t111_var;
+set group_concat_max_len=23;
+select group_concat('中文' separator '分隔') from t111_var;
+
+set group_concat_max_len=1024;
+drop table t1, t111_var;
+--enable_warnings
+
+connection syscon;
+--sleep 2

@@ -14,15 +14,18 @@
 #include <stdint.h>
 #include "lib/oblog/ob_log.h"
 #include "lib/allocator/ob_malloc.h"
-#include "lib/coro/co.h"
 
-namespace {
+namespace
+{
 const pthread_key_t INVALID_THREAD_KEY = UINT32_MAX;
 }
 
-namespace oceanbase {
-namespace common {
-ThreadSpecificBuffer::ThreadSpecificBuffer(const int32_t size) : key_(INVALID_THREAD_KEY), size_(size)
+namespace oceanbase
+{
+namespace common
+{
+ThreadSpecificBuffer::ThreadSpecificBuffer(const int32_t size)
+    : key_(INVALID_THREAD_KEY), size_(size)
 {
   create_thread_key();
 }
@@ -34,16 +37,9 @@ ThreadSpecificBuffer::~ThreadSpecificBuffer()
 
 int ThreadSpecificBuffer::create_thread_key()
 {
-  int ret = pthread_key_create(&key_, nullptr);
+  int ret = pthread_key_create(&key_, destroy_thread_key);
   if (0 != ret) {
     _OB_LOG(ERROR, "cannot create thread key:%d bt=%s", ret, lbt());
-  } else {
-    if (OB_FAIL(CO_THREAD_ATEXIT([this]() {
-          void* ptr = pthread_getspecific(key_);
-          destroy_thread_key(ptr);
-        }))) {
-      OB_LOG(WARN, "failed to register exit callback", K(ret));
-    }
   }
   return (0 == ret) ? OB_SUCCESS : OB_ERR_SYS;
 }
@@ -60,7 +56,7 @@ int ThreadSpecificBuffer::delete_thread_key()
   return (0 == ret) ? OB_SUCCESS : OB_ERR_SYS;
 }
 
-void ThreadSpecificBuffer::destroy_thread_key(void* ptr)
+void ThreadSpecificBuffer::destroy_thread_key(void *ptr)
 {
   _OB_LOG(INFO, "delete thread specific buffer, ptr=%p", ptr);
   if (NULL != ptr) {
@@ -69,25 +65,22 @@ void ThreadSpecificBuffer::destroy_thread_key(void* ptr)
   }
 }
 
-ThreadSpecificBuffer::Buffer* ThreadSpecificBuffer::get_buffer() const
+ThreadSpecificBuffer::Buffer *ThreadSpecificBuffer::get_buffer() const
 {
-  Buffer* buffer = NULL;
+  Buffer *buffer = NULL;
   if (INVALID_THREAD_KEY == key_ || size_ <= 0) {
-    _OB_LOG(ERROR,
-        "thread key must be initialized "
-        "and size must great than zero, key:%u,size:%d",
-        key_,
-        size_);
+    _OB_LOG_RET(ERROR, OB_NOT_INIT, "thread key must be initialized "
+              "and size must great than zero, key:%u,size:%d", key_, size_);
   } else {
-    void* ptr = pthread_getspecific(key_);
+    void *ptr = pthread_getspecific(key_);
     if (NULL != ptr) {
       // got exist ptr;
-      buffer = reinterpret_cast<Buffer*>(ptr);
+      buffer = reinterpret_cast<Buffer *>(ptr);
     } else {
       ptr = ob_malloc(size_ + sizeof(Buffer), ObModIds::OB_THREAD_BUFFER);
       if (NULL == ptr) {
         // malloc failed;
-        _OB_LOG(ERROR, "malloc thread specific memeory failed.");
+        _OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "malloc thread specific memeory failed.");
       } else {
         int ret = pthread_setspecific(key_, ptr);
         if (0 != ret) {
@@ -96,7 +89,7 @@ ThreadSpecificBuffer::Buffer* ThreadSpecificBuffer::get_buffer() const
           ptr = NULL;
         } else {
           _OB_LOG(DEBUG, "new thread specific buffer, addr=%p size=%d this=%p", ptr, size_, this);
-          buffer = new (ptr) Buffer(static_cast<char*>(ptr) + sizeof(Buffer), size_);
+          buffer = new(ptr) Buffer(static_cast<char *>(ptr) + sizeof(Buffer), size_);
         }
       }
     }
@@ -132,12 +125,12 @@ void ThreadSpecificBuffer::Buffer::reset()
   end_ = start_;
 }
 
-char* ThreadSpecificBuffer::Buffer::ptr()
+char *ThreadSpecificBuffer::Buffer::ptr()
 {
   return start_;
 }
 
-int ThreadSpecificBuffer::Buffer::write(const char* bytes, const int32_t size)
+int ThreadSpecificBuffer::Buffer::write(const char *bytes, const int32_t size)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(bytes) || size < 0 || size > remain()) {
@@ -149,5 +142,17 @@ int ThreadSpecificBuffer::Buffer::write(const char* bytes, const int32_t size)
   return ret;
 }
 
-}  // namespace common
-}  // end namespace oceanbase
+char *get_tc_buffer(int64_t &size)
+{
+  static ThreadSpecificBuffer thread_buffer;
+  ThreadSpecificBuffer::Buffer *buffer = thread_buffer.get_buffer();
+  char* buf = NULL;
+  if (NULL != buffer) {
+    buf = buffer->current();
+    size = buffer->remain();
+  }
+  return buf;
+}
+
+} // end namespace chunkserver
+} // end namespace oceanbase

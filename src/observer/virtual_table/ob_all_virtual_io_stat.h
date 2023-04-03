@@ -15,17 +15,20 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualIOStat : public common::ObVirtualTableScannerIterator {
+class ObAllVirtualIOStat : public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualIOStat();
   virtual ~ObAllVirtualIOStat();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  enum IOStatColumn {
+  enum IOStatColumn
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     DISK_TYPE,
@@ -45,7 +48,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualIOStat);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+
+} // namespace observer
+} // namespace oceanbase
+
 
 #endif

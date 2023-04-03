@@ -15,22 +15,19 @@
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
 
-namespace oceanbase {
-using namespace oceanbase::common;
-namespace sql {
-
-ObExprBitXor::ObExprBitXor(ObIAllocator& alloc)
-    : ObBitwiseExprOperator(alloc, T_OP_BIT_XOR, N_BIT_XOR, 2, NOT_ROW_DIMENSION)
-{}
-
-int ObExprBitXor::calc_result2(
-    common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  UNUSED(expr_ctx);
-  return ObBitwiseExprOperator::calc_(result, obj1, obj2, expr_ctx, ObBitwiseExprOperator::BIT_XOR);
+using namespace oceanbase::common;
+namespace sql
+{
+
+ObExprBitXor::ObExprBitXor(ObIAllocator &alloc)
+    : ObBitwiseExprOperator(alloc, T_OP_BIT_XOR, N_BIT_XOR, 2, NOT_ROW_DIMENSION)
+{
 }
 
-int ObExprBitXor::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprBitXor::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   BitOperator op = BIT_XOR;
@@ -40,5 +37,5 @@ int ObExprBitXor::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
 
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

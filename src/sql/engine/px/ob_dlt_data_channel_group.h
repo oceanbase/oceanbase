@@ -12,22 +12,25 @@
 
 #ifndef __OB_SQL_DTL_DATA_CHANNEL_GROUP_H__
 #define __OB_SQL_DTL_DATA_CHANNEL_GROUP_H__
-namespace oceanbase {
-namespace sql {
-class ObDTLDataChannelGroup {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDTLDataChannelGroup
+{
 public:
   ObDTLDataChannelGroup();
   virtual ~ObDTLDataChannelGroup();
   int wait(int64_t timeout_ts);
   int notify();
-  int add_channel_info(ObDtlChannelInfo& producer, common::ObIArray<ObDtlChannelInfo>& consumers);
-
+  int add_channel_info(ObDtlChannelInfo &producer, common::ObIArray<ObDtlChannelInfo> &consumers);
 private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObDTLDataChannelGroup);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* __OB_SQL_DTL_DATA_CHANNEL_GROUP_H__ */
 //// end of header file
+

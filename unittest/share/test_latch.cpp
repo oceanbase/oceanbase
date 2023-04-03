@@ -20,9 +20,12 @@
 #include "lib/stat/ob_session_stat.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "lib/random/ob_random.h"
-namespace oceanbase {
-namespace common {
-class TestLatchStress : public share::ObThreadPool {
+namespace oceanbase
+{
+namespace common
+{
+class TestLatchStress: public share::ObThreadPool
+{
 public:
   TestLatchStress();
   virtual ~TestLatchStress();
@@ -30,19 +33,24 @@ public:
   int64_t round0_;
   int64_t value0_;
   ObLatch lock0_;
-  obsys::CRWLock lock_;
+  obsys::ObRWLock lock_;
   pthread_mutex_t mutex_;
 };
 
-TestLatchStress::TestLatchStress() : round0_(0), value0_(0), lock0_(), lock_()
+TestLatchStress::TestLatchStress()
+  : round0_(0),
+    value0_(0),
+    lock0_(),
+    lock_()
 {
   pthread_mutex_init(&mutex_, NULL);
 }
 
 TestLatchStress::~TestLatchStress()
-{}
+{
+}
 
-void TestLatchStress::run(obsys::CThread* thread, void* arg)
+void TestLatchStress::run(obsys::CThread *thread, void *arg)
 {
 
   int ret = OB_SUCCESS;
@@ -62,16 +70,16 @@ void TestLatchStress::run(obsys::CThread* thread, void* arg)
         lock0_.unlock();
       }
 
-      // ret = lock1_.wrlock(1, INT64_MAX);
-      // ASSERT_EQ(OB_SUCCESS, ret);
-      // lock1_.wrunlock(1);
+      //ret = lock1_.wrlock(1, INT64_MAX);
+      //ASSERT_EQ(OB_SUCCESS, ret);
+      //lock1_.wrunlock(1);
 
-      // ret = pthread_mutex_lock(&mutex_);
-      // ASSERT_EQ(0, ret);
-      // pthread_mutex_unlock(&mutex_);
+      //ret = pthread_mutex_lock(&mutex_);
+      //ASSERT_EQ(0, ret);
+      //pthread_mutex_unlock(&mutex_);
 
-      // obsys::CWLockGuard guard(lock_);
-      // ASSERT_EQ(OB_SUCCESS, ret);
+      //obsys::ObWLockGuard guard(lock_);
+      //ASSERT_EQ(OB_SUCCESS, ret);
     }
   } else {
     for (int i = 0; i < 10000; i++) {
@@ -83,16 +91,16 @@ void TestLatchStress::run(obsys::CThread* thread, void* arg)
       lock0_.unlock();
       lock0_.unlock();
 
-      // ret = lock1_.rdlock(INT64_MAX);
-      // ASSERT_EQ(OB_SUCCESS, ret);
-      // lock1_.rdunlock();
+      //ret = lock1_.rdlock(INT64_MAX);
+      //ASSERT_EQ(OB_SUCCESS, ret);
+      //lock1_.rdunlock();
 
-      // ret = pthread_mutex_lock(&mutex_);
-      // ASSERT_EQ(0, ret);
-      // pthread_mutex_unlock(&mutex_);
+      //ret = pthread_mutex_lock(&mutex_);
+      //ASSERT_EQ(0, ret);
+      //pthread_mutex_unlock(&mutex_);
 
-      // obsys::CRLockGuard guard(lock_);
-      // ASSERT_EQ(OB_SUCCESS, ret);
+      //obsys::ObRLockGuard guard(lock_);
+      //ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
 }
@@ -152,7 +160,7 @@ TEST(ObLatch, normal)
   ret = latch.unlock();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // lock timeout
+  //lock timeout
   ret = latch.wrlock(ObLatchIds::DEFAULT_MUTEX);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = latch.wrlock(ObLatchIds::DEFAULT_MUTEX, 1);
@@ -162,7 +170,7 @@ TEST(ObLatch, normal)
   ret = latch.unlock();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // lock bound
+  //lock bound
   for (int64_t i = 0; i < ObLatch::MAX_READ_LOCK_CNT; ++i) {
     ret = latch.rdlock(ObLatchIds::DEFAULT_MUTEX);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -185,7 +193,7 @@ TEST(ObLatch, normal)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
-  // just print longer than 1s log
+  //just print longer than 1s log
   ObSessionStatEstGuard est_guard(1, 1);
   ret = latch.wrlock(ObLatchIds::DEFAULT_MUTEX);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -206,10 +214,11 @@ TEST(ObLatch, multithread)
   printf("time: %ld us\n", (end_time - begin_time));
 }
 
-}  // namespace common
-}  // namespace oceanbase
 
-int main(int argc, char** argv)
+}
+}
+
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   testing::InitGoogleTest(&argc, argv);

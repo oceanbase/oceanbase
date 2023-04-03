@@ -15,24 +15,28 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprInnerTrim : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprInnerTrim : public ObStringExprOperator
+{
 public:
-  explicit ObExprInnerTrim(common::ObIAllocator& alloc);
+  explicit  ObExprInnerTrim(common::ObIAllocator &alloc);
   virtual ~ObExprInnerTrim();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& trim_type, ObExprResType& trim_pattern,
-      ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& trim_type, const common::ObObj& trim_pattern,
-      const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &trim_type,
+                                ObExprResType &trim_pattern,
+                                ObExprResType &text,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprInnerTrim);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_TRIM_H_ */

@@ -16,14 +16,20 @@
 #include "share/ob_i_sql_expression.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprPartId::ObExprPartId(common::ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PART_ID, N_PART_ID, 1, NOT_ROW_DIMENSION)
-{}
+ObExprPartId::ObExprPartId(common::ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PART_ID, N_PART_ID, 1, NOT_ROW_DIMENSION,
+                         INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
-int ObExprPartId::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+int ObExprPartId::calc_result_type1(ObExprResType &type,
+                                    ObExprResType &type1,
+                                    common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = common::OB_SUCCESS;
@@ -34,33 +40,27 @@ int ObExprPartId::calc_result_type1(ObExprResType& type, ObExprResType& type1, c
     type.set_int();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-    type.set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+    type.set_result_flag(NOT_NULL_FLAG);
   }
   return ret;
 }
 
-int ObExprPartId::calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const
-{
-  int ret = common::OB_SUCCESS;
-  UNUSED(obj);
-  UNUSED(expr_ctx);
-  result.set_int(0);
-  return ret;
-}
-
-int ObExprPartId::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
+int ObExprPartId::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = &ObExprPartId::eval_part_id;
   return ret;
 }
 
-int ObExprPartId::eval_part_id(const ObExpr&, ObEvalCtx&, ObDatum& expr_datum)
+int ObExprPartId::eval_part_id(const ObExpr &, ObEvalCtx &, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   expr_datum.set_int(0);
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+
+
+} //end of sql
+} //end of oceanbase

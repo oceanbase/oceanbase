@@ -15,15 +15,10 @@
 
 // helper template to get some operator of old && new engine.
 
-namespace oceanbase {
-namespace sql {
-class ObPhyOperator;
-class ObTableScan;
-class ObMVTableScan;
-class ObTableInsert;
-class ObTableModify;
-class ObGranuleIterator;
-
+namespace oceanbase
+{
+namespace sql
+{
 class ObOpSpec;
 class ObTableScanSpec;
 class ObMVTableScanSpec;
@@ -35,17 +30,8 @@ template <bool NEW_ENG>
 struct ObEngineOpTraits {};
 
 template <>
-struct ObEngineOpTraits<false> {
-  typedef ObPhyOperator Root;
-  typedef ObTableScan TSC;
-  typedef ObMVTableScan MV_TSC;
-  typedef ObTableModify TableModify;
-  typedef ObTableInsert TableInsert;
-  typedef ObGranuleIterator GI;
-};
-
-template <>
-struct ObEngineOpTraits<true> {
+struct ObEngineOpTraits<true>
+{
   typedef ObOpSpec Root;
   typedef ObTableScanSpec TSC;
   typedef ObMVTableScanSpec MV_TSC;
@@ -54,7 +40,7 @@ struct ObEngineOpTraits<true> {
   typedef ObGranuleIteratorSpec GI;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ENGINE_OB_ENGINE_OP_TRAITS_H_
+#endif // OCEANBASE_ENGINE_OB_ENGINE_OP_TRAITS_H_

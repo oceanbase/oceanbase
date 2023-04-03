@@ -15,95 +15,105 @@
 #include "ob_log_operator_factory.h"
 #include "ob_optimizer_util.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
+#include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObLogSequence::allocate_exchange_post(AllocExchContext* ctx)
+int ObLogSequence::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  ObDMLStmt* stmt = NULL;
-  ObExchangeInfo exch_info;
-  if (OB_ISNULL(ctx) || OB_ISNULL(stmt = get_stmt())) {
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ctx), K(stmt), K(ret));
-  } else if (stmt::T_INSERT == stmt->get_stmt_type() && 0 == get_num_of_child()) {
-  } else if (OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (child->get_sharding_info().is_local() || child->get_sharding_info().is_match_all()) {
-    if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-      LOG_WARN("failed to deep copy sharding info from first child", K(ret));
-    } else { /*do nothing*/
-    }
-  } else {
-    // remote or distribution
-    if (OB_FAIL(child->allocate_exchange(ctx, exch_info))) {
-      LOG_WARN("failed to allocate exchange", K(ret));
-    } else {
-      sharding_info_.set_location_type(ObTableLocationType::OB_TBL_LOCATION_LOCAL);
-    }
-  }
-  return ret;
-}
-
-int ObLogSequence::copy_without_child(ObLogicalOperator*& out)
-{
-  int ret = OB_SUCCESS;
-  out = NULL;
-  ObLogicalOperator* op = NULL;
-  ObLogSequence* sequence = NULL;
-  if (OB_FAIL(clone(op))) {
-    LOG_WARN("failed to clone ObLogSequence", K(ret));
-  } else if (OB_ISNULL(sequence = static_cast<ObLogSequence*>(op))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to cast ObLogicalOperator * to ObLogSequence *", K(ret));
-  } else {
-    ARRAY_FOREACH_X(nextval_seq_ids_, idx, cnt, OB_SUCC(ret))
-    {
-      ret = sequence->nextval_seq_ids_.push_back(nextval_seq_ids_.at(idx));
-    }
-    out = sequence;
-  }
-  return ret;
-}
-
-uint64_t ObLogSequence::hash(uint64_t seed) const
-{
-  uint64_t hash_value = seed;
-  hash_value = ObOptimizerUtil::hash_array(hash_value, nextval_seq_ids_);
-  hash_value = ObLogicalOperator::hash(hash_value);
-  return hash_value;
-}
-
-int ObLogSequence::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
+    LOG_WARN("stmt is null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(stmt->get_sequence_exprs(all_exprs))) {
+    LOG_WARN("fail get sequence exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get exprs", K(ret));
+  } else { /*do nothing*/ }
   return ret;
 }
 
 int ObLogSequence::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  if (0 == get_num_of_child()) {
-    op_cost_ = ObOptEstCost::cost_sequence(0, nextval_seq_ids_.count());
-    cost_ = op_cost_;
-    card_ = 0.0;
-    width_ = 0.0;
-  } else if (OB_ISNULL(child = get_child(first_child))) {
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    op_cost_ = ObOptEstCost::cost_sequence(child->get_card(), nextval_seq_ids_.count());
-    cost_ = op_cost_ + child->get_cost();
-    card_ = child->get_card();
-    width_ = child->get_width() + nextval_seq_ids_.count() * 8;
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    if (0 == get_num_of_child()) {
+      op_cost_ = ObOptEstCost::cost_sequence(0, 
+                                             nextval_seq_ids_.count(),
+                                             opt_ctx.get_cost_model_type());
+      cost_ = op_cost_;
+      card_ = 0.0;
+    } else if (OB_ISNULL(child = get_child(first_child))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      op_cost_ = ObOptEstCost::cost_sequence(child->get_card(), 
+                                             nextval_seq_ids_.count(),
+                                             opt_ctx.get_cost_model_type());
+      cost_ = op_cost_ + child->get_cost();
+      card_ = child->get_card();
+    }
+  }
+  return ret;
+}
+
+int ObLogSequence::est_width()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  double width = 0.0;
+  if (0 == get_num_of_child()) {
+    width = 0.0;
+  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else {
+    width = child->get_width() + nextval_seq_ids_.count() * 8;
+  }
+  set_width(width);
+  return ret;
+}
+
+int ObLogSequence::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+{
+  int ret = OB_SUCCESS;
+  double child_card = 0.0;
+  double child_cost = 0.0;
+  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    if (0 == get_num_of_child()) {
+      card = get_card();
+      cost = get_cost();
+    } else if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+      LOG_WARN("failed to re est cost", K(ret));
+    } else {
+      double op_cost = 0.0;
+      op_cost += ObOptEstCost::cost_sequence(child_card, 
+                                            nextval_seq_ids_.count(),
+                                            opt_ctx.get_cost_model_type());
+      cost = child_cost + op_cost;
+      card = child_card;
+      if (param.override_) {
+        set_op_cost(op_cost);
+        set_cost(cost);
+        set_card(card);
+      }
+    }
   }
   return ret;
 }

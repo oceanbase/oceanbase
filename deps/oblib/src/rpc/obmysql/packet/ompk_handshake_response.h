@@ -17,26 +17,21 @@
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "lib/container/ob_se_array.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
 using common::ObString;
 
-class OMPKHandshakeResponse : public ObMySQLPacket {
+class OMPKHandshakeResponse : public ObMySQLPacket
+{
 public:
   OMPKHandshakeResponse()
-      : capability_(),
-        max_packet_size_(0),
-        character_set_(0),
-        username_(),
-        auth_response_(),
-        database_(),
-        auth_plugin_name_(),
-        connect_attrs_()
-  {}
+    : capability_(), max_packet_size_(0), character_set_(0), username_(),
+      auth_response_(), database_(), auth_plugin_name_(), connect_attrs_() {}
 
-  virtual ~OMPKHandshakeResponse()
-  {}
+  virtual ~OMPKHandshakeResponse() { }
 
   // reset hand shake response
   void reset();
@@ -44,81 +39,42 @@ public:
   // decode hand shake response
   virtual int decode();
   // serialize hand shake response data into buffer
-  virtual int serialize(char* buffer, const int64_t length, int64_t& pos) const;
+  virtual int serialize(char *buffer, const int64_t length, int64_t &pos) const;
   virtual int64_t get_serialize_size() const;
 
-  inline const ObMySQLCapabilityFlags& get_capability_flags() const
-  {
-    return capability_;
+  inline const ObMySQLCapabilityFlags &get_capability_flags() const { return capability_; }
+  inline void set_client_found_rows() {
+    // in oracle mode, update table set c1 = 1 where c1 = 1;
+    // this sql will change none,but oracle return affected with found rows
+    // we must set OB_CLIENT_FOUND_ROWS  == 1, in oracle mode
+    capability_.cap_flags_.OB_CLIENT_FOUND_ROWS = 0x1;
   }
-  inline uint32_t get_max_packet_size() const
-  {
-    return max_packet_size_;
-  }
-  inline uint8_t get_char_set() const
-  {
-    return character_set_;
-  }
-  inline const ObString& get_username() const
-  {
-    return username_;
-  }
-  inline const ObString& get_auth_response() const
-  {
-    return auth_response_;
-  }
-  inline const ObString& get_database() const
-  {
-    return database_;
-  }
-  inline const ObString& get_auth_plugin_name() const
-  {
-    return auth_plugin_name_;
-  }
-  inline const common::ObIArray<ObStringKV>& get_connect_attrs() const
-  {
-    return connect_attrs_;
-  }
+  inline uint32_t get_max_packet_size() const { return max_packet_size_; }
+  inline uint8_t get_char_set() const { return character_set_; }
+  inline const ObString &get_username() const { return username_; }
+  inline const ObString &get_auth_response() const { return auth_response_; }
+  inline const ObString &get_database() const { return database_; }
+  inline const ObString &get_auth_plugin_name() const { return auth_plugin_name_; }
+  inline const common::ObIArray<ObStringKV> &get_connect_attrs() const { return connect_attrs_; }
   bool is_obproxy_client_mode() const;
   bool is_java_client_mode() const;
+  bool is_oci_client_mode() const;
+  bool is_jdbc_client_mode() const;
+  int64_t get_sql_request_level() const;
 
-  inline void set_capability_flags(const ObMySQLCapabilityFlags& cap)
-  {
-    capability_ = cap;
-  }
-  inline void set_max_packet_size(const uint32_t max_size)
-  {
-    max_packet_size_ = max_size;
-  }
-  inline void set_character_set(const uint8_t char_set)
-  {
-    character_set_ = char_set;
-  }
-  inline void set_username(const ObString& username)
-  {
-    username_ = username;
-  }
-  inline void set_auth_response(const ObString& auth_response)
-  {
-    auth_response_ = auth_response;
-  }
-  inline void set_database(const ObString& database)
-  {
-    database_ = database;
-  }
-  inline void set_auth_plugin_name(const ObString& plugin_name)
-  {
-    auth_plugin_name_ = plugin_name;
-  }
-  int add_connect_attr(const ObStringKV& string_kv);
-  void reset_connect_attr()
-  {
-    connect_attrs_.reset();
-  }
+  inline void set_capability_flags(const ObMySQLCapabilityFlags &cap) { capability_ = cap; }
+  inline void set_max_packet_size(const uint32_t max_size) { max_packet_size_ = max_size; }
+  inline void set_character_set(const uint8_t char_set) { character_set_ = char_set; }
+  inline void set_username(const ObString &username) { username_ = username; }
+  inline void set_auth_response(const ObString &auth_response) { auth_response_ = auth_response; }
+  inline void set_database(const ObString &database) { database_ = database; }
+  inline void set_auth_plugin_name(const ObString &plugin_name) { auth_plugin_name_ = plugin_name; }
+  int add_connect_attr(const ObStringKV &string_kv);
+  void reset_connect_attr() { connect_attrs_.reset(); }
 
-  VIRTUAL_TO_STRING_KV("header", hdr_, K_(capability_.capability), K_(max_packet_size), K_(character_set), K_(username),
-      K_(database), K_(auth_plugin_name), K_(connect_attrs));
-
+  VIRTUAL_TO_STRING_KV("header", hdr_, K_(capability_.capability), K_(max_packet_size),
+                       K_(character_set), K_(username), K_(database), K_(auth_plugin_name),
+                       K_(connect_attrs));
 private:
   uint64_t get_connect_attrs_len() const;
 
@@ -145,9 +101,9 @@ private:
   ObString auth_plugin_name_;
   // connection attributes
   common::ObSEArray<ObStringKV, 8> connect_attrs_;
-};  // end of class OMPKHandshakeResponse
+}; // end of class OMPKHandshakeResponse
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OMPK_HANDSHAKE_RESPONSE_H_ */

@@ -20,33 +20,38 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/allocator/ob_mod_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObAllocator;
 }
-namespace lib {
+namespace lib
+{
 class __MemoryContext__;
 class ObTenantCtxAllocator;
 class IBlockMgr;
 class ISetLocker;
-class ObjectSet {
+class ObjectSet
+{
   friend class common::ObAllocator;
   static const uint32_t META_CELLS = (AOBJECT_META_SIZE - 1) / AOBJECT_CELL_BYTES + 1;
-  static const uint32_t MIN_FREE_CELLS = META_CELLS + 1 + (15 / AOBJECT_CELL_BYTES);  // next, prev pointer
+  static const uint32_t MIN_FREE_CELLS = META_CELLS + 1+ (15 / AOBJECT_CELL_BYTES);  // next, prev pointer
   static const double FREE_LISTS_BUILD_RATIO;
   static const double BLOCK_CACHE_RATIO;
 
-  typedef AObject* FreeList;
+  typedef AObject *FreeList;
   typedef ABitSet BitMap;
 
 public:
-  ObjectSet(__MemoryContext__* mem_context = nullptr, const uint32_t ablock_size = INTACT_NORMAL_AOBJECT_SIZE);
+  ObjectSet(__MemoryContext__ *mem_context=nullptr,
+            const uint32_t ablock_size=INTACT_NORMAL_AOBJECT_SIZE);
   ~ObjectSet();
 
   // main interfaces
-  AObject* alloc_object(const uint64_t size, const ObMemAttr& attr);
-  void free_object(AObject* obj);
-  AObject* realloc_object(AObject* obj, const uint64_t size, const ObMemAttr& attr);
+  AObject *alloc_object(const uint64_t size, const ObMemAttr &attr);
+  void free_object(AObject *obj);
+  AObject *realloc_object(AObject *obj, const uint64_t size, const ObMemAttr &attr);
   void reset();
 
   // statistics
@@ -58,63 +63,50 @@ public:
   void unlock();
 
   // statistics
-  void set_block_mgr(IBlockMgr* blk_mgr)
-  {
-    blk_mgr_ = blk_mgr;
-  }
-  IBlockMgr* get_block_mgr()
-  {
-    return blk_mgr_;
-  }
-  void set_mod_set(common::ObLocalModSet* mod_set)
-  {
-    mod_set_ = mod_set;
-  }
-  void set_locker(ISetLocker* locker)
-  {
-    locker_ = locker;
-  }
+  void set_block_mgr(IBlockMgr *blk_mgr) { blk_mgr_ = blk_mgr; }
+  IBlockMgr *get_block_mgr() { return blk_mgr_; }
+  void set_locker(ISetLocker *locker) { locker_ = locker; }
   inline int64_t get_normal_hold() const;
   inline int64_t get_normal_used() const;
   inline int64_t get_normal_alloc() const;
 
 private:
-  AObject* alloc_normal_object(const uint32_t cls, const ObMemAttr& attr);
-  AObject* alloc_big_object(const uint64_t size, const ObMemAttr& attr);
+  AObject *alloc_normal_object(const uint32_t cls, const ObMemAttr &attr);
+  AObject *alloc_big_object(const uint64_t size, const ObMemAttr &attr);
 
-  ABlock* alloc_block(const uint64_t size, const ObMemAttr& attr);
-  void free_block(ABlock* block);
+  ABlock *alloc_block(const uint64_t size, const ObMemAttr &attr);
+  void free_block(ABlock *block);
 
-  AObject* get_free_object(const uint32_t cls);
-  void add_free_object(AObject* obj);
+  AObject *get_free_object(const uint32_t cls);
+  void add_free_object(AObject *obj);
 
-  void free_big_object(AObject* obj);
-  void take_off_free_object(AObject* obj);
-  void free_normal_object(AObject* obj);
+  void free_big_object(AObject *obj);
+  void take_off_free_object(AObject *obj);
+  void free_normal_object(AObject *obj);
 
   bool build_free_lists();
 
-  inline AObject* split_obj(AObject* obj, const uint32_t cls, AObject*& remainder);
-  inline AObject* merge_obj(AObject* obj);
+  inline AObject *split_obj(AObject *obj, const uint32_t cls, AObject *&remainder);
+  inline AObject *merge_obj(AObject *obj);
 
-  void do_free_object(AObject* obj);
+  void do_free_object(AObject *obj);
   void do_free_dirty_list();
+  bool check_has_unfree(const char **first_label=NULL);
 
 private:
-  __MemoryContext__* mem_context_;
-  ISetLocker* locker_;
-  common::ObLocalModSet* mod_set_;
-  IBlockMgr* blk_mgr_;
+  __MemoryContext__ *mem_context_;
+  ISetLocker *locker_;
+  IBlockMgr *blk_mgr_;
 
-  ABlock* blist_;
+  ABlock *blist_;
 
-  AObject* last_remainder_;
+  AObject *last_remainder_;
 
-  BitMap* bm_;
-  FreeList* free_lists_;
+  BitMap *bm_;
+  FreeList *free_lists_;
 
   lib::ObMutex dirty_list_mutex_;
-  AObject* dirty_list_;
+  AObject *dirty_list_;
   int64_t dirty_objs_;
 
   uint64_t alloc_bytes_;
@@ -130,15 +122,17 @@ private:
   uint32_t cells_per_block_;
 
   DISALLOW_COPY_AND_ASSIGN(ObjectSet);
-} CACHE_ALIGNED;  // end of class ObjectSet
+} CACHE_ALIGNED; // end of class ObjectSet
 
 inline void ObjectSet::lock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->lock();
 }
 
 inline void ObjectSet::unlock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->unlock();
 }
 
@@ -157,78 +151,6 @@ inline uint64_t ObjectSet::get_allocs() const
   return allocs_;
 }
 
-AObject* ObjectSet::split_obj(AObject* obj, const uint32_t cls, AObject*& remainder)
-{
-  AObject* new_obj = NULL;
-
-  remainder = NULL;
-  if (NULL == obj) {
-  } else if (obj->nobjs_ < cls + META_CELLS) {
-    new_obj = obj;
-  } else {
-    remainder = new (obj->phy_next(cls)) AObject();
-    remainder->nobjs_prev_ = static_cast<uint16_t>(cls);
-    remainder->nobjs_ = static_cast<uint16_t>(obj->nobjs_ - cls);
-    remainder->obj_offset_ = static_cast<uint16_t>(obj->obj_offset_ + cls);
-    obj->nobjs_ = static_cast<uint16_t>(cls);
-    new_obj = obj;
-
-    if (!remainder->is_last(cells_per_block_)) {
-      AObject* next = remainder->phy_next(remainder->nobjs_);
-      abort_unless(next->is_valid());
-      next->nobjs_prev_ = remainder->nobjs_;
-    }
-  }
-  return new_obj;
-}
-
-AObject* ObjectSet::merge_obj(AObject* obj)
-{
-  abort_unless(NULL != obj);
-  abort_unless(obj->is_valid());
-
-  AObject* prev_obj = NULL;
-  AObject* next_obj = NULL;
-  AObject* next_next_obj = NULL;
-
-  if (0 != obj->obj_offset_) {
-    prev_obj = obj->phy_next(-obj->nobjs_prev_);
-    abort_unless(prev_obj->is_valid());
-    if (prev_obj == last_remainder_) {
-      prev_obj = NULL;
-    } else if (!prev_obj->in_use_) {
-      take_off_free_object(prev_obj);
-    }
-  }
-
-  if (!obj->is_last(cells_per_block_)) {
-    next_obj = obj->phy_next(obj->nobjs_);
-    abort_unless(next_obj->is_valid());
-    if (next_obj != last_remainder_ && !next_obj->in_use_) {
-      take_off_free_object(next_obj);
-    }
-  }
-
-  if (NULL != next_obj && next_obj != last_remainder_ && !next_obj->in_use_) {
-    if (!next_obj->is_last(cells_per_block_)) {
-      next_next_obj = next_obj->phy_next(next_obj->nobjs_);
-      abort_unless(next_next_obj->is_valid());
-    }
-  }
-
-  AObject* head = NULL != prev_obj && !prev_obj->in_use_ ? prev_obj : obj;
-  AObject* tail = next_obj != NULL && next_obj != last_remainder_ && !next_obj->in_use_ ? next_next_obj : next_obj;
-
-  if (NULL != tail) {
-    head->nobjs_ = static_cast<uint16_t>(tail->obj_offset_ - head->obj_offset_);
-    tail->nobjs_prev_ = head->nobjs_;
-  } else {
-    head->nobjs_ = static_cast<uint16_t>(cells_per_block_ - head->obj_offset_);
-  }
-
-  return head;
-}
-
 inline int64_t ObjectSet::get_normal_hold() const
 {
   return normal_hold_bytes_;
@@ -244,7 +166,8 @@ inline int64_t ObjectSet::get_normal_alloc() const
   return normal_alloc_bytes_;
 }
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+
+} // end of namespace lib
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_LIB_ALLOC_OBJECT_SET_H_ */

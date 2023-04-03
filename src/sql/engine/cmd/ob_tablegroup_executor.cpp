@@ -24,25 +24,27 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace sql {
-int ObCreateTablegroupExecutor::execute(ObExecContext& ctx, ObCreateTablegroupStmt& stmt)
+namespace sql
+{
+int ObCreateTablegroupExecutor::execute(ObExecContext &ctx, ObCreateTablegroupStmt &stmt)
 {
   int ret = OB_SUCCESS;
   obrpc::ObRpcOpts rpc_opt;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  obrpc::ObCreateTablegroupArg& create_tablegroup_arg = stmt.get_create_tablegroup_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  obrpc::ObCreateTablegroupArg &create_tablegroup_arg = stmt.get_create_tablegroup_arg();
 
-  ObTablegroupSchema& tablegroup_schema = create_tablegroup_arg.tablegroup_schema_;
+  ObTablegroupSchema &tablegroup_schema = create_tablegroup_arg.tablegroup_schema_;
   tablegroup_schema.set_part_func_expr_num(stmt.get_part_func_expr_num());
   tablegroup_schema.set_sub_part_func_expr_num(stmt.get_sub_part_func_expr_num());
 
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
+    LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     const_cast<obrpc::ObCreateTablegroupArg&>(create_tablegroup_arg).ddl_stmt_str_ = first_stmt;
   }
@@ -54,7 +56,7 @@ int ObCreateTablegroupExecutor::execute(ObExecContext& ctx, ObCreateTablegroupSt
     LOG_WARN("compare range parition expr fail", K(ret));
   } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
     LOG_WARN("get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)) {
+  } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
   } else {
@@ -67,16 +69,16 @@ int ObCreateTablegroupExecutor::execute(ObExecContext& ctx, ObCreateTablegroupSt
   return ret;
 }
 
-int ObDropTablegroupExecutor::execute(ObExecContext& ctx, ObDropTablegroupStmt& stmt)
+int ObDropTablegroupExecutor::execute(ObExecContext &ctx, ObDropTablegroupStmt &stmt)
 {
   int ret = OB_SUCCESS;
   obrpc::ObRpcOpts rpc_opt;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  const obrpc::ObDropTablegroupArg& drop_tablegroup_arg = stmt.get_drop_tablegroup_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obrpc::ObDropTablegroupArg &drop_tablegroup_arg = stmt.get_drop_tablegroup_arg();
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
+    LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     const_cast<obrpc::ObDropTablegroupArg&>(drop_tablegroup_arg).ddl_stmt_str_ = first_stmt;
   }
@@ -86,7 +88,7 @@ int ObDropTablegroupExecutor::execute(ObExecContext& ctx, ObDropTablegroupStmt& 
     LOG_WARN("get task executor context failed");
   } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
     LOG_WARN("get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)) {
+  } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->drop_tablegroup(drop_tablegroup_arg))) {
@@ -96,18 +98,18 @@ int ObDropTablegroupExecutor::execute(ObExecContext& ctx, ObDropTablegroupStmt& 
   return ret;
 }
 
-int ObAlterTablegroupExecutor::execute(ObExecContext& ctx, ObAlterTablegroupStmt& stmt)
+int ObAlterTablegroupExecutor::execute(ObExecContext &ctx, ObAlterTablegroupStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
-  obrpc::ObAlterTablegroupArg& alter_tablegroup_arg = stmt.get_alter_tablegroup_arg();
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  obrpc::ObAlterTablegroupArg &alter_tablegroup_arg = stmt.get_alter_tablegroup_arg();
   alter_tablegroup_arg.alter_tablegroup_schema_.set_part_func_expr_num(stmt.get_part_func_expr_num());
   alter_tablegroup_arg.alter_tablegroup_schema_.set_sub_part_func_expr_num(stmt.get_sub_part_func_expr_num());
 
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt", K(ret));
+    LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     const_cast<obrpc::ObAlterTablegroupArg&>(alter_tablegroup_arg).ddl_stmt_str_ = first_stmt;
   }
@@ -119,27 +121,27 @@ int ObAlterTablegroupExecutor::execute(ObExecContext& ctx, ObAlterTablegroupStmt
     LOG_WARN("get task executor context failed");
   } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
     LOG_WARN("get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)) {
+  } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->alter_tablegroup(alter_tablegroup_arg))) {
-    LOG_WARN(
-        "rpc proxy alter table group failed", "dst", common_rpc_proxy->get_server(), K(ret), K(alter_tablegroup_arg));
+    LOG_WARN("rpc proxy alter table group failed", "dst", common_rpc_proxy->get_server(), K(ret), K(alter_tablegroup_arg));
   }
   return ret;
 }
 
-int ObAlterTablegroupExecutor::check_alter_partition(
-    ObExecContext& ctx, ObAlterTablegroupStmt& stmt, const obrpc::ObAlterTablegroupArg& arg)
+int ObAlterTablegroupExecutor::check_alter_partition(ObExecContext &ctx,
+                                                     ObAlterTablegroupStmt &stmt,
+                                                     const obrpc::ObAlterTablegroupArg &arg)
 {
   int ret = OB_SUCCESS;
   if (arg.is_alter_partitions()) {
-    const ObTablegroupSchema& tablegroup_schema = arg.alter_tablegroup_schema_;
-    if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::ADD_PARTITION) ||
-        arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE) ||
-        arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::REORGANIZE_PARTITION) ||
-        arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
-      ObPartition** partition_array = tablegroup_schema.get_part_array();
+    const ObTablegroupSchema &tablegroup_schema = arg.alter_tablegroup_schema_;
+    if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::ADD_PARTITION)
+        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE)
+        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::REORGANIZE_PARTITION)
+        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
+      ObPartition **partition_array = tablegroup_schema.get_part_array();
       int64_t real_part_num = tablegroup_schema.get_partition_num();
       const int64_t fun_expr_num = stmt.get_part_func_expr_num();
       if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
@@ -147,40 +149,44 @@ int ObAlterTablegroupExecutor::check_alter_partition(
       }
       if (tablegroup_schema.is_range_part()) {
         ObSEArray<ObObj, 8> range_partition_obj;
-        ObIArray<ObRawExpr*>& range_values_exprs = stmt.get_part_values_exprs();
+        ObIArray<ObRawExpr *> &range_values_exprs = stmt.get_part_values_exprs();
         if (OB_ISNULL(partition_array)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("partition_array is NULL", K(ret));
-        } else if (OB_FAIL(ObPartitionExecutorUtils::cast_range_expr_to_obj(ctx,
-                       range_values_exprs,
-                       fun_expr_num,
-                       stmt::T_ALTER_TABLEGROUP,
-                       false,  // is_subpart
-                       real_part_num,
-                       partition_array,
-                       NULL,
-                       range_partition_obj))) {
+        } else if (OB_FAIL(ObPartitionExecutorUtils::cast_range_expr_to_obj(
+                ctx,
+                range_values_exprs,
+                fun_expr_num,
+                stmt::T_ALTER_TABLEGROUP,
+                false, //is_subpart
+                real_part_num,
+                partition_array,
+                NULL,
+                range_partition_obj))) {
           LOG_WARN("partition_array is NULL", K(ret));
         }
       } else if (tablegroup_schema.is_list_part()) {
         if (OB_ISNULL(partition_array)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("partition_array is NULL", K(ret));
-        } else if (OB_FAIL(ObPartitionExecutorUtils::cast_list_expr_to_obj(ctx, stmt, false, partition_array, NULL))) {
+        } else  if (OB_FAIL(ObPartitionExecutorUtils::cast_list_expr_to_obj(ctx,
+                                                                            stmt,
+                                                                            false,
+                                                                            partition_array,
+                                                                            NULL))) {
           LOG_WARN("failed cast list to expr", K(ret));
         }
       } else if (!arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE)) {
         ret = OB_ERR_ONLY_ON_RANGE_LIST_PARTITION;
-        LOG_WARN("unexpected partition type",
-            K(ret),
-            "partition type",
-            tablegroup_schema.get_part_option().get_part_func_type());
+        LOG_WARN("unexpected partition type", K(ret),
+                 "partition type", tablegroup_schema.get_part_option().get_part_func_type());
       }
       if (OB_FAIL(ret)) {
       } else if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
-        const_cast<ObTablegroupSchema&>(tablegroup_schema)
-            .get_part_option()
-            .set_part_num(tablegroup_schema.get_partition_num());
+        //由于split在不引起二义性的情况下，可以不指定high_value，part_num需要和实际range_value_expr对应
+        //在解析完成后可以置为正确的partition_num
+        const_cast<ObTablegroupSchema &>(tablegroup_schema).get_part_option().set_part_num(
+          tablegroup_schema.get_partition_num());
       }
     } else if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::DROP_PARTITION)) {
       // do-nothing

@@ -15,38 +15,42 @@
 
 #include "sql/engine/user_defined_function/ob_user_defined_function.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 class ObExprDllUdf;
 
-class ObUdfCtxMgr {
+/*
+ * 通过expr的id作为执行期，expr获得属于自己的执行ctx的key。
+ * 目前，相同列会指向同一个raw expr，相同的聚合（例如sum）会指向
+ * 同一个raw expr，但是对于普通表达式没有做。
+ * ATTENTION: 如果后续要做相同普通表达式共用同一个expr的优化，udf的expr必须
+ * 保证不能共用expr。
+ *
+ * */
+class ObUdfCtxMgr
+{
 private:
   static const int64_t BUKET_NUM = 100;
-
 public:
-  ObUdfCtxMgr() : allocator_(common::ObModIds::OB_SQL_UDF), ctxs_()
-  {}
+  ObUdfCtxMgr() : allocator_(common::ObModIds::OB_SQL_UDF), ctxs_() {}
   ~ObUdfCtxMgr();
-  int register_udf_expr(const ObExprDllUdf* expr, const ObNormalUdfFunction* func, ObNormalUdfExeUnit*& udf_exec_unit);
-  int get_udf_ctx(uint64_t expr_id, ObNormalUdfExeUnit*& udf_exec_unit);
+  int register_udf_expr(const ObExprDllUdf *expr, const ObNormalUdfFunction *func, ObNormalUdfExeUnit *&udf_exec_unit);
+  int get_udf_ctx(uint64_t expr_id, ObNormalUdfExeUnit *&udf_exec_unit);
   int try_init_map();
-  common::ObIAllocator& get_allocator()
-  {
-    return allocator_;
-  }
+  common::ObIAllocator &get_allocator() { return allocator_; }
   int reset();
-
 private:
   common::ObArenaAllocator allocator_;
-  common::hash::ObHashMap<uint64_t, ObNormalUdfExeUnit*, common::hash::NoPthreadDefendMode> ctxs_;
-
+  common::hash::ObHashMap<uint64_t, ObNormalUdfExeUnit *, common::hash::NoPthreadDefendMode> ctxs_;
 private:
-  // disallow copy
+  //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUdfCtxMgr);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif

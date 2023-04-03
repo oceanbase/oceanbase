@@ -19,41 +19,43 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
-
-const char* get_phy_op_name(ObPhyOperatorType type)
+namespace oceanbase
 {
-  const char* ret_char = NULL;
-  static const char* ObPhyOpName[PHY_END + 2] = {
+namespace sql
+{
+
+  const char *get_phy_op_name(ObPhyOperatorType type) {
+    const char* ret_char = NULL;
+    static const char *ObPhyOpName[PHY_END + 2] =
+      {
 #define PHY_OP_DEF(type) #type,
 #include "ob_phy_operator_type.h"
 #undef PHY_OP_DEF
 #define END ""
-      END
+        END
 #undef END
-  };
+      };
 
-  if (type >= 0 && type < PHY_END + 2) {
-    ret_char = ObPhyOpName[type];
-  } else {
-    ret_char = "INVALID_OP";
+    if (type >= 0 && type < PHY_END + 2) {
+      ret_char = ObPhyOpName[type];
+    } else {
+      ret_char = "INVALID_OP";
+    }
+    return ret_char;
   }
-  return ret_char;
-}
 
-void ObPhyOperatorTypeDescSet::set_type_str(ObPhyOperatorType type, const char* type_str)
+void ObPhyOperatorTypeDescSet::set_type_str(ObPhyOperatorType type, const char *type_str)
 {
   if (OB_LIKELY(type >= PHY_INVALID && type < PHY_END)) {
     set_[type].name_ = type_str;
   } else {
-    LOG_WARN("invalid phy operator", K(type));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid phy operator", K(type));
   }
 }
 
-const char* ObPhyOperatorTypeDescSet::get_type_str(ObPhyOperatorType type) const
+const char *ObPhyOperatorTypeDescSet::get_type_str(ObPhyOperatorType type) const
 {
-  const char* ret = "UNKNOWN_PHY_OP";
+  const char *ret = "UNKNOWN_PHY_OP";
   if (OB_LIKELY(type >= PHY_INVALID && type < PHY_END)) {
     ret = set_[type].name_;
   }
@@ -61,10 +63,10 @@ const char* ObPhyOperatorTypeDescSet::get_type_str(ObPhyOperatorType type) const
 }
 
 static ObPhyOperatorTypeDescSet PHY_OP_TYPE_DESC_SET;
-const char* ob_phy_operator_type_str(ObPhyOperatorType type)
+const char *ob_phy_operator_type_str(ObPhyOperatorType type)
 {
   return PHY_OP_TYPE_DESC_SET.get_type_str(type);
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

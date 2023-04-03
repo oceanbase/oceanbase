@@ -14,25 +14,31 @@
 #include "sql/engine/expr/ob_expr_radians.h"
 #include <cmath>
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 const double ObExprRadians::radians_ratio_ = std::acos(-1) / 180;
 
-ObExprRadians::ObExprRadians(ObIAllocator& alloc)
+ObExprRadians::ObExprRadians(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_RADIANS, N_RADIANS, 1, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprRadians::~ObExprRadians()
-{}
+{
+}
 
-int ObExprRadians::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+int ObExprRadians::calc_result_type1(ObExprResType &type,
+                                   ObExprResType &type1,
+                                   common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
@@ -46,27 +52,11 @@ int ObExprRadians::calc_result_type1(ObExprResType& type, ObExprResType& type1, 
   return ret;
 }
 
-int ObExprRadians::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int ObExprRadians::calc_radians_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  double val = 0.0;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (obj.is_null()) {
-    result.set_null();
-  } else if (OB_FAIL(obj.get_double(val))) {
-    LOG_WARN("get_double from obj failed", K(ret), K(obj), K(val));
-  } else {
-    result.set_double(val * radians_ratio_);
-  }
-  return ret;
-}
-
-int ObExprRadians::calc_radians_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret), K(expr));
   } else if (arg->is_null()) {
@@ -78,12 +68,14 @@ int ObExprRadians::calc_radians_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   return ret;
 }
 
-int ObExprRadians::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprRadians::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) || (ObDoubleType != rt_expr.args_[0]->datum_meta_.type_)) {
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) ||
+      (ObDoubleType != rt_expr.args_[0]->datum_meta_.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_ or arg res type is invalid", K(ret), K(rt_expr));
   } else {
@@ -91,5 +83,5 @@ int ObExprRadians::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, 
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

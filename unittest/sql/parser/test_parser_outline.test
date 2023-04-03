@@ -111,7 +111,7 @@ select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3,idx_t4_c2_c3) where opt.t
 select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3) where opt.t4.c1 = opt.t4.c2;
 select * from opt.t4, hint.t1 ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where opt.t4.c1 = hint.t1.a;
 select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where ta.c1 = tb.a;
-#index not exist, leading hint ineffective @TODO  selectivity error
+#index not exist, leading hint ineffective @TODO yangze.yz selectivity error
 select * from opt.t1 use index(idx_yeti, idx_t1_c2) where opt.t1.c1 = opt.t1.c1;
 select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_test, idx_t1_a) where ta.c1 = tb.a;
 #subquery
@@ -193,7 +193,7 @@ select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) */ * from t1 , (select/*+qb_name(yz) 
 #hint with set op
 select c1 from t1 union select /*+index(@SEL$1 t1 idx_t1_c2)*/ c1 from t2;
 select t1.c1 from t1, t2 where t1.c1 = t2.c1 union select/*+leading(@SEL$1 t1 t2) use_merge(@SEL1 t2@SEL$1)*/ c1 from t2;
-
+#hint with set op 对同一个sub_query指定多个leading失效
 select/*+leading(@SEL$1 t2 t1)*/ t1.c1 from t1, t2 where t1.c1 = t2.c1 union select/*+leading(@SEL$1 t1 t2) use_merge(@SEL1 t2@SEL$1)*/ c1 from t2;
 (select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) */ t1.c1 from t1 , (select/*+qb_name(yz) use_merge(@SEL$1 t1@SEL$1)*/ c1 from t4) t where t.c1 = t1.c1) union select c1 from t3;
 (select t1.c1 from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1) union select/*+leading(@SEL$1 t4@YZ t1@SEL$1) use_merge(@SEL$1 t1@SEL$1)*/ c1 from t3;

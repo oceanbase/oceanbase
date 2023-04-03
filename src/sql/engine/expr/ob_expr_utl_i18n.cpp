@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include <string.h>
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_utl_i18n.h"
 #include "sql/engine/expr/ob_expr_hex.h"
 #include "sql/engine/expr/ob_expr_util.h"
@@ -22,19 +22,27 @@
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 // UTL_I18N.STRING_TO_RAW begin
-ObExprUtlI18nStringToRaw::ObExprUtlI18nStringToRaw(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_STRING_TO_RAW, N_UTL_I18N_STRING_TO_RAW, 2)
-{}
+ObExprUtlI18nStringToRaw::ObExprUtlI18nStringToRaw(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_STRING_TO_RAW, N_UTL_I18N_STRING_TO_RAW, 2,
+                           false, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprUtlI18nStringToRaw::~ObExprUtlI18nStringToRaw()
-{}
+{
+}
 
 int ObExprUtlI18nStringToRaw::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const
+    ObExprResType &type,
+    ObExprResType &type1,
+    ObExprResType &type2,
+    common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
@@ -54,8 +62,12 @@ int ObExprUtlI18nStringToRaw::calc_result_type2(
   return ret;
 }
 
-int ObExprUtlI18nStringToRaw::calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-    common::ObCastCtx& cast_ctx, const ObSQLSessionInfo* session_info)
+int ObExprUtlI18nStringToRaw::calc(
+    common::ObObj &result,
+    const common::ObObj &obj1,
+    const common::ObObj &obj2,
+    common::ObCastCtx &cast_ctx,
+    const ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
 
@@ -76,15 +88,20 @@ int ObExprUtlI18nStringToRaw::calc(common::ObObj& result, const common::ObObj& o
       ObString dest_str;
       if (obj2.is_null()) {
         dest_collation = session_info->get_nls_collation();
-      } else {  // obj2.is_varchar()
-        dest_collation =
-            ObCharset::get_default_collation_oracle(ObCharset::charset_type_by_name_oracle(obj2.get_string()));
+      } else { // obj2.is_varchar()
+        dest_collation = ObCharset::get_default_collation_oracle(
+            ObCharset::charset_type_by_name_oracle(obj2.get_string()));
       }
       if (OB_FAIL(ret)) {
       } else if (CS_TYPE_INVALID != dest_collation) {
-        if (OB_FAIL(ObExprUtil::convert_string_collation(
-                obj1.get_string(), obj1.get_collation_type(), dest_str, dest_collation, *cast_ctx.allocator_v2_))) {
-          LOG_WARN("fail to convert string collation", K(ret), K(obj1), K(dest_str), K(dest_collation));
+        if (OB_FAIL(ObExprUtil::convert_string_collation(obj1.get_string(),
+                                             obj1.get_collation_type(),
+                                             dest_str,
+                                             dest_collation,
+                                             *cast_ctx.allocator_v2_))) {
+          LOG_WARN("fail to convert string collation", K(ret), K(obj1),
+                                                       K(dest_str),
+                                                       K(dest_collation));
         } else {
           result.set_raw(dest_str.ptr(), dest_str.length());
         }
@@ -97,43 +114,29 @@ int ObExprUtlI18nStringToRaw::calc(common::ObObj& result, const common::ObObj& o
   return ret;
 }
 
-int ObExprUtlI18nStringToRaw::calc_result2(
-    common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
 
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    if (OB_FAIL(calc(result, obj1, obj2, cast_ctx, session_info))) {
-      LOG_WARN("fail to calc", K(ret), K(obj1), K(obj2));
-    }
-  }
-
-  return ret;
-}
 // UTL_I18N.STRING_TO_RAW end
 
 // UTL_I18N.RAW_TO_CHAR begin
-ObExprUtlI18nRawToChar::ObExprUtlI18nRawToChar(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_RAW_TO_CHAR, N_UTL_I18N_RAW_TO_CHAR, 2)
-{}
+ObExprUtlI18nRawToChar::ObExprUtlI18nRawToChar(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_RAW_TO_CHAR, N_UTL_I18N_RAW_TO_CHAR, 2,
+                           false, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprUtlI18nRawToChar::~ObExprUtlI18nRawToChar()
-{}
+{
+}
 
 int ObExprUtlI18nRawToChar::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const
+    ObExprResType &type,
+    ObExprResType &type1,
+    ObExprResType &type2,
+    common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  const ObBasicSessionInfo* session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = type_ctx.get_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -157,8 +160,12 @@ int ObExprUtlI18nRawToChar::calc_result_type2(
   return ret;
 }
 
-int ObExprUtlI18nRawToChar::calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-    common::ObCastCtx& cast_ctx, const ObSQLSessionInfo* session_info)
+int ObExprUtlI18nRawToChar::calc(
+    common::ObObj &result,
+    const common::ObObj &obj1,
+    const common::ObObj &obj2,
+    common::ObCastCtx &cast_ctx,
+    const ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
 
@@ -187,15 +194,20 @@ int ObExprUtlI18nRawToChar::calc(common::ObObj& result, const common::ObObj& obj
     if (OB_FAIL(ret)) {
     } else if (obj2.is_null()) {
       src_collation = session_info->get_nls_collation();
-    } else {  // obj2.is_varchar()
-      src_collation =
-          ObCharset::get_default_collation_oracle(ObCharset::charset_type_by_name_oracle(obj2.get_string()));
+    } else { // obj2.is_varchar()
+      src_collation = ObCharset::get_default_collation_oracle(
+          ObCharset::charset_type_by_name_oracle(obj2.get_string()));
     }
     if (OB_FAIL(ret)) {
     } else if (CS_TYPE_INVALID != src_collation) {
       if (OB_FAIL(ObExprUtil::convert_string_collation(
-              src_str, src_collation, dest_str, session_info->get_nls_collation(), *cast_ctx.allocator_v2_))) {
-        LOG_WARN("fail to convert string collation", K(ret), K(obj1), K(src_collation));
+                  src_str,
+                  src_collation,
+                  dest_str,
+                  session_info->get_nls_collation(),
+                  *cast_ctx.allocator_v2_))) {
+        LOG_WARN("fail to convert string collation", K(ret), K(obj1),
+                                                     K(src_collation));
       } else {
         result.set_varchar(dest_str.ptr(), dest_str.length());
         result.set_collation_type(session_info->get_nls_collation());
@@ -208,28 +220,7 @@ int ObExprUtlI18nRawToChar::calc(common::ObObj& result, const common::ObObj& obj
   return ret;
 }
 
-int ObExprUtlI18nRawToChar::calc_result2(
-    common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    if (OB_FAIL(calc(result, obj1, obj2, cast_ctx, session_info))) {
-      LOG_WARN("fail to calc", K(ret), K(obj1), K(obj2));
-    }
-  }
-
-  return ret;
-}
 // UTL_I18N.RAW_TO_CHAR end
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

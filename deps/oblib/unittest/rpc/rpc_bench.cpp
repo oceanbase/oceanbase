@@ -39,7 +39,10 @@ int client_count = 1;
 int io_count = 1;
 int worker_count = 1;
 
-class TestProxy : public ObRpcProxy {
+
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
@@ -52,13 +55,17 @@ int64_t total_net_time = 0;
 int64_t total_count = 0;
 int64_t total_send_count = 0;
 
-class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
+class MyProcessor
+    : public TestProxy::Processor<OB_TEST_PCODE>
+{
 public:
   int process()
   {
     int ret = OB_SUCCESS;
-    const int64_t fly_time = get_receive_timestamp() - get_send_timestamp();
-    const int64_t net_time = get_run_timestamp() - get_receive_timestamp();
+    const int64_t fly_time
+        = get_receive_timestamp() - get_send_timestamp();
+    const int64_t net_time
+        = get_run_timestamp() - get_receive_timestamp();
 
     ATOMIC_FAA(&total_fly_time, fly_time);
     ATOMIC_FAA(&total_net_time, net_time);
@@ -68,9 +75,11 @@ public:
   }
 };
 
-class QHandler : public ObiReqQHandler {
+class QHandler :
+    public ObiReqQHandler
+{
 public:
-  bool handlePacketQueue(ObRequest* req, void* args)
+  bool handlePacketQueue(ObRequest *req, void *args)
   {
     UNUSED(args);
     MyProcessor p;
@@ -80,23 +89,20 @@ public:
     return true;
   }
 
-  int onThreadCreated(obsys::CThread*)
-  {
-    return OB_SUCCESS;
-  }
-  int onThreadDestroy(obsys::CThread*)
-  {
-    return OB_SUCCESS;
-  }
+  int onThreadCreated(obsys::CThread*) { return OB_SUCCESS; }
+  int onThreadDestroy(obsys::CThread*) { return OB_SUCCESS; }
 };
 
-class ObTestDeliver : public rpc::frame::ObReqQDeliver {
+class ObTestDeliver
+    : public rpc::frame::ObReqQDeliver
+{
 public:
-  ObTestDeliver() : ObReqQDeliver(qhandler_)
-  {}
-
-  int init()
+  ObTestDeliver()
+      : ObReqQDeliver(qhandler_)
   {
+  }
+
+  int init() {
     int ret = OB_SUCCESS;
 
     queue_.get_thread().set_thread_count(worker_count);
@@ -105,7 +111,7 @@ public:
     return ret;
   }
 
-  int deliver(rpc::ObRequest& req)
+  int deliver(rpc::ObRequest &req)
   {
     int ret = OB_SUCCESS;
 
@@ -113,7 +119,8 @@ public:
     req.set_request_rtcode(EASY_OK);
     easy_request_wakeup(req.get_request());
 
-    const int64_t fly_time = req.get_receive_timestamp() - req.get_send_timestamp();
+    const int64_t fly_time
+        = req.get_receive_timestamp() - req.get_send_timestamp();
     // const int64_t net_time
     //     = req.get_run_timestamp() - req.get_receive_timestamp();
 
@@ -128,35 +135,39 @@ public:
     return ret;
   }
 
-  void stop(){};
+  void stop() {};
 
 private:
   ObReqQueueThread queue_;
   QHandler qhandler_;
 };
 
-class Client : public CoKThread {
+class Client
+    : public Threads
+{
 public:
-  Client(const TestProxy& proxy, int th_cnt, ObAddr dst, uint32_t sleep_time)
-      : CoKThread(th_cnt), proxy_(proxy), dst_(dst), sleep_time_(sleep_time)
-  {}
+  Client(const TestProxy &proxy, int th_cnt, ObAddr dst, uint32_t sleep_time)
+      : Threads(th_cnt),
+        proxy_(proxy), dst_(dst), sleep_time_(sleep_time)
+  {
+  }
 
   void run(int64_t)
   {
     while (!has_set_stop()) {
       proxy_.to(dst_).test2(NULL);
       ATOMIC_FAA(&total_send_count, 1);
-      this_routine::usleep(sleep_time_);
+      ::usleep(sleep_time_);
     }
   }
 
 private:
-  const TestProxy& proxy_;
+  const TestProxy &proxy_;
   const ObAddr dst_;
   const uint32_t sleep_time_;
 };
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   UNUSED(argc);
   UNUSED(argv);
@@ -175,7 +186,7 @@ int main(int argc, char* argv[])
   rpc::frame::ObNetEasy net_;
   ObTestDeliver server;
   ObRpcHandler handler_(server);
-  rpc::frame::ObReqTransport* transport_;
+  rpc::frame::ObReqTransport *transport_;
 
   if (OB_FAIL(server.init())) {
     exit(1);
@@ -219,8 +230,8 @@ int main(int argc, char* argv[])
        << "total send: \t" << total_send_count << endl
        << "total proc: \t" << total_count << endl
        << "elapse sec: \t" << (end_ts - start_ts) / 1000000L << endl
-       << "avg fly time: " << total_fly_time / (total_count + 1) << endl
-       << "avg net time: " << total_net_time / (total_count + 1) << endl
+       << "avg fly time: " << total_fly_time / (total_count+1) << endl
+       << "avg net time: " << total_net_time / (total_count+1) << endl
        << endl;
 
   return 0;

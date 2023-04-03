@@ -1,0 +1,95 @@
+drop database if exists cte_st;
+create database cte_st;
+use cte_st;
+result_format: 4
+with cte(a,b) as (select 1 from dual) select * from cte;
+ERROR HY000: View's SELECT and view's field list have different column counts
+
+with cte(a,b) as (with cte2(a,b) as (select 1,1 from dual) select a,b from cte) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(a,a) as (select 1 from dual) select * from cte;
+ERROR HY000: duplicate name found in column alias list for WITH clause
+
+with cte as (select 1,1 from dual union all select a+1,b+1 from cte where cte.a < 10) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+# MySQL不支持search depth关键字
+with cte(a,b,c) as
+(
+select 1,2,3 from dual
+union all
+select a+1,b+1,c+1 from cte where cte.c < 10
+) search depth first by d set pcol select * from cte;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'search depth first by d set pcol select * from cte' at line 6
+
+# MySQL不支持cycle关键字
+with cte(n, x) as (select /*+ materialize */ 1,2 from dual) cycle n,n set iscyc to 'aaaaay' default 'n' select * from cte;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'cycle n,n set iscyc to 'aaaaay' default 'n' select * from cte' at line 1
+
+with cte(a,b,c) as
+(
+select 1,2,3 from dual
+union
+select a+1,b+1,c+1 from cte, cte b where cte.c < 10 and b.c = cte.c
+)  select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(a,b,c) as
+(
+select 1,2,3 from dual
+union all
+select 1,2,3 from dual
+union all
+select a+1,b+1,c+1 from cte, cte b where cte.c < 10 and b.c = cte.c
+)  select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with t1 as (select c1 from t1) select * from t1;
+ERROR 42S02: Table doesn't exist
+
+## success
+with cte1(a,b) as (select 'a','b' from dual), cte2 as (select * from cte1 where b > 'c'), cte3 as (select * from cte2 where a > 1 union select * from cte2 where a > 1) select * from cte3;
++---+---+
+| a | b |
++---+---+
++---+---+
+
+with cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(n) AS ( select 1 from dual UNION ALL select (select 1 from dual) from cte where cte.n < 2) select * from    cte;
+ERROR 42S02: Table doesn't exist
+
+create table t1(c1 int, c2 int, c3 int);
+with cte (c1, c2, c3) as ( select * from ( select c1, c2, c3 from t1 union select c1, c2, c3 from t1) where c1 = 1 union all select * from t1 join cte c on t1.c1 = c.c1 where c.c1 < 10 ) select * from   cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(n) AS ( select 1 from cte) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
+ERROR 42S02: Table doesn't exist
+
+with RECURSIVE cte(n) as (select 1  union all select (select n+1 from cte where n < 1) ) select n from cte;
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 1 + (select n+1 from cte where n < 1) from dual) select n from cte;
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
+
+with RECURSIVE cte(n) as (select 1 from dual union all select -(select n+1 from cte where n < 1) from dual) select n from cte;
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 as c1 from dual where c1 in (select n + 1 from cte where n < 10)) select n from cte;
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 from dual where EXISTS(select n + 1 from cte where n < 10)) select n from cte;
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
+
+drop database cte_st;

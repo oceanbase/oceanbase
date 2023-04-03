@@ -17,82 +17,135 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace common {
+struct ObTime;
+}
+namespace sql
+{
 
-class ObExprToCharCommon : public ObStringExprOperator {
+class ObExprToCharCommon : public ObStringExprOperator
+{
 public:
   using ObStringExprOperator::ObStringExprOperator;
 
-  static int number_to_char(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx);
-  static int datetime_to_char(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx);
-  static int calc_result_length_for_string_param(ObExprResType& type, const ObExprResType& param);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  static int number_to_char(common::ObObj &result,
+                            const common::ObObj *objs_array,
+                            int64_t param_num,
+                            common::ObExprCtx &expr_ctx);
+  static int datetime_to_char(common::ObObj &result,
+                              const common::ObObj *objs_array,
+                              int64_t param_num,
+                              common::ObExprCtx &expr_ctx);
+  static int calc_result_length_for_string_param(ObExprResType &type,
+                                                 const ObExprResType &param);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
 
-  static int eval_oracle_to_char(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int eval_oracle_to_char(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  // for static engine batch
+  static int eval_oracle_to_char_batch(
+      const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
 
 protected:
-  static int interval_to_char(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx);
 
-  static int process_number_value(
-      common::ObExprCtx& expr_ctx, const common::ObObj& obj, const int scale, common::ObString& number_str);
+  static int interval_to_char(common::ObObj &result,
+                       const common::ObObj *objs_array,
+                       int64_t param_num,
+                       common::ObExprCtx &expr_ctx);
 
-  static int process_number_format(common::ObString& fmt_raw, int& scale, bool& has_fm);
+  static int process_number_value(common::ObExprCtx &expr_ctx,
+                                  const common::ObObj &obj,
+                                  const int scale,
+                                  common::ObString &number_str);
 
-  static int format_number(const char* number_str, const int64_t number_len, const char* format_str,
-      const int64_t format_len, char* result_buf, int64_t& result_size, bool has_fm);
-  static int64_t trim_number(const common::ObString& number);
+  static int process_number_format(common::ObString &fmt_raw,
+                                   int &scale, bool &has_fm);
 
-  static int is_valid_to_char_number(const common::ObObj* objs_array, const int64_t param_num);
-  static int process_number_sci_value(
-      common::ObExprCtx& expr_ctx, const common::ObObj& obj, const int scale, common::ObString& number_sci);
+  static int format_number(const char *number_str, const int64_t number_len,
+                                      const char *format_str, const int64_t format_len,
+                                      char *result_buf, int64_t &result_size, bool has_fm);
+  static int64_t trim_number(const common::ObString &number);
+
+  static int is_valid_to_char_number(const common::ObObj *objs_array,
+                                     const int64_t param_num);
+  static int process_number_sci_value(common::ObExprCtx &expr_ctx,
+                                      const common::ObObj &obj, const int scale,
+                                      common::ObString &number_sci);
 
   // functions for static typing engine, it's hard to reuse the code of old engine,
   // we copy the old functions adapt it to new engine.
-  static int is_valid_to_char_number(const ObExpr& expr, const common::ObString& fmt);
+  static int is_valid_to_char_number(const ObExpr &expr);
 
-  static int datetime_to_char(const ObExpr& expr, ObEvalCtx& ctx, common::ObIAllocator& alloc,
-      const common::ObDatum& input, const common::ObString& fmt, const common::ObString& nlsparam,
-      common::ObString& res);
+  static int datetime_to_char(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              common::ObIAllocator &alloc,
+                              const common::ObDatum &input,
+                              const common::ObString &fmt,
+                              const common::ObString &nlsparam,
+                              common::ObString &res);
 
-  static int interval_to_char(const ObExpr& expr, ObEvalCtx& ctx, common::ObIAllocator& alloc,
-      const common::ObDatum& input, const common::ObString& fmt, const common::ObString& nlsparam,
-      common::ObString& res);
+  static int interval_to_char(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              common::ObIAllocator &alloc,
+                              const common::ObDatum &input,
+                              const common::ObString &fmt,
+                              const common::ObString &nlsparam,
+                              common::ObString &res);
 
-  static int number_to_char(const ObExpr& expr, common::ObIAllocator& alloc, const common::ObDatum& input,
-      common::ObString& fmt, common::ObString& res);
+  static int number_to_char(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            common::ObIAllocator &alloc,
+                            const common::ObDatum &input,
+                            common::ObString &fmt,
+                            const common::ObString &nlsparam,
+                            common::ObString &res);
 
-  static int process_number_sci_value(const ObExpr& expr, common::ObIAllocator& alloc, const common::ObDatum& input,
-      const int scale, common::ObString& res);
+  static int process_number_sci_value(const ObExpr &expr,
+                                      common::ObIAllocator &alloc,
+                                      const common::ObDatum &input,
+                                      const int scale,
+                                      common::ObString &res);
 
-  static int process_number_value(const ObExpr& expr, common::ObIAllocator& alloc, const common::ObDatum& input,
-      const int scale, common::ObString& res);
+  static int process_number_value(const ObExpr &expr,
+                                  common::ObIAllocator &alloc,
+                                  const common::ObDatum &input,
+                                  const int scale,
+                                  common::ObString &res);
+
+  static int convert_to_ob_time(ObEvalCtx &ctx,
+                                const common::ObDatum &input,
+                                const common::ObObjType input_type,
+                                common::ObTime &ob_time);
+
 };
 
-class ObExprOracleToChar : public ObExprToCharCommon {
+class ObExprOracleToChar : public ObExprToCharCommon
+{
 public:
-  explicit ObExprOracleToChar(common::ObIAllocator& alloc);
+  explicit ObExprOracleToChar(common::ObIAllocator &alloc);
   virtual ~ObExprOracleToChar();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* type_array, int64_t params_count, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *type_array,
+                                int64_t params_count,
+                                common::ObExprTypeCtx &type_ctx) const;
 };
 
-class ObExprOracleToNChar : public ObExprToCharCommon {
+class ObExprOracleToNChar : public ObExprToCharCommon
+{
 public:
-  explicit ObExprOracleToNChar(common::ObIAllocator& alloc);
+  explicit ObExprOracleToNChar(common::ObIAllocator &alloc);
   virtual ~ObExprOracleToNChar();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* type_array, int64_t params_count, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *type_array,
+                                int64_t params_count,
+                                common::ObExprTypeCtx &type_ctx) const;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OB_EXPR_ORACLE_TO_CHAR_H_
+#endif // OB_EXPR_ORACLE_TO_CHAR_H_

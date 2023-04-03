@@ -13,15 +13,15 @@
 #ifndef OCEANBASE_SQL_OB_RESULT_SET_H
 #define OCEANBASE_SQL_OB_RESULT_SET_H
 #include "share/ob_define.h"
-#include "lib/container/ob_array.h"
 #include "lib/container/ob_fast_array.h"
+#include "lib/container/ob_array_serialization.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_2d_array.h"
 #include "lib/timezone/ob_timezone_info.h"
-#include "rpc/obmysql/ob_mysql_global.h"  // for EMySQLFieldType
+#include "rpc/obmysql/ob_mysql_global.h" // for EMySQLFieldType
 #include "common/object/ob_obj_type.h"
 #include "common/object/ob_object.h"
 #include "common/row/ob_row.h"
@@ -29,6 +29,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "common/ob_field.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/ob_scanner.h"
 #include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/executor/ob_executor.h"
 #include "sql/executor/ob_execute_result.h"
@@ -37,13 +38,18 @@
 #include "sql/executor/ob_cmd_executor.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_trans_control.h"
-#include "sql/ob_sql_partition_location_cache.h"
+#include "sql/plan_cache/ob_cache_object_factory.h"
+#include "observer/ob_inner_sql_rpc_proxy.h"
+#include "observer/ob_req_time_service.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 class ObMySQLField;
 }
-namespace sql {
+namespace sql
+{
 class ObSQLSessionInfo;
 class ObPhysicalPlan;
 class ObLogPlan;
@@ -51,84 +57,78 @@ struct ObPsStoreItemValue;
 class ObIEndTransCallback;
 typedef common::ObFastArray<int64_t, OB_DEFAULT_SE_ARRAY_COUNT> IntFastArray;
 typedef common::ObFastArray<uint64_t, OB_DEFAULT_SE_ARRAY_COUNT> UIntFastArray;
-typedef common::ObFastArray<ObRawExpr*, OB_DEFAULT_SE_ARRAY_COUNT> RawExprFastArray;
+typedef common::ObFastArray<ObRawExpr *, OB_DEFAULT_SE_ARRAY_COUNT> RawExprFastArray;
 // query result set
-class ObResultSet {
+class ObResultSet
+{
 public:
-  class ExternalRetrieveInfo {
+  class ExternalRetrieveInfo
+  {
   public:
-    ExternalRetrieveInfo(common::ObIAllocator& allocator)
-        : allocator_(allocator),
-          external_params_(allocator),
-          into_exprs_(allocator),
-          ref_objects_(allocator),
-          route_sql_(),
-          is_select_for_update_(false),
-          has_hidden_rowid_(false)
-    {}
-    virtual ~ExternalRetrieveInfo()
-    {}
+    ExternalRetrieveInfo(common::ObIAllocator &allocator)
+      : allocator_(allocator),
+        external_params_(allocator),
+        into_exprs_(allocator),
+        ref_objects_(allocator),
+        route_sql_(),
+        is_select_for_update_(false),
+        has_hidden_rowid_(false),
+        stmt_sql_() {}
+    virtual ~ExternalRetrieveInfo() {}
 
-    int build(ObStmt& stmt, ObSQLSessionInfo& session_info,
-        common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>>& param_info);
-    int check_into_exprs(ObStmt& stmt, ObArray<ObDataType>& basic_types, ObBitSet<>& basic_into);
-    const ObIArray<ObRawExpr*>& get_into_exprs() const
-    {
-      return into_exprs_;
-    }
-    int recount_dynamic_param_info(ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>>& param_info);
+    int build(ObStmt &stmt,
+              ObSQLSessionInfo &session_info,
+              pl::ObPLBlockNS *ns,
+              bool is_dynamic_sql,
+              common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>> &param_info);
+    int build_into_exprs(ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql);
+    int check_into_exprs(ObStmt &stmt, ObArray<ObDataType> &basic_types, ObBitSet<> &basic_into);
+    const ObIArray<ObRawExpr*>& get_into_exprs() const { return into_exprs_; }
+    int recount_dynamic_param_info(ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info);
 
-    common::ObIAllocator& allocator_;
+    common::ObIAllocator &allocator_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> external_params_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> into_exprs_;
     common::ObFixedArray<share::schema::ObSchemaObjVersion, common::ObIAllocator> ref_objects_;
     ObString route_sql_;
     bool is_select_for_update_;
     bool has_hidden_rowid_;
+    ObString stmt_sql_;
   };
 
-  enum PsMode {
-    NO_PS = 0,  // not PS protocol
-    SIMPLE_PS,  // only support the pl under mysql mode
-    STD_PS,     // The standard PS, work for the oracle mode, and for the ps protocol of the mysql mode
+  enum PsMode
+  {
+    NO_PS = 0, //非PS
+    SIMPLE_PS, //只走parser，不走resolver的简易PS，仅供mysql模式的PL使用
+    STD_PS, //走resolver的标准PS，供oracle模式使用，以及供mysql模式的ps协议使用
   };
 
   typedef common::ObFastArray<ObPhysicalPlan*, 8> CandidatePlanArray;
-
 public:
-  explicit ObResultSet(ObSQLSessionInfo& session);
-  explicit ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator& allocator);
+  explicit ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator &allocator);
   virtual ~ObResultSet();
 
-  static ObResultSet* alloc(ObSQLSessionInfo& session, common::ObIAllocator& allocator);
-  static void free(ObResultSet* rs);
-  static ObResultSet* assign(ObResultSet* other);
+  static ObResultSet *alloc(ObSQLSessionInfo &session, common::ObIAllocator &allocator);
+  static void free(ObResultSet *rs);
+  static ObResultSet *assign(ObResultSet *other);
   /// open and execute the execution plan
   /// @note SHOULD be called for all statement even if there is no result rows
-  int sync_open();
-  int execute();
   int open();
   /// get the next result row
   /// @return OB_ITER_END when no more data available
-  int get_next_row(const common::ObNewRow*& row);
+  int get_next_row(const common::ObNewRow *&row);
   /// close the result set after get all the rows
-  int close(bool need_retry = false);
+  int close();
   /// get number of rows affected by INSERT/UPDATE/DELETE
   int64_t get_affected_rows() const;
-  int64_t get_return_rows() const
-  {
-    return return_rows_;
-  }
+  int64_t get_return_rows() const { return return_rows_; }
   /// get warning count during the execution
   int64_t get_warning_count() const;
   /// get statement id
   uint64_t get_statement_id() const;
-  int64_t get_sql_id() const
-  {
-    return sql_id_;
-  };
+  int64_t get_sql_id() const {return sql_id_;};
   /// get the server's error message
-  const char* get_message() const;
+  const char *get_message() const;
   /// get the server's error code
   int get_errcode() const;
   /**
@@ -136,35 +136,32 @@ public:
    * the row desc should have been valid after open() and before close()
    * @pre call open() first
    */
-  int get_row_desc(const common::ObRowDesc*& row_desc) const;
+  int get_row_desc(const common::ObRowDesc *&row_desc) const;
   /// get the field columns
-  const common::ColumnsFieldIArray* get_field_columns() const;
-  const common::ParamsFieldIArray* get_param_fields() const;
+  const common::ColumnsFieldIArray *get_field_columns() const;
+  const common::ParamsFieldIArray *get_param_fields() const;
+  const common::ParamsFieldIArray *get_returning_param_fields() const;
 
+  /**
+   * 获取字段数（列数）
+   *
+   * @return 该次查询的字段数
+   */
   uint64_t get_field_cnt() const;
 
-  void set_p_param_fileds(common::ParamsFieldIArray* p_param_columns)
-  {
-    p_param_columns_ = p_param_columns;
-  }
+  void set_p_param_fileds(common::ParamsFieldIArray *p_param_columns) { p_param_columns_ = p_param_columns; }
 
-  void set_p_column_fileds(common::ColumnsFieldIArray* p_columns_field)
-  {
-    p_field_columns_ = p_columns_field;
-  }
-  void set_exec_result(ObIExecuteResult* exec_result)
-  {
-    exec_result_ = exec_result;
-  }
-  ExternalRetrieveInfo& get_external_retrieve_info()
-  {
-    return external_retrieve_info_;
-  }
-  ObIArray<ObRawExpr*>& get_external_params();
-  ObIArray<ObRawExpr*>& get_into_exprs();
-  common::ObIArray<share::schema::ObSchemaObjVersion>& get_ref_objects();
-  const common::ObIArray<share::schema::ObSchemaObjVersion>& get_ref_objects() const;
-  ObString& get_route_sql();
+  void set_p_column_fileds(common::ColumnsFieldIArray *p_columns_field ) { p_field_columns_ = p_columns_field; }
+  void set_p_returning_param_fileds(common::ParamsFieldIArray *p_returning_param_columns)
+  { p_returning_param_columns_ = p_returning_param_columns; }
+  void set_exec_result(ObIExecuteResult *exec_result) { exec_result_ = exec_result; }
+  ExternalRetrieveInfo &get_external_retrieve_info() { return external_retrieve_info_; }
+  ObIArray<ObRawExpr*> &get_external_params();
+  ObIArray<ObRawExpr*> &get_into_exprs();
+  common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects();
+  const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const;
+  ObString &get_route_sql();
+  ObString &get_stmt_sql();
   bool get_is_select_for_update();
   inline bool has_hidden_rowid();
   /// whether the result is with rows (true for SELECT statement)
@@ -172,11 +169,11 @@ public:
   // tell mysql if need to do async end trans
   bool need_end_trans_callback() const;
   bool need_end_trans() const;
-  /// get physical plan
-  // ObPhysicalPlan *get_physical_plan();
-  ObPhysicalPlan*& get_physical_plan();
+  // get physical plan
+  // we do not want you to change the pointer of the plan. if you indeed to do that, please
+  ObPhysicalPlan *get_physical_plan();
   /// to string
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
   /// whether the statement is a prepared statment
   bool is_prepare_stmt() const;
   /// whether the statement is SHOW WARNINGS
@@ -187,197 +184,117 @@ public:
   stmt::StmtType get_stmt_type() const;
   stmt::StmtType get_inner_stmt_type() const;
   stmt::StmtType get_literal_stmt_type() const;
+  const common::ObString& get_stmt_ps_sql() const { return ps_sql_; }
+  common::ObString& get_stmt_ps_sql() { return ps_sql_; }
   int64_t get_query_string_id() const;
   static void refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err);
   int refresh_location_cache(bool is_nonblock);
   int check_and_nonblock_refresh_location_cache();
   bool need_execute_remote_sql_async() const
-  {
-    return get_exec_context().use_remote_sql() && !is_inner_result_set_;
-  }
+  { return get_exec_context().use_remote_sql() && !is_inner_result_set_; }
 
   ////////////////////////////////////////////////////////////////
   // the following methods are used by the ob_sql module internally
   /// add a field columns
-  int init()
-  {
+  int init() {
+    if (0 < my_session_.get_pl_exact_err_msg().length()) {
+      my_session_.get_pl_exact_err_msg().reset();
+    }
+    is_init_ = true;
     return common::OB_SUCCESS;
   }
-  common::ObIAllocator& get_mem_pool()
-  {
-    return mem_pool_;
-  }
-  ObExecContext& get_exec_context()
-  {
-    return exec_ctx_ != nullptr ? *exec_ctx_ : inner_exec_ctx_;
-  }
-  void set_exec_context(ObExecContext& exec_ctx)
-  {
-    exec_ctx_ = &exec_ctx;
-  }
-  const ObExecContext& get_exec_context() const
-  {
-    return exec_ctx_ != nullptr ? *exec_ctx_ : inner_exec_ctx_;
-  }
-  int reserve_field_columns(int64_t size)
-  {
-    return field_columns_.reserve(size);
-  };
-  int reserve_param_columns(int64_t size)
-  {
-    return param_columns_.reserve(size);
-  };
-  int add_field_column(const common::ObField& field);
-  int add_param_column(const common::ObField& field);
-  int from_plan(const ObPhysicalPlan& phy_plan, const common::ObIArray<ObPCParam*>& raw_params);
-  int to_plan(const bool is_ps_mode, ObPhysicalPlan* phy_plan);
-  const common::ObString& get_statement_name() const;
+  bool is_inited() const { return is_init_; }
+  common::ObIAllocator& get_mem_pool() { return mem_pool_; }
+  ObExecContext &get_exec_context() { return exec_ctx_ != nullptr ? *exec_ctx_ : *inner_exec_ctx_; }
+  void set_exec_context(ObExecContext &exec_ctx) { exec_ctx_ = &exec_ctx; }
+  const ObExecContext &get_exec_context() const
+  { return exec_ctx_ != nullptr ? *exec_ctx_ : *inner_exec_ctx_; }
+  int reserve_field_columns(int64_t size) { return field_columns_.reserve(size); };
+  int reserve_param_columns(int64_t size) { return param_columns_.reserve(size); };
+  int add_field_column(const common::ObField &field);
+  int add_param_column(const common::ObField &field);
+  int reserve_returning_param_column(int64_t size) { return returning_param_columns_.reserve(size); };
+  int add_returning_param_column(const common::ObField &param);
+
+  int from_plan(const ObPhysicalPlan &phy_plan, const common::ObIArray<ObPCParam *> &raw_params);
+  int to_plan(const PlanCacheMode mode, ObPhysicalPlan *phy_plan);
+  const common::ObString &get_statement_name() const;
   void set_statement_id(const uint64_t stmt_id);
   void set_statement_name(const common::ObString name);
-  void set_message(const char* message);
+  void set_message(const char *message);
   bool need_rollback(int ret, int errcode, bool is_error_ignored) const;
   void set_errcode(int code);
-  void set_affected_rows(const int64_t& affected_rows);
+  void set_affected_rows(const int64_t &affected_rows);
   int set_mysql_info();
   void set_last_insert_id_session(const uint64_t last_insert_id);
   uint64_t get_last_insert_id_session();
   void set_last_insert_id_to_client(const uint64_t last_insert_id);
   uint64_t get_last_insert_id_to_client();
-  void set_warning_count(const int64_t& warning_count);
-  void set_physical_plan(const CacheRefHandleID ref_handle, ObPhysicalPlan* physical_plan);
-  void set_cmd(ObICmd* cmd);
+  void set_warning_count(const int64_t &warning_count);
+  ObCacheObjGuard& get_cache_obj_guard();
+  void set_cmd(ObICmd *cmd);
   bool is_end_trans_async();
   void set_end_trans_async(bool is_async);
-  void set_mysql_end_trans_callback(ObIEndTransCallback* cb);
+  void set_mysql_end_trans_callback(ObIEndTransCallback *cb);
   void fields_clear();
   void set_stmt_type(stmt::StmtType stmt_type);
   void set_inner_stmt_type(stmt::StmtType stmt_type);
   void set_literal_stmt_type(stmt::StmtType stmt_type);
   void set_compound_stmt(bool compound);
-  ObSQLSessionInfo& get_session()
-  {
-    return my_session_;
-  }
-  const ObSQLSessionInfo& get_session() const
-  {
-    return my_session_;
-  };
-  void set_ps_transformer_allocator(common::ObArenaAllocator* allocator);
+  ObSQLSessionInfo& get_session() { return my_session_; }
+  const ObSQLSessionInfo& get_session() const {return my_session_; };
+  void set_ps_transformer_allocator(common::ObArenaAllocator *allocator);
   void set_query_string_id(int64_t query_string_id);
-  void set_sql_id(int64_t sql_id)
-  {
-    sql_id_ = sql_id;
-  };
+  void set_sql_id(int64_t sql_id) {sql_id_ = sql_id;};
   void set_begin_timestamp(const int64_t begin_ts);
   int start_stmt();
   int end_stmt(const bool is_rollback);
   int start_trans();
   int end_trans(const bool is_rollback);
-  int start_participant();
-  int end_participant(const bool is_rollback);
-  void set_is_from_plan_cache(bool is_from_plan_cache)
-  {
-    is_from_plan_cache_ = is_from_plan_cache;
-  }
-  void set_is_inner_result_set(const bool v)
-  {
-    is_inner_result_set_ = v;
-  }
-  bool get_is_from_plan_cache() const
-  {
-    return is_from_plan_cache_;
-  }
-  const ObICmd* get_cmd() const
-  {
-    return cmd_;
-  }
-  ObICmd* get_cmd()
-  {
-    return cmd_;
-  }
-  void init_partition_location_cache(share::ObIPartitionLocationCache* loc_cache, common::ObAddr self_addr,
-      share::schema::ObSchemaGetterGuard* schema_guard)
-  {
-    sql_location_cache_.init(loc_cache, self_addr, schema_guard);
-    self_addr_ = self_addr;
-  }
-  ObSqlPartitionLocationCache& get_partition_location_cache()
-  {
-    return sql_location_cache_;
-  }
+  void set_is_from_plan_cache(bool is_from_plan_cache) { is_from_plan_cache_ = is_from_plan_cache; }
+  void set_is_inner_result_set(const bool v) { is_inner_result_set_ = v; }
+  bool get_is_from_plan_cache() const { return  is_from_plan_cache_; }
+  const ObICmd *get_cmd() const { return cmd_; }
+  ObICmd *get_cmd() { return cmd_; }
   void set_has_top_limit(const bool has_limit);
   void set_is_calc_found_rows(const bool is_calc_found_rows);
   bool get_has_top_limit() const;
   bool is_calc_found_rows() const;
-  // Determine whether an asynchronous EndTrans request has been submitted.
-  // If the request has been submitted, the client needs to wait for the asynchronous response packet.
+  // 判断是否提交了异步EndTrans请求，如果请求已提交，则客户端需要等待异步回包。
   // ref: obmp_query.cpp, ob_mysql_end_trans_callback.cpp
   bool is_async_end_trans_submitted() const
   {
-    return get_exec_context().get_trans_state().is_end_trans_executed();
+    auto &s = get_exec_context().get_trans_state();
+    return s.is_end_trans_executed() && s.is_end_trans_success();
   }
-  inline TransState& get_trans_state()
-  {
-    return get_exec_context().get_trans_state();
-  }
-  inline const TransState& get_trans_state() const
-  {
-    return get_exec_context().get_trans_state();
-  }
+  inline TransState &get_trans_state()  { return get_exec_context().get_trans_state(); }
+  inline const TransState &get_trans_state() const {return get_exec_context().get_trans_state();}
   int update_last_insert_id();
+  int update_last_insert_id_to_client();
   int update_is_result_accurate();
-  bool is_ps_protocol() const
-  {
-    return STD_PS == ps_protocol_;
-  };
-  void set_ps_protocol()
-  {
-    ps_protocol_ = STD_PS;
-  }
-  bool is_simple_ps_protocol() const
-  {
-    return SIMPLE_PS == ps_protocol_;
-  };
-  void set_simple_ps_protocol()
-  {
-    ps_protocol_ = SIMPLE_PS;
-  }
-  int get_read_consistency(ObConsistencyLevel& consistency);
-  void set_has_global_variable(bool has_global_variable)
-  {
-    has_global_variable_ = has_global_variable;
-  }
-  bool has_global_variable() const
-  {
-    return has_global_variable_;
-  }
-  void set_returning(bool is_returning)
-  {
-    is_returning_ = is_returning;
-  }
-  bool is_returning() const
-  {
-    return is_returning_;
-  }
-  void set_user_sql(bool is_user_sql)
-  {
-    is_user_sql_ = is_user_sql;
-  }
-  bool is_user_sql() const
-  {
-    return is_user_sql_;
-  }
+  bool is_ps_protocol() const { return STD_PS == ps_protocol_; };
+  void set_ps_protocol() { ps_protocol_ = STD_PS; }
+  bool is_simple_ps_protocol() const { return SIMPLE_PS == ps_protocol_; };
+  void set_simple_ps_protocol() { ps_protocol_ = SIMPLE_PS; }
+  int get_read_consistency(ObConsistencyLevel &consistency);
+  void set_has_global_variable(bool has_global_variable) { has_global_variable_ = has_global_variable;}
+  bool has_global_variable() const { return has_global_variable_; }
+  void set_returning(bool is_returning) { is_returning_ = is_returning; }
+  bool is_returning() const { return is_returning_; }
+  void set_user_sql(bool is_user_sql) { is_user_sql_ = is_user_sql; }
+  bool is_user_sql() const { return is_user_sql_; }
 
-  // Fill parameter information with the field name
-  // noted that, except for cname_, the rest of the strings are all copied from the plan.
-  // The memory of cname_ is allocated by the allocator of result_set
-  int construct_field_name(const common::ObIArray<ObPCParam*>& raw_params, const bool is_first_parse);
+  // 往带？的field name填充参数信息
+  // 要注意的是，除了cname_以外，其余的string都是从计划里面浅拷出来的，
+  // cname_的内存是由result_set的分配器分配出来的
+  int construct_field_name(const common::ObIArray<ObPCParam *> &raw_params, const bool is_first_parse);
 
-  int construct_display_field_name(
-      common::ObField& field, const ObIArray<ObPCParam*>& raw_params, const bool is_first_parse);
+  int construct_display_field_name(common::ObField &field,
+                                   const ObIArray<ObPCParam *> &raw_params,
+                                   const bool is_first_parse);
 
-  // The field columns in the deep copy plan are stored in the field_columns_ member
-  int copy_field_columns(const ObPhysicalPlan& plan);
+  // 深拷计划中的field columns，存放在field_columns_成员中
+  int copy_field_columns(const ObPhysicalPlan &plan);
   bool has_implicit_cursor() const;
   int switch_implicit_cursor();
   void reset_implicit_cursor_idx()
@@ -387,135 +304,131 @@ public:
   }
   bool is_cursor_end() const;
 
-  inline void set_ref_handle(const CacheRefHandleID handle_id)
-  {
-    ref_handle_id_ = handle_id;
-  }
-  inline CacheRefHandleID get_ref_handle()
-  {
-    return ref_handle_id_;
-  }
   inline bool can_execute_async() const
   {
-    return get_exec_context().use_remote_sql() && physical_plan_ != nullptr &&
-           physical_plan_->get_location_type() != OB_PHY_PLAN_UNCERTAIN;
-    // temporarily prevent the global index plan being executed asynchronously
+    ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
+    return get_exec_context().use_remote_sql()
+        && physical_plan_ != nullptr
+        && physical_plan_->get_location_type() != OB_PHY_PLAN_UNCERTAIN;
+    //暂时不让全局索引的计划走异步执行
   }
-  void set_is_com_filed_list()
-  {
-    is_com_filed_list_ = true;
-  }
-  bool get_is_com_filed_list()
-  {
-    return is_com_filed_list_;
-  }
-  void set_wildcard_string(common::ObString string)
-  {
-    wild_str_ = string;
-  }
-  common::ObString& get_wildcard_string()
-  {
-    return wild_str_;
-  }
-  static void replace_lob_type(const ObSQLSessionInfo& session, const ObField& field, obmysql::ObMySQLField& mfield);
-
+  void set_is_com_filed_list() { is_com_filed_list_ = true; }
+  bool get_is_com_filed_list() { return is_com_filed_list_; }
+  void set_wildcard_string(common::ObString string) { wild_str_ = string; }
+  common::ObString &get_wildcard_string() { return wild_str_;}
+  common::ParamStore &get_ps_params() { return ps_params_; }
+  static void replace_lob_type(const ObSQLSessionInfo &session,
+                               const ObField &field,
+                               obmysql::ObMySQLField &mfield);
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
-
 private:
   // disallow copy
-  ObResultSet(const ObResultSet& other);
-  ObResultSet& operator=(const ObResultSet& other);
+  ObResultSet(const ObResultSet &other);
+  ObResultSet &operator=(const ObResultSet &other);
   // function members
-
+  int execute();
   int open_plan();
   int open_cmd();
-  int do_open_plan(ObExecContext& ctx);
-  int do_close_plan(int errcode, ObExecContext& ctx);
-  bool transaction_set_violation_and_retry(int& err, int64_t& retry);
-  int init_cmd_exec_context(ObExecContext& exec_ctx);
+  int open_result();
+  int do_open_plan(ObExecContext &ctx);
+  int do_close_plan(int errcode, ObExecContext &ctx);
+  bool transaction_set_violation_and_retry(int &err, int64_t &retry);
+  int init_cmd_exec_context(ObExecContext &exec_ctx);
   int on_cmd_execute();
-  int auto_start_plan_trans();
-  int auto_end_plan_trans(int ret, bool need_retry, bool& async);
+  int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool &async);
 
-  void store_affected_rows(ObPhysicalPlanCtx& plan_ctx);
-  void store_found_rows(ObPhysicalPlanCtx& plan_ctx);
-  int store_last_insert_id(ObExecContext& ctx);
-  int drive_pdml_query();
+  void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
+  void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
+  int store_last_insert_id(ObExecContext &ctx);
+  int drive_dml_query();
+  int inner_get_next_row(const common::ObNewRow *&row);
 
   // make final field name
-  int make_final_field_name(char* src, int64_t len, common::ObString& field_name);
-  int prepare_mock_schemas();
-  int rm_mock_schemas();
-  // delete useless spaces
-  static int64_t remove_extra_space(char* buff, int64_t len);
+  int make_final_field_name(char *src, int64_t len, common::ObString &field_name);
+  // 删除ParseNode中raw_text的多余的空格
+  static int64_t remove_extra_space(char *buff, int64_t len);
+  // Always called in the ObResultSet constructor
+  void update_start_time() const
+  {
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_start_time();
+  }
+  // Always called at the end of the ObResultSet destructor
+  void update_end_time() const
+  {
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_end_time();
+  }
 
 protected:
+  // 区分本ResultSet是为User还是Inner SQL服务, 服务于EndTrans异步回调
   bool is_user_sql_;
-
 private:
+  // add cache object guard
+  ObCacheObjGuard cache_obj_guard_;
   // data members
   common::ObArenaAllocator inner_mem_pool_;
-  common::ObIAllocator& mem_pool_;
+  common::ObIAllocator &mem_pool_;
 
   uint64_t statement_id_;
   int64_t sql_id_;
-  int64_t affected_rows_;  // number of rows affected by INSERT/UPDATE/DELETE
+  int64_t affected_rows_;// number of rows affected by INSERT/UPDATE/DELETE
   int64_t return_rows_;
   uint64_t last_insert_id_session_;
   uint64_t last_insert_id_to_client_;
   int64_t warning_count_;
   common::ObString statement_name_;
-  char message_[common::MSG_SIZE];  // null terminated message string
+  char message_[common::MSG_SIZE];// null terminated message string
   common::ColumnsFieldArray field_columns_;
   common::ParamsFieldArray param_columns_;
 
-  const common::ColumnsFieldIArray* p_field_columns_;
-  const common::ParamsFieldIArray* p_param_columns_;
-  ObPhysicalPlan* physical_plan_;
+  const common::ColumnsFieldIArray *p_field_columns_;
+  const common::ParamsFieldIArray *p_param_columns_;
+  common::ParamsFieldArray returning_param_columns_;
+  const common::ParamsFieldIArray *p_returning_param_columns_;
+
   stmt::StmtType stmt_type_;
   // for a prepared SELECT, stmt_type_ is T_PREPARE
   // but in perf stat we want inner info, i.e. SELECT.
   stmt::StmtType inner_stmt_type_;
-  stmt::StmtType literal_stmt_type_;
+  // 字面stmt类型，例如show语句的字面类型为show，而stmt_type_为SELECT
+  stmt::StmtType  literal_stmt_type_;
   char external_retrieve_info_buf_[sizeof(ExternalRetrieveInfo)];
-  ExternalRetrieveInfo& external_retrieve_info_;
+  ExternalRetrieveInfo &external_retrieve_info_;
   bool compound_;
-  bool has_global_variable_;  // there are global variables
-  /*
-   * ob_sql.h is the external interface of the SQL module,
-   * the outside world does not need to know ObExecContext
-   * Therefore, exec_ctx_ is a member of ObResultSet and is not exposed outside of SQL
+  bool has_global_variable_; //表明含有global变量，与stmt_type_为T_VARIABLE_SET配合使用
+  /* ob_sql.h是SQL模块对外的接口，外界无需了解到ObExecContext
+   * 所以，将exec_ctx_作为ObResultSet的成员，不对SQL之外暴露
    */
   int errcode_;
-  ObSQLSessionInfo& my_session_;  // The session who owns this result set
+  ObSQLSessionInfo &my_session_; // The session who owns this result set
   int64_t begin_timestamp_;
-  ObIExecuteResult* exec_result_;
-  ObICmd* cmd_;
-  ObExecContext inner_exec_ctx_;
-  ObExecContext* exec_ctx_;
-  ObSqlPartitionLocationCache sql_location_cache_;
+  ObIExecuteResult *exec_result_;
+  ObICmd *cmd_;
+  char inner_exec_ctx_buf_[sizeof(ObExecContext)];
+  ObExecContext *inner_exec_ctx_;
+  ObExecContext *exec_ctx_;
   bool is_from_plan_cache_;
-  bool is_inner_result_set_;  // result set for inner sql execution.
+  bool is_inner_result_set_; // result set for inner sql execution.
   // mark whether there has limit operator
   bool has_top_limit_;
   bool is_calc_found_rows_;
   PsMode ps_protocol_;
-  common::ObAddr self_addr_;
-  // executor
+  // 执行器
   ObExecutor executor_;
   bool is_returning_;
-  int64_t worker_count_;
-
-  // physical plan ref handle id
-  CacheRefHandleID ref_handle_id_;
-
-  bool is_com_filed_list_;     // used to mark OB_MYSQL_COM_FIELD_LIST
-  common::ObString wild_str_;  // uesd to save filed wildcard in OB_MYSQL_COM_FIELD_LIST;
+  bool is_com_filed_list_; //used to mark COM_FIELD_LIST
+  bool need_revert_tx_; //dblink
+  common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
+  common::ObString ps_sql_; // for sql in pl
+  bool is_init_;
+  common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
 };
 
-// inline ObResultSet *ObResultSet::alloc(ObSQLSessionInfo &session, common::ObIAllocator &allocator)
+
+//inline ObResultSet *ObResultSet::alloc(ObSQLSessionInfo &session, common::ObIAllocator &allocator)
 //{
 //  ObResultSet *rs = op_reclaim_alloc_args(ObResultSet, session, allocator);
 //  if (rs != nullptr) {
@@ -524,7 +437,7 @@ private:
 //  return rs;
 //}
 //
-// inline void ObResultSet::free(ObResultSet *rs)
+//inline void ObResultSet::free(ObResultSet *rs)
 //{
 //  if (rs != nullptr) {
 //    int64_t ref_count = rs->def_ref_count();
@@ -534,7 +447,7 @@ private:
 //  }
 //}
 //
-// inline ObResultSet *ObResultSet::assign(ObResultSet *other)
+//inline ObResultSet *ObResultSet::assign(ObResultSet *other)
 //{
 //  if (other != nullptr) {
 //    other->inc_ref_count();
@@ -542,8 +455,9 @@ private:
 //  return other;
 //}
 
-inline ObResultSet::ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator& allocator)
+inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator &allocator)
     : is_user_sql_(false),
+      cache_obj_guard_(MAX_HANDLE),
       inner_mem_pool_(),
       mem_pool_(allocator),
       statement_id_(common::OB_INVALID_ID),
@@ -558,11 +472,12 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator&
       param_columns_(allocator),
       p_field_columns_(&field_columns_),
       p_param_columns_(&param_columns_),
-      physical_plan_(NULL),
+      returning_param_columns_(allocator),
+      p_returning_param_columns_(&returning_param_columns_),
       stmt_type_(stmt::T_NONE),
       inner_stmt_type_(stmt::T_NONE),
       literal_stmt_type_(stmt::T_NONE),
-      external_retrieve_info_(*new (external_retrieve_info_buf_) ExternalRetrieveInfo(allocator)),
+      external_retrieve_info_(*new(external_retrieve_info_buf_)ExternalRetrieveInfo(allocator)),
       compound_(false),
       has_global_variable_(false),
       errcode_(0),
@@ -570,9 +485,8 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator&
       begin_timestamp_(0),
       exec_result_(nullptr),
       cmd_(NULL),
-      inner_exec_ctx_(allocator),
-      exec_ctx_(&inner_exec_ctx_),
-      sql_location_cache_(),
+      inner_exec_ctx_(new(inner_exec_ctx_buf_)ObExecContext(allocator)),
+      exec_ctx_(inner_exec_ctx_),
       is_from_plan_cache_(false),
       is_inner_result_set_(false),
       has_top_limit_(false),
@@ -580,58 +494,16 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator&
       ps_protocol_(NO_PS),
       executor_(),
       is_returning_(false),
-      worker_count_(0),
-      ref_handle_id_(MAX_HANDLE),
       is_com_filed_list_(false),
-      wild_str_()
+      need_revert_tx_(false),
+      wild_str_(),
+      ps_sql_(),
+      is_init_(false),
+      ps_params_(ObWrapperAllocator(&allocator))
 {
   message_[0] = '\0';
-}
-
-inline ObResultSet::ObResultSet(ObSQLSessionInfo& session)
-    : is_user_sql_(false),
-      inner_mem_pool_(common::ObModIds::OB_RESULT_SET, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
-      mem_pool_(inner_mem_pool_),
-      statement_id_(common::OB_INVALID_ID),
-      sql_id_(0),
-      affected_rows_(0),
-      return_rows_(0),
-      last_insert_id_session_(0),
-      last_insert_id_to_client_(0),
-      warning_count_(0),
-      statement_name_(),
-      field_columns_(inner_mem_pool_),
-      param_columns_(inner_mem_pool_),
-      p_field_columns_(&field_columns_),
-      p_param_columns_(&param_columns_),
-      physical_plan_(NULL),
-      stmt_type_(stmt::T_NONE),
-      inner_stmt_type_(stmt::T_NONE),
-      literal_stmt_type_(stmt::T_NONE),
-      external_retrieve_info_(*new (external_retrieve_info_buf_) ExternalRetrieveInfo(inner_mem_pool_)),
-      compound_(false),
-      has_global_variable_(false),
-      errcode_(0),
-      my_session_(session),
-      begin_timestamp_(0),
-      exec_result_(nullptr),
-      cmd_(NULL),
-      inner_exec_ctx_(),
-      exec_ctx_(&inner_exec_ctx_),
-      sql_location_cache_(),
-      is_from_plan_cache_(false),
-      is_inner_result_set_(false),
-      has_top_limit_(false),
-      is_calc_found_rows_(false),
-      ps_protocol_(NO_PS),
-      executor_(),
-      is_returning_(false),
-      worker_count_(0),
-      ref_handle_id_(MAX_HANDLE),
-      is_com_filed_list_(false),
-      wild_str_()
-{
-  message_[0] = '\0';
+  // Always called in the ObResultSet constructor
+  update_start_time();
 }
 
 inline int64_t ObResultSet::get_affected_rows() const
@@ -649,12 +521,12 @@ inline uint64_t ObResultSet::get_statement_id() const
   return statement_id_;
 }
 
-inline const common::ObString& ObResultSet::get_statement_name() const
+inline const common::ObString &ObResultSet::get_statement_name() const
 {
   return statement_name_;
 }
 
-inline const char* ObResultSet::get_message() const
+inline const char *ObResultSet::get_message() const
 {
   return message_;
 }
@@ -669,7 +541,7 @@ inline void ObResultSet::set_statement_id(const uint64_t stmt_id)
   statement_id_ = stmt_id;
 }
 
-inline void ObResultSet::set_message(const char* message)
+inline void ObResultSet::set_message(const char *message)
 {
   snprintf(message_, common::MSG_SIZE, "%s", message);
 }
@@ -679,49 +551,64 @@ inline void ObResultSet::set_errcode(int code)
   errcode_ = code;
 }
 
-inline int ObResultSet::add_field_column(const common::ObField& field)
+inline int ObResultSet::add_field_column(const common::ObField &field)
 {
   return field_columns_.push_back(field);
 }
 
-inline int ObResultSet::add_param_column(const common::ObField& param)
+inline int ObResultSet::add_param_column(const common::ObField &param)
 {
   return param_columns_.push_back(param);
 }
 
-inline const common::ColumnsFieldIArray* ObResultSet::get_field_columns() const
+inline const common::ColumnsFieldIArray *ObResultSet::get_field_columns() const
 {
   return p_field_columns_;
 }
 
-inline const common::ParamsFieldIArray* ObResultSet::get_param_fields() const
+inline const common::ParamsFieldIArray *ObResultSet::get_param_fields() const
 {
   return p_param_columns_;
 }
 
-inline ObIArray<ObRawExpr*>& ObResultSet::get_external_params()
+inline int ObResultSet::add_returning_param_column(const common::ObField &param)
+{
+  return returning_param_columns_.push_back(param);
+}
+
+inline const common::ParamsFieldIArray *ObResultSet::get_returning_param_fields() const
+{
+  return p_returning_param_columns_;
+}
+
+inline ObIArray<ObRawExpr*> &ObResultSet::get_external_params()
 {
   return external_retrieve_info_.external_params_;
 }
 
-inline ObIArray<ObRawExpr*>& ObResultSet::get_into_exprs()
+inline ObIArray<ObRawExpr*> &ObResultSet::get_into_exprs()
 {
   return external_retrieve_info_.into_exprs_;
 }
 
-inline const common::ObIArray<share::schema::ObSchemaObjVersion>& ObResultSet::get_ref_objects() const
+inline const common::ObIArray<share::schema::ObSchemaObjVersion> &ObResultSet::get_ref_objects() const
 {
   return external_retrieve_info_.ref_objects_;
 }
 
-inline common::ObIArray<share::schema::ObSchemaObjVersion>& ObResultSet::get_ref_objects()
+inline common::ObIArray<share::schema::ObSchemaObjVersion> &ObResultSet::get_ref_objects()
 {
   return external_retrieve_info_.ref_objects_;
 }
 
-inline ObString& ObResultSet::get_route_sql()
+inline ObString &ObResultSet::get_route_sql()
 {
   return external_retrieve_info_.route_sql_;
+}
+
+inline ObString &ObResultSet::get_stmt_sql()
+{
+  return external_retrieve_info_.stmt_sql_;
 }
 
 inline bool ObResultSet::get_is_select_for_update()
@@ -739,7 +626,7 @@ inline bool ObResultSet::is_with_rows() const
   return (p_field_columns_->count() > 0 && !is_prepare_stmt());
 }
 
-inline void ObResultSet::set_affected_rows(const int64_t& affected_rows)
+inline void ObResultSet::set_affected_rows(const int64_t &affected_rows)
 {
   affected_rows_ = affected_rows;
 }
@@ -762,22 +649,29 @@ inline uint64_t ObResultSet::get_last_insert_id_to_client()
   return last_insert_id_to_client_;
 }
 
-inline void ObResultSet::set_warning_count(const int64_t& warning_count)
+inline void ObResultSet::set_warning_count(const int64_t &warning_count)
 {
   warning_count_ = warning_count;
 }
 
-inline int64_t ObResultSet::to_string(char* buf, const int64_t buf_len) const
+inline int64_t ObResultSet::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   common::databuff_printf(buf, buf_len, pos, "stmt_type=%d ", stmt_type_);
-  common::databuff_printf(buf, buf_len, pos, "is_with_rows=%c ", this->is_with_rows() ? 'Y' : 'N');
-  common::databuff_printf(buf, buf_len, pos, "affected_rows=%ld ", affected_rows_);
-  common::databuff_printf(buf, buf_len, pos, "warning_count=%ld ", warning_count_);
-  common::databuff_printf(buf, buf_len, pos, "field_count=%ld ", field_columns_.count());
+  common::databuff_printf(buf, buf_len, pos, "is_with_rows=%c ",
+                          this->is_with_rows() ? 'Y' : 'N');
+  common::databuff_printf(buf, buf_len, pos, "affected_rows=%ld ",
+                          affected_rows_);
+  common::databuff_printf(buf, buf_len, pos, "return_rows=%ld ",
+                          return_rows_);
+  common::databuff_printf(buf, buf_len, pos, "warning_count=%ld ",
+                          warning_count_);
+  common::databuff_printf(buf, buf_len, pos, "field_count=%ld ",
+                          field_columns_.count());
   common::databuff_printf(buf, buf_len, pos, "message=%s ", message_);
   common::databuff_printf(buf, buf_len, pos, "stmt_id=%lu ", statement_id_);
-  common::databuff_printf(buf, buf_len, pos, "stmt_name=%.*s ", statement_name_.length(), statement_name_.ptr());
+  common::databuff_printf(buf, buf_len, pos, "stmt_name=%.*s ",
+                          statement_name_.length(), statement_name_.ptr());
   common::databuff_printf(buf, buf_len, pos, "sql_id=%lu ", sql_id_);
   return pos;
 }
@@ -792,17 +686,14 @@ inline bool ObResultSet::is_end_trans_async()
   return get_exec_context().is_end_trans_async();
 }
 
-inline void ObResultSet::set_cmd(ObICmd* cmd)
+inline void ObResultSet::set_cmd(ObICmd *cmd)
 {
   cmd_ = cmd;
 }
 
-inline void ObResultSet::set_physical_plan(const CacheRefHandleID ref_handle, ObPhysicalPlan* physical_plan)
+inline ObCacheObjGuard& ObResultSet::get_cache_obj_guard()
 {
-  physical_plan_ = physical_plan;
-  if (NULL != physical_plan) {
-    set_ref_handle(ref_handle);
-  }
+  return cache_obj_guard_;
 }
 
 inline void ObResultSet::fields_clear()
@@ -813,11 +704,13 @@ inline void ObResultSet::fields_clear()
   message_[0] = '\0';
   field_columns_.reset();
   param_columns_.reset();
+  returning_param_columns_.reset();
   p_field_columns_ = &field_columns_;
   p_param_columns_ = &param_columns_;
+  p_returning_param_columns_ = &returning_param_columns_;
 }
 
-inline int ObResultSet::get_row_desc(const common::ObRowDesc*& row_desc) const
+inline int ObResultSet::get_row_desc(const common::ObRowDesc *&row_desc) const
 {
   UNUSED(row_desc);
   return common::OB_SUCCESS;
@@ -868,6 +761,7 @@ inline void ObResultSet::set_literal_stmt_type(stmt::StmtType stmt_type)
   literal_stmt_type_ = stmt_type;
 }
 
+
 inline bool ObResultSet::is_compound_stmt() const
 {
   return compound_;
@@ -875,13 +769,18 @@ inline bool ObResultSet::is_compound_stmt() const
 
 inline bool ObResultSet::is_dml_stmt(stmt::StmtType stmt_type) const
 {
-  return (stmt::T_SELECT == stmt_type || stmt::T_INSERT == stmt_type || stmt::T_REPLACE == stmt_type ||
-          stmt::T_MERGE == stmt_type || stmt::T_DELETE == stmt_type || stmt::T_UPDATE == stmt_type);
+  return (stmt::T_SELECT  == stmt_type
+       || stmt::T_INSERT  == stmt_type
+       || stmt::T_REPLACE == stmt_type
+       || stmt::T_MERGE   == stmt_type
+       || stmt::T_DELETE  == stmt_type
+       || stmt::T_UPDATE  == stmt_type);
 }
 
 inline bool ObResultSet::is_pl_stmt(stmt::StmtType stmt_type) const
 {
-  return (stmt::T_CALL_PROCEDURE == stmt_type || stmt::T_ANONYMOUS_BLOCK == stmt_type);
+  return (stmt::T_CALL_PROCEDURE  == stmt_type
+       || stmt::T_ANONYMOUS_BLOCK == stmt_type);
 }
 
 inline void ObResultSet::set_begin_timestamp(const int64_t begin_ts)
@@ -909,12 +808,52 @@ inline bool ObResultSet::is_calc_found_rows() const
   return is_calc_found_rows_;
 }
 
-inline ObPhysicalPlan*& ObResultSet::get_physical_plan()
+inline ObPhysicalPlan *ObResultSet::get_physical_plan()
 {
-  return physical_plan_;
+  return static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+// for remote inner sql
+class ObRemoteResultSet
+{
+public:
+  /* functions */
+  explicit ObRemoteResultSet(common::ObIAllocator &allocator);
+  virtual ~ObRemoteResultSet();
+  int get_next_row(const common::ObNewRow *&row);
+  int close();
+
+  common::ObIAllocator& get_mem_pool() { return mem_pool_; }
+
+  obrpc::ObInnerSqlRpcStreamHandle *get_stream_handler() { return remote_resp_handler_; }
+  int reset_and_init_remote_resp_handler();
+
+  const common::ColumnsFieldIArray *get_field_columns() const { return &field_columns_; }
+  int copy_field_columns(const common::ObSArray<common::ObField> &field_columns);
+
+  sql::stmt::StmtType get_stmt_type() { return stmt_type_; }
+  void set_stmt_type(sql::stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
+
+private:
+  /* functions */
+  int setup_next_scanner();
+  int get_next_row_from_cur_scanner(const common::ObNewRow *&row);
+
+  /* variables */
+  common::ObIAllocator &mem_pool_;
+  obrpc::ObInnerSqlRpcStreamHandle *remote_resp_handler_;
+  common::ObSArray<common::ObField> field_columns_;
+  common::ObScanner *scanner_;
+  common::ObScanner::Iterator scanner_iter_;
+  bool all_data_empty_;
+  bool cur_data_empty_;
+  bool first_response_received_;
+  int64_t found_rows_;
+  sql::stmt::StmtType stmt_type_;
+};
+
+
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_OB_RESULT_SET_H */

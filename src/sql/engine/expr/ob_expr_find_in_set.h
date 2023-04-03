@@ -15,22 +15,24 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprFindInSet : public ObFuncExprOperator {
+class ObExprFindInSet: public ObFuncExprOperator {
 public:
-  explicit ObExprFindInSet(common::ObIAllocator& alloc);
-  virtual ~ObExprFindInSet();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_find_in_set_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-
+	explicit ObExprFindInSet(common::ObIAllocator &alloc);
+	virtual ~ObExprFindInSet();
+	virtual int calc_result_type2(ObExprResType &type,
+																ObExprResType &type1,
+																ObExprResType &type2,
+																common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const;
+  static int calc_find_in_set_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
+	 DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
 };
 
 } /* namespace sql */

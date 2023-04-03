@@ -19,8 +19,10 @@
 #include "lib/hash/ob_hashutils.h"
 #include "lib/container/ob_fixed_array.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <typename Key, typename Value>
 struct MapPair {
   Key first;
@@ -30,51 +32,49 @@ struct MapPair {
 template <typename Key, typename Value>
 struct MapNode {
   MapPair<Key, Value> pair_;
-  MapNode* next_;
+  MapNode *next_;
 };
 
 template <typename Key, typename Value, typename HashFunc = common::hash::hash_func<Key> >
 class ObFixedHashMap;
 
 template <typename Key, typename Value, typename HashFunc = common::hash::hash_func<Key> >
-class ObFixedHashMapIterator {
+class ObFixedHashMapIterator
+{
 public:
   typedef ObFixedHashMap<Key, Value, HashFunc> HashMap;
   typedef ObFixedHashMapIterator<Key, Value, HashFunc> Iterator;
 
-  ObFixedHashMapIterator() : hash_map_(NULL), bucket_pos_(0), node_(NULL)
-  {}
-  ObFixedHashMapIterator(const Iterator& other)
-      : hash_map_(other.hash_map_), bucket_pos_(other.bucket_pos_), node_(other.node_)
-  {}
-  ObFixedHashMapIterator(const HashMap* hash_map, const int64_t bucket_pos, MapNode<Key, Value>* node)
-      : hash_map_(hash_map), bucket_pos_(bucket_pos), node_(node)
-  {}
+  ObFixedHashMapIterator() : hash_map_(NULL), bucket_pos_(0), node_(NULL) {}
+  ObFixedHashMapIterator(const Iterator &other)
+    : hash_map_(other.hash_map_), bucket_pos_(other.bucket_pos_), node_(other.node_) {}
+  ObFixedHashMapIterator(const HashMap *hash_map, const int64_t bucket_pos, MapNode<Key, Value> *node)
+    : hash_map_(hash_map), bucket_pos_(bucket_pos), node_(node) {}
 
-  MapPair<Key, Value>& operator*() const
+  MapPair<Key, Value> &operator *() const
   {
     return node_->pair_;
   }
 
-  MapPair<Key, Value>* operator->() const
+  MapPair<Key, Value> *operator ->() const
   {
     return &(node_->pair_);
   }
 
-  bool operator==(const Iterator& iter) const
+  bool operator ==(const Iterator &iter) const
   {
     return node_ == iter.node_;
   }
 
-  bool operator!=(const Iterator& iter) const
+  bool operator !=(const Iterator &iter) const
   {
     return node_ != iter.node_;
   }
 
-  Iterator& operator++()
+  Iterator &operator ++()
   {
     if (OB_ISNULL(hash_map_)) {
-      SHARE_LOG(ERROR, "hash_map_ is null");
+      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash_map_ is null");
     } else if (NULL != node_ && NULL != (node_ = node_->next_)) {
       // do nothing
     } else {
@@ -91,7 +91,7 @@ public:
     return *this;
   }
 
-  Iterator operator++(int)
+  Iterator operator ++(int)
   {
     Iterator iter = *this;
     ++*this;
@@ -99,13 +99,14 @@ public:
   }
 
 private:
-  const HashMap* hash_map_;
+  const HashMap *hash_map_;
   int64_t bucket_pos_;
-  MapNode<Key, Value>* node_;
+  MapNode<Key, Value> *node_;
 };
 
 template <typename Key, typename Value, typename HashFunc>
-class ObFixedHashMap {
+class ObFixedHashMap
+{
 public:
   typedef MapNode<Key, Value> Node;
   typedef ObFixedHashMapIterator<Key, Value, HashFunc> iterator;
@@ -113,35 +114,36 @@ public:
   ObFixedHashMap();
   virtual ~ObFixedHashMap();
 
-  int init(const int64_t bucket_num, const int64_t node_num, const lib::ObLabel& label);
+  int init(const int64_t bucket_num, const int64_t node_num, const lib::ObLabel &label);
   void destroy();
   void reuse();
 
-  int get(Key key, Value& value);
-  int set(const Key& key, const Value& value);
-  int erase(const Key& key);
+  int get(Key key, Value &value);
+  int set(const Key &key, const Value &value);
+  int erase(const Key &key);
 
   iterator begin();
   iterator end();
-
 private:
-  void push_free_node(Node* node);
-  Node* pop_free_node();
+  void push_free_node(Node *node);
+  Node *pop_free_node();
 
   bool inited_;
-  Node** buckets_;
+  Node **buckets_;
   int64_t bucket_num_;
   int64_t size_;
-  Node* free_nodes_;
-  Node* nodes_;
+  Node *free_nodes_;
+  Node *nodes_;
   int64_t node_num_;
   HashFunc hash_func_;
 };
 
 template <typename Key, typename Value, typename HashFunc>
 ObFixedHashMap<Key, Value, HashFunc>::ObFixedHashMap()
-    : inited_(false), buckets_(NULL), bucket_num_(0), size_(0), free_nodes_(NULL), nodes_(NULL), node_num_(0)
-{}
+  : inited_(false), buckets_(NULL), bucket_num_(0),
+    size_(0), free_nodes_(NULL), nodes_(NULL), node_num_(0)
+{
+}
 
 template <typename Key, typename Value, typename HashFunc>
 ObFixedHashMap<Key, Value, HashFunc>::~ObFixedHashMap()
@@ -150,7 +152,8 @@ ObFixedHashMap<Key, Value, HashFunc>::~ObFixedHashMap()
 }
 
 template <typename Key, typename Value, typename HashFunc>
-int ObFixedHashMap<Key, Value, HashFunc>::init(int64_t bucket_num, const int64_t node_num, const lib::ObLabel& label)
+int ObFixedHashMap<Key, Value, HashFunc>::init(int64_t bucket_num,
+                                               const int64_t node_num, const lib::ObLabel &label)
 {
   int ret = common::OB_SUCCESS;
   ObMemAttr attr;
@@ -161,20 +164,20 @@ int ObFixedHashMap<Key, Value, HashFunc>::init(int64_t bucket_num, const int64_t
   } else if (bucket_num <= 0 || node_num <= 0 || !label.is_valid()) {
     ret = common::OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid arguments", K(ret), K(bucket_num), K(node_num), K(label));
-  } else if (NULL == (buckets_ = static_cast<Node**>(common::ob_malloc(sizeof(Node*) * bucket_num, attr)))) {
+  } else if (NULL == (buckets_ = static_cast<Node **>(common::ob_malloc(sizeof(Node *) * bucket_num, attr)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SHARE_LOG(WARN, "allocate memory failed", K(ret), K(bucket_num), K(attr));
-  } else if (NULL == (nodes_ = static_cast<Node*>(common::ob_malloc(sizeof(Node) * node_num, attr)))) {
+  } else if (NULL == (nodes_ = static_cast<Node *>(common::ob_malloc(sizeof(Node) * node_num, attr)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SHARE_LOG(WARN, "allocate memory failed", K(ret), K(node_num), K(attr));
   } else {
-    memset(buckets_, 0, sizeof(Node*) * bucket_num);
+    memset(buckets_, 0, sizeof(Node *) * bucket_num);
     bucket_num_ = bucket_num;
     memset(nodes_, 0, sizeof(Node) * node_num);
     size_ = 0;
     for (int i = 0; i < node_num; ++i) {
-      Node* node = static_cast<Node*>(nodes_) + i;
-      node = new (node) Node();
+      Node *node = static_cast<Node *>(nodes_) + i;
+      node = new(node) Node();
       push_free_node(node);
     }
     node_num_ = node_num;
@@ -213,9 +216,9 @@ void ObFixedHashMap<Key, Value, HashFunc>::reuse()
 {
   if (inited_) {
     for (int64_t i = 0; i < bucket_num_; ++i) {
-      Node* node = buckets_[i];
+      Node *node = buckets_[i];
       while (NULL != node) {
-        Node* next = node->next_;
+        Node *next = node->next_;
         push_free_node(node);
         node = next;
       }
@@ -226,7 +229,7 @@ void ObFixedHashMap<Key, Value, HashFunc>::reuse()
 }
 
 template <typename Key, typename Value, typename HashFunc>
-int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value& value)
+int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value &value)
 {
   int ret = common::OB_ENTRY_NOT_EXIST;
   if (!inited_) {
@@ -234,7 +237,7 @@ int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value& value)
     SHARE_LOG(WARN, "not init", K(ret));
   } else {
     const int64_t pos = hash_func_(key) % bucket_num_;
-    Node* node = buckets_[pos];
+    Node *node = buckets_[pos];
     while (NULL != node) {
       if (node->pair_.first == key) {
         value = node->pair_.second;
@@ -251,10 +254,10 @@ int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value& value)
 template <typename Key, typename Value, typename HashFunc>
 typename ObFixedHashMap<Key, Value, HashFunc>::iterator ObFixedHashMap<Key, Value, HashFunc>::begin()
 {
-  Node* node = NULL;
+  Node *node = NULL;
   int64_t bucket_pos = 0;
   if (!inited_) {
-    SHARE_LOG(WARN, "not init");
+    SHARE_LOG_RET(WARN, common::OB_NOT_INIT, "not init");
   } else {
     while (NULL == node && bucket_pos < bucket_num_) {
       node = buckets_[bucket_pos];
@@ -273,7 +276,7 @@ typename ObFixedHashMap<Key, Value, HashFunc>::iterator ObFixedHashMap<Key, Valu
 }
 
 template <typename Key, typename Value, typename HashFunc>
-int ObFixedHashMap<Key, Value, HashFunc>::set(const Key& key, const Value& value)
+int ObFixedHashMap<Key, Value, HashFunc>::set(const Key &key, const Value &value)
 {
   int ret = common::OB_SUCCESS;
   if (!inited_) {
@@ -284,7 +287,7 @@ int ObFixedHashMap<Key, Value, HashFunc>::set(const Key& key, const Value& value
     SHARE_LOG(WARN, "hashmap is full", K(ret), K_(size), K_(node_num));
   } else {
     const int64_t pos = hash_func_(key) % bucket_num_;
-    Node* node = buckets_[pos];
+    Node *node = buckets_[pos];
     while (NULL != node && OB_SUCC(ret)) {
       if (node->pair_.first == key) {
         ret = common::OB_ENTRY_EXIST;
@@ -295,7 +298,7 @@ int ObFixedHashMap<Key, Value, HashFunc>::set(const Key& key, const Value& value
     }
 
     if (OB_SUCC(ret)) {
-      Node* new_node = pop_free_node();
+      Node *new_node = pop_free_node();
       if (NULL == new_node) {
         ret = common::OB_ERR_UNEXPECTED;
         SHARE_LOG(WARN, "pop_free_node return null", K(ret));
@@ -312,7 +315,7 @@ int ObFixedHashMap<Key, Value, HashFunc>::set(const Key& key, const Value& value
 }
 
 template <typename Key, typename Value, typename HashFunc>
-int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key& key)
+int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key &key)
 {
   int ret = common::OB_ENTRY_NOT_EXIST;
   if (!inited_) {
@@ -320,8 +323,8 @@ int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key& key)
     SHARE_LOG(WARN, "not init", K(ret));
   } else {
     const int64_t pos = hash_func_(key) % bucket_num_;
-    Node* node = buckets_[pos];
-    Node* prev = NULL;
+    Node *node = buckets_[pos];
+    Node *prev = NULL;
     while (NULL != node && OB_ENTRY_NOT_EXIST == ret) {
       if (node->pair_.first == key) {
         if (NULL == prev) {
@@ -343,16 +346,16 @@ int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key& key)
 }
 
 template <typename Key, typename Value, typename HashFunc>
-void ObFixedHashMap<Key, Value, HashFunc>::push_free_node(Node* node)
+void ObFixedHashMap<Key, Value, HashFunc>::push_free_node(Node *node)
 {
   node->next_ = free_nodes_;
   free_nodes_ = node;
 }
 
 template <typename Key, typename Value, typename HashFunc>
-typename ObFixedHashMap<Key, Value, HashFunc>::Node* ObFixedHashMap<Key, Value, HashFunc>::pop_free_node()
+typename ObFixedHashMap<Key, Value, HashFunc>::Node *ObFixedHashMap<Key, Value, HashFunc>::pop_free_node()
 {
-  Node* node = free_nodes_;
+  Node *node = free_nodes_;
   if (NULL != node) {
     free_nodes_ = node->next_;
   }
@@ -361,28 +364,31 @@ typename ObFixedHashMap<Key, Value, HashFunc>::Node* ObFixedHashMap<Key, Value, 
 
 // sbrk many times, then reuse
 template <typename T>
-class ObFreeHeap {
+class ObFreeHeap
+{
 public:
   ObFreeHeap();
   virtual ~ObFreeHeap();
-  int init(const int64_t count, const char* label);
+  int init(const int64_t count, const char *label);
   void destroy();
 
-  int sbrk(T*& buf);
-  int sbrk(const int64_t count, T*& buf);
+  int sbrk(T *&buf);
+  int sbrk(const int64_t count, T *&buf);
   void reuse();
-
 private:
   bool inited_;
   common::ObArenaAllocator allocator_;
-  T* buf_;
+  T *buf_;
   int64_t free_cnt_;
   int64_t total_cnt_;
 };
 
 template <typename T>
-ObFreeHeap<T>::ObFreeHeap() : inited_(false), allocator_(), buf_(NULL), free_cnt_(0), total_cnt_(0)
-{}
+ObFreeHeap<T>::ObFreeHeap()
+  : inited_(false), allocator_(),
+    buf_(NULL), free_cnt_(0), total_cnt_(0)
+{
+}
 
 template <typename T>
 ObFreeHeap<T>::~ObFreeHeap()
@@ -391,7 +397,7 @@ ObFreeHeap<T>::~ObFreeHeap()
 }
 
 template <typename T>
-int ObFreeHeap<T>::init(const int64_t count, const char* label)
+int ObFreeHeap<T>::init(const int64_t count, const char *label)
 {
   int ret = common::OB_SUCCESS;
   if (inited_) {
@@ -402,7 +408,7 @@ int ObFreeHeap<T>::init(const int64_t count, const char* label)
     SHARE_LOG(WARN, "invalid arguments", K(ret), K(count), K(label));
   } else {
     allocator_.set_label(label);
-    buf_ = static_cast<T*>(allocator_.alloc(sizeof(T) * count));
+    buf_ = static_cast<T *>(allocator_.alloc(sizeof(T) * count));
     if (NULL == buf_) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       SHARE_LOG(WARN, "alloc memory failed", K(ret), K(count));
@@ -434,14 +440,14 @@ void ObFreeHeap<T>::destroy()
 }
 
 template <typename T>
-int ObFreeHeap<T>::sbrk(T*& buf)
+int ObFreeHeap<T>::sbrk(T *&buf)
 {
   const int64_t count = 1;
   return sbrk(count, buf);
 }
 
 template <typename T>
-int ObFreeHeap<T>::sbrk(const int64_t count, T*& buf)
+int ObFreeHeap<T>::sbrk(const int64_t count, T *&buf)
 {
   int ret = common::OB_SUCCESS;
   if (!inited_) {
@@ -465,34 +471,30 @@ void ObFreeHeap<T>::reuse()
 {
   if (inited_) {
     for (int64_t i = 0; i < total_cnt_; ++i) {
-      buf_[i].~T();
-    }
-    for (int64_t i = 0; i < total_cnt_; ++i) {
-      new (&buf_[i]) T();
+      buf_[i].reuse();
     }
     free_cnt_ = total_cnt_;
   }
 }
 
 template <typename T>
-class ObSimpleFixedArray final : public common::ObFixedArrayImpl<T, common::ObArenaAllocator> {
+class ObSimpleFixedArray final : public common::ObFixedArrayImpl<T, common::ObArenaAllocator>
+{
 public:
   ObSimpleFixedArray();
   virtual ~ObSimpleFixedArray();
 
-  int init(const int64_t capacity, const char* label);
+  int init(const int64_t capacity, const char *label);
   void reuse();
   void destroy();
-
 protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
   using ObFixedArrayImpl<T, common::ObArenaAllocator>::init_cnt_;
-
 private:
   bool is_destructor_safe() const
   {
-    // no need to call destructor
+    //no need to call destructor
     return std::is_trivially_destructible<T>::value;
   }
   bool inited_;
@@ -500,15 +502,18 @@ private:
 };
 
 template <typename T>
-ObSimpleFixedArray<T>::ObSimpleFixedArray() : inited_(false), local_allocator_()
-{}
+ObSimpleFixedArray<T>::ObSimpleFixedArray()
+  : inited_(false), local_allocator_()
+{
+}
 
 template <typename T>
 ObSimpleFixedArray<T>::~ObSimpleFixedArray()
-{}
+{
+}
 
 template <typename T>
-int ObSimpleFixedArray<T>::init(const int64_t capacity, const char* label)
+int ObSimpleFixedArray<T>::init(const int64_t capacity, const char *label)
 {
   int ret = common::OB_SUCCESS;
   if (inited_) {
@@ -551,7 +556,7 @@ void ObSimpleFixedArray<T>::destroy()
   local_allocator_.reset();
   inited_ = false;
 }
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_CACHE_OB_CACHE_UTILS_H_
+#endif //OCEANBASE_CACHE_OB_CACHE_UTILS_H_

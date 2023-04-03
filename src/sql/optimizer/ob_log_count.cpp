@@ -16,210 +16,184 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
+#include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-namespace oceanbase {
-namespace sql {
-int ObLogCount::copy_without_child(ObLogicalOperator*& out)
+namespace oceanbase
+{
+namespace sql
+{
+
+int ObLogCount::est_cost()
 {
   int ret = OB_SUCCESS;
-  out = NULL;
-  ObLogicalOperator* op = NULL;
-  ObLogCount* count = NULL;
-  if (OB_FAIL(clone(op))) {
-    LOG_WARN("failed to clone child operator", K(ret));
-  } else if (OB_ISNULL(count = static_cast<ObLogCount*>(op))) {
+  double sel = 1.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL ptr", K(count), K(ret));
+    LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
+      &child->get_output_equal_sets(), child->get_card()))) {
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
+                                                             get_plan()->get_selectivity_ctx(),
+                                                             get_filter_exprs(),
+                                                             sel,
+                                                             get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calculate selectivity", K(ret));
   } else {
-    count->set_rownum_limit_expr(rownum_limit_expr_);
-    out = count;
-  }
-  return ret;
-}
-
-int ObLogCount::allocate_exchange_post(AllocExchContext* ctx)
-{
-  int ret = OB_SUCCESS;
-  bool is_basic = false;
-  ObExchangeInfo exch_info;
-  ObLogicalOperator* exchange_point = NULL;
-  bool should_push_limit = (get_filter_exprs().count() == 0 && NULL != rownum_limit_expr_);
-  if (OB_ISNULL(ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ctx), K(ret));
-  } else if (OB_FAIL(compute_basic_sharding_info(ctx, is_basic))) {
-    LOG_WARN("failed to compute basic sharding info", K(ret));
-  } else if (is_basic) {
-    LOG_TRACE("is basic sharding info", K(sharding_info_));
-  } else if (OB_FAIL(push_down_limit(ctx, rownum_limit_expr_, NULL, should_push_limit, false, exchange_point))) {
-    LOG_WARN("failed to push down limit", K(ret));
-  } else if (OB_ISNULL(exchange_point)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(exchange_point), K(ret));
-  } else if (OB_FAIL(exchange_point->allocate_exchange_nodes_below(first_child, *ctx, exch_info))) {
-    LOG_WARN("failed to allocate exchange nodes below", K(ret));
-  } else {
-    sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
-  }
-  return ret;
-}
-
-int ObLogCount::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLinkStmt* link_stmt = link_ctx.link_stmt_;
-  if (OB_ISNULL(link_stmt) || !link_stmt->is_inited()) {
-    // do nothing.
-  } else if (dblink_id_ != link_ctx.dblink_id_) {
-    link_ctx.dblink_id_ = OB_INVALID_ID;
-    link_ctx.link_stmt_ = NULL;
-  } else if (OB_FAIL(link_stmt->try_fill_select_strs(output_exprs_))) {
-    LOG_WARN("failed to fill link stmt select strs", K(ret), K(output_exprs_));
-  } else if (OB_FAIL(link_stmt->fill_where_rownum(rownum_limit_expr_))) {
-    LOG_WARN("failed to fill link stmt where rownum", K(ret));
-  }
-  return ret;
-}
-
-uint64_t ObLogCount::hash(uint64_t seed) const
-{
-  uint64_t hash_value = seed;
-  hash_value = ObOptimizerUtil::hash_expr(rownum_limit_expr_, hash_value);
-  hash_value = ObLogicalOperator::hash(hash_value);
-
-  return hash_value;
-}
-
-int ObLogCount::set_limit_size()
-{
-  int ret = OB_SUCCESS;
-  double limit_count_double = 0.0;
-  double child_card = 0.0;
-  if (OB_ISNULL(get_child(first_child)) || OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Limit's child not expected to be NULL", K(ret));
-  } else if (FALSE_IT(child_card = get_child(first_child)->get_card())) {
-    /*do nothing*/
-  } else if (NULL == rownum_limit_expr_) {
-    limit_count_double = static_cast<double>(child_card);
-  } else if (rownum_limit_expr_->has_flag(CNT_EXEC_PARAM)) {
-    limit_count_double = static_cast<double>(child_card);
-  } else {
-    int64_t limit_count = 0;
-    bool is_null_value = false;
-    if (OB_FAIL(ObTransformUtils::get_limit_value(rownum_limit_expr_,
-            get_plan()->get_stmt(),
-            get_plan()->get_optimizer_context().get_params(),
-            get_plan()->get_optimizer_context().get_session_info(),
-            &get_plan()->get_optimizer_context().get_allocator(),
-            limit_count,
-            is_null_value))) {
-      LOG_WARN("Get limit count num error", K(ret));
-    } else if (limit_count < 0) {
-      limit_count_double = 0.0;
-    } else if (limit_count >= child_card) {
-      limit_count_double = static_cast<double>(child_card);
+    double child_card = child->get_card();
+    double child_cost = child->get_cost();
+    if (OB_FAIL(inner_est_cost(child_card, child_cost, true, sel, op_cost_))) {
+      LOG_WARN("failed to est count cost", K(ret));
     } else {
-      limit_count_double = static_cast<double>(limit_count);
-    }
-  }
-
-  if (OB_SUCC(ret) && limit_count_double < child_card) {
-    bool re_est = false;
-    if (OB_FAIL(get_child(first_child)->re_est_cost(this, limit_count_double, re_est))) {
-      LOG_WARN("Failed to re est cost", K(limit_count_double), K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    double op_cost = ObOptEstCost::cost_count(get_child(first_child)->get_card());
-    set_card(limit_count_double);
-    set_op_cost(op_cost);
-    set_cost(get_child(first_child)->get_cost() + op_cost);
-    set_width(get_child(first_child)->get_width() + 4);
-  }
-  return ret;
-}
-
-int ObLogCount::re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(parent);
-  re_est = false;
-  if (OB_UNLIKELY(need_row_count < 0.0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Need row count should not less than 0", K(ret));
-  } else if (need_row_count < get_card()) {
-    set_card(need_row_count);
-    ObLogicalOperator* child = NULL;
-    if (OB_ISNULL(child = get_child(first_child))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Count's child not expected to be NULL", K(ret));
-    } else if (OB_FAIL(child->re_est_cost(this, need_row_count, re_est))) {
-      LOG_WARN("Failed to re_est child cost", K(ret));
-    } else {
-      re_est = true;
-      double op_cost = ObOptEstCost::cost_count(get_card());
-      set_op_cost(op_cost);
-      set_cost(child->get_cost() + op_cost);
+      set_cost(op_cost_ + child_cost);
+      set_card(child_card * sel);
     }
   }
   return ret;
 }
 
-int ObLogCount::check_output_dep_specific(ObRawExprCheckDep& checker)
+int ObLogCount::est_width()
 {
   int ret = OB_SUCCESS;
-  if (NULL != rownum_limit_expr_) {
-    if (OB_FAIL(checker.check(*rownum_limit_expr_))) {
-      LOG_WARN("failed to check limit_count_", K(*rownum_limit_expr_), K(ret));
-    }
-  } else { /* Do nothing */
-  }
-  return ret;
-}
-
-int ObLogCount::allocate_expr_pre(ObAllocExprContext& ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogicalOperator::allocate_expr_pre(ctx))) {
-    LOG_WARN("failed to add exprs to ctx", K(ret));
+  double width = 0.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.expr_producers_.count(); ++i) {
-      ExprProducer& producer = ctx.expr_producers_.at(i);
-      if (OB_ISNULL(producer.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_INVALID_ID == producer.producer_id_ && producer.expr_->has_flag(IS_ROWNUM)) {
-        producer.producer_id_ = id_;
-      } else { /*do nothing*/
+    width = child->get_width() + 4;
+    set_width(width);
+  }
+  return ret;
+}
+
+
+int ObLogCount::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+{
+  int ret = OB_SUCCESS;
+  double sel = 1.0;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            get_filter_exprs(),
+                                                            sel,
+                                                            get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calc selectivity", K(ret));
+  } else {
+    double child_card = child->get_card();
+    double child_cost = child->get_cost();
+    double op_cost = 0.0;
+    if (param.need_row_count_ >= 0 && param.need_row_count_ <= get_card()) {
+      //child need row count
+      if (sel > OB_DOUBLE_EPSINON) {
+        param.need_row_count_ /= sel;
+      }
+    }
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+      LOG_WARN("failed to est child cost", K(ret));
+    } else if (OB_FAIL(inner_est_cost(child_card, child_cost, false, sel, op_cost))) {
+      LOG_WARN("failed to est count cost", K(ret));
+    } else {
+      cost = op_cost + child_cost;
+      card = child_card * sel;
+      if (param.override_) {
+        set_op_cost(op_cost);
+        set_cost(cost);
+        set_card(card);
       }
     }
   }
   return ret;
 }
 
-int ObLogCount::print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type)
+int ObLogCount::inner_est_cost(double &child_card, 
+                               double &child_cost, 
+                               bool need_re_est_child_cost,  
+                               double sel, 
+                               double &op_cost)
 {
   int ret = OB_SUCCESS;
-  if (NULL != rownum_limit_expr_) {
-    if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else {
-      EXPLAIN_PRINT_EXPR(rownum_limit_expr_, type);
+  ObLogicalOperator *child = NULL;
+  int64_t limit_count = 0.0;
+  bool is_null_value = false;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
+  } else {
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    if (NULL != rownum_limit_expr_ && 
+        !rownum_limit_expr_->has_flag(CNT_DYNAMIC_PARAM)) {
+      if (OB_FAIL(ObTransformUtils::get_limit_value(rownum_limit_expr_,
+                                                    opt_ctx.get_params(),
+                                                    opt_ctx.get_exec_ctx(),
+                                                    &opt_ctx.get_allocator(),
+                                                    limit_count,
+                                                    is_null_value))) {
+        LOG_WARN("Get limit count num error", K(ret));
+      } else if (limit_count > child_card) {
+        //do nothing
+      } else if (sel > 0 && need_re_est_child_cost) {
+        EstimateCostInfo param;
+        param.need_row_count_ = limit_count / sel;
+        param.override_ = false;
+        if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+          LOG_WARN("failed to est child cost", K(ret));
+        }
+      }
     }
+    op_cost = ObOptEstCost::cost_filter_rows(child_card, get_filter_exprs(),
+                                             opt_ctx.get_cost_model_type());
   }
   return ret;
 }
 
-int ObLogCount::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const
+int ObLogCount::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  OZ(raw_exprs.append(rownum_limit_expr_));
+  if (NULL != rownum_expr_ && OB_FAIL(all_exprs.push_back(rownum_expr_))) {
+    LOG_WARN("failed to add exprs", K(ret));
+  } else if (NULL != rownum_limit_expr_ && OB_FAIL(all_exprs.push_back(rownum_limit_expr_))) {
+    LOG_WARN("failed to add exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else { /*do nothing*/ }
 
+  return ret;
+}
+
+int ObLogCount::get_plan_item_info(PlanText &plan_text,
+                                   ObSqlPlanItem &plan_item)
+{
+	int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get base plan item info", K(ret));
+  } else if (NULL != rownum_limit_expr_) {
+    BEGIN_BUF_PRINT;
+    EXPLAIN_PRINT_EXPR(rownum_limit_expr_, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
+	return ret;
+}
+
+int ObLogCount::inner_replace_op_exprs(
+    const ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != rownum_limit_expr_ &&
+      OB_FAIL(replace_expr_action(to_replace_exprs, rownum_limit_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  }
   return ret;
 }
 

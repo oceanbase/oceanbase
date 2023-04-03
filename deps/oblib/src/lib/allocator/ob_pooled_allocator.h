@@ -15,43 +15,45 @@
 
 #include "lib/objectpool/ob_pool.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // @note thread-safe depends on LockT
 template <typename T, typename BlockAllocatorT = ObMalloc, typename LockT = ObNullLock>
-class ObPooledAllocator {
+class ObPooledAllocator
+{
 public:
   ObPooledAllocator(int64_t block_size = common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-      const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_POOL));
+                    const BlockAllocatorT &alloc = BlockAllocatorT(ObModIds::OB_POOL));
   virtual ~ObPooledAllocator();
 
-  T* alloc();
-  void free(T* obj);
+  T *alloc();
+  void free(T *obj);
   void reset();
-  void clear()
-  {
-    reset();
-  }
-  void inc_ref(){};
-  void dec_ref(){};
+  void clear() { reset(); }
+  void inc_ref() {};
+  void dec_ref() {};
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPooledAllocator);
-
 private:
   // data members
   ObPool<BlockAllocatorT, LockT> the_pool_;
 };
 
 template <typename T, typename BlockAllocatorT, typename LockT>
-ObPooledAllocator<T, BlockAllocatorT, LockT>::ObPooledAllocator(int64_t block_size, const BlockAllocatorT& alloc)
+ObPooledAllocator<T, BlockAllocatorT, LockT>::ObPooledAllocator(int64_t block_size,
+                                                                const BlockAllocatorT &alloc)
     : the_pool_(sizeof(T), block_size, alloc)
-{}
+{
+}
 
 template <typename T, typename BlockAllocatorT, typename LockT>
 ObPooledAllocator<T, BlockAllocatorT, LockT>::~ObPooledAllocator()
-{}
+{
+}
 
 template <typename T, typename BlockAllocatorT, typename LockT>
 void ObPooledAllocator<T, BlockAllocatorT, LockT>::reset()
@@ -60,20 +62,20 @@ void ObPooledAllocator<T, BlockAllocatorT, LockT>::reset()
 }
 
 template <typename T, typename BlockAllocatorT, typename LockT>
-T* ObPooledAllocator<T, BlockAllocatorT, LockT>::alloc()
+T *ObPooledAllocator<T, BlockAllocatorT, LockT>::alloc()
 {
-  T* ret = NULL;
-  void* p = the_pool_.alloc();
+  T *ret = NULL;
+  void *p = the_pool_.alloc();
   if (OB_ISNULL(p)) {
-    LIB_LOG(ERROR, "no memory");
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "no memory");
   } else {
-    ret = new (p) T();
+    ret = new(p) T();
   }
   return ret;
 }
 
 template <typename T, typename BlockAllocatorT, typename LockT>
-void ObPooledAllocator<T, BlockAllocatorT, LockT>::free(T* obj)
+void ObPooledAllocator<T, BlockAllocatorT, LockT>::free(T *obj)
 {
   if (OB_LIKELY(NULL != obj)) {
     obj->~T();
@@ -82,7 +84,7 @@ void ObPooledAllocator<T, BlockAllocatorT, LockT>::free(T* obj)
   }
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_ALLOCATOR_OB_POOLED_ALLOCATOR_H_
+#endif //OCEANBASE_LIB_ALLOCATOR_OB_POOLED_ALLOCATOR_H_

@@ -15,33 +15,36 @@
 #include "ob_expr_test_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
-class ObExprLessEqualTest : public ::testing::Test {
-public:
-  ObExprLessEqualTest();
-  virtual ~ObExprLessEqualTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprLessEqualTest(const ObExprLessEqualTest& other);
-  ObExprLessEqualTest& operator=(const ObExprLessEqualTest& other);
-
-protected:
-  // data members
+class ObExprLessEqualTest: public ::testing::Test
+{
+  public:
+    ObExprLessEqualTest();
+    virtual ~ObExprLessEqualTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprLessEqualTest(const ObExprLessEqualTest &other);
+    ObExprLessEqualTest& operator=(const ObExprLessEqualTest &other);
+  protected:
+    // data members
 };
 
 ObExprLessEqualTest::ObExprLessEqualTest()
-{}
+{
+}
 
 ObExprLessEqualTest::~ObExprLessEqualTest()
-{}
+{
+}
 
 void ObExprLessEqualTest::SetUp()
-{}
+{
+}
 
 void ObExprLessEqualTest::TearDown()
-{}
+{
+}
 
 #define T(t1, v1, t2, v2, res) COMPARE_EXPECT(ObExprLessEqual, &buf, calc_result2, t1, v1, t2, v2, res)
 #define T_BIN(t1, v1, t2, v2, res) COMPARE_EXPECT_BIN(ObExprLessEqual, &buf, calc_result2, t1, v1, t2, v2, res)
@@ -724,8 +727,8 @@ TEST_F(ObExprLessEqualTest, row2_basic_test)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

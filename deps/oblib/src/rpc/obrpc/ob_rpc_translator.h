@@ -17,44 +17,52 @@
 #include "rpc/obrpc/ob_rpc_session_handler.h"
 #include "ob_rpc_packet.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObDataBuffer;
-}  // end of namespace common
-namespace rpc {
+} // end of namespace common
+namespace rpc
+{
 class ObRequest;
-namespace frame {
+namespace frame
+{
 class ObReqProcessor;
-}  // end of namespace frame
-}  // end of namespace rpc
+} // end of namespace frame
+} // end of namespace rpc
 
-namespace obrpc {
+
+namespace obrpc
+{
 
 class ObRpcStreamCond;
 
-class ObRpcTranslator : public rpc::frame::ObReqTranslator {
+class ObRpcTranslator
+    : public rpc::frame::ObReqTranslator
+{
 public:
   int th_init();
   int th_destroy();
 
-  inline ObRpcSessionHandler& get_session_handler();
+  inline ObRpcSessionHandler &get_session_handler();
 
 protected:
-  rpc::frame::ObReqProcessor* get_processor(rpc::ObRequest& req) = 0;
+  rpc::frame::ObReqProcessor* get_processor(rpc::ObRequest &req) = 0;
 
 protected:
   ObRpcSessionHandler session_handler_;
-};  // end of class ObRpcTranslator
+}; // end of class ObRpcTranslator
 
 //////////////////////////////////////////////////////////////
 //  inline functions definition
 ///
-ObRpcSessionHandler& ObRpcTranslator::get_session_handler()
+ObRpcSessionHandler &ObRpcTranslator::get_session_handler()
 {
   return session_handler_;
 }
 
-}  // end of namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace obrpc
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_OB_RPC_TRANSLATOR_
+#endif //OCEANBASE_RPC_OBRPC_OB_RPC_TRANSLATOR_

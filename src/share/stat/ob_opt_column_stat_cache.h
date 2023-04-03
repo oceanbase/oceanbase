@@ -16,25 +16,29 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/cache/ob_kv_storecache.h"
-
-namespace oceanbase {
-namespace common {
+#include "share/stat/ob_opt_column_stat_cache.h"
+namespace oceanbase
+{
+namespace common
+{
 class ObOptColumnStatHandle;
-class ObOptColumnStatCache : public common::ObKVCache<ObOptColumnStat::Key, ObOptColumnStat> {
+class ObOptColumnStatCache : public common::ObKVCache<ObOptColumnStat::Key, ObOptColumnStat>
+{
 public:
-  ObOptColumnStatCache()
-  {}
-  ~ObOptColumnStatCache()
-  {}
+  ObOptColumnStatCache() {}
+  ~ObOptColumnStatCache() {}
 
   /**
    * @param[out] handle  A handle object holding the column statistics.
    *                     the real data is stored in handle.stat_
    */
-  int get_row(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle);
-  int put_row(const ObOptColumnStat::Key& key, const ObOptColumnStat& value);
-  int put_and_fetch_row(const ObOptColumnStat::Key& key, const ObOptColumnStat& value, ObOptColumnStatHandle& handle);
+  int get_row(const ObOptColumnStat::Key &key, ObOptColumnStatHandle &handle);
+  int put_row(const ObOptColumnStat::Key &key, const ObOptColumnStat &value);
+  int put_and_fetch_row(const ObOptColumnStat::Key &key,
+                        const ObOptColumnStat &value,
+                        ObOptColumnStatHandle &handle);
 };
+
 
 /**
  * This class is used to hold a Column Statistics object(ObOptColumnStat).
@@ -45,36 +49,28 @@ public:
  * (even if the object is removed from the cache).
  *
  */
-class ObOptColumnStatHandle {
+class ObOptColumnStatHandle
+{
 public:
   friend class ObOptColumnStatCache;
-  ObOptColumnStatHandle() : stat_(nullptr), cache_(nullptr)
-  {}
-  ObOptColumnStatHandle(const ObOptColumnStatHandle& other) : stat_(nullptr), cache_(nullptr)
+  ObOptColumnStatHandle() : stat_(nullptr), cache_(nullptr) {}
+  ObOptColumnStatHandle(const ObOptColumnStatHandle &other)
+    : stat_(nullptr), cache_(nullptr)
   {
     if (this != &other) {
       *this = other;
     }
   }
-  ~ObOptColumnStatHandle()
-  {
-    stat_ = nullptr;
-    cache_ = nullptr;
-  }
-  void reset()
-  {
-    ObOptColumnStatHandle tmp_handle;
-    *this = tmp_handle;
-  }
-  const ObOptColumnStat* stat_;
+  ~ObOptColumnStatHandle() { stat_ = nullptr; cache_ = nullptr; }
+  void reset() { ObOptColumnStatHandle tmp_handle; *this = tmp_handle; }
+  const ObOptColumnStat *stat_;
   TO_STRING_KV(K(stat_));
-
 private:
-  ObOptColumnStatCache* cache_;
+  ObOptColumnStatCache *cache_;
   ObKVCacheHandle handle_;
 };
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
 #endif /* _OB_COLUMN_STAT_CACHE_H_ */

@@ -27,15 +27,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::observer;
+using namespace oceanbase::share;
 
-void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObTenantDfc*& tenant_dfc, ObDtlChannelMemManager* mgr)
+
+void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObTenantDfc *&tenant_dfc, ObDtlChannelMemManager *mgr)
 {
   tenant_id_ = tenant_dfc->get_tenant_id();
   channel_total_cnt_ = tenant_dfc->get_channel_cnt();
   channel_block_cnt_ = tenant_dfc->get_current_total_blocked_cnt();
   max_parallel_cnt_ = tenant_dfc->get_max_parallel();
   max_blocked_buffer_size_ = tenant_dfc->get_max_blocked_buffer_size();
-  accumulated_block_cnt_ = tenant_dfc->get_accumulated_blocked_cnt();
+  accumulated_block_cnt_ =tenant_dfc->get_accumulated_blocked_cnt();
   current_buffer_used_ = tenant_dfc->get_current_buffer_used();
   seqno_ = mgr->get_seqno();
   alloc_cnt_ = mgr->get_alloc_cnt();
@@ -46,8 +48,12 @@ void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObTenantDfc*& tenant_dfc, 
   real_free_cnt_ = mgr->get_real_free_cnt();
 }
 
-ObAllVirtualDtlMemoryIterator::ObAllVirtualDtlMemoryIterator(ObArenaAllocator* allocator)
-    : cur_tenant_idx_(0), cur_mem_pool_idx_(0), iter_allocator_(allocator), tenant_ids_(), mem_pool_infos_()
+ObAllVirtualDtlMemoryIterator::ObAllVirtualDtlMemoryIterator(ObArenaAllocator *allocator) :
+  cur_tenant_idx_(0),
+  cur_mem_pool_idx_(0),
+  iter_allocator_(allocator),
+  tenant_ids_(),
+  mem_pool_infos_()
 {}
 
 ObAllVirtualDtlMemoryIterator::~ObAllVirtualDtlMemoryIterator()
@@ -76,13 +82,10 @@ int ObAllVirtualDtlMemoryIterator::get_tenant_ids()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == GCTX.omt_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "GCTX.omt_ shouldn't be NULL", K_(GCTX.omt), K(GCTX), K(ret));
-  } else {
-    omt::TenantIdList ids(NULL, ObNewModIds::OB_COMMON_ARRAY);
-    GCTX.omt_->get_tenant_ids(ids);
-    for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); i++) {
-      ret = tenant_ids_.push_back(ids[i]);
-    }
+    SERVER_LOG(WARN, "GCTX.omt_ shouldn't be NULL",
+        K_(GCTX.omt), K(GCTX), K(ret));
+  } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids_))) {
+    LOG_WARN("failed to get_mtl_tenant_ids", K(ret));
   }
   return ret;
 }
@@ -100,24 +103,19 @@ int ObAllVirtualDtlMemoryIterator::init()
 int ObAllVirtualDtlMemoryIterator::get_tenant_memory_pool_infos(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  FETCH_ENTITY(TENANT_SPACE, tenant_id)
-  {
-    ObTenantDfc* tenant_dfc = MTL_GET(ObTenantDfc*);
-    if (nullptr == tenant_dfc) {
-      LOG_TRACE("failed to get tenant dfc", K(tenant_id), K(ret));
-    } else {
-      ObDtlTenantMemManager* mem_mgr = tenant_dfc->get_tenant_mem_manager();
-      int64_t cnt = mem_mgr->get_channel_mgr_count();
-      for (int64_t i = 0; i < cnt && OB_SUCC(ret); ++i) {
-        ObDtlChannelMemManager* chan_mem_mgr = nullptr;
-        if (OB_FAIL(mem_mgr->get_channel_mem_manager(i, chan_mem_mgr))) {
-          LOG_WARN("failed to get channel memory manager", K(ret), K(i));
-        } else {
-          ObAllVirtualDtlMemoryPoolInfo mem_pool_info;
-          mem_pool_info.set_mem_pool_info(tenant_dfc, chan_mem_mgr);
-          if (OB_FAIL(mem_pool_infos_.push_back(mem_pool_info))) {
-            LOG_WARN("failed to push back memory pool info", K(ret), K(i));
-          }
+  MTL_SWITCH(tenant_id) {
+    ObTenantDfc *tenant_dfc = MTL(ObTenantDfc*);
+    ObDtlTenantMemManager *mem_mgr = tenant_dfc->get_tenant_mem_manager();
+    int64_t cnt = mem_mgr->get_channel_mgr_count();
+    for (int64_t i = 0; i < cnt && OB_SUCC(ret); ++i) {
+      ObDtlChannelMemManager *chan_mem_mgr = nullptr;
+      if (OB_FAIL(mem_mgr->get_channel_mem_manager(i, chan_mem_mgr))) {
+        LOG_WARN("failed to get channel memory manager", K(ret), K(i));
+      } else {
+        ObAllVirtualDtlMemoryPoolInfo mem_pool_info;
+        mem_pool_info.set_mem_pool_info(tenant_dfc, chan_mem_mgr);
+        if (OB_FAIL(mem_pool_infos_.push_back(mem_pool_info))) {
+          LOG_WARN("failed to push back memory pool info", K(ret), K(i));
         }
       }
     }
@@ -151,7 +149,7 @@ int ObAllVirtualDtlMemoryIterator::get_next_memory_pools()
   return ret;
 }
 
-int ObAllVirtualDtlMemoryIterator::get_next_mem_pool_info(ObAllVirtualDtlMemoryPoolInfo& memory_pool_info)
+int ObAllVirtualDtlMemoryIterator::get_next_mem_pool_info(ObAllVirtualDtlMemoryPoolInfo &memory_pool_info)
 {
   int ret = OB_SUCCESS;
   bool get_pool = false;
@@ -174,8 +172,11 @@ int ObAllVirtualDtlMemoryIterator::get_next_mem_pool_info(ObAllVirtualDtlMemoryP
   return ret;
 }
 
-ObAllVirtualDtlMemory::ObAllVirtualDtlMemory()
-    : ipstr_(), port_(0), arena_allocator_(ObModIds::OB_SQL_DTL), iter_(&arena_allocator_)
+ObAllVirtualDtlMemory::ObAllVirtualDtlMemory() :
+  ipstr_(),
+  port_(0),
+  arena_allocator_(ObModIds::OB_SQL_DTL),
+  iter_(&arena_allocator_)
 {}
 
 ObAllVirtualDtlMemory::~ObAllVirtualDtlMemory()
@@ -208,7 +209,7 @@ int ObAllVirtualDtlMemory::inner_open()
     } else {
       start_to_read_ = true;
       char ipbuf[common::OB_IP_STR_BUFF];
-      common::ObAddr& addr = GCTX.self_addr_;
+      const common::ObAddr &addr = GCTX.self_addr();
       if (!addr.ip_to_string(ipbuf, sizeof(ipbuf))) {
         SERVER_LOG(ERROR, "ip to string failed");
         ret = OB_ERR_UNEXPECTED;
@@ -224,7 +225,7 @@ int ObAllVirtualDtlMemory::inner_open()
   return ret;
 }
 
-int ObAllVirtualDtlMemory::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualDtlMemory::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObAllVirtualDtlMemoryPoolInfo mem_pool_info;
@@ -240,13 +241,13 @@ int ObAllVirtualDtlMemory::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info, ObNewRow*& row)
+int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo &mem_pool_info, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
     uint64_t col_id = output_column_ids_.at(cell_idx);
-    switch (col_id) {
+    switch(col_id) {
       case SVR_IP: {
         cells[cell_idx].set_varchar(ipstr_);
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -268,7 +269,7 @@ int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info,
         cells[cell_idx].set_int(mem_pool_info.channel_block_cnt_);
         break;
       }
-      case MAX_PARALLEL_CNT: {  // OB_APP_MIN_COLUMN_ID + 5
+      case MAX_PARALLEL_CNT:{// OB_APP_MIN_COLUMN_ID + 5
         cells[cell_idx].set_int(mem_pool_info.max_parallel_cnt_);
         break;
       }
@@ -288,7 +289,7 @@ int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info,
         cells[cell_idx].set_int(mem_pool_info.seqno_);
         break;
       }
-      case ALLOC_CNT: {  // OB_APP_MIN_COLUMN_ID + 10
+      case ALLOC_CNT: {// OB_APP_MIN_COLUMN_ID + 10
         cells[cell_idx].set_int(mem_pool_info.alloc_cnt_);
         break;
       }
@@ -308,7 +309,7 @@ int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info,
         cells[cell_idx].set_int(mem_pool_info.real_alloc_cnt_);
         break;
       }
-      case REAL_FREE_CNT: {  // OB_APP_MIN_COLUMN_ID + 15
+      case REAL_FREE_CNT: {// OB_APP_MIN_COLUMN_ID + 15
         cells[cell_idx].set_int(mem_pool_info.real_free_cnt_);
         break;
       }

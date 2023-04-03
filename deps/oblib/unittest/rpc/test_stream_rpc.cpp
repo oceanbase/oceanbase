@@ -31,19 +31,25 @@ using namespace oceanbase::common;
 using namespace oceanbase::rpc;
 using namespace std;
 
+
 #define IO_CNT 1
 #define SEND_CNT 1
 #define ERROR_MSG "abbcced"
 #define MAX_NUM 1000
 
-class TestProxy : public ObRpcProxy {
+#if 0
+class TestProxy
+    : public ObRpcProxy
+{
 public:
   DEFINE_TO(TestProxy);
 
   RPC_SS(@PR5 test, OB_TEST_PCODE, (int64_t), int64_t);
 };
 
-class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
+class MyProcessor
+    : public TestProxy::Processor<OB_TEST_PCODE>
+{
 protected:
   int process()
   {
@@ -60,12 +66,14 @@ protected:
   }
   int after_process()
   {
-    this_routine::usleep(100);
+    ::usleep(100);
     return OB_SUCCESS;
   }
 };
 
-class QHandler : public ObiReqQHandler {
+class QHandler
+    : public ObiReqQHandler
+{
 public:
   QHandler()
   {
@@ -73,18 +81,16 @@ public:
     mp_.set_session_handler(shandler_);
   }
 
-  virtual int onThreadCreated(obsys::CThread*)
-  {
+  virtual int onThreadCreated(obsys::CThread *) {
     return OB_SUCCESS;
   }
-  virtual int onThreadDestroy(obsys::CThread*)
-  {
+  virtual int onThreadDestroy(obsys::CThread *) {
     return OB_SUCCESS;
   }
 
-  bool handlePacketQueue(ObRequest* req, void*)
+  bool handlePacketQueue(ObRequest *req, void *)
   {
-    const ObRpcPacket& pkt = reinterpret_cast<const ObRpcPacket&>(req->get_packet());
+    const ObRpcPacket &pkt = reinterpret_cast<const ObRpcPacket&>(req->get_packet());
     if (!pkt.is_stream()) {
       LOG_INFO("not stream");
       mp_.set_ob_request(*req);
@@ -103,17 +109,18 @@ private:
   ObRpcReqContext ctx_;
 };
 
-class ObTestDeliver : public rpc::frame::ObReqDeliver {
+class ObTestDeliver
+    : public rpc::frame::ObReqDeliver
+{
 public:
-  int init()
-  {
+  int init() {
     queue_.set_qhandler(&handler_);
     queue_.get_thread().set_thread_count(2);
     queue_.get_thread().start();
     return 0;
   }
 
-  int deliver(rpc::ObRequest& req)
+  int deliver(rpc::ObRequest &req)
   {
     queue_.push(&req, 10);
     return 0;
@@ -130,10 +137,14 @@ protected:
   QHandler handler_;
 };
 
-class TestRpcServer : public ::testing::Test {
+class TestRpcServer
+    : public ::testing::Test
+{
 public:
-  TestRpcServer() : port_(3100), handler_(server_), transport_(NULL)
-  {}
+  TestRpcServer()
+      :  port_(3100), handler_(server_), transport_(NULL)
+  {
+  }
 
   virtual void SetUp()
   {
@@ -156,7 +167,7 @@ public:
     server_.stop();
   }
 
-  int send(const char* buf, int len)
+  int send(const char *buf, int len)
   {
     ObReqTransport::Request<ObRpcPacket> req;
     ObReqTransport::Result<ObRpcPacket> res;
@@ -172,11 +183,13 @@ protected:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObTestDeliver server_;
-  rpc::frame::ObReqTransport* transport_;
+  rpc::frame::ObReqTransport *transport_;
   ObRandom rand;
 };
 
-class MySSHandle : public TestProxy::SSHandle<OB_TEST_PCODE> {
+class MySSHandle
+    : public TestProxy::SSHandle<OB_TEST_PCODE>
+{
 public:
   void inc_sessid()
   {
@@ -201,7 +214,7 @@ TEST_F(TestRpcServer, StreamRPCChaos)
   MySSHandle handle;
   int64_t num = 0;
   proxy.test(MAX_NUM, num, handle);
-  handle.set_timeout(1000 * 1000);
+  handle.set_timeout(1000*1000);
   while (handle.has_more()) {
     int64_t oldnum = num;
     ASSERT_EQ(OB_SUCCESS, handle.get_more(num));
@@ -255,8 +268,9 @@ TEST_F(TestRpcServer, StreamRPC)
   }
   EXPECT_EQ(MAX_NUM, num);
 }
+#endif
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

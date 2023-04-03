@@ -10,317 +10,317 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
-#define OCEANBASE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
+#ifndef OB_STORAGE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
+#define OB_STORAGE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
 
+//#include "ob_imicro_block_reader.h"
 #include "share/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
-#include "common/rowkey/ob_rowkey.h"
 #include "common/ob_store_format.h"
 #include "common/ob_store_range.h"
+#include "share/schema/ob_table_param.h"
+#include "storage/access/ob_table_read_info.h"
 #include "ob_block_sstable_struct.h"
-#include "ob_row_reader.h"
+#include "ob_datum_range.h"
+#include "ob_micro_block_hash_index.h"
+#include "ob_micro_block_header.h"
 
-namespace oceanbase {
-namespace storage {
-class ObStoreRow;
-struct ObStoreRowLockState;
-}  // namespace storage
-
+namespace oceanbase
+{
+namespace sql
+{
+class ObPushdownFilterExecutor;
+class ObWhiteFilterExecutor;
+};
+using namespace storage;
 namespace memtable {
 class ObIMvccCtx;
-}
+};
+namespace blocksstable
+{
+struct ObMicroIndexInfo;
 
-namespace blocksstable {
+#define FREE_PTR_FROM_CONTEXT(ctx, ptr, T)                                  \
+  do {                                                                      \
+    if (nullptr != ptr) {                                                   \
+      ptr->~T();                                                            \
+      if (OB_LIKELY(nullptr != ctx && nullptr != ctx->stmt_allocator_)) {   \
+        ctx->stmt_allocator_->free(ptr);                                    \
+      }                                                                     \
+      ptr = nullptr;                                                        \
+    }                                                                       \
+  } while (0)
 
-class ObColumnMap;
-class ObRowCacheValue;
-class ObIRowReader;
+template<typename T>
+class ObMicroBlockAggInfo {
+public:
+  ObMicroBlockAggInfo(bool is_min, const ObDatumCmpFuncType cmp_fun, T &result_datum) :
+      is_min_(is_min), cmp_fun_(cmp_fun), result_datum_(result_datum) {}
+  void update_min_or_max(const T& datum)
+  {
+    if (datum.is_null()) {
+    } else if (result_datum_.is_null()) {
+      result_datum_ = datum;
+    } else {
+      int cmp_ret = cmp_fun_(result_datum_, datum);
+      if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
+        result_datum_ = datum;
+      }
+    }
+  }
+  TO_STRING_KV(K_(is_min), K_(cmp_fun), K_(result_datum));
+private:
+  bool is_min_;
+  const ObDatumCmpFuncType cmp_fun_;
+  T &result_datum_;
+};
 
-struct ObRowIndexIterator {
+struct ObRowIndexIterator
+{
 public:
   typedef ObRowIndexIterator self_t;
   typedef std::random_access_iterator_tag iterator_category;
   typedef int64_t value_type;
   typedef int64_t difference_type;
-  typedef int64_t* pointer;
-  typedef int64_t& reference;
+  typedef int64_t *pointer;
+  typedef int64_t &reference;
 
-  static const self_t& invalid_iterator()
-  {
-    static self_t invalid_iter(INT64_MIN);
-    return invalid_iter;
-  }
+  static const self_t &invalid_iterator()
+  { static self_t invalid_iter(INT64_MIN); return invalid_iter; }
 
-  ObRowIndexIterator() : row_id_(0)
-  {}
-  explicit ObRowIndexIterator(const int64_t id) : row_id_(id)
-  {}
+  ObRowIndexIterator() : row_id_(0) {}
+  explicit ObRowIndexIterator(const int64_t id) : row_id_(id) {}
 
-  int64_t operator*() const
-  {
-    return row_id_;
-  }
-  bool operator==(const self_t& r) const
-  {
-    return row_id_ == r.row_id_;
-  }
-  bool operator!=(const self_t& r) const
-  {
-    return row_id_ != r.row_id_;
-  }
-  bool operator<(const self_t& r) const
-  {
-    return row_id_ < r.row_id_;
-  }
-  bool operator>(const self_t& r) const
-  {
-    return row_id_ > r.row_id_;
-  }
-  bool operator>=(const self_t& r) const
-  {
-    return row_id_ >= r.row_id_;
-  }
-  bool operator<=(const self_t& r) const
-  {
-    return row_id_ <= r.row_id_;
-  }
-  difference_type operator-(const self_t& r) const
-  {
-    return row_id_ - r.row_id_;
-  }
-  self_t operator-(difference_type step) const
-  {
-    return self_t(row_id_ - step);
-  }
-  self_t operator+(difference_type step) const
-  {
-    return self_t(row_id_ + step);
-  }
-  self_t& operator-=(difference_type step)
-  {
-    row_id_ -= step;
-    return *this;
-  }
-  self_t& operator+=(difference_type step)
-  {
-    row_id_ += step;
-    return *this;
-  }
-  self_t& operator++()
-  {
-    row_id_++;
-    return *this;
-  }
-  self_t operator++(int)
-  {
-    return self_t(row_id_++);
-  }
-  self_t& operator--()
-  {
-    row_id_--;
-    return *this;
-  }
-  self_t operator--(int)
-  {
-    return self_t(row_id_--);
-  }
+  int64_t operator *() const { return row_id_; }
+  bool operator ==(const self_t &r) const { return row_id_ == r.row_id_; }
+  bool operator !=(const self_t &r) const { return row_id_ != r.row_id_; }
+  bool operator <(const self_t &r) const { return row_id_ < r.row_id_; }
+  bool operator >(const self_t &r) const { return row_id_ > r.row_id_; }
+  bool operator >=(const self_t &r) const { return row_id_ >= r.row_id_; }
+  bool operator <=(const self_t &r) const { return row_id_ <= r.row_id_; }
+  difference_type operator -(const self_t &r) const { return row_id_ - r.row_id_; }
+  self_t operator -(difference_type step) const { return self_t(row_id_ - step); }
+  self_t operator +(difference_type step) const { return self_t(row_id_ + step); }
+  self_t &operator -=(difference_type step) { row_id_ -= step; return *this; }
+  self_t &operator +=(difference_type step) { row_id_ += step; return *this; }
+  self_t &operator ++() { row_id_ ++; return *this; }
+  self_t operator ++(int) { return self_t(row_id_++); }
+  self_t &operator --() { row_id_ --; return *this; }
+  self_t operator --(int) { return self_t(row_id_--); }
 
   TO_STRING_KV(K_(row_id));
-
   int64_t row_id_;
 };
 
-struct ObMicroBlockData {
+struct ObMicroBlockData
+{
+  enum Type
+  {
+    DATA_BLOCK,
+    INDEX_BLOCK,
+    DDL_BLOCK_TREE,
+    MAX_TYPE
+  };
 public:
-  ObMicroBlockData() : buf_(NULL), size_(0), extra_buf_(0), extra_size_(0)
-  {}
-  ObMicroBlockData(const char* buf, const int64_t size, const char* extra_buf = NULL, const int64_t extra_size = 0)
-      : buf_(buf), size_(size), extra_buf_(extra_buf), extra_size_(extra_size)
-  {}
-  bool is_valid() const
+  ObMicroBlockData(): buf_(NULL), size_(0), extra_buf_(0), extra_size_(0), type_(DATA_BLOCK) {}
+  ObMicroBlockData(const char *buf,
+                   const int64_t size,
+                   const char *extra_buf = nullptr,
+                   const int64_t extra_size = 0,
+                   const Type block_type = DATA_BLOCK)
+      : buf_(buf), size_(size), extra_buf_(extra_buf), extra_size_(extra_size), type_(block_type) {}
+  bool is_valid() const { return NULL != buf_ && size_ > 0 && type_ < MAX_TYPE; }
+  const char *&get_buf() { return buf_; }
+  const char *get_buf() const { return buf_; }
+  int64_t &get_buf_size() { return size_; }
+  int64_t get_buf_size() const { return size_; }
+
+  const char *&get_extra_buf() { return extra_buf_; }
+  const char *get_extra_buf() const { return extra_buf_; }
+  int64_t get_extra_size() const { return extra_size_; }
+  int64_t &get_extra_size() { return extra_size_; }
+
+  int64_t total_size() const { return size_ + extra_size_; }
+  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_;}
+
+  void reset() { *this = ObMicroBlockData(); }
+  OB_INLINE const ObMicroBlockHeader *get_micro_header() const
   {
-    return NULL != buf_ && size_ > 0;
+    const ObMicroBlockHeader *micro_header = reinterpret_cast<const ObMicroBlockHeader *>(buf_);
+    const bool is_valid_micro_header =
+        size_ >= ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  && micro_header->is_valid();
+    return is_valid_micro_header ? micro_header : nullptr;
   }
-  const char*& get_buf()
+  OB_INLINE ObRowStoreType get_store_type() const
   {
-    return buf_;
-  }
-  const char* get_buf() const
-  {
-    return buf_;
-  }
-  int64_t& get_buf_size()
-  {
-    return size_;
-  }
-  int64_t get_buf_size() const
-  {
-    return size_;
+    const ObMicroBlockHeader *micro_header = reinterpret_cast<const ObMicroBlockHeader *>(buf_);
+    const bool is_valid_micro_header =
+        size_ >= ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET && micro_header->is_valid();
+    return is_valid_micro_header
+      ? static_cast<ObRowStoreType>(micro_header->row_store_type_)
+      : MAX_ROW_STORE;
   }
 
-  const char*& get_extra_buf()
-  {
-    return extra_buf_;
-  }
-  const char* get_extra_buf() const
-  {
-    return extra_buf_;
-  }
-  int64_t get_extra_size() const
-  {
-    return extra_size_;
-  }
-  int64_t& get_extra_size()
-  {
-    return extra_size_;
-  }
+  TO_STRING_KV(KP_(buf), K_(size), KP_(extra_buf), K_(extra_size), K_(type));
 
-  int64_t total_size() const
-  {
-    return size_ + extra_size_;
-  }
-
-  void reset()
-  {
-    *this = ObMicroBlockData();
-  }
-
-  TO_STRING_KV(KP_(buf), K_(size), K_(extra_size));
-
-  const char* buf_;
+  const char *buf_;
   int64_t size_;
-  const char* extra_buf_;
+  const char *extra_buf_;
   int64_t extra_size_;
+  Type type_;
 };
 
-class ObIMicroBlockGetReader {
+class ObMicroBlock
+{
 public:
-  ObIMicroBlockGetReader(){};
-  virtual ~ObIMicroBlockGetReader(){};
-  virtual int get_row(const uint64_t tenant_id, const ObMicroBlockData& block_data, const common::ObStoreRowkey& rowkey,
-      const ObColumnMap& column_map, const ObFullMacroBlockMeta& macro_meta,
-      const storage::ObSSTableRowkeyHelper* rowkey_helper, storage::ObStoreRow& row) = 0;
-  virtual int get_row(const uint64_t tenant_id, const ObMicroBlockData& block_data, const common::ObStoreRowkey& rowkey,
-      const ObFullMacroBlockMeta& macro_meta, const storage::ObSSTableRowkeyHelper* rowkey_helper,
-      storage::ObStoreRow& row) = 0;
-  virtual int exist_row(const uint64_t tenant_id, const ObMicroBlockData& block_data,
-      const common::ObStoreRowkey& rowkey, const ObFullMacroBlockMeta& macro_meta,
-      const storage::ObSSTableRowkeyHelper* rowkey_helper, bool& exist, bool& found) = 0;
-  virtual int check_row_locked(memtable::ObIMvccCtx& ctx, const transaction::ObTransStateTableGuard& trans_table_guard,
-      const transaction::ObTransID& read_trans_id, const ObMicroBlockData& block_data,
-      const common::ObStoreRowkey& rowkey, const ObFullMacroBlockMeta& full_meta,
-      const storage::ObSSTableRowkeyHelper* rowkey_helper, storage::ObStoreRowLockState& lock_state)
+  ObMicroBlock()
+    : range_(), data_(), payload_data_(), read_info_(nullptr), micro_index_info_(nullptr) {}
+
+  inline bool is_valid() const
   {
-    int ret = common::OB_NOT_SUPPORTED;
-    UNUSED(ctx);
-    UNUSED(trans_table_guard);
-    UNUSED(read_trans_id);
-    UNUSED(block_data);
-    UNUSED(rowkey);
-    UNUSED(full_meta);
-    UNUSED(lock_state);
-    UNUSED(rowkey_helper);
+    return range_.is_valid() && header_.is_valid() && data_.is_valid() && nullptr != read_info_
+      && nullptr != micro_index_info_;
+  }
+
+  TO_STRING_KV(K_(range), K_(header), K_(data), K_(payload_data),
+      KP_(read_info), KP_(micro_index_info));
+
+  ObDatumRange range_;
+  ObMicroBlockHeader header_;
+  ObMicroBlockData data_;
+  ObMicroBlockData payload_data_;
+  const ObTableReadInfo *read_info_;
+  const ObMicroIndexInfo *micro_index_info_;
+};
+
+struct ObIMicroBlockReaderInfo
+{
+public:
+  static const int64_t INVALID_ROW_INDEX = -1;
+  ObIMicroBlockReaderInfo()
+      : is_inited_(false),
+      row_count_(-1),
+      read_info_(nullptr)
+  {}
+  virtual ~ObIMicroBlockReaderInfo() { reset(); }
+  OB_INLINE int64_t row_count() const { return row_count_; }
+  OB_INLINE void reset()
+  {
+    row_count_ = -1;
+    read_info_ = nullptr;
+    is_inited_ = false;
+  }
+
+  bool is_inited_;
+  int64_t row_count_;
+  const ObTableReadInfo *read_info_;
+};
+
+class ObIMicroBlockGetReader : public ObIMicroBlockReaderInfo
+{
+public:
+  ObIMicroBlockGetReader()
+   : ObIMicroBlockReaderInfo()
+  {
+  }
+  virtual ~ObIMicroBlockGetReader() {};
+  virtual int get_row(
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObTableReadInfo &read_info,
+      ObDatumRow &row) = 0;
+  virtual int exist_row(
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObTableReadInfo &read_info,
+      bool &exist,
+      bool &found) = 0;
+protected:
+  OB_INLINE static int init_hash_index(
+      const ObMicroBlockData &block_data,
+      ObMicroBlockHashIndex &hash_index,
+      const ObMicroBlockHeader *header)
+  {
+    int ret = OB_SUCCESS;
+    hash_index.reset();
+    if (header->is_contain_hash_index() && OB_FAIL(hash_index.init(block_data))) {
+      STORAGE_LOG(WARN, "failed to init micro block hash index", K(ret), K(block_data));
+    }
     return ret;
   }
 };
 
-class ObIMicroBlockReader {
+class ObIMicroBlockReader : public ObIMicroBlockReaderInfo
+{
 public:
-  typedef const common::ObIArray<int32_t> Projector;
-  static const int64_t OB_MAX_BATCH_ROW_COUNT = 64;
-  static const int64_t INVALID_ROW_INDEX = -1;
-
+  enum ObReaderType
+  {
+    Reader,
+    Decoder,
+  };
   ObIMicroBlockReader()
-      : is_inited_(false),
-        begin_(0),
-        end_(INVALID_ROW_INDEX),
-        column_map_(nullptr),
-        reader_(nullptr),
-        output_row_type_(common::MAX_ROW_STORE)
+    : ObIMicroBlockReaderInfo()
   {}
-  virtual ~ObIMicroBlockReader()
-  {}
-  virtual int init(const ObMicroBlockData& block_data, const ObColumnMap* column_map,
-      const common::ObRowStoreType out_type = common::FLAT_ROW_STORE) = 0;
-  virtual void reset();
-  virtual int get_row(const int64_t index, storage::ObStoreRow& row) = 0;
-  // [begin_index, end_index)
-  virtual int get_rows(const int64_t begin_index, const int64_t end_index, const int64_t row_capacity,
-      storage::ObStoreRow* rows, int64_t& row_count) = 0;
-  virtual int get_row_header(const int64_t row_idx, const ObRowHeader*& row_header) = 0;
-  virtual int get_row_count(int64_t& row_count) = 0;
-  virtual int get_multi_version_info(const int64_t row_idx, const int64_t version_column_idx,
-      const int64_t sql_sequence_idx, storage::ObMultiVersionRowFlag& flag, transaction::ObTransID& trans_id,
-      int64_t& version, int64_t& sql_sequence) = 0;
-  int locate_rowkey(const common::ObStoreRowkey& rowkey, int64_t& row_idx);
-  int locate_range(const common::ObStoreRange& range, const bool is_left_border, const bool is_right_border,
-      int64_t& begin_idx, int64_t& end_idx);
-
-  inline bool is_inited() const
+  virtual ~ObIMicroBlockReader() {}
+  virtual ObReaderType get_type() = 0;
+  virtual void reset() { ObIMicroBlockReaderInfo::reset(); }
+  virtual int init(
+      const ObMicroBlockData &block_data,
+      const ObTableReadInfo &read_info) = 0;
+  virtual int get_row(const int64_t index, ObDatumRow &row) = 0;
+  virtual int get_row_header(
+      const int64_t row_idx,
+      const ObRowHeader *&row_header) = 0;
+  virtual int get_row_count(int64_t &row_count) = 0;
+  virtual int get_multi_version_info(
+      const int64_t row_idx,
+      const int64_t schema_rowkey_cnt,
+      const ObRowHeader *&row_header,
+      int64_t &trans_version,
+      int64_t &sql_sequence) = 0;
+  int locate_range(
+      const ObDatumRange &range,
+      const bool is_left_border,
+      const bool is_right_border,
+      int64_t &begin_idx,
+      int64_t &end_idx,
+      const bool is_index_block = false);
+  virtual int get_row_count(
+      int32_t col_id,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const bool contains_null,
+      int64_t &count)
   {
-    return is_inited_;
+    UNUSEDx(col_id, row_ids, row_cap, contains_null, count);
+    return OB_NOT_SUPPORTED;
   }
-  inline int64_t begin() const
-  {
-    return begin_;
-  }
-  inline int64_t end() const
-  {
-    return end_;
-  }
+  virtual int64_t get_column_count() const = 0;
 
 protected:
-  virtual int find_bound(const common::ObStoreRowkey& key, const bool lower_bound, const int64_t begin_idx,
-      const int64_t end_idx, int64_t& row_idx, bool& equal) = 0;
-
-protected:
-  bool is_inited_;
-  int64_t begin_;  // begin of row index, inclusive
-  int64_t end_;    // end of row index, not inclusive
-  const ObColumnMap* column_map_;
-  ObIRowReader* reader_;
-  common::ObRowStoreType output_row_type_;
+  virtual int find_bound(
+      const ObDatumRowkey &key,
+      const bool lower_bound,
+      const int64_t begin_idx,
+      int64_t &row_idx,
+      bool &equal) = 0;
+  virtual int find_bound(const ObDatumRange &range,
+      const int64_t begin_idx,
+      int64_t &row_idx,
+      bool &equal,
+      int64_t &end_key_begin_idx,
+      int64_t &end_key_end_idx) = 0;
+  int validate_filter_info(
+      const sql::ObPushdownFilterExecutor &filter,
+      const void* col_buf,
+      const int64_t col_capacity,
+      const ObMicroBlockHeader *header);
+  int filter_white_filter(
+      const sql::ObWhiteFilterExecutor &filter,
+      const common::ObObj &obj,
+      bool &filtered);
 };
 
-class ObMicroBlock {
-public:
-  ObMicroBlock()
-      : range_(),
-        data_(),
-        column_map_(NULL),
-        row_store_type_(common::FLAT_ROW_STORE),
-        row_count_(0),
-        column_cnt_(0),
-        column_checksums_(nullptr),
-        meta_(),
-        origin_data_size_(0),
-        header_version_(0)
-  {}
-
-  inline bool is_valid() const
-  {
-    return range_.is_valid() && data_.is_valid() && NULL != column_map_ &&
-           common::ObStoreFormat::is_row_store_type_valid(row_store_type_) && meta_.is_valid();
-  }
-
-  TO_STRING_KV(K_(range), K_(data), K_(column_map), K_(row_store_type), K_(row_count), K_(column_cnt),
-      KP_(column_checksums), K_(meta), K_(origin_data_size));
-
-  common::ObStoreRange range_;
-  ObMicroBlockData data_;
-  ObMicroBlockData payload_data_;
-  ObColumnMap* column_map_;
-  common::ObRowStoreType row_store_type_;
-  int64_t row_count_;
-  int64_t column_cnt_;
-  int64_t* column_checksums_;
-  blocksstable::ObFullMacroBlockMeta meta_;
-  int64_t origin_data_size_;
-  int64_t header_version_;
-};
-
-}  // end namespace blocksstable
-}  // end namespace oceanbase
-
-#endif  // OCEANBASE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
+} //end namespace blocksstable
+} //end namespace oceanbase
+#endif

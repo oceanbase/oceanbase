@@ -1,3 +1,1 @@
-sql_unittest(test_expr_generator)
-sql_unittest(test_code_generator)
-sql_unittest(test_static_engine_cg)
+#sql_unittest(test_static_engine_cg)

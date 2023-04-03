@@ -15,31 +15,52 @@
 #include "sql/engine/expr/ob_expr_stmt_id.h"
 #include "share/ob_i_sql_expression.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
+#include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
-ObExprStmtId::ObExprStmtId(common::ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_STMT_ID, "stmt_id", 0, NOT_ROW_DIMENSION)
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObExprStmtId::ObExprStmtId(common::ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_STMT_ID, "stmt_id", 0, NOT_ROW_DIMENSION,
+                         INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
-int ObExprStmtId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprStmtId::calc_result_type0(ObExprResType &type,
+                                    ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_int();
   return OB_SUCCESS;
 }
 
-int ObExprStmtId::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
+int ObExprStmtId::eval_stmt_id(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx* plan_ctx = expr_ctx.phy_plan_ctx_;
+  UNUSED(expr);
+  ObPhysicalPlanCtx *plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan_ctx is null");
+    LOG_WARN("plan_ctx is null", K(ret));
   } else {
-    result.set_int(plan_ctx->get_cur_stmt_id());
+    res.set_int(plan_ctx->get_cur_stmt_id());
   }
+
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+
+int ObExprStmtId::cg_expr(ObExprCGCtx &expr_cg_ctx,
+                          const ObRawExpr &raw_expr,
+                          ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = eval_stmt_id;
+  return ret;
+}
+
+} //end sql
+} //end oceanbase

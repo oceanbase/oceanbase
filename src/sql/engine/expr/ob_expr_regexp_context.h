@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
-#define OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
+#ifndef  OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
+#define  OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
 #include "easy_define.h"  // for conflict of macro likely
 #include "lib/utility/ob_print_utils.h"
 #include "lib/charset/ob_mysql_global.h"
@@ -19,95 +19,115 @@
 #include <sys/types.h>
 #include <assert.h>
 #include "lib/charset/ob_charset.h"
-#include "lib/regex/regex/regalone.h"
-#include "lib/regex/regex/ob_regex.h"
+#include <icu/i18n/unicode/uregex.h>
 #include "sql/engine/expr/ob_expr_operator.h"
 
-// this regex is compatible with mysql 5.6.16
+// this regex is compatible with mysql 8.0
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-// Return same address if alloc size less than reserved size.
-// Prepare is needed for every allocation.
-class ObInplaceAllocator : public common::ObIAllocator {
-public:
-  ObInplaceAllocator() : alloc_(NULL), mem_(NULL), len_(0)
-  {}
-
-  void prepare(common::ObIAllocator& alloc)
-  {
-    alloc_ = &alloc;
-  }
-
-  virtual void* alloc(const int64_t size) override;
-
-private:
-  common::ObIAllocator* alloc_;
-  void* mem_;
-  int64_t len_;
-};
-
-class ObExprRegexContext : public ObExprOperatorCtx {
+class ObExprRegexContext : public ObExprOperatorCtx
+{
 public:
   ObExprRegexContext();
   virtual ~ObExprRegexContext();
-
 public:
-  inline bool is_inited() const
-  {
-    return inited_;
-  }
+  static const char *icu_version_string() { return U_ICU_VERSION; }
+  inline bool is_inited() const { return inited_; }
   void destroy();
   void reset();
 
   // The previous regex compile result can be used if pattern not change, if %reusable is true.
   // %string_buf must be the same with previous init too if %reusable is true.
-  int init(const common::ObString& pattern, int cflags, common::ObExprStringBuf& string_buf, const bool reusable);
+  int init(ObExprStringBuf &string_buf,
+           ObSQLSessionInfo *session_info,
+           const ObString &origin_pattern,
+           const uint32_t cflags,
+           const bool reusable,
+           const ObCollationType cs_type);
 
-  int match(
-      const common::ObString& text, int64_t start_offset, bool& is_match, common::ObExprStringBuf& string_buf) const;
-  int substr(const common::ObString& text, int64_t occurrence, int64_t subexpr, common::ObString& sub,
-      common::ObExprStringBuf& string_buf, bool from_begin, bool from_end,
-      common::ObSEArray<uint32_t, 4>& begin_locations) const;
-  int count_match_str(const common::ObString& text, int64_t subexpr, int64_t& sub, common::ObExprStringBuf& string_buf,
-      bool from_begin, bool from_end, common::ObSEArray<uint32_t, 4>& begin_locations) const;
-  int instr(const common::ObString& text, int64_t occurrence, int64_t return_option, int64_t subexpr, int64_t& sub,
-      common::ObExprStringBuf& string_buf, bool from_begin, bool from_end,
-      common::ObSEArray<uint32_t, 4>& begin_locations) const;
-  int like(const common::ObString& text, int64_t occurrence, bool& sub, common::ObExprStringBuf& string_buf,
-      bool from_begin, bool from_end, common::ObSEArray<uint32_t, 4>& begin_locations) const;
-  int replace_substr(const common::ObString& text_string, const common::ObString& replace_string, int64_t occurrence,
-      common::ObExprStringBuf& string_buf, common::ObIArray<size_t>& ch_position, common::ObString& sub,
-      bool from_begin, bool from_end, common::ObSEArray<uint32_t, 4>& begin_locations) const;
-  int replace(const common::ObString& text, const common::ObString& to,
-      common::ObSEArray<uint32_t, 4>& locations_and_length, common::ObExprStringBuf& string_buf,
-      common::ObIArray<common::ObSEArray<common::ObString, 8> >& subexpr_arrays, common::ObString& sub) const;
-  int pre_process_replace_str(const common::ObString& text, const common::ObString& to,
-      common::ObExprStringBuf& string_buf, common::ObIArray<common::ObSEArray<common::ObString, 8> >& subexpr_arrays,
-      common::ObIArray<common::ObString>& subexpr_array) const;
-  int extract_subpre_string(const wchar_t* wc_text, int64_t wc_length, int64_t start_pos, ob_regmatch_t pmatch[],
-      uint64_t pmatch_size, common::ObExprStringBuf& string_buf,
-      common::ObIArray<common::ObString>& subexpr_array) const;
+  int match(ObExprStringBuf &string_buf,
+            const ObString &text,
+            const int64_t start,
+            bool &result) const;
+
+  int find(ObExprStringBuf &string_buf,
+           const ObString &text,
+           const int64_t start,
+           const int64_t occurrence,
+           const int64_t return_option,
+           const int64_t subexpr,
+           int64_t &result) const;
+
+  int count(ObExprStringBuf &string_buf,
+            const ObString &text,
+            const int32_t start,
+            int64_t &result) const;
+
+  int substr(ObExprStringBuf &string_buf,
+             const ObString &text,
+             const int64_t start,
+             const int64_t occurrence,
+             const int64_t subexpr,
+             ObString &result) const;
+
+  int replace(ObExprStringBuf &string_buf,
+              const ObString &text_string,
+              const ObString &replace_string,
+              const int64_t start,
+              const int64_t occurrence,
+              ObString &result) const;
+
+  int append_head(ObExprStringBuf &string_buf,
+                  const int32_t current_pos,
+                  UChar *&replace_buff,
+                  int32_t &buff_size,
+                  int32_t &buff_pos) const;
+
+  int append_replace_str(ObExprStringBuf &string_buf,
+                         const UChar *u_replace,
+                         const int32_t u_replace_length,
+                         UChar *&replace_buff,
+                         int32_t &buff_size,
+                         int32_t &buff_pos) const;
+
+  int append_tail(ObExprStringBuf &string_buf,
+                  UChar *&replace_buff,
+                  int32_t &buff_size,
+                  int32_t &buff_pos) const;
+
+  static int get_regexp_flags(const ObString &match_param,
+                              const bool is_case_sensitive,
+                              uint32_t &flags);
+
+  static int check_need_utf8(ObRawExpr *expr, bool &is_nstring);
   TO_STRING_KV(K_(inited));
 
 private:
-  void reset_reg();
-  int getwc(const common::ObString& text, wchar_t*& wc, int64_t& wc_length, common::ObExprStringBuf& string_buf) const;
-  int w2c(
-      const wchar_t* wc, int64_t length, char*& chr, int64_t& chr_length, common::ObExprStringBuf& string_buf) const;
-  int convert_reg_err_code_to_ob_err_code(int reg_err) const;
-
+  int preprocess_pattern(common::ObExprStringBuf &string_buf,
+                         const common::ObString &origin_pattern,
+                         common::ObString &pattern);
+  int check_icu_regexp_status(UErrorCode u_error_code, const UParseError *parse_error = NULL) const;
+  int get_valid_unicode_string(ObExprStringBuf &string_buf,
+                               const ObString &origin_str,
+                               UChar *&u_str,
+                               int32_t &u_str_len) const;
+  int get_valid_replace_string(ObIAllocator &alloc,
+                               const ObString &origin_replace,
+                               UChar *&u_replace,
+                               int32_t &u_replace_len) const;
 private:
   bool inited_;
-  ob_regex_t reg_;
-
   ObInplaceAllocator pattern_allocator_;
   common::ObString pattern_;
-
+  int cflags_;
   ObInplaceAllocator pattern_wc_allocator_;
+  URegularExpression *regexp_engine_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
+#endif //OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_

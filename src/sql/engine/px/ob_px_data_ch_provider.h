@@ -18,81 +18,104 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/dtl/ob_dtl_task.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObPxChProviderUtil {
+class ObPxChProviderUtil
+{
 public:
-  static int inner_get_data_ch(bool ch_map_opt, ObPxTaskChSets& ch_sets, dtl::ObDtlChTotalInfo& ch_total_info,
-      const int64_t sqc_id, const int64_t task_id, ObPxTaskChSet& ch_set, bool is_transmit);
+  static int inner_get_data_ch(
+        ObPxTaskChSets &ch_sets,
+        dtl::ObDtlChTotalInfo &ch_total_info,
+        const int64_t sqc_id,
+        const int64_t task_id,
+        ObPxTaskChSet &ch_set,
+        bool is_transmit);
+  static int check_status(int64_t timeout_ts,
+                          const common::ObAddr &qc_addr,
+                          int64_t query_start_time);
 };
 
-class ObPxTransmitChProvider {
+class ObPxTransmitChProvider
+{
 public:
-  ObPxTransmitChProvider() : msg_set_(false)
-  {}
+  ObPxTransmitChProvider(ObThreadCond &msg_ready_cond) : msg_set_(false), msg_ready_cond_(msg_ready_cond) {}
   virtual ~ObPxTransmitChProvider() = default;
   int init();
-  int get_data_ch(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet& ch_set,
-      dtl::ObDtlChTotalInfo** ch_info);
-  int get_data_ch_nonblock(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet& ch_set,
-      dtl::ObDtlChTotalInfo** ch_info);
-  int get_part_ch_map(ObPxPartChInfo& map, int64_t timeout_ts);
-  int get_part_ch_map_nonblock(ObPxPartChInfo& map, int64_t timeout_ts);
-  int add_msg(const ObPxTransmitDataChannelMsg& msg);
-
+  int get_data_ch(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet &ch_set,
+                  dtl::ObDtlChTotalInfo **ch_info);
+  int get_data_ch_nonblock(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts,
+            ObPxTaskChSet &ch_set, dtl::ObDtlChTotalInfo **ch_info, const common::ObAddr &qc_addr,
+            int64_t query_start_time);
+  int get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts);
+  int get_part_ch_map_nonblock(ObPxPartChInfo &map, int64_t timeout_ts,
+                               const common::ObAddr &qc_addr, int64_t query_start_time);
+  int add_msg(const ObPxTransmitDataChannelMsg &msg);
 private:
   int wait_msg(int64_t timeout_ts);
-  int check_status(int64_t timeout_ts);
-  int inner_get_part_ch_map(ObPxPartChInfo& map);
-
+  int inner_get_part_ch_map(ObPxPartChInfo &map);
 private:
   bool msg_set_;
   ObPxTransmitDataChannelMsg msg_;
-  common::ObThreadCond msg_ready_cond_;
+  common::ObThreadCond &msg_ready_cond_;
 };
 
-class ObPxReceiveChProvider {
+class ObPxReceiveChProvider
+{
 public:
-  ObPxReceiveChProvider()
-  {}
+  ObPxReceiveChProvider(ObThreadCond &msg_ready_cond)
+  : msg_ready_cond_(msg_ready_cond),
+    lock_(common::ObLatchIds::DTL_RECV_CHANNEL_PROVIDER_LOCK)
+  {
+  }
   virtual ~ObPxReceiveChProvider() = default;
   int init();
-  int get_data_ch(const int64_t child_dfo_id, const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts,
-      ObPxTaskChSet& ch_set, dtl::ObDtlChTotalInfo* ch_info);
-  int get_data_ch_nonblock(const int64_t child_dfo_id, const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts,
-      ObPxTaskChSet& ch_set, dtl::ObDtlChTotalInfo* ch_info);
-  int add_msg(const ObPxReceiveDataChannelMsg& msg);
-
+  // 如果 child_dfo_id 的 ch sets 不存在，则等待，由 add_msg 唤醒。
+  int get_data_ch(const int64_t child_dfo_id,
+                  const int64_t sqc_id,
+                  const int64_t task_id,
+                  int64_t timeout_ts,
+                  ObPxTaskChSet &ch_set,
+                  dtl::ObDtlChTotalInfo *ch_info);
+  int get_data_ch_nonblock(const int64_t child_dfo_id,
+                          const int64_t sqc_id,
+                          const int64_t task_id,
+                          int64_t timeout_ts,
+                          ObPxTaskChSet &ch_set,
+                          dtl::ObDtlChTotalInfo *ch_info,
+                          const common::ObAddr &qc_addr,
+                          int64_t query_start_time);
+  int add_msg(const ObPxReceiveDataChannelMsg &msg);
 private:
   /* functions */
   int wait_msg(int64_t child_dfo_id, int64_t timeout_ts);
-  int check_status(int64_t timeout_ts);
   int reserve_msg_set_array_size(int64_t size);
-
 private:
   static const int64_t MSG_SET_DEFAULT_SIZE = 16;
-
 private:
   /* variables */
   common::ObSEArray<ObPxReceiveDataChannelMsg, 2> msgs_;
-  common::ObThreadCond msg_ready_cond_;
+  common::ObThreadCond &msg_ready_cond_;
   common::ObArray<bool> msg_set_;
   common::ObSpinLock lock_;
   DISALLOW_COPY_AND_ASSIGN(ObPxReceiveChProvider);
 };
 
-// Root Dfo Provider
-class ObPxRootReceiveChProvider {
+// Root Dfo 专用的 Provider
+class ObPxRootReceiveChProvider
+{
 public:
-  ObPxRootReceiveChProvider() : root_dfo_(NULL)
-  {}
+  ObPxRootReceiveChProvider() : root_dfo_(NULL) {}
   ~ObPxRootReceiveChProvider() = default;
-  void set_root_dfo(ObDfo& root_dfo)
+  void set_root_dfo(ObDfo &root_dfo)
   {
     root_dfo_ = &root_dfo;
   }
-  int get_data_ch(const int64_t child_dfo_id, ObPxTaskChSets& ch_sets, int64_t timeout_ts)
+  int get_data_ch(const int64_t child_dfo_id,
+                  ObPxTaskChSets &ch_sets,
+                  int64_t timeout_ts)
   {
     int ret = OB_SUCCESS;
     UNUSED(timeout_ts);
@@ -103,16 +126,33 @@ public:
     }
     return ret;
   }
-  void reset()
-  {
-    root_dfo_ = nullptr;
-  }
-
+  void reset() { root_dfo_ = nullptr; }
 private:
-  ObDfo* root_dfo_;
+  ObDfo *root_dfo_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+class ObPxBloomfilterChProvider
+{
+public:
+  ObPxBloomfilterChProvider(ObThreadCond &msg_ready_cond) : msg_set_(false), msg_ready_cond_(msg_ready_cond) {}
+  virtual ~ObPxBloomfilterChProvider() = default;
+  int init();
+  int get_data_ch_nonblock(
+        ObPxBloomFilterChSet &ch_set,
+        int64_t &sqc_count,
+        int64_t timeout_ts,
+        bool is_transmit,
+        const common::ObAddr &qc_addr,
+        int64_t query_start_time);
+  int add_msg(const ObPxCreateBloomFilterChannelMsg &msg);
+  int wait_msg(int64_t timeout_ts);
+private:
+  bool msg_set_;
+  ObPxCreateBloomFilterChannelMsg msg_;
+  common::ObThreadCond &msg_ready_cond_;
+};
+
+}
+}
 #endif /* __OB_SQL_ENGINE_PX_DATA_CH_PROVIDER_H__ */
 //// end of header file

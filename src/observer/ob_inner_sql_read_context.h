@@ -18,30 +18,25 @@
 #include "ob_inner_sql_result.h"
 #include "ob_inner_sql_connection.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObResultSet;
 }
 
-namespace observer {
+namespace observer
+{
 class ObInnerSQLConnection;
 
-class ObInnerSQLReadContext : public common::sqlclient::ObISQLResultHandler {
+class ObInnerSQLReadContext : public common::sqlclient::ObISQLResultHandler
+{
 public:
-  explicit ObInnerSQLReadContext(ObInnerSQLConnection& conn);
+  explicit ObInnerSQLReadContext(ObInnerSQLConnection &conn);
   virtual ~ObInnerSQLReadContext();
-  virtual common::sqlclient::ObMySQLResult* mysql_result()
-  {
-    return &result_;
-  }
-  ObInnerSQLResult& get_result()
-  {
-    return result_;
-  }
-  ObVirtualTableIteratorFactory& get_vt_iter_factory()
-  {
-    return vt_iter_factory_;
-  }
+  virtual common::sqlclient::ObMySQLResult *mysql_result() { return &result_; }
+  ObInnerSQLResult &get_result() { return result_; }
+  ObVirtualTableIteratorFactory &get_vt_iter_factory() { return vt_iter_factory_; }
 
 private:
   // define order dependent:
@@ -54,7 +49,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLReadContext);
 };
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_OB_INNER_SQL_READ_CONTEXT_H_
+#endif // OCEANBASE_OBSERVER_OB_INNER_SQL_READ_CONTEXT_H_

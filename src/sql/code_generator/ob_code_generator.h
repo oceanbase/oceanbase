@@ -16,12 +16,16 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "lib/container/ob_iarray.h"
 
-namespace oceanbase {
-namespace common {
+
+namespace oceanbase
+{
+namespace common
+{
 class ObIAllocator;
 }
 
-namespace sql {
+namespace sql
+{
 class ObCodeGeneratorImpl;
 class ObPhysicalPlan;
 class ObLogPlan;
@@ -29,59 +33,53 @@ class ObRawExpr;
 class ObLogicalOperator;
 class ObRawExprUniqueSet;
 
-class ObCodeGenerator {
+class ObCodeGenerator
+{
 public:
-  ObCodeGenerator(
-      bool use_jit, bool use_static_typing_engine, uint64_t min_cluster_version, DatumParamStore* param_store)
-      : use_jit_(use_jit),
-        use_static_typing_engine_(use_static_typing_engine),
-        min_cluster_version_(min_cluster_version),
-        param_store_(param_store)
+  ObCodeGenerator(bool use_jit,
+                  uint64_t min_cluster_version,
+                  DatumParamStore *param_store)
+    : use_jit_(use_jit),
+      min_cluster_version_(min_cluster_version),
+      param_store_(param_store)
   {}
-  virtual ~ObCodeGenerator()
-  {}
+  virtual ~ObCodeGenerator() {}
 
-  int generate(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
+  //生成执行计划
+  //@param [in]  log_plan 逻辑执行计划
+  //@param [out] phy_plan 物理执行计划
+  int generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan);
+
+  // detect batch row count for vectorized execution.
+  static int detect_batch_size(
+      const ObLogPlan &log_plan, int64_t &batch_size);
 
 private:
-  int generate_old_plan(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
-  int generate_exprs(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
+  //生成表达式
+  //@param [in]  log_plan 逻辑执行计划
+  //@param [out] phy_plan 物理执行计划, 会初始化物理对象中rt_exprs_, 和frame_info_
+  int generate_exprs(const ObLogPlan &log_plan,
+                     ObPhysicalPlan &phy_plan,
+                     const uint64_t cur_cluster_version);
 
-  int generate_operators(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
-
-  // get all raw exprs of logical plan (include the subplans)
-  int get_plan_all_exprs(const ObLogPlan& plan, ObRawExprUniqueSet& exprs);
-
-  // get all plans, referenced in subplan_infos_ or referenced by logical operators.
-  // subplans are referenced in two ways:
-  //   1. ObLogicalPlan::subplan_infos_:
-  //      subplan of subquery ref is add to subplan_infos_, e.g:
-  //      select * from t1 where c1 < (select distinct c2 from t2);
-  //   2. ObLogicalOperator::my_plan_:
-  //      subplan subplan scan is referenced in this way, we traverse all logical operators
-  //      get all subplans. e.g.:
-  //
-  //        Hash Join (my_plan_: root)
-  //          Table Scan (my_plan_: root)
-  //          Subplan Scan (my_plan_: root)
-  //            Table Scan (my_plan_: subplan)
-  //
-  int get_all_log_plan(const ObLogPlan* plan, common::ObIArray<const ObLogPlan*>& plans);
-
-  // traverse logical operator tree, get all plans referenced by logical operators.
-  int get_all_log_plan(const ObLogicalOperator* op, common::ObIArray<const ObLogPlan*>& plans);
+  //生成物理算子
+  //@param [in]  log_plan 逻辑执行计划
+  //@param [out] phy_plan 物理执行计划
+  int generate_operators(const ObLogPlan &log_plan,
+                         ObPhysicalPlan &phy_plan,
+                         const uint64_t cur_cluster_version);
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCodeGenerator);
-
 private:
+  //TODO shengle remove
   bool use_jit_;
-  bool use_static_typing_engine_;
   uint64_t min_cluster_version_;
-  DatumParamStore* param_store_;
+  //所有参数化后的常量对象
+  DatumParamStore *param_store_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_CODE_GENERATOR_OB_CODE_GENERATOR_ */

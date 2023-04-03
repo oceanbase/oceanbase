@@ -14,12 +14,14 @@
 #include "sql/ob_sql_mode_manager.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
-
-int compatibility_mode2index(const common::ObCompatibilityMode mode, int64_t& index)
+namespace oceanbase
 {
-  static const ObCompatibilityMode modes[] = {OCEANBASE_MODE, MYSQL_MODE, ORACLE_MODE};
+namespace sql
+{
+
+int compatibility_mode2index(const common::ObCompatibilityMode mode, int64_t &index)
+{
+  static const ObCompatibilityMode modes[] = { OCEANBASE_MODE, MYSQL_MODE, ORACLE_MODE };
   int ret = OB_ENTRY_NOT_EXIST;
   for (int64_t i = 0; OB_ENTRY_NOT_EXIST == ret && i < ARRAYSIZEOF(modes); ++i) {
     if (mode == modes[i]) {
@@ -80,5 +82,5 @@ void ObSQLModeManager::set_sql_mode(ObSQLMode mode)
   sql_standard_[current_mode_index_].sql_mode_ = mode;
 }
 */
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

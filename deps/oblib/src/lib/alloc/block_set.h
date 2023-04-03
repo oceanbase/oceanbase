@@ -18,74 +18,101 @@
 #include "lib/alloc/alloc_interface.h"
 #include "lib/resource/achunk_mgr.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace common
+{
+class ObPageManagerCenter;
+}
+namespace lib
+{
 
 class ObTenantCtxAllocator;
 class ISetLocker;
-class BlockSet {
+class BlockSet
+{
+  friend class common::ObPageManagerCenter;
   friend class ObTenantCtxAllocator;
-
+  class Lock
+  {
+  public:
+    Lock() : tid_(0) {}
+    ~Lock() { reset(); }
+    void reset() { ATOMIC_STORE(&tid_, 0); }
+    void lock();
+    void unlock() { ATOMIC_STORE(&tid_, 0); }
+  private:
+    int64_t tid_;
+  };
+  class LockGuard
+  {
+  public:
+    LockGuard(Lock &lock) : lock_(lock) { lock_.lock(); }
+    ~LockGuard() { lock_.unlock(); }
+  private:
+    Lock &lock_;
+  };
 public:
   BlockSet();
   ~BlockSet();
 
-  ABlock* alloc_block(const uint64_t size, const ObMemAttr& attr);
-  void free_block(ABlock* block);
+  ABlock *alloc_block(const uint64_t size, const ObMemAttr &attr);
+  void free_block(ABlock *block);
 
   inline void lock();
   inline void unlock();
   inline bool trylock();
 
-  // tempory
   inline uint64_t get_total_hold() const;
+  inline uint64_t get_total_payload() const;
+  inline uint64_t get_total_used() const;
 
-  void set_tenant_ctx_allocator(ObTenantCtxAllocator& allocator, const ObMemAttr& attr);
-  ObTenantCtxAllocator& get_tenant_ctx_allocator() const;
+  void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator);
   void set_max_chunk_cache_cnt(const int cnt)
-  {
-    chunk_free_list_.set_max_chunk_cache_cnt(cnt);
-  }
+  { chunk_free_list_.set_max_chunk_cache_cnt(cnt); }
   void reset();
-  void set_locker(ISetLocker* locker)
-  {
-    locker_ = locker;
-  }
+  void set_locker(ISetLocker *locker) { locker_ = locker; }
+  int64_t sync_wash(int64_t wash_size=INT64_MAX);
+  bool check_has_unfree();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);
 
-  void add_free_block(ABlock* block);
-  ABlock* get_free_block(const int cls, const ObMemAttr& attr);
-  void take_off_free_block(ABlock* block);
-  AChunk* alloc_chunk(const uint64_t size, const ObMemAttr& attr);
-  bool add_chunk(const ObMemAttr& attr);
-  void free_chunk(AChunk* const chunk);
-  void check_block(ABlock* block);
+  void add_free_block(ABlock *block, int nblocks, AChunk *chunk);
+  ABlock *get_free_block(const int cls, const ObMemAttr &attr);
+  void take_off_free_block(ABlock *block, int nblocks, AChunk *chunk);
+  AChunk *alloc_chunk(const uint64_t size, const ObMemAttr &attr);
+  bool add_chunk(const ObMemAttr &attr);
+  void free_chunk(AChunk *const chunk);
 
 private:
   lib::ObMutex mutex_;
   // block_list_ can not be initialized, the state is maintained by avail_bm_
   union {
-    ABlock* block_list_[BLOCKS_PER_CHUNK + 1];
+    ABlock *block_list_[BLOCKS_PER_CHUNK+1];
   };
-  AChunk* clist_;  // using chunk list
+  AChunk *clist_;  // using chunk list
   ABitSet avail_bm_;
-  char avail_bm_buf_[ABitSet::buf_len(BLOCKS_PER_CHUNK + 1)];
+  char avail_bm_buf_[ABitSet::buf_len(BLOCKS_PER_CHUNK+1)];
   uint64_t total_hold_;
-  ObTenantCtxAllocator* tallocator_;
+  uint64_t total_payload_;
+  uint64_t total_used_;
+  ObTenantCtxAllocator *tallocator_;
   ObMemAttr attr_;
   lib::AChunkList chunk_free_list_;
-  ISetLocker* locker_;
-};  // end of class BlockSet
+  ISetLocker *locker_;
+  Lock cache_shared_lock_;
+}; // end of class BlockSet
 
 void BlockSet::lock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->lock();
 }
 
 void BlockSet::unlock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->unlock();
 }
 
@@ -96,10 +123,20 @@ bool BlockSet::trylock()
 
 uint64_t BlockSet::get_total_hold() const
 {
-  return total_hold_;
+  return ATOMIC_LOAD(&total_hold_);
 }
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+uint64_t BlockSet::get_total_payload() const
+{
+  return ATOMIC_LOAD(&total_payload_);
+}
+
+uint64_t BlockSet::get_total_used() const
+{
+  return ATOMIC_LOAD(&total_used_);
+}
+
+} // end of namespace lib
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_LIB_ALLOC_BLOCK_SET_H_ */

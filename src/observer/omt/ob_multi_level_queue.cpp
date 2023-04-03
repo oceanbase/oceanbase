@@ -16,21 +16,21 @@
 #include "ob_multi_level_queue.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 
+
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
 using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
-int ObMultiLevelQueue::init(int64_t limit)
+
+void ObMultiLevelQueue::set_limit(int64_t limit)
 {
-  int ret = OB_SUCCESS;
   for (int32_t level = 0; level < MULTI_LEVEL_QUEUE_SIZE; level++) {
     queue_[level].set_limit(limit);
   }
-  return ret;
 }
 
-int ObMultiLevelQueue::push(ObRequest& req, const int32_t level, const int32_t prio)
+int ObMultiLevelQueue::push(ObRequest &req, const int32_t level, const int32_t prio)
 {
   int ret = OB_SUCCESS;
   if (level < 0 || level >= MULTI_LEVEL_QUEUE_SIZE) {
@@ -42,7 +42,8 @@ int ObMultiLevelQueue::push(ObRequest& req, const int32_t level, const int32_t p
   return ret;
 }
 
-int ObMultiLevelQueue::pop(ObLink*& task, const int32_t level, const int64_t timeout_us)
+int ObMultiLevelQueue::pop(ObLink *&task,
+    const int32_t level, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (timeout_us < 0) {
@@ -57,7 +58,8 @@ int ObMultiLevelQueue::pop(ObLink*& task, const int32_t level, const int64_t tim
   return ret;
 }
 
-int ObMultiLevelQueue::pop_timeup(ObLink*& task, const int32_t level, const int64_t timeout_us)
+int ObMultiLevelQueue::pop_timeup(ObLink *&task,
+    const int32_t level, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (timeout_us < 0) {
@@ -69,8 +71,9 @@ int ObMultiLevelQueue::pop_timeup(ObLink*& task, const int32_t level, const int6
   } else {
     ret = queue_[level].pop(task, timeout_us);
     if (ret == OB_SUCCESS && nullptr != task) {
-      ObRequest* req = static_cast<rpc::ObRequest*>(task);
-      const ObRpcPacket* pkt = static_cast<const ObRpcPacket*>(&(req->get_packet()));
+      ObRequest *req = static_cast<rpc::ObRequest*>(task);
+      const ObRpcPacket *pkt
+          = static_cast<const ObRpcPacket*>(&(req->get_packet()));
       int64_t timeup_us = 5 * 1000 * 1000L;
       if (nullptr == pkt) {
         LOG_WARN("pop req has empty pkt", K(req));
@@ -89,7 +92,7 @@ int ObMultiLevelQueue::pop_timeup(ObLink*& task, const int32_t level, const int6
   return ret;
 }
 
-int ObMultiLevelQueue::try_pop(ObLink*& task, const int32_t level)
+int ObMultiLevelQueue::try_pop(ObLink *&task, const int32_t level)
 {
   int ret = OB_SUCCESS;
   if (level < 0 || level >= MULTI_LEVEL_QUEUE_SIZE) {

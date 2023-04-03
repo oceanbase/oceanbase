@@ -14,6 +14,7 @@
 CTX_ITEM_DEF(DEFAULT_CTX_ID)
 CTX_ITEM_DEF(MEMSTORE_CTX_ID)
 CTX_ITEM_DEF(COMPILE_CTX_ID)
+CTX_ITEM_DEF(PHY_PLAN_CTX_ID)
 CTX_ITEM_DEF(EXECUTE_CTX_ID)
 CTX_ITEM_DEF(HASHJOIN_CTX_ID)
 CTX_ITEM_DEF(SORT_CTX_ID)
@@ -29,10 +30,6 @@ CTX_ITEM_DEF(STORAGE_LONG_TERM_META_CTX_ID)
 CTX_ITEM_DEF(STORAGE_SHORT_TERM_META_CTX_ID)
 CTX_ITEM_DEF(PARTITION_LOG_SERVICE_CTX_ID)
 CTX_ITEM_DEF(REPLAY_STATUS_CTX_ID)
-CTX_ITEM_DEF(TRANS_PART_CTX_ID)
-CTX_ITEM_DEF(TRANS_COORD_CTX_ID)
-CTX_ITEM_DEF(TRANS_SCHE_CTX_ID)
-CTX_ITEM_DEF(OB_TRANS_LOCAL_TASK_ID)
 CTX_ITEM_DEF(PLAN_CACHE_CTX_ID)
 CTX_ITEM_DEF(REQ_MANAGER_CTX_ID)
 CTX_ITEM_DEF(WORK_AREA)
@@ -40,39 +37,22 @@ CTX_ITEM_DEF(GLIBC)
 CTX_ITEM_DEF(LOG_INDEX_CTX_ID)
 CTX_ITEM_DEF(CO_STACK)
 CTX_ITEM_DEF(LIBEASY)
-CTX_ITEM_DEF(QUERY_EXEC_CTX_ID)
 CTX_ITEM_DEF(LOGGER_CTX_ID)
+CTX_ITEM_DEF(KVSTORE_CACHE_ID)
+CTX_ITEM_DEF(META_OBJ_CTX_ID)
+CTX_ITEM_DEF(TX_CALLBACK_CTX_ID)
+CTX_ITEM_DEF(LOB_CTX_ID)
+CTX_ITEM_DEF(PS_CACHE_CTX_ID)
+CTX_ITEM_DEF(RPC_CTX_ID)
+CTX_ITEM_DEF(PKT_NIO)
+CTX_ITEM_DEF(TX_DATA_TABLE)
 CTX_ITEM_DEF(MAX_CTX_ID)
-#endif
-
-// mod_id has been unified into a string, try not to add mod_id,
-// These mods are still retained here because they are more sensitive to the accuracy of statistical values
-// Can't easily bypass
-#ifdef MOD_ITEM_DEF
-MOD_ITEM_DEF(OB_MOD_DO_NOT_USE_ME)
-MOD_ITEM_DEF(TEST1)
-MOD_ITEM_DEF(TEST2)
-MOD_ITEM_DEF(TEST3)
-MOD_ITEM_DEF(OB_PARTITION_MIGRATE)
-MOD_ITEM_DEF(OB_ASYNC_EXTERNAL_SORTER)
-MOD_ITEM_DEF(OB_COMMON_ARRAY)
-MOD_ITEM_DEF(OB_SORT_TEMP_MACRO_READER)
-MOD_ITEM_DEF(OB_SORT_TEMP_MACRO_WRITER)
-MOD_ITEM_DEF(OB_SQL_AGGR_FUNC_ROW)
-MOD_ITEM_DEF(OB_KVSTORE_CACHE)
-MOD_ITEM_DEF(OB_KVSTORE_CACHE_MB)
-MOD_ITEM_DEF(OB_SQL_PLAN_CACHE)
-MOD_ITEM_DEF(OB_SQL_PHY_PLAN)
-MOD_ITEM_DEF(OB_SQL_PHY_PL_OBJ)
-MOD_ITEM_DEF(OB_MEMSTORE)
-MOD_ITEM_DEF(OB_MOD_END)
 #endif
 
 // Label does not need to be defined here, just pass char * directly in alloc,
 // It is reserved here to be compatible with the existing code of the upper layer
 #ifdef LABEL_ITEM_DEF
 LABEL_ITEM_DEF(OB_MOD_DO_NOT_USE_ME, ModDoNotUseMe)
-
 LABEL_ITEM_DEF(OB_MOD_ALLOCATOR_START, ModAllocatStart)
 LABEL_ITEM_DEF(OB_ALLOC_CHUNK, AllocChunk)
 LABEL_ITEM_DEF(OB_ALLOC_BLOCK, AllocBlock)
@@ -84,7 +64,7 @@ LABEL_ITEM_DEF(OB_MOD_ALLOCATOR_END, ModAllocatEnd)
 
 LABEL_ITEM_DEF(OB_MEMORY_STAT, MemoryStat)
 
-// debug
+//debug
 LABEL_ITEM_DEF(OB_COMMON_ARRAY_OB_STMT, CommArraObStmt)
 LABEL_ITEM_DEF(OB_COMMON_ARRAY_OB_SELECT_STMT, CommArrObSeleSt)
 LABEL_ITEM_DEF(OB_COMMON_ARRAY_OB_LOG_TABLE_SCAN, ComArrObLogTabS)
@@ -101,11 +81,13 @@ LABEL_ITEM_DEF(OB_FIFO_ALLOC, FifoAlloc)
 LABEL_ITEM_DEF(OB_VT_ALL_CONCUR_OBJ_POOL, VtAllConcObjPoo)
 LABEL_ITEM_DEF(OB_SE_ARRAY_OB_SHOW_CREATE_TABLEGROUP_KEY_RANGES, SeArObShCrTaKeR)
 
-// end debug
-/// definemoduleshere
-// commonmodules
+
+//end debug
+///definemoduleshere
+//commonmodules
 LABEL_ITEM_DEF(OB_OBJ_FREELISTS, ObjFreelists)
 LABEL_ITEM_DEF(OB_COMMON_NETWORK, CommonNetwork)
+LABEL_ITEM_DEF(OB_RDMA_MYSQL, MysqlRdmaNet)
 LABEL_ITEM_DEF(OB_THREAD_BUFFER, ThreadBuffer)
 LABEL_ITEM_DEF(OB_VARCACHE, Varcache)
 LABEL_ITEM_DEF(OB_KVSTORE_CACHE, KvstoreCache)
@@ -144,7 +126,6 @@ LABEL_ITEM_DEF(OB_BUFFER, Buffer)
 LABEL_ITEM_DEF(OB_THREAD_STORE, ThreadStore)
 LABEL_ITEM_DEF(OB_LOG_WRITER, LogWriter)
 LABEL_ITEM_DEF(OB_LOG_READER, LogReader)
-LABEL_ITEM_DEF(OB_LOG_COMPRESSOR, LogCompressor)
 LABEL_ITEM_DEF(OB_REGEX, Regex)
 LABEL_ITEM_DEF(OB_SLAB, Slab)
 LABEL_ITEM_DEF(OB_SLAVE_MGR, SlaveMgr)
@@ -197,11 +178,17 @@ LABEL_ITEM_DEF(OB_SCHEMA_TABLE_INFO_VEC, ScheTablInfoVec)
 LABEL_ITEM_DEF(OB_SCHEMA_INDEX_INFO_VEC, ScheIndeInfoVec)
 LABEL_ITEM_DEF(OB_SCHEMA_AUX_VP_INFO_VEC, ScheAuxVpInfoVe)
 LABEL_ITEM_DEF(OB_SCHEMA_AUX_VP_NAME_VEC, ScheAuxVpNameVe)
+LABEL_ITEM_DEF(OB_SCHEMA_LOB_META_INFO_VEC, ScheLobMInfoVec)
+LABEL_ITEM_DEF(OB_SCHEMA_LOB_PIECE_INFO_VEC, ScheLobPInfoVec)
 LABEL_ITEM_DEF(OB_SCHEMA_NAME, SchemaName)
 LABEL_ITEM_DEF(OB_SCHEMA_PRIV, SchemaPriv)
 LABEL_ITEM_DEF(OB_SCHEMA_ID_VERSIONS, SchemaIdVersion)
 LABEL_ITEM_DEF(OB_SCHEMA_CACHE_SYS_CACHE_MAP, ScheCacSysCacMa)
 LABEL_ITEM_DEF(OB_SCHEMA_GETTER_GUARD, SchemaGetteGuar)
+LABEL_ITEM_DEF(OB_SCHEMA_LABEL_SE_POLICY, ScheLabeSePolic)
+LABEL_ITEM_DEF(OB_SCHEMA_LABEL_SE_COMPONENT, ScheLabeSeCompo)
+LABEL_ITEM_DEF(OB_SCHEMA_LABEL_SE_LABEL, ScheLabeSeLabel)
+LABEL_ITEM_DEF(OB_SCHEMA_LABEL_SE_USER_LEVEL, ScheLabSeUserLe)
 LABEL_ITEM_DEF(OB_SCHEMA_MGR, SchemaMgr)
 LABEL_ITEM_DEF(OB_SCHEMA_MGR_FOR_ROLLBACK, ScheMgrForRollb)
 LABEL_ITEM_DEF(OB_SCHEMA_UPDATE_INFO, SchemaUpdatInfo)
@@ -240,6 +227,9 @@ LABEL_ITEM_DEF(OB_SCHEMA_SYS_VARIABLE, SchemaSysVariab)
 LABEL_ITEM_DEF(OB_SCHEMA_SEQUENCE, SchemaSequence)
 LABEL_ITEM_DEF(OB_SCHEMA_RG_INFO_VEC, ScheRgInfoVec)
 LABEL_ITEM_DEF(OB_SCHEMA_RG_ID_MAP, ScheRgIdMap)
+LABEL_ITEM_DEF(OB_SCHEMA_KEYSTORE, SchemaKeystore)
+LABEL_ITEM_DEF(OB_SCHEMA_TABLESPACE, SchemaTablespac)
+LABEL_ITEM_DEF(OB_SCHEMA_SECURITY_AUDIT, SchemaSecurAudi)
 LABEL_ITEM_DEF(OB_ROW_ITER_ADAPTOR, RowIterAdaptor)
 LABEL_ITEM_DEF(OB_WAITABLE_POOL, WaitablePool)
 LABEL_ITEM_DEF(OB_ASYNC_FILE_APPENDER, AsyncFileAppend)
@@ -346,7 +336,7 @@ LABEL_ITEM_DEF(OB_NUMBER, Number)
 LABEL_ITEM_DEF(OB_PAGE_MANAGER, PageManager)
 LABEL_ITEM_DEF(OB_SCHEMA_PROFILE, SchemaProfile)
 
-// obproxy
+//obproxy
 LABEL_ITEM_DEF(OB_PROXY_SESSION, ProxySession)
 LABEL_ITEM_DEF(OB_PROXY_DEFAULT_SYS_VARIABLE, ProxDefaSysVari)
 LABEL_ITEM_DEF(OB_PROXY_SQL_PARSE, ProxySqlParse)
@@ -360,7 +350,7 @@ LABEL_ITEM_DEF(OB_PROXY_CONGESTION_ENTRY_MAP, ProxCongEntrMap)
 LABEL_ITEM_DEF(OB_PROXY_PRINTF, ProxyPrintf)
 LABEL_ITEM_DEF(SHARE_CS_FEEDBACKS, ShareCsFeedback)
 
-// mergeservermodules
+//mergeservermodules
 LABEL_ITEM_DEF(OB_MS_CELL_ARRAY, MsCellArray)
 LABEL_ITEM_DEF(OB_MS_LOCATION_CACHE, MsLocatioCache)
 LABEL_ITEM_DEF(OB_MS_BTREE, MsBtree)
@@ -382,9 +372,9 @@ LABEL_ITEM_DEF(OB_MS_TABLE_PREFIX_STAT, MsTablePrefiSta)
 LABEL_ITEM_DEF(OB_SHARDING_RESULT, ShardingResult)
 LABEL_ITEM_DEF(OB_MS_ROOT_TABLE_TEMP, MsRootTableTemp)
 LABEL_ITEM_DEF(OB_MS_FETCH_LOCATION, MsFetchLocation)
-// hashmap
+//hashmap
 
-// updateservermodules
+//updateservermodules
 LABEL_ITEM_DEF(OB_UPS_ENGINE, UpsEngine)
 LABEL_ITEM_DEF(OB_UPS_MEMTABLE, UpsMemtable)
 LABEL_ITEM_DEF(OB_UPS_LOG, UpsLog)
@@ -410,7 +400,7 @@ LABEL_ITEM_DEF(OB_HASH_BUCKET_SSTABLE_INFO_MAP, HashBucSstInfMa)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_STORE_DEV_MAP, HashBucStoDevMa)
 LABEL_ITEM_DEF(OB_CAST_TSI_BUFF, CastTsiBuff)
 
-// oceanbase server modules
+//oceanbase server modules
 LABEL_ITEM_DEF(OCEANBASE_SERVER, OceanbasServer)
 LABEL_ITEM_DEF(OMT, Omt)
 LABEL_ITEM_DEF(OMT_VIRTUAL_TABLE, OmtVirtualTable)
@@ -423,7 +413,7 @@ LABEL_ITEM_DEF(OB_SQL_ARENA, SqlArena)
 LABEL_ITEM_DEF(OB_WORKER_EXECUTION, WorkerExecution)
 LABEL_ITEM_DEF(OB_DUTY_TASK, DutyTask)
 
-// chunkservermodules
+//chunkservermodules
 LABEL_ITEM_DEF(OB_CS_SSTABLE_READER, CsSstableReader)
 LABEL_ITEM_DEF(OB_CS_TABLET_IMAGE, CsTabletImage)
 LABEL_ITEM_DEF(OB_CS_DELETE_TABLET, CsDeleteTablet)
@@ -441,7 +431,7 @@ LABEL_ITEM_DEF(OB_CS_MACRO_BLOCK_STATISTICS_ITEM, CsMacrBlocStaIt)
 LABEL_ITEM_DEF(OB_CS_DISK_BALANCE, CsDiskBalance)
 LABEL_ITEM_DEF(OB_CS_ROW_READER, CsRowReader)
 
-// sstablemodules
+//sstablemodules
 LABEL_ITEM_DEF(OB_SSTABLE, Sstable)
 LABEL_ITEM_DEF(OB_SSTABLE_AIO, SstableAio)
 LABEL_ITEM_DEF(OB_SSTABLE_AIO_BUFFER_ARRAY, SstaAioBuffeArr)
@@ -462,7 +452,6 @@ LABEL_ITEM_DEF(OB_STORE_ROW_EXISTER, StoreRowExister)
 LABEL_ITEM_DEF(OB_STORE_ROW_MULTI_SCANNER, StorRowMultiSca)
 LABEL_ITEM_DEF(OB_STORE_ROW_MULTI_SCAN_ESTIMATOR, StorRowMulScaEs)
 LABEL_ITEM_DEF(OB_SSTABLE_BLOCK_ID_SET, SstaBlocIdSet)
-LABEL_ITEM_DEF(OB_SSTABLE_LOB_BLOCK_ID_MAP, SstaLobBloIdMap)
 LABEL_ITEM_DEF(OB_SORT_TEMP_MACRO_READER, SortTempMacrRea)
 LABEL_ITEM_DEF(OB_SORT_TEMP_MACRO_WRITER, SortTempMacrWri)
 LABEL_ITEM_DEF(OB_SSTABLE_HANDLE_MANAGER, SstablHandlMana)
@@ -486,11 +475,11 @@ LABEL_ITEM_DEF(OB_HASH_BUCKET_SVR_META_MGR, HashBucSvrMetMg)
 LABEL_ITEM_DEF(OB_HASH_NODE_SVR_META_MGR, HashNodSvrMetMg)
 LABEL_ITEM_DEF(OB_TENANT_FILE_MGR, TenantFileMgr)
 
-// obmysqlmodules
+//obmysqlmodules
 LABEL_ITEM_DEF(OB_MYSQL_PACKET, MysqlPacket)
 LABEL_ITEM_DEF(OB_DELETE_SESSION_TASK, DeleteSessiTask)
 
-// rootservermodules
+//rootservermodules
 LABEL_ITEM_DEF(OB_RS_ROOT_TABLE, RsRootTable)
 LABEL_ITEM_DEF(OB_RS_ROOT_TABLE_TEMP, RsRootTableTemp)
 LABEL_ITEM_DEF(OB_RS_SYS_LOCATION_CACHE, RsSysLocatiCach)
@@ -532,7 +521,7 @@ LABEL_ITEM_DEF(OB_HASH_BUCKET_SERVER_MIGRATE_UNIT_MAP, HasBucSerMigUnM)
 LABEL_ITEM_DEF(OB_RS_UNIT_MANAGER, RsUnitManager)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_RENAME_TABLE_MAP, HashBucRenTabMa)
 LABEL_ITEM_DEF(OB_RS_DEFAULT_VALUE_CASTER, RsDefauValueCas)
-LABEL_ITEM_DEF(OB_RS_ASYNC_RPC_PROXY, RsAsyncRpcProxy)
+LABEL_ITEM_DEF(OB_ASYNC_RPC_PROXY, AsyncRpcProxy)
 LABEL_ITEM_DEF(OB_RS_EVENT_QUEUE, RsEventQueue)
 LABEL_ITEM_DEF(OB_RS_EVENT_TASK, RsEventTask)
 LABEL_ITEM_DEF(OB_RS_LEADER_COORDINATOR, RsLeaderCoordin)
@@ -550,9 +539,10 @@ LABEL_ITEM_DEF(OB_RS_PARTITION_META_TABLE_MIGRATION, RsPartMetaTabMi)
 LABEL_ITEM_DEF(OB_RS_FLASHBACK_INFO, RsFlashbaInfo)
 LABEL_ITEM_DEF(OB_SERVER_RECOVERY_MACHINE, ServerRecovMach)
 LABEL_ITEM_DEF(OB_REPLICA_CONTROL, ReplicaControl)
+LABEL_ITEM_DEF(OB_INNER_LOB_HASH_SET, InnerLobHash)
 
-// sqlmodules
-// compile include parse, resolve, optimize, code generate
+//sqlmodules
+//compile include parse, resolve, optimize, code generate
 LABEL_ITEM_DEF(OB_SQL_COMPILE, SqlCompile)
 LABEL_ITEM_DEF(OB_SQL_PARSER, SqlParser)
 LABEL_ITEM_DEF(OB_SQL_SESSION_POOL, SqlSessionPool)
@@ -564,8 +554,8 @@ LABEL_ITEM_DEF(OB_SQL_CHUNK_ROW_STORE, SqlChunkRowStor)
 LABEL_ITEM_DEF(OB_SQL_RES_TYPE, SqlResType)
 LABEL_ITEM_DEF(OB_SQL_HASH_DIST, SqlHashDist)
 LABEL_ITEM_DEF(OB_SQL_HASH_DIST_ROW_STORE, SqlHashDisRowSt)
-// LABEL_ITEM_DEF(OB_SQL_OPTIMIZER)
-// FIXME  For compatibility, remove OB_SQL_OPT_LOCATION_CACHE after submitting the code
+//LABEL_ITEM_DEF(OB_SQL_OPTIMIZER)
+//FIXME qianfu For compatibility, remove OB_SQL_OPT_LOCATION_CACHE after submitting the code
 LABEL_ITEM_DEF(OB_SQL_OPT_LOCATION_CACHE, SqlOptLocatCach)
 LABEL_ITEM_DEF(OB_SQL_OPTIMIZER_LOCATION_CACHE, SqlOptimLocaCac)
 LABEL_ITEM_DEF(OB_SQL_OPTIMIZER_SELECT_REPLICA, SqlOptimSeleRep)
@@ -684,7 +674,7 @@ LABEL_ITEM_DEF(OB_HASH_BUCKET_PS_INFO, HashBuckPsInfo)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_PS_SESSION_INFO, HashBucPsSessIn)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_PS_PCV_SET, HashBucPsPcvSet)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_SQL_PARAMETERIZATION, HashBuckSqlPara)
-LABEL_ITEM_DEF(OB_HASH_BUCKET_PLAN_STAT, HashBuckPlanSta)
+LABEL_ITEM_DEF(OB_HASH_BUCKET_LC_STAT, HashBuckLCSta)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_NLJ_CACHE, HashBuckNljCach)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_INTERRUPT_CHECKER, HashBuckInteChe)
 LABEL_ITEM_DEF(OB_INTERRUPT_CHECKER_NODE, InterrCheckNode)
@@ -702,7 +692,7 @@ LABEL_ITEM_DEF(OB_HASH_NODE_PS_CACHE, HashNodePsCache)
 LABEL_ITEM_DEF(OB_HASH_NODE_PS_INFO, HashNodePsInfo)
 LABEL_ITEM_DEF(OB_HASH_NODE_PS_SESSION_INFO, HashNodPsSessIn)
 LABEL_ITEM_DEF(OB_HASH_NODE_PS_PCV_SET, HashNodPsPcvSet)
-LABEL_ITEM_DEF(OB_HASH_NODE_PLAN_STAT, HashNodePlanSta)
+LABEL_ITEM_DEF(OB_HASH_NODE_LC_STAT, HashNodeLCSta)
 LABEL_ITEM_DEF(OB_HASH_NODE_SQL_PARAMETERIZATION, HashNodeSqlPara)
 LABEL_ITEM_DEF(OB_HASH_NODE_NLJ_CACHE, HashNodeNljCach)
 LABEL_ITEM_DEF(OB_HASH_NODE_INTERRUPT_CHECKER, HashNodeInteChe)
@@ -719,9 +709,10 @@ LABEL_ITEM_DEF(OB_SQL_PS_CACHE, SqlPsCache)
 LABEL_ITEM_DEF(OB_SQL_PS_SQL_META, SqlPsSqlMeta)
 LABEL_ITEM_DEF(OB_SQL_PX_BLOOM_FILTER, SqlPxBloomFilte)
 LABEL_ITEM_DEF(OB_PS_SESSION_INFO_ARRAY, PsSessiInfoArra)
-LABEL_ITEM_DEF(OB_CONNECT_BY_PUMP, ConnecByPump)
+LABEL_ITEM_DEF(OB_CONNECT_BY_PUMP, ConnectByPump)
+LABEL_ITEM_DEF(OB_SQL_PLAN, LogPlanManger)
 
-// mpimodules
+//mpimodules
 LABEL_ITEM_DEF(OB_MPI_INTERM_RESULT, MpiIntermResult)
 LABEL_ITEM_DEF(OB_MPI, Mpi)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_MPI_SUBPLAN_MAP, HashBucMpiSubMa)
@@ -729,7 +720,7 @@ LABEL_ITEM_DEF(OB_HASH_BUCKET_IR_MAP, HashBuckIrMap)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_MPI_TASK_MAP, HashBucMpiTasMa)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_MPI_JOB_MAP, HashBucMpiJobMa)
 
-// liboblog start
+//liboblog start
 LABEL_ITEM_DEF(OB_LOG_BINLOG_RECORD, LogBinlogRecord)
 LABEL_ITEM_DEF(OB_LOG_BINLOG_RECORD_POOL, LogBinloRecoPoo)
 LABEL_ITEM_DEF(OB_LOG_FETCHER, LogFetcher)
@@ -737,8 +728,8 @@ LABEL_ITEM_DEF(OB_LOG_PART_INFO, LogPartInfo)
 LABEL_ITEM_DEF(OB_LOG_PART_COMMIT_INFO, LogPartCommiInf)
 LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_SMALL, LogPartTraTasSm)
 LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_LARGE, LogPartTraTasLa)
-LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_POOL, LogPartTraTasPo)
-LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_PREALLOC_PAGE, LogParTraTasPrP)
+LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_POOL, LSTranTaskPool)
+LABEL_ITEM_DEF(OB_LOG_PART_TRANS_TASK_PREALLOC_PAGE, LSTranTasPreaPa)
 LABEL_ITEM_DEF(OB_LOG_DATABASE_META_MAP, LogDatabMetaMap)
 LABEL_ITEM_DEF(OB_LOG_TABLE_META_MAP, LogTableMetaMap)
 LABEL_ITEM_DEF(OB_LOG_TABLE_COLUMN_ID_META_MAP, LogTabColIdMetM)
@@ -771,7 +762,7 @@ LABEL_ITEM_DEF(OB_LOG_FETCHER_DEAD_POOL, LogFetchDeadPoo)
 LABEL_ITEM_DEF(OB_LOG_FETCHER_SVR_FINDER, LogFetchSvrFind)
 LABEL_ITEM_DEF(OB_LOG_MYSQL_CONNECTOR, LogMysqlConnect)
 LABEL_ITEM_DEF(OB_LOG_ALL_SERVER_CACHE, LogAllServeCach)
-LABEL_ITEM_DEF(OB_LOG_STREAM_WORKER_THREAD, LogStreaWorkThr)
+LABEL_ITEM_DEF(OB_LS_WORKER_THREAD, LogStreaWorkThr)
 LABEL_ITEM_DEF(OB_LOG_SVR_STREAM_MAP, LogSvrStreaMap)
 LABEL_ITEM_DEF(OB_LOG_SVR_STREAM_POOL, LogSvrStreaPool)
 LABEL_ITEM_DEF(OB_LOG_FETCH_STREAM_POOL, LogFetchStrePoo)
@@ -781,7 +772,7 @@ LABEL_ITEM_DEF(OB_LOG_TIMER, LogTimer)
 LABEL_ITEM_DEF(OB_LOG_PART_PROGRESS_CONTROLLER, LogPartProgrCon)
 LABEL_ITEM_DEF(OB_LOG_PART_TRANS_RESOLVER, LogPartTransRes)
 LABEL_ITEM_DEF(OB_LOG_FETCH_LOG_ARPC_RES_QUEUE, LogFetLogArpReQ)
-LABEL_ITEM_DEF(OB_LOG_FETCH_LOG_ARPC_RESULT, LogFetcLogArpRe)
+LABEL_ITEM_DEF(OB_LOG_FETCH_LOG_ARPC_RESULT, FetchLogArpcRes)
 LABEL_ITEM_DEF(OB_LOG_FETCH_LOG_ARPC_REQUEST, LogFetcLogArpRe)
 LABEL_ITEM_DEF(OB_LOG_FETCH_LOG_SRPC, LogFetchLogSrpc)
 LABEL_ITEM_DEF(OB_LOG_HEARTBEATER, LogHeartbeater)
@@ -801,7 +792,7 @@ LABEL_ITEM_DEF(OB_LOG_TENANT_TASK_QUEUE, LogTenanTaskQue)
 LABEL_ITEM_DEF(OB_LOG_CLOG_HISTORY_RECORD_ARRAY, LogClogHisRecAr)
 LABEL_ITEM_DEF(OB_LOG_META_RECORD_ARRAY, LogMetaRecorArr)
 LABEL_ITEM_DEF(OB_LOG_ALL_SERVER_ARRAY, LogAllServeArra)
-// liboblog end
+//liboblog end
 
 // archive start
 LABEL_ITEM_DEF(OB_ARCHIVE_DOWNLOAD_FILE_BUUFER, ArchDownFileBuu)
@@ -826,7 +817,7 @@ LABEL_ITEM_DEF(OB_LARGE_IO_BUFFER, LargeIoBuffer)
 
 // election
 LABEL_ITEM_DEF(OB_ELECTION, Election)
-LABEL_ITEM_DEF(OB_ELECTION_GROUP, ElectionGroup)
+LABEL_ITEM_DEF(OBCG_ELECTION, ElectionGroup)
 LABEL_ITEM_DEF(OB_ELECTION_MGR, ElectionMgr)
 LABEL_ITEM_DEF(OB_ELECTION_TIMER, ElectionTimer)
 LABEL_ITEM_DEF(OB_ELECTION_TIMER_TASK, ElectiTimerTask)
@@ -890,11 +881,6 @@ LABEL_ITEM_DEF(OB_PADDING_COLUMN, PaddingColumn)
 LABEL_ITEM_DEF(OB_SLOG_SCANNER, SlogScanner)
 LABEL_ITEM_DEF(OB_SLOG_WRITER, SlogWriter)
 LABEL_ITEM_DEF(OB_MICRO_INDEX_TRANSFORMER, MicroIndexTrans)
-LABEL_ITEM_DEF(OB_WARM_UP_REQUEST, WarmUpRequest)
-LABEL_ITEM_DEF(OB_WARM_UP_SERVICE, WarmUpService)
-LABEL_ITEM_DEF(OB_WARM_UP_SERVICE2, WarmUpService2)
-LABEL_ITEM_DEF(OB_PARTITION_MIGRATE, PartitioMigrate)
-LABEL_ITEM_DEF(OB_PARTITION_MIGRATE_QUEUE, PartitMigraQueu)
 LABEL_ITEM_DEF(OB_SYS_TASK_STATUS, SysTaskStatus)
 LABEL_ITEM_DEF(OB_SSTABLE_MERGE_INFO, SstablMergeInfo)
 LABEL_ITEM_DEF(OB_SSTABLE_MERGE_INFO_MAP, SstaMergInfoMap)
@@ -935,15 +921,22 @@ LABEL_ITEM_DEF(OB_PARTITION_LOG_BUF, PartitLogBuf)
 LABEL_ITEM_DEF(OB_BLOCK_INDEX_INTERMEDIATE, BlockIndexInter)
 LABEL_ITEM_DEF(OB_CHECKPOINT, Checkpoint)
 LABEL_ITEM_DEF(OB_STORAGE_FILE_BLOCK_REF, StorFileBlocRef)
+LABEL_ITEM_DEF(OB_OFS_STORAGE_FILE_MARK, OfsStoraFileMar)
 LABEL_ITEM_DEF(OB_BLOCK_MARK_DELETION_MAKER, BlocMarkDeleMak)
 LABEL_ITEM_DEF(OB_FAST_MIGRATE_TASK, FastMigratTask)
 LABEL_ITEM_DEF(OB_FAST_RECOVER_SPLIT_TASK, FastRecoSpliTas)
 LABEL_ITEM_DEF(OB_PG_RECYCLE_NODE, PgRecycleNode)
+LABEL_ITEM_DEF(OB_LOB_ACCESS_BUFFER, LobAccessBuf)
 
-// replay engine
+//apply_service
+LABEL_ITEM_DEF(OB_LOG_APPLY_STATUS, LogApplyStatus)
+
+//replay engine
+LABEL_ITEM_DEF(OB_LOG_REPLAY_STATUS, LogReplayStatus)
+LABEL_ITEM_DEF(OB_LOG_REPLAY_TASK, LogReplayTask)
 LABEL_ITEM_DEF(OB_LOG_REPLAY_ENGINE, LogReplayEngine)
 
-// clog
+//clog
 LABEL_ITEM_DEF(OB_LOG_DIRECT_READER_CACHE_ID, LogDireReaCacId)
 LABEL_ITEM_DEF(OB_LOG_DIRECT_READER_IO_ID, LogDireReaIoId)
 LABEL_ITEM_DEF(OB_LOG_DIRECT_READER_COMPRESS_ID, LogDireReaComId)
@@ -990,6 +983,8 @@ LABEL_ITEM_DEF(OB_LOG_AGGRE_BUFFER, LogAggreBuffer)
 LABEL_ITEM_DEF(OB_LOG_AGGRE_BUFFER_ARRAY, LogAggreBuffArr)
 LABEL_ITEM_DEF(OB_FETCH_LOG_HEARTBEAT_ARRAY_FOR_LIBOBLOG, FetLogHeaArrFoL)
 LABEL_ITEM_DEF(OB_LOG_DECRYPT_ID, LogDecryptId)
+LABEL_ITEM_DEF(OB_FETCH_LOG_TASK, FetchLogTask)
+LABEL_ITEM_DEF(OB_GC_LOG_BUFF, GCLOGBUFF)
 
 // cursor cache
 LABEL_ITEM_DEF(OB_CSR_FILE_ID_CACHE_FILE_LIST, CsrFilIdCacFilL)
@@ -999,7 +994,7 @@ LABEL_ITEM_DEF(OB_CSR_PER_FILE_NODE_WRAPPER, CsrPerFileNodWr)
 LABEL_ITEM_DEF(OB_CSR_PER_FILE_NODE_MAP, CsrPerFileNodMa)
 LABEL_ITEM_DEF(OB_CSR_PER_FILE_BUF_AND_MAP, CsrPerFilBufAnM)
 
-// CLOG SPLIT
+//CLOG SPLIT
 LABEL_ITEM_DEF(OB_CLOG_SPLIT_MAP, ClogSplitMap)
 LABEL_ITEM_DEF(OB_CLOG_SPLIT_INFO_ITEM, ClogSpliInfoIte)
 LABEL_ITEM_DEF(OB_CLOG_SPLIT_LOG_BUF, ClogSpliLogBuf)
@@ -1012,14 +1007,14 @@ LABEL_ITEM_DEF(OB_CLOG_EXT_LINE_CACHE, ClogExtLineCach)
 
 // for log archive
 LABEL_ITEM_DEF(OB_LOG_ARCHIVE_LINE_CACHE, LogArchiLineCac)
-// clog test nio
+//clog test nio
 LABEL_ITEM_DEF(NIO_MOD_ID, NioModId)
 LABEL_ITEM_DEF(NIO_MOD_ID2, NioModId2)
 
-// clog log_tool
+//clog log_tool
 LABEL_ITEM_DEF(OB_LOG_TOOL, LogTool)
 
-// clog history reporter
+//clog history reporter
 LABEL_ITEM_DEF(OB_CLOG_HISTORY_TASK_MAP, ClogHistTaskMap)
 
 LABEL_ITEM_DEF(OB_RPC, Rpc)
@@ -1031,6 +1026,7 @@ LABEL_ITEM_DEF(OB_MYSQL_PROCESSOR, MysqlProcessor)
 LABEL_ITEM_DEF(OB_MYSQL_BUFFER, MysqlBuffer)
 LABEL_ITEM_DEF(OB_MYSQL_PTABLE, MysqlPtable)
 LABEL_ITEM_DEF(OB_RPC_HASH_BUCKET_CTX, RpcHashBuckeCtx)
+
 
 // transaction
 LABEL_ITEM_DEF(OB_END_TRANS_CALLBACK, EndTransCallbac)
@@ -1074,6 +1070,8 @@ LABEL_ITEM_DEF(OB_DUP_TABLE_PARTITION_INFO, DupTablePartInf)
 LABEL_ITEM_DEF(OB_DUP_TABLE_PARTITION_MGR, DupTablePartMgr)
 LABEL_ITEM_DEF(OB_DUP_TABLE_LEASE_INFO, DupTableLeasInf)
 LABEL_ITEM_DEF(OB_DUP_TABLE_REDO_SYNC_TASK, DupTablRedSynTa)
+LABEL_ITEM_DEF(OB_GTI_RPC_PROXY, GtiRpcProxy)
+LABEL_ITEM_DEF(OB_GTI_REQUEST_RPC, GtiRequestRpc)
 LABEL_ITEM_DEF(OB_GTS_RPC_PROXY, GtsRpcProxy)
 LABEL_ITEM_DEF(OB_GTS_REQUEST_RPC, GtsRequestRpc)
 LABEL_ITEM_DEF(OB_HASH_BUCKET_HA_GTS, HashBuckHaGts)
@@ -1112,7 +1110,7 @@ LABEL_ITEM_DEF(OB_INDEX_CHECK, IndexCheck)
 LABEL_ITEM_DEF(OB_MEM_STAT_SET, MemStatSet)
 LABEL_ITEM_DEF(OB_RING_BUFFER, RingBuffer)
 LABEL_ITEM_DEF(OB_CONCURRENT_HASH_MAP, ConcurHashMap)
-// backup and restore
+//backup and restore
 LABEL_ITEM_DEF(RESTORE, Restore)
 LABEL_ITEM_DEF(BACKUP, Backup)
 LABEL_ITEM_DEF(OB_INC_BACKUP_MALLOC, IncBackupMalloc)
@@ -1134,21 +1132,25 @@ LABEL_ITEM_DEF(OB_ASYNC_LOG, AsyncLog)
 LABEL_ITEM_DEF(OB_ZLIB, Zlib)
 
 LABEL_ITEM_DEF(OB_CORO, Coro)
-LABEL_ITEM_DEF(OB_CO_LOCAL_STORAGE, CoLocalStorage)
 
 // replication group
 LABEL_ITEM_DEF(OB_RG_TRANSFER_COPY_SSTORE_QUEUE, RgTranCopySstQu)
 LABEL_ITEM_DEF(OB_RG_TRANSFER_FETCH_LOG_TASK, RgTranFetcLogTa)
 
+//ofs
 LABEL_ITEM_DEF(OB_EC_CALCULATE_BUFFER, EcCalculaBuffer)
-
+LABEL_ITEM_DEF(OB_OFS_BLOCK_ALLOCATOR, OfsBlockAllocat)
+LABEL_ITEM_DEF(OB_OFS_CLIENT_ALLOCATOR, OfsClientAlloca)
+LABEL_ITEM_DEF(OB_OFS_STREAM_ALLOCATOR, OfsStreamAlloca)
+LABEL_ITEM_DEF(OB_OFS_STREAM_BUFFER, OfsStreamBuffer)
+LABEL_ITEM_DEF(OB_EXTENT_BLOCK_MEAT_CACHE, ExteBlocMeatCac)
 // TABLE API
 LABEL_ITEM_DEF(TABLE_PROC, TableProc)
 LABEL_ITEM_DEF(TABLE_CLIENT, TableClient)
 LABEL_ITEM_DEF(TABLE_BATCH_OPERATION, TableBatchOpera)
 LABEL_ITEM_DEF(TABLE_BATCH_OPERATION_RESULT, TablBatcOperRes)
 
-// schema
+//schema
 LABEL_ITEM_DEF(OB_TENANT_SCHEMA_MEM_MGR, TenaScheMemMgr)
 LABEL_ITEM_DEF(OB_TENANT_SCHEMA_MGR, TenantSchemMgr)
 LABEL_ITEM_DEF(OB_TENANT_SCHEMA_MEM_MGR_FOR_LIBOBLOG, TenSchMemMgrFoL)
@@ -1190,20 +1192,16 @@ LABEL_ITEM_DEF(OB_MOD_END, ModEnd)
 #include "lib/alloc/alloc_assist.h"
 #include "lib/utility/ob_template_utils.h"
 
-namespace oceanbase {
-namespace common {
-class ObString;
-struct ObNewModIds {
-  enum ObModIdEnum {
-#define MOD_ITEM_DEF(name) name,
-#include "lib/allocator/ob_mod_define.h"
-#undef MOD_ITEM_DEF
-  };
-};
+namespace oceanbase
+{
+namespace common
+{
 
-struct ObModItem {
-  ObModItem() : hold_(0), used_(0), count_(0), alloc_count_(0), free_count_(0)
-  {}
+struct ObLabelItem
+{
+  ObLabelItem()
+    : hold_(0), used_(0), count_(0), alloc_count_(0), free_count_(0)
+    {}
   inline void update(int64_t hold, int64_t used)
   {
     if (hold > 0) {
@@ -1216,8 +1214,8 @@ struct ObModItem {
     used_ += used;
     hold_ += hold;
   }
-  int64_t format_string(char* buf, int64_t len, const char* name) const;
-  ObModItem& operator+=(const ObModItem& item)
+  int64_t format_string(char *buf, int64_t len, const char *name) const;
+  ObLabelItem &operator +=(const ObLabelItem &item)
   {
     hold_ += item.hold_;
     used_ += item.used_;
@@ -1227,10 +1225,7 @@ struct ObModItem {
     return *this;
   }
   // desc
-  bool operator<(const ObModItem mi) const
-  {
-    return hold_ > mi.hold_;
-  }
+  bool operator <(const ObLabelItem mi) const { return hold_ > mi.hold_; }
   void reset()
   {
     hold_ = 0;
@@ -1246,64 +1241,24 @@ struct ObModItem {
   int64_t free_count_;
 };
 
-class ObLocalModSet {
-  enum { MOD_COUNT_LIMIT = ObNewModIds::OB_MOD_END };
 
-public:
-  ObLocalModSet()
+struct ObCtxIds
+{
+  enum ObCtxIdEnum
   {
-    reset();
-  }
-  void reset()
-  {
-    MEMSET(&mods_, 0, sizeof(mods_));
-  }
-  int64_t get_mod_hold(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].hold_;
-  }
-  int64_t get_mod_used(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].used_;
-  }
-  int64_t get_mod_count(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].count_;
-  }
-  int64_t get_mod_alloc_count(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].alloc_count_;
-  }
-  int64_t get_mod_free_count(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].free_count_;
-  }
-  inline ObModItem get_mod(int64_t mod_id) const
-  {
-    return mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0];
-  }
-  inline void mod_update(int64_t mod_id, int64_t hold, int64_t used)
-  {
-    mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].update(hold, used);
-  }
-
-private:
-  ObModItem mods_[MOD_COUNT_LIMIT];
-};
-
-struct ObCtxIds {
-  enum ObCtxIdEnum {
 #define CTX_ITEM_DEF(name) name,
 #include "lib/allocator/ob_mod_define.h"
 #undef CTX_ITEM_DEF
   };
 };
 
-class ObCtxInfo {
+class ObCtxInfo
+{
 public:
   enum { CTX_COUNT_LIMIT = ObCtxIds::MAX_CTX_ID };
 
-  ObCtxInfo() : ctx_names_()
+  ObCtxInfo()
+    : ctx_names_()
   {
 #define CTX_ITEM_DEF(id) set_ctx_name(ObCtxIds::id, #id);
 #include "lib/allocator/ob_mod_define.h"
@@ -1311,12 +1266,13 @@ public:
   }
   const char* get_ctx_name(uint64_t ctx_id) const
   {
-    const char* name = "INVALID_CTX_NAME";
+    const char *name = "INVALID_CTX_NAME";
     return ctx_id < ObCtxIds::MAX_CTX_ID ? ctx_names_[ctx_id] : name;
   }
+  bool is_valid_ctx_name(const char *ctx_name, uint64_t& ctx_id) const;
 
 private:
-  void set_ctx_name(uint64_t ctx_id, const char* ctx_name)
+  void set_ctx_name(uint64_t ctx_id, const char *ctx_name)
   {
     if (ctx_id < ObCtxIds::MAX_CTX_ID) {
       ctx_names_[ctx_id] = ctx_name;
@@ -1324,74 +1280,31 @@ private:
   }
 
 private:
-  const char* ctx_names_[CTX_COUNT_LIMIT];
+  const char *ctx_names_[CTX_COUNT_LIMIT];
 };
 
-inline bool is_valid_mod_id(int64_t mod_id)
+struct ObModIds
 {
-  return mod_id >= 0 && mod_id < ObNewModIds::OB_MOD_END;
-}
-
-class ObModSet {
-public:
-  enum { MOD_COUNT_LIMIT = ObNewModIds::OB_MOD_END };
-  // You can pass the string uniformly where mod_id is used
-  // No need to modify the ob_mod_define.h file
-  // Please do not add mod_id if there is no special requirement
-  STATIC_ASSERT(MOD_COUNT_LIMIT <= 16, "forbidden to add new mod_id!!!");
-  ObModSet() : mod_names_()
-  {
-#define MOD_ITEM_DEF(id) set_mod_name(ObNewModIds::id, #id);
-#include "lib/allocator/ob_mod_define.h"
-#undef MOD_ITEM_DEF
-  }
-  virtual ~ObModSet()
-  {}
-  static ObModSet& instance()
-  {
-    static ObModSet ms;
-    return ms;
-  }
-  int get_mod_id(const common::ObString& mod_name) const;
-  const char* get_mod_name(int64_t mod_id) const
-  {
-    const char* t = "NONE";
-    if (mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) {
-      t = mod_names_[mod_id];
-    }
-    return t;
-  }
-
-private:
-  void set_mod_name(int64_t mod_id, const char* name)
-  {
-    if (mod_id >= 0 && mod_id < ObModSet::MOD_COUNT_LIMIT) {
-      mod_names_[mod_id] = name;
-    }
-  }
-
-private:
-  const char* mod_names_[MOD_COUNT_LIMIT];
-};
-
-struct ObModIds {
 #define LABEL_ITEM_DEF(name, real_name) static constexpr const char name[] = #real_name;
 #include "lib/allocator/ob_mod_define.h"
 #undef LABEL_ITEM_DEF
 };
 
 // for label cnt check
-struct InnerModIds {
-  enum InnerModIdEnum {
-#define LABEL_ITEM_DEF(name, ...) name,
-#include "lib/allocator/ob_mod_define.h"
-#undef LABEL_ITEM_DEF
+struct InnerModIds
+{
+  enum InnerModIdEnum
+  {
+  #define LABEL_ITEM_DEF(name, ...) name,
+  #include "lib/allocator/ob_mod_define.h"
+  #undef LABEL_ITEM_DEF
   };
   enum { LABEL_COUNT_LIMIT = InnerModIds::OB_MOD_END };
-  STATIC_ASSERT(LABEL_COUNT_LIMIT <= 1028, "forbidden to add new label!!!");
+  STATIC_ASSERT(LABEL_COUNT_LIMIT == 1034, "forbidden to add new label!!!");
 };
 
-};  // end namespace common
-};  // end namespace oceanbase
+#define ObNewModIds ObModIds
+}; // end namespace common
+}; // end namespace oceanbase
 
 #endif /* __OB_COMMON_OB_MOD_DEFINE2_H__ */

@@ -14,14 +14,17 @@
 #define OB_LOAD_DATA_STMT_H_
 
 #include "sql/resolver/cmd/ob_cmd_stmt.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-namespace oceanbase {
-namespace sql {
+#include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "share/backup/ob_backup_struct.h"
+namespace oceanbase
+{
+namespace sql
+{
 
 enum class ObLoadDupActionType {
-  LOAD_STOP_ON_DUP = 0,  // stop when going to insert duplicated key
-  LOAD_REPLACE,          // replace into table when the rowkey is already existed
-  LOAD_IGNORE,           // skip this line, when the rowkey is already existed
+  LOAD_STOP_ON_DUP = 0, //stop when going to insert duplicated key
+  LOAD_REPLACE, //replace into table when the rowkey is already existed
+  LOAD_IGNORE, //skip this line, when the rowkey is already existed
   LOAD_INVALID_MODE
 };
 
@@ -31,30 +34,59 @@ enum class ObLoadFileLocation {
   OSS,
 };
 
-struct ObLoadArgument {
-  ObLoadArgument()
-      : load_file_storage_(ObLoadFileLocation::SERVER_DISK),
-        is_default_charset_(true),
-        ignore_rows_(0),
-        dupl_action_(ObLoadDupActionType::LOAD_STOP_ON_DUP),
-        tenant_id_(OB_INVALID_INDEX_INT64),
-        database_id_(OB_INVALID_INDEX_INT64),
-        table_id_(OB_INVALID_INDEX_INT64),
-        is_csv_format_(false)
+class ObLoadFileIterator
+{
+public:
+  ObLoadFileIterator() : pos_(0) {}
+  void reset();
+  bool is_valid() const { return !files_.empty(); }
+  int64_t count() const { return files_.count(); }
+  int add_files(common::ObString *start, const int64_t count = 1);
+  int get_next_file(common::ObString &file);
+  int copy(const ObLoadFileIterator &other);
+  TO_STRING_KV(K_(files), K_(pos));
+private:
+  common::ObSEArray<common::ObString, 16> files_;
+  int64_t pos_;
+};
+
+struct ObLoadArgument
+{
+  ObLoadArgument(): load_file_storage_(ObLoadFileLocation::SERVER_DISK),
+                    is_default_charset_(true),
+                    ignore_rows_(0),
+                    dupl_action_(ObLoadDupActionType::LOAD_STOP_ON_DUP),
+                    file_cs_type_(common::CS_TYPE_UTF8MB4_BIN),
+                    tenant_id_(OB_INVALID_INDEX_INT64),
+                    database_id_(OB_INVALID_INDEX_INT64),
+                    table_id_(OB_INVALID_INDEX_INT64),
+                    is_csv_format_(false),
+                    part_level_(share::schema::PARTITION_LEVEL_MAX)
 
   {}
 
-  TO_STRING_KV(K_(load_file_storage), K_(is_default_charset), K_(ignore_rows), K_(dupl_action), K_(charset),
-      K_(file_name), K_(access_info), K_(database_name), K_(table_name), K_(combined_name), K_(tenant_id),
-      K_(database_id), K_(table_id), K_(is_csv_format), K_(full_file_path));
+  TO_STRING_KV(K_(load_file_storage),
+               K_(is_default_charset),
+               K_(ignore_rows),
+               K_(dupl_action),
+               K_(file_cs_type),
+               K_(file_name),
+               K_(access_info),
+               K_(database_name),
+               K_(table_name),
+               K_(combined_name),
+               K_(tenant_id),
+               K_(database_id),
+               K_(table_id),
+               K_(is_csv_format),
+               K_(file_iter));
 
-  void assign(const ObLoadArgument& other)
-  {
+  void assign(const ObLoadArgument &other) {
     load_file_storage_ = other.load_file_storage_;
     is_default_charset_ = other.is_default_charset_;
     ignore_rows_ = other.ignore_rows_;
     dupl_action_ = other.dupl_action_;
-    charset_ = other.charset_;
+    file_cs_type_ = other.file_cs_type_;
     file_name_ = other.file_name_;
     access_info_ = other.access_info_;
     database_name_ = other.database_name_;
@@ -64,27 +96,30 @@ struct ObLoadArgument {
     database_id_ = other.database_id_;
     table_id_ = other.table_id_;
     is_csv_format_ = other.is_csv_format_;
-    full_file_path_ = other.full_file_path_;
+    part_level_ = other.part_level_;
+    file_iter_.copy(other.file_iter_);
   }
 
   ObLoadFileLocation load_file_storage_;
   bool is_default_charset_;
   int64_t ignore_rows_;
   ObLoadDupActionType dupl_action_;
-  common::ObString charset_;
+  common::ObCollationType file_cs_type_;
   common::ObString file_name_;
-  common::ObString access_info_;
+  share::ObBackupStorageInfo access_info_;
   common::ObString database_name_;
   common::ObString table_name_;
   common::ObString combined_name_;
   uint64_t tenant_id_;
   uint64_t database_id_;
-  uint64_t table_id_;
+  uint64_t table_id_; // physical table id
   bool is_csv_format_;
-  common::ObString full_file_path_;
+  share::schema::ObPartitionLevel part_level_;
+  ObLoadFileIterator file_iter_;
 };
 
-struct ObDataInFileStruct {
+struct ObDataInFileStruct
+{
   static const char* DEFAULT_LINE_TERM_STR;
   static const char* DEFAULT_LINE_BEGIN_STR;
   static const char* DEFAULT_FIELD_TERM_STR;
@@ -103,9 +138,9 @@ struct ObDataInFileStruct {
         field_escaped_char_(DEFAULT_FIELD_ESCAPED_CHAR),
         field_enclosed_char_(DEFAULT_FIELD_ENCLOSED_CHAR),
         is_opt_field_enclosed_(DEFAULT_OPTIONAL_ENCLOSED)
-  {}
-  void assign(const ObDataInFileStruct& other)
   {
+  }
+  void assign(const ObDataInFileStruct &other) {
     line_term_str_ = other.line_term_str_;
     line_start_str_ = other.line_start_str_;
     field_term_str_ = other.field_term_str_;
@@ -115,32 +150,47 @@ struct ObDataInFileStruct {
     field_enclosed_char_ = other.field_enclosed_char_;
     is_opt_field_enclosed_ = other.is_opt_field_enclosed_;
   }
-  TO_STRING_KV(K_(line_term_str), K_(line_start_str), K_(field_term_str), K_(field_escaped_str), K_(field_enclosed_str),
-      K_(field_escaped_char), K_(field_enclosed_char), K_(is_opt_field_enclosed));
+  TO_STRING_KV(K_(line_term_str),
+               K_(line_start_str),
+               K_(field_term_str),
+               K_(field_escaped_str),
+               K_(field_enclosed_str),
+               K_(field_escaped_char),
+               K_(field_enclosed_char),
+               K_(is_opt_field_enclosed));
 
-  common::ObString line_term_str_;       // line teminated str
-  common::ObString line_start_str_;      // line string by
-  common::ObString field_term_str_;      // field terminated str
-  common::ObString field_escaped_str_;   // field escaped str, such as \, ^, just copy from parsernode data
-  common::ObString field_enclosed_str_;  // field enclosed str, such as ", ', just copy from parsernode data
-  int64_t field_escaped_char_;           // valid escaped char after stmt validation
-  int64_t field_enclosed_char_;          // valid enclosed char after stmt validation
-  bool is_opt_field_enclosed_;           // true means no need use enclosed char for int
+  common::ObString line_term_str_;   // line teminated str
+  common::ObString line_start_str_;  // line string by
+  common::ObString field_term_str_;  // field terminated str
+  common::ObString field_escaped_str_;    // field escaped str, such as \, ^, just copy from parsernode data
+  common::ObString field_enclosed_str_;   // field enclosed str, such as ", ', just copy from parsernode data
+  int64_t field_escaped_char_;    // valid escaped char after stmt validation
+  int64_t field_enclosed_char_;   // valid enclosed char after stmt validation
+  bool is_opt_field_enclosed_;    // true means no need use enclosed char for int
 };
 
-class ObLoadDataHint {
+class ObLoadDataHint
+{
 public:
   ObLoadDataHint()
   {
     reset();
   }
   enum IntHintItem {
-    PARALLEL_THREADS = 0,  // parallel threads on the host server, for parsing and calc partition
+    PARALLEL_THREADS = 0,  //parallel threads on the host server, for parsing and calc partition
     BATCH_SIZE,
     QUERY_TIMEOUT,
+    APPEND,
+    ENABLE_DIRECT,
+    NEED_SORT,
+    ERROR_ROWS,
+    GATHER_OPTIMIZER_STATISTICS,
     TOTAL_INT_ITEM
   };
-  enum StringHintItem { LOG_LEVEL, TOTAL_STRING_ITEM };
+  enum StringHintItem {
+    LOG_LEVEL,
+    TOTAL_STRING_ITEM
+  };
   void reset()
   {
     memset(integer_values_, 0, sizeof(integer_values_));
@@ -149,88 +199,66 @@ public:
     }
   }
   int set_value(IntHintItem item, int64_t value);
-  int get_value(IntHintItem item, int64_t& value) const;
-  int set_value(StringHintItem item, const ObString& value);
-  int get_value(StringHintItem item, ObString& value) const;
-  TO_STRING_KV("Int Hint Item", common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM), "String Hint Item",
-      common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
-
+  int get_value(IntHintItem item, int64_t &value) const;
+  int set_value(StringHintItem item, const ObString &value);
+  int get_value(StringHintItem item, ObString &value) const;
+  TO_STRING_KV("Int Hint Item",
+               common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM),
+               "String Hint Item",
+               common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
 private:
   int64_t integer_values_[TOTAL_INT_ITEM];
   ObString string_values_[TOTAL_STRING_ITEM];
+
 };
 
-class ObLoadDataStmt : public ObCMDStmt {
+class ObLoadDataStmt : public ObCMDStmt
+{
 public:
-  struct FieldOrVarStruct {
-    FieldOrVarStruct()
-        : field_or_var_name_(), column_id_(OB_INVALID_ID), column_type_(common::ObMaxType), is_table_column_(true)
-    {}
+  static const int MAX_DELIMIT_STR_LEN = 50;
+  struct FieldOrVarStruct
+  {
+    FieldOrVarStruct() : field_or_var_name_(),
+                         column_id_(OB_INVALID_ID),
+                         column_type_(common::ObMaxType),
+                         is_table_column_(true) { }
     TO_STRING_KV(K_(field_or_var_name), K_(column_id), K_(column_type), K_(is_table_column));
     ObString field_or_var_name_;
     uint64_t column_id_;
     common::ColumnType column_type_;
-    bool is_table_column_;  // false: is a user variable
+    bool is_table_column_;  //false: is a user variable
   };
 
-  ObLoadDataStmt() : ObCMDStmt(stmt::T_LOAD_DATA), is_default_table_columns_(false)
-  {}
+  ObLoadDataStmt() :
+    ObCMDStmt(stmt::T_LOAD_DATA), is_default_table_columns_(false)
+  {
+  }
   virtual ~ObLoadDataStmt()
-  {}
-  // let previous transaction commit first
-  virtual bool cause_implicit_commit() const
   {
-    return true;
   }
+  //let previous transaction commit first
+  virtual bool cause_implicit_commit() const { return true; }
 
-  int add_assignment(ObAssignment& assign)
-  {
-    return assignments_.push_back(assign);
-  }
-  const ObAssignments& get_table_assignment() const
-  {
-    return assignments_;
-  }
-  ObLoadArgument& get_load_arguments()
-  {
-    return load_args_;
-  }
-  const ObLoadArgument& get_load_arguments() const
-  {
-    return load_args_;
-  }
-  ObDataInFileStruct& get_data_struct_in_file()
-  {
-    return data_struct_in_file_;
-  }
-  const ObDataInFileStruct& get_data_struct_in_file() const
-  {
-    return data_struct_in_file_;
-  }
-  common::ObIArray<FieldOrVarStruct>& get_field_or_var_list()
-  {
-    return field_or_var_list_;
-  }
-  const common::ObIArray<FieldOrVarStruct>& get_field_or_var_list() const
-  {
-    return field_or_var_list_;
-  }
+  int add_assignment(ObAssignment& assign) { return assignments_.push_back(assign); }
+  const ObAssignments& get_table_assignment() const { return assignments_; }
+  ObLoadArgument &get_load_arguments() { return load_args_; }
+  const ObLoadArgument &get_load_arguments() const { return load_args_; }
+  ObDataInFileStruct &get_data_struct_in_file() { return data_struct_in_file_; }
+  const ObDataInFileStruct &get_data_struct_in_file() const { return data_struct_in_file_; }
+  common::ObIArray<FieldOrVarStruct> &get_field_or_var_list() { return field_or_var_list_; }
+  const common::ObIArray<FieldOrVarStruct> &get_field_or_var_list() const { return field_or_var_list_; }
   int add_column_item(ColumnItem& item);
-  ColumnItem* get_column_item_by_idx(uint64_t column_id);
-  ObLoadDataHint& get_hints()
-  {
-    return hints_;
-  }
-  void set_default_table_columns()
-  {
-    is_default_table_columns_ = true;
-  }
-  bool get_default_table_columns()
-  {
-    return is_default_table_columns_;
-  }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(load_args), K_(data_struct_in_file), K_(field_or_var_list),
-      K_(assignments), K_(hints), K_(is_default_table_columns));
+  ColumnItem *get_column_item_by_idx(uint64_t column_id);
+  ObLoadDataHint &get_hints() { return hints_; }
+  void set_default_table_columns() { is_default_table_columns_ = true; }
+  bool get_default_table_columns() { return is_default_table_columns_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
+               K_(load_args),
+               K_(data_struct_in_file),
+               K_(field_or_var_list),
+               K_(assignments),
+               K_(hints),
+               K_(is_default_table_columns));
 
 private:
   ObLoadArgument load_args_;
@@ -244,6 +272,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataStmt);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+
+} // sql
+} // oceanbase
 #endif

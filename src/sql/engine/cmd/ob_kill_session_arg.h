@@ -17,28 +17,33 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObKillStmt;
 
-class ObKillSessionArg {
+class ObKillSessionArg
+{
   OB_UNIS_VERSION(1);
-
 public:
   ObKillSessionArg()
       : sess_id_(0),
-        tenant_id_(common::OB_INVALID_TENANT_ID),
-        user_id_(common::OB_INVALID_ID),
-        is_query_(false),
-        has_user_super_privilege_(false)
-  {}
-  ~ObKillSessionArg()
-  {}
-  int init(ObExecContext& ctx, const ObKillStmt& stmt);
-  int calculate_sessid(ObExecContext& ctx, const ObKillStmt& stmt);
-  TO_STRING_KV(K(sess_id_), K(tenant_id_), K(user_id_), K(is_query_), K(has_user_super_privilege_));
-
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      user_id_(common::OB_INVALID_ID),
+      is_query_(false),
+      has_user_super_privilege_(false)
+      {
+      }
+  ~ObKillSessionArg() {}
+  int init(ObExecContext &ctx, const ObKillStmt &stmt);
+  int calculate_sessid(ObExecContext &ctx, const ObKillStmt &stmt);
+  TO_STRING_KV(K(sess_id_),
+               K(tenant_id_),
+               K(user_id_),
+               K(is_query_),
+               K(has_user_super_privilege_));
 public:
   uint32_t sess_id_;
   uint64_t tenant_id_;
@@ -46,6 +51,6 @@ public:
   bool is_query_;
   bool has_user_super_privilege_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}//sql
+}//oceanbase
 #endif

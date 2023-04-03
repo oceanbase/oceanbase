@@ -16,15 +16,19 @@
 #include "share/ob_define.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
-namespace oceanbase {
-namespace sql {
-class ObTaskRunnerNotifier {
+namespace oceanbase
+{
+namespace sql
+{
+class ObTaskRunnerNotifier
+{
 public:
-  ObTaskRunnerNotifier(ObSQLSessionInfo* session, ObSQLSessionMgr* mgr) : session_(session), mgr_(mgr)
-  {}
+  ObTaskRunnerNotifier(ObSQLSessionInfo *session, ObSQLSessionMgr *mgr)
+      : session_(session), mgr_(mgr)
+  {
+  }
 
-  virtual ~ObTaskRunnerNotifier()
-  {}
+  virtual ~ObTaskRunnerNotifier() {}
 
   virtual int kill()
   {
@@ -38,12 +42,11 @@ public:
   }
 
 private:
-  ObSQLSessionInfo* session_;
-  ObSQLSessionMgr* mgr_;
-
+  ObSQLSessionInfo *session_;
+  ObSQLSessionMgr *mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskRunnerNotifier);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_TASK_RUNNER_NOTIFIER_ */

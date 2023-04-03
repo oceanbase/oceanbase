@@ -10,59 +10,59 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_H_
-#define _OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_H_
+#ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_
+#define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_
 
 #include "lib/container/ob_se_array.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_range.h"
 #include "observer/mysql/ob_ra_queue.h"
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 class ObMySQLRequestManager;
 class ObMySQLRequestRecord;
 class ObMySQLGlobalRequestManager;
-}  // namespace obmysql
-namespace common {
+}
+namespace common
+{
 class ObIAllocator;
 }
 
-namespace share {
+namespace share
+{
 class ObTenantSpaceFetcher;
 }
 
-namespace observer {
-class ObGvSqlAudit : public common::ObVirtualTableScannerIterator {
+namespace observer
+{
+class ObGvSqlAudit : public common::ObVirtualTableScannerIterator
+{
 public:
-  ObGvSqlAudit();
+  ObGvSqlAudit ();
   virtual ~ObGvSqlAudit();
 
   int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-  inline void set_addr(common::ObAddr& addr)
-  {
-    addr_ = &addr;
-  }
-  virtual int set_ip(common::ObAddr* addr);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
+  inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
+  virtual int set_ip(common::ObAddr *addr);
   virtual void reset();
-  int check_ip_and_port(bool& is_valid);
-  void use_index_scan()
-  {
-    is_use_index_ = true;
-  }
-  bool is_index_scan() const
-  {
-    return is_use_index_;
-  }
+  int check_ip_and_port(bool &is_valid);
+  void use_index_scan() { is_use_index_ = true; }
+  bool is_index_scan() const { return is_use_index_; }
 
 private:
-  int fill_cells(obmysql::ObMySQLRequestRecord& record);
+  int fill_cells(obmysql::ObMySQLRequestRecord &record);
   int extract_tenant_ids();
-  int extract_request_ids(const uint64_t tenant_id, int64_t& start_id, int64_t& end_id, bool& is_valid);
-
+  int extract_request_ids(const uint64_t tenant_id,
+                          int64_t &start_id,
+                          int64_t &end_id,
+                          bool &is_valid);
 private:
-  enum WAIT_COLUMN {
+  enum WAIT_COLUMN
+  {
     SERVER_IP = common::OB_APP_MIN_COLUMN_ID,
     SERVER_PORT,
     TENANT_ID,
@@ -126,7 +126,6 @@ private:
     ROW_CACHE_HIT,
     BLOOM_FILTER_NOT_HIT,
     BLOCK_CACHE_HIT,
-    BLOCK_INDEX_CACHE_HIT,
     DISK_READS,
     SQL_EXEC_ID,
     SESSION_ID,
@@ -135,56 +134,74 @@ private:
     CONSISTENCY_LEVEL,
     MEMSTORE_READ_ROW_COUNT,
     SSSTORE_READ_ROW_COUNT,
+    DATA_BLOCK_READ_CNT,
+    DATA_BLOCK_CACHE_HIT,
+    INDEX_BLOCK_READ_CNT,
+    INDEX_BLOCK_CACHE_HIT,
+    BLOCKSCAN_BLOCK_CNT,
+    BLOCKSCAN_ROW_CNT,
+    PUSHDOWN_STORAGE_FILTER_ROW_CNT,
     REQUEST_MEMORY_USED,
     EXPECTED_WORKER_COUNT,
     USED_WORKER_COUNT,
     SCHED_INFO,
     FUSE_ROW_CACHE_HIT,
     USER_CLIENT_IP,
-    PS_STMT_ID,
+    PS_CLIENT_STMT_ID,
+    PS_INNER_STMT_ID,
     TRANSACTION_HASH,
+    SNAPSHOT_VERSION,
+    SNAPSHOT_SOURCE,
     REQUEST_TYPE,
     IS_BATCHED_MULTI_STMT,
     OB_TRACE_INFO,
     PLAN_HASH,
     USER_GROUP,
     LOCK_FOR_READ_TIME,
-    WAIT_TRX_MIGRATE_TIME
+    PARAMS_VALUE,
+    RULE_NAME,
+    PROXY_SESSION_ID,
+    TX_INTERNAL_ROUTE_FLAG,
+
+    PARTITION_HIT,
+    TX_INTERNAL_ROUTE_VERSION,
   };
 
-  const static int64_t PRI_KEY_IP_IDX = 0;
-  const static int64_t PRI_KEY_PORT_IDX = 1;
+  const static int64_t PRI_KEY_IP_IDX        = 0;
+  const static int64_t PRI_KEY_PORT_IDX      = 1;
   const static int64_t PRI_KEY_TENANT_ID_IDX = 2;
-  const static int64_t PRI_KEY_REQ_ID_IDX = 3;
+  const static int64_t PRI_KEY_REQ_ID_IDX    = 3;
 
   const static int64_t IDX_KEY_TENANT_ID_IDX = 0;
-  const static int64_t IDX_KEY_REQ_ID_IDX = 1;
-  const static int64_t IDX_KEY_IP_IDX = 2;
-  const static int64_t IDX_KEY_PORT_IDX = 3;
+  const static int64_t IDX_KEY_REQ_ID_IDX    = 1;
+  const static int64_t IDX_KEY_IP_IDX        = 2;
+  const static int64_t IDX_KEY_PORT_IDX      = 3;
+
 
   DISALLOW_COPY_AND_ASSIGN(ObGvSqlAudit);
-  obmysql::ObMySQLRequestManager* cur_mysql_req_mgr_;
+  obmysql::ObMySQLRequestManager *cur_mysql_req_mgr_;
   int64_t start_id_;
   int64_t end_id_;
   int64_t cur_id_;
   common::ObRaQueue::Ref ref_;
-  common::ObAddr* addr_;
+  common::ObAddr *addr_;
   common::ObString ipstr_;
   int32_t port_;
   char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
-  char trace_id_[64];
+  char trace_id_[128];
 
-  // max wait event columns
+  //max wait event columns
   bool is_first_get_;
   bool is_use_index_;
 
   common::ObSEArray<uint64_t, 16> tenant_id_array_;
   int64_t tenant_id_array_idx_;
 
-  share::ObTenantSpaceFetcher* with_tenant_ctx_;
+  share::ObTenantSpaceFetcher *with_tenant_ctx_;
 };
-}  // namespace observer
-}  // namespace oceanbase
-#endif  // _OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_H_
+}
+}
+
+#endif

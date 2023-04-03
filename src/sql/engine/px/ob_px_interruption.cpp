@@ -16,12 +16,13 @@
 #include "sql/engine/px/ob_dfo.h"
 #include "lib/time/ob_time_utility.h"
 
+
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 OB_SERIALIZE_MEMBER(ObPxInterruptID, query_interrupt_id_, px_interrupt_id_);
 
-ObPxInterruptGuard::ObPxInterruptGuard(const ObInterruptibleTaskID& interrupt_id)
+ObPxInterruptGuard::ObPxInterruptGuard(const ObInterruptibleTaskID &interrupt_id)
 {
   interrupt_id_ = interrupt_id;
   SET_INTERRUPTABLE(interrupt_id_);
@@ -32,148 +33,184 @@ ObPxInterruptGuard::~ObPxInterruptGuard()
   UNSET_INTERRUPTABLE(interrupt_id_);
 }
 
-int ObInterruptUtil::broadcast_px(ObIArray<ObDfo*>& dfos, int int_code)
+int ObInterruptUtil::broadcast_px(ObIArray<ObDfo *> &dfos, int int_code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   for (int64_t idx = 0; idx < dfos.count(); ++idx) {
     if (OB_SUCCESS != (tmp_ret = broadcast_dfo(dfos.at(idx), int_code))) {
       LOG_WARN("fail interrupt dfo", K(idx), K(ret));
-      ret = tmp_ret;
     }
   }
   return ret;
 }
 
-int ObInterruptUtil::broadcast_dfo(ObDfo* dfo, int code)
+int ObInterruptUtil::broadcast_dfo(ObDfo *dfo, int code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObInterruptCode int_code(code, GETTID(), GCTX.self_addr_, "PX ABORT DFO");
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
-  ObSEArray<ObPxSqcMeta*, 32> sqcs;
+  ObInterruptCode int_code(code,
+                           GETTID(),
+                           GCTX.self_addr(),
+                           "PX ABORT DFO");
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
+  ObSEArray<ObPxSqcMeta *, 32> sqcs;
   if (OB_ISNULL(dfo)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NULL ptr unexpected", K(ret));
   } else if (OB_FAIL(dfo->get_sqcs(sqcs))) {
     LOG_WARN("fail to get addrs", K(ret));
   } else {
+    // 暂存上次的 id，inc_seqnum 将修改 px_interrupt_id_
     ObInterruptibleTaskID interrupt_id = dfo->get_interrupt_id().px_interrupt_id_;
     for (int64_t j = 0; j < sqcs.count(); ++j) {
-      const ObAddr& addr = sqcs.at(j)->get_exec_addr();
-      if (OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
+      const ObAddr &addr = sqcs.at(j)->get_exec_addr();
+      if(OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
         ret = tmp_ret;
-        LOG_ERROR("fail to send interrupt message to other server", K(ret), K(int_code), K(addr), K(interrupt_id));
+        LOG_WARN("fail to send interrupt message to other server",
+                K(ret), K(int_code), K(addr), K(interrupt_id));
       } else {
-        LOG_INFO("success to send interrupt message", K(int_code), K(addr), K(interrupt_id));
+        LOG_INFO("success to send interrupt message",
+                  K(int_code), K(addr), K(interrupt_id));
       }
     }
   }
   return ret;
 }
 
-int ObInterruptUtil::regenerate_interrupt_id(ObDfo& dfo)
+int ObInterruptUtil::regenerate_interrupt_id(ObDfo &dfo)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObPxSqcMeta*, 32> sqcs;
+  ObSEArray<ObPxSqcMeta *, 32> sqcs;
   if (OB_FAIL(dfo.get_sqcs(sqcs))) {
     LOG_WARN("fail to get addrs", K(ret));
   } else {
+    // 每次发送完中断后，需要将中断号的 sequence 加 1，并设置到 sqc 结构中，
+    // 避免误中断重试的 sqc
     ObDfoInterruptIdGen::inc_seqnum(dfo.get_interrupt_id().px_interrupt_id_);
 
-    ARRAY_FOREACH_X(sqcs, j, cnt, OB_SUCC(ret))
-    {
+    ARRAY_FOREACH_X(sqcs, j, cnt, OB_SUCC(ret)) {
       sqcs.at(j)->set_interrupt_id(dfo.get_interrupt_id());
     }
   }
   return ret;
 }
 
-int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta& sqc, int code)
+// 兜底函数，SQC 通知 task 尽快退出
+int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta &sqc, int code)
 {
   int ret = OB_SUCCESS;
-  ObInterruptCode int_code(code, GETTID(), GCTX.self_addr_, "SQC ABORT TASK");
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObInterruptCode int_code(code,
+                           GETTID(),
+                           GCTX.self_addr(),
+                           "SQC ABORT TASK");
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = sqc.get_interrupt_id().px_interrupt_id_;
-  if (OB_FAIL(manager->interrupt(interrupt_id, int_code))) {
-    LOG_WARN("fail to send interrupt message to other server", K(ret), K(int_code), K(interrupt_id));
+  if(OB_FAIL(manager->interrupt(interrupt_id, int_code))) {
+    LOG_WARN("fail to send interrupt message to other server",
+             K(ret), K(int_code), K(interrupt_id));
   } else {
-    LOG_INFO("success to send interrupt message to local tasks", K(int_code), K(interrupt_id));
+    LOG_INFO("success to send interrupt message to local tasks",
+             K(int_code), K(interrupt_id));
   }
   return ret;
 }
 
-int ObInterruptUtil::interrupt_qc(ObPxSqcMeta& sqc, int code)
+// SQC 向 QC 发送中断
+int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code)
 {
   int ret = OB_SUCCESS;
-  ObInterruptCode int_code(code, GETTID(), GCTX.self_addr_, "SQC ABORT QC");
+  ObInterruptCode int_code(code,
+                           GETTID(),
+                           GCTX.self_addr(),
+                           "SQC ABORT QC");
   ObInterruptCode orig_int_code = int_code;
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = sqc.get_interrupt_id().query_interrupt_id_;
 
+  // 重写错误码，使得scheduler端能等待远端schema刷新并重试
   if (is_schema_error(int_code.code_)) {
-    int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, MTL_ID())) {
+      int_code.code_ = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
+    } else {
+      int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    }
   }
 
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(manager->interrupt(sqc.get_qc_addr(), interrupt_id, int_code))) {
-    LOG_ERROR("fail send interrupt signal to qc", "addr", sqc.get_qc_addr(), K(orig_int_code), K(int_code), K(ret));
+  } else if (OB_FAIL(manager->interrupt(sqc.get_qc_addr(),
+                                        interrupt_id,
+                                        int_code))) {
+    LOG_ERROR("fail send interrupt signal to qc",
+              "addr", sqc.get_qc_addr(),
+              K(orig_int_code),
+              K(int_code),
+              K(ret));
   } else {
     LOG_TRACE("sqc notify qc to interrupt",
-        "qc_addr",
-        sqc.get_qc_addr(),
-        "qc_id",
-        sqc.get_qc_id(),
-        "interrupt_id",
-        interrupt_id,
-        "sqc_id",
-        sqc.get_sqc_id(),
-        K(orig_int_code),
-        K(int_code));
+              "qc_addr", sqc.get_qc_addr(),
+              "qc_id", sqc.get_qc_id(),
+              "interrupt_id", interrupt_id,
+              "sqc_id", sqc.get_sqc_id(),
+              K(orig_int_code),
+              K(int_code));
   }
   return ret;
 }
 
-int ObInterruptUtil::interrupt_qc(ObPxTask& task, int code)
+
+// Task 向 QC 发送中断
+int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code)
 {
   int ret = OB_SUCCESS;
-  ObInterruptCode int_code(code, GETTID(), GCTX.self_addr_, "TASK ABORT QC");
+  ObInterruptCode int_code(code,
+                           GETTID(),
+                           GCTX.self_addr(),
+                           "TASK ABORT QC");
   ObInterruptCode orig_int_code = int_code;
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = task.get_interrupt_id().query_interrupt_id_;
 
+  // 重写错误码，使得scheduler端能等待远端schema刷新并重试
   if (is_schema_error(int_code.code_)) {
-    int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, MTL_ID())) {
+      int_code.code_ = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
+    } else {
+      int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    }
   }
 
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(), interrupt_id, int_code))) {
-    LOG_ERROR("fail send interrupt signal to qc", "addr", task.get_qc_addr(), K(int_code), K(orig_int_code), K(ret));
+  } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(),
+                                        interrupt_id,
+                                        int_code))) {
+    LOG_WARN("fail send interrupt signal to qc",
+              "addr", task.get_qc_addr(),
+              K(int_code),
+              K(orig_int_code),
+              K(ret));
   } else {
     LOG_TRACE("task notify qc to interrupt",
-        "qc_addr",
-        task.get_sqc_addr(),
-        "qc_id",
-        task.get_qc_id(),
-        "task_id",
-        task.get_task_id(),
-        "task_co_id",
-        task.get_task_co_id(),
-        "interrupt_id",
-        interrupt_id,
-        K(orig_int_code),
-        K(int_code));
+              "qc_addr", task.get_sqc_addr(),
+              "qc_id", task.get_qc_id(),
+              "task_id", task.get_task_id(),
+              "task_co_id", task.get_task_co_id(),
+              "interrupt_id", interrupt_id,
+              K(orig_int_code),
+              K(int_code));
   }
   return ret;
 }
 
-int ObInterruptUtil::generate_query_interrupt_id(
-    const uint32_t server_id, const uint64_t px_sequence_id, ObInterruptibleTaskID& interrupt_id)
+int ObInterruptUtil::generate_query_interrupt_id(const uint32_t server_id,
+                                                 const uint64_t px_sequence_id,
+                                                 ObInterruptibleTaskID &interrupt_id)
 {
   int ret = OB_SUCCESS;
   uint64_t timestamp = ObTimeUtility::current_time();
+  // 取低12位
   timestamp = (uint64_t)0xfff & timestamp;
   interrupt_id.first_ = px_sequence_id;
   // [ server_id (32bits) ][ timestamp (12bits) ]
@@ -181,26 +218,35 @@ int ObInterruptUtil::generate_query_interrupt_id(
   return ret;
 }
 
-int ObInterruptUtil::generate_px_interrupt_id(const uint32_t server_id, const uint32_t qc_id,
-    const uint64_t px_sequence_id, const int64_t dfo_id, ObInterruptibleTaskID& interrupt_id)
+int ObInterruptUtil::generate_px_interrupt_id(const uint32_t server_id,
+                                              const uint32_t qc_id,
+                                              const uint64_t px_sequence_id,
+                                              const int64_t dfo_id,
+                                              ObInterruptibleTaskID &interrupt_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(qc_id <= 0 || dfo_id < 0 || dfo_id > ObDfo::MAX_DFO_ID)) {
+  if (OB_UNLIKELY(qc_id <= 0 ||
+                  dfo_id < 0 ||
+                  dfo_id > ObDfo::MAX_DFO_ID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("QC id is less than or equal 0 in generate px interrupt id", K(qc_id), K(dfo_id));
   } else {
     uint64_t timestamp = ObTimeUtility::current_time();
+    // 取低12位
     timestamp = (uint64_t)0xfff & timestamp;
     interrupt_id.first_ = px_sequence_id;
+    //
     // [ server_id (32bits) ][ qc_id (10bits)][ dfo_id (10bits) ][ timestamp (12bits) ]
-    interrupt_id.last_ =
-        ((uint64_t)server_id) << 32 | (uint64_t)qc_id << 22 | (uint64_t)dfo_id << 12 | (uint64_t)timestamp;
+    interrupt_id.last_ = ((uint64_t)server_id) << 32 | (uint64_t)qc_id << 22 |
+        (uint64_t)dfo_id << 12 | (uint64_t)timestamp;
   }
   return ret;
 }
 
-void ObDfoInterruptIdGen::inc_seqnum(common::ObInterruptibleTaskID& px_interrupt_id)
+void ObDfoInterruptIdGen::inc_seqnum(common::ObInterruptibleTaskID &px_interrupt_id)
 {
+  // 将 seq 值 (last_的低 12 位） patch 最低 12 位，每调用一次都加 1
   uint64_t last = px_interrupt_id.last_;
   px_interrupt_id.last_ = (last & (0xffffffff << 12)) | (((last & 0xfff) + 1) & 0xfff);
 }
+

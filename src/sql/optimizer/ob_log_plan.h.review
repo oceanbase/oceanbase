@@ -1,0 +1,286 @@
+// Copyright (c) 2014 Alibaba Inc. All Rights Reserved.
+// Author:
+//
+#ifndef _OB_LOG_PLAN_H
+#define _OB_LOG_PLAN_H 1
+#include "lib/allocator/page_arena.h"
+#include "lib/string/ob_string.h"
+#include "ob_optimizer_context.h"
+#include "sql/resolver/ob_stmt.h"
+#include "ob_log_operator_factory.h"
+
+namespace test
+{
+  class ObLogPlanTest_ob_explain_test_Test;
+}
+
+namespace oceanbase
+{
+namespace sql
+{
+  class ObLogicalOperator;
+  class ObJoinOrder;
+  class AccessPath;
+  class Path;
+  class JoinOrder;
+  class ObJoinOrder;
+  struct JoinInfo;
+  /**
+   * @enum TraverseOp
+   * @brief Plan tree traversal operations
+   */
+  enum TraverseOp
+  {
+    ALLOC_EXPR_R1 = 0,             // allocate expr before parallel optimization
+    ALLOC_EXPR_R2,                 // allocate expr before parallel optimization
+    ALLOC_EXCH,                        // allocating exchange ( // optimization)
+    OPERATOR_NUMBERING,                                   // numbering operators
+    GEN_SIGNATURE,                                  // generating plan signature
+    EXPLAIN_COLLECT_WIDTH,                     // explain calculate column width
+    EXPLAIN_WRITE_BUFFER,                            // explain write plan table
+    EXPLAIN_WRITE_BUFFER_OUTPUT,             // explain write output and filters
+    TRAVERSE_OP_END
+  };
+  const static int64_t max_plan_column_width = 500;
+  const static int64_t max_plan_column = 20;
+
+  // Explain plan text formatter
+  struct plan_formatter
+  {
+    const char *column_name[max_plan_column];
+    int64_t num_of_columns;
+    int column_width[max_plan_column_width];
+  };
+
+  // define operatory enum type
+#define KEYS_DEF                                \
+    KEY_DEF( Id, "ID" ),                        \
+    KEY_DEF( Operator, "OPERATOR" ),            \
+    KEY_DEF( Name, "NAME" ),                    \
+    KEY_DEF( Est_Rows, "EST. ROWS" ),           \
+    KEY_DEF( Cost, "COST" ),                    \
+    KEY_DEF( Max_Plan_Column, "End" )
+#define KEY_DEF( identifier, name )  identifier
+  enum ExplainColumnEnumType { KEYS_DEF };
+#undef KEY_DEF
+
+  // each line of the explain plan text
+  struct plan_line
+  {
+    int id;
+    int level;
+    common::ObArray< common::ObString > column_value;
+  };
+
+
+  // explain plan text
+  class planText
+  {
+  public:
+  planText(char *buffer, const int64_t buffer_len)
+    : level(0), line_id(0), buf(buffer), buf_len(buffer_len), pos(0)
+    {
+#undef KEY_DEF
+#define KEY_DEF( identifier, name ) name
+      static const char *names[] = { KEYS_DEF };
+#undef KEY_DEF
+      for (int i = 0; i < Max_Plan_Column; i++) {
+        formatter.column_width[i] = (int) strlen(names[i]);
+        formatter.column_name[i] = names[i];
+      }
+      formatter.num_of_columns = Max_Plan_Column;
+    }
+    int level;
+    uint64_t line_id;
+    char *buf;
+    int64_t buf_len;
+    int64_t pos;
+    plan_formatter formatter;
+  };
+#undef KYES_DEF
+
+  /**
+   *  Base class for logical plan for all DML/select statements
+   */
+  class ObLogPlan
+  {
+  public:
+    friend class test::ObLogPlanTest_ob_explain_test_Test;
+
+  public:
+    ObLogPlan(ObOptimizerContext *ctx, const ObStmt *stmt);
+    virtual ~ObLogPlan();
+    inline common::ObString &get_sql_text() {return sql_text_;}
+
+    // @brief Get the corresponding stmt
+    inline virtual const ObStmt *get_stmt() const { return stmt_; }
+
+    // @brief Get the ptr to the root
+    inline ObLogicalOperator * get_plan_root() const { return root_; }
+
+    // @brief Set the root of the plan
+    inline void set_plan_root(ObLogicalOperator *root) {root_ = root;}
+    /**
+     * @brief  Generate the plan tree
+     * @param void
+     * @retval OB_SUCCESS execute success
+     * @retval OB_OPTIMIZE_GEN_PLAN_FALIED failed to generate the logical plan
+     *
+     * The function will be invoked by all DML/select statements and will handle
+     * the 'common' part of those statements, including joins, order-by, limit and
+     * etc.
+     */
+    virtual int generate_plan_tree();
+
+    /**
+     * Generate the "explain plan" string
+     */
+    int64_t to_string(char *buf, const int64_t buf_len) const;
+
+    /**
+     * Get optimizer context
+     */
+    ObOptimizerContext *get_optimizer_context() const { return optimizer_context_; }
+
+    /**
+     *  GENERATE logical PLAN
+     * 
+     *  The general public interface to generate a logical plan for a 'select' statement
+     */
+    virtual int generate_plan() = 0;
+    ObIAllocator *get_allocator() const { return allocator_; }
+    virtual ObLogOperatorFactory *get_log_op_factory() { return &log_op_factory_; }
+
+     /**
+     * @brief  Copy the whole plan tree
+     * @param [in] src        - the source plan tree
+     * @param [in/out] dst    - the destination plan tree
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    virtual int plan_tree_copy(ObLogicalOperator *src, ObLogicalOperator *&dst);
+
+    /**
+     *  List all needed plan traversals
+     */
+    int plan_traverse_loop(int op1, ...);
+  protected:
+
+    struct CandidatePlan
+    {
+      common::ObArray< ObRawExpr* > ordering_;
+      ObLogicalOperator *plan_tree_;
+    };
+
+    struct All_Candidate_Plans
+    {
+      common::ObArray<CandidatePlan> candidate_plans_;
+      std::pair<int64_t, int64_t> plain_plan_;
+    };
+
+    /**
+     * @brief Genearete a specified operator on top of a list of candidate plans
+     * @param [out] jos - the generated Join_OrderS
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int generate_join_orders(ObJoinOrder &jo);
+
+    /** @brief Allocate a join operator based on join algorithms */
+    ObLogicalOperator * allocate_join(JoinAlgo join_algo);
+
+    /** @brief Allcoate operator for access path */
+    ObLogicalOperator * allocate_access_path(AccessPath *ap);
+
+    /** @brief Create plan tree from an interesting order */
+    ObLogicalOperator * create_plan_tree_from_path(Path *jo);
+
+    /** @brief Initialize the candidate plans from join order */
+    int candi_init(ObJoinOrder &jo);
+
+    /** @brief Get order by columns */
+    int get_order_by_columns(common::ObIArray<ObRawExpr *> &order_by_columns);
+
+    /** @brief Allocate ORDER BY on top of plan candidates */
+    int candi_allocate_order_by();
+
+    /** @brief Allocate LIMIT on top of plan candidates */
+    int candi_allocate_limit();
+
+    /**
+     *  Plan tree traversing(both top-down and bottom-up)
+     */
+    int plan_tree_traverse(const TraverseOp &operation, void *ctx);
+
+    inline void set_signature(uint64_t hash_value) { hash_value_ = hash_value; }
+
+    //added by ryan.ly 20141230
+    //start..
+    int generate_base_rel(ObJoinOrder* jo, uint32_t table_idx);
+    int generate_baserel_path(ObJoinOrder* jo);
+    int distribute_quals_to_rels(ObIArray<ObJoinOrder*>& baserels);
+    int distribute_qual_to_rel(ObJoinOrder* rel, ObRawExpr* qual, ObIArray<ObRawExpr*>& cur_vars);
+    int generate_join_rel(ObJoinOrder* left_tree,
+                          ObJoinOrder* right_tree,
+                          JoinInfo* join_info,
+                          ObJoinOrder** join_tree);
+    int generate_join_path(ObJoinOrder* left_tree,
+                           ObJoinOrder* right_tree,
+                           ObJoinOrder* joinrel,
+                           JoinInfo* join_info);
+    int generate_join_level(ObArray< ObArray<ObJoinOrder*> >& join_rels_, uint32_t level);
+    int create_nl_path(ObJoinOrder* joinrel,
+                       Path* left_path,
+                       Path* right_path,
+                       JoinInfo* join_info,
+                       Path** join_path);
+    int create_mj_path(ObJoinOrder* joinrel,
+                       Path* left_path,
+                       Path* right_path,
+                       JoinInfo* join_info,
+                       ObArray<ObRawExpr*>& join_conditions,
+                       ObArray<ObRawExpr*>& join_filters,
+                       ObArray<ObRawExpr*>& ordering_,
+                       Path** join_path);
+    ObJoinOrder* find_base_rel(ObIArray<ObJoinOrder*>& base_level, int32_t table_idx);
+    ObJoinOrder* find_join_rel(ObIArray<ObJoinOrder*>& join_level, ObBitSet<>& relids);
+    ObJoinOrder* find_min_rel(ObIArray<ObJoinOrder*>& path_set);
+    int extract_mergejoin_conditions(ObJoinOrder* join_rel,
+                                     ObIArray<ObRawExpr*>& join_quals,
+                                     ObIArray<ObRawExpr*>& join_conditions,
+                                     ObIArray<ObRawExpr*>& join_filters);
+    int make_ordering_for_mergejoin(ObIArray<ObRawExpr*>& join_conditions,
+                                    ObJoinOrder* join_rel,
+                                    ObIArray<ObRawExpr*>& ordering_);
+    int make_ordering_for_conditions(ObBitSet<>& left_relids,
+                                     ObIArray<ObRawExpr*>& join_conditions,
+                                     ObIArray<ObRawExpr*>& ordering);
+    int make_fixed_join_filters(ObIArray<ObRawExpr*>& join_conditions,
+                                ObIArray<ObRawExpr*>& fixed_conditions,
+                                ObIArray<ObRawExpr*>& join_filters,
+                                ObIArray<ObRawExpr*>& fixed_filters);
+    int32_t get_var_relid(ObRawExpr* var);
+    JoinInfo* find_joininfo(ObJoinOrder* rel, ObBitSet<>& unjoined_tables);
+    ObLogicalOperator *allocate_path(Path* path);
+    ObLogicalOperator *allocate_join_path(JoinOrder* join_order);
+    //..end
+
+  protected: // member variable
+    ObOptimizerContext *optimizer_context_;    
+    ObIAllocator *allocator_;
+    const ObStmt *stmt_;
+    ObLogOperatorFactory log_op_factory_;     // operator factory
+    All_Candidate_Plans candidates_;
+  private: // member functions
+    int remove_all_candidates_except_one(int64_t except);
+
+  private: // memeber variable
+    ObLogicalOperator *root_;                    // root operator
+    int64_t flag_;
+    common::ObString sql_text_;                     // SQL string
+    uint64_t hash_value_;                            // signature
+    DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
+  };
+}
+}
+#endif // _OB_LOG_PLAN_H

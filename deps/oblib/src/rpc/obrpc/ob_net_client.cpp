@@ -16,14 +16,20 @@
 #include "lib/ob_define.h"
 #include "lib/net/ob_addr.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
+extern "C" {
+#include "rpc/pnio/interface/group.h"
+};
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 using rpc::frame::ObNetOptions;
 
-ObNetClient::ObNetClient() : inited_(false), net_(), pkt_handler_(), transport_(NULL)
+ObNetClient::ObNetClient()
+    : inited_(false), net_(), pkt_handler_(), transport_(NULL)
 {
   // empty
 }
@@ -75,21 +81,24 @@ int ObNetClient::init()
   return ret;
 }
 
-int ObNetClient::load_ssl_config(const char *ca_cert,
-                                 const char *public_cert,
-                                 const char *private_key)
+int ObNetClient::load_ssl_config(const bool use_bkmi,
+    const bool use_sm,
+    const char *ca_cert,
+    const char *public_cert,const char *private_key,
+    const char *enc_cert, const char *enc_private_key)
 {
   int ret = OB_SUCCESS;
-  bool use_bkmi = false;
-  bool use_sm = false;
+
   if (OB_ISNULL(ca_cert) || OB_ISNULL(public_cert) || OB_ISNULL(private_key)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(ERROR, "invalid argument", K(ret));
-  } else if (OB_FAIL(net_.load_ssl_config(use_bkmi, use_sm, ca_cert, public_cert, private_key))) {
+  } else if (OB_FAIL(net_.load_ssl_config(use_bkmi, use_sm, ca_cert, public_cert, private_key, enc_cert, enc_private_key))) {
     OB_LOG(ERROR, "ObNetEasy load_ssl_config failed", K(ret), K(use_bkmi), K(use_sm));
   } else {
-  	set_pkt_handler_ssl_opt();
-  	set_transport_ssl_opt();
+    pkt_handler_.ez_handler()->is_ssl = 1;
+    pkt_handler_.ez_handler()->is_ssl_opt = 0;
+    transport_->enable_use_ssl();
+
     LOG_INFO("ObNetClient load_ssl_config succ", K(use_bkmi), K(use_sm));
   }
 
@@ -111,7 +120,7 @@ void ObNetClient::destroy()
   }
 }
 
-int ObNetClient::get_proxy(ObRpcProxy& proxy)
+int ObNetClient::get_proxy(ObRpcProxy &proxy)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -120,10 +129,10 @@ int ObNetClient::get_proxy(ObRpcProxy& proxy)
   } else if (OB_FAIL(proxy.init(transport_))) {
     LOG_ERROR("Init proxy error", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-}  // end of namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace obrpc
+} // end of namespace oceanbase

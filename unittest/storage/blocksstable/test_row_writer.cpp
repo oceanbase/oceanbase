@@ -17,20 +17,22 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "lib/number/ob_number_v2.h"
 #include "ob_row_generate.h"
-#include "storage/blocksstable/ob_column_map.h"
 
 #define protected public
 #define private public
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace blocksstable;
 using namespace storage;
 using namespace number;
 using namespace share::schema;
 
-namespace unittest {
-class TestRowWriter : public ::testing::Test {
+namespace unittest
+{
+class TestRowWriter : public ::testing::Test
+{
 public:
   static const int64_t rowkey_column_count = 1;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
@@ -42,7 +44,7 @@ public:
   TestRowWriter();
   virtual void SetUp();
   virtual void TearDown();
-  void alloc(char*& ptr, const int64_t size);
+  void alloc(char *&ptr, const int64_t size);
 
 protected:
   ObRowGenerate row_generate_;
@@ -52,8 +54,11 @@ private:
   ObArenaAllocator allocator_;
 };
 
-TestRowWriter::TestRowWriter() : allocator_(ObModIds::TEST)
-{}
+TestRowWriter::TestRowWriter()
+  :allocator_(ObModIds::TEST)
+{
+
+}
 
 void TestRowWriter::SetUp()
 {
@@ -61,7 +66,7 @@ void TestRowWriter::SetUp()
   ObTableSchema table_schema;
   ObColumnSchemaV2 column;
   oceanbase::common::ObClusterVersion::get_instance().refresh_cluster_version("1.4.70");
-  // init table schema
+  //init table schema
   table_schema.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema.set_table_name("test_row_writer"));
   table_schema.set_tenant_id(1);
@@ -70,10 +75,10 @@ void TestRowWriter::SetUp()
   table_schema.set_table_id(table_id);
   table_schema.set_rowkey_column_num(rowkey_column_count);
   table_schema.set_max_used_column_id(column_num);
-  // init column
+  //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
-  for (int64_t i = 0; i < column_num; ++i) {
+  for(int64_t i = 0; i < column_num; ++i){
     ObObjType obj_type = static_cast<ObObjType>(i + 1);
     column.reset();
     column.set_collation_type(CS_TYPE_BINARY);
@@ -83,21 +88,23 @@ void TestRowWriter::SetUp()
     ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
     column.set_data_type(obj_type);
     column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    if (obj_type == common::ObIntType) {
+    if(obj_type == common::ObIntType){
       column.set_rowkey_position(1);
     } else {
       column.set_rowkey_position(0);
     }
     ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
   }
-  // init ObRowGenerate
+  //init ObRowGenerate
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema));
 }
 
 void TestRowWriter::TearDown()
-{}
+{
 
-void TestRowWriter::alloc(char*& ptr, const int64_t size)
+}
+
+void TestRowWriter::alloc(char *&ptr, const int64_t size)
 {
   ptr = reinterpret_cast<char*>(allocator_.alloc(size));
   ASSERT_TRUE(NULL != ptr);
@@ -118,29 +125,29 @@ TEST_F(TestRowWriter, test_init)
   ObNewRow valid_new_row;
   valid_new_row.cells_ = objs;
   valid_new_row.count_ = column_num;
-  char* buf = NULL;
+  char *buf = NULL;
   alloc(buf, 2 * 1024 * 1024);
   int64_t pos = 0;
   int64_t rowkey_start_pos = 0;
   int64_t rowkey_length = 0;
-  // init success
+  //init success
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(
-      rowkey_column_count, valid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   pos = 0;
   ret = row_writer.write(valid_new_row, buf, 2 * 1024 * 1024, FLAT_ROW_STORE, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // invalid buf
+  //invalid buf
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(
-      rowkey_column_count, valid_store_row, NULL, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, valid_store_row, NULL, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
@@ -151,49 +158,51 @@ TEST_F(TestRowWriter, test_init)
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
 
-  // invalid buf_size
+  //invalid buf_size
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 0, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 0,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // invalid pos
+  //invalid pos
   pos = 2 * 1024 * 1024;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(
-      rowkey_column_count, valid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(2 * 1024 * 1024, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // invalid store_row
+  //invalid store_row
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(
-      rowkey_column_count, invalid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, invalid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // invalid rowkey_column_count
+  //invalid rowkey_column_count
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(-1, valid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(-1, valid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // invalid new_row
+  //invalid new_row
   pos = 0;
   ret = row_writer.write(invalid_new_row, buf, 2 * 1024 * 1024, FLAT_ROW_STORE, pos);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
@@ -215,46 +224,50 @@ TEST_F(TestRowWriter, buf_not_enough)
   ObNewRow valid_new_row;
   valid_new_row.cells_ = objs;
   valid_new_row.count_ = column_num;
-  char* buf = NULL;
+  char *buf = NULL;
   alloc(buf, 2 * 1024 * 1024);
   int64_t pos = 0;
   int64_t rowkey_start_pos = 0;
   int64_t rowkey_length = 0;
 
-  // row header buf not enough
-  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 4, pos, rowkey_start_pos, rowkey_length);
+  //row header buf not enough
+  ret = row_writer.write(rowkey_column_count, valid_store_row,
+      buf, 4, pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // rowkey data not enough
-  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 8, pos, rowkey_start_pos, rowkey_length);
+  //rowkey data not enough
+  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 8,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // normal data not enough
-  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 200, pos, rowkey_start_pos, rowkey_length);
+  //normal data not enough
+  ret = row_writer.write(rowkey_column_count, valid_store_row, buf, 200,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // column index not enough
-  ret = row_writer.write(1, valid_store_row, buf, 430 - 16, pos, rowkey_start_pos, rowkey_length);
+  //column index not enough
+  ret = row_writer.write(1, valid_store_row, buf, 430 - 16,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
   ASSERT_EQ(0, rowkey_length);
 
-  // new row not enough
+  //new row not enough
   ret = row_writer.write(valid_new_row, buf, 1, FLAT_ROW_STORE, pos);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
   ASSERT_EQ(0, pos);
 
-  // buf not enough
+  //buf not enough
   pos = 10;
   ret = row_writer.write(valid_new_row, buf, pos, FLAT_ROW_STORE, pos);
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, ret);
@@ -275,7 +288,7 @@ TEST_F(TestRowWriter, data_type)
   reader_row.row_val_.cells_ = reader_objs;
   reader_row.row_val_.count_ = column_num;
 
-  char* buf = NULL;
+  char *buf = NULL;
   alloc(buf, 2 * 1024 * 1024);
   int64_t pos = 0;
   int64_t rowkey_start_pos = 0;
@@ -283,26 +296,26 @@ TEST_F(TestRowWriter, data_type)
   int64_t read_pos = 0;
   const int64_t test_row_num = 10;
 
-  for (int64_t j = 0; j < test_row_num; ++j) {
+  for(int64_t j = 0; j < test_row_num; ++j){
     pos = 0;
     rowkey_start_pos = 0;
     rowkey_length = 0;
     read_pos = 0;
 
-    // test every ObObjType from ObNullType to ObExtendType
+    //test every ObObjType from ObNullType to ObExtendType
     bool exist = false;
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(writer_row));
-    // column index size is four, one, two will tested normally
-    if (0 == j) {
-      char* ptr = NULL;
+    //column index size is four, one, two will tested normally
+    if(0 == j){
+      char *ptr = NULL;
       ObString str;
-      // TODO: OB_MAX_VARCHAR_LENGTH now is 4 * 1024 * 1024, too large to support
+      //TODO: OB_MAX_VARCHAR_LENGTH now is 4 * 1024 * 1024, too large to support
       alloc(ptr, 256L * 1024);
       memset(ptr, 0, 256L * 1024);
       str.assign_ptr(ptr, 256L * 1024);
 
-      for (int64_t i = 0; i < column_num; ++i) {
-        if (ObVarcharType == objs[i].get_type()) {
+      for (int64_t i = 0; i < column_num; ++i){
+        if(ObVarcharType == objs[i].get_type()){
           objs[i].set_varchar(str);
           objs[i].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
           break;
@@ -310,50 +323,53 @@ TEST_F(TestRowWriter, data_type)
       }
     }
 
-    ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+    ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024,
+        pos, rowkey_start_pos, rowkey_length);
     ASSERT_EQ(OB_SUCCESS, ret);
-    // init ObColumnMap
+    //init ObColumnMap
     column_map_.reuse();
     ObArray<ObColDesc> columns;
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
-    for (int64_t i = 0; i < column_num; ++i) {
-      ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
-      ObObjMeta obj_meta;
-      obj_meta.set_type(obj_type);
-      if (ObVarcharType == obj_type || ObCharType == obj_type) {
-        obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-        obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
-      }
-      columns[i].col_type_ = obj_meta;
+    for (int64_t i = 0; i < column_num; ++i){
+        ObObjType obj_type = writer_row.row_val_.cells_[i].get_type();
+        ObObjMeta obj_meta;
+        obj_meta.set_type(obj_type);
+        if (ObVarcharType == obj_type || ObCharType == obj_type) {
+          obj_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+        }
+        columns[i].col_type_ = obj_meta;
     }
-    ASSERT_EQ(OB_SUCCESS,
-        column_map_.init(allocator_,
-            row_generate_.get_schema().get_schema_version(),
-            row_generate_.get_schema().get_rowkey_column_num(),
-            column_num,
-            columns));
+    ASSERT_EQ(OB_SUCCESS, column_map_.init(allocator_,
+                                           row_generate_.get_schema().get_schema_version(),
+                                           row_generate_.get_schema().get_rowkey_column_num(),
+                                           column_num,
+                                           columns));
 
     ret = row_reader.read_row(buf, pos, read_pos, column_map_, allocator_, reader_row);
-    ASSERT_TRUE(OB_SUCCESS == ret) << "\n j: " << j;
+    ASSERT_TRUE(OB_SUCCESS == ret)
+        << "\n j: " << j;
 
-    if (0 != j) {  // we has change the rule
+    if(0 != j){//we has change the rule
       ASSERT_EQ(OB_SUCCESS, row_generate_.check_one_row(reader_row, exist));
       ASSERT_TRUE(exist);
-      ASSERT_TRUE(column_num == reader_row.row_val_.count_);
+      ASSERT_TRUE(column_num  == reader_row.row_val_.count_);
     }
-    // every obj should equal
-    for (int64_t i = 0; i < column_num; ++i) {
+    //every obj should equal
+    for (int64_t i = 0; i < column_num ; ++i){
       ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i])
-          << "\n i: " << i << "\n writer:  " << to_cstring(writer_row.row_val_.cells_[i])
-          << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
+        << "\n i: " << i
+        << "\n writer:  "<< to_cstring(writer_row.row_val_.cells_[i])
+        << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
     }
   }
-  // unsupported data type
+  //unsupported data type
   objs[0].set_type(static_cast<ObObjType>(ObMaxType));
   pos = 0;
   rowkey_start_pos = 0;
   rowkey_length = 0;
-  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(rowkey_column_count, writer_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_NOT_SUPPORTED, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
@@ -373,8 +389,8 @@ TEST_F(TestRowWriter, char_binary_overflow)
 
   ObObj obj;
   ObString str;
-  char* buf = NULL;
-  char* ptr = NULL;
+  char *buf = NULL;
+  char *ptr = NULL;
   alloc(buf, 2 * 1024 * 1024);
   int64_t pos = 0;
   int64_t rowkey_start_pos = 0;
@@ -386,7 +402,8 @@ TEST_F(TestRowWriter, char_binary_overflow)
   obj.set_varchar(str);
   obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
   valid_store_row.row_val_.cells_[0] = obj;
-  ret = row_writer.write(1, valid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(1, valid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
@@ -394,7 +411,8 @@ TEST_F(TestRowWriter, char_binary_overflow)
 
   obj.set_binary(str);
   valid_store_row.row_val_.cells_[0] = obj;
-  ret = row_writer.write(1, valid_store_row, buf, 2 * 1024 * 1024, pos, rowkey_start_pos, rowkey_length);
+  ret = row_writer.write(1, valid_store_row, buf, 2 * 1024 * 1024,
+      pos, rowkey_start_pos, rowkey_length);
   ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
   ASSERT_EQ(0, pos);
   ASSERT_EQ(0, rowkey_start_pos);
@@ -413,17 +431,17 @@ TEST_F(TestRowWriter, write_only_key_column)
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(valid_store_row));
 
   int32_t buf_size = 1024;
-  char* buf = NULL;
+  char *buf = NULL;
   alloc(buf, buf_size);
 
-  char* key_ptr = nullptr;
+  char *key_ptr = nullptr;
   alloc(key_ptr, 512);
   ObObj key_obj;
   key_obj.set_varchar(key_ptr, 512);
   key_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
   valid_store_row.row_val_.cells_[0] = key_obj;
 
-  char* col_ptr = nullptr;
+  char *col_ptr = nullptr;
   alloc(col_ptr, 1024);
   ObObj col_obj;
   col_obj.set_varchar(col_ptr, 1024);
@@ -434,8 +452,8 @@ TEST_F(TestRowWriter, write_only_key_column)
   int64_t rowkey_start_pos = 0;
   int64_t rowkey_length = 0;
 
-  ret =
-      row_writer.write(1, valid_store_row, buf, buf_size, pos, rowkey_start_pos, rowkey_length, true /*only_row_key*/);
+  ret = row_writer.write(1, valid_store_row, buf, buf_size,
+      pos, rowkey_start_pos, rowkey_length, true/*only_row_key*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_LE(0, pos);
   ASSERT_LE(0, rowkey_start_pos);
@@ -443,10 +461,12 @@ TEST_F(TestRowWriter, write_only_key_column)
   ASSERT_EQ(517, rowkey_length);
 }
 
-}  // namespace unittest
-}  // end namespace oceanbase
 
-int main(int argc, char** argv)
+
+}//end namespace tests
+}//end namespace oceanbase
+
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   testing::InitGoogleTest(&argc, argv);

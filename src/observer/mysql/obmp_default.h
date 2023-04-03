@@ -15,15 +15,18 @@
 
 #include "observer/mysql/obmp_base.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 // this processor always returns NOT_SUPPORTED error to client
-class ObMPDefault : public ObMPBase {
+class ObMPDefault: public ObMPBase
+{
 public:
-  explicit ObMPDefault(const ObGlobalContext& gctx) : ObMPBase(gctx)
+  explicit ObMPDefault(const ObGlobalContext &gctx)
+      :ObMPBase(gctx)
   {}
-  virtual ~ObMPDefault()
-  {}
+  virtual ~ObMPDefault() {}
 
   int process()
   {
@@ -32,25 +35,19 @@ public:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "req_ is NULL", K(ret));
     } else {
-      const obmysql::ObMySQLRawPacket& pkt = reinterpret_cast<const obmysql::ObMySQLRawPacket&>(req_->get_packet());
+      const obmysql::ObMySQLRawPacket &pkt = reinterpret_cast<const obmysql::ObMySQLRawPacket&>(req_->get_packet());
       if (OB_FAIL(send_error_packet(common::OB_NOT_SUPPORTED, NULL))) {
         SERVER_LOG(WARN, "failed to send error packet", K(ret));
       } else {
         SERVER_LOG(WARN, "MySQL command not supported", "cmd", pkt.get_cmd());
       }
-      if (obmysql::OB_MYSQL_COM_STMT_SEND_LONG_DATA == pkt.get_cmd()) {
-        disconnect();
-      }
     }
     return ret;
   }
-  int deserialize()
-  {
-    return common::OB_SUCCESS;
-  }
+  int deserialize() { return common::OB_SUCCESS; }
 };
 
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
 #endif /* _OBMP_DEFAULT_H */

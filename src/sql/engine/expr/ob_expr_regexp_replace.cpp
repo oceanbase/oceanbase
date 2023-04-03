@@ -1,3 +1,4 @@
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -20,107 +21,142 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_regexp_count.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprRegexpReplace::ObExprRegexpReplace(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_REGEXP_REPLACE, N_REGEXP_REPLACE, MORE_THAN_ONE)
-{}
+ObExprRegexpReplace::ObExprRegexpReplace(ObIAllocator &alloc)
+  : ObStringExprOperator(alloc, T_FUN_SYS_REGEXP_REPLACE, N_REGEXP_REPLACE, MORE_THAN_ONE)
+{
+}
 
 ObExprRegexpReplace::~ObExprRegexpReplace()
-{}
-
-int ObExprRegexpReplace::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
+}
+
+int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
+                                           ObExprResType *types,
+                                           int64_t param_num,
+                                           common::ObExprTypeCtx &type_ctx) const
+{
   int ret = OB_SUCCESS;
+  ObRawExpr * raw_expr = type_ctx.get_raw_expr();
   CK(NULL != type_ctx.get_raw_expr());
+  int64_t max_allowed_packet = 0;
+  const ObRawExpr *real_expr = NULL;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(param_num < 2 || param_num > 6)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("param number of regexp_replace at least 2 and at most 6", K(ret), K(param_num));
+  } else if (OB_ISNULL(type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(type_ctx.get_session()));
+  } else if (OB_FAIL(type_ctx.get_session()->get_max_allowed_packet(max_allowed_packet))) {
+    LOG_WARN("failed to get max allowed packet", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(raw_expr->get_param_expr(0), real_expr))) {
+    LOG_WARN("fail to get real expr without cast", K(ret));
+  } else if (OB_ISNULL(real_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real expr is invalid", K(ret), K(real_expr));
   } else {
+    const ObExprResType &text = real_expr->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
       if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("the parameter is not castable", K(ret), K(i));
       }
     }
-    if (lib::is_oracle_mode()) {
-      // deduce length
-      ObExprResType& text = types[0];
-      int64_t to_len = types[2].get_length();
-      common::ObLength len = text.get_length();
-      int64_t offset = len * to_len;
-      len = static_cast<common::ObLength>(len + offset);
-      CK(len <= INT32_MAX);
-      type.set_length(static_cast<common::ObLength>(len));
-      auto input_params = make_const_carray(&types[0]);
-      const bool prefer_varchar = true;
-      OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), input_params, type, prefer_varchar));
-      OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, input_params));
-      OX(type.set_length_semantics(type_ctx.get_session()->get_actual_nls_length_semantics()));
-    } else {
-      const common::ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
-                                               : common::LS_BYTE);
-      if (types[0].is_lob()) {
-        type.set_type(types[0].get_type());
+    if (OB_SUCC(ret)) {
+      if (lib::is_oracle_mode()) {
+        //deduce length
+        int64_t to_len = types[2].get_length();
+        common::ObLength len = text.get_length();
+        int64_t offset = len * to_len;
+        len = static_cast<common::ObLength>(len + offset);
+        CK(len <= INT32_MAX);
+        type.set_length(static_cast<common::ObLength>(len));
+        auto input_params = make_const_carray(const_cast<ObExprResType*>(&text));
+        OZ(aggregate_string_type_and_charset_oracle(
+                *type_ctx.get_session(), input_params, type, PREFER_VAR_LEN_CHAR));
+        OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, input_params));
+        OX(type.set_length_semantics(type_ctx.get_session()->get_actual_nls_length_semantics()));
       } else {
-        type.set_varchar();
-        type.set_length_semantics(
-            types[0].is_varchar_or_char() ? types[0].get_length_semantics() : default_length_semantics);
+        const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
+                ? type_ctx.get_session()->get_actual_nls_length_semantics()
+                : common::LS_BYTE);
+        if (text.is_lob()) {
+          type.set_type(text.get_type());
+        } else {
+          type.set_clob();
+          type.set_length_semantics(text.is_varchar_or_char() ? text.get_length_semantics() : default_length_semantics);
+        }
+        //建表列的最大长度
+        type.set_length(max_allowed_packet);
+        ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
       }
-      type.set_length(OB_MAX_COLUMN_NAMES_LENGTH);
-      ret = aggregate_charsets_for_string_result(type, types, 1, type_ctx.get_coll_type());
     }
     if (OB_SUCC(ret)) {
-      switch (param_num) {  // because of regexp engine need utf8 code, here need reset calc collation type and can
-                            // implicit cast.
-        case 6:
+      bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_calc_collation_type());
+      bool need_utf8 = false;
+      switch (param_num) {
+        case 6/*match type*/:
           types[5].set_calc_type(ObVarcharType);
-        case 5:
-          if (lib::is_oracle_mode()) {
-            types[4].set_calc_type(ObNumberType);
-          } else {
-            type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
-            types[4].set_calc_type(ObIntType);
-          }
-        case 4:
-          if (lib::is_oracle_mode()) {
-            types[3].set_calc_type(ObNumberType);
-          } else {
-            type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
-            types[3].set_calc_type(ObIntType);
-          }
-        case 3:
+          types[5].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          types[5].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+        case 5/*occurence*/:
+          types[4].set_calc_type(lib::is_oracle_mode() ? ObNumberType : ObIntType);
+          types[4].set_scale(lib::is_oracle_mode() ? NUMBER_SCALE_UNKNOWN_YET : DEFAULT_SCALE_FOR_INTEGER);
+          types[4].set_precision(lib::is_oracle_mode() ? PRECISION_UNKNOWN_YET :
+                                            ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+        case 4/*position*/:
+          types[3].set_calc_type(lib::is_oracle_mode() ? ObNumberType : ObIntType);
+          types[3].set_scale(lib::is_oracle_mode() ? NUMBER_SCALE_UNKNOWN_YET : DEFAULT_SCALE_FOR_INTEGER);
+          types[3].set_precision(lib::is_oracle_mode() ? PRECISION_UNKNOWN_YET :
+                                          ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+          type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
+        case 3/*replace string*/:
           types[2].set_calc_type(ObVarcharType);
-          if (ObCharset::is_bin_sort(types[2].get_calc_collation_type())) {
-            types[2].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          types[2].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+          types[2].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+          need_utf8 = false;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(2), need_utf8))) {
+            LOG_WARN("fail to check need utf8", K(ret));
+          } else if (need_utf8) {
+            types[2].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
           } else {
-            types[2].set_calc_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+            types[2].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
           }
-          types[2].set_calc_collation_level(type.get_collation_level());
-        case 2:
+        case 2/*pattern and text*/:
           types[1].set_calc_type(ObVarcharType);
-          if (ObCharset::is_bin_sort(types[1].get_calc_collation_type())) {
-            types[1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-          } else {
-            types[1].set_calc_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-          }
-          types[1].set_calc_collation_level(type.get_collation_level());
+          types[1].set_calc_collation_level(CS_LEVEL_IMPLICIT);
           if (!types[0].is_clob()) {
             types[0].set_calc_type(ObVarcharType);
-            if (ObCharset::is_bin_sort(types[0].get_calc_collation_type())) {
-              types[0].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-            } else {
-              types[0].set_calc_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-            }
-            types[0].set_calc_collation_level(type.get_collation_level());
+          }
+          types[0].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+          need_utf8 = false;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
+            LOG_WARN("fail to check need utf8", K(ret));
+          } else if (need_utf8) {
+            types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+          } else {
+            types[1].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
+          }
+          need_utf8 = false;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
+            LOG_WARN("fail to check need utf8", K(ret));
+          } else if (need_utf8) {
+            types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+          } else {
+            types[0].set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
           }
         default:
           // already check before
@@ -131,329 +167,235 @@ int ObExprRegexpReplace::calc_result_typeN(
   return ret;
 }
 
-int ObExprRegexpReplace::calc_resultN(
-    common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const
+int ObExprRegexpReplace::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  ObString text, pattern, match_param, replacement_string;
-  int64_t position = 1, occurrence = 0;
-  bool is_flag_null = false;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("varchar buffer not init or exec ctx or physical plan ctx is NULL", K(expr_ctx.calc_buf_));
-  } else {
-    int idx = -1;
-    for (int i = 0; i < param_num; i++) {
-      // optional params is null, use default flags
-      if (objs[i].is_null()) {
-        if (share::is_oracle_mode() && (i == 5 || i == 2)) {
-        } else {
-          idx = idx > i ? idx : i;
-          is_flag_null = (i == 5);
-        }
-      }
-    }
-    for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-      if (!objs[i].is_null() && !is_type_valid(objs[i].get_type())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(i), K(objs[i]));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      switch (param_num) {
-        case 6:
-          if (!objs[5].is_null()) {
-            TYPE_CHECK(objs[5], ObVarcharType);
-            match_param = objs[5].get_string();
-          }
-        case 5:
-          if (!objs[4].is_null()) {
-            if (lib::is_oracle_mode()) {
-              TYPE_CHECK(objs[4], ObNumberType);
-            } else {
-              TYPE_CHECK(objs[4], ObIntType);
-            }
-            if (OB_FAIL(ObExprUtil::get_trunc_int64(objs[4], expr_ctx, occurrence))) {
-              LOG_WARN("fail get occurrence", K(occurrence), K(ret));
-              break;
-            } else if (OB_UNLIKELY(occurrence < 0)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("regexp_replace occurrence is invalid", K(ret), K(occurrence));
-              break;
-            }
-          }
-        case 4:
-          if (!objs[3].is_null()) {
-            if (lib::is_oracle_mode()) {
-              TYPE_CHECK(objs[3], ObNumberType);
-            } else {
-              TYPE_CHECK(objs[3], ObIntType);
-            }
-            if (OB_FAIL(ObExprUtil::get_trunc_int64(objs[3], expr_ctx, position))) {
-              LOG_WARN("fail get position", K(position), K(ret));
-              break;
-            } else if (OB_UNLIKELY(position < 0)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("regexp_replace position is invalid", K(ret), K(position));
-              break;
-            }
-          }
-        case 3:
-          if (!objs[2].is_null()) {
-            TYPE_CHECK(objs[2], ObVarcharType);
-            replacement_string = objs[2].get_string();
-          }
-        case 2:
-          if (!objs[1].is_null()) {
-            TYPE_CHECK(objs[1], ObVarcharType);
-            pattern = objs[1].get_string();
-            if (share::is_mysql_mode() && pattern.empty() && !is_flag_null) {  // compatible mysql
-              ret = OB_ERR_REGEXP_ERROR;
-              LOG_WARN("empty regex expression", K(ret));
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (!objs[0].is_null() && !objs[0].is_clob()) {
-            TYPE_CHECK(objs[0], ObVarcharType);
-            text = objs[0].get_string();
-          } else if (objs[0].is_clob()) {
-            text = objs[0].get_string();
-          }
-        default:
-          break;
-      }
-      ObExprRegexContext regexp_obj;
-      if (OB_SUCC(ret)) {
-        ObString ret_str;
-        if (objs[0].is_clob() && 0 == text.length()) {
-          result.set_lob_value(ObLongTextType, ret_str.ptr(), ret_str.length());
-        } else if (OB_FAIL(calc(ret_str,
-                       text,
-                       pattern,
-                       replacement_string,
-                       position,
-                       occurrence,
-                       result_type_.get_collation_type(),
-                       match_param,
-                       idx,
-                       &regexp_obj,
-                       *expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to cacl regexp_replace", K(ret), K(text), K(pattern), K(occurrence), K(match_param));
-        } else {
-          if (OB_ISNULL(ret_str.ptr())) {
-            result.set_null();
-          } else {
-            result.set_string(ObVarcharType, ret_str.ptr(), ret_str.length());
-          }
-        }
-      }
-    }
-  }
-  if (OB_LIKELY(OB_SUCCESS == ret && !result.is_null())) {
-    result.set_collation_type(ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4));
-    if (OB_FAIL(convert_result_collation(result_type_, result, expr_ctx.calc_buf_))) {
-      LOG_WARN("failed to convert result collation", K(ret));
-    } else {
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int ObExprRegexpReplace::calc(common::ObString& ret_str, const ObString& text, const ObString& pattern,
-    const ObString& replacement_string, int64_t position, int64_t occurrence, const ObCollationType cs_type,
-    const ObString& match_param, int null_argument_idx, ObExprRegexContext* regexp_ptr, ObExprStringBuf& string_buf)
-{
-  int ret = OB_SUCCESS;
-  // begin with '^'
-  bool from_begin = false;
-  // end with '$'
-  bool from_end = false;
-  ret_str.reset();
-  ObExprRegexContext* regexp_replace_ctx = regexp_ptr;
-  ObSEArray<uint32_t, 4> begin_locations(common::ObModIds::OB_SQL_EXPR_REPLACE, common::OB_MALLOC_NORMAL_BLOCK_SIZE);
-  int flags = 0, multi_flag = 0;
-  const bool reusable = false;
-  if (OB_ISNULL(regexp_replace_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("regexp ptr is null", K(ret));
-  } else if (!regexp_replace_ctx->is_inited()) {
-    if (OB_FAIL(ObExprRegexpCount::get_regexp_flags(cs_type, match_param, flags, multi_flag))) {
-      LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
-    } else if (OB_FAIL(regexp_replace_ctx->init(pattern, flags, string_buf, reusable))) {
-      LOG_WARN("fail to init regexp", K(flags));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (-1 != null_argument_idx) {
-      if ((null_argument_idx == 0 || (share::is_oracle_mode() && null_argument_idx == 1)) && text.length() != 0) {
-        ret_str = text;
-      } else {
-        ret_str = ObString();  // NULL
-      }
-    } else if (position <= 0 || occurrence < 0) {
-      if (share::is_oracle_mode()) {
-        ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-      }
-      LOG_WARN("position or occurrence is invalid", K(ret), K(position), K(occurrence));
-    } else {
-      if (OB_NOT_NULL(pattern)) {
-        const char* pat = pattern.ptr();
-        if ('^' == pat[0]) {
-          from_begin = true;
-        } else if ('$' == pat[pattern.length() - 1]) {
-          from_end = true;
-        }
-      }
-      if (OB_FAIL(begin_locations.push_back(position - 1))) {
-        LOG_WARN("begin_locations push_back error", K(ret));
-      } else if (from_begin && 1 != position && !multi_flag) {
-        ret_str = text;
-      } else {
-        ObSEArray<size_t, 4> byte_num;
-        ObSEArray<size_t, 4> byte_offsets;
-        if (OB_FAIL(ObExprUtil::get_mb_str_info(
-                text, ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4), byte_num, byte_offsets))) {
-          LOG_WARN("failed to get mb str info", K(ret));
-        } else if (multi_flag) {
-          if (from_begin && 1 != position) {
-            begin_locations.pop_back();
-          }
-          const char* text_ptr = text.ptr();
-          for (int64_t idx = position; OB_SUCC(ret) && idx < byte_offsets.count() - 1; ++idx) {
-            if (OB_UNLIKELY(byte_offsets.at(idx) >= text.length())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected error", K(byte_offsets.at(idx)), K(text.length()), K(ret));
-            } else if (text_ptr[byte_offsets.at(idx)] == '\n') {
-              if (OB_FAIL(begin_locations.push_back(idx + 1))) {
-                LOG_WARN("begin_locations push_back error", K(ret));
-              }
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(regexp_replace_ctx->replace_substr(text,
-                  replacement_string,
-                  occurrence,
-                  string_buf,
-                  byte_offsets,
-                  ret_str,
-                  from_begin,
-                  from_end,
-                  begin_locations))) {
-            LOG_WARN("fail to replace substr", K(ret), K(text), K(replacement_string));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprRegexpReplace::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
-{
-  int ret = OB_SUCCESS;
+  UNUSED(op_cg_ctx);
   CK(2 <= rt_expr.arg_cnt_ && rt_expr.arg_cnt_ <= 6);
-  rt_expr.eval_func_ = &eval_regexp_replace;
+  CK(raw_expr.get_param_count() >= 2);
+  if (OB_SUCC(ret)) {
+    const ObRawExpr *text = raw_expr.get_param_expr(0);
+    const ObRawExpr *pattern = raw_expr.get_param_expr(1);
+    if (OB_ISNULL(text) || OB_ISNULL(pattern)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(text), K(pattern), K(ret));
+    } else {
+      const bool const_text = text->is_const_expr();
+      const bool const_pattern = pattern->is_const_expr();
+      rt_expr.extra_ = (!const_text && const_pattern) ? 1 : 0;
+      rt_expr.eval_func_ = &eval_regexp_replace;
+      LOG_DEBUG("regexp reeplace expr cg", K(const_text), K(const_pattern), K(rt_expr.extra_));
+    }
+  }
   return ret;
 }
 
-int ObExprRegexpReplace::eval_regexp_replace(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprRegexpReplace::eval_regexp_replace(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* text = NULL;
-  ObDatum* pattern = NULL;
-  ObDatum* to = NULL;
-  ObDatum* position = NULL;
-  ObDatum* occurrence = NULL;
-  ObDatum* flags = NULL;
-  if (OB_FAIL(expr.eval_param_value(ctx, text, pattern, to, position, occurrence, flags))) {
+  ObDatum *text = NULL;
+  ObDatum *pattern = NULL;
+  ObDatum *to = NULL;
+  ObDatum *position = NULL;
+  ObDatum *occurrence = NULL;
+  ObDatum *match_type = NULL;
+  ObString res_replace;
+  bool is_no_pattern_to_replace = false;
+  bool need_convert = false;
+  ObCollationType res_coll_type = CS_TYPE_INVALID;
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+  if (OB_FAIL(expr.eval_param_value(ctx, text, pattern, to, position, occurrence, match_type))) {
     LOG_WARN("evaluate parameters failed", K(ret));
-  } else if (share::is_oracle_mode() && pattern->is_null()) {
-    expr_datum.set_datum(*text);
-  } else if (expr.args_[0]->datum_meta_.is_clob() && (0 == text->get_string().length())) {
-    expr_datum.set_datum(*text);
-  } else {
-    // %to and %flags may be null
-    bool is_flag_null = (NULL != flags && flags->is_null());
-    const bool null_result =
-        (text->is_null() || (NULL != position && position->is_null()) ||
-            (NULL != occurrence && occurrence->is_null()) ||
-            (share::is_mysql_mode() && NULL != pattern && pattern->is_null()) ||
-            (share::is_mysql_mode() && NULL != to && to->is_null()) || (share::is_mysql_mode() && is_flag_null));
-    // same with calc_resultN
-    int null_idx = -1;
-    for (int64_t i = 0; i < expr.arg_cnt_; i++) {
-      if (expr.locate_param_datum(ctx, i).is_null() && (i != 5 && i != 2)) {
-        null_idx = null_idx > i ? null_idx : i;
-      }
-    }
-    int64_t pos = 1;
-    int64_t occur = 0;
-    if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos)) ||
-        OB_FAIL(ObExprUtil::get_int_param_val(occurrence, occur))) {
-      LOG_WARN("get integer parameter value failed", K(ret));
-    } else if (pos < 0 || occur < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("regexp_replace position or occurrence is invalid", K(ret), K(pos), K(occur));
-    }
-    ObString to_str = (NULL != to && !to->is_null()) ? to->get_string() : ObString();
-    ObString match_param = (NULL != flags && !flags->is_null()) ? flags->get_string() : ObString();
-
-    ObString res;
-    ObExprRegexContext regexp_ctx;
-    ObIAllocator& alloc = ctx.get_reset_tmp_alloc();
-    if (OB_FAIL(ret)) {
-    } else if (share::is_mysql_mode() && !pattern->is_null() && pattern->get_string().empty() &&
-               !is_flag_null) {  // compatible mysql
-      ret = OB_ERR_REGEXP_ERROR;
-      LOG_WARN("empty regex expression", K(ret));
-    } else if (OB_FAIL(calc(res,
-                   text->get_string(),
-                   pattern->get_string(),
-                   to_str,
-                   pos,
-                   occur,
-                   expr.datum_meta_.cs_type_,
-                   match_param,
-                   null_idx,
-                   &regexp_ctx,
-                   alloc))) {
-      LOG_WARN("calc failed", K(ret));
-    } else if (null_result) {
+  } else if (lib::is_oracle_mode() && pattern->is_null()) {
+    if (text->is_null()) {
       expr_datum.set_null();
     } else {
-      if (res.empty() && lib::is_oracle_mode()) {
-        expr_datum.set_null();
-      } else {
-        ObExprStrResAlloc out_alloc(expr, ctx);
-        ObString out;
-        if (OB_FAIL(ObExprUtil::convert_string_collation(
-                res, expr.args_[0]->datum_meta_.cs_type_, out, expr.datum_meta_.cs_type_, out_alloc))) {
-          LOG_WARN("convert charset failed", K(ret));
-        } else {
-          if (out.ptr() == res.ptr()) {
-            // res is allocated in temporary allocator, deep copy here.
-            char* mem = expr.get_str_res_mem(ctx, res.length());
-            if (OB_ISNULL(mem)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("allocate memory failed", K(ret));
-            } else {
-              MEMCPY(mem, res.ptr(), res.length());
-              expr_datum.set_string(mem, res.length());
-            }
-          } else {
-            expr_datum.set_string(out.ptr(), out.length());
+      is_no_pattern_to_replace = true;
+      res_replace = text->get_string(); // if text is lob type, res_replace only get locator
+      res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+      need_convert = true;
+    }
+  } else if (expr.args_[0]->datum_meta_.is_clob()
+             && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, *text, expr.args_[0]->obj_meta_.has_lob_header())) {
+    expr_datum.set_datum(*text);
+  } else if (OB_UNLIKELY(expr.arg_cnt_ < 2 ||
+                         (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN) ||
+                         (expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(expr));
+  } else if (OB_UNLIKELY(expr.arg_cnt_ > 2 &&
+                         expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
+                         expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                         expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
+                         expr.args_[2]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(expr));
+  } else if (lib::is_mysql_mode() && !pattern->is_null() && pattern->get_string().empty()) {
+    if (NULL == match_type || !match_type->is_null()) {
+      ret = OB_ERR_REGEXP_ERROR;
+      LOG_WARN("empty regex expression", K(ret));
+    } else {
+      expr_datum.set_null();
+    }
+  } else {
+    int64_t pos = 1;
+    int64_t occur = 0;
+    bool null_result = (position != NULL && position->is_null()) ||
+                       (occurrence != NULL && occurrence->is_null()) ||
+                       (lib::is_mysql_mode() && match_type != NULL && match_type->is_null());
+    if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))
+        || OB_FAIL(ObExprUtil::get_int_param_val(occurrence, occur))) {
+      LOG_WARN("get integer parameter value failed", K(ret));
+    } else if (!null_result && (pos <= 0 || occur < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("regexp_replace position or occurrence is invalid", K(ret), K(pos), K(occur));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "use position or occurrence in regexp_replace");
+    } else {
+      ObString to_str = (NULL != to && !to->is_null()) ? to->get_string() : ObString();
+      ObString match_param = (NULL != match_type && !match_type->is_null()) ? match_type->get_string() : ObString();
+      ObExprRegexContext local_regex_ctx;
+      ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+      const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
+      uint32_t flags = 0;
+      bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
+      if (reusable) {
+        if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
+                    ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
+          if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
+            LOG_WARN("create expr regex context failed", K(ret), K(expr));
+          } else if (OB_ISNULL(regexp_ctx)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL context returned", K(ret));
           }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
+        LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
+      } else if (!pattern->is_null() && !null_result &&
+                  OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
+                                           ctx.exec_ctx_.get_my_session(),
+                                           pattern->get_string(), flags, reusable,
+                                           expr.args_[1]->datum_meta_.cs_type_))) {
+        LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
+      } else if (text->is_null() ||
+                 pattern->is_null() ||
+                 null_result ||
+                 (NULL != position && position->is_null()) ||
+                 (NULL != occurrence && occurrence->is_null()) ||
+                 (lib::is_mysql_mode() && NULL != pattern && pattern->is_null()) ||
+                 (lib::is_mysql_mode() && NULL != to && to->is_null()) ||
+                 (lib::is_mysql_mode() && NULL != match_type && match_type->is_null())) {
+        if (lib::is_oracle_mode() && !text->is_null() && !text->get_string().empty()) {
+          if ((NULL != position && position->is_null()) ||
+              (NULL != occurrence && occurrence->is_null())) {
+            expr_datum.set_null();
+          } else {
+            is_no_pattern_to_replace = true;
+            res_replace = text->get_string(); // if text is lob type, res_replace only get locator;
+            res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+            need_convert = true;
+          }
+        } else {
+          expr_datum.set_null();
+        }
+      } else {
+        ObString text_utf16;
+        ObString to_utf16;
+        ObString text_str;
+        if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+          if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, text_str))) {
+            LOG_WARN("get text string failed", K(ret));
+          }
+        } else {
+          text_str = text->get_string();
+        }
+        if (OB_FAIL(ret)) {
+        } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
+                   expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
+          res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI;
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf16,
+                                    res_coll_type, tmp_alloc))) {
+            LOG_WARN("convert charset failed", K(ret));
+          }
+        } else {
+          res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+          text_utf16 = text_str;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (expr.arg_cnt_ > 2 && (expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
+            expr.args_[2]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI)) {
+          if (OB_FAIL(ObExprUtil::convert_string_collation(to_str, expr.args_[2]->datum_meta_.cs_type_, to_utf16,
+                                    ObCharset::is_bin_sort(expr.args_[2]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI,
+                                    tmp_alloc))) {
+            LOG_WARN("convert charset failed", K(ret));
+          }
+        } else {
+          to_utf16 = to_str;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(regexp_ctx->replace(tmp_alloc, text_utf16, to_utf16, pos - 1,
+                                              occur, res_replace))) {
+          LOG_WARN("failed to regexp replace str", K(ret));
+        } else if (res_replace.empty() && lib::is_oracle_mode()) {
+          expr_datum.set_null();
+        } else {
+          need_convert = true;
         }
       }
     }
   }
 
+  if (OB_SUCC(ret) && need_convert) {
+    ObExprStrResAlloc out_alloc(expr, ctx);
+    ObString out;
+    if (is_no_pattern_to_replace && ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+      if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, res_replace))) {
+        LOG_WARN("get text string failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+      if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
+                                                       expr.datum_meta_.cs_type_, out_alloc))) {
+        LOG_WARN("convert charset failed", K(ret));
+      } else if (out.ptr() == res_replace.ptr()) {
+        // res_replace is allocated in temporary allocator, deep copy here.
+        char *mem = expr.get_str_res_mem(ctx, res_replace.length());
+        if (OB_ISNULL(mem)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          MEMCPY(mem, res_replace.ptr(), res_replace.length());
+          expr_datum.set_string(mem, res_replace.length());
+        }
+      } else {
+        expr_datum.set_string(out.ptr(), out.length());
+      }
+    } else { // output is text type
+      ObTextStringDatumResult text_res(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+      if (OB_FAIL(ObExprUtil::convert_string_collation(res_replace, res_coll_type, out,
+                                                       expr.datum_meta_.cs_type_, tmp_alloc))) {
+        LOG_WARN("convert charset failed", K(ret));
+      } else if (OB_FAIL(text_res.init(out.length()))) {
+        LOG_WARN("init lob result failed", K(ret), K(out.length()));
+      } else if (OB_FAIL(text_res.append(out.ptr(), out.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(out), K(text_res));
+      } else {
+        text_res.set_result();
+      }
+    }
+  }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

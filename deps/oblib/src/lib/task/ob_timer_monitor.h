@@ -17,12 +17,15 @@
 
 #include "lib/task/ob_timer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObTimerMonitor {
+class ObTimerMonitor
+{
 public:
-  static ObTimerMonitor& get_instance();
+  static ObTimerMonitor &get_instance();
 
   int init();
   int start();
@@ -30,13 +33,15 @@ public:
   void stop();
   void destroy();
 
-  void start_task(const int64_t thread_id, const int64_t start_time, const int64_t interval, const ObTimerTask* task);
+  void start_task(const int64_t thread_id,
+                  const int64_t start_time,
+                  const int64_t interval,
+                  const ObTimerTask* task);
   void end_task(const int64_t thread_id, const int64_t end_time);
   void dump(const bool print_trace);
 
   ObTimerMonitor(const ObTimerMonitor&) = delete;
   ObTimerMonitor& operator=(const ObTimerMonitor&) = delete;
-
 private:
   ObTimerMonitor();
   ~ObTimerMonitor();
@@ -47,22 +52,23 @@ private:
   static const int64_t MAX_MONITOR_THREAD_NUM = 256L;
   static const int64_t CHECK_INTERVAL = 10L * 1000L * 1000L;
 
-  class ObTimerMonitorTask : public ObTimerTask {
+  class ObTimerMonitorTask : public ObTimerTask
+  {
   public:
-    ObTimerMonitorTask(ObTimerMonitor& monitor);
+    ObTimerMonitorTask(ObTimerMonitor &monitor);
     virtual ~ObTimerMonitorTask();
     virtual void runTimerTask() override;
-
   private:
-    ObTimerMonitor& monitor_;
+    ObTimerMonitor &monitor_;
     int64_t running_cnt_;
   };
 
-  struct TimerRecord {
+  struct TimerRecord
+  {
     int64_t thread_id_;
     int64_t start_time_;
     int64_t interval_;
-    const ObTimerTask* task_;
+    const ObTimerTask *task_;
 
     int64_t task_cnt_;
     int64_t cost_time_;
@@ -79,7 +85,8 @@ private:
   int64_t tail_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+
+}
+}
 
 #endif /* OCEANBASE_COMMON_OB_TIMER_MONITOR_ */

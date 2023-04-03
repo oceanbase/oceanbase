@@ -15,19 +15,27 @@
 #include "observer/ob_server.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 
-namespace observer {
+namespace observer
+{
 
-ObAllVirtualSysTaskStatus::ObAllVirtualSysTaskStatus() : iter_(), task_id_(), svr_ip_(), comment_()
-{}
+ObAllVirtualSysTaskStatus::ObAllVirtualSysTaskStatus()
+  : iter_(),
+    task_id_(),
+    svr_ip_(),
+    comment_()
+{
+}
 
 ObAllVirtualSysTaskStatus::~ObAllVirtualSysTaskStatus()
-{}
+{
+}
 
-int ObAllVirtualSysTaskStatus::init(ObSysTaskStatMgr& status_mgr)
+int ObAllVirtualSysTaskStatus::init(ObSysTaskStatMgr &status_mgr)
 {
   int ret = OB_SUCCESS;
 
@@ -42,7 +50,7 @@ int ObAllVirtualSysTaskStatus::init(ObSysTaskStatMgr& status_mgr)
   return ret;
 }
 
-int ObAllVirtualSysTaskStatus::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualSysTaskStatus::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObSysTaskStat status;
@@ -61,9 +69,9 @@ int ObAllVirtualSysTaskStatus::inner_get_next_row(ObNewRow*& row)
   } else {
     const int64_t col_count = output_column_ids_.count();
     ObCollationType collcation_type = ObCharset::get_default_collation(ObCharset::get_default_charset());
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
+     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       uint64_t col_id = output_column_ids_.at(i);
-      switch (col_id) {
+      switch(col_id) {
         case OB_APP_MIN_COLUMN_ID: {
           // start_time
           cur_row_.cells_[i].set_timestamp(status.start_time_);
@@ -71,7 +79,7 @@ int ObAllVirtualSysTaskStatus::inner_get_next_row(ObNewRow*& row)
         }
         case OB_APP_MIN_COLUMN_ID + 1: {
           // task_type
-          const char* task_type = sys_task_type_to_str(status.task_type_);
+          const char *task_type = sys_task_type_to_str(status.task_type_);
           cur_row_.cells_[i].set_varchar(task_type);
           cur_row_.cells_[i].set_collation_type(collcation_type);
           break;
@@ -140,5 +148,5 @@ void ObAllVirtualSysTaskStatus::reset()
   iter_.reset();
   ObVirtualTableScannerIterator::reset();
 }
-}  // namespace observer
-}  // namespace oceanbase
+}//observer
+}//oceanbase

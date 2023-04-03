@@ -13,56 +13,68 @@
 #ifndef LIB_UTILITY_OB_TEMPLATE_UTILS_
 #define LIB_UTILITY_OB_TEMPLATE_UTILS_
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <bool c>
-struct BoolType {
+struct BoolType
+{
   static const bool value = c;
 };
 typedef BoolType<false> FalseType;
 typedef BoolType<true> TrueType;
 
 template <typename T>
-struct IsPointer : public FalseType {};
+struct IsPointer : public FalseType
+{ };
 
 template <typename T>
-struct IsPointer<T*> : public TrueType {};
+struct IsPointer<T*>: public TrueType
+{ };
+
 
 // std::conditional needed c++1x
 template <bool t, typename T, typename F>
 struct Conditional;
 template <typename T, typename F>
-struct Conditional<true, T, F> {
+struct Conditional<true, T, F>
+{
   typedef T type;
 };
 template <typename T, typename F>
-struct Conditional<false, T, F> {
+struct Conditional<false, T, F>
+{
   typedef F type;
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#define DEFINE_HAS_MEMBER(member)                               \
-  namespace oceanbase {                                         \
-  namespace common {                                            \
-  template <typename T>                                         \
-  struct __has_##member##__ {                                   \
-    typedef char yes[1];                                        \
-    typedef char no[2];                                         \
-                                                                \
-    template <typename _1>                                      \
-    static yes& chk(__typeof__(&_1::member));                   \
-                                                                \
-    template <typename>                                         \
-    static no& chk(...);                                        \
-                                                                \
+#define DEFINE_HAS_MEMBER(member) \
+  namespace oceanbase \
+  { \
+  namespace common \
+  { \
+  template <typename T> \
+  struct __has_##member##__ \
+  { \
+    typedef char yes[1]; \
+    typedef char no [2]; \
+    \
+    template <typename _1> \
+    static yes &chk(__typeof__(&_1::member)); \
+    \
+    template <typename> \
+    static no  &chk(...); \
+    \
     static bool const value = sizeof(chk<T>(0)) == sizeof(yes); \
-  };                                                            \
-  }                                                             \
+  }; \
+  } \
   }
 
-#define HAS_MEMBER(type, member) oceanbase::common::__has_##member##__<type>::value
+#define HAS_MEMBER(type, member) \
+  oceanbase::common::__has_##member##__<type>::value
 
 DEFINE_HAS_MEMBER(MAX_PRINTABLE_SIZE)
 DEFINE_HAS_MEMBER(to_cstring)
@@ -78,15 +90,19 @@ DEFINE_HAS_MEMBER(set_allocator)
 
 // CompileAssert is an implementation detail of COMPILE_ASSERT
 template <bool>
-struct CompileAssert {};
+struct CompileAssert
+{
+};
 
 // STATIC_ASSERT: A poor man's static_assert.  This doesn't handle
 // condition expressions that contain unparenthesized top-level commas;
 // write STATIC_ASSERT((expr), "comment") when needed.
-#define PRIVATE_CAT_IMMEDIATE(a, b) a##b
+#define PRIVATE_CAT_IMMEDIATE(a, b) a ## b
 #define PRIVATE_CAT(a, b) PRIVATE_CAT_IMMEDIATE(a, b)
-#define STATIC_ASSERT(expr, ignored)                            \
-  typedef CompileAssert<(static_cast<bool>(expr))> PRIVATE_CAT( \
-      static_assert_failed_at_line, __LINE__)[bool(expr) ? 1 : -1] __attribute__((unused))
+#define OLD_STATIC_ASSERT(expr, ignored) \
+  typedef CompileAssert<(static_cast<bool>(expr))> \
+  PRIVATE_CAT(static_assert_failed_at_line, __LINE__)[bool(expr) ? 1 : -1] __attribute__((unused))
+
+#define STATIC_ASSERT(expr, message) static_assert(expr, message)
 
 #endif /* LIB_UTILITY_OB_TEMPLATE_UTILS_ */

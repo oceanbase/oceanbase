@@ -25,26 +25,29 @@ using namespace oceanbase::sql::dtl;
 using namespace oceanbase::lib;
 using namespace oceanbase::share;
 
-class PinFunction {
+class PinFunction
+{
 public:
-  void operator()(ObDtlLocalFirstBufferCache* val)
+  void operator()(ObDtlLocalFirstBufferCache *val)
   {
     val->pin();
   }
 };
 
-int ObDtlLocalFirstBufferCache::ObDtlBufferClean::operator()(sql::dtl::ObDtlCacheBufferInfo* buffer_info)
+int ObDtlLocalFirstBufferCache::ObDtlBufferClean::operator()(sql::dtl::ObDtlCacheBufferInfo *buffer_info)
 {
   int ret = OB_SUCCESS;
-  ObDtlLinkedBuffer* linked_buffer = buffer_info->buffer();
+  ObDtlLinkedBuffer *linked_buffer = buffer_info->buffer();
   buffer_info->set_buffer(nullptr);
-  tenant_mem_mgr_->free(linked_buffer);
+  if (nullptr != linked_buffer) {
+    tenant_mem_mgr_->free(linked_buffer);
+  }
   buffer_info->reset();
   buffer_info_mgr_->free_buffer_info(buffer_info);
   return ret;
 }
 
-// make sure bucket_num, conrrent_cntk is power of 2
+//请保证bucket_num, conrrent_cnt是2的整数倍
 int ObDtlLocalFirstBufferCache::init(int64_t bucket_num, int64_t concurrent_cnt)
 {
   int ret = OB_SUCCESS;
@@ -71,11 +74,8 @@ int ObDtlLocalFirstBufferCache::init(int64_t bucket_num, int64_t concurrent_cnt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bitset cnt is invalid", K(ret), K(bitset_cnt_));
   } else {
-    LOG_DEBUG("trace filter bitset",
-        K(bitset_cnt_),
-        K(filter_bitset_.bit_count()),
-        K(filter_bitset_.bitset_word_count()),
-        KP(this));
+    LOG_DEBUG("trace filter bitset", K(bitset_cnt_), K(filter_bitset_.bit_count()),
+      K(filter_bitset_.bitset_word_count()), KP(this));
   }
   return ret;
 }
@@ -96,7 +96,8 @@ int ObDtlLocalFirstBufferCache::clean()
   LOG_DEBUG("trace local first buffer cache unpin", K(dfo_key_), K(get_pins()));
   unpin();
   // spin until there's no reference of this channel.
-  while (get_pins() > 0) {}
+  while (get_pins() > 0) {
+  }
   if (get_pins() < 0) {
     LOG_ERROR("unexpect status: pins is less than 0", K(get_pins()));
   }
@@ -108,39 +109,43 @@ int ObDtlLocalFirstBufferCache::clean()
   return ret;
 }
 
-int ObDtlLocalFirstBufferCache::cache_buffer(ObDtlCacheBufferInfo*& buffer)
+int ObDtlLocalFirstBufferCache::cache_buffer(ObDtlCacheBufferInfo *&buffer)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(buffer)) {
     uint64_t chan_id = buffer->chid();
-    if (OB_FAIL(buffer_map_.set_refactored(chan_id, buffer))) {
+#ifdef ERRSIM
+    // -17 enable failed set refactored
+    ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+#endif
+    int64_t tmp_ret = ret;
+    if (TP_ENABLE_FAILED_SET_HT == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to set refactor", K(ret), K(tmp_ret));
+    } else if (OB_FAIL(buffer_map_.set_refactored(chan_id, buffer))) {
       LOG_WARN("failed to insert buffer map", K(ret));
-    } else if (OB_FAIL(set_first_buffer(chan_id))) {
-      int tmp_ret = OB_SUCCESS;
-      ObDtlCacheBufferInfo* tmp_buffer = nullptr;
-      if (tmp_ret != buffer_map_.erase_refactored(chan_id, tmp_buffer)) {
-        LOG_WARN("failed to insert buffer map", K(ret), K(tmp_ret));
-      } else if (nullptr == tmp_buffer) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("buffer is null", K(ret), K(tmp_ret));
-      } else {
-        buffer = tmp_buffer;
-      }
-      LOG_WARN("failed to set first buffer", K(ret), K(chan_id), KP(chan_id));
     } else {
-      inc_first_buffer_cnt();
-      LOG_DEBUG("trace cache buffer", KP(chan_id), KP(this), K(dfo_key_));
+      buffer = nullptr;
+      if (TP_ENABLE_FAILED_SET_FIRST_BUFFER == tmp_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set first buffer", K(ret), K(tmp_ret));
+      } else if (OB_FAIL(set_first_buffer(chan_id))) {
+        LOG_WARN("failed to set first buffer", K(ret), K(chan_id), KP(chan_id));
+      } else {
+        inc_first_buffer_cnt();
+        LOG_DEBUG("trace cache buffer", KP(chan_id), KP(this), K(dfo_key_));
+      }
     }
   }
   return ret;
 }
 
-int ObDtlLocalFirstBufferCache::get_buffer(int64_t chid, ObDtlCacheBufferInfo*& buffer)
+int ObDtlLocalFirstBufferCache::get_buffer(int64_t chid, ObDtlCacheBufferInfo *&buffer)
 {
   int ret = OB_SUCCESS;
   buffer = nullptr;
   if (OB_FAIL(buffer_map_.erase_refactored(chid, buffer))) {
-    // LOG_WARN("failed to insert buffer map", K(ret));
+    //LOG_WARN("failed to insert buffer map", K(ret));
   } else if (OB_NOT_NULL(buffer)) {
     dec_first_buffer_cnt();
     LOG_DEBUG("trace get cached buffer", KP(buffer->chid()));
@@ -163,14 +168,14 @@ int ObDtlFirstBufferConcurrentCell::init(int32_t n_lock)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status", K(n_lock));
   } else {
-    char* buf = reinterpret_cast<char*>(allocator_.alloc(sizeof(ObLatch) * n_lock));
+    char *buf = reinterpret_cast<char*>(allocator_.alloc(sizeof(ObLatch) * n_lock));
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(n_lock), K(buf));
     } else {
       lock_ = reinterpret_cast<ObLatch*>(buf);
       for (int64_t i = 0; i < n_lock; ++i) {
-        ObLatch* lock = new (buf) ObLatch;
+        ObLatch *lock = new (buf) ObLatch;
         UNUSED(lock);
         buf += sizeof(ObLatch);
       }
@@ -187,7 +192,7 @@ void ObDtlFirstBufferConcurrentCell::reset()
   }
 }
 
-ObLatch& ObDtlFirstBufferConcurrentCell::get_lock(int32_t idx)
+ObLatch &ObDtlFirstBufferConcurrentCell::get_lock(int32_t idx)
 {
   return lock_[idx];
 }
@@ -197,7 +202,9 @@ ObLatch& ObDtlFirstBufferConcurrentCell::get_lock(int32_t idx)
 int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+  if (OB_FAIL(allocator_.init(
+                lib::ObMallocAllocator::get_instance(),
+                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("failed to init alocator", K(ret));
   } else {
     allocator_.set_label("DTLBufAlloc");
@@ -208,12 +215,11 @@ int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::init()
 
 void ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::destroy()
 {
-  ObDtlCacheBufferInfo* buffer_info = NULL;
-  DLIST_FOREACH_REMOVESAFE_NORET(node, free_list_)
-  {
+  ObDtlCacheBufferInfo *buffer_info = NULL;
+  DLIST_FOREACH_REMOVESAFE_NORET(node, free_list_) {
     buffer_info = node;
     if (nullptr != buffer_info->buffer()) {
-      LOG_ERROR("data buffer is not null", K(buffer_info));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "data buffer is not null", K(buffer_info));
       buffer_info->set_buffer(nullptr);
     }
     free_list_.remove(buffer_info);
@@ -222,12 +228,11 @@ void ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::destroy()
   }
 }
 
-int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::alloc_buffer_info(
-    int64_t chid, ObDtlCacheBufferInfo*& buffer_info)
+int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo *&buffer_info)
 {
   int ret = OB_SUCCESS;
   buffer_info = nullptr;
-  ObDtlCacheBufferInfo* res = NULL;
+  ObDtlCacheBufferInfo *res = NULL;
   {
     ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
     res = free_list_.remove_last();
@@ -241,7 +246,7 @@ int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::alloc_buffer_info(
     }
   }
   if (OB_SUCC(ret) && nullptr == res) {
-    void* buf = allocator_.alloc(sizeof(ObDtlCacheBufferInfo));
+    void *buf = allocator_.alloc(sizeof(ObDtlCacheBufferInfo));
     if (OB_ISNULL(buf)) {
       ret = OB_MALLOC_NORMAL_BLOCK_SIZE;
       LOG_WARN("alloc memory failed", K(ret));
@@ -251,13 +256,14 @@ int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::alloc_buffer_info(
     }
   }
   if (OB_SUCC(ret) && nullptr != res) {
+    // 由于会重用，本质上chid应该不可以改变，但即使改变，chid对应的hashtable也是对应的相同的hash cell
     res->chid() = chid;
     buffer_info = res;
   }
   return ret;
 }
 
-int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::free_buffer_info(ObDtlCacheBufferInfo* buffer_info)
+int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::free_buffer_info(ObDtlCacheBufferInfo *buffer_info)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(buffer_info)) {
@@ -282,14 +288,14 @@ int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::free_buffer_info(ObDtlCach
 int ObDtlBufferInfoManager::init()
 {
   int ret = OB_SUCCESS;
-  char* buf = reinterpret_cast<char*>(allocator_.alloc(ALLOCATOR_CNT * sizeof(ObDtlBufferInfoAllocator)));
+  char *buf = reinterpret_cast<char*>(allocator_.alloc(ALLOCATOR_CNT * sizeof(ObDtlBufferInfoAllocator)));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
     conrrent_allocators_ = reinterpret_cast<ObDtlBufferInfoAllocator*>(buf);
     for (int64_t i = 0; i < ALLOCATOR_CNT && OB_SUCC(ret); ++i) {
-      ObDtlBufferInfoAllocator* alloc = new (buf) ObDtlBufferInfoAllocator;
+      ObDtlBufferInfoAllocator *alloc = new (buf) ObDtlBufferInfoAllocator;
       if (OB_FAIL(alloc->init())) {
         LOG_WARN("failed to init allocator");
       }
@@ -306,7 +312,7 @@ void ObDtlBufferInfoManager::destroy()
 {
   if (OB_NOT_NULL(conrrent_allocators_)) {
     for (int64_t i = 0; i < ALLOCATOR_CNT; ++i) {
-      ObDtlBufferInfoAllocator& alloc = conrrent_allocators_[i];
+      ObDtlBufferInfoAllocator &alloc = conrrent_allocators_[i];
       alloc.destroy();
     }
     allocator_.free(conrrent_allocators_);
@@ -314,7 +320,7 @@ void ObDtlBufferInfoManager::destroy()
   }
 }
 
-int ObDtlBufferInfoManager::alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo*& buffer_info)
+int ObDtlBufferInfoManager::alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo *&buffer_info)
 {
   int ret = OB_SUCCESS;
   buffer_info = nullptr;
@@ -325,7 +331,7 @@ int ObDtlBufferInfoManager::alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo
   return ret;
 }
 
-int ObDtlBufferInfoManager::free_buffer_info(ObDtlCacheBufferInfo* buffer_info)
+int ObDtlBufferInfoManager::free_buffer_info(ObDtlCacheBufferInfo *buffer_info)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(buffer_info)) {
@@ -339,13 +345,9 @@ int ObDtlBufferInfoManager::free_buffer_info(ObDtlCacheBufferInfo* buffer_info)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ObDtlLocalFirstBufferCacheManager::ObDtlLocalFirstBufferCacheManager(
-    uint64_t tenant_id, ObDtlTenantMemManager* tenant_mem_mgr)
-    : tenant_id_(tenant_id),
-      allocator_(tenant_id),
-      tenant_mem_mgr_(tenant_mem_mgr),
-      buffer_info_mgr_(allocator_),
-      hash_table_(allocator_)
+ObDtlLocalFirstBufferCacheManager::ObDtlLocalFirstBufferCacheManager(uint64_t tenant_id, ObDtlTenantMemManager *tenant_mem_mgr) :
+  tenant_id_(tenant_id), allocator_(tenant_id), tenant_mem_mgr_(tenant_mem_mgr),
+  buffer_info_mgr_(allocator_), hash_table_(allocator_)
 {}
 
 ObDtlLocalFirstBufferCacheManager::~ObDtlLocalFirstBufferCacheManager()
@@ -356,7 +358,9 @@ ObDtlLocalFirstBufferCacheManager::~ObDtlLocalFirstBufferCacheManager()
 int ObDtlLocalFirstBufferCacheManager::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+  if (OB_FAIL(allocator_.init(
+                lib::ObMallocAllocator::get_instance(),
+                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
     allocator_.set_label(ObModIds::OB_SQL_DTL);
@@ -377,7 +381,7 @@ void ObDtlLocalFirstBufferCacheManager::destroy()
   tenant_mem_mgr_ = nullptr;
 }
 
-int ObDtlLocalFirstBufferCacheManager::get_buffer_cache(ObDtlDfoKey& key, ObDtlLocalFirstBufferCache*& buf_cache)
+int ObDtlLocalFirstBufferCacheManager::get_buffer_cache(ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *&buf_cache)
 {
   int ret = OB_SUCCESS;
   buf_cache = nullptr;
@@ -388,7 +392,7 @@ int ObDtlLocalFirstBufferCacheManager::get_buffer_cache(ObDtlDfoKey& key, ObDtlL
   return ret;
 }
 
-int ObDtlLocalFirstBufferCacheManager::erase_buffer_cache(ObDtlDfoKey& key, ObDtlLocalFirstBufferCache*& buf_cache)
+int ObDtlLocalFirstBufferCacheManager::erase_buffer_cache(ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *&buf_cache)
 {
   int ret = OB_SUCCESS;
   buf_cache = nullptr;
@@ -402,18 +406,18 @@ int ObDtlLocalFirstBufferCacheManager::erase_buffer_cache(ObDtlDfoKey& key, ObDt
 
 // firstly, find the buffer cache, if no buffer cache, then don't cache
 // secondly, cache first buffer
-int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuffer*& data_buffer, bool attach)
+int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach)
 {
   int ret = OB_SUCCESS;
-  ObDtlLocalFirstBufferCache* buf_cache = nullptr;
-  ObDtlDfoKey& key = data_buffer->get_dfo_key();
+  ObDtlLocalFirstBufferCache *buf_cache = nullptr;
+  ObDtlDfoKey &key = data_buffer->get_dfo_key();
   if (OB_FAIL(get_buffer_cache(key, buf_cache))) {
     LOG_DEBUG("failed to get buffer cache", K(key), KP(chid));
   } else if (OB_ISNULL(buf_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer cache is null", KP(chid), K(attach));
   } else {
-    ObDtlCacheBufferInfo* buf_info = nullptr;
+    ObDtlCacheBufferInfo *buf_info = nullptr;
     if (OB_FAIL(buffer_info_mgr_.alloc_buffer_info(chid, buf_info))) {
       LOG_WARN("failed to alloc buffer info", KP(chid), K(key));
     } else if (nullptr != buf_info) {
@@ -421,7 +425,18 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
         buf_info->set_buffer(data_buffer);
         data_buffer = nullptr;
       } else {
-        ObDtlLinkedBuffer* buffer = tenant_mem_mgr_->alloc(chid, data_buffer->size());
+        ObDtlLinkedBuffer *buffer = nullptr;
+    #ifdef ERRSIM
+        // -16 enable failed to alloc memory
+        ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+    #endif
+        if (OB_SUCC(ret) || TP_ENABLE_FAILED_ALLOC_MEM != ret) {
+          ret = OB_SUCCESS;
+          buffer = tenant_mem_mgr_->alloc(chid, data_buffer->size());
+        } else {
+          ret = OB_SUCCESS;
+          buffer = nullptr;
+        }
         if (nullptr != buffer) {
           ObDtlLinkedBuffer::assign(*data_buffer, buffer);
           buf_info->set_buffer(buffer);
@@ -442,13 +457,10 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       if (nullptr != buf_info) {
-        if (nullptr == data_buffer) {
-          // if cache buffer failed, should still send it. Can't just free it
-          data_buffer = buf_info->buffer();
-          buf_info->set_buffer(nullptr);
-        }
-        if (!attach && OB_NOT_NULL(data_buffer)) {
-          tenant_mem_mgr_->free(data_buffer);
+        ObDtlLinkedBuffer *buffer = buf_info->buffer();
+        buf_info->set_buffer(nullptr);
+        if (nullptr != buffer) {
+          tenant_mem_mgr_->free(buffer);
         }
         if (OB_SUCCESS != (tmp_ret = buffer_info_mgr_.free_buffer_info(buf_info))) {
           LOG_WARN("failed to free buffer info", K(ret), K(tmp_ret));
@@ -461,12 +473,12 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
 }
 
 int ObDtlLocalFirstBufferCacheManager::get_cached_buffer(
-    ObDtlLocalFirstBufferCache* buf_cache, int64_t chid, ObDtlLinkedBuffer*& linked_buffer)
+  ObDtlLocalFirstBufferCache *buf_cache, int64_t chid, ObDtlLinkedBuffer *&linked_buffer)
 {
   int ret = OB_SUCCESS;
   linked_buffer = nullptr;
   if (OB_NOT_NULL(buf_cache)) {
-    ObDtlCacheBufferInfo* buffer_info = nullptr;
+    ObDtlCacheBufferInfo *buffer_info = nullptr;
     if (OB_FAIL(buf_cache->get_buffer(chid, buffer_info))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -486,7 +498,7 @@ int ObDtlLocalFirstBufferCacheManager::get_cached_buffer(
   return ret;
 }
 
-int ObDtlLocalFirstBufferCacheManager::register_first_buffer_cache(ObDtlLocalFirstBufferCache* buf_cache)
+int ObDtlLocalFirstBufferCacheManager::register_first_buffer_cache(ObDtlLocalFirstBufferCache *buf_cache)
 {
   int ret = OB_SUCCESS;
   buf_cache->set_buffer_mgr(tenant_mem_mgr_, &buffer_info_mgr_);
@@ -500,10 +512,11 @@ int ObDtlLocalFirstBufferCacheManager::register_first_buffer_cache(ObDtlLocalFir
 }
 
 int ObDtlLocalFirstBufferCacheManager::unregister_first_buffer_cache(
-    ObDtlDfoKey& key, ObDtlLocalFirstBufferCache* org_buf_cache)
+  ObDtlDfoKey &key,
+  ObDtlLocalFirstBufferCache *org_buf_cache)
 {
   int ret = OB_SUCCESS;
-  ObDtlLocalFirstBufferCache* buf_cache = nullptr;
+  ObDtlLocalFirstBufferCache *buf_cache = nullptr;
   if (OB_ISNULL(org_buf_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dtl buffer cache is null", K(ret));
@@ -513,9 +526,8 @@ int ObDtlLocalFirstBufferCacheManager::unregister_first_buffer_cache(
     if (OB_ISNULL(buf_cache)) {
       LOG_DEBUG("buffer cache is null");
     } else if (org_buf_cache != buf_cache) {
-      LOG_ERROR("dtl buffer cache is not match",
-          K(buf_cache->get_first_buffer_key()),
-          K(org_buf_cache->get_first_buffer_key()));
+      LOG_ERROR("dtl buffer cache is not match", K(buf_cache->get_first_buffer_key()),
+        K(org_buf_cache->get_first_buffer_key()));
     } else {
       org_buf_cache->clean();
       LOG_DEBUG("trace destroy bufffer cache");

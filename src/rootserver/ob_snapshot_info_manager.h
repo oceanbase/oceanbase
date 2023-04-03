@@ -15,41 +15,72 @@
 
 #include "share/ob_snapshot_table_proxy.h"
 #include "lib/net/ob_addr.h"
-namespace oceanbase {
-namespace share {
-class ObSnapshotInfo;
+#include "share/scn.h"
+namespace oceanbase
+{
+namespace common
+{
+class ObMySQLProxy;
 }
-namespace rootserver {
+namespace share
+{
+class ObSnapshotInfo;
+  class SCN;
+}
+namespace rootserver
+{
 class ObZoneManager;
-class ObSnapshotInfoManager {
+class ObSnapshotInfoManager
+{
 public:
-  ObSnapshotInfoManager() : self_addr_()
-  {}
-  virtual ~ObSnapshotInfoManager()
-  {}
-  int init(const common::ObAddr& self_addr);
-  int acquire_snapshot(common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot);
-  int release_snapshot(common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot);
-  int acquire_snapshot_for_building_index(
-      common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot, const int64_t index_table_id);
-  int get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
-      const char* extra_info, share::ObSnapshotInfo& snapshot_info);
-  int get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
-      const int64_t snapshot_ts, share::ObSnapshotInfo& snapshot_info);
+  ObSnapshotInfoManager() : self_addr_() {}
+  virtual ~ObSnapshotInfoManager() {}
+  int init(const common::ObAddr &self_addr);
+  int acquire_snapshot(common::ObMySQLTransaction &trans,
+                       const uint64_t tenant_id,
+                       const share::ObSnapshotInfo &snapshot);
+  int release_snapshot(common::ObMySQLTransaction &trans,
+                       const uint64_t tenant_id,
+                       const share::ObSnapshotInfo &snapshot);
+  int get_snapshot(common::ObMySQLProxy &proxy,
+                   const uint64_t tenant_id,
+                   share::ObSnapShotType snapshot_type,
+                   const char *extra_info,
+                   share::ObSnapshotInfo &snapshot_info);
+  int get_snapshot(common::ObMySQLProxy &proxy,
+                   const uint64_t tenant_id,
+                   share::ObSnapShotType snapshot_type,
+                   const share::SCN &snapshot_scn,
+                   share::ObSnapshotInfo &snapshot_info);
 
-  int check_restore_point(common::ObMySQLProxy& proxy, const int64_t tenant_id, const int64_t table_id, bool& is_exist);
-  int get_snapshot_count(
-      common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t& count);
-
-private:
-  int set_index_building_snapshot(
-      common::ObMySQLTransaction& trans, const int64_t index_table_id, const int64_t snapshot_ts);
-
-  DISALLOW_COPY_AND_ASSIGN(ObSnapshotInfoManager);
+  int check_restore_point(common::ObMySQLProxy &proxy,
+                          const uint64_t tenant_id,
+                          const int64_t table_id,
+                          bool &is_exist);
+  int get_snapshot_count(common::ObMySQLProxy &proxy,
+                         const uint64_t tenant_id,
+                         share::ObSnapShotType snapshot_type,
+                         int64_t &count);
+  int batch_acquire_snapshot(
+      common::ObMySQLProxy &proxy,
+      share::ObSnapShotType snapshot_type,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const share::SCN &snapshot_scn,
+      const char *comment,
+      const common::ObIArray<ObTabletID> &tablet_ids);
+  int batch_release_snapshot_in_trans(
+      common::ObMySQLTransaction &trans,
+      share::ObSnapShotType snapshot_type,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const share::SCN &snapshot_scn,
+      const common::ObIArray<ObTabletID> &tablet_ids);
 
 private:
   common::ObAddr self_addr_;
+  DISALLOW_COPY_AND_ASSIGN(ObSnapshotInfoManager);
 };
-}  // namespace rootserver
-}  // namespace oceanbase
+} //end rootserver
+} //end oceanbase
 #endif

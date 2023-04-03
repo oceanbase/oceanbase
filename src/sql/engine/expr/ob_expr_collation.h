@@ -14,19 +14,23 @@
 #define OCEANBASE_SQL_OB_EXPR_COLLATION_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 /// Returns the character set of the string argument.
-class ObExprCharset : public ObStringExprOperator {
+class ObExprCharset: public ObStringExprOperator
+{
 public:
-  // ObExprCharset();
-  explicit ObExprCharset(common::ObIAllocator& alloc);
+  //ObExprCharset();
+  explicit  ObExprCharset(common::ObIAllocator &alloc);
   virtual ~ObExprCharset();
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
+                       ObExpr &rt_expr) const;
 private:
   // types and constants
 private:
@@ -37,17 +41,20 @@ private:
   // data members
 };
 
+
 /// Returns the collation of the string argument.
-class ObExprCollation : public ObStringExprOperator {
+class ObExprCollation: public ObStringExprOperator
+{
 public:
-  // ObExprCollation();
-  explicit ObExprCollation(common::ObIAllocator& alloc);
+  //ObExprCollation();
+  explicit  ObExprCollation(common::ObIAllocator &alloc);
   virtual ~ObExprCollation();
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
+                       ObExpr &rt_expr) const;
 private:
   // types and constants
 private:
@@ -60,16 +67,18 @@ private:
 
 /// Returns the collation coercibility value of the string argument.
 /// @see ObCollationLevel
-class ObExprCoercibility : public ObExprOperator {
+class ObExprCoercibility: public ObExprOperator
+{
 public:
-  // ObExprCoercibility();
-  explicit ObExprCoercibility(common::ObIAllocator& alloc);
+  //ObExprCoercibility();
+  explicit  ObExprCoercibility(common::ObIAllocator &alloc);
   virtual ~ObExprCoercibility();
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
+                       ObExpr &rt_expr) const;
 private:
   // types and constants
 private:
@@ -83,18 +92,19 @@ private:
 /// change collation of the input argument
 /// used to implement COLLATE clause, e.g. C1 collate utf8_general_ci, 'abc' collate utf8_bin
 /// format: SET_COLLATION(expr, utf8_general_ci)
-class ObExprSetCollation : public ObExprOperator {
+class ObExprSetCollation: public ObExprOperator
+{
 public:
-  // ObExprSetCollation();
-  explicit ObExprSetCollation(common::ObIAllocator& alloc);
+  //ObExprSetCollation();
+  explicit  ObExprSetCollation(common::ObIAllocator &alloc);
   virtual ~ObExprSetCollation();
 
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
+                       ObExpr &rt_expr) const;
 private:
   // types and constants
 private:
@@ -107,15 +117,18 @@ private:
 
 /// Returns the meta used for comparison
 /// @note for debug purpose
-class ObExprCmpMeta : public ObStringExprOperator {
+class ObExprCmpMeta: public ObStringExprOperator
+{
 public:
-  // ObExprCmpMeta();
-  explicit ObExprCmpMeta(common::ObIAllocator& alloc);
+  //ObExprCmpMeta();
+  explicit  ObExprCmpMeta(common::ObIAllocator &alloc);
   virtual ~ObExprCmpMeta();
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
+                       ObExpr &rt_expr) const;
 
 private:
   // types and constants
@@ -127,7 +140,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_EXPR_COLLATION_H_
+#endif //OCEANBASE_SQL_OB_EXPR_COLLATION_H_

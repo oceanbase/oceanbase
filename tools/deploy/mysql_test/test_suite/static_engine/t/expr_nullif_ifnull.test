@@ -1,0 +1,250 @@
+#owner: peihan.dph
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn_admin;
+--sleep 2
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned,
+    c15 double, c16 double unsigned,
+    c17 decimal, c18 decimal unsigned,
+    c19 datetime, c20 timestamp,
+    c21 varchar(30), c22 char(30), c_null int);
+
+insert into t1 values(1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    3.5, 4.5,
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00',
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -3.5, 4.5,
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00',
+    '-9.5', '10.5', null);
+
+--sleep 2
+
+#--explain_protocol 2
+eval select nullif(null, null), nullif(1, null), nullif(null, 1);
+eval select ifnull(null, null), ifnull(1, null), ifnull(null, 1);
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, nullif(c$left, c$right), ifnull(c$left, c$right) from t1;
+    eval select c$left, nullif(c$left, c$left) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v1;
+--enable_warnings
+create table t1 (c1 datetime(5), c2 year);
+insert into t1 values('1901-01-01', 1901);
+--echo // transformed to case when expr
+--explain_protocol 2
+select nullif(c1, c2) from t1;
+select nullif(c2, c1) from t1;
+select nullif(c1, c1) from t1;
+select nullif(c2, c2) from t1;
+--explain_protocol 0
+
+--echo // nullif改写不应该影响show create view，所以show create view还应该是nullif，而非case expr
+create view v1 as select nullif(c1, c2) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c2, c1) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(year)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c1, c1) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c2, c2) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+drop view v1;
+
+select collation(nullif('a', binary'b'));
+select NULLIF(14152561829011783680, 1);
+
+drop table t1;
+create table t1 (
+  col_decimal_20_0_unsigned decimal(20,0) unsigned,
+  col_decimal_30_5_signed decimal(30,5) signed,
+  col_tinyint_unsigned tinyint unsigned);
+select mod( nullif( col_decimal_20_0_unsigned, col_decimal_30_5_signed ), col_tinyint_unsigned ) from t1;
+
+--echo // check param num
+select nullif(1) from dual;
+select nullif(1, 2) from dual;
+select nullif(1, 2, 3) from dual;
+select nullif(1, 2, 3, 4) from dual;
+select nullif(1, 2, 3, 4, 5) from dual;
+select nullif(1, 2, 3, 4, 5, 6) from dual;
+select nullif(1, 2, 3, 4, 5, 6, 7) from dual;
+
+drop table t1;
+select 1 from dual where null <= nullif(null,null);
+
+select ifnull(null, 15531789214893998080);
+select ifnull(15531789214893998080, 0);
+SELECT trim(Ifnull(15531789214893998080, 0)) as X from dual;
+create table t1 as select ifnull(15531789214893998080, 0) ;
+desc t1;
+
+drop table t1;
+
+create table t1(z0_test0 enum('中文字符','123456','ABCabc','!@#$%^&*','2020-10-10','2020-10-10 10:10:10','10:10:10') not NULL);
+
+insert into t1 values('中文字符');
+insert into t1 values('123456');
+insert into t1 values('ABCabc');
+insert into t1 values('!@#$%^&*');
+insert into t1 values('2020-10-10');
+insert into t1 values('2020-10-10 10:10:10');
+insert into t1 values('10:10:10');
+
+select nullif(z0_test0,'中文字符') from t1;
+drop table t1;
+--sleep 2
+
+
+
+--echo ##bugfix:
+create table t1 (pk double) PARTITION BY key (pk) partitions 1;
+insert into t1 values( NULLIF( 100.2345, 1 ));
+select * from t1;
+drop table t1;
+
+--disable_result_log
+select
+  subq_0.c3,
+  nullif(subq_0.c3, cast(32 as decimal)) as c14
+from
+  (
+    select
+          cast(
+              (
+                select
+                  help_keyword_id
+                from
+                  mysql.help_keyword
+                limit
+                  1 offset 4
+              ) as DECIMAL
+      ) as c3
+  ) as subq_0;
+--enable_result_log
+
+
+##bugfix:
+create table t1 (pk int);
+insert into t1 values (1);
+select pk, ( NULLIF( 14152561829011783680, INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) ) ) s , INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) s2 from t1;
+drop table t1;
+create table t1 as select NULLIF( 14152561829011783680, 1) c1, NULLIF( 14152561829011783680, 14152561829011783680) c2 from dual;
+desc t1;
+select * from t1;
+drop table t1;
+
+create table t1(c1 enum('a', 'b'));
+insert into t1 values('a');
+select c1, nullif(c1, 'a'), nullif(c1, 0), nullif(c1, 1) from t1;
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 as select c1, nullif(c1, 'a') c2, nullif(c1, 0) c3, nullif(c1, 1) c4 from t1;
+desc t2;
+select * from t2;
+drop table t1,t2;
+
+##
+select collation(nullif('a', binary 'b'));
+
+## test nullif with enumset parameter.
+create table t1(d1 enum('中文字符','123456','ABCabc','2020','2020-10-10','2020-10-10 10:10:10','10:10:10'),
+                d2 set('中文字符','123456','ABCabc','2020','2020-10-10','2020-10-10 10:10:10','10:10:10'));
+insert into t1 values('中文字符', '中文字符');
+insert into t1 values('123456', '123456');
+insert into t1 values('ABCabc', 'ABCabc');
+insert into t1 values('2020', '2020');
+insert into t1 values('2020-10-10', '2020-10-10');
+insert into t1 values('2020-10-10 10:10:10', '2020-10-10 10:10:10');
+insert into t1 values('10:10:10', '10:10:10');
+insert into t1 values(null, null);
+
+create table t2(c1 int, c2 int unsigned, c3 decimal, c4 date, c5 datetime, c6 time, c7 year, c8 varchar(100));
+insert into t2 values(1, 2, 3, '2020-10-10', '2020-10-10 10:10:10', '10:10:10', 2020, '中文字符');
+insert into t2 values(123456, 123456, 123456, '2020-12-12', '2020-12-12 10:10:10', '12:12:12', 2022, 'ABCabc');
+insert into t2 values(null, null, null, null, null, null, null, null);
+
+select d1, d2, nullif(d1, null), nullif(null, d1), nullif(d2, null), nullif(null, d2) from t1;
+select d1, c1, nullif(d1, c1), nullif(c1, d1) from t1, t2 order by d1, c1;
+select d1, c2, nullif(d1, c2), nullif(c2, d1) from t1, t2 order by d1, c1;
+select d1, c3, nullif(d1, c3), nullif(c3, d1) from t1, t2 order by d1, c1;
+select d1, c4, nullif(d1, c4), nullif(c4, d1) from t1, t2 order by d1, c1;
+select d1, c5, nullif(d1, c5), nullif(c5, d1) from t1, t2 order by d1, c1;
+select d1, c6, nullif(d1, c6), nullif(c6, d1) from t1, t2 order by d1, c1;
+select d1, c7, nullif(d1, c7), nullif(c7, d1) from t1, t2 order by d1, c1;
+select d1, c8, nullif(d1, c8), nullif(c8, d1) from t1, t2 order by d1, c1;
+
+select d2, c1, nullif(d2, c1), nullif(c1, d2) from t1, t2 order by d2, c1;
+select d2, c2, nullif(d2, c2), nullif(c2, d2) from t1, t2 order by d2, c1;
+select d2, c3, nullif(d2, c3), nullif(c3, d2) from t1, t2 order by d2, c1;
+select d2, c4, nullif(d2, c4), nullif(c4, d2) from t1, t2 order by d2, c1;
+select d2, c5, nullif(d2, c5), nullif(c5, d2) from t1, t2 order by d2, c1;
+select d2, c6, nullif(d2, c6), nullif(c6, d2) from t1, t2 order by d2, c1;
+select d2, c7, nullif(d2, c7), nullif(c7, d2) from t1, t2 order by d2, c1;
+select d2, c8, nullif(d2, c8), nullif(c8, d2) from t1, t2 order by d2, c1;

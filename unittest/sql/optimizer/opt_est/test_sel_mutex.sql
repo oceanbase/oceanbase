@@ -1,3 +1,4 @@
+# 目前只针对OR有检查独立性的操作，且只针对包含单列的列
 #define p_nn = (10-5)/10 = 0.5
 #define p_e = 1/5*0.5 = 0.1
 p_nn = 0.5
@@ -10,6 +11,7 @@ select c1 from t1 where c1 > 0;
 p_e + p_e = 0.2
 select c1 from t1 where c1 = 1 or c1 = 2;
 
+# 不受影响
 p_e = 0.1
 select c1 from t1 where c1 = 1;
 p_e + p_e - p_e * p_e = 0.19
@@ -18,6 +20,7 @@ p_e + p_nn - p_nn * p_e = 0.55
 select c1 from t1 where c1 > 0 or c1 = 1;
 
 # complex
+# 这个还是不太准, 不过符合预期
 # (p_e + p_e) and (p_e + p_e - p_e * p_e) = 4 * p_e ^ 2 - 2 * p_e ^ 3 = 0.038
 p_e * p_e + p_e - p_e * p_e * p_e = 0.109
 select c1 from t1 where (c1 = 1 and c2 = 1) or c1 = 2;

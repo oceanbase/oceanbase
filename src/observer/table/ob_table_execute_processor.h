@@ -16,7 +16,12 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
+#include "ob_table_context.h"
+#include "ob_table_executor.h"
+#include "ob_table_cache.h"
+#include "sql/plan_cache/ob_cache_object_factory.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "ob_table_op_wrapper.h"
 
 namespace oceanbase
 {
@@ -42,23 +47,47 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
+  int init_tb_ctx();
   int check_arg2() const;
-  int revert_get_ctx();
-  int get_partition_id(uint64_t table_id, const ObRowkey &rowkey, uint64_t &partition_id);
+  int get_tablet_id(uint64_t table_id, const ObRowkey &rowkey, common::ObTabletID &tablet_id);
+  template<int TYPE>
+  int process_dml_op()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(check_arg2())) {
+      SERVER_LOG(WARN, "fail to check arg", K(ret));
+    } else if (OB_FAIL(init_tb_ctx())) {
+      SERVER_LOG(WARN, "fail to init tb ctx", K(ret));
+    } else if (OB_FAIL(start_trans(false, /* is_readonly */
+                                  sql::stmt::T_INSERT,
+                                  arg_.consistency_level_,
+                                  tb_ctx_.get_table_id(),
+                                  tb_ctx_.get_ls_id(),
+                                  get_timeout_ts()))) {
+      SERVER_LOG(WARN, "fail to start trans", K(ret));
+    } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+      SERVER_LOG(WARN, "fail to init trans", K(ret));
+    } else if (OB_FAIL(table::ObTableOpWrapper::process_op<TYPE>(tb_ctx_, result_))) {
+      SERVER_LOG(WARN, "fail to process op", K(ret));
+    }
+
+    result_.set_errno(ret);
+    table::ObTableApiUtil::replace_ret_code(ret);
+    int tmp_ret = ret;
+    if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+      SERVER_LOG(WARN, "fail to end trans", K(ret));
+    }
+
+    ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+    return ret;
+  }
   int process_get();
-  int process_insert();
-  int process_del();
-  int process_update();
-  int process_insert_or_update();
-  int process_replace();
-  int process_increment();
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
+  table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  // the life of scan_ctx_ should be longer than process()
-  ObTableServiceGetCtx get_ctx_;
   bool need_rollback_trans_;
   int64_t query_timeout_ts_;
 };

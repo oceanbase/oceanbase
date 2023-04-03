@@ -169,6 +169,7 @@ insert into t1 values(1,2),(2,3),(3,4);
 create view v as select c1,c2 from t1 order by c2;
 drop table t1;
 create table t1(c1 int);
+#order by 即使是从select里找到了c2(select中的c2不报错是因为view_stmt)，因为select里面的c2也是无效列，因此最终结果也是视图无效
 --error 5231
 select c1 from v;
 
@@ -180,6 +181,7 @@ create view v as select c1, -1 as c2 from t1 order by (select c2);
 select c1 from v;
 drop table t1;
 create table t1(c1 int);
+# a select c2提升上来之后从t1基础列里面找不到就直接报错，不会再去select_items找
 --error 5231
 select c1 from v;
 # b (bug)

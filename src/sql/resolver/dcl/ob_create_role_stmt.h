@@ -17,58 +17,41 @@
 #include "lib/string/ob_strings.h"
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
-class ObCreateRoleStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCreateRoleStmt: public ObDDLStmt
+{
 public:
-  explicit ObCreateRoleStmt(common::ObIAllocator* name_pool);
+  explicit ObCreateRoleStmt(common::ObIAllocator *name_pool);
   ObCreateRoleStmt();
   virtual ~ObCreateRoleStmt();
 
-  void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-  uint64_t get_tenant_id()
-  {
-    return tenant_id_;
-  }
-  void set_role_name(const common::ObString& role_name)
-  {
-    role_name_ = role_name;
-  }
-  const common::ObString& get_role_name() const
-  {
-    return role_name_;
-  }
-  void set_password(const common::ObString& password)
-  {
-    password_ = password;
-  }
-  const common::ObString& get_password() const
-  {
-    return password_;
-  }
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return create_role_arg_;
-  }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() { return tenant_id_; }
+  void set_role_name(const common::ObString &role_name) { role_name_ = role_name; }
+  const common::ObString &get_role_name() const { return role_name_; }
+  void set_password(const common::ObString &password) { password_ = password; }
+  const common::ObString &get_password() const { return password_; }
+  void set_need_enc(bool need_enc) { need_enc_ = need_enc; }
+  bool get_need_enc() const { return need_enc_; }
+  void set_masked_sql(const common::ObString &masked_sql) { masked_sql_ = masked_sql; }
+  const common::ObString &get_masked_sql() const { return masked_sql_; }
+  virtual bool cause_implicit_commit() const { return true; }
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return create_role_arg_; }
   DECLARE_VIRTUAL_TO_STRING;
-
 private:
   // data members
   uint64_t tenant_id_;
-  common::ObString role_name_;
-  common::ObString password_;
+  common::ObString role_name_; 
+  common::ObString password_; 
+  bool need_enc_;
+  common::ObString masked_sql_;
   obrpc::ObCreateRoleArg create_role_arg_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoleStmt);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
-#endif  // OCEANBASE_SQL_RESOLVER_DCL_OB_CREATE_ROLE_STMT_
+} // end namespace sql
+} // end namespace oceanbase
+#endif //OCEANBASE_SQL_RESOLVER_DCL_OB_CREATE_ROLE_STMT_

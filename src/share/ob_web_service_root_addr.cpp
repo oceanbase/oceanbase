@@ -20,12 +20,14 @@
 #include "observer/ob_server_struct.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_rpc_struct.h"
-#include "share/ob_multi_cluster_util.h"
+#include "share/ob_inner_config_root_addr.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace share {
+namespace share
+{
 void ObClusterRsAddr::reset()
 {
   cluster_id_ = OB_INVALID_ID;
@@ -37,7 +39,7 @@ bool ObClusterRsAddr::is_valid() const
   return cluster_id_ > 0 && addr_.is_valid();
 }
 
-int ObClusterRsAddr::assign(const ObClusterRsAddr& other)
+int ObClusterRsAddr::assign(const ObClusterRsAddr &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -50,7 +52,7 @@ int ObClusterRsAddr::assign(const ObClusterRsAddr& other)
 void ObClusterAddr::reset()
 {
   cluster_id_ = common::OB_INVALID_ID;
-  cluster_type_ = INVALID_CLUSTER_TYPE;
+  cluster_role_ = INVALID_CLUSTER_ROLE;
   cluster_status_ = INVALID_CLUSTER_STATUS;
   timestamp_ = 0;
   cluster_name_.reset();
@@ -67,12 +69,14 @@ void ObClusterAddr::reset()
 bool ObClusterAddr::is_valid() const
 {
   bool bret = true;
-  if (OB_INVALID_ID == cluster_id_ || INVALID_CLUSTER_TYPE == cluster_type_ || 0 == cluster_name_.size()) {
+  if (OB_INVALID_ID == cluster_id_
+      || INVALID_CLUSTER_ROLE == cluster_role_
+      || 0 == cluster_name_.size()) {
     bret = false;
   }
   return bret;
 }
-int ObClusterAddr::assign(const ObClusterAddr& other)
+int ObClusterAddr::assign(const ObClusterAddr &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(addr_list_.assign(other.addr_list_))) {
@@ -84,7 +88,7 @@ int ObClusterAddr::assign(const ObClusterAddr& other)
   } else {
     cluster_id_ = other.cluster_id_;
     cluster_idx_ = other.cluster_idx_;
-    cluster_type_ = other.cluster_type_;
+    cluster_role_ = other.cluster_role_;
     cluster_status_ = other.cluster_status_;
     current_scn_ = other.current_scn_;
     redo_transport_options_ = other.redo_transport_options_;
@@ -96,17 +100,22 @@ int ObClusterAddr::assign(const ObClusterAddr& other)
   return ret;
 }
 
-bool ObClusterAddr::operator==(const ObClusterAddr& other) const
+bool ObClusterAddr::operator==(const ObClusterAddr &other) const
 {
   bool b_ret = false;
   if (this == &other) {
     b_ret = true;
-  } else if (addr_list_.count() != other.addr_list_.count() ||
-             readonly_addr_list_.count() != other.readonly_addr_list_.count() || cluster_id_ != other.cluster_id_ ||
-             cluster_idx_ != other.cluster_idx_ || cluster_type_ != other.cluster_type_ ||
-             cluster_status_ != other.cluster_status_ || cluster_name_ != other.cluster_name_ ||
-             current_scn_ != other.current_scn_ || timestamp_ != other.timestamp_ ||
-             redo_transport_options_ != other.redo_transport_options_ || protection_level_ != other.protection_level_) {
+  } else if (addr_list_.count() != other.addr_list_.count()
+             || readonly_addr_list_.count() != other.readonly_addr_list_.count()
+             || cluster_id_ != other.cluster_id_
+             || cluster_idx_ != other.cluster_idx_
+             || cluster_role_ != other.cluster_role_
+             || cluster_status_ != other.cluster_status_
+             || cluster_name_ != other.cluster_name_
+             || current_scn_ != other.current_scn_
+             || timestamp_ != other.timestamp_
+             || redo_transport_options_ != other.redo_transport_options_
+             || protection_level_ != other.protection_level_) {
     b_ret = false;
   } else {
     b_ret = true;
@@ -130,22 +139,55 @@ bool ObClusterAddr::operator==(const ObClusterAddr& other) const
   }
   return b_ret;
 }
-
-OB_SERIALIZE_MEMBER(ObClusterAddr, cluster_id_, cluster_type_, addr_list_, readonly_addr_list_, timestamp_,
-    cluster_name_, cluster_idx_, cluster_status_, current_scn_, redo_transport_options_, protection_level_,
-    sync_status_, last_hb_ts_);
-
-int ObWebServiceRootAddr::build_new_config_url(
-    char* buf, const int64_t buf_len, const char* config_url, const int64_t cluster_id)
+int ObClusterAddr::append_redo_transport_options_change(
+    common::ObString &redo_transport_options,
+    common::ObIAllocator &alloc) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || OB_ISNULL(config_url) || OB_INVALID_ID == cluster_id) {
+  ObSqlString str;
+
+  if (OB_FAIL(redo_transport_options_.get_redo_transport_options_str(str))) {
+    LOG_WARN("fail to redo_transport_options", KR(ret), K(redo_transport_options_));
+  } else if (OB_FAIL(ob_write_string(alloc, str.string(), redo_transport_options))) {
+    LOG_WARN("failed to write stirng", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObClusterAddr::construct_rootservice_list(
+    common::ObString &rootservice_list,
+    common::ObIAllocator &alloc) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString str;
+
+  if (OB_FAIL(ObInnerConfigRootAddr::format_rootservice_list(addr_list_, str))) {
+    LOG_WARN("fail to format rootservice list", KR(ret), K(addr_list_));
+  } else if (str.length() <= 0) {
+    rootservice_list.reset();
+    LOG_INFO("cluster rootservice list is empty", K(addr_list_), K(str));
+  } else if (OB_FAIL(ob_write_string(alloc, str.string(), rootservice_list))) {
+    LOG_WARN("failed to write stirng", KR(ret), K(str));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObClusterAddr, cluster_id_, cluster_role_, addr_list_,
+                    readonly_addr_list_, timestamp_, cluster_name_, cluster_idx_,
+                    cluster_status_, current_scn_, redo_transport_options_, protection_level_,
+                    sync_status_, last_hb_ts_);
+
+int ObWebServiceRootAddr::build_new_config_url(char* buf, const int64_t buf_len,
+                                               const char* config_url, const int64_t cluster_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_ISNULL(config_url) || INVALID_CLUSTER_ID == cluster_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf), K(config_url), K(cluster_id));
   } else {
     int64_t pos = 0;
-    // compatible with obtest and configserver
-    // it can remove after upgrade obtest
+    //compatible with obtest and configserver
+    //it can remove after upgrade obtest
     ObString tmp_url(strlen(config_url), config_url);
     if (OB_ISNULL(tmp_url.find('?'))) {
       BUF_PRINTF("%s?%s=2&%s=%ld", config_url, JSON_VERSION, JSON_OB_CLUSTER_ID, cluster_id);
@@ -159,211 +201,93 @@ int ObWebServiceRootAddr::build_new_config_url(
   return ret;
 }
 
-int ObWebServiceRootAddr::delete_cluster(const int64_t cluster_id)
+int ObWebServiceRootAddr::store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                                const bool force, const common::ObClusterRole cluster_role,
+                                const int64_t timestamp)
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (0 > cluster_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(cluster_id));
-  } else {
-    const char* url = config_->obconfig_url.str();
-    const char* appname = config_->cluster.str();
-    const int64_t buf_len = OB_MAX_CONFIG_URL_LENGTH;
-    const int64_t timeout_ms = config_->rpc_timeout / 1000;
-    char buf[buf_len] = {'\0'};
-    if (NULL == url || NULL == appname || timeout_ms <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR(
-          "NULL url or NULL appname or invalid timeout", K(ret), KP(url), KP(appname), K(cluster_id), K(timeout_ms));
-    } else {
-      int64_t pos = 0;
-      ObString tmp_url(strlen(url), url);
-      if (OB_ISNULL(tmp_url.find('?'))) {
-        BUF_PRINTF("%s?%s=2&%s=%ld", url, JSON_VERSION, JSON_OB_CLUSTER_ID, cluster_id);
-      } else {
-        BUF_PRINTF("%s&%s=2&%s=%ld", url, JSON_VERSION, JSON_OB_CLUSTER_ID, cluster_id);
-      }
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to print to buff", KR(ret), K(url), K(appname), K(cluster_id));
-      }
-    }
-    ObSqlString content;
-    ObSqlString post_data_json;
-    bool is_delete = true;
-    if (OB_FAIL(ret)) {
-      // nothing todo
-    } else if (OB_FAIL(post_data_json.append_fmt("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":%ld,\"%s\":%ld}",
-                   JSON_OB_REGION,
-                   appname,
-                   JSON_OB_CLUSTER,
-                   appname,
-                   JSON_OB_REGION_ID,
-                   cluster_id,
-                   JSON_OB_CLUSTER_ID,
-                   cluster_id))) {
-    } else if (OB_FAIL(call_service(post_data_json.ptr(), content, buf, timeout_ms, is_delete))) {
-      LOG_WARN("fail to call service", K(ret), K(post_data_json), K(buf));
-    } else if (OB_FAIL(check_store_result(content))) {
-      if (OB_OBCONFIG_CLUSTER_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_WARN("cluster not exist", K(ret), K(appname), K(cluster_id), K(content));
-      } else {
-        LOG_WARN("fail to check result", KR(ret), K(content));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObWebServiceRootAddr::store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-    const common::ObClusterType cluster_type, const int64_t timestamp)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(force);  // always update web config
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+  UNUSED(force); //always update web config
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (addr_list.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "addr count", addr_list.count());
   } else {
-    const char* url = config_->obconfig_url.str();
-    const char* appname = config_->cluster.str();
+    const char *url = config_->obconfig_url.str();
+    const char *appname = config_->cluster.str();
     const int64_t cluster_id = config_->cluster_id;
-    const int64_t timeout_ms = config_->rpc_timeout / 1000;
+    //default 4s
+    const int64_t timeout_ms = config_->rpc_timeout / 1000 + 2 * 1000;
     const int64_t max_config_length = OB_MAX_CONFIG_URL_LENGTH;
     char new_config_url[max_config_length] = {'\0'};
     if (NULL == url || NULL == appname || cluster_id <= 0 || timeout_ms <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR(
-          "NULL url or NULL appname or invalid timeout", K(ret), KP(url), KP(appname), K(cluster_id), K(timeout_ms));
+      LOG_ERROR("NULL url or NULL appname or invalid timeout",
+          K(ret), KP(url), KP(appname), K(cluster_id), K(timeout_ms));
     } else if (OB_FAIL(build_new_config_url(new_config_url, max_config_length, url, cluster_id))) {
       LOG_WARN("fail to build new config url", K(ret), K(cluster_id), K(url));
-    } else if (OB_FAIL(store_rs_list_on_url(addr_list,
-                   readonly_addr_list,
-                   appname,
-                   cluster_id,
-                   cluster_type,
-                   new_config_url,
-                   timeout_ms,
-                   timestamp))) {
+    } else if (OB_FAIL(store_rs_list_on_url(addr_list, readonly_addr_list, appname, cluster_id,
+                                            cluster_role, new_config_url, timeout_ms,
+                                            timestamp))) {
       LOG_WARN("store_rs_list_on_url fail",
-          K(ret),
-          K(addr_list),
-          K(readonly_addr_list),
-          K(appname),
-          K(new_config_url),
-          K(timeout_ms),
+          K(ret), K(addr_list), K(readonly_addr_list), K(appname),
+          K(new_config_url), K(timeout_ms),
           K(timestamp));
     } else {
-      LOG_INFO("store_rs_list_on_url success",
-          K(ret),
-          K(addr_list),
-          K(cluster_type),
-          K(readonly_addr_list),
-          K(appname),
-          K(new_config_url),
-          K(timeout_ms));
+      LOG_INFO("store_rs_list_on_url success", K(ret), K(addr_list), K(cluster_role),
+               K(readonly_addr_list), K(appname), K(new_config_url), K(timeout_ms));
     }
   }
 
   return ret;
 }
 
-int ObWebServiceRootAddr::fetch(ObIAddrList& addr_list, ObIAddrList& readonly_addr_list, ObClusterType& cluster_type)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(fetch_rslist_by_id(config_->cluster_id, addr_list, readonly_addr_list, cluster_type))) {
-    LOG_WARN("failed to fetch rs list by cluster id", K(ret));
-  }
-  return ret;
-}
-int ObWebServiceRootAddr::fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list,
-    ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_type)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_INVALID_CLUSTER_ID == cluster_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cluster id is invalid", K(ret), K(cluster_id));
-  } else if (OB_FAIL(fetch_rslist_by_id(cluster_id, addr_list, readonly_addr_list, cluster_type))) {
-    LOG_WARN("failed to fetch rs list by cluster id", K(ret), K(cluster_id));
-  }
-  return ret;
-}
-int ObWebServiceRootAddr::fetch_rslist_by_id(const int64_t cluster_id, ObIAddrList& addr_list,
-    ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_type)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_INVALID_CLUSTER_ID == cluster_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cluster id is invalid", K(ret), K(cluster_id));
-  } else {
-    const char* url = config_->obconfig_url.str();
-    const char* appname = config_->cluster.str();
-    int64_t timeout_ms = config_->rpc_timeout / 1000;
-    const int64_t max_config_length = OB_MAX_CONFIG_URL_LENGTH;
-    char new_config_url[max_config_length] = {'\0'};
 
-    if (NULL == url || NULL == appname || timeout_ms <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("NULL url or NULL appname or invalid timeout", K(ret), KP(url), KP(appname), K(timeout_ms));
-    } else if (OB_FAIL(build_new_config_url(new_config_url, max_config_length, url, cluster_id))) {
-      LOG_WARN("fail to build new config url", K(ret), K(cluster_id), K(url));
-    } else if (OB_FAIL(fetch_rs_list_from_url(
-                   appname, new_config_url, timeout_ms, addr_list, readonly_addr_list, cluster_type))) {
-      LOG_WARN("fetch_rs_list_from_url fail", K(ret), K(appname), K(new_config_url), K(timeout_ms));
-    } else {
-      LOG_INFO("fetch_rs_list_from_url success",
-          K(ret),
-          K(appname),
-          K(new_config_url),
-          K(timeout_ms),
-          K(addr_list),
-          K(readonly_addr_list),
-          K(cluster_type));
-    }
-  }
+int ObWebServiceRootAddr::fetch(
+    ObIAddrList &addr_list,
+    ObIAddrList &readonly_addr_list)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSEDx(addr_list, readonly_addr_list);
+  LOG_WARN("observer can not fetch rs list from configserver", KR(ret));
   return ret;
 }
-int ObWebServiceRootAddr::store_rs_list_on_url(const ObIAddrList& rs_list, const ObIAddrList& readonly_rs_list,
-    const char* appname, const int64_t cluster_id, const common::ObClusterType cluster_type, const char* url,
-    const int64_t timeout_ms, const int64_t timestamp)
+
+int ObWebServiceRootAddr::store_rs_list_on_url(
+    const ObIAddrList &rs_list,
+    const ObIAddrList &readonly_rs_list,
+    const char *appname,
+    const int64_t cluster_id,
+    const common::ObClusterRole cluster_role,
+    const char *url,
+    const int64_t timeout_ms,
+    const int64_t timestamp)
 {
   int ret = OB_SUCCESS;
   ObSqlString json;
   ObSqlString content;
-  if (rs_list.count() <= 0 || NULL == url || NULL == appname || cluster_id <= 0 || timeout_ms <= 0) {
+  if (rs_list.count() <= 0 || NULL == url || NULL == appname
+      || cluster_id <= 0 || timeout_ms <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "invalid arguments", K(ret), "addr_count", rs_list.count(), KP(url), KP(appname), K(cluster_id), K(timeout_ms));
-  } else if (OB_FAIL(to_json(rs_list, readonly_rs_list, appname, cluster_id, cluster_type, timestamp, json))) {
+    LOG_WARN("invalid arguments", K(ret),
+        "addr_count", rs_list.count(), KP(url), KP(appname), K(cluster_id), K(timeout_ms));
+  } else if (OB_FAIL(to_json(rs_list, readonly_rs_list, appname,
+                             cluster_id, cluster_role, timestamp, json))) {
     LOG_WARN("convert addr list to json format failed", K(ret), K(rs_list), K(readonly_rs_list), K(appname));
   } else if (OB_FAIL(call_service(json.ptr(), content, url, timeout_ms))) {
-    LOG_ERROR("call web service failed", K(ret), K(json), K(url), K(timeout_ms));
+    LOG_WARN("call web service failed", K(ret), K(json), K(url), K(timeout_ms));
   } else if (OB_FAIL(check_store_result(content))) {
-    LOG_ERROR("fail to check result", K(ret), K(content), K(url));
+    LOG_WARN("fail to check result", K(ret), K(content), K(url));
   }
   return ret;
 }
 
-int ObWebServiceRootAddr::check_store_result(const ObSqlString& content)
+int ObWebServiceRootAddr::check_store_result(const ObSqlString &content)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::OB_JSON_PARSER);
   json::Parser parser;
-  json::Value* root = NULL;
+  json::Value *root = NULL;
   if (OB_FAIL(parser.init(&allocator))) {
     LOG_WARN("json parser init failed", K(ret));
   } else if (OB_ISNULL(content.ptr()) || content.empty()) {
@@ -379,8 +303,7 @@ int ObWebServiceRootAddr::check_store_result(const ObSqlString& content)
     LOG_WARN("error json format", K(ret), K(content), "root", *root);
   } else {
     bool find_code = false;
-    DLIST_FOREACH(it, root->get_object())
-    {
+    DLIST_FOREACH(it, root->get_object()) {
       if (it->name_.case_compare(JSON_RES_CODE) == 0) {
         find_code = true;
         if (NULL == it->value_) {
@@ -410,8 +333,13 @@ int ObWebServiceRootAddr::check_store_result(const ObSqlString& content)
   return ret;
 }
 
-int ObWebServiceRootAddr::fetch_rs_list_from_url(const char* appname, const char* url, const int64_t timeout_ms,
-    ObIAddrList& rs_list, ObIAddrList& readonly_rs_list, ObClusterType& cluster_type)
+int ObWebServiceRootAddr::fetch_rs_list_from_url(
+    const char *appname,
+    const char *url,
+    const int64_t timeout_ms,
+    ObIAddrList &rs_list,
+    ObIAddrList &readonly_rs_list,
+    ObClusterRole &cluster_role)
 {
   int ret = OB_SUCCESS;
   ObSqlString json;
@@ -422,18 +350,19 @@ int ObWebServiceRootAddr::fetch_rs_list_from_url(const char* appname, const char
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(url), K(timeout_ms));
   } else if (OB_FAIL(call_service(NULL, json, url, timeout_ms))) {
-    LOG_ERROR("call web service failed", K(ret), K(url), K(timeout_ms));
+    LOG_WARN("call web service failed", K(ret), K(url), K(timeout_ms));
   } else if (json.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("web service returned empty result", K(ret));
   } else if (OB_FAIL(from_json(json.ptr(), appname, cluster))) {
-    LOG_WARN("convert json to rootserver address list failed", K(ret), K(json), K(appname));
+    LOG_WARN("convert json to rootserver address list failed",
+        K(ret), K(json), K(appname));
   } else if (OB_FAIL(rs_list.assign(cluster.addr_list_))) {
     LOG_WARN("fail to assign", KR(ret));
   } else if (OB_FAIL(readonly_rs_list.assign(cluster.readonly_addr_list_))) {
     LOG_WARN("fail to assign", KR(ret));
   } else {
-    cluster_type = cluster.cluster_type_;
+    cluster_role = cluster.cluster_role_;
   }
   return ret;
 }
@@ -476,11 +405,12 @@ int ObWebServiceRootAddr::fetch_rs_list_from_url(const char* appname, const char
 //        ]
 //    }
 //
-int ObWebServiceRootAddr::parse_data(const json::Value* data, ObClusterAddr& cluster)
+int ObWebServiceRootAddr::parse_data(const json::Value *data,
+                                     ObClusterAddr &cluster)
 {
   int ret = OB_SUCCESS;
-  json::Value* rs_list = NULL;
-  json::Value* readonly_rs_list = NULL;
+  json::Value *rs_list = NULL;
+  json::Value *readonly_rs_list = NULL;
   cluster.reset();
   if (NULL == data) {
     ret = OB_ERR_UNEXPECTED;
@@ -489,8 +419,7 @@ int ObWebServiceRootAddr::parse_data(const json::Value* data, ObClusterAddr& clu
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data filed not object", K(ret), "data", *data);
   } else {
-    DLIST_FOREACH(it, data->get_object())
-    {
+    DLIST_FOREACH(it, data->get_object()) {
       if (0 == it->name_.case_compare(JSON_RS_LIST)) {
         rs_list = it->value_;
       } else if (0 == it->name_.case_compare(JSON_READONLY_RS_LIST)) {
@@ -503,14 +432,15 @@ int ObWebServiceRootAddr::parse_data(const json::Value* data, ObClusterAddr& clu
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected cluster type", K(ret), "type", it->value_->get_type());
         } else if (it->value_->get_string().case_compare(JSON_PRIMARY) == 0) {
-          cluster.cluster_type_ = PRIMARY_CLUSTER;
+          cluster.cluster_role_ = PRIMARY_CLUSTER;
         } else if (it->value_->get_string().case_compare(JSON_STANDBY) == 0) {
-          cluster.cluster_type_ = STANDBY_CLUSTER;
+          cluster.cluster_role_ = STANDBY_CLUSTER;
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid cluster type", K(ret), "type", it->value_->get_string());
         }
-      } else if (it->name_.case_compare(JSON_OB_REGION_ID) == 0 || it->name_.case_compare(JSON_OB_CLUSTER_ID) == 0) {
+      } else if (it->name_.case_compare(JSON_OB_REGION_ID) == 0
+                 || it->name_.case_compare(JSON_OB_CLUSTER_ID) == 0) {
         if (NULL == it->value_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL value pointer", K(ret));
@@ -530,7 +460,8 @@ int ObWebServiceRootAddr::parse_data(const json::Value* data, ObClusterAddr& clu
         } else {
           cluster.timestamp_ = it->value_->get_number();
         }
-      } else if (0 == it->name_.case_compare(JSON_OB_REGION) || 0 == it->name_.case_compare(JSON_OB_CLUSTER)) {
+      } else if (0 == it->name_.case_compare(JSON_OB_REGION)
+                 || 0 == it->name_.case_compare(JSON_OB_CLUSTER)) {
         if (NULL == it->value_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL value pointer", K(ret));
@@ -559,13 +490,16 @@ int ObWebServiceRootAddr::parse_data(const json::Value* data, ObClusterAddr& clu
   return ret;
 }
 
-int ObWebServiceRootAddr::from_json(const char* json_str, const char* appname, ObClusterAddr& cluster)
+int ObWebServiceRootAddr::from_json(
+    const char *json_str,
+    const char *appname,
+    ObClusterAddr &cluster)
 {
   int ret = OB_SUCCESS;
   cluster.reset();
   ObArenaAllocator allocator(ObModIds::OB_JSON_PARSER);
   json::Parser parser;
-  json::Value* root = NULL;
+  json::Value *root = NULL;
   // appname can be NULL to ignore appname check
   if (NULL == json_str) {
     ret = OB_INVALID_ARGUMENT;
@@ -578,14 +512,13 @@ int ObWebServiceRootAddr::from_json(const char* json_str, const char* appname, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no root value", K(ret));
   } else {
-    json::Value* data = NULL;
+    json::Value *data = NULL;
     //  check return code and get data filed
     if (json::JT_OBJECT != root->get_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error json format", K(ret), K(json_str), "root", *root);
     } else {
-      DLIST_FOREACH(it, root->get_object())
-      {
+      DLIST_FOREACH(it, root->get_object()) {
         if (it->name_.case_compare(JSON_RES_DATA) == 0) {
           data = it->value_;
         }
@@ -614,13 +547,15 @@ int ObWebServiceRootAddr::from_json(const char* json_str, const char* appname, O
       LOG_WARN("fail to parse data", KR(ret));
     } else if (NULL != appname && cluster.cluster_name_.str().case_compare(appname) != 0) {
       ret = OB_OBCONFIG_APPNAME_MISMATCH;
-      LOG_ERROR("obconfig appname mismatch", K(ret), K(appname), "obregion", cluster.cluster_name_);
+      LOG_ERROR("obconfig appname mismatch",
+                K(ret), K(appname), "obregion", cluster.cluster_name_);
     }
+
   }
   return ret;
 }
 
-int ObWebServiceRootAddr::get_addr_list(json::Value*& rs_list, ObIAddrList& addr_list)
+int ObWebServiceRootAddr::get_addr_list(json::Value *&rs_list, ObIAddrList &addr_list)
 {
   int ret = OB_SUCCESS;
   addr_list.reuse();
@@ -634,8 +569,7 @@ int ObWebServiceRootAddr::get_addr_list(json::Value*& rs_list, ObIAddrList& addr
     ObString addr_str;
     ObString role_str;
     // traverse rs_list array
-    DLIST_FOREACH(it, rs_list->get_array())
-    {
+    DLIST_FOREACH(it, rs_list->get_array()) {
       if (json::JT_OBJECT != it->get_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not object in array", K(ret), "type", it->get_type());
@@ -644,8 +578,7 @@ int ObWebServiceRootAddr::get_addr_list(json::Value*& rs_list, ObIAddrList& addr
       addr_str.reset();
       role_str.reset();
       int64_t sql_port = OB_INVALID_INDEX;
-      DLIST_FOREACH(p, it->get_object())
-      {
+      DLIST_FOREACH(p, it->get_object()) {
         if (p->name_.case_compare(JSON_ADDRESS) == 0) {
           if (NULL == p->value_) {
             ret = OB_ERR_UNEXPECTED;
@@ -684,37 +617,41 @@ int ObWebServiceRootAddr::get_addr_list(json::Value*& rs_list, ObIAddrList& addr
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("no address found in rs object", K(ret));
       } else if (OB_FAIL(add_to_list(addr_str, sql_port, role_str, addr_list))) {
-        LOG_WARN("add address to list failed", K(ret), K(addr_str), K(sql_port), K(role_str));
+        LOG_WARN("add address to list failed", K(ret),
+            K(addr_str), K(sql_port), K(role_str));
       }
     }
   }
   return ret;
 }
 
-int ObWebServiceRootAddr::add_to_list(
-    common::ObString& addr_str, const int64_t sql_port, common::ObString& role, ObIAddrList& addr_list)
+int ObWebServiceRootAddr::add_to_list(common::ObString &addr_str, const int64_t sql_port,
+                                      common::ObString &role_str, ObIAddrList &addr_list)
 {
   int ret = OB_SUCCESS;
-  if (addr_str.empty() || sql_port <= 0 || role.empty()) {
+  if (addr_str.empty() || sql_port <= 0 || role_str.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(addr_str), K(sql_port), K(role));
+    LOG_WARN("invalid argument", K(ret), K(addr_str), K(sql_port), K(role_str));
   } else {
     ObRootAddr rs;
-    if (OB_FAIL(rs.server_.parse_from_string(addr_str))) {
+    ObAddr addr;
+    ObRole role;
+    if (OB_FAIL(addr.parse_from_string(addr_str))) {
       LOG_WARN("convert string to address failed", K(ret), K(addr_str));
     } else {
-      rs.sql_port_ = sql_port;
-      if (role.case_compare("LEADER") == 0) {
-        rs.role_ = LEADER;
-      } else if (role.case_compare("FOLLOWER") != 0) {
+      if (role_str.case_compare("LEADER") == 0) {
+        role = LEADER;
+      } else if (role_str.case_compare("FOLLOWER") != 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid role string", K(ret), K(role));
       } else {
-        rs.role_ = FOLLOWER;
+        role = FOLLOWER;
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(addr_list.push_back(rs))) {
+        if (OB_FAIL(rs.init(addr, role, sql_port))) {
+          LOG_WARN("failed to simple init", KR(ret), K(addr), K(role), K(sql_port));
+        } else if (OB_FAIL(addr_list.push_back(rs))) {
           LOG_WARN("add to array failed", K(ret), K(rs));
         }
       }
@@ -723,30 +660,27 @@ int ObWebServiceRootAddr::add_to_list(
   return ret;
 }
 
-int ObWebServiceRootAddr::to_json(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list,
-    const char* appname, const int64_t cluster_id, const common::ObClusterType cluster_type, const int64_t timestamp,
-    common::ObSqlString& json)
+int ObWebServiceRootAddr::to_json(
+    const ObIAddrList &addr_list,
+    const ObIAddrList &readonly_addr_list,
+    const char *appname,
+    const int64_t cluster_id,
+    const common::ObClusterRole cluster_role,
+    const int64_t timestamp,
+    common::ObSqlString &json)
 {
   int ret = OB_SUCCESS;
-  const char* type_str = (PRIMARY_CLUSTER == cluster_type) ? JSON_PRIMARY : JSON_STANDBY;
-  if (addr_list.empty() || NULL == appname) {
+  const char* type_str = (PRIMARY_CLUSTER == cluster_role) ? JSON_PRIMARY : JSON_STANDBY;
+  // TODO support get RS list
+  if (OB_ISNULL(appname)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "addr count", addr_list.count(), KP(appname));
-  } else if (OB_FAIL(
-                 json.append_fmt("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":%ld,\"%s\":%ld,\"%s\":\"%s\",\"%s\":%ld,\"%s\":[",
-                     JSON_OB_REGION,
-                     appname,
-                     JSON_OB_CLUSTER,
-                     appname,
-                     JSON_OB_REGION_ID,
-                     cluster_id,
-                     JSON_OB_CLUSTER_ID,
-                     cluster_id,
-                     JSON_TYPE,
-                     type_str,
-                     JSON_TIMESTAMP,
-                     timestamp,
-                     JSON_RS_LIST))) {
+  } else if (OB_FAIL(json.append_fmt("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":%ld,\"%s\":%ld,\"%s\":\"%s\",\"%s\":%ld,\"%s\":[",
+                                        JSON_OB_REGION, appname,
+                                        JSON_OB_CLUSTER, appname,
+                                        JSON_OB_REGION_ID, cluster_id,
+                                        JSON_OB_CLUSTER_ID, cluster_id,
+                                        JSON_TYPE, type_str, JSON_TIMESTAMP, timestamp, JSON_RS_LIST))) {
     LOG_WARN("assign string failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
@@ -756,23 +690,19 @@ int ObWebServiceRootAddr::to_json(const ObIAddrList& addr_list, const ObIAddrLis
         }
       }
       char ip_buf[OB_IP_STR_BUFF] = "";
-      ObRole role = addr_list.at(i).role_;
+      ObRole role = addr_list.at(i).get_role();
       if (OB_FAIL(ret)) {
-      } else if (!addr_list.at(i).server_.ip_to_string(ip_buf, sizeof(ip_buf))) {
+      } else if (!addr_list.at(i).get_server().ip_to_string(ip_buf, sizeof(ip_buf))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("convert ip to string failed", K(ret), "server", addr_list.at(i).server_);
+        LOG_WARN("convert ip to string failed", K(ret), "server", addr_list.at(i).get_server());
       } else if (!is_strong_leader(role) && !is_follower(role)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid role type", K(ret), K(role));
       } else if (OB_FAIL(json.append_fmt("{\"%s\":\"%s:%d\",\"%s\":\"%s\",\"%s\":%ld}",
 
-                     JSON_ADDRESS,
-                     ip_buf,
-                     addr_list.at(i).server_.get_port(),
-                     JSON_ROLE,
-                     is_strong_leader(role) ? "LEADER" : "FOLLOWER",
-                     JSON_SQL_PORT,
-                     addr_list.at(i).sql_port_))) {
+          JSON_ADDRESS, ip_buf, addr_list.at(i).get_server().get_port(),
+          JSON_ROLE, is_strong_leader(role) ? "LEADER" : "FOLLOWER",
+          JSON_SQL_PORT, addr_list.at(i).get_sql_port()))) {
         LOG_WARN("append string failed", K(ret));
       }
     }
@@ -792,17 +722,13 @@ int ObWebServiceRootAddr::to_json(const ObIAddrList& addr_list, const ObIAddrLis
       }
       char ip_buf[OB_IP_STR_BUFF] = "";
       if (OB_FAIL(ret)) {
-      } else if (!readonly_addr_list.at(i).server_.ip_to_string(ip_buf, sizeof(ip_buf))) {
+      } else if (!readonly_addr_list.at(i).get_server().ip_to_string(ip_buf, sizeof(ip_buf))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("convert ip to string failed", K(ret), "server", readonly_addr_list.at(i).server_);
+        LOG_WARN("convert ip to string failed", K(ret), "server", readonly_addr_list.at(i).get_server());
       } else if (OB_FAIL(json.append_fmt("{\"%s\":\"%s:%d\",\"%s\":\"%s\",\"%s\":%ld}",
-                     JSON_ADDRESS,
-                     ip_buf,
-                     readonly_addr_list.at(i).server_.get_port(),
-                     JSON_ROLE,
-                     "FOLLOWER",
-                     JSON_SQL_PORT,
-                     readonly_addr_list.at(i).sql_port_))) {
+          JSON_ADDRESS, ip_buf, readonly_addr_list.at(i).get_server().get_port(),
+          JSON_ROLE, "FOLLOWER",
+          JSON_SQL_PORT, readonly_addr_list.at(i).get_sql_port()))) {
         LOG_WARN("append string failed", K(ret));
       }
     }
@@ -818,12 +744,15 @@ int ObWebServiceRootAddr::to_json(const ObIAddrList& addr_list, const ObIAddrLis
   return ret;
 }
 
-int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlString& content, const char* config_url,
-    const int64_t timeout_ms, const bool is_delete)
+int ObWebServiceRootAddr::call_service(const char *post_data,
+    common::ObSqlString &content,
+    const char *config_url,
+    const int64_t timeout_ms,
+    const bool is_delete)
 {
   int ret = OB_SUCCESS;
   const int64_t begin = ObTimeUtility::current_time();
-  CURL* curl = curl_easy_init();
+  CURL *curl = curl_easy_init();
   // post_data can be NULL for http get.
   if (NULL == config_url || timeout_ms <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -834,7 +763,7 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
   } else {
     // set options
     CURLcode cc = CURLE_OK;
-    struct curl_slist* list = NULL;
+    struct curl_slist *list = NULL;
     if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_URL, config_url))) {
       LOG_WARN("set url failed", K(cc), "url", config_url);
     } else {
@@ -842,13 +771,15 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
         if (NULL == (list = curl_slist_append(list, "Content-Type: application/json"))) {
           cc = CURLE_OUT_OF_MEMORY;
           LOG_WARN("append list failed", K(cc));
-        } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list))) {
+        } else if (CURLE_OK != (cc =  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list))) {
           LOG_WARN("set http header failed", K(cc));
-        } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(post_data)))) {
+        } else if (CURLE_OK != (cc = curl_easy_setopt(
+            curl, CURLOPT_POSTFIELDSIZE, strlen(post_data)))) {
           LOG_WARN("set post data size failed", K(cc), "size", strlen(post_data));
         } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data))) {
           LOG_WARN("set post data failed", K(cc), K(post_data));
-        } else if (is_delete && CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))) {
+        } else if (is_delete
+                   && CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))) {
           LOG_WARN("fail to set option", KR(ret));
         } else {
           LOG_INFO("post data success", K(post_data));
@@ -858,8 +789,8 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
 
     const int64_t no_signal = 1;
     const int64_t no_delay = 1;
-    const int64_t max_redirect = 3;     // set max redirect
-    const int64_t follow_location = 1;  // for http redirect 301 302
+    const int64_t max_redirect = 3; // set max redirect
+    const int64_t follow_location = 1; // for http redirect 301 302
     if (CURLE_OK != cc) {
     } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_NOSIGNAL, no_signal))) {
       LOG_WARN("set no signal failed", K(cc), K(no_signal));
@@ -873,9 +804,11 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
       LOG_WARN("set max redirect failed", K(cc), K(max_redirect));
     } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, follow_location))) {
       LOG_WARN("set follow location failed", K(cc), K(follow_location));
-    } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &curl_write_data))) {
+    } else if (CURLE_OK != (cc = curl_easy_setopt(
+        curl, CURLOPT_WRITEFUNCTION, &curl_write_data))) {
       LOG_WARN("set write function failed", K(cc));
-    } else if (CURLE_OK != (cc = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content))) {
+    } else if (CURLE_OK != (cc = curl_easy_setopt(
+        curl, CURLOPT_WRITEDATA, &content))) {
       LOG_WARN("set write data failed", K(cc));
     }
 
@@ -884,7 +817,8 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
     if (CURLE_OK != cc) {
     } else if (CURLE_OK != (cc = curl_easy_perform(curl))) {
       LOG_WARN("curl easy perform failed", K(cc));
-    } else if (CURLE_OK != (cc = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code))) {
+    } else if (CURLE_OK != (cc = curl_easy_getinfo(
+        curl, CURLINFO_RESPONSE_CODE, &http_code))) {
       LOG_WARN("curl getinfo failed", K(cc));
     } else {
       // http status code 2xx means success
@@ -897,7 +831,8 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
     if (OB_SUCC(ret)) {
       if (CURLE_OK != cc) {
         ret = OB_CURL_ERROR;
-        LOG_WARN("curl error", K(ret), "curl_error_code", cc, "curl_error_message", curl_easy_strerror(cc));
+        LOG_WARN("curl error", K(ret), "curl_error_code", cc,
+            "curl_error_message", curl_easy_strerror(cc));
       }
     }
     if (NULL != list) {
@@ -910,11 +845,13 @@ int ObWebServiceRootAddr::call_service(const char* post_data, common::ObSqlStrin
     curl = NULL;
   }
   const int64_t consume_time = ObTimeUtility::current_time() - begin;
-  LOG_TRACE("call service", K(ret), K(consume_time), "method", NULL == post_data ? "GET" : "POST");
+  LOG_TRACE("call service", K(ret), K(consume_time),
+      "method", NULL == post_data ? "GET" : "POST");
   return ret;
 }
 
-int64_t ObWebServiceRootAddr::curl_write_data(void* ptr, int64_t size, int64_t nmemb, void* stream)
+int64_t ObWebServiceRootAddr::curl_write_data(
+    void *ptr, int64_t size, int64_t nmemb, void *stream)
 {
   int ret = OB_SUCCESS;
   // This function may be called with zero bytes data if the transferred file is empty.
@@ -922,21 +859,18 @@ int64_t ObWebServiceRootAddr::curl_write_data(void* ptr, int64_t size, int64_t n
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(stream), K(size), K(nmemb));
   } else {
-    ObSqlString* content = static_cast<ObSqlString*>(stream);
+    ObSqlString *content = static_cast<ObSqlString *>(stream);
     if (size * nmemb > 0) {
       if (NULL == ptr) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("receive data but pointer is NULL", K(ret), KP(ptr), K(size), K(nmemb));
       } else if (size * nmemb + content->length() > MAX_RECV_CONTENT_LEN) {
         ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("unexpected long content",
-            K(ret),
-            "new_byte",
-            size * nmemb,
-            "received_byte",
-            content->length(),
+        LOG_WARN("unexpected long content", K(ret),
+            "new_byte", size * nmemb,
+            "received_byte", content->length(),
             LITERAL_K(MAX_RECV_CONTENT_LEN));
-      } else if (OB_FAIL(content->append(static_cast<const char*>(ptr), size * nmemb))) {
+      } else if (OB_FAIL(content->append(static_cast<const char *>(ptr), size * nmemb))) {
         LOG_WARN("append data failed", K(ret));
       }
     }
@@ -945,12 +879,13 @@ int64_t ObWebServiceRootAddr::curl_write_data(void* ptr, int64_t size, int64_t n
   return OB_SUCCESS == ret ? size * nmemb : 0;
 }
 
+
 //{
 //    "Message": "successful",
 //    "Success": true,
 //    "Code": 200,
 //    "Data": [{
-//        "ObRegion": "ob",
+//        "ObRegion": "ob2.rongxuan.lc",
 //        "ObRegionId": 2,
 //        "RsList": [{
 //            "address": "10.101.67.165:16825",
@@ -965,12 +900,13 @@ int64_t ObWebServiceRootAddr::curl_write_data(void* ptr, int64_t size, int64_t n
 //    }]
 //}
 
-int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig* config, ObClusterIAddrList& cluster_list)
+int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig *config,
+                                               ObClusterIAddrList &cluster_list)
 {
   int ret = OB_SUCCESS;
   UNUSED(config);
   cluster_list.reset();
-  // if (OB_ISNULL(config)) {
+  //if (OB_ISNULL(config)) {
   //  ret = OB_INVALID_ARGUMENT;
   //  LOG_WARN("invalid argument", K(ret), K(config));
   //} else {
@@ -1008,7 +944,7 @@ int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig* config, O
   return ret;
 }
 
-// int ObWebServiceRootAddr::get_all_cluster_info(const char *json_str,
+//int ObWebServiceRootAddr::get_all_cluster_info(const char *json_str,
 //                                               ObClusterIAddrList &cluster_list)
 //{
 //  int ret = OB_SUCCESS;
@@ -1111,9 +1047,9 @@ int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig* config, O
 //                ret = OB_ERR_UNEXPECTED;
 //                LOG_WARN("unexpected cluster type", K(ret), "type", p->value_->get_type());
 //              } else if (p->value_->get_string().case_compare(JSON_PRIMARY) == 0) {
-//                cluster_addr.cluster_type_ = PRIMARY_CLUSTER;
+//                cluster_addr.cluster_role_ = PRIMARY_CLUSTER;
 //              } else if (p->value_->get_string().case_compare(JSON_STANDBY) == 0) {
-//                cluster_addr.cluster_type_ = STANDBY_CLUSTER;
+//                cluster_addr.cluster_role_ = STANDBY_CLUSTER;
 //              } else {
 //                ret = OB_ERR_UNEXPECTED;
 //                LOG_WARN("invalid cluster type", K(ret), "type", p->value_->get_string());
@@ -1142,13 +1078,15 @@ int ObWebServiceRootAddr::get_all_cluster_info(common::ObServerConfig* config, O
 //  return ret;
 //}
 
-static const char* redo_transport_options_strs[] = {"SYNC", "ASYNC", "NET_TIMEOUT", "REOPEN", "MAX_FAILURE"};
 
-ObRedoTransportOption::RedoOptionProfile ObRedoTransportOption::str_to_redo_transport_options(const char* str)
+static const char *redo_transport_options_strs[] = {"SYNC", "ASYNC", "NET_TIMEOUT", "REOPEN", "MAX_FAILURE"};
+
+
+ObRedoTransportOption::RedoOptionProfile ObRedoTransportOption::str_to_redo_transport_options(const char *str)
 {
   RedoOptionProfile redo_transport_options = RedoOptionProfile::INVALID_TYPE;
   if (OB_ISNULL(str)) {
-    // nothing
+    //nothing
   } else {
     ObString option(str);
     for (int64_t i = 0; i < ARRAYSIZEOF(redo_transport_options_strs); i++) {
@@ -1162,30 +1100,30 @@ ObRedoTransportOption::RedoOptionProfile ObRedoTransportOption::str_to_redo_tran
 }
 OB_SERIALIZE_MEMBER(ObRedoTransportOption, net_timeout_, reopen_, max_failure_, is_sync_);
 
-int ObRedoTransportOption::append_redo_transport_options_change(const ObString& redo_transport_options_str)
-{
+int ObRedoTransportOption::append_redo_transport_options_change(
+    const ObString &redo_transport_options_str) {
   int ret = OB_SUCCESS;
-  // incremental update
+  //incremental update
   if (redo_transport_options_str.empty()) {
   } else {
-    SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], format_str)
-    {
-      if (OB_FAIL(ObConfigLogArchiveOptionsItem::format_option_str(to_cstring(redo_transport_options_str),
+    SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], format_str) {
+      if (OB_FAIL(ObConfigLogArchiveOptionsItem::format_option_str(
+              to_cstring(redo_transport_options_str),
               redo_transport_options_str.length(),
               format_str,
               OB_MAX_CONFIG_VALUE_LEN))) {
         LOG_WARN("failed to format option str", KR(ret));
       } else {
-        char* saveptr = NULL;
-        char* key_name = STRTOK_R(format_str, " ", &saveptr);
-        while (OB_NOT_NULL(key_name) && OB_SUCC(ret)) {
-          char* s = NULL;
-          char* value_str = NULL;
+        char *saveptr = NULL;
+        char *key_name = STRTOK_R(format_str, " ", &saveptr);
+        while(OB_NOT_NULL(key_name) && OB_SUCC(ret)) {
+          char *s = NULL;
+          char *value_str = NULL;
           RedoOptionProfile redo_transport_options = str_to_redo_transport_options(key_name);
           if (RedoOptionProfile::INVALID_TYPE == redo_transport_options) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN(
-                "failed to construct redo option", KR(ret), K(redo_transport_options_str), K(redo_transport_options));
+            LOG_WARN("failed to construct redo option", KR(ret),
+                K(redo_transport_options_str), K(redo_transport_options));
           } else if (RedoOptionProfile::SYNC == redo_transport_options) {
             is_sync_ = true;
           } else if (RedoOptionProfile::ASYNC == redo_transport_options) {
@@ -1228,7 +1166,7 @@ int ObRedoTransportOption::append_redo_transport_options_change(const ObString& 
   return ret;
 }
 
-int ObRedoTransportOption::assign(const ObRedoTransportOption& other)
+int ObRedoTransportOption::assign(const ObRedoTransportOption &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -1240,7 +1178,7 @@ int ObRedoTransportOption::assign(const ObRedoTransportOption& other)
   return ret;
 }
 
-ObRedoTransportOption& ObRedoTransportOption::operator=(const ObRedoTransportOption& other)
+ObRedoTransportOption& ObRedoTransportOption::operator=(const ObRedoTransportOption &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -1251,17 +1189,19 @@ ObRedoTransportOption& ObRedoTransportOption::operator=(const ObRedoTransportOpt
   return *this;
 }
 
-bool ObRedoTransportOption::operator!=(const ObRedoTransportOption& other) const
+bool ObRedoTransportOption::operator!=(const ObRedoTransportOption &other) const
 {
   return !(*this == other);
 }
-bool ObRedoTransportOption::operator==(const ObRedoTransportOption& other) const
+bool ObRedoTransportOption::operator==(const ObRedoTransportOption &other) const
 {
-  return net_timeout_ == other.net_timeout_ && reopen_ == other.reopen_ && max_failure_ == other.max_failure_ &&
-         is_sync_ == other.is_sync_;
+  return net_timeout_ == other.net_timeout_
+         && reopen_ == other.reopen_
+         && max_failure_ == other.max_failure_
+         && is_sync_ == other.is_sync_;
 }
 
-int ObRedoTransportOption::get_redo_transport_options_str(ObSqlString& str) const
+int ObRedoTransportOption::get_redo_transport_options_str(ObSqlString &str) const
 {
   int ret = OB_SUCCESS;
   if (is_sync_) {
@@ -1272,10 +1212,11 @@ int ObRedoTransportOption::get_redo_transport_options_str(ObSqlString& str) cons
     LOG_WARN("failed to assign str", KR(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(str.append_fmt("NET_TIMEOUT = %ld", net_timeout_))) {
+  } else if (OB_FAIL(str.append_fmt("NET_TIMEOUT = %ld",
+                                    net_timeout_))) {
     LOG_WARN("failed to assign str", KR(ret), "this", *this);
   }
   return ret;
 }
-}  // end namespace share
-}  // namespace oceanbase
+} // end namespace share
+} // end oceanbase

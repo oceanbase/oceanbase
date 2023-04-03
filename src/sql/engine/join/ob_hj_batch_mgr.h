@@ -17,28 +17,31 @@
 #include "lib/list/ob_list.h"
 #include "sql/engine/join/ob_hj_buf_mgr.h"
 
-namespace oceanbase {
-namespace sql {
-namespace join {
+namespace oceanbase
+{
+namespace sql
+{
+namespace join
+{
 
-struct ObHJBatchPair {
-  ObHJBatch* left_;
-  ObHJBatch* right_;
+struct ObHJBatchPair
+{
+  ObHJBatch *left_;
+  ObHJBatch *right_;
 
-  ObHJBatchPair() : left_(NULL), right_(NULL)
-  {}
+  ObHJBatchPair() : left_(NULL), right_(NULL) {}
 };
 
 class ObHJBatchMgr {
 public:
-  ObHJBatchMgr(common::ObIAllocator& alloc, ObHJBufMgr* buf_mgr, uint64_t tenant_id)
-      : total_dump_count_(0),
-        total_dump_size_(0),
-        batch_count_(0),
-        tenant_id_(tenant_id),
-        alloc_(alloc),
-        batch_list_(alloc),
-        buf_mgr_(buf_mgr)
+  ObHJBatchMgr(common::ObIAllocator &alloc, ObHJBufMgr *buf_mgr, uint64_t tenant_id) :
+    total_dump_count_(0),
+    total_dump_size_(0),
+    batch_count_(0),
+    tenant_id_(tenant_id),
+    alloc_(alloc),
+    batch_list_(alloc),
+    buf_mgr_(buf_mgr)
   {}
 
   virtual ~ObHJBatchMgr();
@@ -46,22 +49,23 @@ public:
 
   typedef common::ObList<ObHJBatchPair, common::ObIAllocator> hj_batch_pair_list_type;
 
-  int next_batch(ObHJBatchPair& batch_pair);
+  int next_batch(ObHJBatchPair &batch_pair);
 
-  int64_t get_batch_list_size()
-  {
-    return batch_list_.size();
-  }
+  int64_t get_batch_list_size() { return batch_list_.size(); }
   int remove_undumped_batch();
-  int get_or_create_batch(int32_t level, int32_t batchno, bool is_left, ObHJBatch*& batch, bool only_get = false);
+  int get_or_create_batch(int32_t level,
+                          int64_t part_shift,
+                          int32_t batchno,
+                          bool is_left,
+                          ObHJBatch *&batch,
+                          bool only_get = false);
 
-  void free(ObHJBatch* batch)
-  {
+  void free(ObHJBatch *batch) {
     if (NULL != batch) {
       batch->~ObHJBatch();
       alloc_.free(batch);
       batch = NULL;
-      batch_count_--;
+      batch_count_ --;
     }
   }
 
@@ -72,13 +76,15 @@ public:
 
 private:
   uint64_t tenant_id_;
-  common::ObIAllocator& alloc_;
+  common::ObIAllocator &alloc_;
   hj_batch_pair_list_type batch_list_;
-  ObHJBufMgr* buf_mgr_;
+  ObHJBufMgr *buf_mgr_;
 };
 
-}  // namespace join
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+}
 
 #endif /* _OB_HJ_BATCH_MGR_H */
+
+

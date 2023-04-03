@@ -1,0 +1,19 @@
+result_format: 4
+drop database if exists xiaofeng_db;
+create database xiaofeng_db;
+use xiaofeng_db;
+create table t1(c1 int primary key);
+create table t2(c1 int unique, c2 int, c3 varchar(10), c4 varchar(10), constraint test_for_table_constraints_check_name check(c3 = substr(c4, 1, 1)),
+                constraint test_for_table_constraints_fk_name_1 foreign key (c1) references t1(c1),
+                constraint test_for_table_constraints_fk_name_2 foreign key (c2) references t2(c1));
+select * from information_schema.table_constraints where CONSTRAINT_SCHEMA = 'xiaofeng_db';
++--------------------+-------------------+---------------------------------------+--------------+------------+-----------------+----------+
+| CONSTRAINT_CATALOG | CONSTRAINT_SCHEMA | CONSTRAINT_NAME                       | TABLE_SCHEMA | TABLE_NAME | CONSTRAINT_TYPE | ENFORCED |
++--------------------+-------------------+---------------------------------------+--------------+------------+-----------------+----------+
+| def                | xiaofeng_db       | PRIMARY                               | xiaofeng_db  | t1         | PRIMARY KEY     | YES      |
+| def                | xiaofeng_db       | c1                                    | xiaofeng_db  | t2         | UNIQUE          | YES      |
+| def                | xiaofeng_db       | test_for_table_constraints_check_name | xiaofeng_db  | t2         | CHECK           | YES      |
+| def                | xiaofeng_db       | test_for_table_constraints_fk_name_1  | xiaofeng_db  | t2         | FOREIGN KEY     | YES      |
+| def                | xiaofeng_db       | test_for_table_constraints_fk_name_2  | xiaofeng_db  | t2         | FOREIGN KEY     | YES      |
++--------------------+-------------------+---------------------------------------+--------------+------------+-----------------+----------+
+drop database xiaofeng_db;

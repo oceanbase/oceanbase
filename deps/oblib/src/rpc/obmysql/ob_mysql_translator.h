@@ -16,20 +16,22 @@
 #include "rpc/frame/ob_req_translator.h"
 
 // used when initializing processor table
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 
 using rpc::frame::ObReqProcessor;
 
-class ObMySQLTranslator : public rpc::frame::ObReqTranslator {
+class ObMySQLTranslator
+    : public rpc::frame::ObReqTranslator
+{
 public:
-  ObMySQLTranslator()
-  {}
-  virtual ~ObMySQLTranslator()
-  {}
-};  // end of class ObMySQLTranslator
+  ObMySQLTranslator() {}
+  virtual ~ObMySQLTranslator() {}
+}; // end of class ObMySQLTranslator
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_MYSQL_TRANSLATOR_H_ */

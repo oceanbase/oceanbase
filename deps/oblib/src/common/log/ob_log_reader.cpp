@@ -15,20 +15,25 @@
 using namespace oceanbase::common;
 
 ObLogReader::ObLogReader()
-    : cur_log_file_id_(0),
-      cur_log_seq_id_(0),
-      max_log_file_id_(0),
-      log_file_reader_(NULL),
-      is_inited_(false),
-      is_wait_(false),
-      has_max_(false)
-{}
+  : cur_log_file_id_(0),
+    cur_log_seq_id_(0),
+    max_log_file_id_(0),
+    log_file_reader_(NULL),
+    is_inited_(false),
+    is_wait_(false),
+    has_max_(false)
+{
+}
 
 ObLogReader::~ObLogReader()
-{}
+{
+}
 
-int ObLogReader::init(ObSingleLogReader* reader, const char* log_dir, const uint64_t log_file_id_start,
-    const uint64_t log_seq, bool is_wait)
+int ObLogReader::init(ObSingleLogReader *reader,
+                      const char *log_dir,
+                      const uint64_t log_file_id_start,
+                      const uint64_t log_seq,
+                      bool is_wait)
 {
   int ret = OB_SUCCESS;
 
@@ -69,7 +74,10 @@ int ObLogReader::init(ObSingleLogReader* reader, const char* log_dir, const uint
   return ret;
 }
 
-int ObLogReader::read_log(LogCommand& cmd, uint64_t& seq, char*& log_data, int64_t& data_len)
+int ObLogReader::read_log(LogCommand &cmd,
+                          uint64_t &seq,
+                          char *&log_data,
+                          int64_t &data_len)
 {
   int ret = OB_SUCCESS;
 
@@ -93,7 +101,8 @@ int ObLogReader::read_log(LogCommand& cmd, uint64_t& seq, char*& log_data, int64
         // Regardless of opening success or failure: cur_log_file_id++, log_file_reader_->pos will be set to zero,
         if (OB_FAIL(log_file_reader_->close())) {
           SHARE_LOG(ERROR, "log_file_reader_ close error", K(ret));
-        } else if (OB_FAIL(open_log_(++cur_log_file_id_, seq)) && OB_READ_NOTHING != ret) {
+        } else if (OB_FAIL(open_log_(++cur_log_file_id_, seq))
+            && OB_READ_NOTHING != ret) {
           SHARE_LOG(WARN, "open log failed", K(cur_log_file_id_), K(seq), K(ret));
         }
       }
@@ -116,7 +125,7 @@ int ObLogReader::revise_log(const bool force)
   } else {
     LogCommand cmd;
     uint64_t seq = 0;
-    char* log_data = NULL;
+    char *log_data = NULL;
     int64_t data_len = 0;
     if (!log_file_reader_->is_opened()) {
       ret = open_log_(cur_log_file_id_);
@@ -131,7 +140,8 @@ int ObLogReader::revise_log(const bool force)
         // Regardless of opening success or failure: cur_log_file_id++, log_file_reader_->pos will be set to zero,
         if (OB_FAIL(log_file_reader_->close())) {
           SHARE_LOG(ERROR, "log_file_reader_ close error", K(ret));
-        } else if (OB_FAIL(open_log_(++cur_log_file_id_, seq)) && OB_READ_NOTHING != ret) {
+        } else if (OB_FAIL(open_log_(++cur_log_file_id_, seq))
+            && OB_READ_NOTHING != ret) {
           SHARE_LOG(WARN, "open log failed", K(cur_log_file_id_), K(seq), K(ret));
         }
       }
@@ -204,7 +214,7 @@ int ObLogReader::seek(uint64_t log_seq)
   } else {
     LogCommand cmd;
     uint64_t seq = 0;
-    char* log_data = NULL;
+    char *log_data = NULL;
     int64_t data_len = 0;
 
     if (0 == log_seq) {
@@ -215,15 +225,15 @@ int ObLogReader::seek(uint64_t log_seq)
         ret = OB_SUCCESS;
       } else if (OB_FAIL(ret)) {
         SHARE_LOG(WARN, "seek failed", K(log_seq), K(ret));
-      } else if (seq - 1 == log_seq) {  // log_seq to seek is in the previous log file
+      } else if (seq - 1 == log_seq) { // log_seq to seek is in the previous log file
         if (OB_FAIL(log_file_reader_->close())) {
           SHARE_LOG(ERROR, "log file reader close error", K(ret));
         } else if (OB_FAIL(open_log_(cur_log_file_id_))) {
           SHARE_LOG(ERROR, "open log error", K(cur_log_file_id_), K(ret));
-        } else {
-        }
+        } else {}
       } else if (seq >= log_seq) {
-        SHARE_LOG(WARN, "seek failed, the initial seq is bigger than log_seq, ", K(seq), K(log_seq));
+        SHARE_LOG(WARN, "seek failed, the initial seq is bigger than log_seq, ",
+                        K(seq), K(log_seq));
         ret = OB_ERROR;
       } else {
         while (OB_SUCC(ret) && seq < log_seq) {
@@ -238,7 +248,8 @@ int ObLogReader::seek(uint64_t log_seq)
   return ret;
 }
 
-int ObLogReader::open_log_(const uint64_t log_file_id, const uint64_t last_log_seq /* = 0*/)
+int ObLogReader::open_log_(const uint64_t log_file_id,
+                           const uint64_t last_log_seq/* = 0*/)
 {
   int ret = OB_SUCCESS;
 
@@ -272,7 +283,10 @@ int ObLogReader::open_log_(const uint64_t log_file_id, const uint64_t last_log_s
   return ret;
 }
 
-int ObLogReader::read_log_(LogCommand& cmd, uint64_t& log_seq, char*& log_data, int64_t& data_len)
+int ObLogReader::read_log_(LogCommand &cmd,
+                           uint64_t &log_seq,
+                           char *&log_data,
+                           int64_t &data_len)
 {
   int ret = OB_SUCCESS;
 
@@ -283,7 +297,8 @@ int ObLogReader::read_log_(LogCommand& cmd, uint64_t& log_seq, char*& log_data, 
     SHARE_LOG(ERROR, "log_file_reader_ is NULL, this should not be reached");
     ret = OB_ERROR;
   } else {
-    if (OB_FAIL(log_file_reader_->read_log(cmd, log_seq, log_data, data_len)) && OB_READ_NOTHING != ret) {
+    if (OB_FAIL(log_file_reader_->read_log(cmd, log_seq, log_data, data_len))
+        && OB_READ_NOTHING != ret) {
       SHARE_LOG(WARN, "log_file_reader_ read_log error", K(ret));
     }
   }

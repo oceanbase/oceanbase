@@ -22,39 +22,42 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
-class ObTableInsertTest : public ::testing::Test {
+class ObTableInsertTest: public ::testing::Test
+{
 public:
   ObTableInsertTest();
   virtual ~ObTableInsertTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  int create_const_expr(ObObj& obj, ObSqlExpression*& expr);
-  int create_expr_values(ObExprValues*& expr_values);
-
+  int create_const_expr(ObObj &obj, ObSqlExpression *&expr);
+  int create_expr_values(ObExprValues *&expr_values);
 private:
   // disallow copy
-  ObTableInsertTest(const ObTableInsertTest& other);
-  ObTableInsertTest& operator=(const ObTableInsertTest& other);
-
+  ObTableInsertTest(const ObTableInsertTest &other);
+  ObTableInsertTest& operator=(const ObTableInsertTest &other);
 protected:
   // data members
   ObPhysicalPlan physical_plan_;
 };
 
 ObTableInsertTest::ObTableInsertTest()
-{}
+{
+}
 
 ObTableInsertTest::~ObTableInsertTest()
-{}
+{
+}
 
 void ObTableInsertTest::SetUp()
-{}
+{
+}
 
 void ObTableInsertTest::TearDown()
-{}
+{
+}
 
-int ObTableInsertTest::create_const_expr(ObObj& obj, ObSqlExpression*& expr)
+int ObTableInsertTest::create_const_expr(ObObj &obj, ObSqlExpression *&expr)
 {
   int ret = OB_SUCCESS;
   ObPostExprItem expr_item;
@@ -71,27 +74,27 @@ int ObTableInsertTest::create_const_expr(ObObj& obj, ObSqlExpression*& expr)
   return ret;
 }
 
-int ObTableInsertTest::create_expr_values(ObExprValues*& expr_values)
+int ObTableInsertTest::create_expr_values(ObExprValues *&expr_values)
 {
   return physical_plan_.alloc_operator_by_type(PHY_EXPR_VALUES, expr_values);
 }
 
 TEST_F(ObTableInsertTest, test_operator_serialize)
 {
-  ObExprValues* expr_values = NULL;
+  ObExprValues *expr_values = NULL;
   ASSERT_EQ(OB_SUCCESS, create_expr_values(expr_values));
   expr_values->set_column_count(4);
   expr_values->set_id(0);
   ASSERT_EQ(OB_SUCCESS, expr_values->init_value_count(4));
   for (int64_t i = 0; i < 4; ++i) {
-    ObSqlExpression* expr = NULL;
+    ObSqlExpression *expr = NULL;
     ObObj obj;
     obj.set_int(i);
     ObAccuracy accuracy;
     ASSERT_EQ(OB_SUCCESS, create_const_expr(obj, expr));
     ASSERT_EQ(OB_SUCCESS, expr_values->add_value(expr));
   }
-  ObExprValues* dec_values = NULL;
+  ObExprValues *dec_values = NULL;
   char buf[1024] = {'\0'};
   int64_t pos = 0;
   ObPhyOpSeriCtx seri_ctx;
@@ -106,7 +109,7 @@ TEST_F(ObTableInsertTest, test_operator_serialize)
 
   int ret = OB_SUCCESS;
   uint64_t app_column_id = 16;
-  ObTableInsert* table_insert = NULL;
+  ObTableInsert *table_insert = NULL;
   ASSERT_EQ(OB_SUCCESS, physical_plan_.alloc_operator_by_type(PHY_INSERT, table_insert));
   table_insert->set_column_count(4);
   table_insert->set_id(1);
@@ -121,7 +124,7 @@ TEST_F(ObTableInsertTest, test_operator_serialize)
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, table_insert->serialize(buf, sizeof(buf), pos));
   data_len = pos;
-  ObTableInsert* dec_insert = NULL;
+  ObTableInsert *dec_insert = NULL;
   ASSERT_EQ(OB_SUCCESS, physical_plan_.alloc_operator_by_type(PHY_INSERT, dec_insert));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, dec_insert->deserialize(buf, data_len, pos));
@@ -170,12 +173,12 @@ TEST_F(ObTableInsertTest, test_insert_basic)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_global_memory_pool();
   init_sql_factories();
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   int ret = RUN_ALL_TESTS();
   return ret;
 }

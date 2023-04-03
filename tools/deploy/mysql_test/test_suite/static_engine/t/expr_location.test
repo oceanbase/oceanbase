@@ -1,0 +1,40 @@
+#owner: luofan.zp
+#owner group: sql2
+#tags: optimizer
+#description: locate/instr/reverse test
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+set @@ob_enable_plan_cache = 0;
+--sleep 2
+
+--echo // locate(substr, oristr), instr(oristr, substr)
+select locate(null, 'a'), locate('a', null), locate('a', 'a', null);
+select locate('abc', 'a'), instr('abc', 'a');
+select locate('a', 'aaaa', 1), locate('a', 'aaaa', 0), locate('a', 'aaaa', -1);
+select locate('a', 'aaaa', '1.9'), locate('a', 'aaaa', '0.9'), locate('a', 'aaaa', '-1.9');
+select locate('a', 'aaaa', '1.1'), locate('a', 'aaaa', '0.1'), locate('a', 'aaaa', '-1.1');
+select locate('中', 'a中测试', 1);
+select locate('a', 'abcdabcd', '2.a');
+select locate('a', 'abcdabcd', 'a');
+select locate('a', 'abcdabcd', '-2.a');
+select locate('a', 'a', 10000);
+select locate('a', 'a', 1000000000000000000000000000000000000000000000000000000000000000);
+
+select instr('abc', 'a'), instr('aaaa','a'), instr('a中测试', '中'), instr(null, 'a'), instr('a', null);
+
+select reverse(''), reverse(null), reverse('你好abc中文'), reverse(12345.123), reverse(null);
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 bigint unsigned);
+insert into t1 values(locate('a','b',9223372036854775808));
+select * from t1;
+drop table t1;
+
+--sleep 2

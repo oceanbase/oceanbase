@@ -15,66 +15,44 @@
 
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
-namespace oceanbase {
-namespace sql {
-class ObCreateDbLinkStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCreateDbLinkStmt : public ObDDLStmt
+{
 public:
   ObCreateDbLinkStmt();
-  explicit ObCreateDbLinkStmt(common::ObIAllocator* name_pool);
+  explicit ObCreateDbLinkStmt(common::ObIAllocator *name_pool);
   virtual ~ObCreateDbLinkStmt();
 
-  inline void set_tenant_id(const uint64_t id)
-  {
-    create_dblink_arg_.dblink_info_.set_tenant_id(id);
-  }
-  inline void set_user_id(const uint64_t id)
-  {
-    create_dblink_arg_.dblink_info_.set_owner_id(id);
-  }
-  inline int set_dblink_name(const common::ObString& name)
-  {
-    return create_dblink_arg_.dblink_info_.set_dblink_name(name);
-  }
-  inline int set_cluster_name(const common::ObString& name)
-  {
-    return create_dblink_arg_.dblink_info_.set_cluster_name(name);
-  }
-  inline int set_tenant_name(const common::ObString& name)
-  {
-    return create_dblink_arg_.dblink_info_.set_tenant_name(name);
-  }
-  inline int set_user_name(const common::ObString& name)
-  {
-    return create_dblink_arg_.dblink_info_.set_user_name(name);
-  }
-  inline int set_password(const common::ObString& pwd)
-  {
-    return create_dblink_arg_.dblink_info_.set_password(pwd);
-  }
-  inline void set_host_addr(const common::ObAddr& addr)
-  {
-    create_dblink_arg_.dblink_info_.set_host_addr(addr);
-    ;
-  }
+  inline void set_tenant_id(const uint64_t id) { create_dblink_arg_.dblink_info_.set_tenant_id(id); }
+  inline void set_user_id(const uint64_t id) { create_dblink_arg_.dblink_info_.set_owner_id(id); }
+  inline int set_dblink_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_dblink_name(name); }
+  inline int set_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_cluster_name(name); }
+  inline int set_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_tenant_name(name); }
+  inline int set_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_user_name(name); }
+  int set_password(const common::ObString &pwd);
+  inline void set_reverse_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_reverse_host_addr(addr); }
+  inline int set_reverse_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_cluster_name(name); }
+  inline int set_reverse_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_tenant_name(name); }
+  inline int set_reverse_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_user_name(name); }
+  int set_reverse_password(const common::ObString &pwd);
+  inline void set_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_host_addr(addr);; }
+  inline int set_conn_string(const common::ObString &str) { return create_dblink_arg_.dblink_info_.set_conn_string(str); }
+  inline int set_service_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_service_name(name); }
+  inline void set_driver_proto(int64_t proto) {create_dblink_arg_.dblink_info_.set_driver_proto(proto);}
+  inline int64_t get_driver_proto() const { return create_dblink_arg_.dblink_info_.get_driver_proto(); }
 
-  obrpc::ObCreateDbLinkArg& get_create_dblink_arg()
-  {
-    return create_dblink_arg_;
-  }
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return create_dblink_arg_;
-  }
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
+  obrpc::ObCreateDbLinkArg &get_create_dblink_arg() { return create_dblink_arg_; }
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return create_dblink_arg_; }
+  virtual bool cause_implicit_commit() const { return true; }
 
   TO_STRING_KV(K_(create_dblink_arg));
 
 private:
   obrpc::ObCreateDbLinkArg create_dblink_arg_;
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_CREATE_DBLINK_STMT_H_
+}//namespace sql
+}//namespace oceanbase
+#endif //OCEANBASE_SQL_OB_CREATE_DBLINK_STMT_H_

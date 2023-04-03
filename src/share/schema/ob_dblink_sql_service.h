@@ -16,38 +16,49 @@
 #include "ob_ddl_sql_service.h"
 #include "share/ob_dml_sql_splicer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 class ObISQLClient;
-}  // namespace common
-namespace share {
-class ObDMLSqlSplicter;
-namespace schema {
+}
+namespace share
+{
+namespace schema
+{
 class ObDbLinkInfo;
 
-class ObDbLinkSqlService : public ObDDLSqlService {
+class ObDbLinkSqlService : public ObDDLSqlService
+{
 public:
-  ObDbLinkSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
-  {}
-  virtual ~ObDbLinkSqlService()
-  {}
-
+  ObDbLinkSqlService(ObSchemaService &schema_service)
+    : ObDDLSqlService(schema_service) {}
+  virtual ~ObDbLinkSqlService() {}
 public:
-  int insert_dblink(const ObDbLinkBaseInfo& dblink_info, const int64_t is_deleted, common::ObISQLClient& sql_client,
-      const common::ObString* ddl_stmt_str);
-  int delete_dblink(const uint64_t tenant_id, const uint64_t dblink_id, common::ObISQLClient& sql_client);
-
+  int insert_dblink(const ObDbLinkBaseInfo &dblink_info,
+                    const int64_t is_deleted,
+                    common::ObISQLClient &sql_client,
+                    const common::ObString *ddl_stmt_str);
+  int delete_dblink(const uint64_t tenant_id,
+                    const uint64_t dblink_id,
+                    common::ObISQLClient &sql_client);
 private:
-  int add_pk_columns(const uint64_t tenant_id, const uint64_t dblink_id, ObDMLSqlSplicer& dml);
-  int add_normal_columns(const ObDbLinkBaseInfo& dblink_info, ObDMLSqlSplicer& dml);
-  int add_history_columns(const ObDbLinkBaseInfo& dblink_info, int64_t is_deleted, ObDMLSqlSplicer& dml);
+  int add_pk_columns(const uint64_t tenant_id,
+                     const uint64_t dblink_id,
+                     ObDMLSqlSplicer &dml);
+  int add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
+                         ObDMLSqlSplicer &dml);
+  int add_history_columns(const ObDbLinkBaseInfo &dblink_info,
+                          int64_t is_deleted,
+                          ObDMLSqlSplicer &dml);
 
   DISALLOW_COPY_AND_ASSIGN(ObDbLinkSqlService);
 };
 
-}  // end of namespace schema
-}  // end of namespace share
-}  // end of namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_SCHEMA_OB_DBLINK_SQL_SERVICE_H_
+} //end of namespace schema
+} //end of namespace share
+} //end of namespace oceanbase
+
+#endif //OCEANBASE_SHARE_SCHEMA_OB_DBLINK_SQL_SERVICE_H_

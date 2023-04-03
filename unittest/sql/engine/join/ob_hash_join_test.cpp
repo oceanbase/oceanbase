@@ -11,8 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#define private public
-#define protected public
+#define private  public
+#define protected  public
 #include "lib/utility/ob_test_util.h"
 #include "sql/engine/join/ob_hash_join.h"
 #include "ob_join_fake_table.h"
@@ -27,27 +27,28 @@
 #include <vector>
 #include "sql/engine/test_engine_util.h"
 
+
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::test;
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
 
-class MockSqlExpression : public ObSqlExpression {
+class MockSqlExpression : public ObSqlExpression
+{
 public:
-  MockSqlExpression() : ObSqlExpression(alloc_)
+  MockSqlExpression(): ObSqlExpression(alloc_)
   {
     set_item_count(10);
   }
-  ~MockSqlExpression()
-  {}
+  ~MockSqlExpression() {}
 };
 
-class ObHashJoinTest : public ::testing::Test {
+class ObHashJoinTest: public ::testing::Test
+{
 public:
   ObHashJoinTest();
   virtual ~ObHashJoinTest();
-
 protected:
   void join_test(int64_t case_id, ObJoinType join_type);
   void serialize_test();
@@ -55,24 +56,24 @@ protected:
   void serialize_exception_test(int expect_ret);
   void memlimit_exception_test(int expect_ret, int64_t mem_size);
   // disallow copy
-  ObHashJoinTest(const ObHashJoinTest& other);
-  ObHashJoinTest& operator=(const ObHashJoinTest& other);
-
+  ObHashJoinTest(const ObHashJoinTest &other);
+  ObHashJoinTest& operator=(const ObHashJoinTest &other);
 private:
   // data members
 };
 
-class ObHashJoinPlan {
+class ObHashJoinPlan
+{
 public:
-  static ObHashJoin& get_instance()
+  static ObHashJoin &get_instance()
   {
     return hash_join_;
   }
-  static ObJoinFakeTable& get_out_data()
+  static ObJoinFakeTable &get_out_data()
   {
     return out_data_;
   }
-  static ObPhysicalPlan* get_phy_plan()
+  static ObPhysicalPlan *get_phy_plan()
   {
     return &phy_plan_;
   }
@@ -89,7 +90,7 @@ public:
       hash_join_.set_phy_plan(&phy_plan_);
       left_op_.set_phy_plan(&phy_plan_);
       right_op_.set_phy_plan(&phy_plan_);
-      left_op_.set_rows(10000);  // default
+      left_op_.set_rows(10000); // default
       out_data_.set_phy_plan(&phy_plan_);
       set_id();
       set_column_count(2);
@@ -98,16 +99,15 @@ public:
       projector_size_ = 2;
       left_op_.set_projector(projector_, projector_size_);
       right_op_.set_projector(projector_, projector_size_);
-      if (OB_FAIL(hash_join_.set_child(0, left_op_))) {
-      } else if (OB_FAIL(hash_join_.set_child(1, right_op_))) {
-      } else if (OB_FAIL(hash_join_.set_join_type(join_type))) {
-      } else if (OB_FAIL(hash_join_.set_join_type(join_type))) {
-      } else if (OB_FAIL(init_equal_conds())) {
-      } else if (OB_FAIL(init_other_conds())) {
-      } else if (OB_FAIL(left_op_.prepare_data(case_id, TT_LEFT_TABLE, join_type))) {
-      } else if (OB_FAIL(right_op_.prepare_data(case_id, TT_RIGHT_TABLE, join_type))) {
-      } else if (OB_FAIL(out_data_.prepare_data(case_id, TT_OUT_TABLE, join_type))) {
-      }
+      if      (OB_FAIL(hash_join_.set_child(0, left_op_))) {}
+      else if (OB_FAIL(hash_join_.set_child(1, right_op_))) {}
+      else if (OB_FAIL(hash_join_.set_join_type(join_type))) {}
+      else if (OB_FAIL(hash_join_.set_join_type(join_type))) {}
+      else if (OB_FAIL(init_equal_conds())) {}
+      else if (OB_FAIL(init_other_conds())) {}
+      else if (OB_FAIL(left_op_.prepare_data(case_id, TT_LEFT_TABLE, join_type))) {}
+      else if (OB_FAIL(right_op_.prepare_data(case_id, TT_RIGHT_TABLE, join_type))) {}
+      else if (OB_FAIL(out_data_.prepare_data(case_id, TT_OUT_TABLE, join_type))) {}
     }
     return ret;
   }
@@ -128,7 +128,6 @@ public:
     out_data_.reuse();
     allocator_.reuse();
   }
-
 private:
   static void set_id()
   {
@@ -159,11 +158,10 @@ private:
       item_col2.set_column(i + cond_count);
       item_op.set_op(phy_plan_.get_allocator(), "=", 2);
       item_op.get_expr_operator()->set_result_type(res_type);
-      if (OB_FAIL(equal_expr_[i].add_expr_item(item_col1))) {
-      } else if (OB_FAIL(equal_expr_[i].add_expr_item(item_col2))) {
-      } else if (OB_FAIL(equal_expr_[i].add_expr_item(item_op))) {
-      } else if (OB_FAIL(hash_join_.add_equijoin_condition(&equal_expr_[i]))) {
-      }
+      if      (OB_FAIL(equal_expr_[i].add_expr_item(item_col1))) {}
+      else if (OB_FAIL(equal_expr_[i].add_expr_item(item_col2))) {}
+      else if (OB_FAIL(equal_expr_[i].add_expr_item(item_op))) {}
+      else if (OB_FAIL(hash_join_.add_equijoin_condition(&equal_expr_[i]))) {}
     }
     return ret;
   }
@@ -190,20 +188,17 @@ private:
       item_int.set_item_type(T_INT);
       item_op_gt.set_op(phy_plan_.get_allocator(), ">", 2);
       item_op_gt.get_expr_operator()->set_result_type(res_type_gt);
-      if (OB_FAIL(other_expr_[i].add_expr_item(item_col1))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_col2))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_add))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_int))) {
-      } else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_gt))) {
-      } else if (OB_FAIL(hash_join_.add_other_join_condition(&other_expr_[i]))) {
-      }
+      if      (OB_FAIL(other_expr_[i].add_expr_item(item_col1))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_col2))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_add))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_int))) {}
+      else if (OB_FAIL(other_expr_[i].add_expr_item(item_op_gt))) {}
+      else if (OB_FAIL(hash_join_.add_other_join_condition(&other_expr_[i]))) {}
     }
     return ret;
   }
-
 private:
   ObHashJoinPlan();
-
 private:
   static ObPhysicalPlan phy_plan_;
   static MockSqlExpression equal_expr_[2];
@@ -229,10 +224,12 @@ int32_t ObHashJoinPlan::projector_[2];
 int64_t ObHashJoinPlan::projector_size_;
 
 ObHashJoinTest::ObHashJoinTest()
-{}
+{
+}
 
 ObHashJoinTest::~ObHashJoinTest()
-{}
+{
+}
 
 void ObHashJoinTest::join_test(int64_t case_id, ObJoinType join_type)
 {
@@ -249,15 +246,15 @@ void ObHashJoinTest::join_test(int64_t case_id, ObJoinType join_type)
   ASSERT_EQ(OB_SUCCESS, my_session->load_default_sys_variable(false, true));
   ASSERT_EQ(OB_SUCCESS, my_session->init_tenant(tenant_name, tenant_id));
 
-  ObHashJoin& hash_join = ObHashJoinPlan::get_instance();
+  ObHashJoin &hash_join = ObHashJoinPlan::get_instance();
   ASSERT_EQ(OB_SUCCESS, hash_join.open(exec_ctx));
-  ObJoinFakeTable& out_data = ObHashJoinPlan::get_out_data();
+  ObJoinFakeTable &out_data = ObHashJoinPlan::get_out_data();
   ASSERT_EQ(OB_SUCCESS, out_data.open(exec_ctx));
 
   int join_ret = OB_SUCCESS;
   int out_ret = OB_SUCCESS;
-  const ObNewRow* join_row = NULL;
-  const ObNewRow* out_row = NULL;
+  const ObNewRow *join_row = NULL;
+  const ObNewRow *out_row = NULL;
   std::vector<std::vector<int64_t>> join_res;
   std::vector<std::vector<int64_t>> out_res;
   while (OB_SUCCESS == join_ret && OB_SUCCESS == out_ret) {
@@ -267,21 +264,21 @@ void ObHashJoinTest::join_test(int64_t case_id, ObJoinType join_type)
 
     ASSERT_EQ(join_ret, out_ret);
     if (OB_SUCCESS == join_ret && OB_SUCCESS == out_ret) {
-      ObObj* join_cells = join_row->cells_;
+      ObObj *join_cells = join_row->cells_;
       std::vector<int64_t> res;
       res.resize(4);
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0;i < 4; i++) {
         res.at(i) = join_cells[i].is_null() ? 0 : join_cells[i].get_int();
       }
       join_res.push_back(res);
-      ObObj* out_cells = out_row->cells_;
-      for (int i = 0; i < 4; i++) {
+      ObObj *out_cells = out_row->cells_;
+      for (int i = 0;i < 4; i++) {
         res.at(i) = out_cells[i].is_null() ? 0 : out_cells[i].get_int();
       }
       out_res.push_back(res);
     }
-  }  // while
-  auto cmp_func = [](const std::vector<int64_t>& l, std::vector<int64_t> r) {
+  } // while
+  auto cmp_func = [](const std::vector<int64_t> &l, std::vector<int64_t> r) {
     for (int i = 0; i < l.size(); i++) {
       if (l.at(i) != r.at(i)) {
         return l.at(i) < r.at(i);
@@ -309,7 +306,7 @@ void ObHashJoinTest::join_test(int64_t case_id, ObJoinType join_type)
 
 void ObHashJoinTest::serialize_test()
 {
-  ObHashJoin& hash_join_1 = ObHashJoinPlan::get_instance();
+  ObHashJoin &hash_join_1 = ObHashJoinPlan::get_instance();
   ObArenaAllocator alloc;
   ObHashJoin hash_join_2(alloc);
   const int64_t MAX_SERIALIZE_BUF_LEN = 1024;
@@ -321,12 +318,12 @@ void ObHashJoinTest::serialize_test()
   ASSERT_EQ(pos, hash_join_1.get_serialize_size());
   int64_t data_len = pos;
 
-  hash_join_2.set_phy_plan(const_cast<ObPhysicalPlan*>(hash_join_1.get_phy_plan()));
+  hash_join_2.set_phy_plan(const_cast<ObPhysicalPlan *>(hash_join_1.get_phy_plan()));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, hash_join_2.deserialize(buf, data_len, pos));
   ASSERT_EQ(pos, data_len);
-  const char* str_1 = to_cstring(hash_join_1);
-  const char* str_2 = to_cstring(hash_join_2);
+  const char *str_1 = to_cstring(hash_join_1);
+  const char *str_2 = to_cstring(hash_join_2);
   ASSERT_EQ(0, strcmp(str_1, str_2));
 
   ObHashJoinPlan::reuse();
@@ -336,15 +333,15 @@ void ObHashJoinTest::join_exception_test(int expect_ret)
 {
   int ret = OB_SUCCESS;
   ObExecContext exec_ctx;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
 
   ASSERT_EQ(OB_SUCCESS, exec_ctx.init_phy_op(4));
   ASSERT_EQ(OB_SUCCESS, exec_ctx.create_physical_plan_ctx());
-  ObHashJoin& hash_join = ObHashJoinPlan::get_instance();
+  ObHashJoin &hash_join = ObHashJoinPlan::get_instance();
 
-  if (OB_FAIL(ObHashJoinPlan::init(0, FULL_OUTER_JOIN))) {
-  } else if (OB_FAIL(hash_join.open(exec_ctx))) {
-  } else {
+  if (OB_FAIL(ObHashJoinPlan::init(0, FULL_OUTER_JOIN))) {}
+  else if (OB_FAIL(hash_join.open(exec_ctx))) {}
+  else {
     while (OB_SUCC(ret)) {
       ret = hash_join.get_next_row(exec_ctx, row);
     }
@@ -361,14 +358,14 @@ void ObHashJoinTest::join_exception_test(int expect_ret)
 void ObHashJoinTest::serialize_exception_test(int expect_ret)
 {
   int ret = OB_SUCCESS;
-  ObHashJoin& hash_join = ObHashJoinPlan::get_instance();
+  ObHashJoin &hash_join = ObHashJoinPlan::get_instance();
   const int64_t MAX_SERIALIZE_BUF_LEN = 1024;
   char buf[MAX_SERIALIZE_BUF_LEN] = {'\0'};
   ASSERT_EQ(OB_SUCCESS, ObHashJoinPlan::init(0, INNER_JOIN));
 
   int64_t pos = 0;
-  if (OB_FAIL(hash_join.serialize(buf, MAX_SERIALIZE_BUF_LEN, pos))) {
-  } else {
+  if (OB_FAIL(hash_join.serialize(buf, MAX_SERIALIZE_BUF_LEN, pos))) {}
+  else {
     int64_t data_len = pos;
     pos = 0;
     ObHashJoinPlan::reuse();
@@ -395,11 +392,10 @@ void ObHashJoinTest::memlimit_exception_test(int expect_ret, int64_t memsize)
   auto my_session = exec_ctx.get_my_session();
   ASSERT_TRUE(NULL != my_session);
   ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
-  ASSERT_EQ(OB_SUCCESS, my_session->load_default_sys_variable(false, true));
-  ASSERT_EQ(OB_SUCCESS, my_session->init_tenant(tenant_name, tenant_id));
-  ObHashJoin& hash_join = ObHashJoinPlan::get_instance();
+  ASSERT_EQ(OB_SUCCESS, my_session->load_default_sys_variable(false, true));  ASSERT_EQ(OB_SUCCESS, my_session->init_tenant(tenant_name, tenant_id));
+  ObHashJoin &hash_join = ObHashJoinPlan::get_instance();
   oceanbase::lib::set_wa_limit(10, memsize);
-  ret = hash_join.open(exec_ctx);
+  ret =  hash_join.open(exec_ctx);
   ObHashJoinPlan::reuse();
   // need remote condition
   if (OB_FAIL(ret)) {
@@ -457,29 +453,29 @@ TEST_F(ObHashJoinTest, join_case_5)
 
 TEST_F(ObHashJoinTest, memlimit_test)
 {
-  memlimit_exception_test(OB_ALLOCATE_MEMORY_FAILED, 100 * 1024 * 1024);
-  memlimit_exception_test(OB_SUCCESS, 100 * 1024 * 1024);
+  memlimit_exception_test(OB_ALLOCATE_MEMORY_FAILED, 100*1024*1024);
+  memlimit_exception_test(OB_SUCCESS, 100*1024*1024);
 }
 
 #define JOIN_EXCEPTION_TEST(file, func, key, err, expect_ret) \
-  do {                                                        \
-    TP_SET_ERROR("engine/join/" file, func, key, err);        \
-    join_exception_test(expect_ret);                          \
-    TP_SET_ERROR("engine/join/" file, func, key, NULL);       \
+  do { \
+    TP_SET_ERROR("engine/join/"file, func, key, err); \
+    join_exception_test(expect_ret); \
+    TP_SET_ERROR("engine/join/"file, func, key, NULL); \
   } while (0)
 
 #define SERIALIZE_EXCEPTION_TEST(file, func, key, err, expect_ret) \
-  do {                                                             \
-    TP_SET_ERROR("engine/join/" file, func, key, err);             \
-    serialize_exception_test(expect_ret);                          \
-    TP_SET_ERROR("engine/join/" file, func, key, NULL);            \
+  do { \
+    TP_SET_ERROR("engine/join/"file, func, key, err); \
+    serialize_exception_test(expect_ret); \
+    TP_SET_ERROR("engine/join/"file, func, key, NULL); \
   } while (0)
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_sql_factories();
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();
   return ret;
