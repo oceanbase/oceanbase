@@ -14313,33 +14313,43 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
-    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
-      LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
-    } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
-      LOG_WARN("fail to get drop cols id set", K(ret));
-    } else if (OB_FAIL(reconstruct_index_schema(*orig_table_schema,
-                                                *hidden_table_schema,
-                                                schema_guard,
-                                                drop_cols_id_arr,
-                                                col_name_map,
-                                                *tz_info_wrap.get_time_zone_info(),
-                                                alter_table_arg.allocator_,
-                                                new_table_schemas,
-                                                index_ids))) {
-      LOG_WARN("failed to reconstruct index schema", K(ret));
-    } else if (OB_FAIL(add_new_index_schema(alter_table_arg,
-                                            *orig_table_schema,
-                                            *hidden_table_schema,
-                                            schema_guard,
-                                            new_table_schemas,
-                                            index_ids))) {
-      LOG_WARN("failed to add new index schema", K(ret));
-    } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(alter_table_arg,
-                                                           *hidden_table_schema,
-                                                           schema_guard,
-                                                           trans,
-                                                           new_table_schemas))) {
-      LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
+    } else if (hidden_table_schema->get_simple_index_infos().count() > 0) {
+      // if there is any index in the hidden table, all indexes are already rebuilt because the rebuild is wrap in a transaction
+      const common::ObIArray<ObAuxTableMetaInfo> &index_infos = hidden_table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+        if (OB_FAIL(index_ids.push_back(index_infos.at(i).table_id_))) {
+          LOG_WARN("push back index id failed", K(ret));
+        }
+      }
+    } else {
+      if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+        LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
+      } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
+        LOG_WARN("fail to get drop cols id set", K(ret));
+      } else if (OB_FAIL(reconstruct_index_schema(*orig_table_schema,
+                                                  *hidden_table_schema,
+                                                  schema_guard,
+                                                  drop_cols_id_arr,
+                                                  col_name_map,
+                                                  *tz_info_wrap.get_time_zone_info(),
+                                                  alter_table_arg.allocator_,
+                                                  new_table_schemas,
+                                                  index_ids))) {
+        LOG_WARN("failed to reconstruct index schema", K(ret));
+      } else if (OB_FAIL(add_new_index_schema(alter_table_arg,
+                                              *orig_table_schema,
+                                              *hidden_table_schema,
+                                              schema_guard,
+                                              new_table_schemas,
+                                              index_ids))) {
+        LOG_WARN("failed to add new index schema", K(ret));
+      } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(alter_table_arg,
+                                                             *hidden_table_schema,
+                                                             schema_guard,
+                                                             trans,
+                                                             new_table_schemas))) {
+        LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
+      }
     }
   }
   int tmp_ret = OB_SUCCESS;
