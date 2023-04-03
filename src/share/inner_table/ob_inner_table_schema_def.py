@@ -6562,21 +6562,25 @@ def_table_schema(
   ('trans_id', 'int'),
   ('state', 'int'),
   ('cluster_id', 'int'),
-  ('XA_trans_id', 'varchar:1024'),
   ('coordinator', 'int'),
-  ('participants', 'varchar:1024'),
+  ('participants', 'varchar:1024', 'true'),
   ('isolation_level', 'int'),
-  ('snapshot_version', 'int'),
+  ('snapshot_version', 'uint', 'true'),
   ('access_mode', 'int'),
   ('tx_op_sn', 'int'),
   ('flag', 'int'),
   ('active_time', 'timestamp', 'true'),
   ('expire_time', 'timestamp', 'true'),
   ('timeout_us', 'int'),
-  ('savepoints', 'varchar:1024'),
+  ('ref_cnt', 'int'),
+  ('tx_desc_addr', 'varchar:20'),
+  ('savepoints', 'varchar:1024', 'true'),
   ('savepoints_total_cnt', 'int'),
   ('internal_abort_cause', 'int'),
   ('can_early_lock_release', 'bool'),
+  ('gtrid', 'varbinary:128', 'true'),
+  ('bqual', 'varbinary:128', 'true'),
+  ('format_id', 'int', 'false', '1'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -25165,7 +25169,6 @@ def_table_schema(
       ELSE 'UNKNOWN'
       END AS STATE,
     cluster_id AS CLUSTER_ID,
-    XA_trans_id AS XA_TX_ID,
     coordinator AS COORDINATOR,
     participants AS PARTICIPANTS,
     CASE
@@ -25184,17 +25187,16 @@ def_table_schema(
       ELSE 'UNKNOWN'
       END AS ACCESS_MODE,
     tx_op_sn AS TX_OP_SN,
-    flag AS FLAG,
     active_time AS ACTIVE_TIME,
     expire_time AS EXPIRE_TIME,
-    timeout_us AS TIMEOUT_US,
-    savepoints AS SAVEPOINTS,
-    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
     CASE
       WHEN can_early_lock_release = 0 THEN 'FALSE'
       WHEN can_early_lock_release = 1 THEN 'TRUE'
       ELSE 'UNKNOWN'
-      END AS CAN_EARLY_LOCK_RELEASE
+      END AS CAN_EARLY_LOCK_RELEASE,
+    format_id AS FORMATID,
+    HEX(gtrid) AS GLOBALID,
+    HEX(bqual) AS BRANCHID
     FROM oceanbase.__all_virtual_trans_scheduler
 """.replace("\n", " "),
 )
@@ -48324,7 +48326,7 @@ def_table_schema(
     svr_port AS SVR_PORT,
     session_id AS SESSION_ID,
     trans_id AS TX_ID,
-    CASE
+    CAST (CASE
       WHEN state = 0 THEN 'INVALID'
       WHEN state = 1 THEN 'IDLE'
       WHEN state = 2 THEN 'EXPLICIT_ACTIVE'
@@ -48343,38 +48345,36 @@ def_table_schema(
       WHEN state = 15 THEN 'SUB_ROLLBACKING'
       WHEN state = 16 THEN 'SUB_ROLLBACKED'
       ELSE 'UNKNOWN'
-      END AS STATE,
+      END AS VARCHAR2(18)) AS STATE,
     cluster_id AS CLUSTER_ID,
-    XA_trans_id AS XA_TX_ID,
     coordinator AS COORDINATOR,
     participants AS PARTICIPANTS,
-    CASE
+    CAST (CASE
       WHEN isolation_level = -1 THEN 'INVALID'
       WHEN isolation_level = 0 THEN 'READ UNCOMMITTED'
       WHEN isolation_level = 1 THEN 'READ COMMITTED'
       WHEN isolation_level = 2 THEN 'REPEATABLE READ'
       WHEN isolation_level = 3 THEN 'SERIALIZABLE'
       ELSE 'UNKNOWN'
-      END AS ISOLATION_LEVEL,
+      END AS VARCHAR2(16)) AS ISOLATION_LEVEL,
     snapshot_version AS SNAPSHOT_VERSION,
-    CASE
+    CAST (CASE
       WHEN access_mode = -1 THEN 'INVALID'
       WHEN access_mode = 0 THEN 'READ_WRITE'
       WHEN access_mode = 1 THEN 'READ_ONLY'
       ELSE 'UNKNOWN'
-      END AS ACCESS_MODE,
+      END AS VARCHAR2(10)) AS ACCESS_MODE,
     tx_op_sn AS TX_OP_SN,
-    flag AS FLAG,
     active_time AS ACTIVE_TIME,
     expire_time AS EXPIRE_TIME,
-    timeout_us AS TIMEOUT_US,
-    savepoints AS SAVEPOINTS,
-    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
-    CASE
+    CAST (CASE
       WHEN can_early_lock_release = 0 THEN 'FALSE'
       WHEN can_early_lock_release = 1 THEN 'TRUE'
       ELSE 'UNKNOWN'
-      END AS CAN_EARLY_LOCK_RELEASE
+      END AS VARCHAR2(7)) AS CAN_EARLY_LOCK_RELEASE,
+    format_id AS FORMATID,
+    RAWTOHEX(gtrid) AS GLOBALID,
+    RAWTOHEX(bqual) AS BRANCHID
     FROM SYS.ALL_VIRTUAL_TRANS_SCHEDULER
 """.replace("\n", " "),
 )

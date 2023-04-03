@@ -155,7 +155,9 @@ DEF_TO_STRING(ObTxSavePoint)
   }
   J_COMMA();
   J_KV(K_(scn));
+  J_COMMA();
   J_KV(K_(session_id));
+  J_COMMA();
   J_KV(K_(user_create));
   J_OBJ_END();
   return pos;
