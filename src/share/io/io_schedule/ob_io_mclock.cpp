@@ -275,10 +275,19 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIOReques
       ObMClock &mclock = get_mclock(cur_queue_index);
       double weight_scale = get_weight_scale(cur_queue_index);
       double iops_scale = 0;
+      bool is_io_ability_valid = true;
       if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(req.get_mode(),
                                                                  max(req.io_info_.size_, req.io_size_),
-                                                                 iops_scale))) {
+                                                                 iops_scale,
+                                                                 is_io_ability_valid))) {
         LOG_WARN("get iops scale failed", K(ret), K(req));
+      } else if (OB_UNLIKELY(is_io_ability_valid == false)) {
+        //unlimited
+        const int64_t current_ts = ObTimeUtility::fast_current_time();
+        phy_queue->reservation_ts_ = current_ts;
+        phy_queue->group_limitation_ts_ = current_ts;
+        phy_queue->tenant_limitation_ts_ = current_ts;
+        phy_queue->proportion_ts_ = current_ts;
       } else if (OB_FAIL(mclock.calc_phy_clock(current_ts, iops_scale, weight_scale, phy_queue))) {
         LOG_WARN("calculate clock of the request failed", K(ret), K(mclock), K(weight_scale));
       } else {
@@ -344,9 +353,11 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIOR
   } else {
     ObMClock &mclock = get_mclock(cur_queue_index);
     double iops_scale = 0;
+    bool is_io_ability_valid = true;
     if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(req.get_mode(),
                                                                max(req.io_info_.size_, req.io_size_),
-                                                               iops_scale))) {
+                                                               iops_scale,
+                                                               is_io_ability_valid))) {
       LOG_WARN("get iops scale failed", K(ret), K(req));
     } else if (OB_FAIL(mclock.dial_back_reservation_clock(iops_scale))) {
       LOG_WARN("dial back reservation clock failed", K(ret), K(iops_scale), K(req), K(mclock));

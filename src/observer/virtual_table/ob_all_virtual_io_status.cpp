@@ -355,6 +355,7 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
               item.real_iops_ = avg_iops.at(i+1).at(j);
               int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
               double iops_scale = 0;
+              bool is_io_ability_valid = true;
               if (OB_FAIL(io_config.get_group_config(i,
                                                      group_min_iops,
                                                      group_max_iops,
@@ -362,7 +363,8 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
                 LOG_WARN("get group config failed", K(ret), K(i));
               } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j),
                                                                                 avg_size.at(i+1).at(j),
-                                                                                iops_scale))) {
+                                                                                iops_scale,
+                                                                                is_io_ability_valid))) {
                 LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(j)));
               } else {
                 item.min_iops_ = group_min_iops * iops_scale;
@@ -386,6 +388,7 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
               item.real_iops_ = avg_iops.at(0).at(k);
               int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
               double iops_scale = 0;
+              bool is_io_ability_valid = true;
               if (OB_FAIL(io_config.get_group_config(INT64_MAX,
                                                      group_min_iops,
                                                      group_max_iops,
@@ -393,7 +396,8 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
                 LOG_WARN("get other group config failed", K(ret), "gruop_info", io_config.other_group_config_);
               } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(k),
                                                                                 avg_size.at(0).at(k),
-                                                                                iops_scale))) {
+                                                                                iops_scale,
+                                                                                is_io_ability_valid))) {
                 LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(k)));
               } else {
                 item.min_iops_ = group_min_iops * iops_scale;
