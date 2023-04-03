@@ -392,11 +392,12 @@ int ObBackupDataLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.retry_id_ = retry_id_;
   arg.dst_server_ = get_dst();
   arg.job_id_ = get_job_id();
+  int64_t timeout = 60 * 1000 * 1000; //60s TODO(yangyi.yyy) remove after 4.1 release
   if (OB_FAIL(backup_status_.get_backup_data_type(arg.backup_data_type_))) {
     LOG_WARN("failed to get backup data type", K(ret), K_(backup_status));
   } else if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(backup_path_));
-  } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_ls_data(arg))) {
+  } else if (OB_FAIL(rpc_proxy.timeout(timeout).to(get_dst()).backup_ls_data(arg))) {
     LOG_WARN("fail to send backup ls data task", K(ret), K(arg));
   } else {
     LOG_INFO("start to backup ls data", K(arg));
