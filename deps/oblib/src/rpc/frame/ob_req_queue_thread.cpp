@@ -32,7 +32,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 ObReqQueue::ObReqQueue(int queue_capacity)
-    : wait_finish_(false),
+    : wait_finish_(true),
       queue_(),
       qhandler_(NULL),
       host_()
@@ -143,7 +143,6 @@ void ObReqQueue::loop()
   int ret = OB_SUCCESS;
   int64_t timeout = 300 * 1000;
   void *task = NULL;
-
   if (OB_ISNULL(qhandler_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(qhandler_));
@@ -163,10 +162,9 @@ void ObReqQueue::loop()
     }  // main loop
 
     if (!wait_finish_) {
-      LOG_INFO("exiting queue thread without "
-              "wait finish, remain %ld task", "qsize", queue_.size());
-    } else if (0 != queue_.size()) {
-      LOG_INFO("exiting queue thread and wait remain finish");
+      LOG_INFO("exiting queue thread without wait finish", K(queue_.size()));
+    } else if (0 < queue_.size()) {
+      LOG_INFO("exiting queue thread and wait remain finish", K(queue_.size()));
       // Process remains if we should wait until all task has been
       // processed before exiting this thread. Previous return code
       // isn't significant, we just ignore it to make progress. When
