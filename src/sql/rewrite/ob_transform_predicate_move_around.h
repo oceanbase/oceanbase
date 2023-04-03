@@ -314,8 +314,9 @@ private:
                               ObIArray<ObRawExpr *> &exprs,
                               ObIArray<ObRawExpr *> &push_down_exprs);
 
-  int get_exprs_cnt_exec(ObIArray<ObRawExpr *> &pullup_preds,
-                          ObIArray<ObRawExpr *> &conds);
+  int get_exprs_cnt_exec(ObDMLStmt &stmt,
+                         ObIArray<ObRawExpr *> &pullup_preds,
+                         ObIArray<ObRawExpr *> &conds);
 
   int update_subquery_pullup_preds(ObIArray<ObQueryRefRawExpr *> &subquery_exprs,
                                   ObIArray<ObRawExpr *> &current_exprs_can_push);
