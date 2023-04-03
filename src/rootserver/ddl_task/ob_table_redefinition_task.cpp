@@ -76,7 +76,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     data_format_version_ = tenant_data_format_version;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -117,7 +117,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     start_time_ = ObTimeUtility::current_time();
 
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;

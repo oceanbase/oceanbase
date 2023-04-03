@@ -71,7 +71,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     parallelism_ = parallelism;
     execution_id_ = 1L;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       data_format_version_ = tenant_data_format_version;
@@ -123,7 +123,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;

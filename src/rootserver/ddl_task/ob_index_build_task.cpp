@@ -366,7 +366,7 @@ int ObIndexBuildTask::init(
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(init_ddl_task_monitor_info(data_table_schema))) {
+    } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -433,7 +433,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     ret_code_ = task_record.ret_code_;
     start_time_ = ObTimeUtility::current_time();
 
-    if (OB_FAIL(init_ddl_task_monitor_info(data_schema))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;

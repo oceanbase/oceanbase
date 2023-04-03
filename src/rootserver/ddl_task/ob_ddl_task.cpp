@@ -3198,17 +3198,14 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
   return ret;
 }
 
-int ObDDLTask::init_ddl_task_monitor_info(const ObTableSchema *target_schema)
+int ObDDLTask::init_ddl_task_monitor_info(const uint64_t target_table_id)
 {
   int ret = OB_SUCCESS;
   const char *ddl_type_str = nullptr;
   const char *target_name = nullptr;
-  if (OB_ISNULL(target_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(target_schema));
-  } else if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
+  if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
     LOG_WARN("failed to get ddl type str", K(ret));
-  } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_schema->get_table_id()))) {
+  } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_table_id))) {
     LOG_WARN("failed to init stat info", K(ret));
   }
   return ret;

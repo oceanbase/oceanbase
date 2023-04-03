@@ -535,7 +535,7 @@ protected:
     return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
   }
-  int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
+  int init_ddl_task_monitor_info(const uint64_t target_table_id);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
