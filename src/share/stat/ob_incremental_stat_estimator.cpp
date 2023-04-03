@@ -40,9 +40,11 @@ int ObIncrementalStatEstimator::try_drive_global_stat(ObExecContext &ctx,
                                                       ObIArray<ObOptStat> &opt_stats)
 {
   int ret = OB_SUCCESS;
-  if (extra.type_ == INVALID_LEVEL || extra.type_ == TABLE_LEVEL ||
-      !param.need_approx_global_ || param.part_level_ == share::schema::PARTITION_LEVEL_ZERO) {
-    LOG_TRACE("not fullfill drive global stat", K(extra.type_),K(param.need_approx_global_),
+  if (extra.type_ == INVALID_LEVEL ||
+      extra.type_ == TABLE_LEVEL ||
+      !(param.global_stat_param_.need_modify_ && param.global_stat_param_.gather_approx_) ||
+      param.part_level_ == share::schema::PARTITION_LEVEL_ZERO) {
+    LOG_TRACE("not fullfill drive global stat", K(extra.type_),K(param.global_stat_param_),
                                                 K(param.part_level_));
   } else if (extra.type_ == SUBPARTITION_LEVEL) {
     if (OB_FAIL(drive_part_stats_from_subpart_stats(ctx, param, opt_stats,
@@ -880,7 +882,9 @@ bool ObIncrementalStatEstimator::is_part_can_incremental_gather(const ObTableSta
   bool can_be = false;
   int64_t no_regather_subpart_cnt = 0;
   int64_t cur_part_id = OB_INVALID_ID;
-  if (param.need_approx_global_ && param.need_subpart_ &&
+  if (param.global_stat_param_.need_modify_ &&
+      param.global_stat_param_.gather_approx_ &&
+      param.subpart_stat_param_.need_modify_ &&
       param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
     for (int64_t i = 0; i < param.no_regather_partition_ids_.count(); ++i) {
       if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
@@ -978,9 +982,9 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
     param.tenant_id_ = ctx.get_my_session()->get_effective_tenant_id();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
-    param.need_global_ = true;
-    param.need_part_ = true;
-    param.need_subpart_ = true;
+    param.global_stat_param_.need_modify_ = true;
+    param.part_stat_param_.need_modify_ = true;
+    param.subpart_stat_param_.need_modify_ = true;
     if (OB_FAIL(pl::ObDbmsStats::set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
     }

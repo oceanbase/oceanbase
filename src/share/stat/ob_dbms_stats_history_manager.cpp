@@ -674,14 +674,14 @@ int ObDbmsStatsHistoryManager::get_part_ids_and_column_ids(const ObTableStatPara
 {
   int ret = OB_SUCCESS;
   //get part ids
-  if (param.need_global_ || param.need_approx_global_) {
+  if (param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
     if (OB_FAIL(part_ids.push_back(part_id))) {
         LOG_WARN("failed to push back", K(ret));
     } else {/*do nothing*/}
   }
 
-  if (OB_SUCC(ret) && param.need_part_) {
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));
@@ -689,7 +689,7 @@ int ObDbmsStatsHistoryManager::get_part_ids_and_column_ids(const ObTableStatPara
     }
   }
 
-  if (OB_SUCC(ret) && param.need_subpart_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
       if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));
@@ -788,19 +788,19 @@ int ObDbmsStatsHistoryManager::gen_partition_list(const ObTableStatParam &param,
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 4> partition_ids;
-  if (param.need_global_ || param.need_approx_global_) {
+  if (param.global_stat_param_.need_modify_) {
     if (OB_FAIL(partition_ids.push_back(param.global_part_id_))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
-  if (OB_SUCC(ret) && param.need_part_) {
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       if (OB_FAIL(partition_ids.push_back(param.part_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret), K(param));
       }
     }
   }
-  if (OB_SUCC(ret) && param.need_subpart_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
       if (OB_FAIL(partition_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret), K(param));

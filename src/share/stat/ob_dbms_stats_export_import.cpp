@@ -1500,7 +1500,7 @@ int ObDbmsStatsExportImport::gen_import_partition_list(const ObTableStatParam &p
 {
   int ret = OB_SUCCESS;
   bool need_or = false;
-  if (param.need_global_) {
+  if (param.global_stat_param_.need_modify_) {
     if (OB_FAIL(partition_list.append("c2 is NULL"))) {
       LOG_WARN("failed to append", K(ret), K(partition_list));
     } else {
@@ -1508,7 +1508,7 @@ int ObDbmsStatsExportImport::gen_import_partition_list(const ObTableStatParam &p
     }
   }
 
-  if (OB_SUCC(ret) && param.need_part_) {
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     if (need_or && !param.part_infos_.empty() && OB_FAIL(partition_list.append(" or "))) {
       LOG_WARN("failed to append sql", K(ret));
     }
@@ -1527,7 +1527,7 @@ int ObDbmsStatsExportImport::gen_import_partition_list(const ObTableStatParam &p
     }
   }
 
-  if (OB_SUCC(ret) && param.need_subpart_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     if (need_or && !param.subpart_infos_.empty() && OB_FAIL(partition_list.append(" or "))) {
       LOG_WARN("failed to append sql", K(ret));
     }

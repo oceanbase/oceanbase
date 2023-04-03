@@ -77,11 +77,6 @@ private:
 
   static int prepare_opt_stat(ObIArray<ObOptStat> &all_stats, ObOptStat *&opt_stat);
 
-  static int try_drive_global_stat(ObExecContext &ctx,
-                                   const ObTableStatParam &param,
-                                   ObExtraParam &extra,
-                                   ObIArray<ObOptStat> &opt_stats);
-
   static int check_all_cols_range_skew(const ObTableStatParam &param,
                                        ObIArray<ObOptStat> &opt_stats);
 

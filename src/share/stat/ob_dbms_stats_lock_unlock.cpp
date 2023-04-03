@@ -413,16 +413,15 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
   if (locked_partition_ids.empty()) {
     /*do nothing*/
   } else {
-    if (param.need_global_ || param.need_approx_global_) {
+    if (param.global_stat_param_.need_modify_) {
       int64_t part_id = param.global_part_id_;
       if (is_partition_id_locked(part_id, locked_partition_ids, idx)) {
-        param.need_global_ = false;
-        param.need_approx_global_ = false;
+        param.global_stat_param_.reset_gather_stat();
       } else {
         has_valid_partition_id = true;
       }
     }
-    if (param.need_subpart_) {
+    if (param.subpart_stat_param_.need_modify_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
         if (!is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_ids, idx)) {
           if (OB_FAIL(new_subpart_infos.push_back(param.subpart_infos_.at(i)))) {
@@ -435,7 +434,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
         } else {/*do nothing*/}
       }
     }
-    if (OB_SUCC(ret) && param.need_part_) {
+    if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
         if (!is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_ids, idx)) {
           if (ObIncrementalStatEstimator::is_part_can_incremental_gather(
@@ -480,16 +479,17 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
       } else if (OB_FAIL(param.part_infos_.assign(new_part_infos))) {
         LOG_WARN("failed to assign", K(ret));
       } else {
-        param.need_subpart_ = !new_subpart_infos.empty();
-        param.need_part_ = !new_part_infos.empty();
-        if (param.need_approx_global_ && !param.need_part_) {
+        param.subpart_stat_param_.need_modify_ = !new_subpart_infos.empty();
+        param.part_stat_param_.need_modify_ = !new_part_infos.empty();
+        if (param.global_stat_param_.need_modify_ &&
+            param.global_stat_param_.gather_approx_ &&
+            !param.part_stat_param_.need_modify_) {
           //if take approx global and partition to gather, but all partition are locked, should adjust
           //approx global gather to global gather.
-          if (!param.need_global_ && !param.need_subpart_) {
-            param.need_approx_global_ = false;
-            param.need_global_ = true;
-          } else if (param.need_subpart_) {//incremental partition gather stats from subpart stats.
-            param.need_part_ = true;
+          if (!param.subpart_stat_param_.need_modify_) {
+            param.global_stat_param_.gather_approx_ = false;
+          } else { //incremental partition gather stats from subpart stats.
+            param.part_stat_param_.need_modify_ = true;
           }
         }
         LOG_TRACE("Succeed to adjust table stat param", K(param), K(locked_partition_ids));
@@ -505,7 +505,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
 {
   int ret = OB_SUCCESS;
   int64_t idx = -1;
-  if (param.need_global_ || param.need_approx_global_) {
+  if (param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
     if (is_partition_id_locked(part_id, locked_partition_ids, idx)) {
       if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
@@ -517,7 +517,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
       }
     }
   }
-  if (OB_SUCC(ret) && param.need_subpart_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
       if (is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_ids, idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
@@ -530,7 +530,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
       }
     }
   }
-  if (OB_SUCC(ret) && param.need_part_) {
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       if (is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_ids, idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
