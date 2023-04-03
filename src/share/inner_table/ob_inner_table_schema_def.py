@@ -11250,7 +11250,11 @@ def_table_schema(
     ('archive_scn', 'uint'),
     ('checkpoint_scn', 'uint'),
     ('min_rec_scn', 'uint'),
-    ('min_rec_scn_log_type', 'varchar:32')
+    ('min_rec_scn_log_type', 'varchar:32'),
+    ('restore_handler_role', 'varchar:32'),
+    ('restore_proposal_id', 'int'),
+    ('restore_context_info', 'varchar:1024'),
+    ('restore_err_context_info', 'varchar:1024')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

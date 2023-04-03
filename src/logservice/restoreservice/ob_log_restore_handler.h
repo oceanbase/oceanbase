@@ -57,6 +57,24 @@ using oceanbase::palf::PalfEnv;
 using oceanbase::common::ObString;
 using oceanbase::common::ObAddr;
 
+struct RestoreDiagnoseInfo
+{
+  RestoreDiagnoseInfo() { reset(); }
+  ~RestoreDiagnoseInfo() { reset(); }
+  common::ObRole restore_role_;
+  int64_t restore_proposal_id_;
+  ObSqlString restore_context_info_;
+  ObSqlString restore_err_context_info_;
+  TO_STRING_KV(K(restore_role_),
+               K(restore_proposal_id_));
+  void reset() {
+    restore_role_ = FOLLOWER;
+    restore_proposal_id_ = palf::INVALID_PROPOSAL_ID;
+    restore_context_info_.reset();
+    restore_err_context_info_.reset();
+  }
+};
+
 // The interface to submit log for physical restore and physical standby
 class ObLogRestoreHandler : public ObLogHandlerBase
 {
@@ -154,6 +172,7 @@ public:
   //            OB_SUCCESS      get task successfully, but maybe no task in turn exists
   //            other code      unexpected ret_code
   int get_next_sorted_task(ObFetchLogTask *&task);
+  int diagnose(RestoreDiagnoseInfo &diagnose_info);
 
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 

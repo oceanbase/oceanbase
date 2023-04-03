@@ -78,11 +78,17 @@ struct LSReplayStat
 
 struct ReplayDiagnoseInfo
 {
+  ReplayDiagnoseInfo() { reset(); }
+  ~ReplayDiagnoseInfo() { reset(); }
   palf::LSN max_replayed_lsn_;
   share::SCN max_replayed_scn_;
   ObSqlString diagnose_str_;
   TO_STRING_KV(K(max_replayed_lsn_),
                K(max_replayed_scn_));
+  void reset() {
+    max_replayed_lsn_.reset();
+    max_replayed_scn_.reset();
+  }
 };
 
 //此类型为前向barrier日志专用, 与ObLogReplayTask分开分配

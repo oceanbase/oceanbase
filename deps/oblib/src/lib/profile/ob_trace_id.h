@@ -266,7 +266,7 @@ struct ObCurTraceId
     }
   }
 #ifdef COMPILE_DLL_MODE
-private:		
+private:
   static TLOCAL(TraceId, trace_id_);
 #endif
 };

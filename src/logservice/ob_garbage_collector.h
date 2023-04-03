@@ -96,10 +96,16 @@ int gc_state_to_string(const LSGCState gc_state,
 
 struct GCDiagnoseInfo
 {
+  GCDiagnoseInfo() { reset(); }
+  ~GCDiagnoseInfo() { reset(); }
   LSGCState gc_state_;
   int64_t gc_start_ts_;
   TO_STRING_KV(K(gc_state_),
                K(gc_start_ts_));
+  void reset() {
+    gc_state_ = LSGCState::INVALID_LS_GC_STATE;
+    gc_start_ts_ = OB_INVALID_TIMESTAMP;
+  }
 };
 
 class ObGCLSLog

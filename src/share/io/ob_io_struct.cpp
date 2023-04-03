@@ -888,14 +888,14 @@ void ObIOSender::stop()
   stop_submit();
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
-  }  
+  }
 }
 
 void ObIOSender::wait()
 {
   if (tg_id_ >= 0) {
     TG_WAIT(tg_id_);
-  }  
+  }
 }
 
 void ObIOSender::destroy()
@@ -1014,7 +1014,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
       }
       if (OB_SUCC(ret)) {
         if (tmp_phy_queue->req_list_.is_empty()) {
-          //new request        
+          //new request
           if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
             LOG_WARN("remove phy queue from heap failed", K(ret), K(index));
           } else {
@@ -1026,7 +1026,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
               LOG_WARN("push new req into phy queue failed", K(ret));
             } else {
               ATOMIC_INC(&sender_req_count_);
-              req.time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();      
+              req.time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
               //calc ts_
               if (OB_NOT_NULL(req.tenant_io_mgr_.get_ptr())) {
                 ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req.tenant_io_mgr_.get_ptr()->get_io_clock());
@@ -1749,14 +1749,14 @@ void ObAsyncIOChannel::stop()
 {
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
-  }  
+  }
 }
 
 void ObAsyncIOChannel::wait()
 {
   if (tg_id_ >= 0) {
     TG_WAIT(tg_id_);
-  }  
+  }
 }
 
 void ObAsyncIOChannel::destroy()
@@ -2386,7 +2386,7 @@ void ObIORunner::stop()
 {
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
-  } 
+  }
 }
 
 void ObIORunner::wait()

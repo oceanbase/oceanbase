@@ -39,13 +39,19 @@ struct ObCheckpointVTInfo
 
 struct CheckpointDiagnoseInfo
 {
+  CheckpointDiagnoseInfo() { reset(); }
+  ~CheckpointDiagnoseInfo() { reset(); }
   share::SCN checkpoint_;
   share::SCN min_rec_scn_;
   logservice::ObLogBaseType log_type_;
-
   TO_STRING_KV(K(checkpoint_),
                K(min_rec_scn_),
                K(log_type_));
+  void reset() {
+    checkpoint_.reset();
+    min_rec_scn_.reset();
+    log_type_ = logservice::ObLogBaseType::INVALID_LOG_BASE_TYPE;
+  }
 };
 
 class ObCheckpointExecutor

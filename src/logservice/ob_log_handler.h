@@ -50,8 +50,14 @@ class ObApplyStatus;
 class ObLogReplayService;
 class AppendCb;
 struct LogHandlerDiagnoseInfo {
+  LogHandlerDiagnoseInfo() { reset(); }
+  ~LogHandlerDiagnoseInfo() { reset(); }
   common::ObRole log_handler_role_;
   int64_t log_handler_proposal_id_;
+  void reset() {
+    log_handler_role_ = FOLLOWER;
+    log_handler_proposal_id_ = palf::INVALID_PROPOSAL_ID;
+  }
   TO_STRING_KV(K(log_handler_role_),
                K(log_handler_proposal_id_));
 };
