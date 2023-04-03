@@ -5459,6 +5459,8 @@ def_table_schema(
 # 450 : __all_external_table_file
 # 451 : __all_task_opt_stat_gather_history
 # 452 : __all_table_opt_stat_gather_history
+# 453 : __all_zone_storage
+# 454 : __all_zone_storage_operation
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11426,6 +11428,7 @@ def_table_schema(
 # 12383: __all_virtual_opt_stat_gather_monitor
 # 12384: __all_virtual_thread
 # 12385: __all_virtual_arbitration_member_info
+# 12386: __all_virtual_server_storage
 #
 # 余留位置
 #
@@ -25635,6 +25638,9 @@ def_table_schema(
 # 21381: V$OB_THREAD
 # 21382: GV$OB_ARBITRATION_MEMBER_INFO
 # 21383: V$OB_ARBITRATION_MEMBER_INFO
+# 21384: DBA_OB_ZONE_STORAGE
+# 21385: GV$OB_SERVER_STORAGE
+# 21386: V$OB_SERVER_STORAGE
 
 ################################################################################
 # Oracle System View (25000, 30000]

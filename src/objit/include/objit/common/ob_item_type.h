@@ -2206,6 +2206,7 @@ typedef enum ObItemType
   T_TRIM_SPACE,
   T_NULL_IF_EXETERNAL,
   T_EMPTY_FIELD_AS_NULL,
+  T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
