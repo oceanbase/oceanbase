@@ -1517,11 +1517,8 @@ int ObSqlModeVar::do_check_and_convert(ObExecContext &ctx,
           LOG_ERROR("fail to get varchar", K(ret), K(in_val));
         }
       } else {
-        ret = OB_ERR_WRONG_VALUE_FOR_VAR;
-        int log_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (log_ret = log_err_wrong_value_for_var(ret, in_val))) {
-          LOG_ERROR("fail to log error", K(ret), K(log_ret), K(in_val));
-        }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected type", K(ret), K(in_val));
       }
       ObString val_without_space = str_val.trim_space_only();
       if (OB_FAIL(ret)) {
