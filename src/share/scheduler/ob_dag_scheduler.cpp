@@ -1632,23 +1632,26 @@ void ObTenantDagScheduler::destroy()
     int tmp_ret = OB_SUCCESS;
     for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
       for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
-        const ObIDag *head = dag_list_[j].get_head(i);
-        const ObIDag *cur_dag = head->get_next();
-        const ObIDag *next = NULL;
+        ObIDag *head = dag_list_[j].get_head(i);
+        ObIDag *cur_dag = head->get_next();
+        ObIDag *next = NULL;
+        ObIDagNet *tmp_dag_net = nullptr;
         while (NULL != cur_dag && head != cur_dag) {
-          if (OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
+          next = cur_dag->get_next();
+          if (cur_dag->get_dag_id().is_valid()
+            && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
             if (OB_ENTRY_NOT_EXIST != tmp_ret) {
               STORAGE_LOG_RET(WARN, tmp_ret, "failed to del sys task", K(tmp_ret), K(cur_dag->get_dag_id()));
             }
           }
-          next = cur_dag->get_next();
-          cur_dag->~ObIDag();
-          allocator_.free((void*)cur_dag);
+          if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net))) {
+            STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
+          }
           cur_dag = next;
-        }
+        } // end of while
       }
       dag_list_[j].reset();
-    }
+    } // end of for
     blocking_dag_net_list_.reset();
 
     if (dag_map_.created()) {

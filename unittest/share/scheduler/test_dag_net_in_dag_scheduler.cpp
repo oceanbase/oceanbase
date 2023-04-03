@@ -1542,6 +1542,23 @@ TEST_F(TestDagScheduler, test_cancel_dag_net_func)
 }
 
 
+TEST_F(TestDagScheduler, test_destroy_when_running)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+
+  #ifndef BUILD_COVERAGE
+  // not participate in coverage compilation to fix hang problem
+  ObCancelDagNet *dag_net = nullptr;
+  EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net(nullptr, dag_net));
+
+  while (scheduler->get_cur_dag_cnt() < 3) {
+    usleep(100);
+  }
+  #endif
+}
+
+
 }
 }
 
