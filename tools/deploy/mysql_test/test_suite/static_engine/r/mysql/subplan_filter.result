@@ -898,11 +898,11 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |7   |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |7   |
-|2 |  SORT                    |        |1        |7   |
-|3 |   PX PARTITION ITERATOR  |        |1        |7   |
-|4 |    SUBPLAN FILTER        |        |1        |7   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |9   |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |9   |
+|2 |  SORT                    |        |1        |9   |
+|3 |   PX PARTITION ITERATOR  |        |1        |9   |
+|4 |    SUBPLAN FILTER        |        |1        |9   |
 |5 |     TABLE SCAN           |t1      |1        |5   |
 |6 |     TABLE SCAN           |t2      |1        |5   |
 =======================================================
@@ -937,11 +937,11 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |9   |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |9   |
-|2 |  SORT                    |        |1        |9   |
-|3 |   PX PARTITION ITERATOR  |        |1        |9   |
-|4 |    SUBPLAN FILTER        |        |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |13  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |13  |
+|2 |  SORT                    |        |1        |13  |
+|3 |   PX PARTITION ITERATOR  |        |1        |13  |
+|4 |    SUBPLAN FILTER        |        |1        |13  |
 |5 |     TABLE SCAN           |t1      |1        |5   |
 |6 |     TABLE SCAN           |t2      |1        |5   |
 |7 |     TABLE SCAN           |t2      |1        |5   |
@@ -1034,10 +1034,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |7   |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |7   |
-|2 |  SORT                        |        |1        |7   |
-|3 |   SUBPLAN FILTER             |        |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |10  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |10  |
+|2 |  SORT                        |        |1        |9   |
+|3 |   SUBPLAN FILTER             |        |1        |9   |
 |4 |    EXCHANGE IN DISTR         |        |1        |5   |
 |5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |5   |
 |6 |      PX BLOCK ITERATOR       |        |1        |5   |
@@ -1282,10 +1282,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |9   |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |9   |
-|2 |  SORT                        |        |1        |9   |
-|3 |   SUBPLAN FILTER             |        |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |12  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |12  |
+|2 |  SORT                        |        |1        |12  |
+|3 |   SUBPLAN FILTER             |        |1        |12  |
 |4 |    EXCHANGE IN DISTR         |        |1        |5   |
 |5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |5   |
 |6 |      PX BLOCK ITERATOR       |        |1        |5   |
@@ -1433,7 +1433,7 @@ Query Plan
 |6 |  MERGE GROUP BY                        |        |1        |12  |
 |7 |   PX COORDINATOR                       |        |2        |12  |
 |8 |    EXCHANGE OUT DISTR                  |:EX20002|2        |12  |
-|9 |     MERGE GROUP BY                     |        |2        |11  |
+|9 |     MERGE GROUP BY                     |        |2        |12  |
 |10|      NESTED-LOOP JOIN CARTESIAN        |        |1        |11  |
 |11|       NESTED-LOOP JOIN CARTESIAN       |        |1        |8   |
 |12|        PX BLOCK ITERATOR               |        |1        |5   |
