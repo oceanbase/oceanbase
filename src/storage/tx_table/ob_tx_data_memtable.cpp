@@ -68,6 +68,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     deleted_cnt_ = 0;
     write_ref_ = 0;
     last_insert_ts_ = 0;
+    stat_change_ts_.reset();
     state_ = ObTxDataMemtable::State::ACTIVE;
     sort_list_head_.reset();
     slice_allocator_ = slice_allocator;
@@ -145,6 +146,7 @@ void ObTxDataMemtable::reset()
   ObITable::reset();
   DEBUG_iter_commit_ts_cnt_ = 0;
   DEBUG_last_start_scn_ = SCN::min_scn();
+  stat_change_ts_.reset();
   is_inited_ = false;
 }
 
@@ -786,10 +788,22 @@ bool ObTxDataMemtable::ready_for_flush()
     state_ = ObTxDataMemtable::State::FROZEN;
     set_snapshot_version(get_min_tx_scn());
     bool_ret = true;
-  } else {
+    stat_change_ts_.ready_for_flush_time_ = ObTimeUtil::fast_current_time();
+  } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000 /* one second */)) {
     const SCN &freeze_scn = key_.scn_range_.end_scn_;
-    STORAGE_LOG(INFO, "tx data metmable is not ready for flush",
-                K(max_consequent_callbacked_scn), K(freeze_scn));
+    if (ObTimeUtil::fast_current_time() - stat_change_ts_.frozen_time_ > 60 * 1000 * 1000 /* 60 seconds */) {
+      STORAGE_LOG(WARN,
+                  "tx data metmable is not ready for flush",
+                  K(max_consequent_callbacked_scn),
+                  K(freeze_scn),
+                  K(stat_change_ts_));
+    } else {
+      STORAGE_LOG(INFO,
+                  "tx data metmable is not ready for flush",
+                  K(max_consequent_callbacked_scn),
+                  K(freeze_scn),
+                  K(stat_change_ts_));
+    }
   }
 
   return bool_ret;
@@ -808,6 +822,7 @@ int ObTxDataMemtable::flush()
       STORAGE_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
     }
   } else {
+    stat_change_ts_.create_flush_dag_time_ = ObTimeUtil::fast_current_time();
     STORAGE_LOG(INFO, "schedule flush tx data memtable task done", KR(ret), K(param), KPC(this));
   }
   return ret;

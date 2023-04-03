@@ -29,6 +29,7 @@ class ObTxDataMemtableMgr;
 class ObFreezer;
 class ObTxDataTable;
 
+
 // The basic unit that manages tx_data
 class ObTxDataMemtable : public memtable::ObIMemtable
 {
@@ -97,6 +98,16 @@ private:
     int64_t tx_data_count_;
 
     TO_STRING_KV(K_(tx_id), K_(tx_data_count));
+  };
+
+  struct StateChangeTime {
+    void reset() { memset(this, 0, sizeof(*this)); }
+    int64_t frozen_time_;
+    int64_t ready_for_flush_time_;
+    int64_t create_flush_dag_time_;
+    int64_t release_time_;
+
+    TO_STRING_KV(K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time), K_(release_time));
   };
 
   using SliceAllocator = ObSliceAlloc;
@@ -211,6 +222,7 @@ public:  // ObTxDataMemtable
                        K_(write_ref),
                        K_(occupied_size),
                        K_(state),
+                       K_(stat_change_ts),
                        KP_(tx_data_map),
                        KP_(memtable_mgr),
                        K_(commit_versions_serialize_size),
@@ -355,7 +367,8 @@ public:  // getter && setter
   void set_end_scn() { key_.scn_range_.end_scn_ = max_tx_scn_; }
   void set_state(const ObTxDataMemtable::State &state) { state_ = state; }
   void reset_is_iterating() { ATOMIC_STORE(&is_iterating_, false); }
-
+  void set_freeze_time() { stat_change_ts_.frozen_time_ = ObTimeUtil::fast_current_time(); }
+  void set_release_time() { stat_change_ts_.release_time_ = ObTimeUtil::fast_current_time(); }
 
   share::SCN get_end_scn() { return key_.scn_range_.end_scn_;}
 
@@ -446,6 +459,7 @@ private:  // ObTxDataMemtable
   int64_t occupied_size_[MAX_TX_DATA_TABLE_CONCURRENCY];
 
   int64_t last_insert_ts_;
+  StateChangeTime stat_change_ts_;
 
   // the state of tx data memtable can be one of 4 kinds of state :
   // active, freezing, frozen, dumped
