@@ -2094,10 +2094,15 @@ int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop,
     share::ObBackupPieceInfoKey cur_key = sys_non_frozen_piece.cur_piece_info_.key_;
     cur_key.tenant_id_ = tenant_id;
     tenant_max_ts = MAX(tenant_max_ts, gts);
-    max_ts = MAX(max_ts, gts);
     if (OB_FAIL(info_mgr.get_non_frozen_backup_piece(trans, for_update, cur_key, tenant_non_frozen_piece))) {
       LOG_WARN("failed to get backup piece", K(ret), K(cur_key));
+    } else if (!tenant_non_frozen_piece.has_prev_piece_info_) {
+      // Perhaps during the last freeze, this tenant has been freezed successfully, and update
+      // status to FROZEN. But some tenant failed. We need ignore the tenant.
+      LOG_INFO("no piece need frozen, maybe has been freezed before", K(tenant_non_frozen_piece));
+      max_ts = MAX(max_ts, tenant_non_frozen_piece.cur_piece_info_.start_ts_);
     } else {
+      max_ts = MAX(max_ts, gts);
       tenant_non_frozen_piece.prev_piece_info_.max_ts_ = gts;
       tenant_non_frozen_piece.cur_piece_info_.start_ts_ = gts;
       tenant_non_frozen_piece.prev_piece_info_.status_ = ObBackupPieceStatus::BACKUP_PIECE_FROZEN;
@@ -2132,7 +2137,12 @@ int ObLogArchiveScheduler::frozen_sys_old_piece_(
   ObLogArchiveBackupInfoMgr info_mgr;
   ObMySQLTransaction trans;
 
-  if (max_gts <= 0 || !sys_non_frozen_piece.is_valid() || !sys_non_frozen_piece.has_prev_piece_info_) {
+#ifdef ERRSIM
+  ret = E(EventTable::EN_LOG_ARCHIVE_FROZEN_SYS_PIECE_FAILED) OB_SUCCESS;
+#endif
+
+  if (OB_FAIL(ret)) {
+  } else if (max_gts <= 0 || !sys_non_frozen_piece.is_valid() || !sys_non_frozen_piece.has_prev_piece_info_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(sys_non_frozen_piece), K(max_gts));
   } else if (OB_FAIL(trans.start(sql_proxy_))) {
