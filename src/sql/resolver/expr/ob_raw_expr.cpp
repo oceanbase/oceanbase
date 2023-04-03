@@ -4192,6 +4192,18 @@ int ObCollectionConstructRawExpr::set_access_names(
   return ret;
 }
 
+int ObCollectionConstructRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+{
+  int ret = OB_SUCCESS;
+  CK (coll_schema_version_ != OB_INVALID_VERSION);
+  CK (udt_id_ != common::OB_INVALID_ID);
+  OX (obj_version.object_id_ = udt_id_);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.version_ = coll_schema_version_);
+
+  return ret;
+}
+
 int ObCollectionConstructRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
@@ -4209,6 +4221,7 @@ int ObCollectionConstructRawExpr::assign(const ObRawExpr &other)
       capacity_ = tmp.capacity_;
       udt_id_ = tmp.udt_id_;
       elem_type_ = tmp.elem_type_;
+      coll_schema_version_ = tmp.coll_schema_version_;
       if (OB_FAIL(access_names_.assign(tmp.access_names_))) {
         LOG_WARN("failed to assign access names", K(ret));
       }
@@ -4272,6 +4285,19 @@ ObExprOperator *ObCollectionConstructRawExpr::get_op()
   return OB_SUCCESS == ret ? expr_op : NULL;
 }
 
+int ObObjectConstructRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+{
+  int ret = OB_SUCCESS;
+  CK (object_schema_version_ != OB_INVALID_VERSION);
+  CK (udt_id_ != common::OB_INVALID_ID);
+  OX (obj_version.object_id_ = udt_id_);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.version_ = object_schema_version_);
+
+  return ret;
+}
+
+
 int ObObjectConstructRawExpr::set_access_names(
   const common::ObIArray<ObObjAccessIdent> &access_idents)
 {
@@ -4297,6 +4323,7 @@ int ObObjectConstructRawExpr::assign(const ObRawExpr &other)
           static_cast<const ObObjectConstructRawExpr &>(other);
       rowsize_ = tmp.rowsize_;
       udt_id_ = tmp.udt_id_;
+      object_schema_version_ = tmp.object_schema_version_;
       if (OB_FAIL(elem_types_.assign(tmp.elem_types_))) {
         LOG_WARN("failed to assign elem types", K(ret));
       } else if (OB_FAIL(access_names_.assign(tmp.access_names_))) {
