@@ -127,6 +127,7 @@ enum ObTxAbortCause
   STOP = 6,
   PARTICIPANT_STATE_INCOMPLETE = 7,
   PARTICIPANTS_SET_INCOMPLETE = 8,
+  END_STMT_FAIL = 9,
 };
 
 enum class ObTxClass { USER, SYS };
@@ -812,6 +813,7 @@ public:
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }
+  bool need_rollback() const  { return state_ == ObTxDesc::State::ABORTED; }
 };
 
 class TxCtxRoleState

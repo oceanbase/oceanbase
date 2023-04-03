@@ -208,13 +208,15 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
             cur_row_.cells_[i].set_timestamp(tx_stat.tx_ctx_create_time_);
           } else {
             // if invalid timestamp, display NULL
+            cur_row_.cells_[i].reset();
           }
           break;
         case TX_EXPIRED_TIME:
           if (is_valid_timestamp_(tx_stat.tx_expired_time_)) {
             cur_row_.cells_[i].set_timestamp(tx_stat.tx_expired_time_);
           } else {
-            // if invalid timestmap, display NULL
+            // if invalid timestamp, display NULL
+            cur_row_.cells_[i].reset();
           }
           break;
         case REF_CNT:
