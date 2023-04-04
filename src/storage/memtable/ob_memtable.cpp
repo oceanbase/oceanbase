@@ -1223,8 +1223,12 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "ObIStore is null", K(ret), K(i));
         } else if (stores->at(i)->is_data_memtable()) {
-          auto &mvcc_engine = static_cast<ObMemtable *>(stores->at(i))->get_mvcc_engine();
-          if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, lock_state))) {
+          ObMemtable *memtable = static_cast<ObMemtable *>(stores->at(i));
+          ObMvccEngine &mvcc_engine = memtable->get_mvcc_engine();
+          if (OB_UNLIKELY(memtable->is_active_memtable())) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "lock row on frozen stores check an active memtable", K(ret), KPC(stores));
+          } else if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, lock_state))) {
             TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(lock_state));
           }
         } else if (stores->at(i)->is_sstable()) {
