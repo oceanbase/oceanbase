@@ -50,11 +50,20 @@ public:
   virtual void TearDown();
 
   TestColumnDecoder()
-      : is_retro_(false) {}
+      : is_retro_(false), tenant_ctx_(OB_SERVER_TENANT_ID)
+  {
+    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+  }
   TestColumnDecoder(ObColumnHeader::Type column_encoding_type)
-      : is_retro_(false), column_encoding_type_(column_encoding_type) {}
+      : is_retro_(false), column_encoding_type_(column_encoding_type), tenant_ctx_(OB_SERVER_TENANT_ID)
+  {
+    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+  }
   TestColumnDecoder(bool is_retro)
-      : is_retro_(is_retro) {}
+      : is_retro_(is_retro), tenant_ctx_(OB_SERVER_TENANT_ID)
+  {
+    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+  }
   virtual ~TestColumnDecoder() {}
 
   inline void setup_obj(ObObj& obj, int64_t column_id, int64_t seed);
@@ -103,6 +112,7 @@ protected:
   int64_t column_cnt_;
   int64_t full_column_cnt_;
   int64_t rowkey_cnt_;
+  share::ObTenantBase tenant_ctx_;
 };
 
 void TestColumnDecoder::set_column_type_default()

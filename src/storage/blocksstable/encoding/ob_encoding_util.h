@@ -650,7 +650,7 @@ public:
       const int64_t page_size = common::OB_MALLOC_MIDDLE_BLOCK_SIZE)
     : allocator_(label, page_size), buf_size_limit_(0), alloc_size_(0), alloc_buf_(nullptr) {}
   virtual ~ObEncodingRowBufHolder() {}
-  int init(const int64_t macro_block_size);
+  int init(const int64_t macro_block_size, const int64_t tenant_id = OB_SERVER_TENANT_ID);
   void reset();
   // try to re-alloc held memory buffer
   int try_alloc(const int64_t required_size);
