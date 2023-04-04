@@ -2291,7 +2291,12 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   } else if (0 == valid_index_ids.count()) {
     for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
       const uint64_t tid = (i == -1) ? ref_table_id : tids[i]; //with base table
-      if (OB_FAIL(valid_index_ids.push_back(tid))) {
+      bool is_skip = false;
+      if (i != -1 && OB_FAIL(check_px_spatial_index(schema_guard, tid, is_skip))) {
+        LOG_WARN("fail to check px spatial index", K(ref_table_id), K(tid), K(ret));
+      }
+      if (OB_FAIL(ret) || is_skip) {
+      } else if (OB_FAIL(valid_index_ids.push_back(tid))) {
         LOG_WARN("failed to push back index id", K(ret));
       } else { /*do nothing*/ }
     }
@@ -2320,6 +2325,24 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     LOG_WARN("failed add primary key id to array no dup", K(ret));
   }
   LOG_TRACE("all valid index id", K(valid_index_ids), K(ret));
+  return ret;
+}
+
+int ObJoinOrder::check_px_spatial_index(ObSqlSchemaGuard *schema_guard, uint64_t index_id, bool &is_skip)
+{
+  int ret = OB_SUCCESS;
+  is_skip = false;
+  const ObTableSchema *index_schema = NULL;
+  if (!OPT_CTX.use_intra_parallel()) {
+    // do nothing
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema)) ||
+             OB_ISNULL(index_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("fail to get table schema", K(index_id), K(ret));
+  } else if (index_schema->is_spatial_index()) {
+    is_skip = true;
+  }
+
   return ret;
 }
 

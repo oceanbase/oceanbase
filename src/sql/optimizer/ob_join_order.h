@@ -2165,6 +2165,9 @@ struct NullAwareAntiJoinInfo {
                            int64_t &common_prefix_idx);
 
   private:
+    int check_px_spatial_index(ObSqlSchemaGuard *schema_guard,
+                               uint64_t index_id,
+                               bool &res_tmp);
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
     int revise_output_rows_after_creating_path(PathHelper &helper,
