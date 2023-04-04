@@ -11437,6 +11437,7 @@ def_table_schema(
 # 12384: __all_virtual_thread
 # 12385: __all_virtual_arbitration_member_info
 # 12386: __all_virtual_server_storage
+# 12387: __all_virtual_arbitration_service_status
 #
 # 余留位置
 #
@@ -25647,6 +25648,8 @@ def_table_schema(
 # 21384: DBA_OB_ZONE_STORAGE
 # 21385: GV$OB_SERVER_STORAGE
 # 21386: V$OB_SERVER_STORAGE
+# 21387: GV$OB_ARBITRATION_SERVICE_STATUS
+# 21388: V$OB_ARBITRATION_SERVICE_STATUS
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48500,6 +48503,8 @@ def_table_schema(
 # 28188:  V$OB_THREAD
 # 28189:  GV$OB_ARBITRATION_MEMBER_INFO
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
+# 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
+# 28192:  V$OB_ARBITRATION_SERVICE_STATUS
 
 ################################################################################
 # Lob Table (50000, 70000)
