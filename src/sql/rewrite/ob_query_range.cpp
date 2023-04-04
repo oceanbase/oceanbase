@@ -136,24 +136,30 @@ int ObQueryRange::init_query_range_ctx(
     } else {
       ObKeyPartId key_part_id(col.table_id_, col.column_id_);
       const ObExprResType* expr_res_type = col.get_column_type();
+      void *ptr = NULL;
       if (OB_ISNULL(expr_res_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr result type is null", K(ret));
+      } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObKeyPartPos)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memeory for ObKeyPartPos", K(ret));
       } else {
         ObExprResType tmp_expr_type = *expr_res_type;
         if (tmp_expr_type.is_lob_locator()) {
           tmp_expr_type.set_type(ObLongTextType);
         }
-        ObKeyPartPos key_part_pos(i, tmp_expr_type);
+        ObKeyPartPos *key_part_pos = new (ptr) ObKeyPartPos(i, tmp_expr_type);
         table_id = (i > 0 ? table_id : col.table_id_);
 
         if (OB_UNLIKELY(table_id != col.table_id_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("range columns must have the same table id", K(table_id), K_(col.table_id));
-        } else if (OB_FAIL(key_part_pos.set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
+        } else if (OB_FAIL(key_part_pos->set_enum_set_values(allocator_, col.expr_->get_enum_set_values()))) {
           LOG_WARN("fail to set values", K(key_part_pos), K(ret));
         } else if (OB_FAIL(query_range_ctx_->key_part_map_.set_refactored(key_part_id, key_part_pos))) {
           LOG_WARN("set key part map failed", K(ret), K(key_part_id));
+        } else if (OB_FAIL(query_range_ctx_->key_part_pos_array_.push_back(key_part_pos))) {
+          LOG_WARN("failed to push back key part pos", K(ret));
         }
       }
     }
@@ -185,6 +191,12 @@ int ObQueryRange::init_query_range_ctx(
 void ObQueryRange::destroy_query_range_ctx(ObIAllocator& ctx_allocator)
 {
   if (NULL != query_range_ctx_) {
+    for (int64_t i = 0; i < query_range_ctx_->key_part_pos_array_.count(); ++i) {
+      if (NULL != query_range_ctx_->key_part_pos_array_.at(i)) {
+        query_range_ctx_->key_part_pos_array_.at(i)->~ObKeyPartPos();
+        ctx_allocator.free(query_range_ctx_->key_part_pos_array_.at(i));
+      }
+    }
     query_range_ctx_->~ObQueryRangeCtx();
     ctx_allocator.free(query_range_ctx_);
     query_range_ctx_ = NULL;
@@ -202,7 +214,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
     ret = OB_NOT_INIT;
     LOG_WARN("query_range_ctx_ is not inited.", K(ret));
   } else {
-    query_range_ctx_->need_final_extact_ = false;
+    query_range_ctx_->need_final_extract_ = false;
     ObKeyPart* root = NULL;
     if (OB_UNLIKELY(NULL == expr_root)) {
       //(MIN, MAX), whole range
@@ -258,7 +270,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
     }
   }
   if (OB_SUCC(ret)) {
-    if (query_range_ctx_->need_final_extact_) {
+    if (query_range_ctx_->need_final_extract_) {
       state_ = NEED_PREPARE_PARAMS;
     } else {
       state_ = CAN_READ;
@@ -353,7 +365,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
     }
   }
   if (OB_SUCC(ret)) {
-    if (query_range_ctx_->need_final_extact_) {
+    if (query_range_ctx_->need_final_extract_) {
       state_ = NEED_PREPARE_PARAMS;
     } else {
       state_ = CAN_READ;
@@ -814,21 +826,24 @@ int ObQueryRange::get_column_key_part(const ObRawExpr* l_expr, const ObRawExpr* 
       if (T_OP_LIKE != c_type || NULL == query_range_ctx_->params_) {
         // 1. non like condition
         // 2. like condition and params_ is NULL
-        query_range_ctx_->need_final_extact_ = true;
+        query_range_ctx_->need_final_extract_ = true;
       } else {
         // like condition and params_ NOT NULL
       }
     }
     ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
-    ObKeyPartPos key_part_pos(allocator_);
+    ObKeyPartPos *key_part_pos = nullptr;
     bool b_is_key_part = false;
     bool always_true = true;
     if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
       LOG_WARN("is_key_part failed", K(ret));
     } else if (!b_is_key_part) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (OB_ISNULL(key_part_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(key_part_id));
     } else if (!can_be_extract_range(cmp_type,
-                   key_part_pos.column_type_,
+                   key_part_pos->column_type_,
                    calc_type,
                    const_expr->get_result_type().get_type(),
                    always_true)) {
@@ -839,7 +854,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr* l_expr, const ObRawExpr* 
     } else {
       ObObj val;
       out_key_part->id_ = key_part_id;
-      out_key_part->pos_ = key_part_pos;
+      out_key_part->pos_ = *key_part_pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
       if (NULL != const_item) {
         // none-ObConstRawExpr does not have value
@@ -894,8 +909,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr* l_expr, const ObRawExpr* 
             // do nothing
           }
         }
-        if (OB_SUCC(ret) && key_part_pos.column_type_.is_string_type() && calc_type.is_string_type()) {
-          if (CS_TYPE_UTF8MB4_GENERAL_CI == key_part_pos.column_type_.get_collation_type() &&
+        if (OB_SUCC(ret) && key_part_pos->column_type_.is_string_type() && calc_type.is_string_type()) {
+          if (CS_TYPE_UTF8MB4_GENERAL_CI == key_part_pos->column_type_.get_collation_type() &&
               CS_TYPE_UTF8MB4_GENERAL_CI != calc_type.get_collation_type()) {
             // in this case, unify the character set into the character set of the target column,
             // use general ci to compare, because the character set of calc type is general bin
@@ -911,7 +926,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr* l_expr, const ObRawExpr* 
           // because the storage layer stores strings without padding spaces,
           // so this range will cause'abc'
           // was selected, so this range is not an accurate range
-          ObObjType column_type = key_part_pos.column_type_.get_type();
+          ObObjType column_type = key_part_pos->column_type_.get_type();
           ObObjType const_type = const_expr->get_result_type().get_type();
           if ((ObCharType == column_type && ObVarcharType == const_type) ||
               (ObNCharType == column_type && ObNVarchar2Type == const_type)) {
@@ -1888,7 +1903,7 @@ int ObQueryRange::get_in_expr_res_type(const ObRawExpr* in_expr, int64_t val_idx
   return ret;
 }
 
-int ObQueryRange::is_key_part(const ObKeyPartId& id, ObKeyPartPos& pos, bool& is_key_part)
+int ObQueryRange::is_key_part(const ObKeyPartId& id, ObKeyPartPos*& pos, bool& is_key_part)
 {
   int ret = OB_SUCCESS;
   if (NULL == query_range_ctx_) {

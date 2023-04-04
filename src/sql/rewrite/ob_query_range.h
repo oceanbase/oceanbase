@@ -56,21 +56,23 @@ private:
 
   struct ObQueryRangeCtx {
     ObQueryRangeCtx(const ParamsIArray* params)
-        : need_final_extact_(false), cur_expr_is_precise_(false), params_(params)
+        : need_final_extract_(false), cur_expr_is_precise_(false), params_(params)
     {}
     ~ObQueryRangeCtx()
     {}
     void clear()
     {
       key_part_map_.reset();
-      need_final_extact_ = false;
+      key_part_pos_array_.reset();
+      need_final_extract_ = false;
     }
-    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos, 131> key_part_map_;
-    bool need_final_extact_;
+    common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos*, 131> key_part_map_;
+    bool need_final_extract_;
     bool cur_expr_is_precise_;  // range extracted using current expr is precise, not been enlarged
     common::ObSEArray<ObRangeExprItem, 4, common::ModulePageAllocator, true> precise_range_exprs_;
     common::ObSEArray<int64_t, 16, common::ModulePageAllocator, true> param_indexs_;
     const ParamsIArray* params_;
+    ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
   };
 
 public:
@@ -377,7 +379,7 @@ private:
   int pre_extract_and_or_op(
       const ObOpRawExpr* m_expr, ObKeyPart*& out_key_part, const common::ObDataTypeCastParams& dtc_params);
   int pre_extract_const_op(const ObConstRawExpr* node, ObKeyPart*& out_key_part);
-  int is_key_part(const ObKeyPartId& id, ObKeyPartPos& pos, bool& is_key_part);
+  int is_key_part(const ObKeyPartId& id, ObKeyPartPos*& pos, bool& is_key_part);
   int split_general_or(ObKeyPart* graph, ObKeyPartList& or_storage);
   int split_or(ObKeyPart* graph, ObKeyPartList& or_list);
   int deal_not_align_keypart(ObKeyPart* l_key_part, ObKeyPart* r_key_part, ObKeyPart*& rest);
