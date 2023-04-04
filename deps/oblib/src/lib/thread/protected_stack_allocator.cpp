@@ -29,11 +29,6 @@ namespace lib
 ProtectedStackAllocator g_stack_allocer;
 StackMgr g_stack_mgr;
 
-ssize_t ProtectedStackAllocator::adjust_size(const ssize_t size)
-{
-  return size - page_size() * 2 - ACHUNK_PRESERVE_SIZE;
-}
-
 ssize_t ProtectedStackAllocator::page_size()
 {
   return get_page_size();
