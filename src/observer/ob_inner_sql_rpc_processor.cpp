@@ -559,7 +559,6 @@ int ObInnerSqlRpcP::process()
       if (OB_FAIL(inner_conn->set_session_timeout(transmit_arg.get_query_timeout(), transmit_arg.get_trx_timeout()))) {
         LOG_WARN("failed to set_session_timeout", K(ret), K(transmit_arg));
       } else if (FALSE_IT(THIS_WORKER.set_timeout_ts(transmit_arg.get_worker_timeout()))) {
-      } else if (FALSE_IT(THIS_WORKER.set_group_id(group_id))) { //for ddl data_complement process
       } else {
         switch (transmit_arg.get_operation_type()) {
           case ObInnerSQLTransmitArg::OPERATION_TYPE_START_TRANSACTION: {
