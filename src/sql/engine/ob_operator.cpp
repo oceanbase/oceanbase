@@ -79,13 +79,22 @@ int ObDynamicParamSetter::update_dynamic_param(ObEvalCtx &eval_ctx, ObDatum &dat
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(phy_ctx), KP(dst_));
   } else {
-    ParamStore &param_store = phy_ctx->get_param_store_for_update();
     clear_parent_evaluated_flag(eval_ctx, *dst_);
     ObDatum &param_datum = dst_->locate_expr_datum(eval_ctx);
-    param_datum.set_datum(datum);
     dst_->get_eval_info(eval_ctx).evaluated_ = true;
+    if (0 == dst_->res_buf_off_) {
+      // for compat, old server don't have ref buf for dynamic expr,
+      // so keep shallow copy
+      param_datum.set_datum(datum);
+    } else {
+      if (OB_FAIL(dst_->deep_copy_datum(eval_ctx, datum))) {
+        LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx), K(*dst_));
+      }
+    }
     //初始化param store, 用于query range计算
-    if (OB_UNLIKELY(param_idx_ < 0 || param_idx_ >= param_store.count())) {
+    ParamStore &param_store = phy_ctx->get_param_store_for_update();
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(param_idx_ < 0 || param_idx_ >= param_store.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid index", K(ret), K(param_idx_), K(param_store.count()));
     } else if (OB_FAIL(param_datum.to_obj(param_store.at(param_idx_),
