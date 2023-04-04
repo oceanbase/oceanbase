@@ -1011,6 +1011,10 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         bool no_need_submit_log = is_sub2pc() || exec_info_.is_dup_tx_;
         if (get_upstream_state() < ObTxState::PREPARE && OB_FAIL(do_prepare(no_need_submit_log))) {
           TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
+        } else {
+          // no_need_submit_log must be false here
+          collected_.reset();
+          set_upstream_state(ObTxState::PREPARE);
         }
         if (OB_SUCC(ret) && !no_need_submit_log && OB_FAIL(submit_log_impl_(ObTxLogType::TX_PREPARE_LOG))) {
           TRANS_LOG(WARN, "submit prepare log in gts callback failed", K(ret), KPC(this));
