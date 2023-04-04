@@ -438,9 +438,7 @@ int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDat
       }
 
       if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID != autoinc_param->autoinc_col_id_) {
-        if (is_to_generate) {
-          plan_ctx->set_autoinc_col_value(new_val);
-        }
+        plan_ctx->set_autoinc_col_value(new_val);
       }
     }
   }
