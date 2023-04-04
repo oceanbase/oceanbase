@@ -962,10 +962,11 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                       bool &is_diagnostics_stmt,
                                       int64_t &execution_id,
                                       const bool force_sync_resp,
-                                      bool &async_resp_used)
+                                      bool &async_resp_used,
+                                      ObPsStmtId &inner_stmt_id)
 {
   int ret = OB_SUCCESS;
-  ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+  inner_stmt_id = OB_INVALID_ID;
   ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
   if (OB_ISNULL(session.get_ps_cache())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1103,6 +1104,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
+  ObPsStmtId inner_stmt_id = OB_INVALID_ID;
   bool need_response_error = is_arraybinding_ ? false : true;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
@@ -1165,7 +1167,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
                                         is_diagnostics_stmt,
                                         execution_id,
                                         force_sync_resp,
-                                        async_resp_used);
+                                        async_resp_used,
+                                        inner_stmt_id);
           } else {
             ret = execute_response(session,
                                     result,
@@ -1174,7 +1177,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
                                     is_diagnostics_stmt,
                                     execution_id,
                                     force_sync_resp,
-                                    async_resp_used);
+                                    async_resp_used,
+                                    inner_stmt_id);
           }
           if ((OB_SUCC(ret) && is_diagnostics_stmt) || async_resp_used) {
             // if diagnostic stmt succeed, no need to clear warning buf.
@@ -1257,6 +1261,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.sql_len_ = min(ctx_.cur_sql_.length(), OB_MAX_SQL_LENGTH);
       audit_record.sql_cs_type_ = session.get_local_collation_connection();
       audit_record.ps_stmt_id_ = stmt_id_;
+      audit_record.ps_inner_stmt_id_ = inner_stmt_id;
       audit_record.params_value_ = params_value_;
       audit_record.params_value_len_ = params_value_len_;
 

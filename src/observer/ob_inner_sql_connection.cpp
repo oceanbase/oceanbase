@@ -519,6 +519,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
     audit_record.user_group_ = THIS_WORKER.get_group_id();
     audit_record.execution_id_ = execution_id;
     audit_record.ps_stmt_id_ = ps_stmt_id;
+    audit_record.ps_inner_stmt_id_ = ps_stmt_id;
     if (ps_sql.length() != 0) {
       audit_record.sql_ = const_cast<char *>(ps_sql.ptr());
       audit_record.sql_len_ = min(ps_sql.length(), OB_MAX_SQL_LENGTH);

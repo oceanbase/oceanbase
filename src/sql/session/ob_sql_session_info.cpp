@@ -1649,14 +1649,6 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     audit_record_.sql_cs_type_ = CS_TYPE_INVALID;
   }
 
-  if (OB_SUCC(ret) && OB_INVALID_STMT_ID != audit_record_.ps_stmt_id_) {
-    ObPsStmtId inner_stmt_id = OB_INVALID_STMT_ID;
-    if (OB_SUCC(get_inner_ps_stmt_id(audit_record_.ps_stmt_id_, inner_stmt_id))) {
-      audit_record_.ps_inner_stmt_id_ = inner_stmt_id;
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
   audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
   audit_record_.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
   return audit_record_;

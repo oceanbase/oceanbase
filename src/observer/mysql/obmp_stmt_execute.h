@@ -176,7 +176,8 @@ protected:
                         bool &is_diagnostics_stmt,
                         int64_t &execution_id,
                         const bool force_sync_resp,
-                        bool &async_resp_used);
+                        bool &async_resp_used,
+                        ObPsStmtId &inner_stmt_id);
   virtual bool is_prexecute() const { return false; }
   inline bool is_execute_ps_cursor() { return ObExecutePsCursorType == ps_cursor_type_; }
   inline bool is_prexecute_ps_cursor() { return ObPrexecutePsCursorType == ps_cursor_type_; }
