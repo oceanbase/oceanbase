@@ -29,6 +29,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {
@@ -1388,5 +1389,40 @@ void ObMultipleMerge::reuse_lob_locator()
   lob_reader_.reuse();
 }
 
+void ObMultipleMerge::dump_tx_statistic_for_4377(ObStoreCtx *store_ctx)
+{
+  int ret = OB_SUCCESS;
+  LOG_ERROR("==================== Start trx info ====================");
+
+  if (NULL != store_ctx) {
+    store_ctx->force_print_trace_log();
+    if (NULL != store_ctx->mvcc_acc_ctx_.tx_ctx_) {
+      LOG_ERROR("Dump trx info", K(ret), KPC(store_ctx->mvcc_acc_ctx_.tx_ctx_));
+      if (NULL != store_ctx->mvcc_acc_ctx_.mem_ctx_) {
+        // TODO(handora.qc): Shall we dump the row?
+        store_ctx->mvcc_acc_ctx_.mem_ctx_->print_callbacks();
+      }
+    } else {
+      LOG_ERROR("no some of the trx info", K(ret), KPC(store_ctx));
+    }
+  } else {
+    LOG_ERROR("no trx info completely", K(ret));
+  }
+
+  LOG_ERROR("==================== End trx info ====================");
+}
+
+void ObMultipleMerge::dump_table_statistic_for_4377()
+{
+  int ret = OB_SUCCESS;
+  int64_t table_idx = -1;
+
+  LOG_ERROR("==================== Start table info ====================");
+  for (table_idx = tables_.count() - 1; table_idx >= 0; --table_idx) {
+    ObITable *table = tables_.at(table_idx);
+    LOG_ERROR("Dump table info", K(ret), KPC(table));
+  }
+  LOG_ERROR("==================== End table info ====================");
+}
 }
 }

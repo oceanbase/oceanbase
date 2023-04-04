@@ -880,7 +880,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   if (MY_SPEC.batch_scan_flag_ || is_lookup) {
     das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
   }
-  das_rtdef.scan_flag_.is_lookup_ = is_lookup;
+  das_rtdef.scan_flag_.is_lookup_for_4377_ = is_lookup;
   das_rtdef.need_check_output_datum_ = MY_SPEC.need_check_output_datum_;
   das_rtdef.sql_mode_ = my_session->get_sql_mode();
   das_rtdef.stmt_allocator_.set_alloc(&das_ref_.get_das_alloc());
