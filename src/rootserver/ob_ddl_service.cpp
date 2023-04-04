@@ -2775,6 +2775,7 @@ int ObDDLService::create_hidden_table_with_pk_changed(
 {
   int ret = OB_SUCCESS;
   const bool bind_tablets = false;
+  ObString index_name("");
   const bool is_drop_pk = ObIndexArg::DROP_PRIMARY_KEY == index_action_type;
   const bool is_add_or_alter_pk = (ObIndexArg::ADD_PRIMARY_KEY == index_action_type) || (ObIndexArg::ALTER_PRIMARY_KEY == index_action_type);
   // For add primary key and modify column in one sql, create user hidden table when modifing column.
@@ -2788,16 +2789,68 @@ int ObDDLService::create_hidden_table_with_pk_changed(
     LOG_WARN("failed to add pk", K(ret), K(index_columns), K(new_table_schema));
   } else if (is_drop_pk && OB_FAIL(drop_primary_key(new_table_schema))) {
     LOG_WARN("failed to add hidden pk column for heap table", K(ret));
-  } else if (create_user_hidden_table_now
-          && OB_FAIL(create_user_hidden_table(origin_table_schema,
+  } else if (!create_user_hidden_table_now) {
+  } else if (OB_FAIL(get_add_pk_index_name(origin_table_schema,
+                                           new_table_schema,
+                                           index_action_type,
+                                           alter_table_arg.index_arg_list_,
+                                           schema_guard,
+                                           index_name))) {
+    LOG_WARN("fail to rename hidden table's pk constraint", K(ret));
+  } else if (OB_FAIL(create_user_hidden_table(origin_table_schema,
                                               new_table_schema,
                                               &alter_table_arg.sequence_ddl_arg_,
                                               bind_tablets,
                                               schema_guard,
                                               ddl_operator,
                                               trans,
-                                              allocator))) {
+                                              allocator,
+                                              index_name))) {
     LOG_WARN("failed to alter table offline", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLService::get_add_pk_index_name(const ObTableSchema &origin_table_schema,
+                                        ObTableSchema &new_table_schema,
+                                        const ObIndexArg::IndexActionType &index_action_type,
+                                        const ObIArray<ObIndexArg *> &index_arg_list,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        ObString &index_name)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  bool is_exist = false;
+
+  if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", K(ret));
+  } else if (is_oracle_mode && index_action_type == ObIndexArg::ADD_PRIMARY_KEY) {
+    // find pk name;
+    ObIndexArg *tmp_index_arg = nullptr;
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < index_arg_list.count(); i++) {
+      if (OB_ISNULL(tmp_index_arg = index_arg_list.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get index arg", K(ret));
+      } else if (tmp_index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && found && tmp_index_arg->index_name_.length() != 0) {
+      index_name.assign_ptr(tmp_index_arg->index_name_.ptr(),
+                            tmp_index_arg->index_name_.length());
+      // check constraint name is not duplicated.
+      if (OB_FAIL(check_constraint_name_is_exist(schema_guard,
+                                                 origin_table_schema,
+                                                 index_name,
+                                                 false,
+                                                 is_exist))) {
+        LOG_WARN("fail to check constraint exist", K(ret));
+      } else if (is_exist) {
+        ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+        LOG_WARN("check constraint name is duplicate", K(ret), K(index_name));
+      }
+    }
   }
   return ret;
 }
@@ -13338,7 +13391,8 @@ int ObDDLService::is_foreign_key_name_prefix_match(const ObForeignKeyInfo &origi
 
 int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_schema,
                                               ObIAllocator &allocator,
-                                              ObTableSchema &hidden_table_schema)
+                                              ObTableSchema &hidden_table_schema,
+                                              const ObString &index_name)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
@@ -13396,7 +13450,11 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
             LOG_WARN("failed to get pk constraint name", K(ret));
           }
         } else {
-          if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
+          if (index_name.length() != 0) {
+            if (OB_FAIL(ob_write_string(allocator, index_name, pk_name))) {
+              LOG_WARN("fail to write string", K(ret));
+            }
+          } else if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
                       pk_name, orig_table_schema.get_table_name_str(),
                       allocator, CONSTRAINT_TYPE_PRIMARY_KEY, is_oracle_mode))) {
             LOG_WARN("create cons name automatically failed", K(ret));
@@ -13500,7 +13558,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObSchemaGetterGuard &schema_guard,
                                            ObDDLOperator &ddl_operator,
                                            ObMySQLTransaction &trans,
-                                           ObIAllocator &allocator)
+                                           ObIAllocator &allocator,
+                                           const ObString &index_name/*default ""*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
@@ -13519,7 +13578,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     LOG_WARN("failed to check is add identity column", K(ret));
   } else if (OB_FAIL(prepare_hidden_table_schema(orig_table_schema,
                                           allocator,
-                                          hidden_table_schema))) {
+                                          hidden_table_schema,
+                                          index_name))) {
     LOG_WARN("failed to prepare hidden table schema", K(ret));
   } else if (OB_FAIL(ddl_operator.create_sequence_in_create_table(hidden_table_schema,
                                                                   trans,

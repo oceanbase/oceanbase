@@ -610,6 +610,12 @@ public:
       common::ObMySQLTransaction &trans,
       common::ObArenaAllocator &allocator,
       const obrpc::ObIndexArg::IndexActionType &index_action_type);
+  int get_add_pk_index_name(const share::schema::ObTableSchema &origin_table_schema,
+                            share::schema::ObTableSchema &new_table_schema,
+                            const obrpc::ObIndexArg::IndexActionType &index_action_type,
+                            const common::ObIArray<obrpc::ObIndexArg *> &index_arg_list,
+                            share::schema::ObSchemaGetterGuard &schema_guard,
+                            ObString &index_name);
   virtual int rename_table(const obrpc::ObRenameTableArg &rename_table_arg);
   int collect_temporary_tables_in_session(const obrpc::ObDropTableArg &drop_table_arg);
   int need_collect_current_temp_table(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1298,7 +1304,8 @@ private:
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                ObDDLOperator &ddl_operator,
                                common::ObMySQLTransaction &trans,
-                               common::ObIAllocator &allocator);
+                               common::ObIAllocator &allocator,
+                               const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1331,7 +1338,8 @@ private:
   int prepare_hidden_table_schema(
       const share::schema::ObTableSchema &orig_table_schema,
       common::ObIAllocator &allocator,
-      share::schema::ObTableSchema &hidden_table_schema);
+      share::schema::ObTableSchema &hidden_table_schema,
+      const ObString &index_name);
   int rebuild_hidden_table_priv(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,

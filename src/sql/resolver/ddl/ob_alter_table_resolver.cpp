@@ -2613,8 +2613,16 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
     if (OB_SUCC(ret)) {
       ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
       create_index_arg->index_type_ = INDEX_TYPE_PRIMARY;
-      create_index_arg->index_name_.assign_ptr(common::OB_PRIMARY_INDEX_NAME,
-                                               static_cast<int32_t>(strlen(common::OB_PRIMARY_INDEX_NAME)));
+      if (lib::is_oracle_mode()) {
+        if (node.num_child_ == 2 && OB_NOT_NULL(node.children_[1])
+            && node.children_[1]->str_len_ != 0) {
+          create_index_arg->index_name_.assign_ptr(node.children_[1]->str_value_,
+                                                   static_cast<int32_t>(node.children_[1]->str_len_));
+        }
+      } else {
+        create_index_arg->index_name_.assign_ptr(common::OB_PRIMARY_INDEX_NAME,
+                                                 static_cast<int32_t>(strlen(common::OB_PRIMARY_INDEX_NAME)));
+      }
       create_index_arg->tenant_id_ = session_info_->get_effective_tenant_id();
       if (OB_ISNULL(alter_table_stmt)) {
         ret = OB_ERR_UNEXPECTED;
