@@ -212,16 +212,27 @@ int ObTenantNodeBalancer::try_notify_drop_tenant(const int64_t tenant_id)
 {
   LOG_INFO("[DELETE_TENANT] succ to receive notify of dropping tenant", K(tenant_id));
   int ret = OB_SUCCESS;
-  TenantUnits units;
+  int tmp_ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
-
-  if (OB_FAIL(omt_->mark_del_tenant(tenant_id))) {
-    LOG_WARN("failed to mark del tenant", K(ret));
-  }  else {
-    ret = OB_SUCCESS;
-    LOG_INFO("[DELETE_TENANT] succ to mark drop tenant", K(tenant_id), K(units));
+  uint64_t meta_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(is_meta_tenant(tenant_id))) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("meta tenant is not allowed", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt_ is null", KR(ret),KP(omt_));
+  } else {
+    if (OB_TMP_FAIL(omt_->mark_del_tenant(tenant_id))) {
+      LOG_WARN("fail to mark del user_tenant", KR(ret), KR(tmp_ret), K(tenant_id));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    if (OB_TMP_FAIL(omt_->mark_del_tenant(meta_tenant_id))) {
+      LOG_WARN("fail to mark del meta_tenant", KR(ret), KR(tmp_ret), K(meta_tenant_id));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
   }
-
+  LOG_INFO("[DELETE_TENANT] mark drop tenant", KR(ret), K(tenant_id), K(meta_tenant_id));
   return ret;
 }
 
