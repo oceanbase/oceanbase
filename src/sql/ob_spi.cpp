@@ -3101,11 +3101,14 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
                 K(i), K(cursor_param_count), KPC(actual_param_exprs[i]), K(dummy_result));
 
     if (OB_SUCC(ret) && dummy_result.is_pl_mock_default_param()) {
+      int64_t idx = dummy_result.get_int();
       ObSqlExpression *actual_param_expr = NULL;
+      dummy_result.reset();
+      dummy_result.ObObj::reset();
       if (DECL_PKG == loc) {
-        OZ (spi_calc_package_expr(ctx, package_id, dummy_result.get_int(), &dummy_result));
+        OZ (spi_calc_package_expr(ctx, package_id, idx, &dummy_result));
       } else {
-        OZ (spi_calc_subprogram_expr(ctx, package_id, routine_id, dummy_result.get_int(), &dummy_result));
+        OZ (spi_calc_subprogram_expr(ctx, package_id, routine_id, idx, &dummy_result));
       }
     }
 
