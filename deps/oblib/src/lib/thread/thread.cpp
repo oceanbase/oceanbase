@@ -24,6 +24,7 @@
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/utility/ob_hang_fatal_error.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/signal/ob_signal_struct.h"
 
 using namespace oceanbase;
@@ -127,6 +128,16 @@ int Thread::start(Runnable runnable)
 
 void Thread::stop()
 {
+#ifdef ERRSIM
+  if (!stop_
+      && stack_addr_ != NULL
+      && 0 != (OB_E(EventTable::EN_THREAD_HANG) 0)) {
+    int tid_offset = 720;
+    int tid = *(pid_t*)((char*)pth_ + tid_offset);
+    LOG_WARN_RET(OB_SUCCESS, "stop was ignored", K(tid));
+    return;
+  }
+#endif
 #ifndef OB_USE_ASAN
   if (!stop_ && stack_addr_ != NULL) {
     int tid_offset = 720;
@@ -179,14 +190,35 @@ void Thread::dump_pth() // for debug pthread join faileds
 #endif
 }
 
-void Thread::wait()
+int Thread::try_wait()
 {
   int ret = OB_SUCCESS;
+  if (pth_ != 0) {
+    int tmp = pthread_tryjoin_np(pth_, nullptr);
+    if (EBUSY == tmp) {
+      ret = OB_EAGAIN;
+      LOG_WARN("pthread_tryjoin_np failed", K(tmp), K(errno), K(tid_before_stop_));
+    } else if (0 == tmp) {
+      destroy_stack();
+      runnable_ = nullptr;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("pthread_tryjoin_np failed", K(tmp), K(errno), K(tid_before_stop_));
+      dump_pth();
+      abort();
+    }
+  }
+  return ret;
+}
+
+void Thread::wait()
+{
+  int ret = 0;
   if (pth_ != 0) {
     if (2 <= ATOMIC_AAF(&join_concurrency_, 1)) {
       abort();
     }
-    if (OB_FAIL(pthread_join(pth_, nullptr))) {
+    if (0 != (ret = pthread_join(pth_, nullptr))) {
       LOG_ERROR("pthread_join failed", K(ret), K(errno));
 #ifndef OB_USE_ASAN
       dump_pth();
@@ -194,7 +226,6 @@ void Thread::wait()
 #endif
     }
     destroy_stack();
-    pth_ = 0;
     runnable_ = nullptr;
     if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
       abort();
@@ -215,11 +246,11 @@ void Thread::destroy()
 
 void Thread::destroy_stack()
 {
-
 #ifndef OB_USE_ASAN
   if (stack_addr_ != nullptr) {
     g_stack_allocer.dealloc(stack_addr_);
     stack_addr_ = nullptr;
+    pth_ = 0;
   }
 #endif
 }

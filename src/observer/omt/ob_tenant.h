@@ -295,7 +295,7 @@ public:
   int acquire_more_worker(int64_t num, int64_t &succ_num);
   void check_worker_count();
   void check_worker_count(ObThWorker &w);
-  int clear_worker();
+  int try_clear_worker();
 
   lib::ObMutex workers_lock_;
 
@@ -323,7 +323,7 @@ public:
   }
   ~GroupMap() {}
 	int create_and_insert_group(int32_t group_id, ObTenant *tenant, share::ObCgroupCtrl *cgroup_ctrl, ObResourceGroup *&group);
-  void wait_group();
+  int try_wait_group();
   void destroy_group();
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -401,7 +401,7 @@ public:
   int init(const ObTenantMeta &meta);
   void stop() { ATOMIC_STORE(&stopped_, true); }
   void start() { ATOMIC_STORE(&stopped_, false); }
-  void wait();
+  int try_wait();
   void destroy();
   bool has_stopped() const { return ATOMIC_LOAD(&stopped_); }
 
