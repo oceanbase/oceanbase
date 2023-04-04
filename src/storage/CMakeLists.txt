@@ -463,6 +463,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_server_compaction_event_history.cpp
   compaction/ob_compaction_util.cpp
   compaction/ob_partition_rows_merger.cpp
+  compaction/ob_storage_locality_cache.cpp
 )
 
 ob_set_subtarget(ob_storage concurrency_control

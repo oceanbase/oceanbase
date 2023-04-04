@@ -19,6 +19,7 @@
 #include "storage/ob_i_store.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/compaction/ob_storage_locality_cache.h"
 
 namespace oceanbase
 {
@@ -225,10 +226,11 @@ private:
   static const int64_t DEFAULT_HASH_MAP_BUCKET_CNT = 1009;
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL = 10 * 1000 * 1000L; // 10s
-  static const int64_t CHECK_REPORT_SCN_INTERVAL = 2 * 60 * 1000 * 1000L; // 2m, temp solution, change to 10m later
+  static const int64_t CHECK_REPORT_SCN_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000L; // 10m
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
+  static const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
 private:
   bool is_inited_;
   bool major_merge_status_;
@@ -250,6 +252,7 @@ private:
   ObFastFreezeChecker fast_freeze_checker_;
   bool enable_adaptive_compaction_;
   int64_t error_tablet_cnt_; // for diagnose
+  compaction::ObStorageLocalityCache ls_locality_cache_;
 };
 
 } // namespace storage
