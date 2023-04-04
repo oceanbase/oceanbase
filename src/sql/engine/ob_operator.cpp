@@ -244,84 +244,88 @@ int ObOpSpec::create_operator(ObExecContext& exec_ctx, ObOperator*& op) const
 int ObOpSpec::create_operator_recursive(ObExecContext& exec_ctx, ObOperator*& op) const
 {
   int ret = OB_SUCCESS;
-  ObOperatorKit* kit = exec_ctx.get_operator_kit(id_);
-  int64_t create_child_cnt = child_cnt_;
-  if (OB_ISNULL(kit) || (child_cnt_ > 0 && NULL == children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("operator kit should be created before create operator "
-             "and children must be valid",
-        K(ret),
-        K(id_),
-        KP(kit),
-        KP(children_),
-        K(create_child_cnt),
-        K(type_));
+  if (OB_FAIL(check_stack_overflow())) {
+    LOG_WARN("failed to check stack overflow", K(ret));
   } else {
-    kit->spec_ = this;
-    LOG_TRACE("trace create spec", K(ret), K(id_), K(type_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; i++) {
-      if (NULL == children_[i]) {
-        // if child is nullptr, it means it's receive operator
-        if (!IS_PX_RECEIVE(type_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("only receive is leaf in px", K(ret), K(type_), K(id_));
-        } else {
+    ObOperatorKit* kit = exec_ctx.get_operator_kit(id_);
+    int64_t create_child_cnt = child_cnt_;
+    if (OB_ISNULL(kit) || (child_cnt_ > 0 && NULL == children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator kit should be created before create operator "
+              "and children must be valid",
+          K(ret),
+          K(id_),
+          KP(kit),
+          KP(children_),
+          K(create_child_cnt),
+          K(type_));
+    } else {
+      kit->spec_ = this;
+      LOG_TRACE("trace create spec", K(ret), K(id_), K(type_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; i++) {
+        if (NULL == children_[i]) {
+          // if child is nullptr, it means it's receive operator
+          if (!IS_PX_RECEIVE(type_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("only receive is leaf in px", K(ret), K(type_), K(id_));
+          } else {
+            create_child_cnt = 0;
+          }
+        } else if (IS_TRANSMIT(children_[i]->type_)) {
+          OB_ASSERT(1 == child_cnt_);
+          // only create context for current DFO
           create_child_cnt = 0;
         }
-      } else if (IS_TRANSMIT(children_[i]->type_)) {
-        OB_ASSERT(1 == child_cnt_);
-        // only create context for current DFO
-        create_child_cnt = 0;
       }
     }
-  }
 
-  // create operator input
-  if (OB_SUCC(ret)) {
-    // Operator input may created in scheduler, no need to create again.
-    if (NULL == kit->input_ && ObOperatorFactory::has_op_input(type_)) {
-      if (OB_FAIL(ObOperatorFactory::alloc_op_input(exec_ctx.get_allocator(), exec_ctx, *this, kit->input_))) {
-        LOG_WARN("create operator input failed", K(ret), K(*this));
-      } else if (OB_ISNULL(kit->input_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL input returned", K(ret));
-      } else {
-        LOG_TRACE("trace create input", K(ret), K(id_), K(type_));
-      }
-    }
-  }
-
-  // create operator
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOperatorFactory::alloc_operator(
-            exec_ctx.get_allocator(), exec_ctx, *this, kit->input_, create_child_cnt, kit->op_)) ||
-        OB_ISNULL(kit->op_)) {
-      ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
-      LOG_WARN("create operator failed", K(ret), KP(kit->op_), K(*this));
-    } else {
-      op = kit->op_;
-      op->get_monitor_info().set_operator_id(id_);
-      op->get_monitor_info().set_operator_type(type_);
-      op->get_monitor_info().set_plan_depth(plan_depth_);
-      op->get_monitor_info().set_tenant_id(GET_MY_SESSION(exec_ctx)->get_effective_tenant_id());
-      op->get_monitor_info().open_time_ = oceanbase::common::ObClockGenerator::getClock();
-    }
-  }
-
-  // create child operator
-  if (OB_SUCC(ret) && create_child_cnt > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < create_child_cnt; i++) {
-      ObOperator* child_op = NULL;
-      if (nullptr == children_[i]) {
-        // if child is nullptr, it means it's receive operator
-        if (!IS_PX_RECEIVE(type_)) {
+    // create operator input
+    if (OB_SUCC(ret)) {
+      // Operator input may created in scheduler, no need to create again.
+      if (NULL == kit->input_ && ObOperatorFactory::has_op_input(type_)) {
+        if (OB_FAIL(ObOperatorFactory::alloc_op_input(exec_ctx.get_allocator(), exec_ctx, *this, kit->input_))) {
+          LOG_WARN("create operator input failed", K(ret), K(*this));
+        } else if (OB_ISNULL(kit->input_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("only receive is leaf in px", K(ret), K(type_), K(id_));
+          LOG_WARN("NULL input returned", K(ret));
+        } else {
+          LOG_TRACE("trace create input", K(ret), K(id_), K(type_));
         }
-      } else if (OB_FAIL(children_[i]->create_operator_recursive(exec_ctx, child_op))) {
-        LOG_WARN("create operator failed", K(ret));
-      } else if (OB_FAIL(op->set_child(i, child_op))) {
-        LOG_WARN("set child operator failed", K(ret));
+      }
+    }
+
+    // create operator
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObOperatorFactory::alloc_operator(
+              exec_ctx.get_allocator(), exec_ctx, *this, kit->input_, create_child_cnt, kit->op_)) ||
+          OB_ISNULL(kit->op_)) {
+        ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+        LOG_WARN("create operator failed", K(ret), KP(kit->op_), K(*this));
+      } else {
+        op = kit->op_;
+        op->get_monitor_info().set_operator_id(id_);
+        op->get_monitor_info().set_operator_type(type_);
+        op->get_monitor_info().set_plan_depth(plan_depth_);
+        op->get_monitor_info().set_tenant_id(GET_MY_SESSION(exec_ctx)->get_effective_tenant_id());
+        op->get_monitor_info().open_time_ = oceanbase::common::ObClockGenerator::getClock();
+      }
+    }
+
+    // create child operator
+    if (OB_SUCC(ret) && create_child_cnt > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < create_child_cnt; i++) {
+        ObOperator* child_op = NULL;
+        if (nullptr == children_[i]) {
+          // if child is nullptr, it means it's receive operator
+          if (!IS_PX_RECEIVE(type_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("only receive is leaf in px", K(ret), K(type_), K(id_));
+          }
+        } else if (OB_FAIL(children_[i]->create_operator_recursive(exec_ctx, child_op))) {
+          LOG_WARN("create operator failed", K(ret));
+        } else if (OB_FAIL(op->set_child(i, child_op))) {
+          LOG_WARN("set child operator failed", K(ret));
+        }
       }
     }
   }
@@ -369,7 +373,8 @@ ObOperator::ObOperator(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput*
       opened_(false),
       startup_passed_(spec_.startup_filters_.empty()),
       exch_drained_(false),
-      got_first_row_(false)
+      got_first_row_(false),
+      check_stack_overflow_(false)
 {}
 
 ObOperator::~ObOperator()
@@ -424,52 +429,68 @@ int ObOperator::init()
   return OB_SUCCESS;
 }
 
+int ObOperator::check_stack_once()
+{
+  int ret = OB_SUCCESS;
+  if (check_stack_overflow_) {
+  } else if (OB_FAIL(check_stack_overflow())) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else {
+    check_stack_overflow_ = true;
+  }
+  return ret;
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::open()
 {
   int ret = OB_SUCCESS;
-  OperatorOpenOrder open_order = get_operator_open_order();
-  while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
-    switch (open_order) {
-      case OPEN_CHILDREN_FIRST:
-      case OPEN_CHILDREN_LATER: {
-        for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; ++i) {
-          // children_ pointer is checked before operator open, no need check again.
-          if (OB_FAIL(children_[i]->open())) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-              LOG_WARN("Open child operator failed", K(ret), "op_type", op_name());
+  if (OB_FAIL(check_stack_overflow())) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else {
+    OperatorOpenOrder open_order = get_operator_open_order();
+    while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
+      switch (open_order) {
+        case OPEN_CHILDREN_FIRST:
+        case OPEN_CHILDREN_LATER: {
+          for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; ++i) {
+            // children_ pointer is checked before operator open, no need check again.
+            if (OB_FAIL(children_[i]->open())) {
+              if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+                LOG_WARN("Open child operator failed", K(ret), "op_type", op_name());
+              }
             }
           }
+          open_order = (OPEN_CHILDREN_FIRST == open_order) ? OPEN_SELF_LATER : OPEN_EXIT;
+          break;
         }
-        open_order = (OPEN_CHILDREN_FIRST == open_order) ? OPEN_SELF_LATER : OPEN_EXIT;
-        break;
-      }
-      case OPEN_SELF_FIRST:
-      case OPEN_SELF_LATER:
-      case OPEN_SELF_ONLY: {
-        if (OB_FAIL(init_evaluated_flags())) {
-          LOG_WARN("init evaluate flags failed", K(ret));
-        } else if (OB_FAIL(inner_open())) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-            LOG_WARN("Open this operator failed", K(ret), "op_type", op_name());
+        case OPEN_SELF_FIRST:
+        case OPEN_SELF_LATER:
+        case OPEN_SELF_ONLY: {
+          if (OB_FAIL(init_evaluated_flags())) {
+            LOG_WARN("init evaluate flags failed", K(ret));
+          } else if (OB_FAIL(inner_open())) {
+            if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+              LOG_WARN("Open this operator failed", K(ret), "op_type", op_name());
+            }
           }
+          open_order = (OPEN_SELF_FIRST == open_order) ? OPEN_CHILDREN_LATER : OPEN_EXIT;
+          break;
         }
-        open_order = (OPEN_SELF_FIRST == open_order) ? OPEN_CHILDREN_LATER : OPEN_EXIT;
-        break;
+        case OPEN_NONE:
+        case OPEN_EXIT: {
+          open_order = OPEN_EXIT;
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected open order type", K(open_order));
+          break;
       }
-      case OPEN_NONE:
-      case OPEN_EXIT: {
-        open_order = OPEN_EXIT;
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected open order type", K(open_order));
-        break;
     }
+    opened_ = true;
+    LOG_DEBUG("open op", K(ret), "op_type", op_name(), "op_id", spec_.id_, K(open_order));
   }
-  opened_ = true;
-  LOG_DEBUG("open op", K(ret), "op_type", op_name(), "op_id", spec_.id_, K(open_order));
   return ret;
 }
 
@@ -542,34 +563,38 @@ int ObOperator::close()
 {
   int ret = OB_SUCCESS;
   int child_ret = OB_SUCCESS;
-  OperatorOpenOrder open_order = get_operator_open_order();
-  if (OPEN_SELF_ONLY != open_order && OPEN_NONE != open_order) {
-    // first call close of children
-    for (int64_t i = 0; i < child_cnt_; ++i) {
-      // children_ pointer is checked before operator open, no need check again.
-      int tmp_ret = children_[i]->close();
-      if (OB_SUCCESS != tmp_ret) {
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
+  if (OB_FAIL(check_stack_overflow())) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else {
+    OperatorOpenOrder open_order = get_operator_open_order();
+    if (OPEN_SELF_ONLY != open_order && OPEN_NONE != open_order) {
+      // first call close of children
+      for (int64_t i = 0; i < child_cnt_; ++i) {
+        // children_ pointer is checked before operator open, no need check again.
+        int tmp_ret = children_[i]->close();
+        if (OB_SUCCESS != tmp_ret) {
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
+        }
       }
     }
-  }
 
-  if (OPEN_NONE != open_order) {
-    // no matter what, must call operator's close function
-    int tmp_ret = inner_close();
-    if (OB_SUCCESS != tmp_ret) {
-      ret = tmp_ret;  // overwrite child's error code.
-      LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
-    }
-    if (GCONF.enable_sql_audit) {
-      op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
-      ObPlanMonitorNodeList* list = MTL_GET(ObPlanMonitorNodeList*);
-      if (OB_LIKELY(nullptr != list && ctx_.get_my_session()->is_user_session() &&
-                    OB_PHY_PLAN_LOCAL != spec_.plan_->get_plan_type() &&
-                    OB_PHY_PLAN_REMOTE != spec_.plan_->get_plan_type())) {
-        IGNORE_RETURN list->submit_node(op_monitor_info_);
-        LOG_DEBUG("debug monitor", K(spec_.id_));
+    if (OPEN_NONE != open_order) {
+      // no matter what, must call operator's close function
+      int tmp_ret = inner_close();
+      if (OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;  // overwrite child's error code.
+        LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
+      }
+      if (GCONF.enable_sql_audit) {
+        op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
+        ObPlanMonitorNodeList* list = MTL_GET(ObPlanMonitorNodeList*);
+        if (OB_LIKELY(nullptr != list && ctx_.get_my_session()->is_user_session() &&
+                      OB_PHY_PLAN_LOCAL != spec_.plan_->get_plan_type() &&
+                      OB_PHY_PLAN_REMOTE != spec_.plan_->get_plan_type())) {
+          IGNORE_RETURN list->submit_node(op_monitor_info_);
+          LOG_DEBUG("debug monitor", K(spec_.id_));
+        }
       }
     }
   }
@@ -580,54 +605,57 @@ int ObOperator::close()
 int ObOperator::get_next_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!startup_passed_)) {
-    bool filtered = false;
-    if (OB_FAIL(startup_filter(filtered))) {
-      LOG_WARN("do startup filter failed", K(ret), "op", op_name());
-    } else {
-      if (filtered) {
-        ret = OB_ITER_END;
+  if (OB_FAIL(check_stack_once())) {
+    LOG_WARN("too deep recusive", K(ret));
+  } else {
+    if (OB_UNLIKELY(!startup_passed_)) {
+      bool filtered = false;
+      if (OB_FAIL(startup_filter(filtered))) {
+        LOG_WARN("do startup filter failed", K(ret), "op", op_name());
       } else {
-        startup_passed_ = true;
-      }
-    }
-  }
-
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(inner_get_next_row())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("inner get next row failed", K(ret), "type", spec_.type_, "op", op_name());
-      }
-    } else {
-      if (!spec_.filters_.empty()) {
-        bool filtered = false;
-        if (OB_FAIL(filter_row(filtered))) {
-          LOG_WARN("filter row failed", K(ret), "type", spec_.type_, "op", op_name());
+        if (filtered) {
+          ret = OB_ITER_END;
         } else {
-          if (filtered) {
-            continue;
-          }
+          startup_passed_ = true;
         }
       }
     }
-    break;
-  }
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_get_next_row())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("inner get next row failed", K(ret), "type", spec_.type_, "op", op_name());
+        }
+      } else {
+        if (!spec_.filters_.empty()) {
+          bool filtered = false;
+          if (OB_FAIL(filter_row(filtered))) {
+            LOG_WARN("filter row failed", K(ret), "type", spec_.type_, "op", op_name());
+          } else {
+            if (filtered) {
+              continue;
+            }
+          }
+        }
+      }
+      break;
+    }
 
-  if (OB_SUCCESS == ret) {
-    op_monitor_info_.output_row_count_++;
-    if (!got_first_row_) {
-      op_monitor_info_.first_row_time_ = oceanbase::common::ObClockGenerator::getClock();
-      ;
-      got_first_row_ = true;
-    }
-  } else if (OB_ITER_END == ret) {
-    int tmp_ret = drain_exch();
-    if (OB_SUCCESS != tmp_ret) {
-      ret = tmp_ret;
-      LOG_WARN("drain exchange data failed", K(tmp_ret));
-    }
-    if (got_first_row_) {
-      op_monitor_info_.last_row_time_ = oceanbase::common::ObClockGenerator::getClock();
+    if (OB_SUCCESS == ret) {
+      op_monitor_info_.output_row_count_++;
+      if (!got_first_row_) {
+        op_monitor_info_.first_row_time_ = oceanbase::common::ObClockGenerator::getClock();
+        ;
+        got_first_row_ = true;
+      }
+    } else if (OB_ITER_END == ret) {
+      int tmp_ret = drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
+      if (got_first_row_) {
+        op_monitor_info_.last_row_time_ = oceanbase::common::ObClockGenerator::getClock();
+      }
     }
   }
   return ret;

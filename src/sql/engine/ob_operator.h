@@ -398,6 +398,7 @@ protected:
 
   // Drain exchange in data for PX, or producer DFO will be blocked.
   virtual int drain_exch();
+  int check_stack_once();
 
 protected:
   const ObOpSpec& spec_;
@@ -426,6 +427,7 @@ protected:
   bool got_first_row_;
   // gv$sql_plan_monitor
   ObMonitorNode op_monitor_info_;
+  bool check_stack_overflow_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
