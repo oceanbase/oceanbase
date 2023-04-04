@@ -1100,13 +1100,19 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
         replay_task->shallow_copy(task);
         if (OB_FAIL(broadcast_task_array.push_back(replay_task))) {
           free_replay_task(replay_task);
-          CLOG_LOG(ERROR, "broadcast_task_array push back replay_task failed", K(replay_task),
-                   KPC(replay_task), K(i), K(ret));
+          CLOG_LOG(ERROR, "broadcast_task_array push back replay_task failed", K(task), K(i), K(ret));
         }
       }
     }
     if (OB_SUCC(ret)) {
       int index = 0;
+      ObLogBaseType log_type = task.log_type_;
+      share::ObLSID ls_id = task.ls_id_;
+      palf::LSN lsn = task.lsn_;
+      share::SCN scn = task.scn_;
+      bool is_pre_barrier = task.is_pre_barrier_;
+      bool is_post_barrier = task.is_post_barrier_;
+      int64_t log_size = task.log_size_;
       for (index = 0; OB_SUCC(ret) && index < REPLAY_TASK_QUEUE_SIZE; ++index) {
         ObLogReplayTask *replay_task = broadcast_task_array[index];
         task_queues_[index].push(replay_task);
@@ -1123,6 +1129,8 @@ int ObReplayStatus::push_log_replay_task(ObLogReplayTask &task)
         }
         task_queues_[index].set_batch_push_finish();
       }
+      CLOG_LOG(INFO, "submit pre barrier log success", K(log_type), K(ls_id), K(lsn), K(scn),
+               K(is_pre_barrier), K(is_post_barrier), K(log_size));
     } else {
       for (int64_t i = 1; i < broadcast_task_array.count(); ++i) {
         free_replay_task(broadcast_task_array[i]);
