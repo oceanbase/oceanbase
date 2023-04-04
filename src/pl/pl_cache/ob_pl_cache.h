@@ -217,7 +217,11 @@ public:
   TO_STRING_KV(K_(sys_schema_version),
                K_(tenant_schema_version),
                K_(sessid),
-               K_(sess_create_time));
+               K_(sess_create_time),
+               K_(contain_sys_name_table),
+               K_(contain_tmp_table),
+               K_(contain_sys_pl_object),
+               K_(stored_schema_objs));
 
 public:
   common::ObIAllocator *pc_alloc_;
