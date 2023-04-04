@@ -3689,10 +3689,12 @@ int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &
   static const char *name_pair[] = { "dbms_utility", "name_resolve" };
   static const char *name_pair1[] = { "dbms_utility", "ICD_NAME_RES" };
   static const char *name_pair2[] = { "dbms_utility", "old_current_schema" };
+  static const char *name_pair3[] = { "dbms_describe", "describe_procedure" };
   static name_pair_ptr name_arr[] = {
     &name_pair,
     &name_pair1,
-    &name_pair2
+    &name_pair2,
+    &name_pair3
     // { "dbms_utility", "name_resolve" }
   };
   int ret = OB_SUCCESS;
