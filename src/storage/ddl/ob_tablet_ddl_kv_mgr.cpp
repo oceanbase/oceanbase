@@ -955,13 +955,13 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const SCN &scn, ObTableHandleV2 &kv
   int ret = OB_SUCCESS;
   kv_handle.reset();
   if (get_count() > 0) {
-    for (int64_t i = tail_ - 1; OB_SUCC(ret) && i >= head_ && !kv_handle.is_valid(); ++i) {
+    for (int64_t i = tail_ - 1; OB_SUCC(ret) && i >= head_ && !kv_handle.is_valid(); --i) {
       ObTableHandleV2 &tmp_kv_handle = ddl_kv_handles_[get_idx(i)];
       ObDDLKV *tmp_kv = static_cast<ObDDLKV *>(tmp_kv_handle.get_table());
       if (OB_ISNULL(tmp_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(tmp_kv), K(i), K(head_), K(tail_));
-      } else if (scn <= tmp_kv->get_freeze_scn()) {
+      } else if (scn > tmp_kv->get_start_scn() && scn <= tmp_kv->get_freeze_scn()) {
         kv_handle = tmp_kv_handle;
         break;
       }
