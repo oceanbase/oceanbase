@@ -251,29 +251,16 @@ int ObRedoLogGenerator::sync_log_succ(const SCN scn, const ObCallbackScope &call
 void ObRedoLogGenerator::sync_log_fail(const ObCallbackScope &callbacks)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
+  int64_t removed_cnt = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(ERROR, "not init", K(ret));
   } else if (!callbacks.is_empty()) {
-    ObTransCallbackMgr::RDLockGuard guard(callback_mgr_->get_rwlock());
-    ObITransCallbackIterator cursor = callbacks.start_;
-    do {
-      ObITransCallback *iter = (ObITransCallback *)*cursor;
-      if (iter->need_fill_redo()) {
-        if (OB_TMP_FAIL(iter->log_sync_fail_cb())) {
-          if (OB_SUCC(ret)) {
-            ret = tmp_ret;
-          }
-          TRANS_LOG(WARN, "failed to set sync log info for callback ", K(tmp_ret), K(*iter));
-        } else {
-          redo_sync_fail_cnt_ += 1;
-        }
-      } else {
-        TRANS_LOG(ERROR, "sync_log_fail error", K(ret), K(iter), K(iter->need_fill_redo()));
-      }
-    } while (cursor != callbacks.end_ && !FALSE_IT(cursor++));
+    if (OB_FAIL(callback_mgr_->sync_log_fail(callbacks, removed_cnt))) {
+      TRANS_LOG(ERROR, "sync log failed", K(ret));
+    }
+    redo_sync_fail_cnt_ += removed_cnt;
   }
 }
 

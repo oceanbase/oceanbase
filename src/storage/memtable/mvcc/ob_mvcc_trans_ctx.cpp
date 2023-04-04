@@ -223,7 +223,6 @@ void ObTransCallbackMgr::reset()
     callback_lists_ = NULL;
   }
   parallel_stat_ = 0;
-  leader_changed_ = false;
   callback_main_list_append_count_ = 0;
   callback_slave_list_append_count_ = 0;
   callback_slave_list_merge_count_ = 0;
@@ -440,6 +439,24 @@ int ObTransCallbackMgr::calc_checksum_before_scn(const SCN scn,
     TRANS_LOG(WARN, "calc checksum with minor freeze failed", K(ret), K(scn));
   } else {
     callback_list_.get_checksum_and_scn(checksum, checksum_scn);
+  }
+
+  return ret;
+}
+
+int ObTransCallbackMgr::sync_log_fail(const ObCallbackScope &callbacks,
+                                      int64_t &removed_cnt)
+{
+  int ret = OB_SUCCESS;
+  removed_cnt = 0;
+
+  // TODO(handora.qc): remove it in the future
+  RDLockGuard guard(rwlock_);
+
+  if (callbacks.is_empty()) {
+    // pass empty callbacks
+  } else if (OB_FAIL(callback_list_.sync_log_fail(callbacks, removed_cnt))) {
+    TRANS_LOG(ERROR, "sync log fail", K(ret));
   }
 
   return ret;
