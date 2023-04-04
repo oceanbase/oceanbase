@@ -53,6 +53,27 @@ ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
   return r;
 }
 
+const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation)
+{
+  static const ObString EMPTY_STR;
+  static const ObString LEVEL_STR[4] =
+    {
+     "READ-UNCOMMITTED",
+     "READ-COMMITTED",
+     "REPEATABLE-READ",
+     "SERIALIZABLE"
+    };
+  const ObString *isolation_str = &EMPTY_STR;
+  switch (isolation) {
+  case ObTxIsolationLevel::RU: isolation_str = &LEVEL_STR[0]; break;
+  case ObTxIsolationLevel::RC: isolation_str = &LEVEL_STR[1]; break;
+  case ObTxIsolationLevel::RR: isolation_str = &LEVEL_STR[2]; break;
+  case ObTxIsolationLevel::SERIAL: isolation_str = &LEVEL_STR[3]; break;
+  default: break;
+  }
+  return *isolation_str;
+}
+
 ObTxSavePoint::ObTxSavePoint()
   : type_(T::INVL), scn_(0), session_id_(0), user_create_(false), name_() {}
 

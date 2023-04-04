@@ -54,8 +54,10 @@ void ObXAQueryObImpl::reset()
       DBMS_XA.TMNOFLAGS) as result \
   from dual"
 
+// NOTE that the input parameter flags is not used
 int ObXAQueryObImpl::xa_start(const ObXATransID &xid, const int64_t flags)
 {
+  UNUSED(flags);
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -209,13 +211,16 @@ int ObXAQueryOraImpl::init(ObISQLConnection *conn)
   return ret;
 }
 
-#define OCI_DEFAULT          0x00000000
-#define OCI_TRANS_NEW        0x00000001
-#define OCI_TRANS_JOIN       0x00000002
-#define OCI_TRANS_RESUME     0x00000004
-#define OCI_TRANS_LOOSE      0x00010000
-#define OCI_TRANS_TIGHT      0x00020000
-#define OCI_TRANS_TWOPHASE   0x01000000
+#define OCI_DEFAULT            0x00000000
+#define OCI_TRANS_NEW          0x00000001
+#define OCI_TRANS_JOIN         0x00000002
+#define OCI_TRANS_RESUME       0x00000004
+#define OCI_TRANS_READONLY     0x00000100
+#define OCI_TRANS_READWRITE    0x00000200
+#define OCI_TRANS_SERIALIZABLE 0x00000400
+#define OCI_TRANS_LOOSE        0x00010000
+#define OCI_TRANS_TIGHT        0x00020000
+#define OCI_TRANS_TWOPHASE     0x01000000
 
 int ObXAQueryOraImpl::xa_start(const ObXATransID &xid, const int64_t flags)
 {
@@ -323,7 +328,7 @@ int ObXAQueryOraImpl::xa_rollback(const ObXATransID &xid)
 }
 
 // NOTE that only support
-// xa start, TMNOFLAGS
+// xa start, TMNOFLAGS, TMSERIALIZABLE
 // xa end, TMSUCCESS
 // xa commit, TMNOFLAGS
 int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
@@ -345,6 +350,14 @@ int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
     case ObXAFlag::TMSUCCESS: {
       if (ObXAReqType::XA_END == xa_req_type) {
         oci_flag = OCI_DEFAULT;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+      }
+      break;
+    }
+    case ObXAFlag::TMSERIALIZABLE: {
+      if (ObXAReqType::XA_START == xa_req_type) {
+        oci_flag = OCI_TRANS_SERIALIZABLE;
       } else {
         ret = OB_NOT_SUPPORTED;
       }

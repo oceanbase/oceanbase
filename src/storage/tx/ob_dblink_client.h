@@ -64,7 +64,7 @@ public:
            const int64_t tx_timeout_us,
            common::sqlclient::ObISQLConnection *dblink_conn);
 public:
-  int rm_xa_start(const transaction::ObXATransID &xid);
+  int rm_xa_start(const transaction::ObXATransID &xid, const ObTxIsolationLevel isolation);
   int rm_xa_end();
   int rm_xa_prepare();
   int rm_xa_commit();
@@ -79,7 +79,7 @@ public:
   static bool is_valid_dblink_type(const common::sqlclient::DblinkDriverProto dblink_type);
 private:
   int rm_xa_end_();
-  int init_query_impl_();
+  int init_query_impl_(const ObTxIsolationLevel isolation);
 public:
   TO_STRING_KV(KP(this), K_(is_inited), K_(index), K_(xid), K_(state),
       K_(dblink_type), KP_(dblink_conn), K_(tx_timeout_us));

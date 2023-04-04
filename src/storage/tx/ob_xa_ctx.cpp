@@ -1055,6 +1055,7 @@ int ObXACtx::xa_start_for_dblink(const ObXATransID &xid,
   } else {
     // set global trans type to dblink trans
     tx_desc->set_global_tx_type(ObGlobalTxType::DBLINK_TRANS);
+    tx_desc->set_explicit();
   }
 
   TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags), K(need_promote), K(*this));

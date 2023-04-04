@@ -150,6 +150,8 @@ enum class ObTxIsolationLevel
 
 extern ObTxIsolationLevel tx_isolation_from_str(const ObString &s);
 
+extern const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation);
+
 enum class ObTxAccessMode
 {
   INVL = -1, RW = 0, RD_ONLY = 1
@@ -655,6 +657,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
   bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
+  void set_explicit() { flags_.EXPLICIT_ = true; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
