@@ -282,7 +282,7 @@ function deploy_cluster {
   then
     config_yaml=$YAML_CONF
   else
-    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status .data | awk '{print $2}')" != "UNCHNAGE" ]]
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml && "$(grep config_status $OBD_CLUSTER_PATH/$deploy_name/.data | awk '{print $2}')" != "UNCHNAGE" ]]
     then
       config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
     else
@@ -556,7 +556,16 @@ function main() {
     case "$1" in
       -v ) VERBOSE_FLAG='-v'; set -x; shift ;;
       --with-local-obproxy) WITH_LOCAL_PROXY="1";SKIP_COPY="1"; shift ;;
-      -c | --config ) YAML_CONF="$2"; shift 2 ;;
+      -c | --config )
+        if [[ $commond == "deploy" || $commond == "redeploy" || $commond == "mysqltest" ]]
+        then
+          YAML_CONF="$2"
+          shift 2
+        else
+          extra_args="$extra_args $1"
+          shift
+        fi
+        ;;
       -n | --deploy-name ) DEPLOY_NAME="$2"; shift 2 ;;
       -p | --data-path ) DATA_PATH="$2"; shift 2 ;;
       -N ) NO_CONFIRM="1"; shift ;;
