@@ -429,8 +429,15 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
           std::lower_bound(all_progress.begin(), all_progress.end(), ls_r->get_zone());
         if ((p != all_progress.end()) && (p->zone_ == ls_r->get_zone())) {
           SCN replica_snapshot_scn;
+          SCN replica_report_scn;
           if (OB_FAIL(replica_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
+          } else if (replica_report_scn.convert_for_tx(r->get_report_scn())) {
+            LOG_WARN("fail to convert val to SCN", KR(ret), "report_scn", r->get_report_scn());
+          } else if (replica_report_scn > replica_snapshot_scn) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected report_scn and snapshot_scn", KR(ret), "report_scn",
+                     r->get_report_scn(), "snapshot_scn", r->get_snapshot_version());
           } else if ((REPLICA_TYPE_LOGONLY == ls_r->get_replica_type())
                     || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
             // logonly replica no need check
@@ -440,17 +447,22 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
               p->smallest_snapshot_scn_ = replica_snapshot_scn;
             }
             if (replica_snapshot_scn >= global_broadcast_scn) {
-              if (replica_snapshot_scn > global_broadcast_scn) {
-                tablet_need_verify = false; // this tablet doesn't need to execute checksum verification
+              if (replica_snapshot_scn > global_broadcast_scn) { // launched another medium compaction
+                tablet_need_verify = false; // this tablet does not need to execute checksum verification
               } else {  // replica_snapshot_scn == global_broadcast_scn
-                // check tablet replica status when replica_snapshot_scn = global_broadcast_scn,
-                // so as to find out checksum error occured before this round of major freeze.
-                // not check tablet replica status when replica_snapshot_scn > global_broadcast_scn,
-                // since the checksum error detected here may be caused by medium compaction after
-                // this round of major freeze.
-                if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
-                  ret = OB_CHECKSUM_ERROR;
-                  LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
+                if (replica_report_scn == global_broadcast_scn) { // finished verification on the old leader
+                  tablet_need_verify = false; // this tablet does not need to execute checksum verification
+                } else { // replica_report_scn < global_broadcast_scn
+                  // check tablet replica status when replica_snapshot_scn = global_broadcast_scn
+                  // and replica_report_scn < global_broadcast_scn, so as to find out checksum error
+                  // occured before this round of major freeze. do not check tablet replica status
+                  // when replica_snapshot_scn > global_broadcast_scn or replica_report_scn =
+                  // global_broadcast_scn, since the checksum error detected here may be caused by
+                  // medium compaction after this round of major freeze.
+                  if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
+                    ret = OB_CHECKSUM_ERROR;
+                    LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
+                  }
                 }
               }
               ++(p->merged_tablet_cnt_);

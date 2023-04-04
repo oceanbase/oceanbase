@@ -177,8 +177,7 @@ public:
       const schema::ObSimpleTableSchemaV2 &data_simple_schema,
       const schema::ObSimpleTableSchemaV2 &index_simple_schema,
       const SCN &compaction_scn,
-      common::ObMySQLProxy &sql_proxy,
-      const int64_t expected_epoch);
+      common::ObMySQLProxy &sql_proxy);
 
   static int set_column_meta_with_hex_str(
       const ObString &hex_str,
@@ -266,16 +265,14 @@ private:
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
       const SCN &compaction_scn,
-      common::ObMySQLProxy &sql_proxy,
-      const int64_t expected_epoch);
+      common::ObMySQLProxy &sql_proxy);
 
   static int check_local_index_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
       const SCN &compaction_scn,
-      common::ObMySQLProxy &sql_proxy,
-      const int64_t expected_epoch);
+      common::ObMySQLProxy &sql_proxy);
 
   // get column checksum_sum from items and store result in map
   // KV of @column_ckm_sum_map is: <column_id, column_checksum_sum>
