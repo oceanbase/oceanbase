@@ -1232,7 +1232,7 @@ int ObTablet::get_sstables_size(int64_t &used_size, const bool ignore_shared_blo
       }
     }
     if (OB_SUCC(ret) && tablet_meta_.has_next_tablet_ && OB_FAIL(
-        next_tablet_guard_.get_obj()->get_sstables_size(used_size, true /*ignore shared block*/))) {
+        next_tablet_guard_.get_obj()->get_sstables_size(used_size, ignore_shared_block /*whether ignore shared block*/))) {
       LOG_WARN("failed to get size of tablets on the list", K(ret), K(used_size));
     }
   }

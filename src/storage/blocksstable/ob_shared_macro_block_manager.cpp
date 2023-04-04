@@ -440,10 +440,11 @@ int ObSharedMacroBlockMgr::defragment()
           rewrite_cnt,
           *sstable_index_builder,
           *index_block_rebuilder))) {
-        LOG_WARN("fail to update tablet", K(ret), K(tablet_handle), K(macro_ids));
-      }
-      if (OB_UNLIKELY(OB_EAGAIN == ret)) {
-        ret = OB_SUCCESS;
+        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+          LOG_WARN("fail to update tablet", K(ret), K(tablet_handle), K(macro_ids));
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -464,8 +465,12 @@ int ObSharedMacroBlockMgr::defragment()
     index_block_rebuilder = nullptr;
   }
 
-  if (OB_FAIL(ret) && REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
-    LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids));
+  if (OB_FAIL(ret)) {
+    if (REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
+      LOG_ERROR("defragmentation failed 10 times, something is wrong", K(ret), K(macro_ids));
+    } else {
+      LOG_WARN("fail to finish defragmentation", K(ret), K(macro_ids));
+    }
   }
 
   return ret;
