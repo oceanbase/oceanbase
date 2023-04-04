@@ -446,7 +446,7 @@ int ObTabletChecksumValidator::validate_tablet_replica_checksum(
 
 ///////////////////////////////////////////////////////////////////////////////
 ObCrossClusterTabletChecksumValidator::ObCrossClusterTabletChecksumValidator()
-  : major_merge_start_us_(-1), special_table_id_(OB_INVALID_ID)
+  : major_merge_start_us_(-1)
 {
 }
 
@@ -832,9 +832,13 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
                 LOG_WARN("fail to check if contains first tablet in sys ls", KR(ret), K_(tenant_id), K(pairs));
               } else if (is_containing) {
                 // do not write tablet checksum and update report_scn of this table here.
-                // instead, just record the table_id of this table here. write tablet checksum
-                // and update report_scn of this table in the end of this round of major freeze.
-                special_table_id_ = table_id;
+                // instead, write tablet checksum and update report_scn of this table in the end
+                // of this round of major freeze.
+                if (MAJOR_MERGE_SPECIAL_TABLE_ID != table_id) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("table_id of the table containing first tablet in sys ls does not equal"
+                           " to 1", KR(ret), K_(tenant_id), K(table_id));
+                }
                 need_update_report_scn = false;
                 LOG_INFO("this table contains first tablet in sys ls, write tablet checksum and update"
                         " report_scn of this table later", K(table_id), K(pairs));
@@ -892,12 +896,11 @@ int ObCrossClusterTabletChecksumValidator::write_tablet_checksum_at_table_level(
   bool is_exist = false;
   FREEZE_TIME_GUARD;
   if (OB_UNLIKELY(pairs.empty()
-                  || (!table_compaction_info.is_index_ckm_verified() && (table_id != special_table_id_))
-                  || (!table_compaction_info.is_verified() && (table_id == special_table_id_)
-                      && (OB_INVALID_ID != special_table_id_)))) {
+                  || (!table_compaction_info.is_index_ckm_verified() && (MAJOR_MERGE_SPECIAL_TABLE_ID != table_id))
+                  || (!table_compaction_info.is_verified() && (MAJOR_MERGE_SPECIAL_TABLE_ID == table_id)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(pairs), K(frozen_scn), K(table_compaction_info),
-             K(table_id), K_(special_table_id));
+             K(table_id));
   } else if (stop) {
     ret = OB_CANCELED;
     LOG_WARN("already stop", KR(ret), K_(tenant_id));
@@ -909,9 +912,8 @@ int ObCrossClusterTabletChecksumValidator::write_tablet_checksum_at_table_level(
     if (table_compaction_info.can_skip_verifying()) {
       // do not write tablet checksum items for tables that can skip verifying,
       // since tablet checksum items of these tables must have already been written
-    } else if ((table_compaction_info.is_index_ckm_verified() && (table_id != special_table_id_))
-               || (table_compaction_info.is_verified() && (table_id == special_table_id_)
-                      && (OB_INVALID_ID != special_table_id_))) {
+    } else if ((table_compaction_info.is_index_ckm_verified() && (MAJOR_MERGE_SPECIAL_TABLE_ID != table_id))
+               || (table_compaction_info.is_verified() && (MAJOR_MERGE_SPECIAL_TABLE_ID == table_id))) {
       const int64_t IMMEDIATE_RETRY_CNT = 5;
       int64_t fail_count = 0;
       int64_t sleep_time_us = 200 * 1000; // 200 ms

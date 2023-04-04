@@ -17,6 +17,7 @@
 #include "share/ob_tablet_replica_checksum_iterator.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_zone_merge_info.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -161,7 +162,6 @@ public:
   {
     major_merge_start_us_ = major_merge_start_us;
   }
-  uint64_t get_special_table_id() const { return special_table_id_; }
   // sync data from __all_tablet_replica_checksum to __all_tablet_checksum at table granularity
   int write_tablet_checksum_at_table_level(const volatile bool &stop,
                                            const ObArray<share::ObTabletLSPair> &pairs,
@@ -169,6 +169,8 @@ public:
                                            const share::ObTableCompactionInfo &table_compaction_info,
                                            const uint64_t table_id,
                                            const int64_t expected_epoch);
+  // table_id of the table containing first tablet in sys ls
+  static const uint64_t MAJOR_MERGE_SPECIAL_TABLE_ID = share::OB_ALL_CORE_TABLE_TID;
 
 private:
   virtual int check_all_table_verification_finished(const volatile bool &stop,
@@ -213,8 +215,6 @@ private:
   const static int64_t MAX_BATCH_INSERT_COUNT = 100;
   // record the time when starting to major merge, used for check_waiting_tablet_checksum_timeout
   int64_t major_merge_start_us_;
-  // record the table_id of the table which contains first tablet in sys ls
-  uint64_t special_table_id_;
 };
 
 // Mainly to verify checksum between (global and local) index table and main table
