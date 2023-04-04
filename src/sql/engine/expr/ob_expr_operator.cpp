@@ -2175,7 +2175,7 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
-    } else if (is_mysql_mode() && ObDoubleType == cmp_type.get_calc_type()) {
+    } else if (is_mysql_mode() && ob_is_double_type(cmp_type.get_calc_type())) {
       if (ob_is_numeric_tc(type1.get_type_class()) && ob_is_numeric_tc(type2.get_type_class()) &&
             SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
         const ObScale scale = MAX(type1.get_scale(), type2.get_scale());
@@ -3932,7 +3932,7 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
-    } else if (is_mysql_mode() && ObDoubleType == cmp_type.get_calc_type()) {
+    } else if (is_mysql_mode() && ob_is_double_tc(cmp_type.get_calc_type())) {
       if (ob_is_numeric_tc(type1.get_type_class()) && ob_is_numeric_tc(type2.get_type_class()) &&
             SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
         const ObScale scale = MAX(type1.get_scale(), type2.get_scale());
