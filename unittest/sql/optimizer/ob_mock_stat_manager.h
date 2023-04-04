@@ -129,7 +129,7 @@ class MockStatManager : public oceanbase::common::ObStatManager
 {
   static const uint64_t DEFAULT_TABLE1_ID = 1099511677777;
   static const uint64_t DEFAULT_TABLE2_ID = 1099511677778;
-  static const int64_t TIME_MAX_VALUE = (3020399 * 1000000LL);
+  static const int64_t TIME_MAX_VALUE = TIME_MAX_VAL;
   static const int64_t DATE_MAX_VALUE = 2932896;
   static const int64_t DATE_MIN_VALUE = -354258;
 public:
