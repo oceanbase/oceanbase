@@ -249,13 +249,8 @@ int ObTablet::init(
     LOG_WARN("failed to build read info", K(ret));
   } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
-  } else if (OB_FAIL(check_max_sync_schema_version())) {
-    LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet),
-        K(max_sync_schema_version), K(storage_schema_));
-  } else if (OB_FAIL(check_medium_list())) {
-    LOG_WARN("failed to check medium list", K(ret), K(param), K(old_tablet), K(medium_info_list_));
-  } else if (OB_FAIL(check_sstable_column_checksum())) {
-    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
+  } else if (OB_FAIL(inner_check_valid())) {
+    LOG_WARN("failed to check tablet valid", K(ret), K(param), K(old_tablet));
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -323,12 +318,8 @@ int ObTablet::init(
     LOG_WARN("failed to build read info", K(ret), K(param));
   } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
-  } else if (OB_FAIL(check_max_sync_schema_version())) {
-    LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(is_update), K(storage_schema_));
-  } else if (OB_FAIL(check_medium_list())) {
-    LOG_WARN("failed to check medium list", K(ret), K(param), K(medium_info_list_));
-  } else if (OB_FAIL(check_sstable_column_checksum())) {
-    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
+  } else if (OB_FAIL(inner_check_valid())) {
+    LOG_WARN("failed to check tablet valid", K(ret), K(param));
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet", K(ret), K(param), KPC(this));
@@ -442,12 +433,8 @@ int ObTablet::init(
     LOG_WARN("failed to build read info", K(ret));
   } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
-  } else if (OB_FAIL(check_max_sync_schema_version())) {
-    LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet), K(storage_schema_));
-  } else if (OB_FAIL(check_medium_list())) {
-    LOG_WARN("failed to check medium list", K(ret), K(param), K(old_tablet), K(medium_info_list_));
-  } else if (OB_FAIL(check_sstable_column_checksum())) {
-    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
+  } else if (OB_FAIL(inner_check_valid())) {
+    LOG_WARN("failed to check tablet valid", K(ret), K(param), K(old_tablet));
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -3292,8 +3279,7 @@ int ObTablet::check_medium_list() const
 {
   int ret = OB_SUCCESS;
   ObITable *last_major = nullptr;
-  if (tablet_meta_.ha_status_.is_none()
-    && nullptr != (last_major = table_store_.get_major_sstables().get_boundary_table(true/*last*/))
+  if (nullptr != (last_major = table_store_.get_major_sstables().get_boundary_table(true/*last*/))
     && get_medium_compaction_info_list().get_last_compaction_scn() > 0) { // for compat
     if (OB_UNLIKELY(get_medium_compaction_info_list().get_last_compaction_scn() != last_major->get_snapshot_version())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3371,15 +3357,26 @@ int ObTablet::remove_memtables_from_data_checkpoint()
   return ret;
 }
 
+// only check storage_schema & medium_list when ha_status is none
 int ObTablet::check_valid() const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(check_max_sync_schema_version())) {
+  } else {
+    ret = inner_check_valid();
+  }
+  return ret;
+}
+
+int ObTablet::inner_check_valid() const
+{
+  int ret = OB_SUCCESS;
+  const bool ha_status_none = tablet_meta_.ha_status_.is_none();
+  if (ha_status_none && OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("fialed to check max sync schema version", K(ret), KPC(this));
-  } else if (OB_FAIL(check_medium_list())) {
+  } else if (ha_status_none && OB_FAIL(check_medium_list())) {
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
