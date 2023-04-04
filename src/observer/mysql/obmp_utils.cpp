@@ -164,6 +164,9 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
       succ_info_types.add_member(info_type);
       LOG_DEBUG("sync-session-info", K(info_type), K(info_len));
     }
+    if (OB_FAIL(ret)) {
+      sess.post_sync_session_info();
+    }
   }
 
   return ret;

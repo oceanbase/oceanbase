@@ -558,9 +558,9 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     TRANS_LOG(WARN, "try abort tx which has decided",
               K(ret), K(tx), K(cause));
   } else {
-    // TODO: refactor state switch and put this to there
     if (ObTxDesc::State::IDLE == tx.state_) {
-      tx.state_change_flags_.STATIC_CHANGED_ = 1;
+      // for tx free route, when switch from idle to abort, same as tx actived
+      tx.state_change_flags_.mark_all();
     }
     tx.state_ = ObTxDesc::State::IN_TERMINATE;
     tx.abort_cause_ = cause;
