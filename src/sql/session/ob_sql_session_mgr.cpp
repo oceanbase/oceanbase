@@ -577,6 +577,7 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   }
 
   session.update_last_active_time();
+  session.set_disconnect_state(NORMAL_KILL_SESSION);
   rpc::ObSqlSockDesc &sock_desc = session.get_sock_desc();
   if (OB_LIKELY(NULL != sock_desc.sock_desc_)) {
     SQL_REQ_OP.disconnect_by_sql_sock_desc(sock_desc);

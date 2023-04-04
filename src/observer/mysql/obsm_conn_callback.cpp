@@ -145,25 +145,29 @@ static void sm_conn_unlock_tenant(ObSMConnection& conn)
   }
 }
 
-static void sm_conn_log_close(ObSMConnection& conn, int ret)
-{
-  LOG_INFO("connection close",
-           "sessid", conn.sessid_,
-           "proxy_sessid", conn.proxy_sessid_,
-           "tenant_id", conn.tenant_id_,
-           "server_id", GCTX.server_id_,
-           "from_proxy", conn.is_proxy_,
-           "from_java_client", conn.is_java_client_,
-           "c/s protocol", get_cs_protocol_type_name(conn.get_cs_protocol_type()),
-           "is_need_clear_sessid_", conn.is_need_clear_sessid_,
-           K(ret));
-}
-
 void ObSMConnectionCallback::destroy(ObSMConnection& conn)
 {
   int ret = OB_SUCCESS;
   bool is_need_clear = false;
+  sql::ObDisconnectState disconnect_state;
+  ObCurTraceId::TraceId trace_id;
   if (conn.is_sess_alloc_ && !conn.is_sess_free_) {
+    {
+      int tmp_ret = OB_SUCCESS;
+      sql::ObSQLSessionInfo *sess_info = NULL;
+      sql::ObSessionGetterGuard guard(*GCTX.session_mgr_, conn.sessid_);
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = guard.get_session(sess_info)))) {
+        LOG_WARN_RET(tmp_ret, "fail to get session", K(tmp_ret), K(conn.sessid_),
+                "proxy_sessid", conn.proxy_sessid_);
+      } else if (OB_ISNULL(sess_info)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN_RET(tmp_ret, "session info is NULL", K(tmp_ret), K(conn.sessid_),
+                "proxy_sessid", conn.proxy_sessid_);
+      } else {
+        disconnect_state = sess_info->get_disconnect_state();
+        trace_id = sess_info->get_current_trace_id();
+      }
+    }
     sql::ObFreeSessionCtx ctx;
     ctx.tenant_id_ = conn.tenant_id_;
     ctx.sessid_ = conn.sessid_;
@@ -201,15 +205,28 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
   } else if (is_need_clear) {
     GCTX.session_mgr_->mark_sessid_unused(conn.sessid_);
   }
+
   sm_conn_unlock_tenant(conn);
-  sm_conn_log_close(conn, ret);
+  share::ObTaskController::get().allow_next_syslog();
+  LOG_INFO("connection close",
+           "sessid", conn.sessid_,
+           "proxy_sessid", conn.proxy_sessid_,
+           "tenant_id", conn.tenant_id_,
+           "server_id", GCTX.server_id_,
+           "from_proxy", conn.is_proxy_,
+           "from_java_client", conn.is_java_client_,
+           "c/s protocol", get_cs_protocol_type_name(conn.get_cs_protocol_type()),
+           "is_need_clear_sessid_", conn.is_need_clear_sessid_,
+           K(ret),
+           K(trace_id),
+           K(conn.pkt_rec_wrapper_),
+           K(disconnect_state));
   conn.~ObSMConnection();
 }
 
 int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
 {
   int ret = OB_SUCCESS;
-
   if (conn.is_sess_alloc_
       && !conn.is_sess_free_
       && ObSMConnection::INITIAL_SESSID != conn.sessid_) {
@@ -228,7 +245,7 @@ int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
     }
   }
   LOG_INFO("kill and revert session", K(conn.sessid_),
-      "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_, K(ret));
+          "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_, K(ret));
   return ret;
 }
 
