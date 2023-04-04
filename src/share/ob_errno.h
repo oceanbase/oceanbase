@@ -1377,6 +1377,7 @@ constexpr int OB_TRANSFER_CTX_TS_NOT_MATCH = -7108;
 constexpr int OB_TRANSFER_SYS_ERROR = -7109;
 constexpr int OB_TRANSFER_MEMBER_LIST_NOT_SAME = -7110;
 constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
+constexpr int OB_LS_TRANSFER_SCN_TOO_SMALL = -7112;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -3307,6 +3308,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_SYS_ERROR__USER_ERROR_MSG "transfer system error"
 #define OB_TRANSFER_MEMBER_LIST_NOT_SAME__USER_ERROR_MSG "transfer src ls and dest ls member list not same"
 #define OB_ERR_UNEXPECTED_LOCK_OWNER__USER_ERROR_MSG "lock owner id is not expected"
+#define OB_LS_TRANSFER_SCN_TOO_SMALL__USER_ERROR_MSG "change member list compare ls transfer scn too small"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -5346,6 +5348,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_SYS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7109, transfer system error"
 #define OB_TRANSFER_MEMBER_LIST_NOT_SAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7110, transfer src ls and dest ls member list not same"
 #define OB_ERR_UNEXPECTED_LOCK_OWNER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7111, lock owner id is not expected"
+#define OB_LS_TRANSFER_SCN_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7112, change member list compare ls transfer scn too small"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5784,7 +5787,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2035];
+extern int g_all_ob_errnos[2036];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

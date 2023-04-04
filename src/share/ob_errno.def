@@ -1759,6 +1759,7 @@ DEFINE_ERROR(OB_TRANSFER_CTX_TS_NOT_MATCH, -7108, -1, "HY000", "transfer ctx_ts 
 DEFINE_ERROR(OB_TRANSFER_SYS_ERROR, -7109, -1, "HY000", "transfer system error");
 DEFINE_ERROR(OB_TRANSFER_MEMBER_LIST_NOT_SAME, -7110, -1, "HY000", "transfer src ls and dest ls member list not same");
 DEFINE_ERROR(OB_ERR_UNEXPECTED_LOCK_OWNER, -7111, -1, "HY000", "lock owner id is not expected");
+DEFINE_ERROR(OB_LS_TRANSFER_SCN_TOO_SMALL, -7112, -1, "HY000", "change member list compare ls transfer scn too small");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
