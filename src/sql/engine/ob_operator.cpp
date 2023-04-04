@@ -18,6 +18,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "common/ob_smart_call.h"
 #include "sql/monitor/ob_sql_plan_manager.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -937,7 +938,10 @@ int ObOperator::submit_op_monitor_node()
           }
         }
         // exclude io time cost
-        op_monitor_info_.db_time_ = db_time;
+        uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+        op_monitor_info_.db_time_ = 1000 * db_time / cpu_khz;
+        op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_ / cpu_khz;
+
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }

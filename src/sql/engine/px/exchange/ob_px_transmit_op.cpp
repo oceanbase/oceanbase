@@ -575,7 +575,6 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
         } else if (OB_FAIL(send_eof_row())) { // overwrite err code
           LOG_WARN("fail send eof rows to channels", K(ret));
         }
-        op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
         break;
       }
     }
@@ -604,7 +603,6 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
         }
       }
     }
-    op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
   }
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
@@ -721,11 +719,9 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       } else if (OB_FAIL(send_eof_row())) {
         LOG_WARN("fail send eof rows to channels", K(ret));
       }
-      op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
       break;
     }
     // for those break out ops
-    op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
   }
   LOG_TRACE("Transmit time record", K(row_count), K(ret));
   return ret;
