@@ -134,7 +134,7 @@ int ObITableArray::copy(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init(allocator, other.count_))) {
-    LOG_ERROR("failed to init ObITableArray for copying", K(ret), K(other));
+    LOG_WARN("failed to init ObITableArray for copying", K(ret), K(other));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       if (OB_ISNULL(other[i])) {

@@ -1255,6 +1255,14 @@ int ObTabletTableStore::check_ready_for_read()
       is_ready_for_read_ = true;
     }
   }
+
+  if (OB_SUCC(ret) && get_table_count() > EMERGENCY_SSTABLE_CNT) {
+    int tmp_ret = OB_TOO_MANY_SSTABLE;
+    LOG_WARN("Emergency SSTable count, maybe frequency freeze occurs, or maybe multi_version_start not adavanced.",
+             K(tmp_ret),
+             "major table count: ", major_tables_.count(),
+             "minor table count: ", minor_tables_.count());
+  }
   return ret;
 }
 

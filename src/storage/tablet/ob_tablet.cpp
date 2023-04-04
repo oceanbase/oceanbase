@@ -2460,10 +2460,21 @@ int ObTablet::get_kept_multi_version_start(
     ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
   }
   if (OB_SUCC(ret)) {
+    const int64_t old_min_reserved_snapshot = min_reserved_snapshot;
     min_reserved_snapshot = common::min(
         ls_min_reserved_snapshot,
         common::min(min_reserved_snapshot, min_medium_snapshot));
     multi_version_start = MIN(MAX(min_reserved_snapshot, multi_version_start), tablet.get_snapshot_version());
+
+    const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
+    if (current_time - multi_version_start > 120 * 60 * 1000 * 1000L /*2 hour*/) {
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
+        LOG_INFO("tablet multi version start not advance for a long time", K(ret),
+                "ls_id", tablet.get_tablet_meta().ls_id_, K(tablet_id),
+                K(multi_version_start), K(old_min_reserved_snapshot), K(min_medium_snapshot),
+                "ls_min_reserved_snapshot", ls.get_min_reserved_snapshot(), K(tablet));
+      }
+    }
   }
   LOG_DEBUG("get multi version start", "ls_id", tablet.get_tablet_meta().ls_id_, K(tablet_id),
       K(multi_version_start), K(min_reserved_snapshot), K(tablet.get_tablet_meta()), K(min_medium_snapshot),
