@@ -5029,7 +5029,6 @@ int ObWindow::assign(const ObWindow &other)
 void ObWinFunRawExpr::clear_child()
 {
   func_type_ = T_MAX;
-  is_distinct_ = false;
   func_params_.reset();
   partition_exprs_.reset();
   order_items_.reset();
@@ -5058,7 +5057,6 @@ int ObWinFunRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("failed to assign lower bound", K(ret));
       } else {
         func_type_ = tmp.func_type_;
-        is_distinct_ = tmp.is_distinct_;
         is_ignore_null_ = tmp.is_ignore_null_;
         is_from_first_ = tmp.is_from_first_;
         agg_expr_ = tmp.agg_expr_;

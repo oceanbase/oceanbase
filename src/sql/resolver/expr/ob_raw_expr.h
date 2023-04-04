@@ -4283,7 +4283,6 @@ public:
     : ObRawExpr(),
       ObWindow(),
       func_type_(T_MAX),
-      is_distinct_(false),
       is_ignore_null_(false),
       is_from_first_(false),
       agg_expr_(NULL),
@@ -4295,7 +4294,6 @@ public:
     : ObRawExpr(alloc),
       ObWindow(),
       func_type_(T_MAX),
-      is_distinct_(false),
       is_ignore_null_(false),
       is_from_first_(false),
       agg_expr_(NULL),
@@ -4312,8 +4310,6 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs);
   inline void set_func_type(ObItemType func_type)
   { func_type_ = func_type; }
-  inline void set_is_distinct(bool is_distinct)
-  { is_distinct_ = is_distinct; }
   inline void set_is_ignore_null(bool is_ignore_null)
   { is_ignore_null_ = is_ignore_null; }
   inline void set_is_from_first(bool is_from_first)
@@ -4323,7 +4319,6 @@ public:
   inline void set_agg_expr(ObAggFunRawExpr *agg_expr)
   { agg_expr_ = agg_expr; }
   inline ObItemType get_func_type() const { return func_type_; }
-  inline bool is_distinct() { return is_distinct_; }
   inline bool is_ignore_null() { return is_ignore_null_; }
   inline bool is_from_first() { return is_from_first_; }
   inline const common::ObIArray<ObRawExpr *> &get_func_params() const { return func_params_; }
@@ -4369,7 +4364,6 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             K_(func_type),
-                                            K_(is_distinct),
                                             K_(func_params),
                                             K_(partition_exprs),
                                             K_(order_items),
@@ -4384,7 +4378,6 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObWinFunRawExpr);
   ObItemType func_type_;
-  bool is_distinct_;
   bool is_ignore_null_;
   bool is_from_first_;
   common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> func_params_;
