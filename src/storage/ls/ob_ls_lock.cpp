@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_ls_lock.h"
 
 #include "lib/stat/ob_latch_define.h"
@@ -33,7 +35,7 @@ ObLSLock::~ObLSLock()
 {
 }
 
-int64_t ObLSLock::lock(int64_t hold, int64_t change)
+int64_t ObLSLock::lock(const ObLS *ls, int64_t hold, int64_t change)
 {
   int ret = OB_SUCCESS; // tmp_ret, rewrite every time
   int64_t pos = 0;
@@ -41,17 +43,17 @@ int64_t ObLSLock::lock(int64_t hold, int64_t change)
 
   hold &= LSLOCKMASK;
   change &= LSLOCKMASK;
-  ObTimeGuard tg("ObLSLock::lock", 100 * 1000);
+  ObTimeGuard tg("ObLSLock::lock", LOCK_CONFLICT_WARN_TIME);
   while (hold | change) {
     if (change & 1) {
       if (OB_FAIL(locks_[pos].wrlock(ObLatchIds::LS_LOCK))) {
-        STORAGE_LOG(ERROR, "wrlock error", K(ret), K(pos));
+        LOG_ERROR("wrlock error", K(ret), K(pos));
       } else {
         res |= 1L << pos;
       }
     } else if (hold & 1) {
       if (OB_FAIL(locks_[pos].rdlock(ObLatchIds::LS_LOCK))) {
-        STORAGE_LOG(ERROR, "rdlock error", K(ret), K(pos));
+        LOG_ERROR("rdlock error", K(ret), K(pos));
       } else {
         res |= 1L << pos;
       }
@@ -63,11 +65,13 @@ int64_t ObLSLock::lock(int64_t hold, int64_t change)
     change >>= 1;
     pos++;
   }
-
+  if (tg.get_diff() >= LOCK_CONFLICT_WARN_TIME) {
+    LOG_WARN("get lock cost too much time", KP(ls), "ls_id", OB_ISNULL(ls) ? ObLSID(0) : ls->get_ls_id());
+  }
   return res;
 }
 
-int64_t ObLSLock::try_lock(int64_t hold, int64_t change)
+int64_t ObLSLock::try_lock(const ObLS *ls, int64_t hold, int64_t change)
 {
   int ret = OB_SUCCESS; // tmp_ret, rewrite every time
   int64_t pos = 0;
@@ -75,7 +79,7 @@ int64_t ObLSLock::try_lock(int64_t hold, int64_t change)
 
   hold &= LSLOCKMASK;
   change &= LSLOCKMASK;
-  ObTimeGuard tg("ObLSLock::try_lock", 100 * 1000);
+  ObTimeGuard tg("ObLSLock::try_lock", LOCK_CONFLICT_WARN_TIME);
   while (hold | change) {
     if (change & 1) {
       if (OB_FAIL(locks_[pos].try_wrlock(ObLatchIds::LS_LOCK))) {
@@ -97,6 +101,9 @@ int64_t ObLSLock::try_lock(int64_t hold, int64_t change)
     change >>= 1;
     pos++;
   }
+  if (tg.get_diff() >= LOCK_CONFLICT_WARN_TIME) {
+    LOG_WARN("get lock cost too much time", KP(ls), "ls_id", OB_ISNULL(ls) ? ObLSID(0) : ls->get_ls_id());
+  }
 
   return res;
 }
@@ -109,7 +116,7 @@ void ObLSLock::unlock(int64_t target)
   target &= LSLOCKMASK;
   while (target) {
     if ((target & 1) && OB_FAIL(locks_[pos].unlock())) {
-      STORAGE_LOG(ERROR, "unlock error", K(ret), K(pos));
+      LOG_ERROR("unlock error", K(ret), K(pos));
     }
 
     target >>= 1;
@@ -119,13 +126,15 @@ void ObLSLock::unlock(int64_t target)
 
 // <=================== lock guard =======================>
 
-ObLSLockGuard::ObLSLockGuard(ObLSLock &lock,
+ObLSLockGuard::ObLSLockGuard(ObLS *ls,
+                             ObLSLock &lock,
                              int64_t hold,
                              int64_t change,
                              const bool trylock)
   : lock_(lock),
     mark_(0),
-    start_ts_(INT64_MAX)
+    start_ts_(INT64_MAX),
+    ls_(ls)
 {
   hold &= LSLOCKMASK;
   change &= LSLOCKMASK;
@@ -133,10 +142,10 @@ ObLSLockGuard::ObLSLockGuard(ObLSLock &lock,
   hold ^= hold & change;
 
   if (!trylock) {
-    mark_ = lock_.lock(hold, change);
+    mark_ = lock_.lock(ls, hold, change);
     start_ts_ = ObTimeUtility::current_time();
   } else {
-    if ((hold | change) != (mark_ = lock_.try_lock(hold, change))) {
+    if ((hold | change) != (mark_ = lock_.try_lock(ls, hold, change))) {
       // try lock failed
       lock_.unlock(mark_);
       mark_ = 0;
@@ -147,7 +156,8 @@ ObLSLockGuard::ObLSLockGuard(ObLSLock &lock,
 ObLSLockGuard::ObLSLockGuard(ObLS *ls, const bool rdlock)
   : lock_(ls->lock_),
     mark_(0),
-    start_ts_(INT64_MAX)
+    start_ts_(INT64_MAX),
+    ls_(ls)
 {
   int64_t wrlock_mask = LSLOCKALL;
   int64_t rdlock_mask = 0;
@@ -157,7 +167,7 @@ ObLSLockGuard::ObLSLockGuard(ObLS *ls, const bool rdlock)
   }
   wrlock_mask &= LSLOCKMASK;
   rdlock_mask &= LSLOCKMASK;
-  mark_ = lock_.lock(rdlock_mask, wrlock_mask);
+  mark_ = lock_.lock(ls, rdlock_mask, wrlock_mask);
   start_ts_ = ObTimeUtility::current_time();
 }
 
@@ -166,12 +176,12 @@ ObLSLockGuard::~ObLSLockGuard()
   lock_.unlock(mark_);
   const int64_t end_ts = ObTimeUtility::current_time();
   if (end_ts - start_ts_ > 5 * 1000 * 1000) {
-    STORAGE_LOG(INFO, "ls lock cost too much time",
-                       K_(start_ts),
-                       "cost_us", end_ts - start_ts_,
-                       K(lbt()));
+    FLOG_INFO("ls lock cost too much time", K_(start_ts),
+              "cost_us", end_ts - start_ts_, KP(ls_),
+              "ls_id", OB_ISNULL(ls_) ? ObLSID(0) : ls_->get_ls_id(), K(lbt()));
   }
   start_ts_ = INT64_MAX;
+  ls_ = nullptr;
 }
 
 void ObLSLockGuard::unlock(int64_t target)
@@ -181,10 +191,9 @@ void ObLSLockGuard::unlock(int64_t target)
   lock_.unlock(target);
   const int64_t end_ts = ObTimeUtility::current_time();
   if (end_ts - start_ts_ > 5 * 1000 * 1000) {
-    STORAGE_LOG(INFO, "ls lock cost too much time",
-                       K_(start_ts),
-                       "cost_us", end_ts - start_ts_,
-                       K(lbt()));
+    FLOG_INFO("ls lock cost too much time", K_(start_ts),
+              "cost_us", end_ts - start_ts_, KP(ls_),
+              "ls_id", OB_ISNULL(ls_) ? ObLSID(0) : ls_->get_ls_id(), K(lbt()));
   }
 }
 
@@ -207,11 +216,8 @@ ObLSLockWithPendingReplayGuard::~ObLSLockWithPendingReplayGuard()
   // TODO: cxf262476 unlock
   const int64_t end_ts = ObTimeUtility::current_time();
   if (end_ts - start_ts_ > 5 * 1000 * 1000) {
-    STORAGE_LOG(INFO, "ls lock cost too much time",
-                       K_(start_ts),
-                       "cost_us", end_ts - start_ts_,
-                       K(ls_id_),
-                       K(lbt()));
+    LOG_INFO("ls lock cost too much time", K_(start_ts),
+             "cost_us", end_ts - start_ts_, K(ls_id_), K(lbt()));
   }
   start_ts_ = INT64_MAX;
 }

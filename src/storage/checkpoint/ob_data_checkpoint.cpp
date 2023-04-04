@@ -383,7 +383,7 @@ void ObDataCheckpoint::ls_frozen_to_active_(int64_t &last_time)
     {
       int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
       int64_t write_lock = 0;
-      ObLSLockGuard lock_ls(ls_->lock_, read_lock, write_lock);
+      ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
       if (OB_UNLIKELY(ls_->is_stopped_)) {
         ret = OB_NOT_RUNNING;
@@ -445,7 +445,7 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
     {
       int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
       int64_t write_lock = 0;
-      ObLSLockGuard lock_ls(ls_->lock_, read_lock, write_lock);
+      ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
       if (OB_UNLIKELY(ls_->is_stopped_)) {
         ret = OB_NOT_RUNNING;

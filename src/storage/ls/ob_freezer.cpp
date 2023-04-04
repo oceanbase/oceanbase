@@ -540,7 +540,7 @@ int ObFreezer::ls_freeze_task()
         if (need_resubmit_log()) {
           int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
           int64_t write_lock = 0;
-          ObLSLockGuard lock_ls(ls_->lock_, read_lock, write_lock);
+          ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
           if (OB_FAIL(check_ls_state())) {
           } else {
             submit_log_for_freeze();
@@ -782,7 +782,7 @@ int ObFreezer::tablet_freeze_task(ObTableHandleV2 handle)
     } else {
       int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
       int64_t write_lock = 0;
-      ObLSLockGuard lock_ls(ls_->lock_, read_lock, write_lock);
+      ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
       if (OB_FAIL(check_ls_state())) {
       } else if (OB_FAIL(memtable->finish_freeze())) {
         TRANS_LOG(ERROR, "[Freezer] memtable cannot be flushed",
@@ -813,7 +813,7 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *
   do {
     int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
     int64_t write_lock = 0;
-    ObLSLockGuard lock_ls(ls_->lock_, read_lock, write_lock);
+    ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
     if (OB_FAIL(check_ls_state())) {
     } else if (!memtable->ready_for_flush()) {
