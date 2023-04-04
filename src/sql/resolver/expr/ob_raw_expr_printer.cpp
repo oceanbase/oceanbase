@@ -2328,6 +2328,15 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr* expr)
           DATA_PRINTF("date");
           break;
         }
+        case T_YEAR: {
+          int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+          if (scale >= 0) {
+            DATA_PRINTF("year(%d)", scale);
+          } else {
+            DATA_PRINTF("year");
+          }
+          break;
+        }
         case T_TIME: {
           int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
           if (scale >= 0) {

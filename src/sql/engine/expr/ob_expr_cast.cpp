@@ -360,6 +360,10 @@ int ObExprCast::calc_result_type2(
           ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
           type.set_accuracy(acc);
           type1.set_accuracy(acc);
+        } else if (ObYearType == dst_type.get_type()) {
+          ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
+          type.set_accuracy(acc);
+          type1.set_accuracy(acc);
         } else {
           type.set_precision(dst_type.get_precision());
         }
