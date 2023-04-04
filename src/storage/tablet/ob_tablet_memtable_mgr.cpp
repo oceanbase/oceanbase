@@ -1087,5 +1087,34 @@ int ObTabletMemtableMgr::get_memtable_for_multi_source_data_unit(
   return ret;
 }
 
+int ObTabletMemtableMgr::set_frozen_for_all_memtables()
+{
+  int ret = OB_SUCCESS;
+  MemMgrWLockGuard lock_guard(lock_);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls is null", K(ret));
+  } else {
+    const share::ObLSID &ls_id = ls_->get_ls_id();
+    for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
+      // memtable that cannot be released will block memtables behind it
+      ObMemtable *memtable = static_cast<memtable::ObMemtable *>(tables_[get_memtable_idx(i)]);
+      if (OB_ISNULL(memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "memtable is nullptr", K(ret), K(ls_id), KP(memtable), K(i));
+      } else {
+        STORAGE_LOG(INFO, "set frozen for offline", K(ls_id), K(i), KPC(memtable));
+        memtable->set_frozen();
+      }
+    }
+  }
+
+  return ret;
+}
+
 }  // namespace storage
 }  // namespace oceanbase

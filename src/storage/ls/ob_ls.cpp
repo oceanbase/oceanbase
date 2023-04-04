@@ -720,8 +720,8 @@ int ObLS::offline_()
   } else if (OB_FAIL(log_handler_.offline())) {
     LOG_WARN("failed to offline log", K(ret));
   // TODO: delete it if apply sequence
-  // force release memtables and freeze their allocators to reduce active tenant_memory
-  } else if (OB_FAIL(ls_tablet_svr_.offline())) {
+  // force set allocators frozen to reduce active tenant_memory
+  } else if (OB_FAIL(ls_tablet_svr_.set_frozen_for_all_memtables())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_compaction_())) {
     LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));

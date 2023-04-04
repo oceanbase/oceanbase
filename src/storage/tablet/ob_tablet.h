@@ -390,6 +390,7 @@ public:
       const ObMigrationTabletParam *tablet_meta);
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int remove_memtables_from_data_checkpoint();
+  int set_frozen_for_all_memtables();
   // different from the is_valid() function
   // typically used for check valid for migration or restore
   int check_valid() const;

@@ -104,6 +104,7 @@ public:
       logservice::ObLogHandler *log_handler) override;
   virtual int reset_storage_recorder() override;
   virtual int remove_memtables_from_data_checkpoint() override;
+  virtual int set_frozen_for_all_memtables() override;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

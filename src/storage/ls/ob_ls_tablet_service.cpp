@@ -6241,6 +6241,32 @@ int ObLSTabletService::DestroyMemtableAndMemberOperator::operator()(const common
   return ret;
 }
 
+int ObLSTabletService::SetMemtableFrozenOperator::operator()(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTabletHandle handle;
+  const uint64_t tenant_id = MTL_ID();
+  cur_tablet_id_ = tablet_id;
+  if (OB_UNLIKELY(!tablet_id.is_valid()) ||
+      OB_ISNULL(tablet_svr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(tablet_svr_));
+  } else if (OB_FAIL(tablet_svr_->get_tablet(tablet_id,
+                                             handle,
+                                             ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      LOG_WARN("failed to get tablet, skip set memtable frozen", K(ret), K(tablet_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("failed to get tablet", K(ret), K(tablet_id));
+    }
+  } else if (OB_FAIL(handle.get_obj()->set_frozen_for_all_memtables())) {
+    LOG_WARN("failed to set frozen for all memtables", K(tenant_id), K(tablet_id));
+  }
+  return ret;
+}
+
 void ObLSTabletService::AllowToReadMgr::disable_to_read()
 {
   AllowToReadInfo read_info;
@@ -6297,5 +6323,19 @@ int ObLSTabletService::get_all_tablet_ids(
   return ret;
 }
 
+int ObLSTabletService::set_frozen_for_all_memtables()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    SetMemtableFrozenOperator set_mem_frozen_op(this);
+    if (OB_FAIL(tablet_id_set_.foreach(set_mem_frozen_op))) {
+      LOG_WARN("fail to set memtables frozen", K(ret), K(set_mem_frozen_op.cur_tablet_id_));
+    }
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

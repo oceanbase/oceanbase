@@ -3351,7 +3351,7 @@ int ObTablet::remove_memtables_from_data_checkpoint()
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
   } else if (OB_FAIL(memtable_mgr->remove_memtables_from_data_checkpoint())){
-    LOG_WARN("failed to rmeove memtables from data_checkpoint", K(ret));
+    LOG_WARN("failed to remove memtables from data_checkpoint", K(ret));
   }
 
   return ret;
@@ -3384,5 +3384,21 @@ int ObTablet::inner_check_valid() const
   return ret;
 }
 
+int ObTablet::set_frozen_for_all_memtables()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_FAIL(memtable_mgr->set_frozen_for_all_memtables())){
+    LOG_WARN("failed to set_frozen_for_all_memtables", K(ret));
+  }
+
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase
