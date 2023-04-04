@@ -179,6 +179,7 @@ public:
                  const int64_t create_time,
                  const ObAddr addr);
   share::SCN get_reserved_snapshot_version() const;
+  ObMultiVersionSnapshotType get_reserved_snapshot_type() const;
   ObMultiVersionGCStatus get_status() const;
   bool is_this_server_disabled() const
   { return is_this_server_disabled_; }
@@ -312,6 +313,9 @@ public:
   // get_reserved_snapshot_for_active_txn fetch the cached globally reserved
   // snapshot if updated in time, otherwise max_scn() is used for available
   share::SCN get_reserved_snapshot_for_active_txn() const;
+  // report_sstable_overflow marks the last sstable's overflow events and we
+  // will use it to disable mvcc gc
+  void report_sstable_overflow();
   // is_gc_disabled shows the global gc status of whether the gc is disabled
   bool is_gc_disabled() const;
 
@@ -319,6 +323,7 @@ public:
                K_(last_study_timestamp),
                K_(last_refresh_timestamp),
                K_(last_reclaim_timestamp),
+               K_(last_sstable_overflow_timestamp),
                K_(has_error_when_study),
                K_(refresh_error_too_long),
                K_(has_error_when_reclaim),
@@ -342,8 +347,10 @@ private:
   int study_max_committed_txn_version(share::SCN &max_committed_txn_version);
   int study_min_active_txn_version(share::SCN &min_active_txn_version);
   int is_disk_almost_full_(bool &is_almost_full);
+  bool is_sstable_overflow_();
   void decide_gc_status_(const ObMultiVersionGCStatus gc_status);
-  void decide_reserved_snapshot_version_(const share::SCN reserved_snapshot);
+  void decide_reserved_snapshot_version_(const share::SCN reserved_snapshot,
+                                         const ObMultiVersionSnapshotType reserved_type);
 
   // ============== for test ================
   OB_NOINLINE bool can_report();
@@ -355,6 +362,8 @@ private:
   int64_t last_study_timestamp_;
   int64_t last_refresh_timestamp_;
   int64_t last_reclaim_timestamp_;
+  // last timestamp sstable reports overflow during merge
+  int64_t last_sstable_overflow_timestamp_;
   bool has_error_when_study_;
   // refresh too long without contacting inner table successfully.
   // It may be caused by inner table majority crash or network issues.
