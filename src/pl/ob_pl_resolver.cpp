@@ -7015,13 +7015,35 @@ int ObPLResolver::resolve_fetch(
                   const ObUserDefinedType *into_var_type = NULL;
                   OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
                   CK (OB_NOT_NULL(into_var_type));
-                  if (OB_SUCC(ret) && into_var_type->is_record_type()) {
+                  if (OB_FAIL(ret)) {
+                  } else if (into_var_type->is_record_type()) {
                     for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
                       if (!into_var_type->get_member(j)->is_obj_type()) {
                         ret = OB_NOT_SUPPORTED;
                         LOG_WARN("cursor nested complex type", K(ret));
                         LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
                       }
+                    }
+                  } else if (into_var_type->is_collection_type()) {
+                    const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(into_var_type);
+                    CK (OB_NOT_NULL(coll_type));
+                    if (coll_type->get_element_type().is_obj_type()) {
+                      // do nothing
+                    } else if (coll_type->get_element_type().is_record_type()) {
+                      const ObUserDefinedType *element_type = NULL;
+                      OZ (current_block_->get_namespace().get_user_type(coll_type->get_element_type().get_user_type_id(), element_type));
+                      CK (OB_NOT_NULL(element_type));
+                      for (int64_t j = 0; OB_SUCC(ret) && j < element_type->get_member_count(); ++j) {
+                        if (!element_type->get_member(j)->is_obj_type()) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("cursor nested complex type", K(ret));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                        }
+                      }
+                    } else {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("cursor nested complex type", K(ret));
+                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
                     }
                   }
                 }
