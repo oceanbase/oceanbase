@@ -55,6 +55,8 @@ public:
   ObDDLTaskQueue();
   virtual ~ObDDLTaskQueue();
   int init(const int64_t bucket_num);
+  bool has_set_stop() const { return ATOMIC_LOAD(&stop_); }
+  void set_stop(bool stop) { ATOMIC_STORE(&stop_, stop); }
   int push_task(ObDDLTask *task);
   int get_next_task(ObDDLTask *&task);
   int remove_task(ObDDLTask *task);
@@ -83,6 +85,7 @@ private:
   TaskKeyMap task_map_;
   TaskIdMap task_id_map_;
   common::ObSpinLock lock_;
+  bool stop_;
   bool is_inited_;
 };
 
