@@ -2637,13 +2637,13 @@ count of rang columns = 3
 [{"range":"table_id:3003,(MAX,MAX,MAX;MIN,MIN,MIN)"}]
 
 [215] (a,b) != (1,2)
-query range need to deep copy
-is not min_to_max_range
+query range not need to deep copy
+is min_to_max_range
 ranges.count() = 1
 get_methods.count() = 1
 get_methods 0: 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,(MIN,MIN;MAX,MAX)"}]
 

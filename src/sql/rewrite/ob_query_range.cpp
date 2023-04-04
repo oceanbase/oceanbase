@@ -1454,30 +1454,29 @@ int ObQueryRange::pre_extract_ne_op(
     const ObRawExpr* l_expr = t_expr->get_param_expr(0);
     const ObRawExpr* r_expr = t_expr->get_param_expr(1);
     ObKeyPartList key_part_list;
-    if (share::is_oracle_mode() && T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
-      if (1 == r_expr->get_param_count() && T_OP_ROW == r_expr->get_param_expr(0)->get_expr_type()) {
-        r_expr = r_expr->get_param_expr(0);
+    if (T_OP_ROW == l_expr->get_expr_type() && T_OP_ROW == r_expr->get_expr_type()) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+        ObKeyPart *tmp = NULL;
+        if (OB_FAIL(get_basic_query_range(
+                l_expr, r_expr, NULL, i == 0 ? T_OP_LT : T_OP_GT, t_expr->get_result_type(), tmp, dtc_params))) {
+          LOG_WARN("Get basic query range failed", K(ret));
+        } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
+          LOG_WARN("push back failed", K(ret));
+        } else {
+          // A != B expression is split into two expressions, A<B OR A>B
+          // To ensure that each expression is accurate, the entire expression is accurate
+          is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
+        }
       }
-    }
-    for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
-      ObKeyPart* tmp = NULL;
-      if (OB_FAIL(get_basic_query_range(
-              l_expr, r_expr, NULL, i == 0 ? T_OP_LT : T_OP_GT, t_expr->get_result_type(), tmp, dtc_params))) {
-        LOG_WARN("Get basic query range failed", K(ret));
-      } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
-        LOG_WARN("push back failed", K(ret));
-      } else {
-        // A != B expression is split into two expressions, A<B OR A>B
-        // To ensure that each expression is accurate, the entire expression is accurate
-        is_precise = (is_precise && query_range_ctx_->cur_expr_is_precise_);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      query_range_ctx_->cur_expr_is_precise_ = is_precise;
-      // not need params when preliminary extract
-      if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-        LOG_WARN("or range graph failed", K(ret));
+      if (OB_SUCC(ret)) {
+        query_range_ctx_->cur_expr_is_precise_ = is_precise;
+        // not need params when preliminary extract
+        if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+          LOG_WARN("or range graph failed", K(ret));
+        }
       }
     }
   }
