@@ -3385,9 +3385,9 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
           if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, memtable_handle))) {
             LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
           } else {
-            time_guard.click("TabletFreeze");
             is_tablet_freeze = true;
           }
+          time_guard.click("TabletFreeze");
         }
 
         if (OB_FAIL(ret)) {
@@ -3468,7 +3468,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
   // check time guard
   const int64_t cost_time = time_guard.get_diff();
   if (cost_time > 10 * 1000 * 1000) {
-    LOG_ERROR("build ha new table store costs too much time", K(ret), K(tablet_id), K(cost_time), K(time_guard));
+    LOG_WARN("build ha new table store costs too much time", K(ret), K(tablet_id), K(cost_time), K(time_guard), K(lbt()));
   }
 
   return ret;
