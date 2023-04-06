@@ -5461,6 +5461,10 @@ def_table_schema(
 # 452 : __all_table_opt_stat_gather_history
 # 453 : __all_zone_storage
 # 454 : __all_zone_storage_operation
+# 455 : __wr_active_session_history
+# 456 : __wr_snapshot
+# 457 : __wr_statname
+# 458 : __wr_sysstat
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11438,6 +11442,10 @@ def_table_schema(
 # 12385: __all_virtual_arbitration_member_info
 # 12386: __all_virtual_server_storage
 # 12387: __all_virtual_arbitration_service_status
+# 12388: __all_virtual_wr_active_session_history
+# 12389: __all_virtual_wr_snapshot
+# 12390: __all_virtual_wr_statname
+# 12391: __all_virtual_wr_sysstat
 #
 # 余留位置
 #
@@ -11725,7 +11733,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15296: __all_virtual_opt_stat_gather_monitor
 # 15297: __all_virtual_long_ops_status_ora
 # 15298: __all_virtual_thread
-
+# 15299: __all_virtual_wr_active_session_history
+# 15300: __all_virtual_wr_snapshot
+# 15301: __all_virtual_wr_statname
+# 15302: __all_virtual_wr_sysstat
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -25650,7 +25661,14 @@ def_table_schema(
 # 21386: V$OB_SERVER_STORAGE
 # 21387: GV$OB_ARBITRATION_SERVICE_STATUS
 # 21388: V$OB_ARBITRATION_SERVICE_STATUS
-
+# 21389: DBA_WR_ACTIVE_SESSION_HISTORY
+# 21390: CDB_WR_ACTIVE_SESSION_HISTORY
+# 21391: DBA_WR_SNAPSHOT
+# 21392: CDB_WR_SNAPSHOT
+# 21393: DBA_WR_STAT_NAME
+# 21394: CDB_WR_STAT_NAME
+# 21395: DBA_WR_SYSSTAT
+# 21396: CDB_WR_SYSSTAT
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
@@ -43056,6 +43074,10 @@ def_table_schema(
 
 # 25227: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
 # 25228: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+# 25229: DBA_WR_ACTIVE_SESSION_HISTORY
+# 25230: DBA_WR_SNAPSHOT
+# 25231: DBA_WR_STAT_NAME
+# 25232: DBA_WR_SYSSTAT
 
 #### End Data Dictionary View
 ################################################################################
