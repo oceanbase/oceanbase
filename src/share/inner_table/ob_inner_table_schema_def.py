@@ -11738,6 +11738,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15300: __all_virtual_wr_snapshot
 # 15301: __all_virtual_wr_statname
 # 15302: __all_virtual_wr_sysstat
+# 15303: __all_virtual_arbitration_member_info
+# 15304: __all_virtual_arbitration_service_status
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
