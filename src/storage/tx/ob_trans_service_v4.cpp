@@ -1353,7 +1353,7 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
   int ret = OB_SUCCESS;
   bool leader = false;
   int64_t epoch = 0;
-  bool readable = check_ls_readable_(ls, snapshot);
+  bool readable = check_ls_readable_(ls, snapshot, src);
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
@@ -1364,10 +1364,12 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
       // to compatible with SQL's retry-logic, trigger re-choose replica
       ret = OB_REPLICA_NOT_READABLE;
     } else {
-      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot))) {
+      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
-      } else {
+      } else if (MTL_IS_PRIMARY_TENANT()) {
         ret = OB_NOT_MASTER;
+      } else {
+        ret = OB_REPLICA_NOT_READABLE;
       }
     }
   }
@@ -1375,12 +1377,14 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
   return ret;
 }
 
-bool ObTransService::check_ls_readable_(ObLS &ls, const SCN &snapshot)
+bool ObTransService::check_ls_readable_(ObLS &ls,
+                                        const SCN &snapshot,
+                                        const ObTxReadSnapshot::SRC src)
 {
   int ret = OB_SUCCESS;
   bool readable = false;
   SCN scn;
-  if (MTL_IS_PRIMARY_TENANT()) {
+  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_IS_PRIMARY_TENANT()) {
     readable = snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   } else if (OB_FAIL(ls.get_ls_replica_readable_scn(scn))) {
     TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls.get_ls_id()));
@@ -1395,7 +1399,8 @@ bool ObTransService::check_ls_readable_(ObLS &ls, const SCN &snapshot)
 
 int ObTransService::wait_follower_readable_(ObLS &ls,
                                             const int64_t expire_ts,
-                                            const SCN &snapshot)
+                                            const SCN &snapshot,
+                                            const ObTxReadSnapshot::SRC src)
 {
   int ret = OB_REPLICA_NOT_READABLE;
   int64_t compare_timeout = 0;
@@ -1411,7 +1416,7 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
     do {
       if (OB_UNLIKELY(ObClockGenerator::getClock() >= expire_ts)) {
         ret = OB_TIMEOUT;
-      } else if (check_ls_readable_(ls, snapshot)) {
+      } else if (check_ls_readable_(ls, snapshot, src)) {
         TRANS_LOG(WARN, "read from follower", K(snapshot), K(ls.get_ls_id()), K(tenant_id));
         ret = OB_SUCCESS;
       } else if (ObClockGenerator::getClock() >= compare_expired_time) {

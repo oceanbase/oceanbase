@@ -221,7 +221,9 @@ int check_replica_readable_(const share::SCN &snapshot,
                             const share::ObLSID &ls_id,
                             const int64_t expired_ts,
                             ObLS &ls);
-bool check_ls_readable_(ObLS &ls, const share::SCN &snapshot);
+bool check_ls_readable_(ObLS &ls,
+                        const share::SCN &snapshot,
+                        const ObTxReadSnapshot::SRC src);
 int build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg);
 int abort_participants_(const ObTxDesc &tx_desc);
 int acquire_local_snapshot_(const share::ObLSID &ls_id, share::SCN &snapshot);
@@ -341,7 +343,8 @@ int get_tx_table_guard_(ObLS *ls,
 void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
-                            const share::SCN &snapshot);
+                            const share::SCN &snapshot,
+                            const ObTxReadSnapshot::SRC src);
 MonotonicTs get_req_receive_mts_();
 // include tx api refacored for future
 public:
