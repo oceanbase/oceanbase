@@ -27,6 +27,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "sql/executor/ob_bkgd_dist_task.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
+#include "sql/executor/ob_task_spliter.h"
 #include "rootserver/ob_root_service.h"
 
 using namespace oceanbase::common;
@@ -282,7 +283,12 @@ int ObDistributedTaskExecutor::build_task(ObExecContext& query_ctx, ObJob& job, 
     LOG_WARN("physical plan ctx is null", K(ret));
   } else {
     query_ctx.get_physical_plan_ctx()->set_phy_plan(phy_plan);
-    const ObTaskInfo::ObRangeLocation& range_loc = task_info.get_range_location();
+    const ObTaskInfo::ObRangeLocation &range_loc = task_info.get_range_location();
+    if (task_info.get_task_split_type() == ObTaskSpliter::INSERT_SPLIT &&
+        job.get_phy_plan()->is_dist_insert_or_replace_plan() && !job.get_phy_plan()->is_insert_select() &&
+        !job.get_phy_plan()->get_row_param_map().empty() && task_info.get_location_idx() != OB_INVALID_INDEX) {
+      query_ctx.add_row_id_list(query_ctx.get_part_row_manager().get_row_id_list(task_info.get_location_idx()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < range_loc.part_locs_.count(); ++i) {
       const ObTaskInfo::ObPartLoc& part_loc = range_loc.part_locs_.at(i);
       if (OB_FAIL(task.add_partition_key(part_loc.partition_key_))) {
