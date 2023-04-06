@@ -11,7 +11,7 @@ tag="latest"
 current_path=$(pwd)
 if [[ "$current_path" != "$BASE_DIR/tools/deploy" ]]
 then
-  echo "切换至路径[$BASE_DIR/tools/deploy]"
+  echo "Switching basedir to [$BASE_DIR/tools/deploy]..."
   cd $BASE_DIR/tools/deploy || exit 1
 fi
 
@@ -538,9 +538,9 @@ function graph {
 
 function help_info {
   echo """
-Usage: $entrance <commond> [options]
+Usage: $entrance <command> [options]
 
-Available commonds:
+Available commands:
 
 prepare  [-p DATA_PATH -h HOST]          Prepare for deployment.
 deploy -c YAML_CONF [-n DEPLOY_NAME]     Deploy a cluster by a deploy yaml file. Default deploy name will be the name of yaml file.
@@ -590,7 +590,7 @@ Options:
 function main() {
   entrance=${OBD_SH_ENTRANCE:-obd.sh}
   variables_parpare
-  commond="$1"
+  command="$1"
   shift
   extra_args=""
   while true; do
@@ -598,7 +598,7 @@ function main() {
       -v ) VERBOSE_FLAG='-v'; set -x; shift ;;
       --with-local-obproxy) WITH_LOCAL_PROXY="1";SKIP_COPY="1"; shift ;;
       -c | --config )
-        if [[ $commond == "deploy" || $commond == "redeploy" || $commond == "mysqltest" ]]
+        if [[ $command == "deploy" || $command == "redeploy" || $command == "mysqltest" ]]
         then
           YAML_CONF="$2"
           shift 2
@@ -644,9 +644,12 @@ function main() {
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
   fi
-  case $commond in 
+  case $command in 
     -V | --version)
     obd --version
+    ;;
+    -h | --help)
+    help_info
     ;;
     prepare)
     [[ "$SKIP_COPY" == "" ]] && copy_sh
@@ -739,7 +742,9 @@ function main() {
     graph
     ;;
     *)
+    echo "Unknown command: $command"
     help_info
+    exit 1
     ;;
   esac
 }
