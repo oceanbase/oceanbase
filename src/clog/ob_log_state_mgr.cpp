@@ -1016,7 +1016,7 @@ bool ObLogStateMgr::check_sliding_window_state()
       // standby_leader check whether renew_ms_log has been sent to all follower
       (void)standby_leader_check_renew_ms_log_state_();
       if (GCTX.is_sync_level_on_standby()) {
-        // 处于强同步模式的备库leader需要check protection_level
+        // The standby database leader in strong synchronization mode needs to check protection_level
         (void)standby_leader_check_protection_level_();
       }
     } else {
@@ -2035,7 +2035,21 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
         // reconfirm timeout, firstly check if partition exist
         bool is_exist = true;
         if (OB_SUCCESS != (tmp_ret = partition_service_->check_partition_exist(partition_key_, is_exist))) {
-          CLOG_LOG(WARN, "check_partition_exist failed", K_(partition_key), K(tmp_ret));
+          if (OB_TENANT_NOT_EXIST == tmp_ret) {
+            schema::ObSchemaGetterGuard schema_guard;
+            bool is_dropped = false;
+            if (OB_SUCCESS != (tmp_ret = GSCHEMASERVICE.get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+              CLOG_LOG(WARN, "fail to get schema guard", K(tmp_ret));
+            } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_if_tenant_has_been_dropped(
+                                          partition_key_.get_tenant_id(), is_dropped))) {
+              CLOG_LOG(WARN, "failed to check tenant has been dropped", K(tmp_ret), K(partition_key_));
+            } else if (is_dropped) {
+              is_exist = false;
+              CLOG_LOG(WARN, "tenant has been dropped", K(tmp_ret), K(partition_key_));
+            }
+          } else {
+            CLOG_LOG(WARN, "check_partition_exist failed", K_(partition_key), K(tmp_ret));
+          }
         }
         if (is_exist || (OB_SUCCESS != tmp_ret)) {
           // partition exists or check_partition_exist failed
@@ -2153,7 +2167,7 @@ bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
       is_error = true;
     } else {
       // state_changed is false, check cluster type and status
-      // if primary cluster switches to standby，clog need do role change: leader->follower->standby_leader
+      // if primary cluster switches to standby, clog need do role change: leader->follower->standby_leader
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
           GCTX.is_in_standby_active_state()) {
         state_changed = true;
