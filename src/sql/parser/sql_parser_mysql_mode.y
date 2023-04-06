@@ -8193,7 +8193,7 @@ expr %prec LOWER_PARENS
     }
     else
     {
-      if (1 == @1.last_column - @1.first_column) {
+      if (0 == $$->str_len_) {
         $$->str_value_ = $1->str_value_;
         $$->str_len_ = $1->str_len_;
       } else {
