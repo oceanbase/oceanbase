@@ -98,6 +98,8 @@ public:
 protected:
   int cons_row(const table::ObITableEntity &entity, common::ObNewRow *&row);
   virtual bool is_read() const override { return false; }
+private:
+  bool is_iter_end_;
 };
 
 

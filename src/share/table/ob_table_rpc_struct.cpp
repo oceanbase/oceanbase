@@ -64,8 +64,9 @@ OB_SERIALIZE_MEMBER(ObTableBatchOperationRequest,
                     returning_rowkey_,
                     returning_affected_entity_,
                     returning_affected_rows_,
-                    partition_id_
-                    );
+                    partition_id_,
+                    batch_operation_as_atomic_,
+                    binlog_row_image_type_);
 
 OB_SERIALIZE_MEMBER(ObTableQueryRequest,
                     credential_,

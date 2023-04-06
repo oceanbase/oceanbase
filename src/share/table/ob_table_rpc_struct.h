@@ -153,7 +153,9 @@ public:
                K_(consistency_level),
                K_(returning_rowkey),
                K_(returning_affected_entity),
-               K_(returning_affected_rows));
+               K_(returning_affected_rows),
+               K_(batch_operation_as_atomic),
+               K_(binlog_row_image_type));
 public:
   ObString credential_;
   ObString table_name_;
@@ -170,6 +172,8 @@ public:
   bool returning_affected_entity_;
   /// whether return affected_rows
   bool returning_affected_rows_;
+  // batch oepration suppoert atomic operation
+  bool batch_operation_as_atomic_;
   /// Whether record the full row in binlog of modification
   ObBinlogRowImageType binlog_row_image_type_;
 };

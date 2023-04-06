@@ -581,6 +581,7 @@ int ObTableApiRowIterator::fill_flag(ObTableServiceCtx &ctx, storage::ObTableSca
  * ------------------------------------------------------------------ObTableApiInsertRowIterator---------------------------------------------------------
  */
 ObTableApiInsertRowIterator::ObTableApiInsertRowIterator()
+  : is_iter_end_(false)
 {
 }
 
@@ -606,12 +607,15 @@ int ObTableApiInsertRowIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   row_allocator_.reuse();
-  if (OB_ISNULL(entity_)) {
+  if (is_iter_end_) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(entity_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("The entity is null, ", K(ret));
   } else if (OB_FAIL(cons_row(*entity_, row))) {
     LOG_WARN("Fail to construct insert row, ", K(ret));
   } else {
+    is_iter_end_ = true;
     //success
     LOG_DEBUG("Api insert row iter, ", K(*row));
   }
