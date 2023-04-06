@@ -37,7 +37,7 @@ protected:
   int entity_to_row(const table::ObITableEntity &entity, common::ObIArray<ObObj> &row);
   int cons_all_columns(const table::ObITableEntity &entity,
                        const bool ignore_missing_column = false,
-                       const bool allow_rowkey_in_properties = true);
+                       const bool allow_rowkey_in_properties = false);
   int cons_missing_columns(const table::ObITableEntity &entity);
   int fill_get_param(
       ObTableServiceCtx &ctx,

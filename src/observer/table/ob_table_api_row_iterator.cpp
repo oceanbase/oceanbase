@@ -767,7 +767,7 @@ int ObTableApiUpdateRowIterator::open(const ObTableOperation &table_operation,
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api update row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(table_operation.entity(), false, false))) {
+  } else if (OB_FAIL(cons_all_columns(table_operation.entity()))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(cons_update_columns(need_update_rowkey))) {
     LOG_WARN("Fail to construct update columns, ", K(ret));
@@ -1147,7 +1147,7 @@ int ObTableApiMultiUpdateRowIterator::open(const ObTableBatchOperation &batch_op
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api update row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(batch_operation.at(0).entity(), false, false))) {
+  } else if (OB_FAIL(cons_all_columns(batch_operation.at(0).entity()))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(cons_update_columns(false/*need_update_rowkey*/))) {
     LOG_WARN("Fail to construct update columns, ", K(ret));
@@ -1430,11 +1430,12 @@ int ObTableApiGetRowIterator::open(const ObTableOperation &table_operation)
 {
   int ret = OB_SUCCESS;
   const bool ignore_missing_column = true;
+  const bool allow_rowkey_in_properties = true;
   ObRowkey rowkey = const_cast<ObITableEntity &>(table_operation.entity()).get_rowkey();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api update row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(table_operation.entity(), ignore_missing_column))) {
+  } else if (OB_FAIL(cons_all_columns(table_operation.entity(), ignore_missing_column, allow_rowkey_in_properties))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(fill_get_param(*ctx_, table_operation.type(), rowkey,
       scan_param_, table_param_))) {
@@ -1477,10 +1478,12 @@ int ObTableApiMultiGetRowIterator::open(const ObTableBatchOperation &batch_opera
 {
   int ret = OB_SUCCESS;
   const bool ignore_missing_column = true;
+  const bool allow_rowkey_in_properties = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api multi get row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(batch_operation.at(0).entity(), ignore_missing_column))) {
+  } else if (OB_FAIL(
+                 cons_all_columns(batch_operation.at(0).entity(), ignore_missing_column, allow_rowkey_in_properties))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(fill_multi_get_param(*ctx_, batch_operation, scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
