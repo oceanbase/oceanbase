@@ -1873,7 +1873,7 @@ int ObTransformUtils::is_null_reject_condition(
   } else if (T_OP_AND == condition->get_expr_type()) {
     // and, one of param expr is null reject
     for (int64_t i = 0; OB_SUCC(ret) && !is_null_reject && i < condition->get_param_count(); ++i) {
-      if (OB_FAIL(is_null_reject_condition(condition->get_param_expr(i), targets, is_null_reject))) {
+      if (OB_FAIL(SMART_CALL(is_null_reject_condition(condition->get_param_expr(i), targets, is_null_reject)))) {
         LOG_WARN("failed to check whether param is null reject", K(ret));
       }
     }
@@ -1881,11 +1881,11 @@ int ObTransformUtils::is_null_reject_condition(
     // or  all of param exprs are null reject
     is_null_reject = true;
     for (int64_t i = 0; OB_SUCC(ret) && is_null_reject && i < condition->get_param_count(); ++i) {
-      if (OB_FAIL(is_null_reject_condition(condition->get_param_expr(i), targets, is_null_reject))) {
+      if (OB_FAIL(SMART_CALL(is_null_reject_condition(condition->get_param_expr(i), targets, is_null_reject)))) {
         LOG_WARN("failed to check whether param is null reject", K(ret));
       }
     }
-  } else if (OB_FAIL(is_simple_null_reject(condition, targets, is_null_reject))) {
+  } else if (OB_FAIL(SMART_CALL(is_simple_null_reject(condition, targets, is_null_reject)))) {
     LOG_WARN("failed to check is simple null reject", K(ret));
   }
   if (OB_SUCC(ret) && is_null_reject) {
@@ -1897,20 +1897,14 @@ int ObTransformUtils::is_null_reject_condition(
 int ObTransformUtils::is_simple_null_reject(
     const ObRawExpr* condition, const ObIArray<const ObRawExpr*>& targets, bool& is_null_reject)
 {
-  bool ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   is_null_reject = false;
   const ObRawExpr* expr = NULL;
   bool check_expr_is_null_reject = false;
   bool check_expr_is_null_propagate = false;
-  bool is_stack_overflow = false;
   if (OB_ISNULL(condition)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(condition));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (T_OP_IS_NOT == condition->get_expr_type()) {
     if (OB_ISNULL(condition->get_param_expr(1)) || OB_ISNULL(condition->get_param_expr(2))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1949,7 +1943,7 @@ int ObTransformUtils::is_simple_null_reject(
       LOG_WARN("failed to check expr is null propagate", K(ret));
     }
   } else if (check_expr_is_null_reject) {
-    if (OB_FAIL(is_null_reject_condition(expr, targets, is_null_reject))) {
+    if (OB_FAIL(SMART_CALL(is_null_reject_condition(expr, targets, is_null_reject)))) {
       LOG_WARN("failed to check expr is null reject", K(ret));
     }
   }
@@ -1972,16 +1966,10 @@ int ObTransformUtils::is_null_propagate_expr(
     const ObRawExpr* expr, const ObIArray<const ObRawExpr*>& targets, bool& bret)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
   bret = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(expr));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (OB_FAIL(find_expr(targets, expr, bret))) {
     LOG_WARN("failed to find expr", K(ret));
   } else if (bret) {
@@ -1995,7 +1983,7 @@ int ObTransformUtils::is_null_propagate_expr(
   } else if (T_OP_LIKE == expr->get_expr_type() || T_OP_NOT_LIKE == expr->get_expr_type()) {
     // c1 like 'xxx' escape NULL is not null propagate. escape NULL = escape '\\'
     for (int64_t i = 0; OB_SUCC(ret) && !bret && i < expr->get_param_count() - 1; ++i) {
-      if (OB_FAIL(is_null_propagate_expr(expr->get_param_expr(i), targets, bret))) {
+      if (OB_FAIL(SMART_CALL(is_null_propagate_expr(expr->get_param_expr(i), targets, bret)))) {
         LOG_WARN("failed to check param can propagate null", K(ret));
       }
     }
