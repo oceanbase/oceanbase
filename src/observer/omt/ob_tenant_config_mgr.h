@@ -131,8 +131,7 @@ public:
   int64_t get_tenant_newest_version(uint64_t tenant_id) const;
   int64_t get_tenant_current_version(uint64_t tenant_id) const;
   void print() const;
-  int dump2file(const int64_t tenant_id = 0);
-  int read_dump_config(const int64_t tenant_id);
+  int dump2file();
 
   void refresh_config_version_map(const common::ObIArray<uint64_t> &tenants);
   void reset_version_has_refreshed() { version_has_refreshed_ = false; }
@@ -188,7 +187,6 @@ private:
 } // oceanbase
 
 #define OTC_MGR (::oceanbase::omt::ObTenantConfigMgr::get_instance())
-#define TENANT_CONF_UNSAFE(tenant_id) (OTC_MGR.get_tenant_config(tenant_id))
 /*
  * use ObTenantConfigGuard to unlock automatically, otherwise remember to unlock:
  *   ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));

@@ -40,14 +40,14 @@ ObTenantConfigGuard::ObTenantConfigGuard(ObTenantConfig *config)
 ObTenantConfigGuard::~ObTenantConfigGuard()
 {
   if (OB_NOT_NULL(config_)) {
-    config_->unlock();
+    config_->unref();
   }
 }
 
 void ObTenantConfigGuard::set_config(ObTenantConfig *config)
 {
   if (OB_NOT_NULL(config_)) {
-    config_->unlock();
+    config_->unref();
   }
   config_ = config;
 }
@@ -256,8 +256,16 @@ int ObTenantConfigMgr::init_tenant_config(const obrpc::ObTenantConfigArg &arg)
     LOG_WARN("fail to add tenant config", KR(ret), K(arg));
   } else if (OB_FAIL(add_extra_config(arg))) {
     LOG_WARN("fail to add extra config", KR(ret), K(arg));
-  } else if (OB_FAIL(dump2file(arg.tenant_id_))) {
-    LOG_WARN("fail to dump config to file", KR(ret), K(arg));
+  } else {
+    DRWLock::WRLockGuard guard(rwlock_);
+    ObTenantConfig *config = nullptr;
+    if (OB_FAIL(dump2file())) {
+      LOG_WARN("fail to dump config to file", KR(ret), K(arg));
+    } else if (OB_FAIL(config_map_.get_refactored(ObTenantID(arg.tenant_id_), config))) {
+      LOG_WARN("No tenant config found", K(arg.tenant_id_), K(ret));
+    } else if (OB_FAIL(config->publish_special_config_after_dump())) {
+      LOG_WARN("publish special config after dump failed", K(ret));
+    }
   }
   return ret;
 }
@@ -313,7 +321,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
     static const int DEL_TRY_TIMES = 30;
     static const int64_t TIME_SLICE_PERIOD = 10000;
     for (int i =  0; i < DEL_TRY_TIMES; ++i) {
-      if (OB_SUCC(config->try_wrlock())) {
+      if (config->is_ref_clear()) {
         break;
       }
       ob_usleep(TIME_SLICE_PERIOD);
@@ -328,23 +336,9 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
         ob_delete(config);
         LOG_INFO("tenant config deleted", K(tenant_id), K(ret));
       }
-      if (OB_FAIL(ret)) {
-        config->wrunlock();
-      }
     }
   }
   return ret;
-}
-
-ObTenantConfig *ObTenantConfigMgr::get_tenant_config(uint64_t tenant_id) const
-{
-  int ret = OB_SUCCESS;
-  ObTenantConfig *config = nullptr;
-  DRWLock::RDLockGuard guard(rwlock_);
-  if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
-    LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
-  }
-  return config;
 }
 
 ObTenantConfig *ObTenantConfigMgr::get_tenant_config_with_lock(
@@ -373,9 +367,8 @@ ObTenantConfig *ObTenantConfigMgr::get_tenant_config_with_lock(
       LOG_WARN("failed to get tenant config", K(tenant_id), K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(config) && OB_FAIL(config->rdlock())) { // remember to unlock outside
-    config = nullptr;
-    LOG_ERROR("lock tenant config failed", K(tenant_id), K(ret));
+  if (OB_SUCC(ret) && OB_NOT_NULL(config)) {
+    config->ref(); // remember to unref outside
   }
   return config;
 }
@@ -418,31 +411,13 @@ void ObTenantConfigMgr::print() const
   } // for
 }
 
-int ObTenantConfigMgr::dump2file(const int64_t tenant_id)
+int ObTenantConfigMgr::dump2file()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_config_mgr_->dump2file())) {
     LOG_WARN("failed to dump2file", K(ret));
   } else if (OB_FAIL(sys_config_mgr_->config_backup())) {
     LOG_WARN("failed to dump2file backup", K(ret));
-  } else if (OB_FAIL(read_dump_config(tenant_id))) {
-    LOG_WARN("failed to read_dump_config", K(ret));
-  }
-  return ret;
-}
-
-int ObTenantConfigMgr::read_dump_config(int64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObTenantConfig *config = nullptr;
-  {
-    DRWLock::RDLockGuard guard(rwlock_);
-    if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
-      LOG_WARN("No tenant config found", K(tenant_id), K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ret = config->read_dump_config(tenant_id);
   }
   return ret;
 }
@@ -621,10 +596,8 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
         LOG_WARN("read config from __tenant_parameter failed",
                  KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else {
-        {
-          DRWLock::RDLockGuard guard(rwlock_);
-          ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
-        }
+        DRWLock::WRLockGuard guard(rwlock_);
+        ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
         if (OB_FAIL(ret)) {
           LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
         } else {
@@ -649,7 +622,7 @@ int ObTenantConfigMgr::add_extra_config(const obrpc::ObTenantConfigArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arg", K(ret), K(arg));
   } else {
-    DRWLock::RDLockGuard guard(rwlock_);
+    DRWLock::WRLockGuard guard(rwlock_);
     if (OB_FAIL(config_map_.get_refactored(ObTenantID(arg.tenant_id_), config))) {
       LOG_ERROR("failed to get tenant config", K(arg.tenant_id_), K(ret));
     } else {
@@ -705,7 +678,6 @@ int ObTenantConfigMgr::wait(const ObTenantConfig::TenantConfigUpdateTask &task)
 OB_DEF_SERIALIZE(ObTenantConfigMgr)
 {
   int ret = OB_SUCCESS;
-  DRWLock::RDLockGuard guard(rwlock_);
   int64_t expect_data_len = get_serialize_size_();
   int64_t saved_pos = pos;
   TenantConfigMap::const_iterator it = config_map_.begin();
@@ -789,7 +761,6 @@ OB_DEF_DESERIALIZE(ObTenantConfigMgr)
 OB_DEF_SERIALIZE_SIZE(ObTenantConfigMgr)
 {
   int64_t len = 0;
-  DRWLock::RDLockGuard guard(rwlock_);
   TenantConfigMap::const_iterator it = config_map_.begin();
   for (; it != config_map_.end(); ++it) {
     if (OB_NOT_NULL(it->second)) {

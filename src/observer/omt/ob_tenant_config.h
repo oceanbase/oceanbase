@@ -75,17 +75,14 @@ public:
   ObTenantConfig &operator=(const ObTenantConfig &)=delete;
 
   void print() const override;
-  int check_all() const override;
+  int check_all() const override { return OB_SUCCESS; }
   common::ObServerRole get_server_type() const override { return common::OB_SERVER; }
-  int rdlock();
-  int wrlock();
-  int try_rdlock();
-  int try_wrlock();
-  int unlock();
-  int wrunlock();
+  void ref() { ATOMIC_INC(&ref_); }
+  void unref() { ATOMIC_DEC(&ref_); }
+  bool is_ref_clear() { return 0 == ATOMIC_LOAD(&ref_); }
 
   int read_config();
-  int read_dump_config(int64_t tenant_id);
+  int publish_special_config_after_dump();
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
@@ -105,8 +102,7 @@ private:
   TenantConfigUpdateTask update_task_;
   common::ObSystemConfig system_config_;
   ObTenantConfigMgr *config_mgr_;
-  // protect this object from being deleted in OTC_MGR.del_tenant_config
-  mutable common::DRWLock lock_;
+  int64_t ref_;
   bool is_deleting_;
   int64_t create_timestamp_;
 

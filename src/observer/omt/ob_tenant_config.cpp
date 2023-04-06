@@ -37,7 +37,7 @@ ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
     : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION),
       mutex_(),
       update_task_(), system_config_(), config_mgr_(nullptr),
-      lock_(ObLatchIds::CONFIG_LOCK), is_deleting_(false), create_timestamp_(0L)
+      ref_(0L), is_deleting_(false), create_timestamp_(0L)
 {
 }
 
@@ -56,7 +56,6 @@ int ObTenantConfig::init(ObTenantConfigMgr *config_mgr)
 
 void ObTenantConfig::print() const
 {
-  DRWLock::RDLockGuard guard(lock_);
   OB_LOG(INFO, "===================== * begin tenant config report * =====================", K(tenant_id_));
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
@@ -69,63 +68,12 @@ void ObTenantConfig::print() const
   OB_LOG(INFO, "===================== * stop tenant config report * =======================", K(tenant_id_));
 }
 
-int ObTenantConfig::check_all() const
-{
-  int ret = OB_SUCCESS;
-  DRWLock::RDLockGuard guard(lock_);
-  ObConfigContainer::const_iterator it = container_.begin();
-  for (; OB_SUCC(ret) && it != container_.end(); ++it) {
-    if (OB_ISNULL(it->second)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
-    } else if (!it->second->check()) {
-      ret = OB_INVALID_CONFIG;
-      OB_LOG(WARN, "Configure setting invalid",
-             "name", it->first.str(), "value", it->second->str(), K(ret));
-    } else {
-      // do nothing
-    }
-  }
-  return ret;
-}
-
-int ObTenantConfig::rdlock()
-{
-  return lock_.rdlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
-int ObTenantConfig::wrlock()
-{
-  return lock_.wrlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
-int ObTenantConfig::try_rdlock()
-{
-  return lock_.try_rdlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
-int ObTenantConfig::try_wrlock()
-{
-  return lock_.try_wrlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
-int ObTenantConfig::unlock()
-{
-  return lock_.rdunlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
-int ObTenantConfig::wrunlock()
-{
-  return lock_.wrunlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
-}
-
 int ObTenantConfig::read_config()
 {
   int ret = OB_SUCCESS;
   ObSystemConfigKey key;
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   server = GCTX.self_addr();
   if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
@@ -347,8 +295,10 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   if (OB_SUCC(ret)) {
     if (OB_FAIL(read_config())) {
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
-    } else if (save2file && OB_FAIL(config_mgr_->dump2file(tenant_id_))) {
+    } else if (save2file && OB_FAIL(config_mgr_->dump2file())) {
       LOG_WARN("Dump to file failed", K(ret));
+    } else if (OB_FAIL(publish_special_config_after_dump())) {
+      LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
     print();
   } else {
@@ -357,21 +307,20 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
   return ret;
 }
 
-int ObTenantConfig::read_dump_config(int64_t tenant_id)
+int ObTenantConfig::publish_special_config_after_dump()
 {
   int ret = OB_SUCCESS;
   ObConfigItem *const *pp_item = NULL;
-  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(COMPATIBLE)))) {
     ret = OB_INVALID_CONFIG;
-    LOG_WARN("Invalid config string", K(tenant_id), K(ret));
+    LOG_WARN("Invalid config string", K(tenant_id_), K(ret));
   } else if (!(*pp_item)->dump_value_updated()) {
-    LOG_INFO("config dump value is not set, no need read", K(tenant_id), K((*pp_item)->spfile_str()));
+    LOG_INFO("config dump value is not set, no need read", K(tenant_id_), K((*pp_item)->spfile_str()));
   } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
     ret = OB_INVALID_CONFIG;
-    LOG_WARN("Invalid config value", K(tenant_id), K((*pp_item)->spfile_str()), K(ret));
+    LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
-    LOG_INFO("read dump config succ", K(tenant_id), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
+    LOG_INFO("publish special config after dump succ", K(tenant_id_), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
   }
   return ret;
 }
@@ -398,7 +347,6 @@ int ObTenantConfig::add_extra_config(const char *config_str,
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
     token = STRTOK_R(buf, ",\n", &saveptr);
     const ObString compatible_cfg(COMPATIBLE);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
@@ -473,7 +421,6 @@ OB_DEF_SERIALIZE(ObTenantConfig)
   int ret = OB_SUCCESS;
   int64_t expect_data_len = get_serialize_size_();
   int64_t saved_pos = pos;
-  DRWLock::RDLockGuard guard(lock_);
   if (OB_FAIL(databuff_printf(buf, buf_len, pos, "[%lu]\n", tenant_id_))) {
   } else {
     ret = ObCommonConfig::serialize(buf, buf_len, pos);
@@ -491,7 +438,6 @@ OB_DEF_SERIALIZE(ObTenantConfig)
 OB_DEF_DESERIALIZE(ObTenantConfig)
 {
   int ret = OB_SUCCESS;
-  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   if ('[' != *(buf + pos)) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid tenant config", K(ret));
@@ -534,7 +480,6 @@ OB_DEF_SERIALIZE_SIZE(ObTenantConfig)
   int64_t len = 0, tmp_pos = 0;
   int ret = OB_SUCCESS;
   char tenant_str[100] = {'\0'};
-  DRWLock::RDLockGuard guard(lock_);
   if (OB_FAIL(databuff_printf(tenant_str, 100, tmp_pos, "[%lu]\n", tenant_id_))) {
     LOG_WARN("write data buff failed", K(ret));
   } else {
