@@ -201,7 +201,8 @@ bool ObDDLTableMergeDag::ignore_warning()
   return OB_LS_NOT_EXIST == dag_ret_
     || OB_TABLET_NOT_EXIST == dag_ret_
     || OB_TASK_EXPIRED == dag_ret_
-    || OB_EAGAIN == dag_ret_;
+    || OB_EAGAIN == dag_ret_
+    || OB_NEED_RETRY == dag_ret_;
 }
 
 /******************             ObDDLTableDumpTask             *****************/
@@ -268,6 +269,9 @@ int ObDDLTableDumpTask::process()
     ObArray<ObITable *> candidate_sstables;
     if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_freezed_ddl_kv(freeze_scn_, ddl_kv_handle))) {
       LOG_WARN("get ddl kv handle failed", K(ret), K(freeze_scn_));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_NEED_RETRY; // dag is async, the ddl kv may be dumped, no need record in dag warning history
+      }
     } else if (OB_ISNULL(ddl_kv = static_cast<ObDDLKV *>(ddl_kv_handle.get_table()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get ddl kv failed", K(ret));
@@ -370,6 +374,9 @@ int ObDDLTableMergeTask::process()
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
+      if (OB_STATE_NOT_MATCH == ret) {
+        ret = OB_NEED_RETRY;
+      }
     } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {
       ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_scn", ddl_param.start_scn_);

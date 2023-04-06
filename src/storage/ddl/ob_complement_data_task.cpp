@@ -383,6 +383,13 @@ int ObComplementDataDag::create_first_task()
   return ret;
 }
 
+bool ObComplementDataDag::ignore_warning()
+{
+  return OB_EAGAIN == dag_ret_
+    || OB_NEED_RETRY == dag_ret_
+    || OB_TASK_EXPIRED == dag_ret_;
+}
+
 int ObComplementDataDag::prepare_context()
 {
   int ret = OB_SUCCESS;

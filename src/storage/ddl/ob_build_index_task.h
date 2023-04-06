@@ -179,6 +179,7 @@ public:
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
+  virtual bool ignore_warning() override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override

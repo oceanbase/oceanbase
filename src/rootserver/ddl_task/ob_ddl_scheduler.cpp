@@ -2099,6 +2099,9 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
       }))) {
     LOG_WARN("failed to modify task", K(ret));
   }
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_NEED_RETRY;
+  }
   LOG_INFO("receive column checksum response", K(ret), K(tablet_id), K(task_key), K(ret_code));
   return ret;
 }
@@ -2166,6 +2169,9 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
         return ret;
       }))) {
     LOG_WARN("failed to modify task", K(ret));
+  }
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_NEED_RETRY;
   }
   return ret;
 }

@@ -803,6 +803,13 @@ int ObUniqueCheckingDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
+bool ObUniqueCheckingDag::ignore_warning()
+{
+  return OB_EAGAIN == dag_ret_
+    || OB_NEED_RETRY == dag_ret_
+    || OB_TASK_EXPIRED == dag_ret_;
+}
+
 bool ObUniqueCheckingDag::operator==(const ObIDag &other) const
 {
   int tmp_ret = OB_SUCCESS;
