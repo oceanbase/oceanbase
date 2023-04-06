@@ -139,13 +139,13 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
   int ret = OB_SUCCESS;
   if (NULL != rowkey_) {
     bool found_row_cache = false;
-    bool has_frozen_memtable = false;
     int64_t end_table_idx = 0;
     int64_t row_cache_snapshot_version = 0;
     const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
-    const bool enable_fuse_row_cache = is_x86() && access_ctx_->use_fuse_row_cache_ &&
-                                       access_param_->iter_param_.enable_fuse_row_cache() &&
-                                       access_ctx_->fuse_row_cache_hit_rate_ > 6;
+    const bool enable_fuse_row_cache = is_x86() && GCONF._enable_fuse_row_cache
+      && access_ctx_->use_fuse_row_cache_
+      && access_param_->iter_param_.enable_fuse_row_cache()
+      && access_ctx_->fuse_row_cache_hit_rate_ > 6;
     access_ctx_->query_flag_.set_not_use_row_cache();
     const int64_t table_cnt = tables.count();
     ObITable* table = NULL;
@@ -171,7 +171,7 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
         K(access_param_->iter_param_.enable_fuse_row_cache()));
 
     // firstly, try get from fuse row cache if memtable row is not final result
-    if (OB_SUCC(ret) && enable_fuse_row_cache && !has_frozen_memtable) {
+    if (OB_SUCC(ret) && enable_fuse_row_cache) {
       if (OB_FAIL(fuse_row_cache_fetcher_.get_fuse_row_cache(rowkey_->get_store_rowkey(), handle_))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           STORAGE_LOG(WARN, "fail to get from fuse row cache", K(ret), K(*rowkey_));

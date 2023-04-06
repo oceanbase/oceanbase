@@ -885,6 +885,10 @@ DEF_INT(bf_cache_miss_count_threshold, OB_CLUSTER_PARAMETER, "100", "[0,)",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_fuse_row_cache, OB_CLUSTER_PARAMETER, "False",
+         "enable fuse row cache"
+         "Value:  True:turned on;  False: turned off",
+         ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // background limit config
 DEF_INT(sys_bkgd_io_low_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",

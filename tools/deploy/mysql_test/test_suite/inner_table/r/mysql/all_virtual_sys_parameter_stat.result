@@ -308,6 +308,7 @@ _enable_easy_keepalive
 _enable_fast_commit
 _enable_filter_push_down_storage
 _enable_fulltext_index
+_enable_fuse_row_cache
 _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_ha_gts_full_service

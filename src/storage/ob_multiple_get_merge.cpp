@@ -174,9 +174,10 @@ int ObMultipleGetMerge::construct_iters_with_fuse_row_cache()
   } else {
     access_ctx_->query_flag_.set_not_use_fuse_row_cache();
   }
-  const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
-                                     access_param_->iter_param_.enable_fuse_row_cache() &&
-                                     access_ctx_->query_flag_.is_use_fuse_row_cache();
+  const bool enable_fuse_row_cache = is_x86() && GCONF._enable_fuse_row_cache
+    && access_ctx_->use_fuse_row_cache_
+    && access_param_->iter_param_.enable_fuse_row_cache()
+    && access_ctx_->query_flag_.is_use_fuse_row_cache();
   access_ctx_->use_fuse_row_cache_ = enable_fuse_row_cache;
 
   if (OB_FAIL(fuse_row_cache_fetcher_.init(*access_param_, *access_ctx_))) {
