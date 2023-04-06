@@ -8880,7 +8880,7 @@ int ObDMLResolver::add_cte_table_to_children(ObChildStmtResolver& child_resolver
 }
 
 int ObDMLResolver::resolve_index_rowkey_exprs(uint64_t table_id, const ObTableSchema& index_schema,
-    ObIArray<ObColumnRefRawExpr*>& column_exprs, bool use_shared_spk /*= true*/)
+    ObIArray<ObColumnRefRawExpr*>& column_exprs, bool use_shared_spk /*= false*/)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt* dml_stmt = get_stmt();

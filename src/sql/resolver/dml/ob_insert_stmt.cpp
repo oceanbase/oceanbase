@@ -806,5 +806,21 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo& other)
   return ret;
 }
 
+int ObInsertStmt::inner_get_share_exprs(ObIArray<ObRawExpr*> &candi_share_exprs) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDelUpdStmt::inner_get_share_exprs(candi_share_exprs))) {
+    LOG_WARN("failed to mark share exprs", K(ret));
+  }
+  // shadow pk in constraint_infos are not shared with shadow pk in all_table_column.
+  // Place refer to ObInsertResolver::resolve_unique_index_constraint_info for more information.
+  for (int64_t i = 0; OB_SUCC(ret) && i < constraint_check_stmt_.constraint_infos_.count(); ++i) {
+    if (OB_FAIL(append(candi_share_exprs, constraint_check_stmt_.constraint_infos_.at(i).constraint_columns_))) {
+      LOG_WARN("failed to append exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

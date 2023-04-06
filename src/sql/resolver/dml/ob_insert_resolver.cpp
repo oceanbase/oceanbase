@@ -2074,7 +2074,7 @@ int ObInsertResolver::resolve_dupkey_scan_info(const ObTableSchema& index_schema
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(table_columns), K(table_offset));
     } else if (OB_FAIL(resolve_index_rowkey_exprs(
-                   insert_stmt->get_insert_table_id(table_offset), index_schema, index_rowkey_exprs))) {
+                   insert_stmt->get_insert_table_id(table_offset), index_schema, index_rowkey_exprs, true))) {
       LOG_WARN("resolve index rowkey exprs failed", K(ret), KPC(insert_stmt), K(index_schema));
     } else if (index_schema.is_global_index_table()) {
       // For global unique index,

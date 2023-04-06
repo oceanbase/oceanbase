@@ -290,6 +290,7 @@ public:
     return multi_insert_table_info_;
   }
   DECLARE_VIRTUAL_TO_STRING;
+  virtual int inner_get_share_exprs(ObIArray<ObRawExpr*> &share_exprs) const;
 
 protected:
   // Get the root expr of all query-related expressions in
