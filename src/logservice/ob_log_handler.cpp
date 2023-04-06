@@ -128,6 +128,7 @@ int ObLogHandler::stop()
   tg.click("wrlock succ");
   if (IS_INIT) {
     is_in_stop_state_ = true;
+    common::ObSpinLockGuard deps_guard(deps_lock_);
     //unregister_file_size_cb不能在apply status锁内, 可能会导致死锁
     apply_status_->unregister_file_size_cb();
     tg.click("unreg cb end");
@@ -866,7 +867,16 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
     bool has_added_to_blacklist = false;
     bool has_removed_from_blacklist = false;
     while(OB_SUCCESS == ret || OB_NOT_MASTER == ret) {
-      if (common::ObTimeUtility::current_time() - start_time_us >= req.timeout_us_) {
+      // judge init status to avoiding log_handler destoring gets stuck
+      if (IS_NOT_INIT || OB_ISNULL(lc_cb_) || OB_ISNULL(rpc_proxy_)) {
+        ret = OB_NOT_INIT;
+        CLOG_LOG(WARN, "PalfHandleImpl not init", KR(ret), K_(id));
+        break;
+      } else if (is_in_stop_state_) {
+        ret = OB_NOT_RUNNING;
+        CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
+        break;
+      } else if (common::ObTimeUtility::current_time() - start_time_us >= req.timeout_us_) {
         ret = OB_TIMEOUT;
         FLOG_WARN("config_change timeout", KR(ret), KPC(this), K(req), K(start_time_us));
         break;
@@ -886,11 +896,7 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
       ConfigChangeCmdHandler cmd_handler(&palf_handle_);
       LogConfigChangeCmdResp resp;
       bool need_renew_leader = false;
-      // judge init status to avoiding log_handler destoring gets stuck
-      if (IS_NOT_INIT || OB_ISNULL(lc_cb_) || OB_ISNULL(rpc_proxy_)) {
-        ret = OB_NOT_INIT;
-        CLOG_LOG(WARN, "PalfHandleImpl not init", KR(ret), K_(id));
-      } else if (OB_FAIL(lc_cb_->get_leader(id_, leader))) {
+      if (OB_FAIL(lc_cb_->get_leader(id_, leader))) {
         need_renew_leader = true;
         ret = OB_SUCCESS;
       } else if (leader == self_ && FALSE_IT(resp.ret_ = cmd_handler.handle_config_change_cmd(req))) {
