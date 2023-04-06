@@ -90,7 +90,7 @@ const int64_t MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US = 1 * 1000 * 1000L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
 const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 // Control the fetch interval trigger by outer(eg. config change pre check) by 500ms.
-const int64_t PALF_FETCH_LOG_OUTER_TRIGGER_INTERVAL = 500 * 1000 * 1000L;
+const int64_t PALF_FETCH_LOG_OUTER_TRIGGER_INTERVAL = 100 * 1000 * 1000L;
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;     // 5s
 const int64_t PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;     // 10s
 const int64_t PREPARE_LOG_BUFFER_SIZE = 2048;

@@ -847,14 +847,20 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
 {
   int ret = OB_SUCCESS;
   LogLearnerList children_list;
+  common::GlobalLearnerList degraded_learner_list;
+  const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
   if (OB_FAIL(mm_->get_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,
           prev_log_pid, prev_lsn, lsn, log_write_buf))) {
     PALF_LOG(WARN, "submit_push_log_req failed", K(ret), K_(palf_id), K_(self));
-  } else {
-    // do nothing
+  } else if (false == need_presend_log) {
+  } else if (OB_FAIL(mm_->get_degraded_learner_list(degraded_learner_list))) {
+    PALF_LOG(WARN, "get_log_sync_member_list failed", K(ret), K_(palf_id), K_(self));
+  } else if (OB_UNLIKELY(degraded_learner_list.is_valid() && mm_->need_sync_to_degraded_learners())) {
+    (void) log_engine_->submit_push_log_req(degraded_learner_list, PUSH_LOG,
+        curr_proposal_id, prev_log_pid, prev_lsn, lsn, log_write_buf);
   }
   return ret;
 }
@@ -1462,6 +1468,11 @@ int LogSlidingWindow::get_last_slide_end_lsn(LSN &out_end_lsn) const
   return ret;
 }
 
+int64_t LogSlidingWindow::get_last_slide_log_id() const
+{
+  return ATOMIC_LOAD(&last_slide_log_id_);
+}
+
 int64_t LogSlidingWindow::get_last_slide_log_id_() const
 {
   return ATOMIC_LOAD(&last_slide_log_id_);
@@ -1741,7 +1752,8 @@ bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger
   if (FetchTriggerType::SLIDING_CB == last_fetch_trigger_type_
       && (FetchTriggerType::ADD_MEMBER_PRE_CHECK == fetch_trigger_type
           || FetchTriggerType::MODE_META_BARRIER == fetch_trigger_type
-          || FetchTriggerType::LEARNER_REGISTER == fetch_trigger_type)) {
+          || FetchTriggerType::LEARNER_REGISTER == fetch_trigger_type
+          || FetchTriggerType::RECONFIRM_NOTIFY_FETCH == fetch_trigger_type)) {
     // If self is currently in streamingly fetch state, it does not need fetch again
     // in some trigger cases.
     bool_ret = false;
@@ -2904,8 +2916,10 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
   } else if (FALSE_IT(log_id = group_entry_header.get_log_id())) {
   } else if (!can_receive_larger_log_(log_id)) {
     ret = OB_EAGAIN;
-    PALF_LOG(WARN, "sw is full, cannot receive larger log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
-        "start_id", get_start_id());
+    if (palf_reach_time_interval(5 * 1000 * 1000, larger_log_warn_time_)) {
+      PALF_LOG(WARN, "sw is full, cannot receive larger log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
+          "start_id", get_start_id());
+    }
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
       if (REACH_TIME_INTERVAL(100 * 1000)) {

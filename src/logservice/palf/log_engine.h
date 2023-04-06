@@ -196,16 +196,16 @@ public:
                                                             prev_lsn,
                                                             curr_lsn,
                                                             write_buf))) {
-      PALF_LOG(ERROR,
-               "LogNetService submit_group_entry_to_memberlist failed",
-               K(ret),
-               KPC(this),
-               K(member_list),
-               K(prev_log_proposal_id),
-               K(prev_lsn),
-               K(prev_log_proposal_id),
-               K(curr_lsn),
-               K(write_buf));
+      // PALF_LOG(ERROR,
+      //          "LogNetService submit_group_entry_to_memberlist failed",
+      //          K(ret),
+      //          KPC(this),
+      //          K(member_list),
+      //          K(prev_log_proposal_id),
+      //          K(prev_lsn),
+      //          K(prev_log_proposal_id),
+      //          K(curr_lsn),
+      //          K(write_buf));
     } else {
       PALF_LOG(TRACE,
                "submit_group_entry_to_memberlist success",

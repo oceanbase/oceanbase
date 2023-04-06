@@ -256,6 +256,7 @@ public:
                                       const LSN &log_lsn,
                                       const LSN &log_end_lsn,
                                       const int64_t &log_proposal_id);
+  int64_t get_last_slide_log_id() const;
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \

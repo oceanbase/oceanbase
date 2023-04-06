@@ -249,16 +249,18 @@ public:
   LogGetMCStResp(const int64_t &msg_proposal_id,
                  const LSN &max_flushed_end_lsn,
                  const bool is_normal_replica,
-                 const bool need_update_config_meta);
+                 const bool need_update_config_meta,
+                 const int64_t last_slide_log_id);
   ~LogGetMCStResp();
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(msg_proposal_id), K_(max_flushed_end_lsn), K_(is_normal_replica),
-      K_(need_update_config_meta));
+      K_(need_update_config_meta), K_(last_slide_log_id));
   int64_t msg_proposal_id_;
   LSN max_flushed_end_lsn_;
   bool is_normal_replica_;
   bool need_update_config_meta_;
+  int64_t last_slide_log_id_;
 };
 
 enum LogLearnerReqType

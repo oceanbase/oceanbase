@@ -56,7 +56,7 @@ LogReconfirm::LogReconfirm()
       last_record_sw_start_id_(OB_INVALID_LOG_ID),
       wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
       wait_majority_time_us_(OB_INVALID_TIMESTAMP),
-      has_notify_fetch_(false),
+      last_notify_fetch_time_us_(OB_INVALID_TIMESTAMP),
       is_inited_(false)
 {}
 
@@ -110,7 +110,7 @@ void LogReconfirm::reset_state()
     last_submit_prepare_req_time_us_ = OB_INVALID_TIMESTAMP;
     last_fetch_log_time_us_ = OB_INVALID_TIMESTAMP;
     last_record_sw_start_id_ = OB_INVALID_LOG_ID;
-    has_notify_fetch_ = false;
+    last_notify_fetch_time_us_ = OB_INVALID_TIMESTAMP;
   }
 }
 
@@ -119,7 +119,7 @@ void LogReconfirm::destroy()
   ObLockGuard<ObSpinLock> guard(lock_);
   if (is_inited_) {
     is_inited_ = false;
-    has_notify_fetch_ = false;
+    last_notify_fetch_time_us_ = OB_INVALID_TIMESTAMP;
     state_ = INITED;
     new_proposal_id_ = INVALID_PROPOSAL_ID;
     prepare_log_ack_list_.reset();
@@ -421,16 +421,15 @@ bool LogReconfirm::is_majority_catch_up_()
   } else if (majority_match_lsn < majority_max_lsn_) {
     PALF_LOG_RET(WARN, OB_SUCCESS, "majority_match_lsn is smaller than majority_max_lsn_, need wait", K_(palf_id),
         K_(majority_max_lsn), K(majority_match_lsn));
-    ObMemberList lagged_list;
-    if (has_notify_fetch_) {
-      // has_notify_fetch_ is true, no need do it again
-    } else if (OB_SUCCESS != (tmp_ret = sw_->get_lagged_member_list(majority_max_lsn_, lagged_list))) {
-      PALF_LOG_RET(WARN, tmp_ret, "get_lagged_member_list_ failed", K(tmp_ret), K_(palf_id));
-    } else if (OB_SUCCESS != (tmp_ret = log_engine_->submit_notify_fetch_log_req(lagged_list))) {
-      PALF_LOG_RET(WARN, tmp_ret, "submit_notify_fetch_log_req failed", K(tmp_ret), K_(palf_id), K(lagged_list));
-    } else {
-      has_notify_fetch_ = true;
-      PALF_LOG(INFO, "notify_fetch_log success", K(tmp_ret), K_(palf_id), K_(majority_max_lsn), K(lagged_list));
+    if (palf_reach_time_interval(500 * 1000, last_fetch_log_time_us_)) {
+      ObMemberList lagged_list;
+      if (OB_SUCCESS != (tmp_ret = sw_->get_lagged_member_list(majority_max_lsn_, lagged_list))) {
+        PALF_LOG_RET(WARN, tmp_ret, "get_lagged_member_list_ failed", K(tmp_ret), K_(palf_id));
+      } else if (OB_SUCCESS != (tmp_ret = log_engine_->submit_notify_fetch_log_req(lagged_list))) {
+        PALF_LOG_RET(WARN, tmp_ret, "submit_notify_fetch_log_req failed", K(tmp_ret), K_(palf_id), K(lagged_list));
+      } else {
+        PALF_LOG(INFO, "notify_fetch_log success", K(tmp_ret), K_(palf_id), K_(majority_max_lsn), K(lagged_list));
+      }
     }
   } else {
     bool_ret = true;

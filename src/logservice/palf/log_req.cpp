@@ -522,18 +522,21 @@ LogGetMCStResp::LogGetMCStResp()
   : msg_proposal_id_(INVALID_PROPOSAL_ID),
     max_flushed_end_lsn_(),
     is_normal_replica_(false),
-    need_update_config_meta_(false)
+    need_update_config_meta_(false),
+    last_slide_log_id_(INT64_MAX)
 {
 }
 
 LogGetMCStResp::LogGetMCStResp(const int64_t &msg_proposal_id,
                                const LSN &max_flushed_end_lsn,
                                const bool is_normal_replica,
-                               const bool need_update_config_meta)
+                               const bool need_update_config_meta,
+                               const int64_t last_slide_log_id)
   : msg_proposal_id_(msg_proposal_id),
     max_flushed_end_lsn_(max_flushed_end_lsn),
     is_normal_replica_(is_normal_replica),
-    need_update_config_meta_(need_update_config_meta)
+    need_update_config_meta_(need_update_config_meta),
+    last_slide_log_id_(last_slide_log_id)
 {
 }
 
@@ -553,10 +556,11 @@ void LogGetMCStResp::reset()
   max_flushed_end_lsn_.reset();
   is_normal_replica_ = false;
   need_update_config_meta_ = false;
+  last_slide_log_id_ = INT64_MAX;
 }
 
 OB_SERIALIZE_MEMBER(LogGetMCStResp, msg_proposal_id_, max_flushed_end_lsn_, \
-    is_normal_replica_, need_update_config_meta_);
+    is_normal_replica_, need_update_config_meta_, last_slide_log_id_);
 // ================= LogGetMCStResp end ================
 
 // ============= LogLearnerReq begin ==============
