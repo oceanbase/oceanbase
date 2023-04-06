@@ -43,6 +43,7 @@ public:
 private:
   virtual void reset_dblink() override;
   void reset_result();
+  bool need_tx(const ObSQLSessionInfo *my_session) const;
 private:
   common::ObMySQLProxy::MySQLResult res_;
   common::sqlclient::ObMySQLResult *result_;
