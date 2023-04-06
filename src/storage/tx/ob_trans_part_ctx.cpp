@@ -6777,7 +6777,9 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
         case ObTxState::UNKNOWN: {
           // 当前为获取的日志流回放位点
           SCN readable_scn;
-          if (tmp_state_info.version_.is_valid()) {
+          if (tmp_state_info.snapshot_version_ < snapshot) {
+            break;
+          } else if (tmp_state_info.version_.is_valid()) {
             if (OB_SUCCESS != (tmp_ret = get_ls_replica_readable_scn_(ls_id_, readable_scn))) {
               TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(snapshot), KPC(this));
             } else if (readable_scn >= tmp_state_info.version_) {
@@ -6794,7 +6796,9 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
         }
         case ObTxState::INIT:
         case ObTxState::REDO_COMPLETE: {
-          if (tmp_state_info.version_ >= snapshot) {
+          if (tmp_state_info.snapshot_version_ < snapshot) {
+            break;
+          } else if (tmp_state_info.version_ >= snapshot) {
             can_read = false;
             trans_version.set_min();
             is_determined_state = false;

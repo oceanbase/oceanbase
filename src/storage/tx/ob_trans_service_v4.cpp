@@ -3255,6 +3255,7 @@ int ObTransService::handle_trans_collect_state(const ObCollectStateMsg &msg,
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObStateInfo state_info;
       state_info.ls_id_ = ls_id;
+      state_info.snapshot_version_ = msg.snapshot_;
       if (OB_FAIL(check_and_fill_state_info(tx_id, state_info))) {
         TRANS_LOG(WARN, "fill state info fail", K(ret), K(ls_id), K(tx_id), K(state_info));
       } else {
