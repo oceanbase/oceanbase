@@ -52,8 +52,6 @@ int ObExplainLogPlan::generate_normal_raw_plan()
                          create(optimizer_context_, *child_stmt))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to create log plan for explain stmt");
-    } else if (OB_FAIL(child_plan->init_plan_info())) {
-      LOG_WARN("failed to init equal_sets");
     } else if (OB_FAIL(child_plan->generate_plan())) {
       LOG_WARN("failed to generate plan tree for explain", K(ret));
     } else if (OB_FAIL(ObCodeGenerator::detect_batch_size(*child_plan, batch_size))) {

@@ -54,8 +54,6 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
   } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create plan", K(ret));
-  } else if (OB_FAIL(plan->init_plan_info())) {
-    LOG_WARN("failed to init equal sets", K(ret));
   } else if (OB_FAIL(plan->generate_plan())) {
     LOG_WARN("failed to perform optimization", K(ret));
   } else if (OB_FAIL(plan->add_extra_dependency_table())) {
@@ -107,8 +105,6 @@ int ObOptimizer::get_optimization_cost(ObDMLStmt &stmt,
     LOG_WARN("failed to init env info", K(ret));
   } else if (OB_FAIL(generate_plan_for_temp_table(stmt))) {
     LOG_WARN("failed to generate plan for temp table", K(ret));
-  } else if (OB_FAIL(plan->init_plan_info())) {
-    LOG_WARN("failed to init plan info", K(ret));
   } else if (OB_FAIL(plan->generate_raw_plan())) {
       LOG_WARN("failed to perform optimization", K(ret));
   } else {
@@ -140,8 +136,6 @@ int ObOptimizer::generate_plan_for_temp_table(ObDMLStmt &stmt)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create logical plan", K(temp_plan), K(ret));
       } else if (OB_FALSE_IT(temp_plan->set_temp_table_info(temp_table_info))) {
-      } else if (OB_FAIL(temp_plan->init_plan_info())) {
-        LOG_WARN("failed to init equal sets", K(ret));
       } else {
         OPT_TRACE_TITLE("begin generate plan for temp table ", temp_table_info->table_name_);
       }
