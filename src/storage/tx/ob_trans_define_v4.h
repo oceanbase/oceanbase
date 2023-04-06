@@ -286,6 +286,7 @@ public:
   bool is_savepoint() const { return type_ == T::SAVEPOINT || type_ == T::STASH; }
   bool is_snapshot() const { return type_ == T::SNAPSHOT; }
   bool is_stash() const { return type_ == T::STASH; }
+  bool is_user_savepoint() const { return type_ == T::SAVEPOINT && user_create_; }
   DECLARE_TO_STRING;
   OB_UNIS_VERSION(1);
 };

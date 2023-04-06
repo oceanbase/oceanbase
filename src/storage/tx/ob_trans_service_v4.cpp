@@ -2429,16 +2429,17 @@ int ObTransService::assign_user_savepoint_(ObTxDesc &tx, ObTxSavePointList &save
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
-    if (tx.savepoints_.at(i).user_create_) {
+    if (tx.savepoints_.at(i).is_user_savepoint()) {
       if (OB_FAIL(savepoints.push_back(tx.savepoints_.at(i)))) {
         TRANS_LOG(WARN, "push back user create sp fail", K(ret), K(tx));
       }
     }
   }
+  TRANS_LOG(INFO, "assign user sp finish", K(ret), K(savepoints), K(tx));
   return ret;
 }
 
-int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints)
+int ObTransService::update_user_savepoint_(ObTxDesc &tx, const ObTxSavePointList &savepoints)
 {
   int ret = OB_SUCCESS;
   int j = 0;
@@ -2447,10 +2448,27 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
     for (j = 0, is_contain = false; j<tx.savepoints_.count() && !is_contain; j++) {
       is_contain = savepoints.at(i) == tx.savepoints_.at(j);
     }
-    if (!is_contain && OB_FAIL(tx.savepoints_.push_back(savepoints.at(i)))) {
-      TRANS_LOG(WARN, "push back user sp fail", K(ret));
+    if (!is_contain) {
+      if (!savepoints.at(i).is_user_savepoint()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "savepoint isn't user create", K(ret), K(tx), K(i), K(savepoints));
+      } else if (OB_FAIL(tx.savepoints_.push_back(savepoints.at(i)))) {
+        TRANS_LOG(WARN, "push back user sp fail", K(ret));
+      } else {
+        // do thing
+      }
     }
   }
+  TRANS_LOG(INFO, "update user sp finish", K(ret), K(savepoints), K(tx));
+  return ret;
+}
+
+int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints)
+{
+  int ret = OB_SUCCESS;
+  tx.lock_.lock();
+  ret = update_user_savepoint_(tx, savepoints);
+  tx.lock_.unlock();
   return ret;
 }
 
@@ -2478,8 +2496,8 @@ int ObTransService::update_tx_with_stmt_info(const ObTxStmtInfo &tx_info, ObTxDe
   tx->op_sn_ = tx_info.op_sn_;
   tx->state_ = tx_info.state_;
   tx->update_parts_(tx_info.parts_);
-  if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx, tx_info.savepoints_))) {
-    TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(tx), K(tx_info));
+  if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint_(*tx, tx_info.savepoints_))) {
+    TRANS_LOG(WARN, "update user sp fail", K(ret), K(tx), K(tx_info));
   }
   tx->lock_.unlock();
   return ret;

@@ -295,6 +295,7 @@ int sub_end_tx_local_ls_(const ObTransID &tx_id,
                          const common::ObAddr &sender_addr,
                          const bool is_rollback);
 int assign_user_savepoint_(ObTxDesc &tx, ObTxSavePointList &savepoints);
+int update_user_savepoint_(ObTxDesc &tx, const ObTxSavePointList &savepoints);
 
 private:
 ObTxCtxMgr tx_ctx_mgr_;
