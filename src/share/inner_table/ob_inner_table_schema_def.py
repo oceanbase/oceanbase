@@ -11446,6 +11446,7 @@ def_table_schema(
 # 12389: __all_virtual_wr_snapshot
 # 12390: __all_virtual_wr_statname
 # 12391: __all_virtual_wr_sysstat
+# 12392: __all_virtual_kv_connection
 #
 # 余留位置
 #
@@ -25669,6 +25670,9 @@ def_table_schema(
 # 21394: CDB_WR_STAT_NAME
 # 21395: DBA_WR_SYSSTAT
 # 21396: CDB_WR_SYSSTAT
+# 21397: GV$OB_KV_CONNECTIONS
+# 21398: V$OB_KV_CONNECTIONS
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
