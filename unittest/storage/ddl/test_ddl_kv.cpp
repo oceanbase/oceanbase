@@ -16,8 +16,10 @@
 #include <gtest/gtest.h>
 
 #define private public
+#define protected public
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #undef private
@@ -60,6 +62,7 @@ protected:
 void TestBlockMetaTree::SetUp()
 {
   TearDown();
+  ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(TEST_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_base_);
   prepare_schema();
   ASSERT_OK(data_desc_.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE));
@@ -170,6 +173,49 @@ TEST_F(TestBlockMetaTree, random_keybtree)
     meta_tree.destroy();
   }
   fclose(dump_file);
+}
+
+TEST_F(TestBlockMetaTree, update_ddl_sstable)
+{
+  ObTenantMetaMemMgr t3m(TEST_TENANT_ID);
+  ASSERT_OK(t3m.init());
+  tenant_base_.set(&t3m);
+  ObTenantEnv::set_tenant(&tenant_base_);
+  ObTabletTableStore old_table_store;
+  ObArenaAllocator arena;
+  ObStorageSchema storage_schema;
+  ASSERT_OK(storage_schema.init(arena, table_schema_, Worker::CompatMode::MYSQL));
+  ObArray<ObITable *> ddl_sstables;
+  for (int64_t i = 1; i <= 5; ++i) {
+    void *buf = arena.alloc(sizeof(ObSSTable));
+    ObSSTable *tmp_sstable = new (buf) ObSSTable();
+    tmp_sstable->key_.table_type_ = ObITable::DDL_DUMP_SSTABLE;
+    tmp_sstable->key_.scn_range_.start_scn_ = SCN::plus(SCN::min_scn(), 10 * i);
+    tmp_sstable->key_.scn_range_.end_scn_ = SCN::plus(SCN::min_scn(), 10 * (i + 1));
+    ASSERT_OK(ddl_sstables.push_back(tmp_sstable));
+  }
+  ObSSTable compact_sstable;
+  compact_sstable.key_.table_type_ = ObITable::DDL_DUMP_SSTABLE;
+  compact_sstable.key_.scn_range_.start_scn_ = SCN::plus(SCN::min_scn(), 10);
+  compact_sstable.key_.scn_range_.end_scn_ = SCN::plus(SCN::min_scn(), 60);
+
+  ObUpdateTableStoreParam update_param(1, //snapshot_version,
+                                       1, //multi_version_start,
+                                       &storage_schema, //storage_schema,
+                                       1//rebuild_seq
+      );
+  update_param.ddl_info_.keep_old_ddl_sstable_ = true;
+  update_param.table_handle_.set_table(&compact_sstable, &arena);
+  ASSERT_OK(old_table_store.ddl_sstables_.init_and_copy(arena, ddl_sstables));
+  ObTabletTableStore new_table_store;
+  ObTablet tablet;
+  tablet.tablet_meta_.start_scn_ = SCN::plus(SCN::min_scn(), 10);
+  compact_sstable.meta_.basic_meta_.ddl_scn_ = tablet.tablet_meta_.start_scn_;
+  new_table_store.tablet_ptr_ = &tablet;
+  ASSERT_OK(new_table_store.build_ddl_sstables(arena, update_param, old_table_store));
+  ASSERT_EQ(new_table_store.ddl_sstables_.count(), 1);
+  ASSERT_EQ(new_table_store.ddl_sstables_.get_boundary_table(true)->get_start_scn(), compact_sstable.get_start_scn());
+  ASSERT_EQ(new_table_store.ddl_sstables_.get_boundary_table(true)->get_end_scn(), compact_sstable.get_end_scn());
 }
 
 }

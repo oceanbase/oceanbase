@@ -1196,7 +1196,7 @@ int ObTabletTableStore::build_ddl_sstables(
       SCN max_end_scn = SCN::min_scn();
       for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstables.count(); ++i) {
         ObITable *cur_table = ddl_sstables.at(i);
-        if (cur_table->get_end_scn() < max_end_scn) {
+        if (cur_table->get_end_scn() <= max_end_scn) {
           // drop it
           LOG_INFO("drop ddl sstable", K(i), K(max_end_scn), KPC(cur_table));
         } else if (OB_FAIL(ddl_dump_sstables.push_back(cur_table))) {
