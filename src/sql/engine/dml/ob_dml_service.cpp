@@ -292,6 +292,7 @@ int ObDMLService::check_lob_column_changed(ObEvalCtx &eval_ctx,
     cmp_params.offset_right_ = 0;
     cmp_params.compare_len_ = UINT64_MAX;
     cmp_params.timeout_ = timeout;
+    cmp_params.tx_desc_ = eval_ctx.exec_ctx_.get_my_session()->get_tx_desc();
     if(old_set_has_lob_header && new_set_has_lob_header) {
       if(OB_FAIL(lob_mngr->compare(old_lob, new_lob, cmp_params, result))) {
         LOG_WARN("fail to compare lob", K(ret), K(old_lob), K(new_lob));
