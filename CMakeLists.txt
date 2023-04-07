@@ -87,14 +87,21 @@ if (ENABLE_SANITY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_SANITY")
 endif()
 
+# display compile and link time
+option(ENABLE_TIME "" OFF)
+if(ENABLE_TIME)
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
+endif()
+
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_subdirectory(deps/easy)
-add_subdirectory(deps/oblib)
 add_subdirectory(src/objit)
+add_subdirectory(deps/oblib)
 add_subdirectory(src)
 
 include(CMakeDependentOption)
@@ -137,14 +144,25 @@ cmake_dependent_option(
 )
 
 include(CTest)
-if (OB_BUILD_UNITTEST)
+if(OB_BUILD_UNITTEST)
   add_subdirectory(unittest)
 elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
 endif()
 
+if(OB_BUILD_MITTEST)
+  add_subdirectory(mittest)
+else()
+  add_subdirectory(mittest EXCLUDE_FROM_ALL)
+endif()
 
-if (OB_BUILD_TOOLS)
+if(OB_BUILD_TESTBENCH)
+  add_subdirectory(testbench)
+else()
+  add_subdirectory(testbench EXCLUDE_FROM_ALL)
+endif()
+
+if(OB_BUILD_TOOLS)
   add_subdirectory(tools)
 elseif (OB_INCLUDE_TOOLS)
   add_subdirectory(tools EXCLUDE_FROM_ALL)

@@ -19,8 +19,6 @@ LLD_OPTION=ON
 ASAN_OPTION=ON
 STATIC_LINK_LGPL_DEPS_OPTION=ON
 
-echo "$0 ${ALL_ARGS[@]}"
-
 function echo_log() {
   echo -e "[build.sh] $@"
 }
@@ -28,6 +26,8 @@ function echo_log() {
 function echo_err() {
   echo -e "[build.sh][ERROR] $@" 1>&2
 }
+
+echo_log "command $0 ${ALL_ARGS[@]}"
 
 function usage
 {
@@ -50,6 +50,18 @@ function usage
 
     echo -e "\n\t# Build with rpm mode and make with default arguments."
     echo -e "\t./build.sh rpm --make"
+
+    echo -e "\n\t# Build with unittest and make with default arguments."
+    echo -e "\t./build.sh release -DOB_BUILD_UNITTEST=ON --make"
+
+    echo -e "\n\t# Build with mittest and make with default arguments."
+    echo -e "\t./build.sh release -DOB_BUILD_MITTEST=ON --make"
+
+    echo -e "\n\t# Build with testbench and make with default arguments."
+    echo -e "\t./build.sh release -DOB_BUILD_TESTBENCH=ON --make"
+
+    echo -e "\n\t# Build with time statistics and make with default arguments."
+    echo -e "\t./build.sh release -DENABLE_TIME=ON --make"
 }
 
 # parse arguments
@@ -71,7 +83,7 @@ function parse_args
     done
 
     if [[ "$KERNEL_RELEASE" == "release 6" ]]; then
-        echo_log '[NOTICE] lld is disabled in kernel release 6'
+        echo_log "[NOTICE] lld is disabled in kernel release 6"
         LLD_OPTION="OFF"
     fi
 }
@@ -81,6 +93,7 @@ function try_make
 {
     if [[ $NEED_MAKE != false ]]
     then
+        echo_log "command $NEED_MAKE ${MAKE_ARGS[@]}"
         $NEED_MAKE "${MAKE_ARGS[@]}"
     fi
 }
@@ -99,6 +112,8 @@ function prepare_build_dir
 {
     TYPE=$1
     mkdir -p $TOPDIR/build_$TYPE && cd $TOPDIR/build_$TYPE
+    rm -f $TOPDIR/build_$TYPE/CMakeCache.txt
+    echo_log "enter the build directory and remove cmake cache"
 }
 
 # dep_create
@@ -129,6 +144,7 @@ function do_build
 
     TYPE=$1; shift
     prepare_build_dir $TYPE || return
+    echo_log "command ${CMAKE_COMMAND} ${TOPDIR} $@"
     ${CMAKE_COMMAND} ${TOPDIR} "$@"
     if [ $? -ne 0 ]; then
       echo_err "Failed to generate Makefile"
@@ -146,7 +162,6 @@ function do_clean
 # build - configurate project and prepare to compile, by calling make
 function build
 {
-
     set -- "${BUILD_ARGS[@]}"
     case "x$1" in
       xrelease)
