@@ -30687,11 +30687,11 @@ int ObDDLService::init_system_variables(
         HEAP_VAR(ObUnitConfig, unit_config) {
           if (OB_SYS_TENANT_ID == sys_variable_schema.get_tenant_id()) {
             // When creating a system tenant, the default value of px_thread_count is related to
-            // default sys tenant max cpu
-            const int64_t sys_default_max_cpu =
-                static_cast<int64_t>(GCONF.get_sys_tenant_default_max_cpu());
+            // default sys tenant min cpu
+            const int64_t sys_default_min_cpu =
+                static_cast<int64_t>(GCONF.get_sys_tenant_default_min_cpu());
             default_px_thread_count = ObTenantCpuShare::calc_px_pool_share(
-                sys_variable_schema.get_tenant_id(), sys_default_max_cpu);
+                sys_variable_schema.get_tenant_id(), sys_default_min_cpu);
           } else if (OB_UNLIKELY(NULL == unit_mgr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unit_mgr_ is null", K(ret), KP(unit_mgr_));
@@ -30702,7 +30702,7 @@ int ObDDLService::init_system_variables(
                       arg.pool_list_.at(0), unit_config))) {
             LOG_WARN("fail to get unit config", K(ret));
           } else {
-            int64_t cpu_count = static_cast<int64_t>(unit_config.unit_resource().max_cpu());
+            int64_t cpu_count = static_cast<int64_t>(unit_config.unit_resource().min_cpu());
             default_px_thread_count = ObTenantCpuShare::calc_px_pool_share(
                 sys_variable_schema.get_tenant_id(), cpu_count);
           }
@@ -30711,7 +30711,7 @@ int ObDDLService::init_system_variables(
 
       if (OB_SUCC(ret) && use_default_parallel_servers_target && default_px_thread_count > 0) {
         // target cannot be less than 3, otherwise any px query will not come in
-        int64_t default_px_servers_target = std::max(3L, static_cast<int64_t>(default_px_thread_count * 0.8));
+        int64_t default_px_servers_target = std::max(3L, static_cast<int64_t>(default_px_thread_count));
         VAR_INT_TO_STRING(val_buf, default_px_servers_target);
         SET_TENANT_VARIABLE(SYS_VAR_PARALLEL_SERVERS_TARGET, val_buf);
       }
