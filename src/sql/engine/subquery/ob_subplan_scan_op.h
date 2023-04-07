@@ -26,7 +26,7 @@ class ObSubPlanScanSpec : public ObOpSpec
 public:
   ObSubPlanScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
   // project child output to subplan scan column.
-  // projector_is filled with [child output, scan column] paires, even index is child output,
+  // projector_is filled with [child output, scan column] pairs, even index is child output,
   // odd is scan column. e.g.:
   //   [child output, scan column, child output, scan column, ...]
   ExprFixedArray projector_;

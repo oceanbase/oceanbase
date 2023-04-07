@@ -203,7 +203,7 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
     SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
   } else if (OB_ISNULL(common_rpc_proxy) || OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "failt to get my session", K(ctx), K(common_rpc_proxy));
+    SQL_ENG_LOG(WARN, "fail to get my session", K(ctx), K(common_rpc_proxy));
   } else {
     obrpc::UInt64 affected_row(0);
     obrpc::ObDropDatabaseRes drop_database_res;

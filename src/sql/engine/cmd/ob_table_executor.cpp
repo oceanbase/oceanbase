@@ -598,7 +598,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       }
     }
 
-    // only CTAS or create temperary table will make session_id != 0. If such table detected, set
+    // only CTAS or create temporary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
     if (0 != table_schema.get_session_id()) {
       LOG_TRACE("CTAS or temporary table create detected", K(table_schema));
@@ -2173,7 +2173,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       bool use_parallel_truncate = false;
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
       if (OB_FAIL(check_use_parallel_truncate(truncate_table_arg, use_parallel_truncate))) {
-        LOG_WARN("fail to check use parallel trunate", KR(ret), K(truncate_table_arg));
+        LOG_WARN("fail to check use parallel truncate", KR(ret), K(truncate_table_arg));
       } else if (!use_parallel_truncate) {
         if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
           LOG_WARN("rpc proxy alter table failed", K(ret));
@@ -2372,7 +2372,7 @@ int ObFlashBackTableToScnExecutor::execute(ObExecContext &ctx, ObFlashBackTableT
       LOG_WARN("get common rpc proxy failed", K(ret));
     } else if (OB_ISNULL(common_rpc_proxy)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cmmon rpc proxy should not be null", K(ret));
+      LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_FAIL(common_rpc_proxy->flashback_table_to_time_point(arg))) {
       LOG_WARN("rpc proxy flashback table failed", K(ret));
     }
