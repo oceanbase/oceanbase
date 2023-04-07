@@ -123,6 +123,11 @@ STAT_EVENT_ADD_DEF(TRANS_ELR_UNABLE_COUNT, "trans early lock release unable coun
 STAT_EVENT_ADD_DEF(READ_ELR_ROW_COUNT, "read elr row count", ObStatClassIds::TRANS, "read elr row count", 30079, true, true)
 STAT_EVENT_ADD_DEF(TRANS_LOCAL_TOTAL_USED_TIME, "local trans total used time", ObStatClassIds::TRANS, "local trans total used time", 30080, true, true)
 STAT_EVENT_ADD_DEF(TRANS_DIST_TOTAL_USED_TIME, "distributed trans total used time", ObStatClassIds::TRANS, "distributed trans total used time", 30081, true, true)
+STAT_EVENT_ADD_DEF(TX_DATA_HIT_MINI_CACHE_COUNT, "tx data hit mini cache count", ObStatClassIds::TRANS, "tx data hit mini cache count", 30082, true, true)
+STAT_EVENT_ADD_DEF(TX_DATA_HIT_KV_CACHE_COUNT, "tx data hit kv cache count", ObStatClassIds::TRANS, "tx data hit kv cache count", 30083, true, true)
+STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_CTX_COUNT, "tx data read tx ctx count", ObStatClassIds::TRANS, "tx data read tx ctx count", 30084, true, true)
+STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_DATA_MEMTABLE_COUNT, "tx data read tx data memtable count", ObStatClassIds::TRANS, "tx data read tx data memtable count", 30085, true, true)
+STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_DATA_SSTABLE_COUNT, "tx data read tx data sstable count", ObStatClassIds::TRANS, "tx data read tx data sstable count", 30086, true, true)
 
 // SQL
 //STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT")
