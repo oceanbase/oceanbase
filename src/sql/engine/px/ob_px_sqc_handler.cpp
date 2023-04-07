@@ -241,11 +241,14 @@ int ObPxSqcHandler::copy_sqc_init_arg(int64_t& pos, const char* data_buf, int64_
     LOG_WARN("Sqc handler need to be inited", K(ret));
   } else {
     allocator = &mem_context_->get_arena_allocator();
-    sqc_init_args_->set_deserialize_param(*exec_ctx_, *des_phy_plan_, allocator);
-    if (OB_FAIL(sqc_init_args_->do_deserialize(pos, data_buf, data_len))) {
-      LOG_WARN("Failed to deserialize", K(ret));
+    WITH_CONTEXT(mem_context_)
+    {
+      sqc_init_args_->set_deserialize_param(*exec_ctx_, *des_phy_plan_, allocator);
+      if (OB_FAIL(sqc_init_args_->do_deserialize(pos, data_buf, data_len))) {
+        LOG_WARN("Failed to deserialize", K(ret));
+      }
+      sqc_init_args_->sqc_handler_ = this;
     }
-    sqc_init_args_->sqc_handler_ = this;
   }
   return ret;
 }
