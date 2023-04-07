@@ -567,9 +567,6 @@ int ObSelectStmt::add_select_item(SelectItem& item)
 {
   int ret = OB_SUCCESS;
   if (item.expr_ != NULL) {
-    if (item.expr_->get_expr_level() < 0) {
-      item.expr_->set_expr_level(current_level_);
-    }
     if (item.is_real_alias_) {
       item.expr_->set_alias_column_name(item.alias_name_);
     }
