@@ -8,26 +8,26 @@ on:
 
 jobs:
   ubuntu-x86_64:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
-  
+    - uses: actions/checkout@v3
+
     - name: Install environment
       shell: bash
       run: sudo apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4
-  
+
     - name: Build project
       shell: bash
-      run: | 
+      run: |
         bash build.sh init
         bash build.sh debug
         cd build_debug && make -j4
 
   centos-x86_64:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     container: centos:7
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Install environment
       shell: bash
@@ -39,4 +39,3 @@ jobs:
         bash build.sh init
         bash build.sh debug
         cd build_debug && make -j4
-        
