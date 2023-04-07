@@ -11743,6 +11743,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15304: __all_virtual_arbitration_service_status
 # 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
 
+# [15306, 15375] for oracle inner_table index
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
