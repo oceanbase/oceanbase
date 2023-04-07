@@ -25677,6 +25677,8 @@ def_table_schema(
 # 21396: CDB_WR_SYSSTAT
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
+# 21399: GV$OB_LOCKS
+# 21400: V$OB_LOCKS
 
 ################################################################################
 # Oracle System View (25000, 30000]
