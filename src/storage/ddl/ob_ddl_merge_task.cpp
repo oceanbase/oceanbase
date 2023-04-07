@@ -745,15 +745,21 @@ int ObTabletDDLUtil::update_ddl_table_store(const ObTabletDDLParam &ddl_param,
                                                  ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("get tablet failed", K(ret), K(ddl_param));
     } else {
+      const bool is_major_sstable = ddl_param.table_key_.is_major_sstable();
       const int64_t rebuild_seq = ls_handle.get_ls()->get_rebuild_seq();
+      const int64_t snapshot_version = is_major_sstable ? max(ddl_param.snapshot_version_, tablet_handle.get_obj()->get_snapshot_version())
+                                                       : tablet_handle.get_obj()->get_snapshot_version();
+      const int64_t multi_version_start = is_major_sstable ? max(ddl_param.snapshot_version_, tablet_handle.get_obj()->get_multi_version_start())
+                                              : 0;
       ObTabletHandle new_tablet_handle;
       ObUpdateTableStoreParam table_store_param(table_handle,
-                                                tablet_handle.get_obj()->get_snapshot_version(),
-                                                &tablet_handle.get_obj()->get_storage_schema(),
+                                                snapshot_version,
+                                                multi_version_start,
                                                 rebuild_seq,
-                                                ddl_param.table_key_.is_major_sstable(), // update_with_major_flag
-                                                ddl_param.table_key_.is_major_sstable()); // need report checksum
-      table_store_param.ddl_info_.keep_old_ddl_sstable_ = !ddl_param.table_key_.is_major_sstable();
+                                                &tablet_handle.get_obj()->get_storage_schema(),
+                                                is_major_sstable, // update_with_major_flag
+                                                is_major_sstable); // need report checksum
+      table_store_param.ddl_info_.keep_old_ddl_sstable_ = !is_major_sstable;
       table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
       table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
       if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {

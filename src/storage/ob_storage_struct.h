@@ -335,8 +335,9 @@ struct ObUpdateTableStoreParam
   ObUpdateTableStoreParam( // for ddl merge task only
     const ObTableHandleV2 &table_handle,
     const int64_t snapshot_version,
-    const ObStorageSchema *storage_schema,
+    const int64_t multi_version_start,
     const int64_t rebuild_seq,
+    const ObStorageSchema *storage_schema,
     const bool update_with_major_flag,
     const bool need_report = false);
 

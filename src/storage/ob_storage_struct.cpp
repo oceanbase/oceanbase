@@ -290,14 +290,15 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const ObTableHandleV2 &table_handle,
     const int64_t snapshot_version,
-    const ObStorageSchema *storage_schema,
+    const int64_t multi_version_start,
     const int64_t rebuild_seq,
+    const ObStorageSchema *storage_schema,
     const bool update_with_major_flag,
     const bool need_report)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
-    multi_version_start_(0),
+    multi_version_start_(multi_version_start),
     need_report_(need_report),
     storage_schema_(storage_schema),
     rebuild_seq_(rebuild_seq),
