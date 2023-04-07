@@ -68,6 +68,8 @@ public:
                          int64_t param_num);
   static int fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs);
 
+  static int newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id);
+
   virtual void reset() {
     rowsize_ = 0;
     udt_id_ = OB_INVALID_ID;
