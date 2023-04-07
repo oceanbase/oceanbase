@@ -10371,8 +10371,7 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, child of stmt parallel degree node should not be null", K(ret));
           } else if (parallel_node->value_ < 1) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, value of parallelism is not valid", K(ret), "parallelism", parallel_node->value_);
+            hint_parallel = 1;  // ignore invalid hint
           } else {
             hint_parallel = parallel_node->value_;
           }
