@@ -519,6 +519,8 @@ int ObRawExprUtils::resolve_op_expr_for_oracle_implicit_cast(
       } else if (OB_ISNULL(select_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(b_expr->replace_param_expr(0, sub_expr1))) {
+        LOG_WARN("failed to replace_param_expr", K(ret));
       } else {
         query_stmt->get_select_item(0).expr_ = select_expr;
         ObIArray<ObExprResType>& column_types = query_ref_expr->get_column_types();
