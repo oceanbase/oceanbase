@@ -98,6 +98,7 @@ int ObMicroBlockDataHandle::get_index_block_data(
     micro_block_id.macro_id_ = macro_block_id_;
     micro_block_id.offset_ = micro_info_.offset_;
     micro_block_id.size_ = micro_info_.size_;
+    is_loaded_index_block_ = true;
     if (OB_FAIL(ObStorageCacheSuite::get_instance().get_index_block_cache().load_block(
         micro_block_id,
         des_meta_,
@@ -109,7 +110,6 @@ int ObMicroBlockDataHandle::get_index_block_data(
       try_release_loaded_index_block();
     } else {
       index_block = loaded_index_block_data_;
-      is_loaded_index_block_ = true;
     }
   }
   return ret;
