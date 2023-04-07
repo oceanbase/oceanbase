@@ -36,7 +36,6 @@
 static int64_t const_data_num;
 int64_t tx_data_num CACHE_ALIGNED = 0;
 int64_t inserted_cnt = 0;
-share::SCN insert_start_scn = share::SCN::min_scn();
 const int64_t ONE_SEC_NS = 1000LL * 1000LL * 1000LL;
 const int64_t MOD_NS = 1000LL * ONE_SEC_NS;
 
@@ -44,6 +43,8 @@ namespace oceanbase
 {
 using namespace share;
 using namespace palf;
+
+share::SCN insert_start_scn = share::SCN::min_scn();
 
 namespace storage
 {

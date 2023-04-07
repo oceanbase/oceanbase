@@ -313,7 +313,7 @@ TEST_F(TestLSStatusOperator, test_check_ls_exist)
 
 int main(int argc, char **argv)
 {
-  init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
