@@ -222,6 +222,7 @@ namespace sql
     sharding_(NULL),
     calc_part_id_expr_(NULL),
     ref_table_id_(OB_INVALID_ID),
+    index_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
     filter_table_id_(OB_INVALID_ID),
     row_count_(1.0),
@@ -241,6 +242,7 @@ namespace sql
     K_(sharding),
     K_(calc_part_id_expr),
     K_(ref_table_id),
+    K_(index_id),
     K_(table_id),
     K_(filter_table_id),
     K_(row_count),
@@ -258,6 +260,7 @@ namespace sql
   ObShardingInfo *sharding_;      //join filter use基表的sharding
   ObRawExpr *calc_part_id_expr_;  //partition join filter计算分区id的表达式
   uint64_t ref_table_id_;         //join filter use基表的ref table id
+  uint64_t index_id_;             //index id for join filter use
   uint64_t table_id_;             //join filter use基表的table id
   uint64_t filter_table_id_;        //join filter use实际受hint控制的table id
   double row_count_;              //join filter use基表的output rows
@@ -444,9 +447,9 @@ struct EstimateCostInfo {
       }
       return ret;
     }
-    inline bool parallel_more_than_part_cnt() const		
-    {		
-      return NULL != strong_sharding_ && parallel_ > strong_sharding_->get_part_cnt();		
+    inline bool parallel_more_than_part_cnt() const
+    {
+      return NULL != strong_sharding_ && parallel_ > strong_sharding_->get_part_cnt();
     }
     int compute_path_property_from_log_op();
     TO_STRING_KV(K_(is_local_order),
@@ -502,7 +505,7 @@ struct EstimateCostInfo {
     common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
     bool is_pipelined_path_;
     bool is_nl_style_pipelined_path_;
-    
+
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
   };
@@ -1424,7 +1427,7 @@ struct NullAwareAntiJoinInfo {
                                AccessPath *&ap,
                                bool use_das,
                                OptSkipScanState use_skip_scan);
-                          
+
     int will_use_das(const uint64_t table_id,
                      const uint64_t ref_id,
                      const uint64_t index_id,
@@ -2128,7 +2131,7 @@ struct NullAwareAntiJoinInfo {
                                      const ObJoinOrder *right_tree,
                                      const JoinInfo *join_info,
                                      const ObJoinType join_type);
-    
+
     int compute_fd_item_set_for_inner_join(const ObJoinOrder *left_tree,
                                            const ObJoinOrder *right_tree,
                                            const JoinInfo *join_info);
@@ -2162,6 +2165,9 @@ struct NullAwareAntiJoinInfo {
                            int64_t &common_prefix_idx);
 
   private:
+    int check_px_spatial_index(ObSqlSchemaGuard *schema_guard,
+                               uint64_t index_id,
+                               bool &res_tmp);
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
     int revise_output_rows_after_creating_path(PathHelper &helper,
@@ -2255,7 +2261,7 @@ struct NullAwareAntiJoinInfo {
                               ObIArray<ObPCParamEqualInfo> &equal_param_constraints);
 
     int check_filter_is_redundant(ObJoinOrder &left_tree,
-                                  ObRawExpr *expr, 
+                                  ObRawExpr *expr,
                                   ObExprParamCheckContext &context,
                                   bool &is_redunant);
 

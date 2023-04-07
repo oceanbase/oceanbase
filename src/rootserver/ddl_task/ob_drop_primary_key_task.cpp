@@ -40,14 +40,15 @@ ObDropPrimaryKeyTask::~ObDropPrimaryKeyTask()
 
 int ObDropPrimaryKeyTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
     const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism,
-    const obrpc::ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
+    const int64_t consumer_group_id, const obrpc::ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableRedefinitionTask::init(tenant_id, task_id, ddl_type, data_table_id, 
-                                            dest_table_id, schema_version, parallelism, 
+                                            dest_table_id, schema_version, parallelism, consumer_group_id,
                                             alter_table_arg, task_status, snapshot_version))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
+    consumer_group_id_ = consumer_group_id;
     task_version_ = OB_DROP_PRIMARY_KEY_TASK_VERSION;
     ddl_tracing_.open();
   }

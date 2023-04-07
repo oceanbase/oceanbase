@@ -1336,7 +1336,7 @@ DEF_INT(sql_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
         "the number of global mysql I/O threads. Range: [0, 64] in integer, "
         "default value is 0, 0 stands for old value GCONF.net_thread_count",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_tenant_sql_net_thread, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(_enable_tenant_sql_net_thread, OB_CLUSTER_PARAMETER, "True",
         "Dispatch mysql request to each tenant with True, or disable with False",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #ifndef ENABLE_SANITY
@@ -1349,7 +1349,7 @@ DEF_BOOL(_enable_tenant_leak_memory_protection, OB_CLUSTER_PARAMETER, "True", "p
 DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          "the timeout for backup/migrate advance checkpoint Range: [10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "5m", "(0s,]",
+DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
          "data dictionary dump to log(SYS LS) interval"
         "Range: (0s,+∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

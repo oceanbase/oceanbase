@@ -2775,6 +2775,7 @@ int ObDDLService::create_hidden_table_with_pk_changed(
 {
   int ret = OB_SUCCESS;
   const bool bind_tablets = false;
+  ObString index_name("");
   const bool is_drop_pk = ObIndexArg::DROP_PRIMARY_KEY == index_action_type;
   const bool is_add_or_alter_pk = (ObIndexArg::ADD_PRIMARY_KEY == index_action_type) || (ObIndexArg::ALTER_PRIMARY_KEY == index_action_type);
   // For add primary key and modify column in one sql, create user hidden table when modifing column.
@@ -2788,16 +2789,68 @@ int ObDDLService::create_hidden_table_with_pk_changed(
     LOG_WARN("failed to add pk", K(ret), K(index_columns), K(new_table_schema));
   } else if (is_drop_pk && OB_FAIL(drop_primary_key(new_table_schema))) {
     LOG_WARN("failed to add hidden pk column for heap table", K(ret));
-  } else if (create_user_hidden_table_now
-          && OB_FAIL(create_user_hidden_table(origin_table_schema,
+  } else if (!create_user_hidden_table_now) {
+  } else if (OB_FAIL(get_add_pk_index_name(origin_table_schema,
+                                           new_table_schema,
+                                           index_action_type,
+                                           alter_table_arg.index_arg_list_,
+                                           schema_guard,
+                                           index_name))) {
+    LOG_WARN("fail to rename hidden table's pk constraint", K(ret));
+  } else if (OB_FAIL(create_user_hidden_table(origin_table_schema,
                                               new_table_schema,
                                               &alter_table_arg.sequence_ddl_arg_,
                                               bind_tablets,
                                               schema_guard,
                                               ddl_operator,
                                               trans,
-                                              allocator))) {
+                                              allocator,
+                                              index_name))) {
     LOG_WARN("failed to alter table offline", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLService::get_add_pk_index_name(const ObTableSchema &origin_table_schema,
+                                        ObTableSchema &new_table_schema,
+                                        const ObIndexArg::IndexActionType &index_action_type,
+                                        const ObIArray<ObIndexArg *> &index_arg_list,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        ObString &index_name)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  bool is_exist = false;
+
+  if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", K(ret));
+  } else if (is_oracle_mode && index_action_type == ObIndexArg::ADD_PRIMARY_KEY) {
+    // find pk name;
+    ObIndexArg *tmp_index_arg = nullptr;
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < index_arg_list.count(); i++) {
+      if (OB_ISNULL(tmp_index_arg = index_arg_list.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get index arg", K(ret));
+      } else if (tmp_index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && found && tmp_index_arg->index_name_.length() != 0) {
+      index_name.assign_ptr(tmp_index_arg->index_name_.ptr(),
+                            tmp_index_arg->index_name_.length());
+      // check constraint name is not duplicated.
+      if (OB_FAIL(check_constraint_name_is_exist(schema_guard,
+                                                 origin_table_schema,
+                                                 index_name,
+                                                 false,
+                                                 is_exist))) {
+        LOG_WARN("fail to check constraint exist", K(ret));
+      } else if (is_exist) {
+        ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+        LOG_WARN("check constraint name is duplicate", K(ret), K(index_name));
+      }
+    }
   }
   return ret;
 }
@@ -4962,6 +5015,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                               0/*object_id*/,
                                               new_index_schema.get_schema_version(),
                                               0L/*parallelism*/,
+                                              drop_index_arg->consumer_group_id_,
                                               &allocator,
                                               drop_index_arg);
                   if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10305,7 +10359,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                        &index_schema,
                                                                        alter_table_arg.parallelism_,
                                                                        alter_table_arg.allocator_,
-                                                                       task_record))) {
+                                                                       task_record,
+                                                                       alter_table_arg.consumer_group_id_))) {
                 LOG_WARN("fail to submit build index task", K(ret), "type", create_index_arg->index_type_);
               } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
                 LOG_WARN("fail to push ddl task", K(ret), K(task_record));
@@ -10355,6 +10410,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                         (*iter)->get_constraint_id(),
                                         new_table_schema.get_schema_version(),
                                         0/*parallelsim*/,
+                                        const_alter_table_arg.consumer_group_id_,
                                         &alter_table_arg.allocator_,
                                         &const_alter_table_arg);
               if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10400,6 +10456,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            fk_id,
                                            new_table_schema.get_schema_version(),
                                            0/*parallelism*/,
+                                           const_alter_table_arg.consumer_group_id_,
                                            &alter_table_arg.allocator_,
                                            &const_alter_table_arg);
                 if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10886,6 +10943,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    0/*object_id*/,
                                    new_table_schema.get_schema_version(),
                                    alter_table_arg.parallelism_,
+                                   alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg);
         if (orig_table_schema->is_tmp_table()) {
@@ -10912,6 +10970,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    0/*object_id*/,
                                    new_table_schema.get_schema_version(),
                                    alter_table_arg.parallelism_,
+                                   alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg);
         if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -11026,6 +11085,7 @@ int ObDDLService::create_hidden_table(
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
             } else {
+              alter_table_arg.consumer_group_id_ = create_hidden_table_arg.consumer_group_id_;
               LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
               ObCreateDDLTaskParam param(tenant_id,
                                         create_hidden_table_arg.ddl_type_,
@@ -11034,6 +11094,7 @@ int ObDDLService::create_hidden_table(
                                         table_id,
                                         orig_table_schema->get_schema_version(),
                                         create_hidden_table_arg.parallelism_,
+                                        create_hidden_table_arg.consumer_group_id_,
                                         &allocator_for_redef,
                                         &alter_table_arg);
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -13330,7 +13391,8 @@ int ObDDLService::is_foreign_key_name_prefix_match(const ObForeignKeyInfo &origi
 
 int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_schema,
                                               ObIAllocator &allocator,
-                                              ObTableSchema &hidden_table_schema)
+                                              ObTableSchema &hidden_table_schema,
+                                              const ObString &index_name)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
@@ -13388,7 +13450,11 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
             LOG_WARN("failed to get pk constraint name", K(ret));
           }
         } else {
-          if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
+          if (index_name.length() != 0) {
+            if (OB_FAIL(ob_write_string(allocator, index_name, pk_name))) {
+              LOG_WARN("fail to write string", K(ret));
+            }
+          } else if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
                       pk_name, orig_table_schema.get_table_name_str(),
                       allocator, CONSTRAINT_TYPE_PRIMARY_KEY, is_oracle_mode))) {
             LOG_WARN("create cons name automatically failed", K(ret));
@@ -13492,7 +13558,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObSchemaGetterGuard &schema_guard,
                                            ObDDLOperator &ddl_operator,
                                            ObMySQLTransaction &trans,
-                                           ObIAllocator &allocator)
+                                           ObIAllocator &allocator,
+                                           const ObString &index_name/*default ""*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
@@ -13511,7 +13578,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     LOG_WARN("failed to check is add identity column", K(ret));
   } else if (OB_FAIL(prepare_hidden_table_schema(orig_table_schema,
                                           allocator,
-                                          hidden_table_schema))) {
+                                          hidden_table_schema,
+                                          index_name))) {
     LOG_WARN("failed to prepare hidden table schema", K(ret));
   } else if (OB_FAIL(ddl_operator.create_sequence_in_create_table(hidden_table_schema,
                                                                   trans,
@@ -14305,33 +14373,43 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
-    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
-      LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
-    } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
-      LOG_WARN("fail to get drop cols id set", K(ret));
-    } else if (OB_FAIL(reconstruct_index_schema(*orig_table_schema,
-                                                *hidden_table_schema,
-                                                schema_guard,
-                                                drop_cols_id_arr,
-                                                col_name_map,
-                                                *tz_info_wrap.get_time_zone_info(),
-                                                alter_table_arg.allocator_,
-                                                new_table_schemas,
-                                                index_ids))) {
-      LOG_WARN("failed to reconstruct index schema", K(ret));
-    } else if (OB_FAIL(add_new_index_schema(alter_table_arg,
-                                            *orig_table_schema,
-                                            *hidden_table_schema,
-                                            schema_guard,
-                                            new_table_schemas,
-                                            index_ids))) {
-      LOG_WARN("failed to add new index schema", K(ret));
-    } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(alter_table_arg,
-                                                           *hidden_table_schema,
-                                                           schema_guard,
-                                                           trans,
-                                                           new_table_schemas))) {
-      LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
+    } else if (hidden_table_schema->get_simple_index_infos().count() > 0) {
+      // if there is any index in the hidden table, all indexes are already rebuilt because the rebuild is wrap in a transaction
+      const common::ObIArray<ObAuxTableMetaInfo> &index_infos = hidden_table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+        if (OB_FAIL(index_ids.push_back(index_infos.at(i).table_id_))) {
+          LOG_WARN("push back index id failed", K(ret));
+        }
+      }
+    } else {
+      if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+        LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
+      } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
+        LOG_WARN("fail to get drop cols id set", K(ret));
+      } else if (OB_FAIL(reconstruct_index_schema(*orig_table_schema,
+                                                  *hidden_table_schema,
+                                                  schema_guard,
+                                                  drop_cols_id_arr,
+                                                  col_name_map,
+                                                  *tz_info_wrap.get_time_zone_info(),
+                                                  alter_table_arg.allocator_,
+                                                  new_table_schemas,
+                                                  index_ids))) {
+        LOG_WARN("failed to reconstruct index schema", K(ret));
+      } else if (OB_FAIL(add_new_index_schema(alter_table_arg,
+                                              *orig_table_schema,
+                                              *hidden_table_schema,
+                                              schema_guard,
+                                              new_table_schemas,
+                                              index_ids))) {
+        LOG_WARN("failed to add new index schema", K(ret));
+      } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(alter_table_arg,
+                                                             *hidden_table_schema,
+                                                             schema_guard,
+                                                             trans,
+                                                             new_table_schemas))) {
+        LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
+      }
     }
   }
   int tmp_ret = OB_SUCCESS;
@@ -19559,7 +19637,8 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
                                                                  &new_table_schema,
                                                                  arg.parallelism_,
                                                                  allocator,
-                                                                 task_record))) {
+                                                                 task_record,
+                                                                 arg.consumer_group_id_))) {
           LOG_WARN("fail to submit build global index task", KR(ret));
         } else {
           res.index_table_id_ = new_table_schema.get_table_id();
@@ -23799,7 +23878,7 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
 
 int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
                                 obrpc::ObDropDatabaseRes &res,
-                                ObMySQLTransaction *ora_user_trans)
+                                ObDDLSQLTransaction *ora_user_trans)
 {
   int ret = OB_SUCCESS;
   const bool if_exist = arg.if_exist_;
@@ -23849,6 +23928,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
         && OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
+      ObDDLSQLTransaction &actual_trans = OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans;
       const ObTableSchema *schema = NULL;
       // lock table when drop data table
       for (int64_t i = 0; OB_SUCC(ret) && i < table_count; i++) {
@@ -23861,7 +23941,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
                    K(schema), K(ret));
-        } else if (OB_FAIL(lock_table(OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, *schema))) {
+        } else if (OB_FAIL(lock_table(actual_trans, *schema))) {
           LOG_WARN("fail to lock_table", KR(ret), KPC(schema));
           // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
           const bool is_ddl_scheduled_task = arg.task_id_ > 0 ? true : false;
@@ -23878,8 +23958,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
                    K(schema), K(ret));
         } else if (schema && schema->is_materialized_view()) {
-          if (OB_FAIL(ddl_operator.drop_table(*schema,
-                         OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans))) {
+          if (OB_FAIL(ddl_operator.drop_table(*schema, actual_trans))) {
             LOG_WARN("fail to drop mv", K(ret), K(*schema));
           }
         }
@@ -23887,24 +23966,21 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
 
       if (OB_SUCC(ret) && arg.to_recyclebin_ && !is_inner_db(db_schema->get_database_id())) {
         if (OB_FAIL(ddl_operator.drop_database_to_recyclebin(*db_schema,
-            OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans,
-            schema_guard,
-            &arg.ddl_stmt_str_))) {
+            actual_trans, schema_guard, &arg.ddl_stmt_str_))) {
           LOG_WARN("drop database to recyclebin failed", K(arg), K(ret));
         }
+        (void) actual_trans.disable_serialize_inc_schemas();
       } else {
         if (OB_FAIL(ret)) {
           // FAIL
-        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema,
-            OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans,
-            schema_guard,
-            &arg.ddl_stmt_str_))) {
+        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema, actual_trans,
+                   schema_guard, &arg.ddl_stmt_str_))) {
           LOG_WARN("ddl_operator drop_database failed", K(tenant_id), KT(database_id), K(ret));
         }
       }
       if (OB_FAIL(ret)) {
       } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(
-          OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, tenant_id, arg.task_id_))) {
+                 actual_trans, tenant_id, arg.task_id_))) {
         LOG_WARN("update ddl task status to success failed", K(ret));
       }
     }

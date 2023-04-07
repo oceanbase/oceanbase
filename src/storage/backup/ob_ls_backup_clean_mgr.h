@@ -98,6 +98,8 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return lib::Worker::CompatMode::MYSQL; }
+  virtual uint64_t get_consumer_group_id() const override
+  { return consumer_group_id_; }
   int create_first_task();
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KP(this), K_(param), K_(result));

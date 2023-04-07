@@ -5212,7 +5212,7 @@ static int string_time(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("invalid use of blob type", K(ret), K(in), K(expect_type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
-  } else if (CAST_FAIL(ObTimeConverter::str_to_time(in.get_string(), value, &res_scale, 0, need_truncate))) {
+  } else if (CAST_FAIL(ObTimeConverter::str_to_time(in.get_string(), value, &res_scale, need_truncate))) {
   } else {
     SET_RES_TIME(out);
   }
@@ -12182,7 +12182,7 @@ int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_in
         LOG_WARN("int to ob time without date failed", K(ret));
       } else {
         //mysql中intTC转time时，如果hour超过838，那么time应该为null，而不是最大值。
-        const int64_t time_max_val = 3020399 * 1000000LL;    // 838:59:59 .
+        const int64_t time_max_val = TIME_MAX_VAL;    // 838:59:59 .
         int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
         if (value > time_max_val) {
           ret = OB_INVALID_DATE_VALUE;
@@ -12218,6 +12218,14 @@ int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_in
     }
     case ObStringTC: {
       ret = ObTimeConverter::str_to_ob_time_without_date(obj.get_string(), ob_time);
+      if (OB_SUCC(ret)) {
+        int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
+        int64_t tmp_value = value;
+        ObTimeConverter::time_overflow_trunc(value);
+        if (value != tmp_value) {
+          ObTimeConverter::time_to_ob_time(value, ob_time);
+        }
+      }
       break;
     }
     case ObLobTC: {
@@ -12230,13 +12238,25 @@ int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_in
       break;
     }
     case ObNumberTC: {
-      const char *num_format = obj.get_number().format();
-      if (OB_ISNULL(num_format)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("number format value is null", K(ret));
+      int64_t int_part = 0;
+      int64_t dec_part = 0;
+      const number::ObNumber num(obj.get_number());
+      if (!num.is_int_parts_valid_int64(int_part, dec_part)) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("invalid date format", K(ret), K(num));
       } else {
-        ObString num_str(num_format);
-        ret = ObTimeConverter::str_to_ob_time_without_date(num_str, ob_time);
+        if (OB_FAIL(ObTimeConverter::int_to_ob_time_without_date(int_part, ob_time, dec_part))) {
+          LOG_WARN("int to ob time without date failed", K(ret));
+        } else {
+          if ((!ob_time.parts_[DT_YEAR]) && (!ob_time.parts_[DT_MON]) && (!ob_time.parts_[DT_MDAY])) {
+            //mysql中intTC转time时，如果超过838:59:59，那么time应该为null，而不是最大值。
+            const int64_t time_max_val = TIME_MAX_VAL;    // 838:59:59 .
+            int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
+            if(value > time_max_val) {
+              ret = OB_INVALID_DATE_VALUE;
+            }
+          }
+        }
       }
       break;
     }

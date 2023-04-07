@@ -588,18 +588,32 @@ int ObPxTenantTargetMonitorP::process()
   ObTimeGuard timeguard("px_target_request", 100000);
   const uint64_t tenant_id = arg_.get_tenant_id();
   const uint64_t follower_version = arg_.get_version();
+  // server id of the leader that the follower sync with previously.
+  const uint64_t prev_leader_server_id = ObPxTenantTargetMonitor::get_server_id(follower_version);
+  const uint64_t leader_server_id  = GCTX.server_id_;
   bool is_leader;
   uint64_t leader_version;
+  result_.set_tenant_id(tenant_id);
   if (OB_FAIL(OB_PX_TARGET_MGR.is_leader(tenant_id, is_leader))) {
-    LOG_WARN("get is_leader failed", K(ret), K(tenant_id));
+    LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
+  } else if (!is_leader) {
+    result_.set_status(MONITOR_NOT_MASTER);
+  } else if (arg_.need_refresh_all_ || prev_leader_server_id != leader_server_id) {
+    if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
+      LOG_ERROR("reset leader statistics failed", K(ret));
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
+      LOG_WARN("get master_version failed", K(ret), K(tenant_id));
+    } else {
+      result_.set_status(MONITOR_VERSION_NOT_MATCH);
+      result_.set_version(leader_version);
+      LOG_INFO("need refresh all", K(tenant_id), K(arg_.need_refresh_all_),
+               K(follower_version), K(prev_leader_server_id), K(leader_server_id));
+    }
   } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
     LOG_WARN("get master_version failed", K(ret), K(tenant_id));
   } else {
-    result_.set_tenant_id(tenant_id);
     result_.set_version(leader_version);
-    if (!is_leader) {
-      result_.set_status(MONITOR_NOT_MASTER);
-    } else if (follower_version != leader_version) {
+    if (follower_version != leader_version) {
       result_.set_status(MONITOR_VERSION_NOT_MATCH);
     } else {
       result_.set_status(MONITOR_READY);
@@ -614,8 +628,8 @@ int ObPxTenantTargetMonitorP::process()
       // A simple and rude exception handling, re-statistics
       if (OB_FAIL(ret)) {
         int tem_ret = OB_SUCCESS;
-        if ((tem_ret = OB_PX_TARGET_MGR.reset_statistics(tenant_id, leader_version + 1)) != OB_SUCCESS) {
-          LOG_WARN("reset statistics failed", K(tem_ret), K(tenant_id), K(leader_version));
+        if ((tem_ret = OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id)) != OB_SUCCESS) {
+          LOG_ERROR("reset statistics failed", K(tem_ret), K(tenant_id), K(leader_version));
         } else {
           LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }

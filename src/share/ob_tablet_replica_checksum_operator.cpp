@@ -1015,8 +1015,7 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
     const ObSimpleTableSchemaV2 &data_simple_schema,
     const ObSimpleTableSchemaV2 &index_simple_schema,
     const SCN &compaction_scn,
-    ObMySQLProxy &sql_proxy,
-    const int64_t expected_epoch)
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t index_table_id = index_simple_schema.get_table_id();
@@ -1045,7 +1044,7 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
     const bool is_global_index = index_simple_schema.is_global_index_table();
     if (is_global_index) {
       if (OB_FAIL(check_global_index_column_checksum(tenant_id, *data_table_schema, *index_table_schema,
-          compaction_scn, sql_proxy, expected_epoch))) {
+          compaction_scn, sql_proxy))) {
         LOG_WARN("fail to check global index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
     } else if (OB_UNLIKELY(index_simple_schema.is_spatial_index())) {
@@ -1053,7 +1052,7 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
       // spatial index column is different from data table column
     } else {
       if (OB_FAIL(check_local_index_column_checksum(tenant_id, *data_table_schema, *index_table_schema,
-          compaction_scn, sql_proxy, expected_epoch))) {
+          compaction_scn, sql_proxy))) {
         LOG_WARN("fail to check local index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
     }
@@ -1066,8 +1065,7 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_table_schema,
     const SCN &compaction_scn,
-    ObMySQLProxy &sql_proxy,
-    const int64_t expected_epoch)
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1122,16 +1120,6 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
           } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             LOG_WARN("fail to get data table tablet checksum items", KR(ret), K(data_table_schema));
           }
-        } else if (OB_FAIL(ObServiceEpochProxy::check_service_epoch(sql_proxy, tenant_id,
-                           ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
-          LOG_WARN("fail to check service epoch", KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
-        } else if (!is_match) {
-          // Do not compare column checksum in case of OB_FREEZE_SERVICE_EPOCH_MISMATCH, since
-          // tablet replica checksum items may be incomplete now.
-          //
-          ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
-          LOG_WARN("no need to compare column checksum, cuz freeze_service_epoch mismatch",
-                    KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
         } else if (need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
                                          need_verify, index_ckm_tablet_cnt)) {
           LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
@@ -1178,8 +1166,7 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_table_schema,
     const SCN &compaction_scn,
-    ObMySQLProxy &sql_proxy,
-    const int64_t expected_epoch)
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1208,15 +1195,6 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet count of local index table is not same with data table", KR(ret), "data_table_tablet_cnt",
           data_table_tablets.count(), "index_table_tablet_cnt", index_table_tablets.count());
-      }  else if (OB_FAIL(ObServiceEpochProxy::check_service_epoch(sql_proxy, tenant_id,
-                          ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
-        LOG_WARN("fail to check service epoch", KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
-      } else if (!is_match) {
-        // Do not compare column checksum in case of OB_FREEZE_SERVICE_EPOCH_MISMATCH, since
-        // tablet replica checksum items may be incomplete now.
-        ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
-        LOG_WARN("no need to compare column checksum, cuz freeze_service_epoch mismatch",
-                  KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
       } else if (need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
                                        need_verify, index_ckm_tablet_cnt)) {
         LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));

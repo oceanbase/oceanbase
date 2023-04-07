@@ -99,6 +99,7 @@ class ObServer
 public:
   static const int64_t DEFAULT_ETHERNET_SPEED = 1000 / 8 * 1024 * 1024; // default 125m/s  1000Mbit
   static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 10L; // 60s
+  static const uint64_t DEFAULT_CPU_FREQUENCY = 2500 * 1000; // 2500 * 1000 khz
   static ObServer &get_instance();
 
 public:
@@ -158,6 +159,20 @@ public:
     bool is_inited_;
   };
 
+  class ObRefreshCpuFreqTimeTask: public common::ObTimerTask
+  {
+  public:
+    ObRefreshCpuFreqTimeTask();
+    virtual ~ObRefreshCpuFreqTimeTask() {}
+    int init(ObServer *observer, int tg_id);
+    void destroy();
+    virtual void runTimerTask() override;
+  private:
+    const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L;//10s
+    ObServer *obs_;
+    bool is_inited_;
+  };
+
   class ObCollectInfoGCTask : public common::ObTimerTask
   {
   public:
@@ -208,6 +223,7 @@ public:
   };
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return schema_service_; }
   ObInOutBandwidthThrottle &get_bandwidth_throttle() { return bandwidth_throttle_; }
+  uint64_t get_cpu_frequency_khz() { return cpu_frequency_; }
   const common::ObAddr &get_self() const { return self_addr_; }
   const ObGlobalContext &get_gctx() const { return gctx_; }
   ObGlobalContext &get_gctx() { return gctx_; }
@@ -267,6 +283,7 @@ private:
   int get_network_speed_from_sysfs(int64_t &network_speed);
   int get_network_speed_from_config_file(int64_t &network_speed);
   int refresh_network_speed();
+  int refresh_cpu_frequency();
   int clean_up_invalid_tables();
   int clean_up_invalid_tables_by_tenant(const uint64_t tenant_id);
   int init_ctas_clean_up_task(); //Regularly clean up the residuals related to querying and building tables and temporary tables
@@ -275,6 +292,7 @@ private:
   int refresh_temp_table_sess_active_time();
   int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
+  int init_refresh_cpu_frequency();
   int init_collect_info_gc_task();
   int set_running_mode();
   int check_server_can_start_service();
@@ -366,6 +384,7 @@ private:
   common::ObInOutBandwidthThrottle bandwidth_throttle_;
   int64_t sys_bkgd_net_percentage_;
   int64_t ethernet_speed_;
+  uint64_t cpu_frequency_;
 
   // sql session_mgr
   sql::ObSQLSessionMgr session_mgr_;
@@ -414,6 +433,7 @@ private:
   ObRedefTableHeartBeatTask redef_table_heart_beat_task_;
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
+  ObRefreshCpuFreqTimeTask refresh_cpu_frequency_task_;
   ObCollectInfoGCTask collect_info_gc_task_;
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;

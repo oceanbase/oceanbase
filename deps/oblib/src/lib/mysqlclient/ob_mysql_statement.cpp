@@ -164,11 +164,11 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
 
 bool ObMySQLStatement::is_need_disconnect_error(int ret)
 {
-  const int CLIENT_MIN_ERROR_CODE = 2000;
-  const int CLIENT_MAX_ERROR_CODE = 2099;
-  // need close connection when there is a client error
+  const int CR_SERVER_GONE_ERROR = 2006;
+  const int CR_SERVER_LOST = 2013;
+  // need disconnect when there is a connection error
   ret = abs(ret);
-  return ret >= CLIENT_MIN_ERROR_CODE && ret <= CLIENT_MAX_ERROR_CODE;
+  return ret == CR_SERVER_GONE_ERROR || ret == CR_SERVER_LOST;
 }
 
 } // end namespace sqlclient

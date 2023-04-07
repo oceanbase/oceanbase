@@ -82,6 +82,9 @@ protected:
       blocksstable::ObDatumRow &projected_row);
   void reset_iter_array();
   void reuse_iter_array();
+  void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
+  void dump_table_statistic_for_4377();
+
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);

@@ -65,8 +65,13 @@ struct LSApplyStat
 
 struct ApplyDiagnoseInfo
 {
+  ApplyDiagnoseInfo() { reset(); }
+  ~ApplyDiagnoseInfo() { reset(); }
   share::SCN max_applied_scn_;
   TO_STRING_KV(K(max_applied_scn_));
+  void reset() {
+    max_applied_scn_.reset();
+  }
 };
 
 class ObApplyFsCb : public palf::PalfFSCb

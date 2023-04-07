@@ -288,16 +288,6 @@ int ObMemtableCtx::write_done()
   return rwlock_.unlock();
 }
 
-void ObMemtableCtx::replay_auth()
-{
-  lock_.lock();
-}
-
-void ObMemtableCtx::replay_done()
-{
-  lock_.unlock();
-}
-
 int ObMemtableCtx::write_lock_yield()
 {
   int ret = OB_SUCCESS;

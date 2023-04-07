@@ -111,6 +111,7 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
     const int64_t idx = get_memtable_idx(memtable_head_);
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
+      memtable->set_release_time();
       STORAGE_LOG(INFO, "tx data memtable mgr release head memtable", KPC(memtable));
       release_head_memtable();
     } else {
@@ -275,6 +276,7 @@ int ObTxDataMemtableMgr::freeze_()
       freeze_memtable->set_end_scn();
 
       freeze_memtable->set_state(ObTxDataMemtable::State::FREEZING);
+      freeze_memtable->set_freeze_time();
       new_memtable->set_start_scn(freeze_memtable->get_end_scn());
       new_memtable->set_state(ObTxDataMemtable::State::ACTIVE);
       STORAGE_LOG(INFO, "tx data memtable freeze success.", K(get_memtable_count_()),

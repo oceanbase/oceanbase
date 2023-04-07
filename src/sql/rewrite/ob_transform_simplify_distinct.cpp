@@ -94,7 +94,8 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
     // Do nothing for non-select query.
     // When there are `@var := ` assignment, don't eliminate distinct.
     OPT_TRACE("stmt has assignment or calc found rows");
-  } else if (stmt->has_distinct() && !stmt->is_set_stmt() && stmt->get_from_item_size() > 0) {
+  } else if (stmt->has_distinct() && !stmt->is_set_stmt() && stmt->get_from_item_size() > 0 &&
+             !stmt->has_rollup()) {
     // Only try to eliminate DISTINCT for plain SELECT
     int64_t limit_count = 0;
     const ObConstRawExpr *limit_expr = static_cast<ObConstRawExpr *>(stmt->get_limit_expr());

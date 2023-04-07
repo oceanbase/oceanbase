@@ -140,13 +140,15 @@ public:
             const share::ObLSID &coord_id,
             const ObTxPartList &parts,
             const ObTxIsolationLevel &isolation,
-            const int64_t snapshot_version,
+            const share::SCN &snapshot_version,
             const ObTxAccessMode &access_mode,
             const uint64_t op_sn,
             const uint64_t flag,
             const int64_t active_ts,
             const int64_t expire_ts,
             const int64_t timeout_us,
+            const int32_t ref_cnt,
+            const void* const tx_desc_addr,
             const ObTxSavePointList &savepoints,
             const int16_t abort_cause,
             const bool can_elr);
@@ -156,7 +158,8 @@ public:
                K_(isolation), K_(snapshot_version),
                K_(access_mode), K_(op_sn),
                K_(flag), K_(active_ts), K_(expire_ts),
-               K_(timeout_us), K_(savepoints),
+               K_(timeout_us), K_(ref_cnt),
+               K_(tx_desc_addr), K_(savepoints),
                K_(abort_cause), K_(can_elr));
   int64_t get_parts_str(char* buf, const int64_t buf_len);
   int get_valid_savepoints(const ObTxSavePointList &savepoints);
@@ -173,13 +176,15 @@ public:
   share::ObLSID coord_id_;
   ObTxPartList parts_;
   ObTxIsolationLevel isolation_;
-  int64_t snapshot_version_;
+  share::SCN snapshot_version_;
   ObTxAccessMode access_mode_;
   uint64_t op_sn_;
   uint64_t flag_;
   int64_t active_ts_;
   int64_t expire_ts_;
   int64_t timeout_us_;
+  int32_t ref_cnt_;
+  const void *tx_desc_addr_;
   ObTxSavePointList savepoints_;
   int16_t abort_cause_;
   bool can_elr_;

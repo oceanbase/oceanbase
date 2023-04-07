@@ -925,7 +925,8 @@ int ObSelectStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
                                            const bool check_having) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::get_equal_set_conditions(conditions, is_strict, check_having))) {
+  if (!(check_having && has_rollup()) &&
+      OB_FAIL(ObDMLStmt::get_equal_set_conditions(conditions, is_strict, check_having))) {
     LOG_WARN("failed to get equal set cond", K(ret));
   } else if (!check_having) {
     // do nothing

@@ -260,6 +260,7 @@ void ObMySQLConnectionPool::mark_all_server_connection_gone()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected error, pool is null", K(ret));
     } else {
+      pool->reset_idle_conn_to_sys_tenant();
       pool->set_server_gone(true);
     }
   }

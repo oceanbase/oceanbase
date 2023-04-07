@@ -3526,6 +3526,10 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
       should_ignore = true;
       break;
     }
+    case OB_TENANT_NOT_IN_SERVER: {
+      should_ignore = true;
+      break;
+    }
     default: {
       break;
     }

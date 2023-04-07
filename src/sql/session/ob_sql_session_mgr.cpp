@@ -433,8 +433,7 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   ObSQLSessionInfo *sess_info = NULL;
   sessinfo_map_.get(Key(sessid), sess_info);
   if (NULL != sess_info) {
-    if (sess_info->has_got_conn_res()
-        && OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
+    if (OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
       LOG_WARN("user disconnect failed", K(ret), K(sess_info->get_user_id()));
     }
     sessinfo_map_.revert(sess_info);
@@ -578,6 +577,7 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   }
 
   session.update_last_active_time();
+  session.set_disconnect_state(NORMAL_KILL_SESSION);
   rpc::ObSqlSockDesc &sock_desc = session.get_sock_desc();
   if (OB_LIKELY(NULL != sock_desc.sock_desc_)) {
     SQL_REQ_OP.disconnect_by_sql_sock_desc(sock_desc);

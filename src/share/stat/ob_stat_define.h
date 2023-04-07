@@ -105,12 +105,25 @@ enum ColumnAttrFlag
   IS_NOT_NULL_COL   = 1 << 3
 };
 
+enum ObGranularityType
+{
+  GRANULARITY_INVALID = 0,
+  GRANULARITY_GLOBAL,
+  GRANULARITY_PARTITION,
+  GRANULARITY_SUBPARTITION,
+  GRANULARITY_ALL,
+  GRANULARITY_AUTO,
+  GRANULARITY_GLOBAL_AND_PARTITION,
+  GRANULARITY_APPROX_GLOBAL_AND_PARTITION
+};
+
 struct ObExtraParam
 {
   StatLevel type_;
   int64_t nth_part_;
   PartitionIdBlockMap partition_id_block_map_;
   int64_t start_time_;
+  bool need_histogram_;
 };
 
 //TODO@jiangxiu.wt: improve the expression of PartInfo, use the map is better.
@@ -172,6 +185,76 @@ struct PartInfo
   double stale_percent_;
   bool need_gather_subpart_;
   ObSEArray<int64_t, 4> no_regather_partition_ids_;
+};
+
+struct ObGlobalStatParam
+{
+  ObGlobalStatParam()
+  : need_modify_(true),
+    gather_approx_(false),
+    gather_histogram_(true)
+  {}
+  ObGlobalStatParam& operator=(const ObGlobalStatParam& other)
+  {
+    need_modify_ = other.need_modify_;
+    gather_approx_ = other.gather_approx_;
+    gather_histogram_ = other.gather_histogram_;
+    return *this;
+  }
+  void set_gather_stat(const bool gather_approx)
+  {
+    need_modify_ = true;
+    gather_approx_ = gather_approx;
+    gather_histogram_ = true;
+  }
+  void reset_gather_stat()
+  {
+    need_modify_ = false;
+    gather_approx_ = false;
+    gather_histogram_ = false;
+  }
+  TO_STRING_KV(K_(need_modify),
+               K_(gather_approx),
+               K_(gather_histogram));
+  bool need_modify_;
+  bool gather_approx_;
+  bool gather_histogram_;
+};
+struct ObPartitionStatParam
+{
+  ObPartitionStatParam(share::schema::ObPartitionFuncType type)
+  : part_type_(type),
+    need_modify_(true),
+    gather_histogram_(true)
+  {}
+  ObPartitionStatParam& operator=(const ObPartitionStatParam& other)
+  {
+    part_type_ = other.part_type_;
+    need_modify_ = other.need_modify_;
+    gather_histogram_ = other.gather_histogram_;
+    return *this;
+  }
+  void assign_without_part_type(const ObPartitionStatParam& other)
+  {
+    need_modify_ = other.need_modify_;
+    gather_histogram_ = other.gather_histogram_;
+  }
+  void set_gather_stat()
+  {
+    need_modify_ = true;
+    gather_histogram_ = true;
+  }
+  void reset_gather_stat()
+  {
+    need_modify_ = false;
+    gather_histogram_ = false;
+  }
+  TO_STRING_KV(K_(part_type),
+               K_(need_modify),
+               K_(gather_histogram));
+  share::schema::ObPartitionFuncType part_type_;
+  bool need_modify_;
+  bool gather_histogram_;
 };
 
 enum SampleType
@@ -262,6 +345,9 @@ struct ObTableStatParam {
     tab_name_(),
     table_id_(OB_INVALID_ID),
     part_level_(share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO),
+    global_stat_param_(),
+    part_stat_param_(share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
+    subpart_stat_param_(share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
     total_part_cnt_(0),
     part_name_(),
     part_infos_(),
@@ -270,10 +356,6 @@ struct ObTableStatParam {
     sample_info_(),
     method_opt_(),
     degree_(1),
-    need_global_(true),
-    need_approx_global_(false),
-    need_part_(true),
-    need_subpart_(true),
     granularity_(),
     cascade_(false),
     stat_tab_(),
@@ -326,6 +408,9 @@ struct ObTableStatParam {
   ObString tab_name_;
   uint64_t table_id_;
   share::schema::ObPartitionLevel part_level_;
+  ObGlobalStatParam global_stat_param_;
+  ObPartitionStatParam part_stat_param_;
+  ObPartitionStatParam subpart_stat_param_;
   int64_t total_part_cnt_;
 
   ObString part_name_;
@@ -336,11 +421,6 @@ struct ObTableStatParam {
   ObAnalyzeSampleInfo sample_info_;
   ObString method_opt_;
   int64_t degree_;
-
-  bool need_global_;
-  bool need_approx_global_;
-  bool need_part_;
-  bool need_subpart_;
 
   ObString granularity_;
   bool cascade_;
@@ -389,10 +469,9 @@ struct ObTableStatParam {
                K(sample_info_),
                K(method_opt_),
                K(degree_),
-               K(need_global_),
-               K(need_approx_global_),
-               K(need_part_),
-               K(need_subpart_),
+               K(global_stat_param_),
+               K(part_stat_param_),
+               K(subpart_stat_param_),
                K(granularity_),
                K(cascade_),
                K(stat_tab_),

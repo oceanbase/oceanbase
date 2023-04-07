@@ -29,7 +29,7 @@ class ObKVCacheMap
   static constexpr int64_t DEFAULT_BUCKET_SIZE = (16L << 20); // 16M
   static constexpr int64_t MIN_BUCKET_SIZE     = ( 4L << 10); //  4K
   static const int64_t HAZARD_VERSION_THREAD_WAITING_THRESHOLD = 512;
-  
+  static const int64_t DEFAULT_LFU_THRESHOLD_BASE = 2;
 public:
   ObKVCacheMap();
   virtual ~ObKVCacheMap();
@@ -89,14 +89,12 @@ private:
   int multi_get(const int64_t cache_id, const int64_t pos, common::ObList<Node, common::ObArenaAllocator> &list);
   void internal_map_erase(Node *&prev, Node *&iter, Node *&bucket_ptr);
   void internal_map_replace(Node *&prev, Node *&iter, Node *&bucket_ptr);
-  int internal_data_move(Node *&prev, Node *&iter, Node *&bucket_ptr, const enum ObKVCachePolicy policy);
+  int internal_data_move(Node *&prev, Node *&iter, Node *&bucket_ptr);
   OB_INLINE bool need_modify_cache(const int64_t iter_get_cnt, const int64_t total_get_cnt, const int64_t kv_cnt) const
   {
     bool ret = false;
-    if (kv_cnt > 0) {
-      int64_t threshold = total_get_cnt / kv_cnt;
-      ret = iter_get_cnt > threshold;
-    }
+    int64_t threshold = total_get_cnt / (kv_cnt + 1) + DEFAULT_LFU_THRESHOLD_BASE;
+    ret = iter_get_cnt > threshold;
     return ret;
   }
   Node *&get_bucket_node(const int64_t idx)

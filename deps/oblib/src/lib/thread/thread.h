@@ -34,6 +34,7 @@ public:
   int start();
   int start(Runnable runnable);
   void stop();
+  int try_wait();
   void wait();
   void destroy();
   void dump_pth();

@@ -81,6 +81,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     //impossible
   } else if (FALSE_IT(create_index_arg.is_inner_ = my_session->is_inner())) {
   } else if (FALSE_IT(create_index_arg.parallelism_ = stmt.get_parallelism())) {
+  } else if (FALSE_IT(create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
   } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
     LOG_WARN("rpc proxy create index failed", K(create_index_arg),
              "dst", common_rpc_proxy->get_server(), K(ret));
@@ -336,14 +337,16 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObDropIndexArg &drop_index_arg = stmt.get_drop_index_arg();
+  obrpc::ObDropIndexArg &tmp_arg = const_cast<obrpc::ObDropIndexArg&>(drop_index_arg);
   ObSQLSessionInfo *my_session = ctx.get_my_session();
   ObString first_stmt;
   ObDropIndexRes res;
-  const_cast<obrpc::ObDropIndexArg &>(drop_index_arg).is_add_to_scheduler_ = true;
+  tmp_arg.is_add_to_scheduler_ = true;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObDropIndexArg&>(drop_index_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+
   }
   if (OB_FAIL(ret)) {
   } else if (NULL == my_session) {
@@ -358,8 +361,9 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
   }  else if (OB_INVALID_ID == drop_index_arg.session_id_
-             && FALSE_IT(const_cast<obrpc::ObDropIndexArg&>(drop_index_arg).session_id_ = my_session->get_sessid_for_table())) {
+             && FALSE_IT(tmp_arg.session_id_ = my_session->get_sessid_for_table())) {
     //impossible
+  } else if (FALSE_IT(tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
   } else if (OB_FAIL(common_rpc_proxy->drop_index(drop_index_arg, res))) {
     LOG_WARN("rpc proxy drop index failed", "dst", common_rpc_proxy->get_server(), K(ret));
   } else if (OB_FAIL(wait_drop_index_finish(res.tenant_id_, res.task_id_, *my_session))) {

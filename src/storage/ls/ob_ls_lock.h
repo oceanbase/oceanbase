@@ -56,6 +56,7 @@ class ObLSLock
   friend ObLSLockGuard;
   friend ObLSTryLockGuard;
   friend ObLSLockWithPendingReplayGuard;
+  static const int64_t LOCK_CONFLICT_WARN_TIME = 100 * 1000; // 100 ms
 public:
   typedef common::ObLatch RWLock;
 
@@ -65,8 +66,8 @@ public:
   ObLSLock(const ObLSLock&) = delete;
   ObLSLock& operator=(const ObLSLock&) = delete;
 private:
-  int64_t lock(int64_t hold, int64_t change);
-  int64_t try_lock(int64_t hold, int64_t change);
+  int64_t lock(const ObLS *ls, int64_t hold, int64_t change);
+  int64_t try_lock(const ObLS *ls, int64_t hold, int64_t change);
   void unlock(int64_t target);
 
   RWLock locks_[LSLOCKSIZE];
@@ -75,7 +76,8 @@ private:
 class ObLSLockGuard
 {
 public:
-  ObLSLockGuard(ObLSLock &lock,
+  ObLSLockGuard(ObLS *ls,
+                ObLSLock &lock,
                 int64_t hold,
                 int64_t change,
                 const bool trylock = false);
@@ -93,6 +95,7 @@ private:
   ObLSLock &lock_;
   int64_t mark_;
   int64_t start_ts_;
+  const ObLS *ls_;
 };
 
 // ATTENTION:

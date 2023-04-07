@@ -344,6 +344,8 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     JoinedTable *joined_table = static_cast<JoinedTable*>(table);
     PullupHelper left_helper = helper;
     PullupHelper right_helper = helper;
+    bool check_left = true;
+    bool check_right = true;
     left_helper.parent_table_ = joined_table;
     right_helper.parent_table_ = joined_table;
     if (LEFT_OUTER_JOIN == joined_table->joined_type_) {
@@ -351,10 +353,12 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       //LEFT OUTER JOIN的右表上拉group by要求不能有having条件
       right_helper.need_check_having_ = true;
       right_helper.need_check_null_propagate_ = true;
+      check_left = false;
     } else if (RIGHT_OUTER_JOIN == joined_table->joined_type_) {
       //RIGHT OUTER JOIN的左表上拉group by要求不能有having条件
       left_helper.need_check_having_ = true;
       left_helper.need_check_null_propagate_ = true;
+      check_right = false;
       //LEFT OUTER JOIN的右表行为跟parent table相同
     } else if (INNER_JOIN == joined_table->joined_type_) {
       //INNER JOIN的左表行为跟parent table相同
@@ -369,6 +373,8 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
         //full join要求两侧至少有一个basic table，否则不能保证能够生成严格唯一键
         is_valid = false;
       } else {
+        check_left = false;
+        check_right = false;
         left_helper.need_check_having_ = true;
         left_helper.need_check_null_propagate_ = true;
         right_helper.need_check_having_ = true;
@@ -379,7 +385,8 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       //do nothing
     } else if (!is_valid) {
       //do nothing
-    } else if (OB_FAIL(SMART_CALL(check_groupby_pullup_validity(stmt,
+    } else if (check_left &&
+               OB_FAIL(SMART_CALL(check_groupby_pullup_validity(stmt,
                                                                 joined_table->left_table_,
                                                                 left_helper,
                                                                 contain_inner_table,
@@ -387,7 +394,8 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
                                                                 valid_views,
                                                                 is_valid)))) {
       LOG_WARN("failed to check group by pull up validity", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_groupby_pullup_validity(stmt,
+    } else if (check_right &&
+               OB_FAIL(SMART_CALL(check_groupby_pullup_validity(stmt,
                                                                 joined_table->right_table_,
                                                                 right_helper,
                                                                 contain_inner_table,

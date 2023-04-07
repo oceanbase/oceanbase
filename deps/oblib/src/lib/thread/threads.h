@@ -93,6 +93,7 @@ public:
   }
   virtual int start();
   virtual void stop();
+  virtual int try_wait();
   virtual void wait();
   void destroy();
 

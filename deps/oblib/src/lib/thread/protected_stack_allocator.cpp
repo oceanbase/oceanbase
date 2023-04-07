@@ -29,11 +29,6 @@ namespace lib
 ProtectedStackAllocator g_stack_allocer;
 StackMgr g_stack_mgr;
 
-ssize_t ProtectedStackAllocator::adjust_size(const ssize_t size)
-{
-  return size - page_size() * 2 - ACHUNK_PRESERVE_SIZE;
-}
-
 ssize_t ProtectedStackAllocator::page_size()
 {
   return get_page_size();
@@ -145,7 +140,6 @@ void StackMgr::insert(ObStackHeader *header)
     header->next_ = dummy_.next_;
     dummy_.next_->prev_ = header;
     dummy_.next_ = header;
-    add_flow(header, 1);
     mutex_.unlock();
   }
 }
@@ -158,22 +152,9 @@ void StackMgr::erase(ObStackHeader *header)
     header->prev_->next_ = header->next_;
     header->next_->prev_ = header->prev_;
     header->prev_ = header->next_ = header;
-    add_flow(header, 0);
     mutex_.unlock();
   }
 }
-
-void StackMgr::add_flow(ObStackHeader *header, bool is_alloc)
-{
-  int ret = databuff_printf(flow_print_buf_, sizeof(flow_print_buf_), flow_print_pos_,
-                            "%p %d %ld %ld %s\n", header, is_alloc, header->size_, GETTID(), lbt());
-  if (OB_SUCC(ret) && flow_print_pos_ > sizeof(flow_print_buf_)/2) {
-    common::allow_next_syslog();
-    _LOG_INFO("DUMP STACK FLOW:\n%.*s", static_cast<int32_t>(flow_print_pos_), flow_print_buf_);
-    flow_print_pos_ = 0;
-  }
-}
-
 
 }  // lib
 }  // oceanbase

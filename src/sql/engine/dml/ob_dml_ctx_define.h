@@ -282,35 +282,35 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
-      table_id_(0),
       columns_(),
-      is_self_ref_(false)
+      is_self_ref_(false),
+      table_id_(OB_INVALID_ID)
   {}
 
   ObForeignKeyArg(common::ObIAllocator &alloc)
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
-      table_id_(0),
       columns_(alloc),
-      is_self_ref_(false)
+      is_self_ref_(false),
+      table_id_(OB_INVALID_ID)
   {}
   inline void reset()
   {
     ref_action_ = share::schema::ACTION_INVALID;
     database_name_.reset();
     table_name_.reset();
-    table_id_ = 0;
+    table_id_ = OB_INVALID_ID;
     columns_.reset();
   }
-  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
+  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref), K_(table_id));
 public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
-  uint64_t table_id_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
+  uint64_t table_id_;
 };
 typedef common::ObFixedArray<ObForeignKeyArg, common::ObIAllocator> ObForeignKeyArgArray;
 

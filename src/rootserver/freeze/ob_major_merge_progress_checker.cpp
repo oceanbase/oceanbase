@@ -157,33 +157,31 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTableSchemaV2 *simple_schema = nullptr;
   ObTableCompactionInfo cur_compaction_info;
-  const uint64_t special_table_id = cross_cluster_validator_.get_special_table_id();
+  // table_id of the table containing first tablet in sys ls
+  const uint64_t major_merge_special_table_id = ObCrossClusterTabletChecksumValidator::MAJOR_MERGE_SPECIAL_TABLE_ID;
   // only primary major_freeze_service need to handle table with frist tablet in sys ls here
   if (!is_primary_service) {
-  } else if (OB_UNLIKELY(OB_INVALID_ID == special_table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid special table id", KR(ret), K_(tenant_id), K(special_table_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, special_table_id, simple_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(special_table_id));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, major_merge_special_table_id, simple_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(major_merge_special_table_id));
   } else if (OB_ISNULL(simple_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table schema is null", KR(ret), K_(tenant_id), K(special_table_id));
+    LOG_WARN("table schema is null", KR(ret), K_(tenant_id), K(major_merge_special_table_id));
   } else {
     SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
       FREEZE_TIME_GUARD;
       if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *simple_schema,
                                                                        *sql_proxy_, pairs))) {
-        LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(special_table_id));
+        LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(major_merge_special_table_id));
       } else if (OB_UNLIKELY(pairs.count() < 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret), K_(tenant_id),
-                 K(special_table_id));
-      } else if (OB_FAIL(table_compaction_map_.get_refactored(special_table_id, cur_compaction_info))) {
-        LOG_WARN("fail to get refactored", KR(ret), K(special_table_id));
+                 K(major_merge_special_table_id));
+      } else if (OB_FAIL(table_compaction_map_.get_refactored(major_merge_special_table_id, cur_compaction_info))) {
+        LOG_WARN("fail to get refactored", KR(ret), K(major_merge_special_table_id));
       } else if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_at_table_level(stop, pairs,
-                   global_broadcast_scn, cur_compaction_info, special_table_id, expected_epoch))) {
+                   global_broadcast_scn, cur_compaction_info, major_merge_special_table_id, expected_epoch))) {
         LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
       } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                    tenant_id_, global_broadcast_scn.get_val_for_tx(),
@@ -431,8 +429,15 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
           std::lower_bound(all_progress.begin(), all_progress.end(), ls_r->get_zone());
         if ((p != all_progress.end()) && (p->zone_ == ls_r->get_zone())) {
           SCN replica_snapshot_scn;
+          SCN replica_report_scn;
           if (OB_FAIL(replica_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
+          } else if (replica_report_scn.convert_for_tx(r->get_report_scn())) {
+            LOG_WARN("fail to convert val to SCN", KR(ret), "report_scn", r->get_report_scn());
+          } else if (replica_report_scn > replica_snapshot_scn) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected report_scn and snapshot_scn", KR(ret), "report_scn",
+                     r->get_report_scn(), "snapshot_scn", r->get_snapshot_version());
           } else if ((REPLICA_TYPE_LOGONLY == ls_r->get_replica_type())
                     || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
             // logonly replica no need check
@@ -442,17 +447,22 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
               p->smallest_snapshot_scn_ = replica_snapshot_scn;
             }
             if (replica_snapshot_scn >= global_broadcast_scn) {
-              if (replica_snapshot_scn > global_broadcast_scn) {
-                tablet_need_verify = false; // this tablet doesn't need to execute checksum verification
+              if (replica_snapshot_scn > global_broadcast_scn) { // launched another medium compaction
+                tablet_need_verify = false; // this tablet does not need to execute checksum verification
               } else {  // replica_snapshot_scn == global_broadcast_scn
-                // check tablet replica status when replica_snapshot_scn = global_broadcast_scn,
-                // so as to find out checksum error occured before this round of major freeze.
-                // not check tablet replica status when replica_snapshot_scn > global_broadcast_scn,
-                // since the checksum error detected here may be caused by medium compaction after
-                // this round of major freeze.
-                if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
-                  ret = OB_CHECKSUM_ERROR;
-                  LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
+                if (replica_report_scn == global_broadcast_scn) { // finished verification on the old leader
+                  tablet_need_verify = false; // this tablet does not need to execute checksum verification
+                } else { // replica_report_scn < global_broadcast_scn
+                  // check tablet replica status when replica_snapshot_scn = global_broadcast_scn
+                  // and replica_report_scn < global_broadcast_scn, so as to find out checksum error
+                  // occured before this round of major freeze. do not check tablet replica status
+                  // when replica_snapshot_scn > global_broadcast_scn or replica_report_scn =
+                  // global_broadcast_scn, since the checksum error detected here may be caused by
+                  // medium compaction after this round of major freeze.
+                  if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
+                    ret = OB_CHECKSUM_ERROR;
+                    LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
+                  }
                 }
               }
               ++(p->merged_tablet_cnt_);

@@ -340,6 +340,14 @@ int ObLogSet::compute_sharding_info()
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
     inherit_sharding_index_ = ObLogicalOperator::second_child;
+  } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
+    is_partition_wise_ = false;
+    strong_sharding_ = second_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::second_child;
+  } else if (DistAlgo::DIST_NONE_PARTITION == set_dist_algo_) {
+    is_partition_wise_ = false;
+    strong_sharding_ = first_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else { /*do nothing*/ }

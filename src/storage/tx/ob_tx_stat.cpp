@@ -156,13 +156,15 @@ int ObTxSchedulerStat::init(const uint64_t tenant_id,
                             const share::ObLSID &coord_id,
                             const ObTxPartList &parts,
                             const ObTxIsolationLevel &isolation,
-                            const int64_t snapshot_version,
+                            const share::SCN &snapshot_version,
                             const ObTxAccessMode &access_mode,
                             const uint64_t op_sn,
                             const uint64_t flag,
                             const int64_t active_ts,
                             const int64_t expire_ts,
                             const int64_t timeout_us,
+                            const int32_t ref_cnt,
+                            const void* const tx_desc_addr,
                             const ObTxSavePointList &savepoints,
                             const int16_t abort_cause,
                             const bool can_elr)
@@ -193,6 +195,8 @@ int ObTxSchedulerStat::init(const uint64_t tenant_id,
     active_ts_ = active_ts;
     expire_ts_ = expire_ts;
     timeout_us_ = timeout_us;
+    ref_cnt_ = ref_cnt;
+    tx_desc_addr_ = tx_desc_addr;
     abort_cause_ = abort_cause;
     can_elr_ = can_elr;
   }
@@ -212,13 +216,15 @@ void ObTxSchedulerStat::reset()
   coord_id_.reset();
   parts_.reset();
   isolation_ = ObTxIsolationLevel::INVALID;
-  snapshot_version_ = -1;
+  snapshot_version_.reset();
   access_mode_ = ObTxAccessMode::INVL;
   op_sn_ = -1;
   flag_ = 0;
   active_ts_ = -1;
   expire_ts_ = -1;
   timeout_us_ = -1;
+  ref_cnt_ = -1;
+  tx_desc_addr_ = (void*)0;
   savepoints_.reset();
   abort_cause_ = 0;
   can_elr_ = false;
@@ -247,8 +253,8 @@ int64_t ObTxSchedulerStat::get_parts_str(char* buf, const int64_t buf_len)
 int ObTxSchedulerStat::get_valid_savepoints(const ObTxSavePointList &savepoints)
 {
   int ret = OB_SUCCESS;
-  for (int i = 0; i < savepoints.count(); i++) {
-    if (savepoints.at(i).is_savepoint() || savepoints.at(i).is_snapshot()) {
+  for (int i = 0; OB_SUCC(ret) && i < savepoints.count(); i++) {
+    if (savepoints.at(i).is_savepoint()) {
       if (OB_FAIL(savepoints_.push_back(savepoints.at(i)))) {
         TRANS_LOG(WARN, "failed to push into savepoints array", KR(ret));
       }

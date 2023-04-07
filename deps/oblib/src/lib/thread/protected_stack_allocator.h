@@ -41,7 +41,6 @@ class ProtectedStackAllocator
 public:
   void *alloc(const uint64_t tenant_id, const ssize_t size);
   void dealloc(void *ptr);
-  static ssize_t adjust_size(const ssize_t size);
   static ObStackHeader *stack_header(void *ptr);
   static ssize_t page_size();
 private:
@@ -54,7 +53,6 @@ class StackMgr
   friend class ObMemoryCutter;
 public:
   StackMgr()
-    : flow_print_pos_(0)
   {
     dummy_.prev_ = dummy_.next_ = &dummy_;
   }
@@ -63,11 +61,7 @@ public:
   ObStackHeader *begin() { return dummy_.next_; }
   ObStackHeader *end() { return &dummy_; }
 private:
-  void add_flow(ObStackHeader *header, bool is_alloc);
-private:
   lib::ObMutex mutex_;
-  char flow_print_buf_[8192];
-  int64_t flow_print_pos_;
   ObStackHeader dummy_;
 };
 

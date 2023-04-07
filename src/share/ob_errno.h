@@ -438,6 +438,8 @@ constexpr int OB_DELETE_SERVER_NOT_ALLOWED = -4745;
 constexpr int OB_PACKET_STATUS_UNKNOWN = -4746;
 constexpr int OB_ARBITRATION_SERVICE_NOT_EXIST = -4747;
 constexpr int OB_ARBITRATION_SERVICE_ALREADY_EXIST = -4748;
+constexpr int OB_UNEXPECTED_TABLET_STATUS = -4749;
+constexpr int OB_INVALID_TABLE_STORE = -4750;
 constexpr int OB_WAIT_DEGRATION_TIMEOUT = -4751;
 constexpr int OB_ERR_ROOTSERVICE_START = -4752;
 constexpr int OB_ERR_ROOTSERVICE_STOP = -4753;
@@ -1329,6 +1331,7 @@ constexpr int OB_TOO_MANY_LOG_TASK = -6320;
 constexpr int OB_INVALID_BATCH_SIZE = -6321;
 constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
 constexpr int OB_LOG_REPLAY_ERROR = -6323;
+constexpr int OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT = -6324;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1371,6 +1374,10 @@ constexpr int OB_RG_NOT_MATCH = -7105;
 constexpr int OB_TRANSFER_TASK_ABORTED = -7106;
 constexpr int OB_TRANSFER_INVALID_MESSAGE = -7107;
 constexpr int OB_TRANSFER_CTX_TS_NOT_MATCH = -7108;
+constexpr int OB_TRANSFER_SYS_ERROR = -7109;
+constexpr int OB_TRANSFER_MEMBER_LIST_NOT_SAME = -7110;
+constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
+constexpr int OB_LS_TRANSFER_SCN_TOO_SMALL = -7112;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -2237,6 +2244,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PACKET_STATUS_UNKNOWN__USER_ERROR_MSG "Network error and packet status unknown. Abort auto retry."
 #define OB_ARBITRATION_SERVICE_NOT_EXIST__USER_ERROR_MSG "arbitration service does not exist"
 #define OB_ARBITRATION_SERVICE_ALREADY_EXIST__USER_ERROR_MSG "arbitration service already exist"
+#define OB_UNEXPECTED_TABLET_STATUS__USER_ERROR_MSG "%s"
+#define OB_INVALID_TABLE_STORE__USER_ERROR_MSG "%s"
 #define OB_WAIT_DEGRATION_TIMEOUT__USER_ERROR_MSG "wait degration finished timeout"
 #define OB_ERR_ROOTSERVICE_START__USER_ERROR_MSG "rootservice start process has failure"
 #define OB_ERR_ROOTSERVICE_STOP__USER_ERROR_MSG "rootservice stop process has failure"
@@ -3253,6 +3262,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_BATCH_SIZE__USER_ERROR_MSG "ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__USER_ERROR_MSG "ob clog slide timeout"
 #define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
+#define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__USER_ERROR_MSG "ob trying to lock config change conflicts"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3295,6 +3305,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_TASK_ABORTED__USER_ERROR_MSG "transfer task aborted"
 #define OB_TRANSFER_INVALID_MESSAGE__USER_ERROR_MSG "transfer invalid message"
 #define OB_TRANSFER_CTX_TS_NOT_MATCH__USER_ERROR_MSG "transfer ctx_ts not match"
+#define OB_TRANSFER_SYS_ERROR__USER_ERROR_MSG "transfer system error"
+#define OB_TRANSFER_MEMBER_LIST_NOT_SAME__USER_ERROR_MSG "transfer src ls and dest ls member list not same"
+#define OB_ERR_UNEXPECTED_LOCK_OWNER__USER_ERROR_MSG "lock owner id is not expected"
+#define OB_LS_TRANSFER_SCN_TOO_SMALL__USER_ERROR_MSG "change member list compare ls transfer scn too small"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -4270,6 +4284,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PACKET_STATUS_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
 #define OB_ARBITRATION_SERVICE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4747, arbitration service does not exist"
 #define OB_ARBITRATION_SERVICE_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4748, arbitration service already exist"
+#define OB_UNEXPECTED_TABLET_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4749, %s"
+#define OB_INVALID_TABLE_STORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4750, %s"
 #define OB_WAIT_DEGRATION_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4751, wait degration finished timeout"
 #define OB_ERR_ROOTSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4752, rootservice start process has failure"
 #define OB_ERR_ROOTSERVICE_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4753, rootservice stop process has failure"
@@ -5286,6 +5302,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_BATCH_SIZE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6321, ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
 #define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
+#define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6324, ob trying to lock config change conflicts"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -5328,6 +5345,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_TASK_ABORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7106, transfer task aborted"
 #define OB_TRANSFER_INVALID_MESSAGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7107, transfer invalid message"
 #define OB_TRANSFER_CTX_TS_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7108, transfer ctx_ts not match"
+#define OB_TRANSFER_SYS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7109, transfer system error"
+#define OB_TRANSFER_MEMBER_LIST_NOT_SAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7110, transfer src ls and dest ls member list not same"
+#define OB_ERR_UNEXPECTED_LOCK_OWNER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7111, lock owner id is not expected"
+#define OB_LS_TRANSFER_SCN_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7112, change member list compare ls transfer scn too small"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5766,7 +5787,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2029];
+extern int g_all_ob_errnos[2036];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

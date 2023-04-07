@@ -22,6 +22,7 @@
 #include "lib/time/ob_time_utility.h"        // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"       // ObLogService
+#include "logservice/palf/log_define.h"
 #include "logservice/palf/log_group_entry.h"
 #include "logservice/palf/palf_env.h"        // PalfEnv
 #include "logservice/palf/palf_iterator.h"
@@ -696,6 +697,39 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
     context_.submit_array_.at(0) = tmp_task;
     std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
     task = first;
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  diagnose_info.restore_context_info_.reset();
+  diagnose_info.restore_context_info_.reset();
+  const int64_t MAX_TRACE_ID_LENGTH = 64;
+  char trace_id[MAX_TRACE_ID_LENGTH];
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (FALSE_IT(diagnose_info.restore_role_ = role_)) {
+  } else if (FALSE_IT(diagnose_info.restore_proposal_id_ = proposal_id_)) {
+  } else if (OB_FAIL(diagnose_info.restore_context_info_.append_fmt("issue_task_num:%ld; "
+                                                                    "last_fetch_ts:%ld; "
+                                                                    "max_submit_lsn:%ld; "
+                                                                    "max_fetch_lsn:%ld; "
+                                                                    "max_fetch_scn:%ld; ",
+                                                                    context_.issue_task_num_,
+                                                                    context_.last_fetch_ts_,
+                                                                    context_.max_submit_lsn_.val_,
+                                                                    context_.max_fetch_lsn_.val_,
+                                                                    context_.max_fetch_scn_.convert_to_ts()))) {
+    CLOG_LOG(WARN, "append restore_context_info failed", K(ret), K(context_));
+  } else if (FALSE_IT(context_.error_context_.trace_id_.to_string(trace_id, sizeof(trace_id)))) {
+  } else if (OB_FAIL(diagnose_info.restore_err_context_info_.append_fmt("ret_code:%d; "
+                                                                        "trace_id:%s; ",
+                                                                        context_.error_context_.ret_code_,
+                                                                        trace_id))) {
+    CLOG_LOG(WARN, "append restore_context_info failed", K(ret), K(context_));
   }
   return ret;
 }

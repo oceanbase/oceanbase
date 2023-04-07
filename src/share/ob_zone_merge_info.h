@@ -190,8 +190,14 @@ public:
 enum ObTabletCompactionStatus
 {
   INITIAL = 0,
-  COMPACTED, // tablet finished compaction
-  CAN_SKIP_VERIFYING,  // tablet finished compaction and not need to verify
+  // tablet finished compaction
+  COMPACTED,
+  // tablet finished compaction and no need to verify checksum
+  // 1. compaction_scn of this tablet > frozen_scn of this round major compaction. i.e., already
+  //    launched another medium compaction for this tablet.
+  // 2. report_scn of this tablet > frozen_scn of this round major compaction. i.e., already
+  //    finished verification on the old leader.
+  CAN_SKIP_VERIFYING,
   STATUS_MAX
 };
 
@@ -202,11 +208,6 @@ public:
     INITIAL = 0,
     // already finished compaction and verified tablet checksum
     COMPACTED,
-    // already finished compaction and can skip verification due to the following two reasons:
-    // 1. this table has no tablet.
-    // 2. this table has tablets, but compaction_scn of tablets > frozen_scn of this round major compaction.
-    // i.e., already launched another medium compaction for this table.
-    CAN_SKIP_VERIFYING,
     // already verified index checksum
     INDEX_CKM_VERIFIED,
     // already verified all kinds of checksum (i.e., tablet checksum, index checksum, cross-cluster checksum)
@@ -231,13 +232,10 @@ public:
   bool is_uncompacted() const { return Status::INITIAL == status_; }
   void set_compacted() { status_ = Status::COMPACTED; }
   bool is_compacted() const { return Status::COMPACTED == status_; }
-  void set_can_skip_verifying() { status_ = Status::CAN_SKIP_VERIFYING; }
-  bool can_skip_verifying() const { return Status::CAN_SKIP_VERIFYING == status_; }
   void set_index_ckm_verified() { status_ = Status::INDEX_CKM_VERIFIED; }
   bool is_index_ckm_verified() const { return Status::INDEX_CKM_VERIFIED == status_; }
   void set_verified() { status_ = Status::VERIFIED; }
   bool is_verified() const { return Status::VERIFIED == status_; }
-  bool finish_compaction() const { return (is_compacted() ||  can_skip_verifying()); }
 
   TO_STRING_KV(K_(table_id), K_(tablet_cnt), K_(status));
 

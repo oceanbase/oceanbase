@@ -405,13 +405,13 @@ int ObIndexStatsEstimator::get_all_need_gather_partition_ids(const ObTableStatPa
                                                              ObIArray<int64_t> &gather_part_ids)
 {
   int ret = OB_SUCCESS;
-  if (index_param.need_global_ || index_param.need_approx_global_) {
+  if (index_param.global_stat_param_.need_modify_) {
     if (OB_FAIL(gather_part_ids.push_back(data_param.global_part_id_))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
 
-  if (OB_SUCC(ret) && index_param.need_part_) {
+  if (OB_SUCC(ret) && index_param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < data_param.part_infos_.count(); ++i) {
       if (OB_FAIL(gather_part_ids.push_back(data_param.part_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));
@@ -419,7 +419,7 @@ int ObIndexStatsEstimator::get_all_need_gather_partition_ids(const ObTableStatPa
     }
   }
 
-  if (OB_SUCC(ret) && index_param.need_subpart_) {
+  if (OB_SUCC(ret) && index_param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < data_param.subpart_infos_.count(); ++i) {
       if (OB_FAIL(gather_part_ids.push_back(data_param.subpart_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));

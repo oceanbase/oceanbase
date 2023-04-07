@@ -352,6 +352,26 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     access_ctx_->defensive_check_record_.reset();
     */
 #endif
+
+    // When the index lookups the rowkeys from the main table, it should exists
+    // and if we find that it does not exist, there must be an anomaly
+    if (GCONF.enable_defensive_check()
+        && access_ctx_->query_flag_.is_lookup_for_4377()
+        && OB_ITER_END == ret) {
+      ret = OB_ERR_DEFENSIVE_CHECK;
+      ObString func_name = ObString::make_string("[index lookup]ObSingleMerge::inner_get_next_row");
+      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+      LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
+                    K(have_uncommited_row),
+                    K(enable_fuse_row_cache),
+                    K(read_snapshot_version),
+                    KPC(read_info),
+                    KPC(access_ctx_->store_ctx_),
+                    K(tables_));
+      dump_table_statistic_for_4377();
+      dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+    }
+
     rowkey_ = NULL;
   } else {
     ret = OB_ITER_END;

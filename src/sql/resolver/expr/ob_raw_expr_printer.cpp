@@ -3266,13 +3266,17 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
       case T_FUN_PL_AGG_UDF: {
-        if (type == T_FUN_PL_AGG_UDF) {
-          if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
-              OB_UNLIKELY(!expr->get_pl_agg_udf_expr()->is_udf_expr())) {
+        if (OB_ISNULL(expr->get_agg_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), KPC(expr));
+        } else if (type == T_FUN_PL_AGG_UDF) {
+          ObRawExpr *udf_expr = expr->get_agg_expr()->get_pl_agg_udf_expr();
+          if (OB_ISNULL(udf_expr) ||
+              OB_UNLIKELY(!udf_expr->is_udf_expr())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
+            LOG_WARN("get unexpected null", K(ret), KPC(expr));
           } else {
-            symbol = static_cast<ObUDFRawExpr*>(expr->get_pl_agg_udf_expr())->get_func_name();
+            symbol = static_cast<ObUDFRawExpr*>(udf_expr)->get_func_name();
           }
         }
         if (OB_SUCC(ret)) {
@@ -3280,7 +3284,7 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         }
         // distinct, default 'all', not print
         if (OB_SUCC(ret)) {
-          if (expr->is_distinct()) {
+          if (expr->get_agg_expr()->is_param_distinct()) {
             DATA_PRINTF("distinct ");
           }
         }
@@ -3305,7 +3309,8 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         }
         DATA_PRINTF(")");
         DATA_PRINTF(" over(");
-        if (OB_FAIL(print_partition_exprs(expr))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(print_partition_exprs(expr))) {
           LOG_WARN("failed to print partition exprs.", K(ret));
         } else if (OB_FAIL(print_order_items(expr))) {
           LOG_WARN("failed to print order items.", K(ret));
@@ -3462,72 +3467,9 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
        break;
       }
       case T_FUN_GROUP_CONCAT: {
-        // mysql: group_concat(distinct c1,c2+1 order by c1 desc separator ',')
-        // oracle: listagg(c1,',') within group(order by c1);
-        if (lib::is_oracle_mode()) {
-          SET_SYMBOL_IF_EMPTY("listagg");
-        } else {
-          SET_SYMBOL_IF_EMPTY("group_concat");
+        if (OB_FAIL(print(expr->get_agg_expr()))) {
+          LOG_WARN("failed to print agg expr", K(ret));
         }
-        DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
-        // distinct
-        if (OB_SUCC(ret)) {
-          if (expr->is_distinct()) {
-            DATA_PRINTF("distinct ");
-          }
-        }
-        // expr list
-        for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_agg_expr()->get_real_param_count(); ++i) {
-          PRINT_EXPR(expr->get_agg_expr()->get_real_param_exprs().at(i));
-          DATA_PRINTF(",");
-        }
-        if (OB_SUCC(ret)) {
-          --*pos_;
-        }
-        if (lib::is_oracle_mode() && 0 == expr->get_order_items().count()) {// oracle 模式 listagg 支持无 within group
-          /* do nothing */
-        } else if (lib::is_oracle_mode()) {
-          DATA_PRINTF(") within group (");
-          // order by
-          if (OB_SUCC(ret)) {
-            const ObIArray<OrderItem> &order_items = expr->get_agg_expr()->get_order_items();
-            int64_t order_item_size = order_items.count();
-            if (order_item_size > 0) {
-              DATA_PRINTF(" order by ");
-              for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
-                const OrderItem &order_item = order_items.at(i);
-                PRINT_EXPR(order_item.expr_);
-                if (OB_SUCC(ret)) {
-                  if (lib::is_mysql_mode()) {
-                    if (is_descending_direction(order_item.order_type_)) {
-                      DATA_PRINTF(" desc ");
-                    }
-                  } else if (order_item.order_type_ == NULLS_FIRST_ASC) {
-                    DATA_PRINTF(" asc nulls first ");
-                  } else if (order_item.order_type_ == NULLS_LAST_ASC) {//use default value
-                    /*do nothing*/
-                  } else if (order_item.order_type_ == NULLS_FIRST_DESC) {//use default value
-                    DATA_PRINTF(" desc ");
-                  } else if (order_item.order_type_ == NULLS_LAST_DESC) {
-                    DATA_PRINTF(" desc nulls last ");
-                  } else {/*do nothing*/}
-                }
-                DATA_PRINTF(",");
-              }
-              if (OB_SUCC(ret)) {
-                --*pos_;
-              }
-            }
-          }
-        }
-        // separator
-        if (OB_SUCC(ret)) {
-          if (expr->get_agg_expr()->get_separator_param_expr()) {
-            DATA_PRINTF(" separator ");
-            PRINT_EXPR(expr->get_agg_expr()->get_separator_param_expr());
-          }
-        }
-        DATA_PRINTF(")");
         if (OB_SUCC(ret)) {
           DATA_PRINTF(" over(");
           if (OB_FAIL(print_partition_exprs(expr))) {

@@ -145,7 +145,7 @@ void TestMultiTenant::TearDown()
   GCTX.omt_->get_tenant_ids(ids);
   bool lock_succ = false;
   for (int64_t index = 0; index < ids.size(); index++) {
-    GCTX.omt_->remove_tenant(ids[index], lock_succ);
+    while (OB_EAGAIN == GCTX.omt_->remove_tenant(ids[index], lock_succ));
   }
 }
 
@@ -187,7 +187,7 @@ TEST_F(TestMultiTenant, create_and_remove_tenant)
   ret = add_tenant(tenants[0]);
   ASSERT_EQ(OB_TENANT_EXIST, ret);
   bool lock_succ = false;
-  GCTX.omt_->remove_tenant(tenants[0], lock_succ);
+  while (OB_EAGAIN == GCTX.omt_->remove_tenant(tenants[0], lock_succ));
   //ASSERT_EQ(OB_SUCCESS, ret); // partition_service should init
   ret = add_tenant(tenants[0]);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -334,9 +334,9 @@ TEST_F(TestMultiTenant, tenant_local)
   }
   guard.release();
   bool lock_succ = false;
-  GCTX.omt_->remove_tenant(tenant_id[0], lock_succ);
+  while (OB_EAGAIN == GCTX.omt_->remove_tenant(tenant_id[0], lock_succ));
   ASSERT_EQ(seq, 1);
-  GCTX.omt_->remove_tenant(tenant_id[1], lock_succ);
+  while (OB_EAGAIN == GCTX.omt_->remove_tenant(tenant_id[1], lock_succ));
   ASSERT_EQ(seq, 0);
 }
 

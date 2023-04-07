@@ -39,7 +39,7 @@ ObColumnRedefinitionTask::~ObColumnRedefinitionTask()
 }
 
 int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
-    const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism,
+    const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism, const int64_t consumer_group_id,
     const obrpc::ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -69,9 +69,10 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     task_version_ = OB_COLUMN_REDEFINITION_TASK_VERSION;
     task_id_ = task_id;
     parallelism_ = parallelism;
+    consumer_group_id_ = consumer_group_id;
     execution_id_ = 1L;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       data_format_version_ = tenant_data_format_version;
@@ -123,7 +124,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -187,6 +188,7 @@ int ObColumnRedefinitionTask::send_build_single_replica_request()
     param.parallelism_ = alter_table_arg_.parallelism_;
     param.execution_id_ = execution_id_;
     param.data_format_version_ = data_format_version_;
+    param.consumer_group_id_ = alter_table_arg_.consumer_group_id_;
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, param.dest_tablet_ids_))) {
@@ -335,6 +337,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
                                          0/*object_id*/,
                                          index_schema->get_schema_version(),
                                          parallelism_ / index_ids.count()/*parallelism*/,
+                                         consumer_group_id_,
                                          &allocator_,
                                          &create_index_arg,
                                          task_id_);

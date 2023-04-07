@@ -1166,15 +1166,18 @@ int ObRecordType::deserialize(
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(dst);
   CK (OB_NOT_NULL(record));
   int64_t count = OB_INVALID_COUNT;
-  OX (record->deserialize(src, src_len, src_pos));
-  OZ (serialization::decode(src, src_len, src_pos, count));
-  OX (record->set_count(count));
+  // when record be delete , type will be PL_INVALID_TYPE
+  if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
+    OX (record->deserialize(src, src_len, src_pos));
+    OZ (serialization::decode(src, src_len, src_pos, count));
+    OX (record->set_count(count));
 
-  dst = reinterpret_cast<char*>(record->get_element());
-  for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-    const ObPLDataType *type = get_record_member_type(i);
-    CK (OB_NOT_NULL(type));
-    OZ (type->deserialize(resolve_ctx, allocator, src, src_len, src_pos, dst));
+    dst = reinterpret_cast<char*>(record->get_element());
+    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
+      const ObPLDataType *type = get_record_member_type(i);
+      CK (OB_NOT_NULL(type));
+      OZ (type->deserialize(resolve_ctx, allocator, src, src_len, src_pos, dst));
+    }
   }
   return ret;
 }

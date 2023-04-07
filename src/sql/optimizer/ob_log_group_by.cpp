@@ -546,6 +546,33 @@ int ObLogGroupBy::compute_const_exprs()
   return ret;
 }
 
+int ObLogGroupBy::compute_equal_set()
+{
+  int ret = OB_SUCCESS;
+  EqualSets *ordering_esets = NULL;
+  if (OB_ISNULL(my_plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is invalid", K(ret), K(my_plan_));
+  } else if (!has_rollup()) {
+    if (OB_FAIL(ObLogicalOperator::compute_equal_set())) {
+      LOG_WARN("failed to compute equal set", K(ret));
+    }
+  } else if (filter_exprs_.empty()) {
+    set_output_equal_sets(&empty_expr_sets_);
+  } else if (OB_ISNULL(ordering_esets = get_plan()->create_equal_sets())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create equal sets", K(ret));
+  } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(
+                       &my_plan_->get_allocator(),
+                       filter_exprs_,
+                       *ordering_esets))) {
+    LOG_WARN("failed to compute ordering output equal set", K(ret));
+  } else {
+    set_output_equal_sets(ordering_esets);
+  }
+  return ret;
+}
+
 int ObLogGroupBy::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;

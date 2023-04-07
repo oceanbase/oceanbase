@@ -308,11 +308,9 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
     SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
 
     share::schema::ObSessionPrivInfo session_priv;
-    if (session->has_got_conn_res()) {
-      // disconnect previous user connection first.
-      if (OB_FAIL(session->on_user_disconnect())) {
-        LOG_WARN("user disconnect failed", K(ret));
-      }
+    // disconnect previous user connection first.
+    if (OB_FAIL(session->on_user_disconnect())) {
+      LOG_WARN("user disconnect failed", K(ret));
     }
     const ObUserInfo *user_info = NULL;
     if (OB_FAIL(ret)) {

@@ -41,7 +41,7 @@ namespace rootserver
 {
 
 ObDDLTaskQueue::ObDDLTaskQueue()
-  : task_list_(), task_map_(), lock_(), is_inited_(false)
+  : task_list_(), task_map_(), lock_(), stop_(true), is_inited_(false)
 {
 }
 
@@ -71,6 +71,7 @@ int ObDDLTaskQueue::init(const int64_t bucket_num)
   } else if (OB_FAIL(task_id_map_.create(bucket_num, lib::ObLabel("DdlQue")))) {
     LOG_WARN("fail to create task set", K(ret), K(bucket_num));
   } else {
+    stop_ = true;
     is_inited_ = true;
   }
   return ret;
@@ -85,6 +86,9 @@ int ObDDLTaskQueue::push_task(ObDDLTask *task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
+  } else if (has_set_stop()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("scheduler has stopped", K(ret));
   } else if (OB_ISNULL(task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(task));
@@ -547,6 +551,7 @@ int ObDDLScheduler::start()
     LOG_WARN("not init", K(ret));
   } else if (is_started_) {
     // do nothing
+  } else if (OB_FALSE_IT(task_queue_.set_stop(false))) {
   } else if (OB_FAIL(TG_SET_RUNNABLE(tg_id_, *this))) {
     LOG_WARN("tg set runnable failed", K(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
@@ -571,9 +576,9 @@ void ObDDLScheduler::stop()
   TG_STOP(tg_id_);
   TG_STOP(lib::TGDefIDs::DDLScanTask);
   TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
+  task_queue_.set_stop(true);
   idle_stop_ = true;
   is_started_ = false;
-  destroy_all_tasks();
 }
 
 void ObDDLScheduler::wait()
@@ -595,42 +600,50 @@ void ObDDLScheduler::run1()
     ObDDLTask *task = nullptr;
     ObDDLTask *first_retry_task = nullptr;
     lib::set_thread_name("DDLTaskExecutor");
-    while (!has_set_stop()) {
-      THIS_WORKER.set_worker_level(1);
-      THIS_WORKER.set_curr_request_level(1);
-      while (!has_set_stop()) {
-        if (OB_FAIL(task_queue_.get_next_task(task))) {
-          if (common::OB_ENTRY_NOT_EXIST == ret) {
-            break;
-          } else {
-            LOG_WARN("fail to get next task", K(ret));
+    THIS_WORKER.set_worker_level(1);
+    THIS_WORKER.set_curr_request_level(1);
+    while (true) {
+      const bool stop = task_queue_.has_set_stop();
+      bool do_idle = false;
+      if (OB_FAIL(task_queue_.get_next_task(task))) {
+        if (common::OB_ENTRY_NOT_EXIST == ret) {
+          if (stop) {
+            // Task queue remains empty after the last scheduler exit here.
+            // Otherwise, a successful push_task must happen after this get_next_task,
+            // which must have seen the stop flag (modification order consistency of atomic operation)
+            // and failed, contradition.
             break;
           }
-        } else if (OB_ISNULL(task)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, task must not be NULL", K(ret));
-        } else if (task == first_retry_task || !task->need_schedule()) {
-          // add the task back to the queue
-          if (OB_FAIL(task_queue_.add_task_to_last(task))) {
-            STORAGE_LOG(ERROR, "fail to add task to last", K(ret), K(*task));
-          }
-          break;
         } else {
-          ObCurTraceId::set(task->get_trace_id());
-          int task_ret = task->process();
-          task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);
-          if (task->need_retry() && !has_set_stop() && !ObIDDLTask::is_ddl_force_no_more_process(task_ret)) {
-            if (OB_FAIL(task_queue_.add_task_to_last(task))) {
-              STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
-            }
-            first_retry_task = nullptr == first_retry_task ? task : first_retry_task;
-          } else if (OB_FAIL(remove_ddl_task(task))) {
-            LOG_WARN("remove ddl task failed", K(ret));
+          LOG_WARN("fail to get next task", K(ret));
+        }
+        do_idle = true;
+      } else if (OB_ISNULL(task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, task must not be NULL", K(ret));
+      } else if (task == first_retry_task || !task->need_schedule()) {
+        // add the task back to the queue
+        if (OB_FAIL(task_queue_.add_task_to_last(task))) {
+          STORAGE_LOG(ERROR, "fail to add task to last", K(ret), K(*task));
+        }
+        do_idle = true;
+      } else {
+        ObCurTraceId::set(task->get_trace_id());
+        int task_ret = task->process();
+        task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);
+        if (task->need_retry() && !stop && !ObIDDLTask::is_ddl_force_no_more_process(task_ret)) {
+          if (OB_FAIL(task_queue_.add_task_to_last(task))) {
+            STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
           }
+          first_retry_task = nullptr == first_retry_task ? task : first_retry_task;
+        } else if (OB_FAIL(remove_ddl_task(task))) {
+          LOG_WARN("remove ddl task failed", K(ret));
         }
       }
-      first_retry_task = nullptr;
-      idler_.idle(100 * 1000L);
+      if (do_idle) {
+        first_retry_task = nullptr;
+        idler_.idle(100 * 1000L);
+      }
     }
   }
 }
@@ -671,6 +684,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                             param.dest_table_schema_,
                                             param.parallelism_,
                                             param.parent_task_id_,
+                                            param.consumer_group_id_,
                                             create_index_arg,
                                             *param.allocator_,
                                             task_record))) {
@@ -683,6 +697,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         if (OB_FAIL(create_drop_index_task(proxy,
                                            param.src_table_schema_,
                                            param.parent_task_id_,
+                                           param.consumer_group_id_,
                                            drop_index_arg,
                                            *param.allocator_,
                                            task_record))) {
@@ -702,6 +717,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    param.src_table_schema_,
                                                    param.dest_table_schema_,
                                                    param.parallelism_,
+                                                   param.consumer_group_id_,
                                                    static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                    *param.allocator_,
                                                    task_record))) {
@@ -715,6 +731,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                  param.src_table_schema_,
                                                  param.dest_table_schema_,
                                                  param.parallelism_,
+                                                 param.consumer_group_id_,
                                                  alter_table_arg,
                                                  *param.allocator_,
                                                  task_record))) {
@@ -731,6 +748,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                            param.schema_version_,
                                            static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                            param.parent_task_id_,
+                                           param.consumer_group_id_,
                                            *param.allocator_,
                                            task_record))) {
           LOG_WARN("fail to create constraint task failed", K(ret));
@@ -744,6 +762,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                     param.src_table_schema_,
                                                     param.dest_table_schema_,
                                                     param.parallelism_,
+                                                    param.consumer_group_id_,
                                                     static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                     *param.allocator_,
                                                     task_record))) {
@@ -755,6 +774,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                param.tenant_id_,
                                                param.src_table_schema_->get_table_id(),
                                                param.schema_version_,
+                                               param.consumer_group_id_,
                                                static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                *param.allocator_,
                                                task_record))) {
@@ -772,6 +792,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                           param.tenant_id_,
                                           param.object_id_,
                                           param.schema_version_,
+                                          param.consumer_group_id_,
                                           param.type_,
                                           param.ddl_arg_,
                                           *param.allocator_,
@@ -853,6 +874,8 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
   } else if (FALSE_IT(alter_table_arg.session_id_ = param.session_id_)) {
     // do nothing
   } else if (FALSE_IT(alter_table_arg.sql_mode_ = param.sql_mode_)) {
+    // do nothing
+  } else if (FALSE_IT(alter_table_arg.consumer_group_id_ = param.sql_mode_)) {
     // do nothing
   } else if (FALSE_IT(alter_table_arg.ddl_stmt_str_.assign_ptr(ddl_stmt_str.ptr(), ddl_stmt_str.length()))) {
     // do nothing
@@ -968,6 +991,17 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
             return ret;
           }))) {
         LOG_WARN("failed to modify task", K(ret));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          int tmp_ret = OB_SUCCESS;
+          ObSqlString sql_string;
+          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
+            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id.task_id_));
+          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
+            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
         redefinition_task.set_is_abort(true);
         if (OB_FAIL(update_task_info(task_id, trans, task_record,
@@ -1189,6 +1223,7 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
         LOG_WARN("failed to build alter table arg", K(ret));
       } else {
         common::ObArenaAllocator allocator(lib::ObLabel("StartRedefTable"));
+        int64_t group_id = THIS_WORKER.get_group_id(); //TODO qilu: pass id when directload_arg_init
         ObCreateDDLTaskParam param(tenant_id,
                                       arg.ddl_type_,
                                       orig_table_schema,
@@ -1196,6 +1231,7 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
                                       orig_table_schema->get_table_id(),
                                       orig_table_schema->get_schema_version(),
                                       arg.parallelism_,
+                                      group_id,
                                       &allocator,
                                       &alter_table_arg,
                                       0);
@@ -1220,6 +1256,7 @@ int ObDDLScheduler::create_build_index_task(
     const ObTableSchema *index_schema,
     const int64_t parallelism,
     const int64_t parent_task_id,
+    const int64_t consumer_group_id,
     const obrpc::ObCreateIndexArg *create_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1241,6 +1278,7 @@ int ObDDLScheduler::create_build_index_task(
                                       index_schema,
                                       index_schema->get_schema_version(),
                                       parallelism,
+                                      consumer_group_id,
                                       *create_index_arg,
                                       parent_task_id))) {
       LOG_WARN("init global index task failed", K(ret), K(data_table_schema), K(index_schema));
@@ -1259,6 +1297,7 @@ int ObDDLScheduler::create_drop_index_task(
     common::ObISQLClient &proxy,
     const share::schema::ObTableSchema *index_schema,
     const int64_t parent_task_id,
+    const int64_t consumer_group_id,
     const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1286,6 +1325,7 @@ int ObDDLScheduler::create_drop_index_task(
                                 index_table_id,
                                 index_schema->get_schema_version(),
                                 parent_task_id,
+                                consumer_group_id,
                                 *drop_index_arg))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(index_table_id));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1305,6 +1345,7 @@ int ObDDLScheduler::create_constraint_task(
     const int64_t schema_version,
     const obrpc::ObAlterTableArg *arg,
     const int64_t parent_task_id,
+    const int64_t consumer_group_id,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -1320,7 +1361,7 @@ int ObDDLScheduler::create_constraint_task(
     LOG_WARN("invalid argument", K(ret), K(table_schema), K(constraint_id), K(schema_version), K(arg));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FAIL(constraint_task.init(task_id, table_schema, constraint_id, ddl_type, schema_version, *arg, parent_task_id))) {
+  } else if (OB_FAIL(constraint_task.init(task_id, table_schema, constraint_id, ddl_type, schema_version, *arg, consumer_group_id, parent_task_id))) {
     LOG_WARN("init constraint task failed", K(ret), K(table_schema), K(constraint_id));
   } else if (OB_FAIL(constraint_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
     LOG_WARN("set trace id failed", K(ret));
@@ -1338,6 +1379,7 @@ int ObDDLScheduler::create_table_redefinition_task(
     const share::schema::ObTableSchema *src_schema,
     const share::schema::ObTableSchema *dest_schema,
     const int64_t parallelism,
+    const int64_t consumer_group_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1360,6 +1402,7 @@ int ObDDLScheduler::create_table_redefinition_task(
                                               dest_schema->get_table_id(),
                                               dest_schema->get_schema_version(),
                                               parallelism,
+                                              consumer_group_id,
                                               *alter_table_arg))) {
       LOG_WARN("fail to init redefinition task", K(ret));
     } else if (OB_FAIL(redefinition_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1378,6 +1421,7 @@ int ObDDLScheduler::create_drop_primary_key_task(
     const ObTableSchema *src_schema,
     const ObTableSchema *dest_schema,
     const int64_t parallelism,
+    const int64_t consumer_group_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1400,6 +1444,7 @@ int ObDDLScheduler::create_drop_primary_key_task(
                                        dest_schema->get_table_id(),
                                        dest_schema->get_schema_version(),
                                        parallelism,
+                                       consumer_group_id,
                                        *alter_table_arg))) {
     LOG_WARN("fail to init redefinition task", K(ret));
   } else if (OB_FAIL(drop_pk_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1418,6 +1463,7 @@ int ObDDLScheduler::create_column_redefinition_task(
     const share::schema::ObTableSchema *src_schema,
     const share::schema::ObTableSchema *dest_schema,
     const int64_t parallelism,
+    const int64_t consumer_group_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1440,6 +1486,7 @@ int ObDDLScheduler::create_column_redefinition_task(
                                             dest_schema->get_table_id(),
                                             dest_schema->get_schema_version(),
                                             parallelism,
+                                            consumer_group_id,
                                             *alter_table_arg))) {
     LOG_WARN("fail to init redefinition task", K(ret));
   } else if (OB_FAIL(redefinition_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1457,6 +1504,7 @@ int ObDDLScheduler::create_modify_autoinc_task(
     const uint64_t tenant_id,
     const int64_t table_id,
     const int64_t schema_version,
+    const int64_t consumer_group_id,
     const obrpc::ObAlterTableArg *arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1473,7 +1521,7 @@ int ObDDLScheduler::create_modify_autoinc_task(
       LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(schema_version), K(arg));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
-    } else if (OB_FAIL(modify_autoinc_task.init(tenant_id, task_id, table_id, schema_version, *arg))) {
+    } else if (OB_FAIL(modify_autoinc_task.init(tenant_id, task_id, table_id, schema_version, consumer_group_id, *arg))) {
       LOG_WARN("init global index task failed", K(ret), K(table_id), K(arg));
     } else if (OB_FAIL(modify_autoinc_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
@@ -1492,6 +1540,7 @@ int ObDDLScheduler::create_ddl_retry_task(
     const uint64_t tenant_id,
     const uint64_t object_id,
     const int64_t schema_version,
+    const int64_t consumer_group_id,
     const share::ObDDLType &type,
     const obrpc::ObDDLArg *arg,
     ObIAllocator &allocator,
@@ -1509,7 +1558,7 @@ int ObDDLScheduler::create_ddl_retry_task(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(object_id), K(schema_version), K(arg));
   } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), task_id))) {
     LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FAIL(ddl_retry_task.init(tenant_id, task_id, object_id, schema_version, type, arg))) {
+  } else if (OB_FAIL(ddl_retry_task.init(tenant_id, task_id, object_id, schema_version, consumer_group_id, type, arg))) {
     LOG_WARN("init ddl retry task failed", K(ret), K(arg));
   } else if (OB_FAIL(ddl_retry_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
     LOG_WARN("set trace id failed", K(ret));
@@ -1997,6 +2046,9 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
   if (OB_ISNULL(ddl_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_task));
+  } else if (!is_started_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ddl schedule is not start", K(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
     bool longops_added = true;

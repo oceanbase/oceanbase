@@ -168,7 +168,8 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
    sstable_gc_task_(),
    fast_freeze_checker_(),
    enable_adaptive_compaction_(false),
-   error_tablet_cnt_(0)
+   error_tablet_cnt_(0),
+   ls_locality_cache_()
 {
   STATIC_ASSERT(static_cast<int64_t>(NO_MAJOR_MERGE_TYPE_CNT) == ARRAYSIZEOF(MERGE_TYPES), "merge type array len is mismatch");
 }
@@ -194,6 +195,7 @@ void ObTenantTabletScheduler::destroy()
   medium_loop_tg_id_ = 0;
   sstable_gc_tg_id_ = 0;
   schedule_interval_ = 0;
+  ls_locality_cache_.reset();
   is_inited_ = false;
   LOG_INFO("The ObTenantTabletScheduler destroy");
 }
@@ -224,6 +226,8 @@ int ObTenantTabletScheduler::init()
                                     MTL_ID(),
                                     "bf_queue"))) {
     LOG_WARN("Fail to init bloom filter queue", K(ret));
+  } else if (OB_FAIL(ls_locality_cache_.init(MTL_ID(), GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init ls locality cache", K(ret), KP(GCTX.sql_proxy_));
   } else {
     schedule_interval_ = schedule_interval;
     is_inited_ = true;
@@ -936,7 +940,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool is_leader = false;
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
-
+    ObLSLocality ls_locality;
     if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
       could_major_merge = true;
     } else if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
@@ -952,6 +956,9 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           }
         } else if (is_leader_by_election(role)) {
           is_leader = true;
+          if (OB_FAIL(ls_locality_cache_.get_ls_locality(ls_id, ls_locality))) {
+            LOG_WARN("failed to get ls locality", K(ret), K(ls_id));
+          }
         }
       } else {
         all_ls_weak_read_ts_ready = false;
@@ -994,7 +1001,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
         if (!is_leader || OB_ISNULL(latest_major)) {
           // follower or no major: do nothing
         } else if (tablet->get_medium_compaction_info_list().need_check_finish()) { // need check finished
-          if (OB_TMP_FAIL(func.check_medium_finish())) {
+          if (OB_TMP_FAIL(func.check_medium_finish(ls_locality))) {
             LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
           } else if (ObTimeUtility::fast_current_time() <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
@@ -1069,6 +1076,13 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
 
     if (REACH_TENANT_TIME_INTERVAL(CHECK_REPORT_SCN_INTERVAL)) {
       check_report_scn_flag = true;
+    }
+    if (REACH_TENANT_TIME_INTERVAL(CHECK_LS_LOCALITY_INTERVAL)) {
+      if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality())) {
+        LOG_WARN("failed to refresh ls locality", K(tmp_ret));
+        ADD_SUSPECT_INFO(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX),
+          "refresh ls locality cache failed", "errno", tmp_ret);
+      }
     }
 #ifdef ERRSIM
     check_report_scn_flag = true;

@@ -58,6 +58,7 @@ public:
            const int64_t task_id,
            const int64_t table_id,
            const int64_t schema_version,
+           const int64_t consumer_group_id,
            const obrpc::ObAlterTableArg &alter_table_arg,
            const int64_t task_status = share::ObDDLTaskStatus::LOCK_TABLE,
            const int64_t snapshot_version = 0);

@@ -60,7 +60,7 @@ public:
       const bool is_major,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE);
 
-  int check_medium_finish();
+  int check_medium_finish(const ObLSLocality &ls_locality);
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
@@ -85,6 +85,7 @@ protected:
       const int64_t medium_snapshot,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
+      const ObLSLocality &ls_locality,
       bool &merge_finish);
   int init_tablet_filters();
   static int check_medium_checksum_table(

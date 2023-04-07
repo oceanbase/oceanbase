@@ -69,7 +69,8 @@ public:
                         bool &is_diagnostics_stmt,
                         int64_t &execution_id,
                         const bool force_sync_resp,
-                        bool &async_resp_used);
+                        bool &async_resp_used,
+                        ObPsStmtId &inner_stmt_id);
   int response_query_header(sql::ObSQLSessionInfo &session,
                             const ColumnsFieldIArray *fields,
                             const ParamsFieldIArray *inout_params,

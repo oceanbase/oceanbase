@@ -64,7 +64,7 @@ struct ObMergeCachedTransKey {
 struct ObMergeCachedTransState {
   ObMergeCachedTransState()
     : key_(),
-      trans_version_(0),
+      trans_version_(INVALID_TRANS_VERSION),
       trans_state_(INT32_MAX),
       can_read_(INVALID_BOOL_VALUE),
       is_determined_state_(INVALID_BOOL_VALUE)
@@ -85,12 +85,13 @@ struct ObMergeCachedTransState {
   virtual ~ObMergeCachedTransState() {}
   inline bool is_valid() const
   {
-    return key_.is_valid() && 0 != trans_version_ && INT32_MAX != trans_state_ &&
+    return key_.is_valid() && INVALID_TRANS_VERSION != trans_version_ && INT32_MAX != trans_state_ &&
       INVALID_BOOL_VALUE != can_read_ && INVALID_BOOL_VALUE != is_determined_state_;
   }
   TO_STRING_KV(K_(key), K_(trans_state), K_(trans_version), K_(can_read), K_(is_determined_state));
 
   static const int16_t INVALID_BOOL_VALUE = -1;
+  static const int64_t INVALID_TRANS_VERSION = -1;
   ObMergeCachedTransKey key_;
   int64_t trans_version_;
   int32_t trans_state_;

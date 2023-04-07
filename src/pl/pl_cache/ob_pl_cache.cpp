@@ -265,7 +265,7 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           LOG_DEBUG("matched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           // do nothing
         } else {
-          LOG_DEBUG("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
+          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           is_old_version = true;
         }
       }
@@ -377,7 +377,8 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         // if no table schema, get schema version is enough
         int64_t new_version = 0;
         if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-            || UDT_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
+            || UDT_SCHEMA == stored_schema_objs_.at(i)->schema_type_
+            || ROUTINE_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
           tenant_id = pl::get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         }
         if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
@@ -437,7 +438,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         tmp_schema_obj.reset();
       } else if (nullptr == table_schema) {
         ret = OB_OLD_SCHEMA_VERSION;
-        LOG_DEBUG("table not exist", K(ret), K(*pcv_schema), K(table_schema));
+        LOG_WARN("table not exist", K(ret), K(*pcv_schema), K(table_schema));
       } else if (OB_FAIL(tmp_schema_obj.init_without_copy_name(table_schema))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
       } else if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
@@ -472,6 +473,10 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
       } else if (schema_array.at(i).is_tmp_table_) { // check for tmp table
         is_same = ((session_info->get_sessid_for_table() == sessid_) &&
                    (session_info->get_sess_create_time() == sess_create_time_));
+        if (!is_same) {
+          LOG_WARN("tmp table not match", K(ret), K(sessid_), K(session_info->get_sessid_for_table()),
+                                                  K(sess_create_time_), K(session_info->get_sess_create_time()));
+        }
       } else if (lib::is_oracle_mode()
                  && TABLE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
@@ -839,7 +844,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
                                         need_check_schema,
                                         schema_array))) {
       if (OB_OLD_SCHEMA_VERSION == ret) {
-        LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+        LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
       } else {
         LOG_WARN("failed to get all table schema", K(ret));
       }
@@ -847,7 +852,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
       LOG_WARN("failed to match_dep_schema", K(ret));
     } else if (!is_same) {
       ret = OB_OLD_SCHEMA_VERSION;
-      LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+      LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
     } else if (OB_FAIL(pl_object_value->check_value_version(pc_ctx.schema_guard_,
                                                             need_check_schema,
                                                             schema_array,
@@ -855,9 +860,9 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
       LOG_WARN("fail to check table version", K(ret));
     } else if (true == is_old_version) {
       ret = OB_OLD_SCHEMA_VERSION;
-      LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+      LOG_WARN("old schema version, to be delete", K(ret), K(schema_array), KPC(pl_object_value));
     } else if (OB_FAIL(pl_object_value->match_params_info(pc_ctx.cache_params_, match_params))) {
-      LOG_DEBUG("failed to match params info", K(ret));
+      LOG_WARN("failed to match params info", K(ret));
     } else if (!match_params) {
       // do nothing
     } else {
@@ -871,6 +876,7 @@ int ObPLObjectSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   }
   if (OB_SUCC(ret) && nullptr == cache_obj) {
     ret = OB_SQL_PC_NOT_EXIST;
+    LOG_WARN("failed to get cache obj in pl cache", K(ret));
   }
   return ret;
 }
@@ -907,7 +913,7 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
           LOG_WARN("failed to match_dep_schema", K(ret));
         } else if (!is_same) {
           ret = OB_OLD_SCHEMA_VERSION;
-          LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+          LOG_WARN("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
         } else if (pl_object_value->check_value_version(pc_ctx.schema_guard_,
                                                 true,
                                                 schema_array,
@@ -915,7 +921,7 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
           LOG_WARN("fail to check table version", K(ret));
         } else if (true == is_old_version) {
           ret = OB_OLD_SCHEMA_VERSION;
-          LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+          LOG_WARN("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -947,7 +953,7 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
         LOG_WARN("fail to check table version", K(ret));
       } else if (true == is_old_version) {
         ret = OB_OLD_SCHEMA_VERSION;
-        LOG_DEBUG("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
+        LOG_WARN("old schema version, to be delete", K(ret), K(pl_object_value->pl_routine_obj_->get_object_id()));
       } else {
         pl_object_value->pl_routine_obj_ = cache_object;
         pl_object_value->pl_routine_obj_->set_dynamic_ref_handle(PC_REF_PL_HANDLE);

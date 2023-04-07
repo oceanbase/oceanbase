@@ -280,17 +280,18 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
 int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   all_table_cleaned = false;
-  int64_t left_recycle_cnt = ONE_ROUND_RECYCLE_COUNT_THRESHOLD;
-  int64_t table_cnt_arr[ObITable::TableType::MAX_TABLE_TYPE] = { 0 };
   const int64_t pending_cnt = free_tables_queue_.size();
+  int64_t left_recycle_cnt = MIN(pending_cnt, ONE_ROUND_RECYCLE_COUNT_THRESHOLD);
+  int64_t table_cnt_arr[ObITable::TableType::MAX_TABLE_TYPE] = { 0 };
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("t3m has not been inited", K(ret));
   } else {
     lib::ObLockGuard<common::ObSpinLock> lock_guard(gc_queue_lock_);
-    while(OB_SUCC(ret) && left_recycle_cnt > 0 && free_tables_queue_.size() > 0) {
+    while(OB_SUCC(ret) && left_recycle_cnt-- > 0 && free_tables_queue_.size() > 0) {
       ObLink *ptr = nullptr;
       if (OB_FAIL(free_tables_queue_.pop(ptr))) {
         LOG_WARN("fail to pop itable gc item", K(ret));
@@ -320,16 +321,17 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
           LOG_INFO("the table is unsafe to destroy", KPC(table));
         }
 
-        if (OB_SUCC(ret) && is_safe) {
-          left_recycle_cnt--;
-          ob_free(item);
-          item = nullptr;
-        } else if (OB_NOT_NULL(item)) {
-          int tmp_ret = OB_SUCCESS;
+        if (OB_FAIL(ret)) {
           if (OB_TMP_FAIL(free_tables_queue_.push(item))) {
             LOG_ERROR("fail to push itable gc item into queue", K(tmp_ret));
+          }
+        } else {
+          if (is_safe) {
+            ob_free(item);
           } else {
-            item = nullptr;
+            if (OB_TMP_FAIL(free_tables_queue_.push(item))) {
+              LOG_ERROR("fail to push itable gc item into queue", K(tmp_ret));
+            }
           }
         }
       }

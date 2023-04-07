@@ -683,6 +683,7 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
     const int64_t check_medium_snapshot,
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
+    const ObLSLocality &ls_locality,
     bool &merge_finish)
 {
   int ret = OB_SUCCESS;
@@ -702,6 +703,7 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
   } else {
     const ObArray<ObTabletReplica> &replica_array = tablet_info.get_replicas();
     int64_t unfinish_cnt = 0;
+    int64_t filter_cnt = 0;
     bool pass = true;
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObTabletReplica &replica = replica_array.at(i);
@@ -712,15 +714,23 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
         LOG_WARN("filter replica failed", K(ret), K(replica), K(filters_));
       } else if (!pass) {
         // do nothing
+        filter_cnt++;
       } else if (replica.get_snapshot_version() >= check_medium_snapshot) {
         // replica may have check_medium_snapshot = 2, but have received medium info of 3,
         // when this replica is elected as leader, this will happened
+      } else if (ls_locality.is_valid()) {
+        if (ls_locality.check_exist(replica.get_server())) {
+          unfinish_cnt++;
+        } else {
+          filter_cnt++;
+          LOG_TRACE("filter by ls locality", K(ret), K(replica));
+        }
       } else {
         unfinish_cnt++;
       }
     } // end of for
-    FLOG_INFO("check_medium_compaction_finish", K(ret), K(ls_id), K(tablet_id), K(check_medium_snapshot),
-        K(unfinish_cnt), "total_cnt", replica_array.count());
+    LOG_INFO("check_medium_compaction_finish", K(ret), K(ls_id), K(tablet_id), K(check_medium_snapshot),
+        K(unfinish_cnt), K(filter_cnt), "total_cnt", replica_array.count());
 
     if (0 == unfinish_cnt) { // merge finish
       merge_finish = true;
@@ -795,7 +805,7 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum_table(
 }
 
 // for Leader, clean wait_check_medium_scn
-int ObMediumCompactionScheduleFunc::check_medium_finish()
+int ObMediumCompactionScheduleFunc::check_medium_finish(const ObLSLocality &ls_locality)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
@@ -805,7 +815,7 @@ int ObMediumCompactionScheduleFunc::check_medium_finish()
 
   if (0 == wait_check_medium_scn) {
     // do nothing
-  } else if (OB_FAIL(check_medium_meta_table(wait_check_medium_scn, ls_id, tablet_id, merge_finish))) {
+  } else if (OB_FAIL(check_medium_meta_table(wait_check_medium_scn, ls_id, tablet_id, ls_locality, merge_finish))) {
     LOG_WARN("failed to check inner table", K(ret), KPC(this));
   } else if (!merge_finish) {
     // do nothing

@@ -31,13 +31,14 @@ public:
       const int64_t schema_version,
       const int64_t snapshot_version,
       const int64_t execution_id,
+      const int64_t consumer_group_id,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
-        trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
+        consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
         root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
   {
     set_retry_times(0);
@@ -52,7 +53,7 @@ public:
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
-               K_(execution_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
+               K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
                K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
 
 private:
@@ -63,6 +64,7 @@ private:
   int64_t schema_version_;
   int64_t snapshot_version_;
   int64_t execution_id_;
+  int64_t consumer_group_id_;
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
   common::ObArenaAllocator allocator_;
@@ -87,6 +89,7 @@ public:
       const share::schema::ObTableSchema *index_schema,
       const int64_t schema_version,
       const int64_t parallel,
+      const int64_t consumer_group_id,
       const obrpc::ObCreateIndexArg &create_index_arg,
       const int64_t parent_task_id /* = 0 */,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,

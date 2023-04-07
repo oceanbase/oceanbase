@@ -679,6 +679,7 @@ class EventTable
       EN_TX_FREE_ROUTE_STATE_SIZE = 2003,
       // Transaction common
       EN_TX_RESULT_INCOMPLETE = 2011,
+      EN_THREAD_HANG = 2022,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

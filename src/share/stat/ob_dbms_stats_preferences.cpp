@@ -864,16 +864,9 @@ int ObGranularityPrefs::check_pref_value_validity(ObTableStatParam *param/*defau
       param->granularity_.assign_ptr(buf, buf_len);
     }
   } else {
-    bool dummy_need_global = false;
-    bool need_approx_global = false;
-    bool need_part = false;
-    bool need_subpart = false;
-    if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(pvalue_,
-                                                    dummy_need_global,
-                                                    need_approx_global,
-                                                    need_part,
-                                                    need_subpart))) {
-      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(pvalue_));
+    ObGranularityType dummy_type = ObGranularityType::GRANULARITY_INVALID;
+    if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(pvalue_, dummy_type))) {
+      LOG_WARN("failed to parse granularity", K(ret), K(pvalue_));
     } else {/*do nothing*/}
   }
   return ret;

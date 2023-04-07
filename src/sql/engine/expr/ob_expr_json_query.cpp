@@ -145,7 +145,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
 
     // ASCII clause
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[4], types_stack[0], type, type_ctx))) {
+      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[5], types_stack[0], type, type_ctx))) {
         LOG_WARN("fail to parse asc option.", K(ret));
       }
     }

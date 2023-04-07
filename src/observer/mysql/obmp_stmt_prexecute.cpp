@@ -388,7 +388,8 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
                                         bool &is_diagnostics_stmt,
                                         int64_t &execution_id,
                                         const bool force_sync_resp,
-                                        bool &async_resp_used)
+                                        bool &async_resp_used,
+                                        ObPsStmtId &inner_stmt_id)
 {
   int ret = OB_SUCCESS;
   if (OB_OCI_EXACT_FETCH != exec_mode_ && stmt::T_SELECT == stmt_type_) {
@@ -396,6 +397,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     set_ps_cursor_type(ObPrexecutePsCursorType);
     ObDbmsCursorInfo *cursor = NULL;
     bool use_stream = false;
+    inner_stmt_id = OB_INVALID_ID;
     // 1.创建cursor
     ObPsStmtId inner_stmt_id = OB_INVALID_ID;
     if (OB_NOT_NULL(session.get_cursor(stmt_id_))) {

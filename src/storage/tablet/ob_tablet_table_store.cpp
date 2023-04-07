@@ -23,6 +23,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 
 using namespace oceanbase;
 using namespace oceanbase::blocksstable;
@@ -1238,9 +1239,11 @@ int ObTabletTableStore::check_ready_for_read()
   } else if (minor_tables_.count() + 1 > MAX_SSTABLE_CNT_IN_STORAGE) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("Too Many sstables in table store", K(ret), KPC(this), KPC(tablet_ptr_));
+    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
   } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), KPC(tablet_ptr_));
+    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
   } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
@@ -1254,6 +1257,14 @@ int ObTabletTableStore::check_ready_for_read()
     } else {
       is_ready_for_read_ = true;
     }
+  }
+
+  if (OB_SUCC(ret) && get_table_count() > EMERGENCY_SSTABLE_CNT) {
+    int tmp_ret = OB_TOO_MANY_SSTABLE;
+    LOG_WARN("Emergency SSTable count, maybe frequency freeze occurs, or maybe multi_version_start not adavanced.",
+             K(tmp_ret),
+             "major table count: ", major_tables_.count(),
+             "minor table count: ", minor_tables_.count());
   }
   return ret;
 }

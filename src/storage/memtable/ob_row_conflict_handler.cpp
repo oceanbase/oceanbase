@@ -118,12 +118,14 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
     int tmp_ret = OB_SUCCESS;
     ObTransID tx_id = acc_ctx.get_tx_id();
     ObAddr conflict_scheduler_addr;
+    // register to deadlock detector
     if (OB_FAIL(ObTransDeadlockDetectorAdapter::
                 get_trans_scheduler_info_on_participant(conflict_tx_id, ls_id, conflict_scheduler_addr))) {
       TRANS_LOG(WARN, "get transaction scheduler info fail", K(ret), K(conflict_tx_id), K(tx_id), K(ls_id));
+    } else {
+      ObTransIDAndAddr conflict_tx(conflict_tx_id, conflict_scheduler_addr);
+      tx_desc->add_conflict_tx(conflict_tx);
     }
-    ObTransIDAndAddr conflict_tx(conflict_tx_id, conflict_scheduler_addr);
-    tx_desc->add_conflict_tx(conflict_tx);
     // The addr in tx_desc is the scheduler_addr of current trans,
     // and GCTX.self_addr() will retrun the addr where the row is stored
     // (i.e. where the trans is executing)

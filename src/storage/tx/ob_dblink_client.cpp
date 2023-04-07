@@ -12,6 +12,7 @@
 #include "share/ob_define.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_server_struct.h"
+#include "lib/mysqlclient/ob_mysql_connection.h"
 
 namespace oceanbase
 {
@@ -68,7 +69,7 @@ int ObDBLinkClient::init(const uint32_t index,
 // 1. if START, return success directly
 // 2. if IDLE, execute xa start
 // @param[in] xid
-int ObDBLinkClient::rm_xa_start(const ObXATransID &xid)
+int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel isolation)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
@@ -76,9 +77,9 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(xid), K(*this));
-  } else if (!xid.is_valid() || xid.empty()) {
+  } else if (!xid.is_valid() || xid.empty() || ObTxIsolationLevel::INVALID == isolation) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid));
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), K(isolation));
   } else if (ObDBLinkClientState::IDLE != state_) {
     if (ObDBLinkClientState::START == state_
         && xid.all_equal_to(xid_)) {
@@ -89,18 +90,22 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid)
     }
   // TODO, check connection
   } else {
-    if (OB_FAIL(init_query_impl_())) {
-      TRANS_LOG(WARN, "fail to init query impl", K(ret), K(xid), K(*this));
+    int64_t flag = ObXAFlag::TMNOFLAGS;
+    if (ObTxIsolationLevel::RR == isolation || ObTxIsolationLevel::SERIAL == isolation) {
+      flag = ObXAFlag::TMSERIALIZABLE;
+    }
+    if (OB_FAIL(init_query_impl_(isolation))) {
+      TRANS_LOG(WARN, "fail to init query impl", K(ret), K(xid), K(isolation), K(*this));
     } else if (NULL == impl_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected query impl", K(ret), K(xid), K(*this));
-    } else if (OB_FAIL(impl_->xa_start(xid, ObXAFlag::TMNOFLAGS))) {
-      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(*this));
+    } else if (OB_FAIL(impl_->xa_start(xid, flag))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(flag), K(*this));
     } else {
       xid_ = xid;
       state_ = ObDBLinkClientState::START;
     }
-    TRANS_LOG(INFO, "rm xa start for dblink", K(ret), K(xid));
+    TRANS_LOG(INFO, "rm xa start for dblink", K(ret), K(xid), K(isolation), K(flag));
   }
   return ret;
 }
@@ -318,7 +323,7 @@ bool ObDBLinkClient::equal(ObISQLConnection *dblink_conn)
   return dblink_conn_ == dblink_conn;
 }
 
-int ObDBLinkClient::init_query_impl_()
+int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
 {
   int ret = OB_SUCCESS;
   if (NULL == impl_) {
@@ -339,8 +344,16 @@ int ObDBLinkClient::init_query_impl_()
           // set tx variables
           static const int64_t MIN_TIMEOUT_US = 20 * 1000 * 1000;  // 20s
           const int64_t timeout_us = tx_timeout_us_ + MIN_TIMEOUT_US;
-          if (OB_FAIL(dblink_conn_->set_session_variable("ob_trx_timeout", timeout_us))) {
+          ObMySQLConnection *mysql_conn = dynamic_cast<ObMySQLConnection*>(dblink_conn_);
+          const ObString isolation_str = get_tx_isolation_str(isolation);
+          if (nullptr == mysql_conn) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(WARN, "unexpected mysql connection", K(ret), K(*this));
+          } else if (OB_FAIL(mysql_conn->set_session_variable("ob_trx_timeout", timeout_us))) {
             TRANS_LOG(WARN, "fail to set transaction timeout", K(ret), K(timeout_us), K(*this));
+          } else if (OB_FAIL(mysql_conn->set_session_variable("tx_isolation", isolation_str))) {
+            TRANS_LOG(WARN, "fail to set transaction isolation level in session", K(ret),
+                K(timeout_us), K(*this));
           }
         }
         if (OB_SUCCESS != ret) {

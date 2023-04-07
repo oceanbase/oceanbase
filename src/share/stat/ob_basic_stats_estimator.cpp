@@ -108,7 +108,8 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
         OB_FAIL(add_stat_item(ObStatNumDistinct(col_param, src_col_stats.at(i), param.need_approx_ndv_))) ||
         OB_FAIL(add_stat_item(ObStatAvgLen(col_param, src_col_stats.at(i)))) ||
         OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i)))) ||
-        OB_FAIL(add_stat_item(ObStatTopKHist(col_param, src_tab_stat, src_col_stats.at(i))))) {
+        (extra.need_histogram_ &&
+         OB_FAIL(add_stat_item(ObStatTopKHist(col_param, src_tab_stat, src_col_stats.at(i)))))) {
       LOG_WARN("failed to add statistic item", K(ret));
     } else {/*do nothing*/}
   }
@@ -707,7 +708,7 @@ int ObBasicStatsEstimator::gen_tablet_list(const ObTableStatParam &param,
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> tablet_ids;
-  if (param.need_global_ || param.need_approx_global_) {
+  if (param.global_stat_param_.need_modify_) {
     if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
       if (OB_UNLIKELY(param.global_tablet_id_ == 0)) {
         ret = OB_ERR_UNEXPECTED;
@@ -717,7 +718,7 @@ int ObBasicStatsEstimator::gen_tablet_list(const ObTableStatParam &param,
       }
     }
   }
-  if (OB_SUCC(ret) && param.need_part_ &&
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_ &&
       param.part_level_ != share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       if (OB_FAIL(tablet_ids.push_back(param.part_infos_.at(i).tablet_id_.id()))) {
@@ -725,7 +726,7 @@ int ObBasicStatsEstimator::gen_tablet_list(const ObTableStatParam &param,
       }
     }
   }
-  if (OB_SUCC(ret) && param.need_subpart_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
       if (OB_FAIL(tablet_ids.push_back(param.subpart_infos_.at(i).tablet_id_.id()))) {
         LOG_WARN("failed to push back", K(ret));

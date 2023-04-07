@@ -302,68 +302,25 @@ bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ORA_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TID;
 }
 
-/**
- * @brief ObDbmsStats::parse_granularity
- * @param ctx
- * @param granularity
- * possible values are:
- *  ALL: Gather all (subpartition, partition, and global)
- *  AUTO: Oracle recommends setting granularity to the default value of AUTO to gather subpartition,
- *        partition, or global statistics, depending on partition type. oracle 12c auto is same as
- *        ALL, compatible it.
- *  DEFAULT: Gathers global and partition-level
- *  GLOBAL: Gather global only
- *  GLOBAL AND PARTITION: Gather global and partition-level
- *  APPROX_GLOBAL AND PARTITION: similar to 'GLOBAL AND PARTITION' but in this case the global
-                                 statistics are aggregated from partition level statistics.
- *  PARTITION: Gather partition-level
- *  SUBPARTITION: Gather subpartition-level
- *  Oracle granularity actual behavior survey:
- *
- * @return
- */
-int ObDbmsStatsUtils::parse_granularity(const ObString &granularity,
-                                        bool &need_global,
-                                        bool &need_approx_global,
-                                        bool &need_part,
-                                        bool &need_subpart)
+int ObDbmsStatsUtils::parse_granularity(const ObString &granularity, ObGranularityType &granu_type)
 {
   int ret = OB_SUCCESS;
-  // first check the table is partitioned;
   if (0 == granularity.case_compare("all")) {
-    need_global = true;
-    need_part = true;
-    need_subpart = true;
-    need_approx_global = false;
+    granu_type = ObGranularityType::GRANULARITY_ALL;
   } else if (0 == granularity.case_compare("auto") ||
              0 == granularity.case_compare("Z")) {
-    /*do nothing, use default value*/
+    granu_type = ObGranularityType::GRANULARITY_AUTO;
   } else if (0 == granularity.case_compare("default") ||
              0 == granularity.case_compare("global and partition")) {
-    need_global = true;
-    need_part = true;
-    need_subpart = false;
-    need_approx_global = false;
+    granu_type = ObGranularityType::GRANULARITY_GLOBAL_AND_PARTITION;
   } else if (0 == granularity.case_compare("approx_global and partition")) {
-    need_global = false;
-    need_approx_global = true;
-    need_part = true;
-    need_subpart = false;
+    granu_type = ObGranularityType::GRANULARITY_APPROX_GLOBAL_AND_PARTITION;
   } else if (0 == granularity.case_compare("global")) {
-    need_global = true;
-    need_part = false;
-    need_subpart = false;
-    need_approx_global = false;
+    granu_type = ObGranularityType::GRANULARITY_GLOBAL;
   } else if (0 == granularity.case_compare("partition")) {
-    need_global = false;
-    need_part = true;
-    need_subpart = false;
-    need_approx_global = false;
+    granu_type = ObGranularityType::GRANULARITY_PARTITION;
   } else if (0 == granularity.case_compare("subpartition")) {
-    need_global = false;
-    need_part = false;
-    need_subpart = true;
-    need_approx_global = false;
+    granu_type = ObGranularityType::GRANULARITY_SUBPARTITION;
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Illegal granularity : must be AUTO | ALL | GLOBAL | PARTITION | SUBPARTITION" \
@@ -371,7 +328,6 @@ int ObDbmsStatsUtils::parse_granularity(const ObString &granularity,
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal granularity : must be AUTO | ALL | GLOBAL |" \
              " PARTITION | SUBPARTITION | GLOBAL AND PARTITION | APPROX_GLOBAL AND PARTITION");
   }
-  LOG_TRACE("succeed to parse granularity", K(need_global), K(need_part), K(need_subpart));
   return ret;
 }
 
@@ -676,12 +632,12 @@ int ObDbmsStatsUtils::check_part_id_valid(const ObTableStatParam &param,
   bool found = false;
   LOG_DEBUG("check part_id valid", K(param), K(part_id));
   is_valid = false;
-  if (param.need_global_) {
+  if (param.global_stat_param_.need_modify_) {
     if (part_id == param.global_part_id_) {
       is_valid = true;
     }
   }
-  if (!is_valid && param.need_part_) {
+  if (!is_valid && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; !found && i < param.part_infos_.count(); i++) {
       if (part_id == param.part_infos_.at(i).part_id_) {
         found = true;
@@ -689,37 +645,11 @@ int ObDbmsStatsUtils::check_part_id_valid(const ObTableStatParam &param,
       }
     }
   }
-  if (!is_valid && param.need_subpart_) {
+  if (!is_valid && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; !found && i < param.subpart_infos_.count(); i++) {
       if (part_id == param.subpart_infos_.at(i).part_id_) {
         found = true;
         is_valid = true;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDbmsStatsUtils::get_part_ids_from_param(const ObTableStatParam &param,
-                                              common::ObIArray<int64_t> &part_ids)
-{
-  int ret = OB_SUCCESS;
-  if (param.need_global_) {
-    if (OB_FAIL(part_ids.push_back(param.global_part_id_))) {
-      LOG_WARN("failed to push back partition id", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && param.need_part_) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
-      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
-        LOG_WARN("failed to push back partition id", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && param.need_subpart_) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
-      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
-        LOG_WARN("failed to push back partition id", K(ret));
       }
     }
   }

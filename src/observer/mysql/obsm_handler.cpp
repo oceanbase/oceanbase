@@ -148,10 +148,6 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
     eret = EASY_ERROR;
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "conn is null", K(eret));
   } else {
-    // get reason for disconnect.
-    sql::ObDisconnectState dis_state;
-    // get trace_id for disconnect.
-    ObCurTraceId::TraceId trace_id;
     //set session shadow
     if (conn->is_sess_alloc_
         && !conn->is_sess_free_
@@ -166,23 +162,13 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
         LOG_WARN_RET(tmp_ret, "session info is NULL", K(tmp_ret), K(conn->sessid_),
                  "proxy_sessid", conn->proxy_sessid_);
       } else {
-        // tcp disconnect
-        if (EASY_CONN_CLOSE_BY_PEER == c->status) {
-          if(sql::DIS_INIT == sess_info->get_disconnect_state()) {
-            sess_info->set_disconnect_state(sql::CLIENT_FORCE_DISCONNECT);
-          }
-        }
         sess_info->set_session_state(sql::SESSION_KILLED);
         sess_info->set_shadow(true);
-        dis_state = sess_info->get_disconnect_state();
-        trace_id = sess_info->get_current_trace_id();
       }
     }
-    share::ObTaskController::get().allow_next_syslog();
     LOG_INFO("kill and revert session", K(conn->sessid_),
-        "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_,
-        K(tmp_ret), K(eret), K(dis_state), K(trace_id),
-        K(conn->get_cs_protocol_type()), K(conn->pkt_rec_wrapper_));
+             "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_,
+             K(tmp_ret), K(eret));
   }
   return eret;
 }
@@ -193,6 +179,8 @@ int ObSMHandler::on_close(easy_connection_t *c)
   int ret = OB_SUCCESS;
   bool is_need_clear = false;
   ObSMConnection *conn = NULL;
+  sql::ObDisconnectState disconnect_state;
+  ObCurTraceId::TraceId trace_id;
   if (OB_ISNULL(c) || OB_ISNULL(gctx_.session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("easy_connection_t or session_mgr is null",
@@ -205,6 +193,22 @@ int ObSMHandler::on_close(easy_connection_t *c)
   } else {
     //free session
     if (conn->is_sess_alloc_ && !conn->is_sess_free_) {
+      {
+        int tmp_ret = OB_SUCCESS;
+        sql::ObSQLSessionInfo *sess_info = NULL;
+        sql::ObSessionGetterGuard guard(*gctx_.session_mgr_, conn->sessid_);
+        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = guard.get_session(sess_info)))) {
+          LOG_WARN_RET(tmp_ret, "fail to get session", K(tmp_ret), K(conn->sessid_),
+                  "proxy_sessid", conn->proxy_sessid_);
+        } else if (OB_ISNULL(sess_info)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN_RET(tmp_ret, "session info is NULL", K(tmp_ret), K(conn->sessid_),
+                  "proxy_sessid", conn->proxy_sessid_);
+        } else {
+          disconnect_state = sess_info->get_disconnect_state();
+          trace_id = sess_info->get_current_trace_id();
+        }
+      }
       sql::ObFreeSessionCtx ctx;
       ctx.tenant_id_ = conn->tenant_id_;
       ctx.sessid_ = conn->sessid_;
@@ -258,7 +262,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
       LOG_INFO("unlock session of tenant", K(conn->sessid_),
                "proxy_sessid", conn->proxy_sessid_, K(conn->tenant_id_));
     }
-
+    share::ObTaskController::get().allow_next_syslog();
     LOG_INFO("connection close",
              K(easy_connection_str(c)),
              "sessid", conn->sessid_,
@@ -269,7 +273,10 @@ int ObSMHandler::on_close(easy_connection_t *c)
              "from_java_client", conn->is_java_client_,
              "c/s protocol", get_cs_protocol_type_name(conn->get_cs_protocol_type()),
              "is_need_clear_sessid_", conn->is_need_clear_sessid_,
-             K(ret));
+             K(ret),
+             K(trace_id),
+             K(conn->pkt_rec_wrapper_),
+             K(disconnect_state));
     conn->~ObSMConnection();
     conn = nullptr;
   }

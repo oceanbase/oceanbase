@@ -108,6 +108,9 @@ public:
   void destroy();
   int offline();
   int online();
+  // TODO: delete it if apply sequence
+  // set allocators frozen to reduce active tenant_memory in ObLS::offline_()
+  int set_frozen_for_all_memtables();
 public:
   class AllowToReadMgr final
   {
@@ -477,6 +480,16 @@ private:
     DestroyMemtableAndMemberOperator(ObLSTabletService *tablet_svr)
       : tablet_svr_(tablet_svr) {}
     ~DestroyMemtableAndMemberOperator() = default;
+    int operator()(const common::ObTabletID &tablet_id);
+    common::ObTabletID cur_tablet_id_;
+    ObLSTabletService *tablet_svr_;
+  };
+  class SetMemtableFrozenOperator final
+  {
+  public:
+    SetMemtableFrozenOperator(ObLSTabletService *tablet_svr)
+      : tablet_svr_(tablet_svr) {}
+    ~SetMemtableFrozenOperator() = default;
     int operator()(const common::ObTabletID &tablet_id);
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;

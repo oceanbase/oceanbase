@@ -125,12 +125,13 @@ public:
       const uint64_t user_id,
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
-      ObConnectResource *&user_res, bool &has_insert);
+      ObConnectResource *&user_res, bool &has_insert, bool &user_conn_increased);
   int increase_user_connections_count(
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
       const ObString &user_name,
-      ObConnectResource *user_res);
+      ObConnectResource *user_res,
+      bool &user_conn_increased);
   int on_user_connect(const uint64_t tenant_id,
                       const uint64_t user_id,
                       const ObPrivSet &priv,

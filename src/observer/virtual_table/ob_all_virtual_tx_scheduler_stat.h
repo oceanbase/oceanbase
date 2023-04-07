@@ -32,6 +32,7 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual void release_last_tenant() override;
   int get_next_tx_info_(transaction::ObTxSchedulerStat &tx_scheduler_stat);
+  bool is_valid_timestamp_(const int64_t timestamp) const;
 
 private:
   enum
@@ -43,7 +44,6 @@ private:
     TX_ID,
     STATE,
     CLUSTER_ID,
-    XA_TX_ID,
     COORDINATOR,
     PARTICIPANTS,
     ISOLATION_LEVEL,
@@ -54,16 +54,22 @@ private:
     ACTIVE_TS,
     EXPIRE_TS,
     TIMEOUT_US,
+    REF_CNT,
+    TX_DESC_ADDR,
     SAVEPOINTS,
     SAVEPOINTS_TOTAL_CNT,
     INTERNAL_ABORT_CAUSE,
     CAN_EARLY_LOCK_RELEASE,
+    GTRID,
+    BQUAL,
+    FORMAT_ID
   };
   static const int64_t OB_MAX_BUFFER_SIZE = 1024;
   char ip_buffer_[common::OB_IP_STR_BUFF];
-  char XA_buffer_[OB_MAX_BUFFER_SIZE];
   char parts_buffer_[OB_MAX_BUFFER_SIZE];
+  char tx_desc_addr_buffer_[20];
   char savepoints_buffer_[OB_MAX_BUFFER_SIZE];
+  transaction::ObXATransID xid_;
   transaction::ObTxSchedulerStatIterator tx_scheduler_stat_iter_;
   DISALLOW_COPY_AND_ASSIGN(ObGVTxSchedulerStat);
 };

@@ -1048,6 +1048,7 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
                              rowkey_str,
                              &lob_common,
                              static_cast<uint32_t>(res_len + sizeof(ObLobCommon)),
+                             0,
                              false))) {
       LOG_WARN("Lob: fill temp lob locator failed", K(type_), K(ret));
     } else if (OB_FAIL((locator.set_payload_data(&lob_common, empty_str)))) {

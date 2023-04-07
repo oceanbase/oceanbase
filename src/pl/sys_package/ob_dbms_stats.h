@@ -558,6 +558,9 @@ private:
 
   static bool is_func_index(const ObTableStatParam &index_param);
 
+  static int resovle_granularity(ObGranularityType granu_type, ObTableStatParam &param);
+  static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
+
 };
 
 }

@@ -319,10 +319,9 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
     }
     if (OB_SUCC(ret)) {
       index_param.is_index_stat_ = true;
-      index_param.need_global_ = data_param.need_global_;
-      index_param.need_approx_global_ = data_param.need_approx_global_;
-      index_param.need_part_ = data_param.need_part_;
-      index_param.need_subpart_ = data_param.need_subpart_;
+      index_param.global_stat_param_ = data_param.global_stat_param_;
+      index_param.part_stat_param_.assign_without_part_type(data_param.part_stat_param_);
+      index_param.subpart_stat_param_.assign_without_part_type(data_param.subpart_stat_param_);
       index_param.data_table_name_ = data_param.tab_name_;
       if (index_param.force_ &&
           OB_FAIL(ObDbmsStatsLockUnlock::fill_stat_locked(ctx, index_param))) {
@@ -392,16 +391,15 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
       //glboal index can't reuse the partition data in fast gather index
       } else if (index_schema->is_global_index_table()) {
         index_param.is_global_index_ = true;
-        index_param.need_global_ = data_param.need_global_ || data_param.need_global_;
-        index_param.need_approx_global_ = false;
-        index_param.need_part_ = false;
-        index_param.need_subpart_ = false;
+        index_param.global_stat_param_ = data_param.global_stat_param_;
+        index_param.global_stat_param_.gather_approx_ = false;
+        index_param.part_stat_param_.reset_gather_stat();
+        index_param.subpart_stat_param_.reset_gather_stat();
       //local index the partition is same as data table
       } else {
-        index_param.need_global_ = data_param.need_global_;
-        index_param.need_approx_global_ = data_param.need_approx_global_;
-        index_param.need_part_ = data_param.need_part_;
-        index_param.need_subpart_ = data_param.need_subpart_;
+        index_param.global_stat_param_ = data_param.global_stat_param_;
+        index_param.part_stat_param_ = data_param.part_stat_param_;
+        index_param.subpart_stat_param_ = data_param.subpart_stat_param_;
       }
       if (OB_SUCC(ret) && is_fast_gather) {
         if (OB_FAIL(ObIndexStatsEstimator::fast_gather_index_stats(ctx, data_param,
@@ -662,25 +660,7 @@ int ObDbmsStats::set_index_stats(ObExecContext &ctx, ParamStore &params, ObObj &
   } else if (OB_FAIL(num_nummicroblks.extract_valid_int64_with_trunc(set_index_param.nummicroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummicroblks));
   } else {
-    if (index_stat_param.part_name_.empty()) {
-      index_stat_param.need_global_ = true;
-      index_stat_param.need_part_ = false;
-      index_stat_param.need_subpart_ = false;
-    } else if (!index_stat_param.is_subpart_name_) {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = true;
-      index_stat_param.need_subpart_ = false;
-    } else {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = false;
-      index_stat_param.need_subpart_ = true;
-    }
-    if (!index_stat_param.need_part_) {
-      index_stat_param.part_infos_.reset();
-    }
-    if (!index_stat_param.need_subpart_) {
-      index_stat_param.subpart_infos_.reset();
-    }
+    decide_modified_part(index_stat_param, false/* cascade_part */);
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(set_index_param.table_param_.assign(index_stat_param))) {
@@ -751,26 +731,9 @@ int ObDbmsStats::delete_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     stat_param.column_params_.reset();
   }
   if (OB_SUCC(ret)) {
-    if (stat_param.part_name_.empty()) {
-      stat_param.need_global_ = true;
-      stat_param.need_part_ = cascade_parts;
-      stat_param.need_subpart_ = cascade_parts;
-    } else if (!stat_param.is_subpart_name_) {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = true;
-      stat_param.need_subpart_ = cascade_parts;
+    decide_modified_part(stat_param, cascade_parts);
+    if (!stat_param.part_name_.empty()) {
       cascade_indexes = false;
-    } else {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = false;
-      stat_param.need_subpart_ = true;
-      cascade_indexes = false;
-    }
-    if (!stat_param.need_part_) {
-      stat_param.part_infos_.reset();
-    }
-    if (!stat_param.need_subpart_) {
-      stat_param.subpart_infos_.reset();
     }
   }
   if (OB_SUCC(ret)) {
@@ -855,28 +818,7 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
   }
 
   if (OB_SUCC(ret)) {
-    if (stat_param.part_name_.empty()) {
-      stat_param.need_global_ = true;
-      stat_param.need_part_ = cascade_parts;
-      stat_param.need_subpart_ = cascade_parts;
-    } else if (!stat_param.is_subpart_name_) {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = true;
-      stat_param.need_subpart_ = cascade_parts;
-    } else {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = false;
-      stat_param.need_subpart_ = true;
-    }
-    if (!stat_param.need_part_) {
-      stat_param.part_infos_.reset();
-    }
-    if (!stat_param.need_subpart_) {
-      stat_param.subpart_infos_.reset();
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+    decide_modified_part(stat_param, cascade_parts);
     if (stat_param.force_ &&
         OB_FAIL(ObDbmsStatsLockUnlock::fill_stat_locked(ctx, stat_param))) {
       LOG_WARN("failed fill stat locked", K(ret));
@@ -933,9 +875,9 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
         } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.force_))) {
           LOG_WARN("failed to get no invalidate", K(ret));
         } else {
-          stat_param.need_global_ = true;
-          stat_param.need_part_ = true;
-          stat_param.need_subpart_ = true;
+          stat_param.global_stat_param_.need_modify_ = true;
+          stat_param.part_stat_param_.need_modify_ = true;
+          stat_param.subpart_stat_param_.need_modify_ = true;
           if (stat_param.force_ &&
               OB_FAIL(ObDbmsStatsLockUnlock::fill_stat_locked(ctx, stat_param))) {
             LOG_WARN("failed to fill stat locked", K(ret));
@@ -1016,25 +958,7 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   } else if (!params.at(9).is_null() && OB_FAIL(params.at(9).get_bool(index_stat_param.force_))) {
     LOG_WARN("failed to get force", K(ret));
   } else {
-    if (index_stat_param.part_name_.empty()) {
-      index_stat_param.need_global_ = true;
-      index_stat_param.need_part_ = cascade_parts;
-      index_stat_param.need_subpart_ = cascade_parts;
-    } else if (!index_stat_param.is_subpart_name_) {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = true;
-      index_stat_param.need_subpart_ = cascade_parts;
-    } else {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = false;
-      index_stat_param.need_subpart_ = true;
-    }
-    if (!index_stat_param.need_part_) {
-      index_stat_param.part_infos_.reset();
-    }
-    if (!index_stat_param.need_subpart_) {
-      index_stat_param.subpart_infos_.reset();
-    }
+    decide_modified_part(index_stat_param, cascade_parts);
   }
 
   if (OB_SUCC(ret)) {
@@ -1602,26 +1526,9 @@ int ObDbmsStats::import_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
       cascade_index = stat_param.cascade_;
       stat_param.stat_own_ = stat_table_param.db_name_;
       stat_param.stat_tab_ = stat_table_param.tab_name_;
-      if (stat_param.part_name_.empty()) {
-        stat_param.need_global_ = true;
-        stat_param.need_part_ = true;
-        stat_param.need_subpart_ = true;
-      } else if (!stat_param.is_subpart_name_) {
-        stat_param.need_global_ = false;
-        stat_param.need_part_ = true;
-        stat_param.need_subpart_ = true;
+      decide_modified_part(stat_param, true /* cascade_part */);
+      if (!stat_param.part_name_.empty()) {
         cascade_index = false;
-      } else {
-        stat_param.need_global_ = false;
-        stat_param.need_part_ = false;
-        stat_param.need_subpart_ = true;
-        cascade_index = false;
-      }
-      if (!stat_param.need_part_) {
-        stat_param.part_infos_.reset();
-      }
-      if (!stat_param.need_subpart_) {
-        stat_param.subpart_infos_.reset();
       }
     }
     if (OB_FAIL(ret)) {
@@ -1705,25 +1612,7 @@ int ObDbmsStats::import_column_stats(sql::ObExecContext &ctx,
   } else {
     stat_param.stat_own_ = stat_table_param.db_name_;
     stat_param.stat_tab_ = stat_table_param.tab_name_;
-    if (stat_param.part_name_.empty()) {
-      stat_param.need_global_ = true;
-      stat_param.need_part_ = true;
-      stat_param.need_subpart_ = true;
-    } else if (!stat_param.is_subpart_name_) {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = true;
-      stat_param.need_subpart_ = true;
-    } else {
-      stat_param.need_global_ = false;
-      stat_param.need_part_ = false;
-      stat_param.need_subpart_ = true;
-    }
-    if (!stat_param.need_part_) {
-      stat_param.part_infos_.reset();
-    }
-    if (!stat_param.need_subpart_) {
-      stat_param.subpart_infos_.reset();
-    }
+    decide_modified_part(stat_param, true /* cascade_part */);
   }
   if (OB_FAIL(ret)) {
   } else if (!stat_param.force_ &&
@@ -1793,9 +1682,9 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           stat_param.stat_tab_ = stat_table_param.tab_name_;
           stat_param.stat_id_ = stat_table_param.stat_id_;
           stat_param.cascade_ = true;
-          stat_param.need_global_ = true;
-          stat_param.need_part_ = true;
-          stat_param.need_subpart_ = true;
+          stat_param.global_stat_param_.need_modify_ = true;
+          stat_param.part_stat_param_.need_modify_ = true;
+          stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after stat import
           if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
             LOG_WARN("failed to parse table part info", K(ret));
@@ -1897,25 +1786,7 @@ int ObDbmsStats::import_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   } else {
     index_stat_param.stat_own_ = stat_table_param.db_name_;
     index_stat_param.stat_tab_ = stat_table_param.tab_name_;
-    if (index_stat_param.part_name_.empty()) {
-      index_stat_param.need_global_ = true;
-      index_stat_param.need_part_ = true;
-      index_stat_param.need_subpart_ = true;
-    } else if (!index_stat_param.is_subpart_name_) {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = true;
-      index_stat_param.need_subpart_ = true;
-    } else {
-      index_stat_param.need_global_ = false;
-      index_stat_param.need_part_ = false;
-      index_stat_param.need_subpart_ = true;
-    }
-    if (!index_stat_param.need_part_) {
-      index_stat_param.part_infos_.reset();
-    }
-    if (!index_stat_param.need_subpart_) {
-      index_stat_param.subpart_infos_.reset();
-    }
+    decide_modified_part(index_stat_param, true /* cascade_part */);
   }
   if (OB_FAIL(ret)) {
   } else if (index_stat_param.force_ &&
@@ -2012,10 +1883,9 @@ int ObDbmsStats::lock_table_stats(sql::ObExecContext &ctx,
   } else if (OB_FAIL(parse_stat_type(stat_type_str, stat_param.stattype_))) {
     LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
   } else {
-    stat_param.need_global_ = true;
-    stat_param.need_approx_global_ = false;
-    stat_param.need_part_ = true;
-    stat_param.need_subpart_ = true;
+    stat_param.global_stat_param_.need_modify_ = true;
+    stat_param.part_stat_param_.need_modify_ = true;
+    stat_param.subpart_stat_param_.need_modify_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, true))) {
@@ -2060,10 +1930,9 @@ int ObDbmsStats::lock_partition_stats(sql::ObExecContext &ctx,
   } else if (!stat_param.part_name_.empty() && stat_param.is_subpart_name_) {
     /*do nothing*/
   } else {
-    stat_param.need_global_ = false;
-    stat_param.need_approx_global_ = false;
-    stat_param.need_part_ = true;
-    stat_param.need_subpart_ = false;
+    stat_param.global_stat_param_.need_modify_ = false;
+    stat_param.part_stat_param_.need_modify_ = true;
+    stat_param.subpart_stat_param_.need_modify_ = false;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else {/*do nothing */}
@@ -2112,10 +1981,9 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
         if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
           LOG_WARN("failed to parse table part info", K(ret));
         } else {
-          stat_param.need_global_ = true;
-          stat_param.need_approx_global_ = false;
-          stat_param.need_part_ = true;
-          stat_param.need_subpart_ = true;
+          stat_param.global_stat_param_.need_modify_ = true;
+          stat_param.part_stat_param_.need_modify_ = true;
+          stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator free memory after stat lock
           if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
             LOG_WARN("failed to lock table stats", K(ret));
@@ -2151,10 +2019,9 @@ int ObDbmsStats::lock_or_unlock_index_stats(sql::ObExecContext &ctx,
       } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, index_param))) {
         LOG_WARN("failed to parse table part info", K(ret));
       } else {
-        index_param.need_global_ = true;
-        index_param.need_approx_global_ = false;
-        index_param.need_part_ = true;
-        index_param.need_subpart_ = true;
+        index_param.global_stat_param_.need_modify_ = true;
+        index_param.part_stat_param_.need_modify_ = true;
+        index_param.subpart_stat_param_.need_modify_ = true;
         index_param.is_index_stat_ = true;
         if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, index_param, is_lock_stats))) {
           LOG_WARN("failed to lock table stats", K(ret));
@@ -2205,10 +2072,9 @@ int ObDbmsStats::unlock_table_stats(sql::ObExecContext &ctx,
   } else if (OB_FAIL(parse_stat_type(stat_type_str, stat_param.stattype_))) {
     LOG_WARN("failed to parse stat type", K(ret), K(stat_type_str));
   } else {
-    stat_param.need_global_ = true;
-    stat_param.need_approx_global_ = false;
-    stat_param.need_part_ = true;
-    stat_param.need_subpart_ = true;
+    stat_param.global_stat_param_.need_modify_ = true;
+    stat_param.part_stat_param_.need_modify_ = true;
+    stat_param.subpart_stat_param_.need_modify_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, false))) {
@@ -2253,10 +2119,9 @@ int ObDbmsStats::unlock_partition_stats(sql::ObExecContext &ctx,
   } else if (!stat_param.part_name_.empty() && stat_param.is_subpart_name_) {
     /*do nothing*/
   } else {
-    stat_param.need_global_ = false;
-    stat_param.need_approx_global_ = false;
-    stat_param.need_part_ = true;
-    stat_param.need_subpart_ = false;
+    stat_param.global_stat_param_.need_modify_ = false;
+    stat_param.part_stat_param_.need_modify_ = true;
+    stat_param.subpart_stat_param_.need_modify_ = false;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else {/*do nothing */}
@@ -2305,10 +2170,9 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
         if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
           LOG_WARN("failed to parse table part info", K(ret));
         } else {
-          stat_param.need_global_ = true;
-          stat_param.need_approx_global_ = false;
-          stat_param.need_part_ = true;
-          stat_param.need_subpart_ = true;
+          stat_param.global_stat_param_.need_modify_ = true;
+          stat_param.part_stat_param_.need_modify_ = true;
+          stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after stat unlock
           if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
             LOG_WARN("failed to lock table stats", K(ret));
@@ -3057,7 +2921,7 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
       LOG_WARN("failed to push back partition id", K(ret));
     }
   }
-  if (OB_SUCC(ret) && param.need_global_) {
+  if (OB_SUCC(ret) && param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
     if (OB_FAIL(stat_arg.partition_ids_.push_back(part_id))) {
       LOG_WARN("failed to push back partition ids", K(ret));
@@ -3131,17 +2995,20 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
   } else if (OB_FAIL(param.all_part_infos_.assign(param.part_infos_)) ||
              OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
     LOG_WARN("failed to assign", K(ret));
-  } else if (!part_name.is_null()) {
-    param.table_id_ = table_schema->get_table_id();
-    param.part_level_ = table_schema->get_part_level();
-    param.total_part_cnt_ = table_schema->get_all_part_num();
-    if (OB_FAIL(parse_partition_name(ctx, table_schema, part_name, param))) {
-      LOG_WARN("failed to parse partition name", K(ret));
-    }
+  } else if (!part_name.is_null() && OB_FAIL(parse_partition_name(ctx, table_schema, part_name, param))) {
+    LOG_WARN("failed to parse partition name", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
+    // we can't get part/subpart type anyway, because default value of part_func_type is
+    // PARTITION_FUNC_TYPE_HASH even table is not partitioned.
+    if (share::schema::ObPartitionLevel::PARTITION_LEVEL_ONE == param.part_level_) {
+      param.part_stat_param_.part_type_ = table_schema->get_part_option().get_part_func_type();
+    } else if (share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO == param.part_level_) {
+      param.part_stat_param_.part_type_ = table_schema->get_part_option().get_part_func_type();
+      param.subpart_stat_param_.part_type_ = table_schema->get_sub_part_option().get_part_func_type();
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_column_stat_params(*param.allocator_,
@@ -3149,12 +3016,6 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                         *table_schema,
                                         param.column_params_))) {
       LOG_WARN("failed to init column stat params", K(ret));
-    } else {
-      //set default granularity: gather subpartition、partition and global stats
-      param.need_global_ = true;
-      param.need_approx_global_ = false;
-      param.need_part_ = true;
-      param.need_subpart_ = true;
     }
   }
   return ret;
@@ -3192,11 +3053,6 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
-    //set default granularity: gather subpartition、partition and global stats
-    param.need_global_ = true;
-    param.need_approx_global_ = false;
-    param.need_part_ = true;
-    param.need_subpart_ = true;
   }
   return ret;
 }
@@ -3269,11 +3125,6 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
                                         param.column_params_))) {
       LOG_WARN("failed to init column stat params", K(ret));
     } else {
-      //set default granularity: gather subpartition、partition and global stats
-      param.need_global_ = true;
-      param.need_approx_global_ = false;
-      param.need_part_ = true;
-      param.need_subpart_ = true;
       LOG_TRACE("Succed to parse index part info", K(param));
     }
   }
@@ -3451,25 +3302,7 @@ int ObDbmsStats::parse_set_table_info(ObExecContext &ctx,
   } else {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
-    if (param.part_name_.empty()) {
-      param.need_global_ = true;
-      param.need_part_ = false;
-      param.need_subpart_ = false;
-    } else if (!param.is_subpart_name_) {
-      param.need_global_ = false;
-      param.need_part_ = true;
-      param.need_subpart_ = false;
-    } else {
-      param.need_global_ = false;
-      param.need_part_ = false;
-      param.need_subpart_ = true;
-    }
-    if (!param.need_part_) {
-      param.part_infos_.reset();
-    }
-    if (!param.need_subpart_) {
-      param.subpart_infos_.reset();
-    }
+    decide_modified_part(param, false /* cascade_part */);
   }
   return ret;
 }
@@ -3550,25 +3383,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
         } else {
           param.table_id_ = table_schema->get_table_id();
           param.part_level_ = table_schema->get_part_level();
-          if (param.part_name_.empty()) {
-            param.need_global_ = true;
-            param.need_part_ = false;
-            param.need_subpart_ = false;
-          } else if (!param.is_subpart_name_) {
-            param.need_global_ = false;
-            param.need_part_ = true;
-            param.need_subpart_ = false;
-          } else {
-            param.need_global_ = false;
-            param.need_part_ = false;
-            param.need_subpart_ = true;
-          }
-          if (!param.need_part_) {
-            param.part_infos_.reset();
-          }
-          if (!param.need_subpart_) {
-            param.subpart_infos_.reset();
-          }
+          decide_modified_part(param, false /* cascade_part */);
         }
       }
     }
@@ -4092,12 +3907,11 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   //virtual table(not include real agent table) doesn't gather histogram.
   bool is_vt = is_virtual_table(param.table_id_);
-  if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(param.granularity_,
-                                                  param.need_global_,
-                                                  param.need_approx_global_,
-                                                  param.need_part_,
-                                                  param.need_subpart_))) {
-    LOG_WARN("extract_valid_int64_with_trunc failed", K(ret));
+  ObGranularityType granu_type = ObGranularityType::GRANULARITY_INVALID;
+  if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(param.granularity_, granu_type))) {
+    LOG_WARN("failed to parse granularity");
+  } else if (OB_FAIL(resovle_granularity(granu_type, param)))  {
+    LOG_WARN("failed to resovle granularity", K(granu_type));
   } else if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
     if (OB_FAIL(set_default_column_params(param.column_params_))) {
       LOG_WARN("failed to set default column params", K(ret));
@@ -5775,7 +5589,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
   } else if (OB_FAIL(use_default_gather_stat_options(ctx, stat_table, stat_param))) {
     LOG_WARN("failed to use default gather stat optitions", K(ret));
   } else if (stat_table.need_gather_subpart_) {
-    stat_param.need_subpart_ = true;
+    stat_param.subpart_stat_param_.set_gather_stat();
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDbmsStatsLockUnlock::adjust_table_stat_param(stat_table.no_regather_partition_ids_,
@@ -6200,6 +6014,94 @@ bool ObDbmsStats::is_func_index(const ObTableStatParam &index_param)
     is_true = index_param.column_params_.at(i).is_hidden_column();
   }
   return is_true;
+}
+
+/**
+ * @brief ObDbmsStats::parse_granularity
+ * @param ctx
+ * @param granularity
+ * possible values are:
+ *  ALL: Gather all (subpartition, partition, and global)
+ *  AUTO: Oracle recommends setting granularity to the default value of AUTO to gather subpartition,
+ *        partition, or global statistics, depending on partition type.
+ *  DEFAULT: Gathers global and partition-level
+ *  GLOBAL: Gather global only
+ *  GLOBAL AND PARTITION: Gather global and partition-level
+ *  APPROX_GLOBAL AND PARTITION: similar to 'GLOBAL AND PARTITION' but in this case the global
+                                 statistics are aggregated from partition level statistics.
+ *  PARTITION: Gather partition-level
+ *  SUBPARTITION: Gather subpartition-level
+ *  Oracle granularity actual behavior survey:
+ *
+ * @return
+ */
+int ObDbmsStats::resovle_granularity(ObGranularityType granu_type, ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (ObGranularityType::GRANULARITY_AUTO == granu_type) {
+    param.global_stat_param_.set_gather_stat(false);
+    param.part_stat_param_.set_gather_stat();
+    param.subpart_stat_param_.set_gather_stat();
+    // refine auto granularity based on subpart type
+    if (ObPartitionLevel::PARTITION_LEVEL_TWO == param.part_level_ &&
+        !(is_range_part(param.subpart_stat_param_.part_type_) || is_list_part(param.subpart_stat_param_.part_type_))) {
+      param.subpart_stat_param_.gather_histogram_ = false;
+    }
+  } else if (ObGranularityType::GRANULARITY_ALL == granu_type) {
+    param.global_stat_param_.set_gather_stat(false);
+    param.part_stat_param_.set_gather_stat();
+    param.subpart_stat_param_.set_gather_stat();
+  } else if (ObGranularityType::GRANULARITY_GLOBAL_AND_PARTITION == granu_type) {
+    param.global_stat_param_.set_gather_stat(false);
+    param.part_stat_param_.set_gather_stat();
+    param.subpart_stat_param_.reset_gather_stat();
+  } else if (ObGranularityType::GRANULARITY_APPROX_GLOBAL_AND_PARTITION == granu_type) {
+    bool gather_approx = param.part_level_ != ObPartitionLevel::PARTITION_LEVEL_ZERO;
+    param.global_stat_param_.set_gather_stat(gather_approx);
+    param.part_stat_param_.set_gather_stat();
+    param.subpart_stat_param_.reset_gather_stat();
+  } else if (ObGranularityType::GRANULARITY_GLOBAL == granu_type) {
+    param.global_stat_param_.set_gather_stat(false);
+    param.part_stat_param_.reset_gather_stat();
+    param.subpart_stat_param_.reset_gather_stat();
+  } else if (ObGranularityType::GRANULARITY_PARTITION == granu_type) {
+    param.global_stat_param_.reset_gather_stat();
+    param.part_stat_param_.set_gather_stat();
+    param.subpart_stat_param_.reset_gather_stat();
+  } else if (ObGranularityType::GRANULARITY_SUBPARTITION == granu_type) {
+    param.global_stat_param_.reset_gather_stat();
+    param.part_stat_param_.reset_gather_stat();
+    param.subpart_stat_param_.set_gather_stat();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected granularity type", K(granu_type));
+  }
+  LOG_TRACE("succeed to parse granularity", K(param.global_stat_param_),
+              K(param.part_stat_param_), K(param.subpart_stat_param_));
+  return ret;
+}
+
+void ObDbmsStats::decide_modified_part(ObTableStatParam &param, const bool cascade_parts)
+{
+  if (param.part_name_.empty()) {
+    param.global_stat_param_.need_modify_ = true;
+    param.part_stat_param_.need_modify_ = cascade_parts;
+    param.subpart_stat_param_.need_modify_ = cascade_parts;
+  } else if (!param.is_subpart_name_) {
+    param.global_stat_param_.need_modify_ = false;
+    param.part_stat_param_.need_modify_ = true;
+    param.subpart_stat_param_.need_modify_ = cascade_parts;
+  } else {
+    param.global_stat_param_.need_modify_ = false;
+    param.part_stat_param_.need_modify_ = false;
+    param.subpart_stat_param_.need_modify_ = true;
+  }
+  if (!param.part_stat_param_.need_modify_) {
+    param.part_infos_.reset();
+  }
+  if (!param.subpart_stat_param_.need_modify_) {
+    param.subpart_infos_.reset();
+  }
 }
 
 }

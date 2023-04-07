@@ -45,7 +45,7 @@ ObTableRedefinitionTask::~ObTableRedefinitionTask()
 
 int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
     const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism,
-    const ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
+    const int64_t consumer_group_id, const ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_format_version = 0;
@@ -63,6 +63,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
+    consumer_group_id_ = consumer_group_id;
     task_type_ = ddl_type;
     object_id_ = data_table_id;
     target_object_id_ = dest_table_id;
@@ -76,7 +77,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     data_format_version_ = tenant_data_format_version;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     start_time_ = ObTimeUtility::current_time();
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -117,7 +118,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     start_time_ = ObTimeUtility::current_time();
 
-    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+    if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -228,6 +229,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
         schema_version_,
         snapshot_version_,
         new_execution_id,
+        consumer_group_id_,
         sql_mode,
         trace_id_,
         parallelism_,
@@ -469,6 +471,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
                                          0/*object_id*/,
                                          index_schema->get_schema_version(),
                                          parallelism_ / index_ids.count()/*parallelism*/,
+                                         consumer_group_id_,
                                          &allocator_,
                                          &create_index_arg,
                                          task_id_);

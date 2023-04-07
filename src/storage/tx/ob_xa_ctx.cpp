@@ -856,6 +856,10 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
       // if tightly coupled, need to update user savepoint
       if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx_desc_, stmt_info.savepoints_))) {
         TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(req));
+      } else if (!tx_desc_->need_rollback() && stmt_info.need_rollback()) {
+        if (OB_FAIL(MTL(ObTransService *)->abort_tx(*tx_desc_, ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+          TRANS_LOG(WARN, "abort tx fail", K(ret), K(*this), K(req));
+        }
       }
     }
   }
@@ -1051,6 +1055,7 @@ int ObXACtx::xa_start_for_dblink(const ObXATransID &xid,
   } else {
     // set global trans type to dblink trans
     tx_desc->set_global_tx_type(ObGlobalTxType::DBLINK_TRANS);
+    tx_desc->set_explicit();
   }
 
   TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags), K(need_promote), K(*this));

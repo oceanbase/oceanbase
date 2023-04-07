@@ -40,14 +40,20 @@ public:
 class ObPxRpcFetchStatArgs {
   OB_UNIS_VERSION(1);
 public:
-  ObPxRpcFetchStatArgs() : addr_target_array_() {}
-  ~ObPxRpcFetchStatArgs() { addr_target_array_.destroy(); }
+  ObPxRpcFetchStatArgs() : tenant_id_(OB_INVALID_ID), follower_version_(OB_INVALID_ID),
+    addr_target_array_(), need_refresh_all_(false) {}
+  ObPxRpcFetchStatArgs(uint64_t tenant_id, uint64_t ver, uint64_t refresh_all) :
+    tenant_id_(tenant_id), follower_version_(ver),
+    addr_target_array_(), need_refresh_all_(refresh_all) {}
+  ~ObPxRpcFetchStatArgs() { }
 
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() { return tenant_id_; }
 
   void set_version(uint64_t version) { follower_version_ = version; }
   uint64_t get_version() { return follower_version_; }
+  void set_need_refresh_all(bool v) { need_refresh_all_ = v; }
+  bool need_refresh_all() { return need_refresh_all_; }
 
   int push_local_target_usage(const ObAddr &server, int64_t local_usage)
   {
@@ -69,6 +75,7 @@ public:
   // value represents the number of targets used since the last report
   // Because hashmap does not support serialization, so that it is transform to array
   ObSEArray<ObPxRpcAddrTarget, 100> addr_target_array_;
+  bool need_refresh_all_;
 };
 
 
@@ -76,7 +83,7 @@ class ObPxRpcFetchStatResponse {
   OB_UNIS_VERSION(1);
 public:
   ObPxRpcFetchStatResponse() : addr_target_array_() {}
-  ~ObPxRpcFetchStatResponse() { addr_target_array_.destroy(); }
+  ~ObPxRpcFetchStatResponse() { }
 
   void set_status(uint64_t status) { status_ = status; }
   uint64_t get_status() { return status_; }

@@ -76,11 +76,7 @@ public:
 
   static bool is_virtual_index_table(const int64_t table_id);
 
-  static int parse_granularity(const ObString &granularity,
-                               bool &need_global,
-                               bool &need_approx_global,
-                               bool &need_part,
-                               bool &need_subpart);
+  static int parse_granularity(const ObString &granularity, ObGranularityType &granu_type);
 
   static bool is_subpart_id(const ObIArray<PartInfo> &partition_infos,
                             const int64_t partition_id,
@@ -111,7 +107,6 @@ public:
     common::ObIArray<ObOptColumnStat*> &dst_column_stat);
 
   static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
-  static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

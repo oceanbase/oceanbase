@@ -183,6 +183,8 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return compat_mode_; }
+  virtual uint64_t get_consumer_group_id() const override
+  { return consumer_group_id_; }
 private:
   bool is_inited_;
   uint64_t tenant_id_;

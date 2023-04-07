@@ -125,12 +125,16 @@ int ObDDLTaskID::assign(const ObDDLTaskID &other)
   return ret;
 }
 
-ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version, const int64_t parallelism,
-                                  const int64_t data_format_version, const bool is_abort)
+ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
+                                                 const int64_t parallelism,
+                                                 const int64_t data_format_version,
+                                                 const int64_t consumer_group_id,
+                                                 const bool is_abort)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
   data_format_version_ = data_format_version;
+  consumer_group_id_ = consumer_group_id;
   is_abort_ = is_abort;
 }
 
@@ -139,13 +143,19 @@ void ObDDLTaskSerializeField::reset()
   task_version_ = 0;
   parallelism_ = 0;
   data_format_version_ = 0;
+  consumer_group_id_ = 0;
   is_abort_ = false;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField, task_version_, parallelism_, data_format_version_, is_abort_);
+OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
+                    task_version_,
+                    parallelism_,
+                    data_format_version_,
+                    consumer_group_id_,
+                    is_abort_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
-  : tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), parent_task_id_(0),
+  : tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), consumer_group_id_(0), parent_task_id_(0),
     type_(DDL_INVALID), src_table_schema_(nullptr), dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr)
 {
 }
@@ -157,10 +167,11 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
                                            const int64_t object_id,
                                            const int64_t schema_version,
                                            const int64_t parallelism,
+                                           const int64_t consumer_group_id,
                                            ObIAllocator *allocator,
                                            const obrpc::ObDDLArg *ddl_arg,
                                            const int64_t parent_task_id)
-  : tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism),
+  : tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator)
 {
@@ -812,7 +823,7 @@ int ObDDLTask::set_ddl_stmt_str(const ObString &ddl_stmt_str)
 int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, is_abort_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_);
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -827,15 +838,13 @@ int ObDDLTask::deserlize_params_from_message(const uint64_t tenant_id, const cha
   int ret = OB_SUCCESS;
   ObDDLTaskSerializeField serialize_field;
   serialize_field.reset();
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(tenant_id), K(buf_size));
-  } else if (OB_FAIL(serialize_field.deserialize(buf, buf_size, pos))) {
+  if (OB_FAIL(serialize_field.deserialize(buf, buf_size, pos))) {
     LOG_WARN("serialize_field deserialize failed", K(ret));
   } else {
     task_version_ = serialize_field.task_version_;
     parallelism_ = serialize_field.parallelism_;
     data_format_version_ = serialize_field.data_format_version_;
+    consumer_group_id_ = serialize_field.consumer_group_id_;
     is_abort_ = serialize_field.is_abort_;
   }
   return ret;
@@ -843,7 +852,7 @@ int ObDDLTask::deserlize_params_from_message(const uint64_t tenant_id, const cha
 
 int64_t ObDDLTask::get_serialize_param_size() const
 {
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, is_abort_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_);
   return serialize_field.get_serialize_size();
 }
 
@@ -3198,21 +3207,19 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
   return ret;
 }
 
-int ObDDLTask::init_ddl_task_monitor_info(const ObTableSchema *target_schema)
+int ObDDLTask::init_ddl_task_monitor_info(const uint64_t target_table_id)
 {
   int ret = OB_SUCCESS;
   const char *ddl_type_str = nullptr;
   const char *target_name = nullptr;
-  if (OB_ISNULL(target_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(target_schema));
-  } else if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
+  if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
     LOG_WARN("failed to get ddl type str", K(ret));
-  } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_schema->get_table_id()))) {
+  } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_table_id))) {
     LOG_WARN("failed to init stat info", K(ret));
   }
   return ret;
 }
+
 
 
 } // end namespace rootserver

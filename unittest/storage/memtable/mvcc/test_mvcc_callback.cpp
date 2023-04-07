@@ -149,17 +149,18 @@ public:
     return cb;
   }
 
-  void create_and_append_callback(ObMemtable *mt,
-                                  bool need_submit_log = true,
-                                  bool need_fill_redo = true,
-                                  share::SCN scn = share::SCN::max_scn())
-  {
+  ObITransCallback *create_and_append_callback(ObMemtable *mt,
+                                               bool need_submit_log = true,
+                                               bool need_fill_redo = true,
+                                               share::SCN scn = share::SCN::max_scn())
+    {
     ObMockTxCallback *cb = create_callback(mt,
                                            need_submit_log,
                                            need_fill_redo,
                                            scn);
     EXPECT_NE(NULL, (long)cb);
     EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb));
+    return cb;
   }
 
   ObMemtable *create_memtable()
@@ -225,6 +226,38 @@ int ObMockTxCallback::calc_checksum(const share::SCN checksum_scn,
     TRANS_LOG(INFO, "no need to calc checksum", K(checksum_scn), K(scn_), K(seq_no_));
   }
   return OB_SUCCESS;
+}
+
+TEST_F(TestTxCallbackList, remove_callback_on_failure)
+{
+  ObMemtable *memtable = create_memtable();
+  share::SCN scn_1;
+  scn_1.convert_for_logservice(1);
+
+  create_and_append_callback(memtable,
+                             false, /*need_submit_log*/
+                             false, /*need_fill_redo*/
+                             scn_1);
+  auto cb1 = create_and_append_callback(memtable,
+                                        false, /*need_submit_log*/
+                                        true /*need_fill_redo*/);
+  auto cb2 = create_and_append_callback(memtable,
+                                        false, /*need_submit_log*/
+                                        true /*need_fill_redo*/);
+  create_and_append_callback(memtable,
+                             false, /*need_submit_log*/
+                             true /*need_fill_redo*/);
+
+  ObCallbackScope scope;
+  int64_t removed_cnt = 0;
+  scope.start_ = ObITransCallbackIterator(cb1);
+  scope.end_ = ObITransCallbackIterator(cb2);
+
+  EXPECT_EQ(false, scope.is_empty());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.sync_log_fail(scope, removed_cnt));
+
+  EXPECT_EQ(2, removed_cnt);
+  EXPECT_EQ(2, callback_list_.get_length());
 }
 
 TEST_F(TestTxCallbackList, remove_callback_by_tx_commit)

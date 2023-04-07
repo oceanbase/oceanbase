@@ -1512,6 +1512,9 @@ int ObBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupProvid
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tablet provider do not init", K(ret));
+  } else if (OB_ISNULL(ls_backup_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls backup ctx should not be null", K(ret));
   } else if (OB_FAIL(prepare_batch_tablet_(tenant_id, ls_id))) {
     LOG_WARN("failed to prepare batch tablet", K(ret), K(tenant_id), K(ls_id));
   } else {
@@ -1528,7 +1531,10 @@ int ObBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupProvid
 #endif
     while (OB_SUCC(ret)) {
       tmp_items.reset();
-      if (OB_FAIL(inner_get_batch_items_(batch_size, tmp_items))) {
+      if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+        LOG_INFO("backup task already failed", "result_code", ls_backup_ctx_->get_result_code());
+        break;
+      } else if (OB_FAIL(inner_get_batch_items_(batch_size, tmp_items))) {
         LOG_WARN("failed to inner get batch item", K(ret), K(batch_size));
       } else if (tmp_items.empty() && meet_end_) {
         is_run_out_ = true;

@@ -179,6 +179,7 @@ struct ObDiagnoseTabletCompProgress : public ObCompactionProgress
   ObDiagnoseTabletCompProgress()
     : ObCompactionProgress(),
       is_suspect_abormal_(false),
+      is_waiting_schedule_(false),
       dag_id_(),
       create_time_(0),
       latest_update_ts_(0),
@@ -188,10 +189,11 @@ struct ObDiagnoseTabletCompProgress : public ObCompactionProgress
   }
   bool is_valid() const;
   void reset();
-  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_suspect_abormal), K_(create_time),
-      K_(dag_id), K_(base_version), K_(snapshot_version), K_(status));
+  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_suspect_abormal), K_(is_waiting_schedule),
+      K_(create_time), K_(latest_update_ts), K_(dag_id), K_(base_version), K_(snapshot_version), K_(status));
 
   bool is_suspect_abormal_;
+  bool is_waiting_schedule_;
   share::ObDagId dag_id_;
   int64_t create_time_;
   int64_t latest_update_ts_;

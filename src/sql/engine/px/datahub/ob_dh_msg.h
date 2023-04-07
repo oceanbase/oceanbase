@@ -70,8 +70,45 @@ public:
 
 OB_SERIALIZE_MEMBER_TEMP(template<dtl::ObDtlMsgType T>, ObDatahubWholeMsg<T>,
                          op_id_);
-OB_SERIALIZE_MEMBER_TEMP(template<dtl::ObDtlMsgType T>, ObDatahubPieceMsg<T>,
-                         op_id_, source_dfo_id_, thread_id_, piece_count_, target_dfo_id_);
+
+OB_DEF_SERIALIZE(ObDatahubPieceMsg<T>, template<dtl::ObDtlMsgType T>)
+{
+  int ret = common::OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              op_id_,
+              source_dfo_id_,
+              thread_id_,
+              piece_count_,
+              target_dfo_id_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDatahubPieceMsg<T>, template<dtl::ObDtlMsgType T>)
+{
+  int ret = common::OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              op_id_,
+              source_dfo_id_,
+              thread_id_,
+              piece_count_);
+  // for compat
+  target_dfo_id_ = source_dfo_id_;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              target_dfo_id_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDatahubPieceMsg<T>, template<dtl::ObDtlMsgType T>)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              op_id_,
+              source_dfo_id_,
+              thread_id_,
+              piece_count_,
+              target_dfo_id_);
+  return len;
+}
 
 
 }

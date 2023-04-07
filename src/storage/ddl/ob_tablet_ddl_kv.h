@@ -129,6 +129,7 @@ public:
   share::SCN get_min_scn() const { return min_scn_; }
   share::SCN get_freeze_scn() const { return freeze_scn_; }
   share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
+  share::SCN get_start_scn() const { return last_freezed_scn_; }
   int64_t get_macro_block_cnt() const { return block_meta_tree_.get_macro_block_cnt(); }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();

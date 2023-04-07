@@ -108,18 +108,23 @@ struct ObDDLTaskSerializeField final
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(is_abort));
-  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), is_abort_(false) {}
-  ObDDLTaskSerializeField(const int64_t task_version, const int64_t parallelism,
-                          const int64_t data_format_version, const bool is_abort);
+  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id), K_(is_abort));
+  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false) {}
+  ObDDLTaskSerializeField(const int64_t task_version,
+                          const int64_t parallelism,
+                          const int64_t data_format_version,
+                          const int64_t consumer_group_id,
+                          const bool is_abort);
   ~ObDDLTaskSerializeField() = default;
   void reset();
 public:
   int64_t task_version_;
   int64_t parallelism_;
   int64_t data_format_version_;
+  int64_t consumer_group_id_;
   bool is_abort_;
 };
+
 struct ObCreateDDLTaskParam final
 {
 public:
@@ -131,19 +136,21 @@ public:
                        const int64_t object_id,
                        const int64_t schema_version,
                        const int64_t parallelism,
+                       const int64_t consumer_group_id,
                        ObIAllocator *allocator,
                        const obrpc::ObDDLArg *ddl_arg = nullptr,
                        const int64_t parent_task_id = 0);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
-  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(parent_task_id), K_(type),
-               KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg));
+  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id),
+               K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg));
 public:
   uint64_t tenant_id_;
   int64_t object_id_;
   int64_t schema_version_;
   int64_t parallelism_;
+  int64_t consumer_group_id_;
   int64_t parent_task_id_;
   share::ObDDLType type_;
   const ObTableSchema *src_table_schema_;
@@ -437,6 +444,7 @@ public:
   void set_task_status(const share::ObDDLTaskStatus new_status) {task_status_ = new_status; }
   void set_is_abort(const bool is_abort) { is_abort_ = is_abort; }
   bool get_is_abort() { return is_abort_; }
+  void set_consumer_group_id(const int64_t group_id) { consumer_group_id_ = group_id; }
   bool try_set_running() { return !ATOMIC_CAS(&is_running_, false, true); }
   uint64_t get_tenant_id() const { return tenant_id_; }
   uint64_t get_object_id() const { return object_id_; }
@@ -506,7 +514,7 @@ public:
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
-      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version));
+      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_));
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,
@@ -535,7 +543,7 @@ protected:
     return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
   }
-  int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
+  int init_ddl_task_monitor_info(const uint64_t target_table_id);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
@@ -572,6 +580,7 @@ protected:
   common::ObAddr sql_exec_addr_;
   int64_t start_time_;
   int64_t data_format_version_;
+  int64_t consumer_group_id_;
 };
 
 enum ColChecksumStat

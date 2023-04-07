@@ -12,6 +12,7 @@
 
 #include "common/cell/ob_cell_writer.h"
 #include "common/object/ob_object.h"
+#include "lib/timezone/ob_time_convert.h"
 namespace oceanbase
 {
 namespace common
@@ -505,7 +506,7 @@ int ObCellWriter::append(uint64_t column_id, const ObObj &obj, ObObj *clone_obj)
         WRITE_DATA(ObTimestampType, 0, int64_t, obj.get_timestamp());
         break;
       case ObTimeType: {
-        const int64_t ob_time_max_value = 3020399999999;  // 838:59:59
+        const int64_t ob_time_max_value = TIME_MAX_VAL;
         assert(obj.get_time() <= ob_time_max_value && obj.get_time() >= -ob_time_max_value);
         WRITE_DATA(ObTimeType, 0, int64_t, obj.get_time());
         break;

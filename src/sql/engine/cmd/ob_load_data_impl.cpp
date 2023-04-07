@@ -1063,7 +1063,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
         } else if (OB_FAIL(handle->generator.gen_insert_values(insert_values, str_buf))) {
           LOG_WARN("fail to generate insert values", K(ret));
         } else if (nullptr == handle->calc_tablet_id_expr) {
-          tablet_id = handle->datafrag_mgr.get_tablet_ids().at(0);
+          int64_t idx = task_id % handle->datafrag_mgr.get_tablet_ids().count();
+          tablet_id = handle->datafrag_mgr.get_tablet_ids().at(idx);
         } else {
           for (int i = 0; i < handle->parser.get_fields_per_line().count(); ++i) {
             ObCSVGeneralParser::FieldValue &str_v = handle->parser.get_fields_per_line().at(i);
@@ -2565,6 +2566,14 @@ int ObLoadDataSPImpl::ToolBox::build_calc_partid_expr(ObExecContext &ctx,
         LOG_WARN("plan ctx is null", K(ret));
       } else {
         ctx.get_physical_plan_ctx()->set_autoinc_params(insert_stmt->get_autoinc_params());
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      bool part_key_has_autoinc = false;
+      OZ (insert_stmt->part_key_has_auto_inc(part_key_has_autoinc));
+      if (part_key_has_autoinc) {
+        calc_tablet_id_expr = NULL;
       }
     }
 

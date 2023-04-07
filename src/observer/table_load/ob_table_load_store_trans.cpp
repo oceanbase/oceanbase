@@ -106,69 +106,13 @@ int ObTableLoadStoreTrans::set_trans_status_abort()
   return ret;
 }
 
-int ObTableLoadStoreTrans::get_store_writer_for_write(
-  ObTableLoadTransStoreWriter *&store_writer) const
+int ObTableLoadStoreTrans::get_store_writer(ObTableLoadTransStoreWriter *&store_writer) const
 {
   int ret = OB_SUCCESS;
   store_writer = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
-  } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
-    LOG_WARN("fail to check trans status", KR(ret));
-  } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
-    if (OB_ISNULL(trans_store_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null store writer", KR(ret));
-    } else if (OB_UNLIKELY(trans_store_writer_->is_flush())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("trans store writer is flush", KR(ret));
-    } else {
-      store_writer = trans_store_writer_;
-      store_writer->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTrans::get_store_writer_for_flush(
-  ObTableLoadTransStoreWriter *&store_writer) const
-{
-  int ret = OB_SUCCESS;
-  store_writer = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
-  } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-    LOG_WARN("fail to check trans status", KR(ret));
-  } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
-    if (OB_ISNULL(trans_store_writer_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null store writer", KR(ret));
-    } else if (OB_UNLIKELY(trans_store_writer_->is_flush())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("trans store writer is flush", KR(ret));
-    } else {
-      trans_store_writer_->set_is_flush();
-      store_writer = trans_store_writer_;
-      store_writer->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTrans::get_store_writer_for_clean_up(
-  ObTableLoadTransStoreWriter *&store_writer) const
-{
-  int ret = OB_SUCCESS;
-  store_writer = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
-  } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::ABORT))) {
-    LOG_WARN("fail to check trans status", KR(ret));
   } else {
     obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_writer_)) {

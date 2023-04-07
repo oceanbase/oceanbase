@@ -705,8 +705,9 @@ int ObLoadDataDirectImpl::DataReader::get_next_buffer(ObLoadFileBuffer &file_buf
                                                     complete_len, complete_cnt))) {
           LOG_WARN("fail to fast_lines_parse", KR(ret));
         } else if (OB_UNLIKELY(0 == complete_len)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected complete len", KR(ret), K(complete_len));
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support big row", KR(ret), "size",
+                   file_buffer.get_data_len());
         } else if (OB_FAIL(data_trimer_.backup_incomplate_data(file_buffer, complete_len))) {
           LOG_WARN("fail to back up data", KR(ret));
         } else {
@@ -1577,9 +1578,9 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
     if (OB_FAIL(skip_ignore_rows(total_line_count))) {
       LOG_WARN("fail to skip ignore rows", KR(ret));
     } else if (OB_UNLIKELY(total_line_count < execute_param_->ignore_row_num_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected ignore row num", KR(ret), K(total_line_count),
-               K(execute_param_->ignore_row_num_));
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support ignore rows exceed the first file", KR(ret),
+               K(total_line_count), K(execute_param_->ignore_row_num_));
     } else if (!handle_->data_buffer_.empty()) {
       handle_->start_line_no_ = total_line_count + 1;
       if (OB_FAIL(
@@ -1612,8 +1613,9 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
             file_load_executor_->process_task_handle(worker_idx_, handle_, current_line_count))) {
         LOG_WARN("fail to process task handle", KR(ret));
       } else if (OB_UNLIKELY(0 == current_line_count)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected no complete line", KR(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("direct-load does not support big row", KR(ret), "size",
+                 handle_->data_buffer_.get_data_length());
       } else {
         total_line_count += current_line_count;
         current_line_count = 0;
@@ -1652,8 +1654,9 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::skip_ignore_rows(int64_t 
               complete_len, complete_cnt))) {
           LOG_WARN("fail to fast_lines_parse", KR(ret));
         } else if (OB_UNLIKELY(0 == complete_len)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected complete len", KR(ret), K(complete_len));
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("direct-load does not support big row", KR(ret), "size",
+                   data_buffer.get_data_length());
         } else {
           data_buffer.advance(complete_len);
           skip_line_count += complete_cnt;

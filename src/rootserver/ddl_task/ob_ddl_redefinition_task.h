@@ -32,6 +32,7 @@ public:
       const int64_t schema_version,
       const int64_t snapshot_version,
       const int64_t execution_id,
+      const int64_t consumer_group_id,
       const ObSQLMode &sql_mode,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
@@ -56,6 +57,7 @@ private:
   int64_t schema_version_;
   int64_t snapshot_version_;
   int64_t execution_id_;
+  int64_t consumer_group_id_;
   ObSQLMode sql_mode_;
   ObTimeZoneInfoWrap tz_info_wrap_;
   share::ObColumnNameMap col_name_map_;

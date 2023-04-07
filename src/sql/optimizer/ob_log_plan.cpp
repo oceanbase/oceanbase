@@ -13301,6 +13301,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       info.table_id_ = scan->get_table_id();
       info.filter_table_id_ = hint_info.filter_table_id_;
       info.ref_table_id_ = scan->get_ref_table_id();
+      info.index_id_ = scan->get_index_table_id();
       info.sharding_ = scan->get_strong_sharding();
       info.row_count_ = scan->get_output_row_count();
       info.can_use_join_filter_ = can_join_filter;

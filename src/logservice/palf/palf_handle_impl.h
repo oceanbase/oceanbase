@@ -99,11 +99,20 @@ public:
 };
 
 struct PalfDiagnoseInfo {
+  PalfDiagnoseInfo() { reset(); }
+  ~PalfDiagnoseInfo() { reset(); }
   common::ObRole election_role_;
   int64_t election_epoch_;
   common::ObRole palf_role_;
   palf::ObReplicaState palf_state_;
   int64_t palf_proposal_id_;
+  void reset() {
+    election_role_ = FOLLOWER;
+    election_epoch_ = 0;
+    palf_role_ = FOLLOWER;
+    palf_state_ = ObReplicaState::INVALID_STATE;
+    palf_proposal_id_ = INVALID_PROPOSAL_ID;
+  }
   TO_STRING_KV(K(election_role_),
                K(election_epoch_),
                K(palf_role_),

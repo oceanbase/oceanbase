@@ -5223,6 +5223,8 @@ int ObQueryRange::union_single_equal_cond(ObExecContext *exec_ctx,
       LOG_WARN("Do merge Or graph failed", K(ret));
     } else if (OB_FAIL(or_range_graph(next_or_list, exec_ctx, next_key_part, dtc_params))) {
       LOG_WARN("Do merge Or graph failed", K(ret));
+    } else if (next_key_part->is_always_true()) {
+      cur1->and_next_ = NULL;
     } else {
       cur1->and_next_ = next_key_part;
     }

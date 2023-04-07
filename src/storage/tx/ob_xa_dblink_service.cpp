@@ -433,7 +433,7 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
       } else if (OB_FAIL(ObXAService::generate_xid_with_new_bqual(xid,
               client->get_index(), remote_xid))) {
         TRANS_LOG(WARN, "fail to generate xid", K(ret), K(xid), K(tx_id), K(remote_xid));
-      } else if (OB_FAIL(client->rm_xa_start(remote_xid))) {
+      } else if (OB_FAIL(client->rm_xa_start(remote_xid, tx_desc->get_isolation_level()))) {
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(xa_ctx->remove_dblink_client(client))) {
           ret = tmp_ret;

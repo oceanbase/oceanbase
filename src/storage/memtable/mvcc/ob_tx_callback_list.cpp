@@ -88,6 +88,18 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor)
 }
 
 int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
+                                const ObCallbackScope &callbacks)
+{
+  ObITransCallback *start = (ObITransCallback *)*(callbacks.start_);
+  ObITransCallback *end = (ObITransCallback *)*(callbacks.end_);
+  if (functor.is_reverse()) {
+    return callback_(functor, start->get_next(), end->get_prev());
+  } else {
+    return callback_(functor, start->get_prev(), end->get_next());
+  }
+}
+
+int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
                                 ObITransCallback *start,
                                 ObITransCallback *end)
 {
@@ -250,6 +262,23 @@ int ObTxCallbackList::reverse_search_callback_by_seq_no(const int64_t seq_no,
     search_res = functor.get_search_result();
   }
 
+  return ret;
+}
+
+int ObTxCallbackList::sync_log_fail(const ObCallbackScope &callbacks,
+                                    int64_t &removed_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSyncLogFailFunctor functor;
+
+  SpinLockGuard guard(latch_);
+
+  if (OB_FAIL(callback_(functor, callbacks))) {
+    TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret), K(functor));
+  } else {
+    TRANS_LOG(INFO, "sync failed log successfully", K(functor), K(*this));
+  }
+  removed_cnt = functor.get_remove_cnt();
   return ret;
 }
 

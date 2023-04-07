@@ -7601,21 +7601,6 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("XA_TRANS_ID", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      1024, //column_length
-      2, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("COORDINATOR", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -7641,7 +7626,7 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
       1024, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7671,7 +7656,7 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7766,6 +7751,36 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("REF_CNT", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("TX_DESC_ADDR", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      20, //column_length
+      2, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("SAVEPOINTS", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -7776,7 +7791,7 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
       1024, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7812,6 +7827,51 @@ int ObInnerTableSchema::all_virtual_trans_scheduler_ora_schema(ObTableSchema &ta
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("CAN_EARLY_LOCK_RELEASE", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("GTRID", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      128, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("BQUAL", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      128, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("FORMAT_ID", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

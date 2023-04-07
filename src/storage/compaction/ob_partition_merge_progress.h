@@ -37,7 +37,6 @@ public:
   void reset();
   OB_INLINE bool is_inited() const { return is_inited_; }
   int init(ObTabletMergeCtx *ctx, const storage::ObTableReadInfo &read_info);
-  int update_row_count(const int64_t idx, const int64_t incre_row_cnt);
   virtual int update_merge_progress(const int64_t idx, const int64_t scanned_row_count, const int64_t output_block_cnt);
   virtual int finish_merge_progress(const int64_t output_cnt);
   int update_merge_info(storage::ObSSTableMergeInfo &merge_info);
@@ -73,6 +72,7 @@ protected:
   int64_t pre_scanned_row_cnt_; // for smooth the progress curve
   int64_t pre_output_block_cnt_;
   bool is_updating_; // atomic lock
+  bool is_waiting_schedule_;
   bool is_inited_;
 };
 

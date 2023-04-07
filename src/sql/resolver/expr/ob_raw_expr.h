@@ -3439,13 +3439,17 @@ public:
       type_(pl::ObPLType::PL_INVALID_TYPE),
       elem_type_(),
       capacity_(OB_INVALID_SIZE),
-      udt_id_(OB_INVALID_ID) {}
+      udt_id_(OB_INVALID_ID),
+      database_id_(OB_INVALID_ID),
+      coll_schema_version_(common::OB_INVALID_VERSION) {}
   ObCollectionConstructRawExpr()
     : ObSysFunRawExpr(),
       type_(pl::ObPLType::PL_INVALID_TYPE),
       elem_type_(),
       capacity_(OB_INVALID_SIZE),
-      udt_id_(OB_INVALID_ID) {}
+      udt_id_(OB_INVALID_ID),
+      database_id_(OB_INVALID_ID),
+      coll_schema_version_(common::OB_INVALID_VERSION) {}
   virtual ~ObCollectionConstructRawExpr() {}
 
   inline void set_type(pl::ObPLType type) { type_ = type; }
@@ -3467,12 +3471,32 @@ public:
 
   virtual ObExprOperator *get_op() override;
 
+  inline void set_database_id(int64_t database_id)
+  {
+    database_id_ = database_id;
+  }
+
+  OB_INLINE uint64_t get_database_id() const { return database_id_; }
+
+  inline void set_coll_schema_version(int64_t schema_version)
+  {
+    coll_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return coll_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             N_FUNC, get_func_name(),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(coll_schema_version));
 private:
   pl::ObPLType type_; // PL_NESTED_TABLE_TYPE|PL_ASSOCIATIVE_ARRAY_TYPE|PL_VARRAY_TYPE
   pl::ObPLDataType elem_type_; // 记录复杂数据类型的元素类型
@@ -3480,6 +3504,8 @@ private:
   uint64_t udt_id_; // 记录复杂类型的ID
   // 用于打印构造函数的名字
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  int64_t database_id_;
+  int64_t coll_schema_version_;
 };
 
 class ObObjectConstructRawExpr : public ObSysFunRawExpr
@@ -3490,13 +3516,17 @@ public:
       rowsize_(0),
       udt_id_(OB_INVALID_ID),
       elem_types_(),
-      access_names_() {}
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
   ObObjectConstructRawExpr()
     : ObSysFunRawExpr(),
       rowsize_(0),
       udt_id_(OB_INVALID_ID),
       elem_types_(),
-      access_names_() {}
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
 
   virtual ~ObObjectConstructRawExpr() {}
 
@@ -3526,6 +3556,25 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
 
+  inline void set_database_id(int64_t database_id)
+  {
+    database_id_ = database_id;
+  }
+
+  OB_INLINE uint64_t get_database_id() const { return database_id_; }
+
+  inline void set_coll_schema_version(int64_t schema_version)
+  {
+    object_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return object_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
   virtual ObExprOperator *get_op() override;
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
@@ -3533,7 +3582,9 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             N_FUNC, get_func_name(),
-                                            N_CHILDREN, exprs_);
+                                            N_CHILDREN, exprs_,
+                                            K_(database_id),
+                                            K_(object_schema_version));
 private:
   int64_t rowsize_;
   uint64_t udt_id_;
@@ -3541,6 +3592,8 @@ private:
   common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> elem_types_;
   // 用于打印构造函数的名字
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  int64_t database_id_;
+  int64_t object_schema_version_;
 };
 
 class ObUDFParamDesc
@@ -4230,7 +4283,6 @@ public:
     : ObRawExpr(),
       ObWindow(),
       func_type_(T_MAX),
-      is_distinct_(false),
       is_ignore_null_(false),
       is_from_first_(false),
       agg_expr_(NULL),
@@ -4242,7 +4294,6 @@ public:
     : ObRawExpr(alloc),
       ObWindow(),
       func_type_(T_MAX),
-      is_distinct_(false),
       is_ignore_null_(false),
       is_from_first_(false),
       agg_expr_(NULL),
@@ -4259,8 +4310,6 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs);
   inline void set_func_type(ObItemType func_type)
   { func_type_ = func_type; }
-  inline void set_is_distinct(bool is_distinct)
-  { is_distinct_ = is_distinct; }
   inline void set_is_ignore_null(bool is_ignore_null)
   { is_ignore_null_ = is_ignore_null; }
   inline void set_is_from_first(bool is_from_first)
@@ -4270,7 +4319,6 @@ public:
   inline void set_agg_expr(ObAggFunRawExpr *agg_expr)
   { agg_expr_ = agg_expr; }
   inline ObItemType get_func_type() const { return func_type_; }
-  inline bool is_distinct() { return is_distinct_; }
   inline bool is_ignore_null() { return is_ignore_null_; }
   inline bool is_from_first() { return is_from_first_; }
   inline const common::ObIArray<ObRawExpr *> &get_func_params() const { return func_params_; }
@@ -4316,7 +4364,6 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             K_(func_type),
-                                            K_(is_distinct),
                                             K_(func_params),
                                             K_(partition_exprs),
                                             K_(order_items),
@@ -4331,7 +4378,6 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObWinFunRawExpr);
   ObItemType func_type_;
-  bool is_distinct_;
   bool is_ignore_null_;
   bool is_from_first_;
   common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> func_params_;

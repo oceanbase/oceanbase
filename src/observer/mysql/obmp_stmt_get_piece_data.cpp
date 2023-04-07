@@ -292,6 +292,7 @@ int ObMPStmtGetPieceData::do_process(ObSQLSessionInfo &session)
       if (OB_SUCC(session.get_inner_ps_stmt_id(stmt_id_, inner_stmt_id))
             && OB_SUCC(session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
             && OB_NOT_NULL(ps_info = guard.get_stmt_info())) {
+        audit_record.ps_inner_stmt_id_ = inner_stmt_id;
         audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
         audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
       } else {

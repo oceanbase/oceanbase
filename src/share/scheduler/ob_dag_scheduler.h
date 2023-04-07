@@ -350,12 +350,14 @@ public:
   virtual int create_first_task() { return common::OB_SUCCESS; }
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const = 0;
   virtual lib::Worker::CompatMode get_compat_mode() const = 0;
+  virtual uint64_t get_consumer_group_id() const = 0;
   int remove_task(ObITask &task);
 
 protected:
   int dag_ret_;
   int64_t add_time_;
   int64_t start_time_;
+  uint64_t consumer_group_id_;
 
 private:
   typedef common::ObDList<ObITask> TaskList;
@@ -707,7 +709,7 @@ public:
   void yield();
   void set_task(ObITask *task) { task_ = task; }
   void set_function_type(const int64_t function_type) { function_type_ = function_type; }
-  int set_dag_resource();
+  int set_dag_resource(const uint64_t group_id);
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
   static ObTenantDagWorker *self() { return self_; }

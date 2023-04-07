@@ -1354,7 +1354,7 @@ protected:
                          cur_query_len_(0),
                          cur_statement_id_(0),
                          last_active_time_(0),
-                         dis_state_(DIS_INIT),
+                         dis_state_(CLIENT_FORCE_DISCONNECT),
                          state_(SESSION_SLEEP),
                          is_interactive_(false),
                          sock_desc_(),
@@ -1389,7 +1389,7 @@ protected:
       cur_query_len_ = 0;
       cur_statement_id_ = 0;
       last_active_time_ = 0;
-      dis_state_ = DIS_INIT;
+      dis_state_ = CLIENT_FORCE_DISCONNECT;
       state_ = SESSION_SLEEP;
       is_interactive_ = false;
       sock_desc_.clear_sql_session_info();

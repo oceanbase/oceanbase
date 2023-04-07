@@ -49,8 +49,9 @@ public:
   { return OPEN_SELF_FIRST; }
 
   int prepare_rescan_params();
-
   int restore_prior_expr();
+  int calc_connect_by_root_exprs(bool is_root);
+
   int64_t get_current_level() const override { return connect_by_pump_.get_current_level(); }
   virtual int get_sys_parent_path(ObString &parent_path) override
   { return connect_by_pump_.get_parent_path(sys_connect_by_path_id_, parent_path); }
@@ -108,6 +109,7 @@ private:
   bool is_inited_;
   bool need_return_;
   lib::MemoryContext mem_context_;
+  ObChunkDatumStore::StoredRow *connect_by_root_row_;
 };
 
 }//sql

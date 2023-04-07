@@ -266,7 +266,7 @@ public:
   virtual int alter_database(const obrpc::ObAlterDatabaseArg &arg);
   virtual int drop_database(const obrpc::ObDropDatabaseArg &arg,
                             obrpc::ObDropDatabaseRes &res,
-                            ObMySQLTransaction *trans = NULL);
+                            ObDDLSQLTransaction *trans = NULL);
   virtual int create_tablegroup(const bool if_not_exist,
                                 share::schema::ObTablegroupSchema &tablegroup_schema,
                                 const common::ObString *ddl_stmt_str);
@@ -610,6 +610,12 @@ public:
       common::ObMySQLTransaction &trans,
       common::ObArenaAllocator &allocator,
       const obrpc::ObIndexArg::IndexActionType &index_action_type);
+  int get_add_pk_index_name(const share::schema::ObTableSchema &origin_table_schema,
+                            share::schema::ObTableSchema &new_table_schema,
+                            const obrpc::ObIndexArg::IndexActionType &index_action_type,
+                            const common::ObIArray<obrpc::ObIndexArg *> &index_arg_list,
+                            share::schema::ObSchemaGetterGuard &schema_guard,
+                            ObString &index_name);
   virtual int rename_table(const obrpc::ObRenameTableArg &rename_table_arg);
   int collect_temporary_tables_in_session(const obrpc::ObDropTableArg &drop_table_arg);
   int need_collect_current_temp_table(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1298,7 +1304,8 @@ private:
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                ObDDLOperator &ddl_operator,
                                common::ObMySQLTransaction &trans,
-                               common::ObIAllocator &allocator);
+                               common::ObIAllocator &allocator,
+                               const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1331,7 +1338,8 @@ private:
   int prepare_hidden_table_schema(
       const share::schema::ObTableSchema &orig_table_schema,
       common::ObIAllocator &allocator,
-      share::schema::ObTableSchema &hidden_table_schema);
+      share::schema::ObTableSchema &hidden_table_schema,
+      const ObString &index_name);
   int rebuild_hidden_table_priv(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -2349,6 +2357,7 @@ public:
                        const transaction::ObTxDataSourceType &type,
                        const char *buf,
                        const int64_t buf_len);
+  void disable_serialize_inc_schemas() { trans_start_schema_version_ = 0; }
   // serialize inc schemas from (start_schema_version, ]
   int serialize_inc_schemas(const int64_t start_schema_version);
 private:
@@ -2393,7 +2402,8 @@ private:
   // Used for fetch increment schemas generate by this DDL trans.
   // 1. when bootstrap/create tenant, trans_start_schema_version_ is 0, won't fetch increment schema.
   // 2. when enable_ddl_parallel_ = true(truncate table in 4.1), trans_start_schema_version_ is meaningless, it needs fetch increment schema alone.
-  // 3. other situations, fetch increament schemas in (trans_start_schema_version_, ].
+  // 3. in some situations, serialize inc schemas may be useless(eg. drop database to recyclebin). Can disable serialize logic by disable_serialize_inc_schemas().
+  // 4. other situations, fetch increament schemas in (trans_start_schema_version_, ].
   int64_t trans_start_schema_version_;
   // enable ddl parallel
   bool enable_ddl_parallel_;

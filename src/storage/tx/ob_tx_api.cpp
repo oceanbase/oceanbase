@@ -1523,7 +1523,9 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     tx.lock_.lock();
     tx.flags_.BLOCK_ = false;
     // restore state
-    tx.state_ = save_state;
+    if (OB_SUCC(ret) && tx.is_tx_active()) {
+      tx.state_ = save_state;
+    }
     // mask_set need clear
     tx.brpc_mask_set_.reset();
     // clear interrupt flag
@@ -1869,6 +1871,12 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
           ret = OB_TRANS_NEED_ROLLBACK;
           TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
         }
+      } else if (ObGlobalTxType::XA_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL != ret) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = abort_tx(tx, ObTxAbortCause::END_STMT_FAIL))) {
+          TRANS_LOG(WARN, "abort tx fail", K(ret), K(tmp_ret), K(global_tx_type), K(xid));
+        }
+        ret = OB_TRANS_NEED_ROLLBACK;
       }
     }
     // deregister from tx_desc_mgr to prevent
@@ -1876,7 +1884,7 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
     if (tx.xa_start_addr_ != self_ && tx.addr_ != self_ ) {
       tx_desc_mgr_.remove(tx);
     }
-    TRANS_LOG(INFO, "xa trans end stmt", K_(tx.xid), K(xid));
+    TRANS_LOG(INFO, "xa trans end stmt", K(ret), K_(tx.xid), K(xid));
   }
   return ret;
 }

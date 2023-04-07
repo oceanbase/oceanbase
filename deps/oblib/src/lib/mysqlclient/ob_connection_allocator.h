@@ -37,7 +37,7 @@ public:
   virtual int get_cached(T *&conn, uint32_t sessid = 0) = 0;
   virtual int put_cached(T *conn, uint32_t sessid = 0) = 0;
 protected:
-  inline void free(T *conn) 
+  inline void free(T *conn)
   {
     if (NULL != conn) {
       conn->~T();
@@ -60,6 +60,7 @@ public:
   virtual int alloc(T *&conn, uint32_t sessid = 0) override;
   virtual int get_cached(T *&conn, uint32_t sessid = 0) override;
   virtual int put_cached(T *conn, uint32_t sessid = 0) override;
+  template<typename Function> void for_each(Function &fn);
 private:
   // disallow copy
   ObSimpleConnectionAllocator(const ObSimpleConnectionAllocator &other);
@@ -137,6 +138,19 @@ int ObSimpleConnectionAllocator<T>::put_cached(T *conn, uint32_t sessid)
   return ret;
 }
 
+template<typename T>
+template<typename Function>
+void ObSimpleConnectionAllocator<T>::for_each(Function &fn)
+{
+  const int64_t size = cached_objs_.size();
+  for(int i = 0; i < size; i++) {
+    T *obj = cached_objs_.at(i);
+    if (OB_NOT_NULL(obj)) {
+      fn(*obj);
+    }
+  }
+}
+
 template <typename T>
 class ObLruConnectionAllocator : public ObIConnectionAllocator<T>
 {
@@ -146,23 +160,23 @@ private:
 
     LruNode(T *conn, uint32_t sessid) : conn_(conn), sessid_(sessid) {}
 
-    bool operator ==(const LruNode &node) 
+    bool operator ==(const LruNode &node)
     {
       return (conn_ == node.conn_) && (sessid_ = node.sessid_);
     }
-    
+
     T *conn_;
     uint32_t sessid_;
   };
 
   struct FreeConnsOp
   {
-    explicit FreeConnsOp(ObLruConnectionAllocator<T> *free_ptr) 
+    explicit FreeConnsOp(ObLruConnectionAllocator<T> *free_ptr)
     {
       free_ptr_ = free_ptr;
     }
 
-    inline int operator()(common::hash::HashMapPair<uint32_t, ObArray<T *>> &entry) 
+    inline int operator()(common::hash::HashMapPair<uint32_t, ObArray<T *>> &entry)
     {
       int ret = OB_SUCCESS;
       _OB_LOG(DEBUG, "free conns in session, sessid=%u", entry.first);
@@ -203,7 +217,7 @@ public:
   }
 
   int init();
-  // fail_recycled_conn_count means count of connection that cannot be recycled to the free_conn_array, 
+  // fail_recycled_conn_count means count of connection that cannot be recycled to the free_conn_array,
   // and such a connection will be directly freed.
   int free_session_conn_array(uint32_t sessid, int64_t &fail_recycled_conn_count, int64_t &succ_recycled_conn_count);
 
@@ -225,23 +239,23 @@ private:
 private:
   // data members
   bool is_inited_;
-  // When this value is true, it means that the free connection belonging 
+  // When this value is true, it means that the free connection belonging
   // to a session will not be closed when it is allocated to other sessions.
   bool is_session_share_conns_;
   ObMalloc allocator_;
   /**
     Use list as a lru cache, it is convenient for us to find Least Recently Used connection.
 
-    Why not use ObDList? 
-    Because ObDList does not have a suitable interface function to 
-    remove any node in the linked listBecause ObDList. 
+    Why not use ObDList?
+    Because ObDList does not have a suitable interface function to
+    remove any node in the linked listBecause ObDList.
    */
   ObList<LruNode> lru_list_;
   // Store free connection that does not belong to any session.
   ObArray<T *> free_conn_array_;
   // Each session has an array for storing free conn belonging to this session
   // Use session id to manage array
-  hash::ObHashMap<uint32_t, ObArray<T *>> sessionid_to_conns_map_; 
+  hash::ObHashMap<uint32_t, ObArray<T *>> sessionid_to_conns_map_;
   static int64_t HASH_BUCKET_NUM;
 };
 

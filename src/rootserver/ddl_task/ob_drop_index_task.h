@@ -32,6 +32,7 @@ public:
       const uint64_t index_table_id,
       const int64_t schema_version,
       const int64_t parent_task_id,
+      const int64_t consumer_group_id,
       const obrpc::ObDropIndexArg &drop_index_arg);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;

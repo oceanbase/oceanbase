@@ -1230,13 +1230,12 @@ public:
   {
     int tmp_ret = common::OB_SUCCESS;
     bool bool_ret = false;
-    ObTransID tx_id;
 
     if (OB_ISNULL(tx_desc)) {
       tmp_ret = OB_INVALID_ARGUMENT;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument tx_desc", KP(tx_desc));
     } else {
-      tx_id = tx_desc->tx_id_;
+      ObTransID &tx_id = tx_desc->tx_id_;
       if (!tx_id.is_valid()) {
         tmp_ret = OB_INVALID_ARGUMENT;
         TRANS_LOG_RET(WARN, tmp_ret, "invalid argument tx_id", K(tx_id), KP(tx_desc));
@@ -1261,13 +1260,15 @@ public:
                                                     tx_desc->coord_id_,
                                                     copy_parts,
                                                     tx_desc->isolation_,
-                                                    tx_desc->snapshot_version_.get_val_for_tx(true),
+                                                    tx_desc->snapshot_version_,
                                                     tx_desc->access_mode_,
                                                     tx_desc->op_sn_,
                                                     tx_desc->flags_.v_,
                                                     tx_desc->active_ts_,
                                                     tx_desc->expire_ts_,
                                                     tx_desc->timeout_us_,
+                                                    tx_desc->ref_,
+                                                    tx_desc,
                                                     copy_savepoints,
                                                     tx_desc->abort_cause_,
                                                     tx_desc->can_elr_))) {

@@ -334,12 +334,12 @@ int ObPxTargetMgr::get_global_target_usage(uint64_t tenant_id, const hash::ObHas
   return ret;
 }
 
-int ObPxTargetMgr::reset_statistics(uint64_t tenant_id, uint64_t version)
+int ObPxTargetMgr::reset_leader_statistics(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->reset_statistics(version))) {
-      LOG_WARN("reset statistics failed", K(ret), K(version));
+    if (OB_FAIL(target_monitor->reset_leader_statistics())) {
+      LOG_WARN("reset statistics failed", K(ret));
     }
   });
   return ret;

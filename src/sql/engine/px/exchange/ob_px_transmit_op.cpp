@@ -575,7 +575,6 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
         } else if (OB_FAIL(send_eof_row())) { // overwrite err code
           LOG_WARN("fail send eof rows to channels", K(ret));
         }
-        op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
         break;
       }
     }
@@ -604,7 +603,6 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
         }
       }
     }
-    op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
   }
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
@@ -629,7 +627,11 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
     }
     uint64_t begin_cpu_time = rdtsc();
     if (dfc_.all_ch_drained()) {
-      LOG_DEBUG("all channel has been drained");
+      int tmp_ret = drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
+      LOG_TRACE("all channel has been drained");
       break;
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
@@ -717,11 +719,9 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       } else if (OB_FAIL(send_eof_row())) {
         LOG_WARN("fail send eof rows to channels", K(ret));
       }
-      op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
       break;
     }
     // for those break out ops
-    op_monitor_info_.db_time_ += (rdtsc() - begin_cpu_time);
   }
   LOG_TRACE("Transmit time record", K(row_count), K(ret));
   return ret;

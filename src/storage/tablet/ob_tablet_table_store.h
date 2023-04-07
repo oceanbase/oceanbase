@@ -236,6 +236,7 @@ private:
 public:
   static const int64_t TABLE_STORE_VERSION = 0x0100;
   static const int64_t MAX_SSTABLE_CNT = 128;
+  static const int64_t EMERGENCY_SSTABLE_CNT = 48;
 private:
   ObTablet *tablet_ptr_;
   ObSSTableArray major_tables_;

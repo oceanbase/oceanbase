@@ -3101,11 +3101,14 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
                 K(i), K(cursor_param_count), KPC(actual_param_exprs[i]), K(dummy_result));
 
     if (OB_SUCC(ret) && dummy_result.is_pl_mock_default_param()) {
+      int64_t idx = dummy_result.get_int();
       ObSqlExpression *actual_param_expr = NULL;
+      dummy_result.reset();
+      dummy_result.ObObj::reset();
       if (DECL_PKG == loc) {
-        OZ (spi_calc_package_expr(ctx, package_id, dummy_result.get_int(), &dummy_result));
+        OZ (spi_calc_package_expr(ctx, package_id, idx, &dummy_result));
       } else {
-        OZ (spi_calc_subprogram_expr(ctx, package_id, routine_id, dummy_result.get_int(), &dummy_result));
+        OZ (spi_calc_subprogram_expr(ctx, package_id, routine_id, idx, &dummy_result));
       }
     }
 
@@ -3625,6 +3628,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
               LOG_WARN("failed to fill_cursor, check if need retry",
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
                       K(sql_stmt), K(ps_sql), K(exec_params));
+              ret = cli_ret;
+              ctx->exec_ctx_->get_sql_ctx()->clear();
+              ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
             }
           }
           OX (spi_cursor->row_store_.finish_add_row());
@@ -4324,6 +4330,7 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
             for (int64_t j = coll_cnt - n; OB_SUCC(ret) && j < coll_cnt; ++j) {
               if (ith_elem.is_pl_extend()) {
                 CK (OB_NOT_NULL(table->get_allocator()));
+                OZ (ObUserDefinedType::destruct_obj(data[j], ctx->exec_ctx_->get_my_session()));
                 OZ (ObUserDefinedType::deep_copy_obj(*(table->get_allocator()), ith_elem, data[j]));
               } else {
                 new (&(data[j]))ObObj(ith_elem);

@@ -368,6 +368,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
                          const ObString &rowkey_str,
                          const ObLobCommon *disk_loc,
                          uint32_t disk_lob_full_size,
+                         uint32_t disk_lob_header_size,
                          bool is_simple)
 {
   validate_has_lob_header(has_lob_header_);
@@ -453,6 +454,8 @@ int ObLobLocatorV2::fill(ObMemLobType type,
             if (disk_loc->is_init_) {
               disk_loc_header_size += sizeof(ObLobData);
             }
+          } else if (disk_lob_header_size != 0) {
+            disk_loc_header_size = disk_lob_header_size;
           } else {
             int64_t tbz = disk_loc->get_byte_size(disk_lob_full_size);
             int64_t thz = disk_loc->get_handle_size(tbz);
@@ -461,7 +464,7 @@ int ObLobLocatorV2::fill(ObMemLobType type,
           if (offset + disk_loc_header_size > size_ || disk_lob_full_size < disk_loc_header_size) {
             ret = OB_INVALID_ARGUMENT;
             COMMON_LOG(WARN, "Lob: invalid disk locator",
-              K(ret), K(type), KP(offset), K(size_), K(flags), K(offset),
+              K(ret), K(type), K(offset), K(size_), K(flags), K(disk_lob_header_size),
               K(disk_loc_header_size), K(disk_lob_full_size), K(*disk_loc));
           } else {
             offset += disk_loc_header_size;

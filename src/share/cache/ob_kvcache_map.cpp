@@ -316,7 +316,7 @@ int ObKVCacheMap::get(
                     COMMON_LOG(WARN, "Failed to check kvcache key equal", K(tmp_ret));
                   } else if (is_equal) {
                     ObKVMemBlockHandle *old_handle = iter->mb_handle_;
-                    if (OB_TMP_FAIL(internal_data_move(prev, iter, bucket_ptr, LFU))) {
+                    if (OB_TMP_FAIL(internal_data_move(prev, iter, bucket_ptr))) {
                       COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
                     }
                     store_->de_handle_ref(old_handle);
@@ -786,7 +786,7 @@ void ObKVCacheMap::internal_map_replace(Node *&prev, Node *&iter, Node *&bucket_
   }
 }
 
-int ObKVCacheMap::internal_data_move(Node *&prev, Node *&old_iter, Node *&bucket_ptr, const enum ObKVCachePolicy policy)
+int ObKVCacheMap::internal_data_move(Node *&prev, Node *&old_iter, Node *&bucket_ptr)
 {
   int ret = OB_SUCCESS;
   Node *new_node = NULL;
@@ -796,7 +796,7 @@ int ObKVCacheMap::internal_data_move(Node *&prev, Node *&old_iter, Node *&bucket
   if (NULL == (buf = old_iter->inst_->node_allocator_.alloc(sizeof(Node)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "Fail to allocate memory for Node, ", K(ret), "size:", sizeof(Node));
-  } else if (OB_FAIL(store_->store(*old_iter->inst_, *old_iter->key_, *old_iter->value_, new_kvpair, new_mb_handle, policy))) {
+  } else if (OB_FAIL(store_->store(*old_iter->inst_, *old_iter->key_, *old_iter->value_, new_kvpair, new_mb_handle, LFU))) {
     old_iter->inst_->node_allocator_.free(buf);
     COMMON_LOG(WARN, "Fail to move kvpair ", K(ret));
   } else {

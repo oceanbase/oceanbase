@@ -534,6 +534,7 @@ int ObInnerSqlRpcP::process()
       LOG_WARN("failed to acquire inner connection", K(ret), K(transmit_arg));
     }
     /* init session info */
+    const int64_t group_id = transmit_arg.get_consumer_group_id();
     if (OB_NOT_NULL(tmp_session)) {
       tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
       tmp_session->switch_tenant(transmit_arg.get_tenant_id());

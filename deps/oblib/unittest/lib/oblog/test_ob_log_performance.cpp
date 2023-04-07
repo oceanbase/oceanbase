@@ -72,7 +72,7 @@ void ObLogTestThread::run1()
     _OB_LOG(WARN, "oblog test %ld", i);
     OB_LOG(ERROR, "trace error log also would print lbt");
   }
-  PRINT_OB_LOG_TRACE_BUF(OBTRACE, INFO);
+  PRINT_OB_LOG_TRACE_BUF(FLT, INFO);
   CANCLE_OB_LOG_TRACE_MODE();
   int64_t e_time = ::oceanbase::common::ObTimeUtility::current_time();
   OB_LOG(WARN, "yangze one thread time","u_time", e_time - b_time);

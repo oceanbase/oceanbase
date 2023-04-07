@@ -79,6 +79,7 @@ int ObDDLArg::assign(const ObDDLArg &other)
     sync_from_primary_ = other.sync_from_primary_;
     parallelism_ = other.parallelism_;
     task_id_ = other.task_id_;
+    consumer_group_id_ = other.consumer_group_id_;
   }
   return ret;
 }
@@ -534,6 +535,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
   } else {
     tenant_id_ = arg.tenant_id_;
     table_id_ = arg.table_id_;
+    consumer_group_id_ = arg.consumer_group_id_;
     dest_tenant_id_ = arg.dest_tenant_id_;
     session_id_ = arg.session_id_;
     parallelism_ = arg.parallelism_;
@@ -558,6 +560,7 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 tenant_id_,
                 table_id_,
+                consumer_group_id_,
                 dest_tenant_id_,
                 session_id_,
                 parallelism_,
@@ -585,6 +588,7 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
     LST_DO_CODE(OB_UNIS_DECODE,
               tenant_id_,
               table_id_,
+              consumer_group_id_,
               dest_tenant_id_,
               session_id_,
               parallelism_,
@@ -627,6 +631,7 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 tenant_id_,
                 table_id_,
+                consumer_group_id_,
                 dest_tenant_id_,
                 session_id_,
                 parallelism_,
@@ -902,7 +907,8 @@ OB_SERIALIZE_MEMBER(ObDDLArg,
                     sync_from_primary_,
                     based_schema_object_infos_,
                     parallelism_,
-                    task_id_);
+                    task_id_,
+                    consumer_group_id_);
 
 //////////////////////////////////////////////
 //
@@ -6396,7 +6402,7 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
-  parallelism_, tablet_task_id_, data_format_version_);
+  parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -6415,6 +6421,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   execution_id_ = other.execution_id_;
   tablet_task_id_ = other.tablet_task_id_;
   data_format_version_ = other.data_format_version_;
+  consumer_group_id_ = other.consumer_group_id_;
   return ret;
 }
 

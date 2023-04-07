@@ -88,7 +88,8 @@ public:
                               const share::schema::ObTableSchema *index_schema,
                               const int64_t parallelism,
                               common::ObIAllocator &allocator,
-                              ObDDLTaskRecord &task_record);
+                              ObDDLTaskRecord &task_record,
+                              const int64_t group_id);
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder

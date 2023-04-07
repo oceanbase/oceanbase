@@ -162,6 +162,13 @@ void ObServerConnectionPool::reset()
   close_all_connection();
 }
 
+void ObServerConnectionPool::reset_idle_conn_to_sys_tenant()
+{
+  ObSpinLockGuard lock(pool_lock_);
+  auto fn = [](ObMySQLConnection &conn){ if (!conn.is_closed() && !conn.is_busy()) conn.switch_tenant(OB_SYS_TENANT_ID); };
+  connection_pool_.for_each(fn);
+}
+
 void ObServerConnectionPool::close_all_connection()
 {
   ObSpinLockGuard lock(pool_lock_);

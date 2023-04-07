@@ -140,7 +140,7 @@ int ObMicroBlockEncoder::init(const ObMicroBlockEncodingCtx &ctx)
     LOG_WARN("reserve array failed", K(ret), "size", ctx.column_cnt_);
   } else if (OB_FAIL(init_all_col_values(ctx))) {
     LOG_WARN("init all_col_values failed", K(ret), K(ctx));
-  } else if (OB_FAIL(row_buf_holder_.init(ctx.macro_block_size_))) {
+  } else if (OB_FAIL(row_buf_holder_.init(ctx.macro_block_size_, MTL_ID()))) {
     LOG_WARN("init row buf holder failed", K(ret));
   } else {
     // TODO bin.lb: shrink all_col_values_ size

@@ -519,6 +519,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
     audit_record.user_group_ = THIS_WORKER.get_group_id();
     audit_record.execution_id_ = execution_id;
     audit_record.ps_stmt_id_ = ps_stmt_id;
+    audit_record.ps_inner_stmt_id_ = ps_stmt_id;
     if (ps_sql.length() != 0) {
       audit_record.sql_ = const_cast<char *>(ps_sql.ptr());
       audit_record.sql_len_ = min(ps_sql.length(), OB_MAX_SQL_LENGTH);
@@ -1837,6 +1838,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
       int64_t query_timeout = OB_DEFAULT_SESSION_TIMEOUT;
       int64_t trx_timeout = OB_DEFAULT_SESSION_TIMEOUT;
+      int64_t consumer_group_id = get_group_id();
       ObSQLMode sql_mode = 0;
       const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
       bool is_load_data_exec = get_session().is_load_data_exec_session();
@@ -1877,7 +1879,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
             sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_WRITE,
             lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
             THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-            ddl_info, is_load_data_exec, use_external_session_);
+            ddl_info, is_load_data_exec, use_external_session_, consumer_group_id);
         arg.set_nls_formats(get_session().get_local_nls_date_format(),
                             get_session().get_local_nls_timestamp_format(),
                             get_session().get_local_nls_timestamp_tz_format());

@@ -303,6 +303,7 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
                                  rowkey_str_,
                                  &lob_common,
                                  payload_size,
+                                 0,
                                  false))) {
           STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(column_id));
         } else if (OB_FAIL(locator.set_payload_data(&lob_common, def_obj.get_string()))) {
@@ -500,6 +501,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
                                rowid_str,
                                lob_common,
                                out_payload_len,
+                               is_dst_inrow ? 0 : payload.length(),
                                is_simple))) {
         STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(column_id));
       } else if (OB_SUCC(locator.get_mem_locator(mem_lob_common))) {
@@ -560,6 +562,8 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             }
 
             // read full data to new locator
+            // use tmp allocator for read lob col instead of batch level allocator
+            ObArenaAllocator tmp_lob_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
             ObLobAccessParam param;
             param.tx_desc_ = NULL;
             param.snapshot_.core_.tx_id_ = tx_id_;
@@ -572,7 +576,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             param.sql_mode_ = access_ctx.sql_mode_;
             param.tablet_id_ = ObTabletID(tablet_id_);
 
-            param.allocator_ = &locator_allocator_;
+            param.allocator_ = &tmp_lob_allocator;
             param.lob_common_ = const_cast<ObLobCommon *>(lob_common);
             param.handle_size_ = payload.length();
             param.byte_size_ = lob_common->get_byte_size(payload.length());
@@ -599,7 +603,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
               }
             }
           }
-        } else if (is_src_inrow && (!is_dst_inrow)){
+        } else if (is_src_inrow && (!is_dst_inrow)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(ERROR, "Lob: fatal error", K(ret), K(locator), K(is_src_inrow), K(is_dst_inrow));
         }

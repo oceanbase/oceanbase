@@ -10125,6 +10125,30 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         //the flag will change to false;
         OX (expr->set_is_called_in_sql(true));
       }
+    } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
+      ObDMLStmt *stmt = get_stmt();
+      ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
+      CK (OB_NOT_NULL(object_expr));
+      CK (OB_NOT_NULL(stmt));
+      if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
+        uint64_t dep_obj_id = view_ref_id_;
+        ObSchemaObjVersion coll_schema_version;
+        OZ (object_expr->get_schema_object_version(coll_schema_version));
+        OZ (stmt->add_global_dependency_table(coll_schema_version));
+        OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
+      }
+    } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
+      ObDMLStmt *stmt = get_stmt();
+      ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
+      CK (OB_NOT_NULL(coll_expr));
+      CK (OB_NOT_NULL(stmt));
+      if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
+        uint64_t dep_obj_id = view_ref_id_;
+        ObSchemaObjVersion coll_schema_version;
+        OZ (coll_expr->get_schema_object_version(coll_schema_version));
+        OZ (stmt->add_global_dependency_table(coll_schema_version));
+        OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
+      }
     }
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {

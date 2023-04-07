@@ -1223,8 +1223,12 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "ObIStore is null", K(ret), K(i));
         } else if (stores->at(i)->is_data_memtable()) {
-          auto &mvcc_engine = static_cast<ObMemtable *>(stores->at(i))->get_mvcc_engine();
-          if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, lock_state))) {
+          ObMemtable *memtable = static_cast<ObMemtable *>(stores->at(i));
+          ObMvccEngine &mvcc_engine = memtable->get_mvcc_engine();
+          if (OB_UNLIKELY(memtable->is_active_memtable())) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "lock row on frozen stores check an active memtable", K(ret), KPC(stores));
+          } else if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, lock_state))) {
             TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(lock_state));
           }
         } else if (stores->at(i)->is_sstable()) {
@@ -2089,19 +2093,6 @@ int ObMemtable::flush(share::ObLSID ls_id)
   if (is_flushed_) {
     ret = OB_NO_NEED_UPDATE;
   } else {
-    if (mt_stat_.create_flush_dag_time_ == 0 &&
-        mt_stat_.ready_for_flush_time_ != 0 &&
-        cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
-      STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
-                K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
-      ADD_SUSPECT_INFO(MINI_MERGE,
-                       ls_id, get_tablet_id(),
-                       "memtable can not create dag successfully",
-                       "has been ready for flush time:",
-                       cur_time - mt_stat_.ready_for_flush_time_,
-                       "ready for flush time:",
-                       mt_stat_.ready_for_flush_time_);
-    }
     ObTabletMergeDagParam param;
     param.ls_id_ = ls_id;
     param.tablet_id_ = key_.tablet_id_;
@@ -2115,6 +2106,23 @@ int ObMemtable::flush(share::ObLSID ls_id)
     } else {
       mt_stat_.create_flush_dag_time_ = cur_time;
       TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
+    }
+
+    if (OB_FAIL(ret) && mt_stat_.create_flush_dag_time_ == 0 &&
+        mt_stat_.ready_for_flush_time_ != 0 &&
+        cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
+      STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
+                K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
+      const char *str_user_error = ob_errpkt_str_user_error(ret, false);
+      ADD_SUSPECT_INFO(MINI_MERGE,
+                       ls_id, get_tablet_id(),
+                       "memtable can not create dag successfully",
+                       "extra info",
+                       str_user_error,
+                       "has been ready for flush time:",
+                       cur_time - mt_stat_.ready_for_flush_time_,
+                       "ready for flush time:",
+                       mt_stat_.ready_for_flush_time_);
     }
   }
 

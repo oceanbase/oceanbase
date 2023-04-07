@@ -7015,13 +7015,35 @@ int ObPLResolver::resolve_fetch(
                   const ObUserDefinedType *into_var_type = NULL;
                   OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
                   CK (OB_NOT_NULL(into_var_type));
-                  if (OB_SUCC(ret) && into_var_type->is_record_type()) {
+                  if (OB_FAIL(ret)) {
+                  } else if (into_var_type->is_record_type()) {
                     for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
                       if (!into_var_type->get_member(j)->is_obj_type()) {
                         ret = OB_NOT_SUPPORTED;
                         LOG_WARN("cursor nested complex type", K(ret));
                         LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
                       }
+                    }
+                  } else if (into_var_type->is_collection_type()) {
+                    const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(into_var_type);
+                    CK (OB_NOT_NULL(coll_type));
+                    if (coll_type->get_element_type().is_obj_type()) {
+                      // do nothing
+                    } else if (coll_type->get_element_type().is_record_type()) {
+                      const ObUserDefinedType *element_type = NULL;
+                      OZ (current_block_->get_namespace().get_user_type(coll_type->get_element_type().get_user_type_id(), element_type));
+                      CK (OB_NOT_NULL(element_type));
+                      for (int64_t j = 0; OB_SUCC(ret) && j < element_type->get_member_count(); ++j) {
+                        if (!element_type->get_member(j)->is_obj_type()) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("cursor nested complex type", K(ret));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                        }
+                      }
+                    } else {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("cursor nested complex type", K(ret));
+                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
                     }
                   }
                 }
@@ -9643,6 +9665,11 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   ObObjectConstructRawExpr *object_expr = NULL;
   ObExprResType res_type;
   int64_t rowsize = 0;
+  const ObUDTTypeInfo *udt_info = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
+  bool is_udt_type = false;
+  CK (OB_NOT_NULL(user_type));
+  OX (is_udt_type = user_type->is_udt_type());
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   CK (OB_NOT_NULL(object_type = static_cast<const ObRecordType *>(user_type)));
   if (OB_SUCC(ret) && udf_info.param_names_.count() > 0) { // 构造函数暂时不允许使用=>赋值
@@ -9676,6 +9703,14 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   OX (res_type.set_udt_id(user_type->get_user_type_id()));
   OX (object_expr->set_udt_id(user_type->get_user_type_id()));
   OX (object_expr->set_result_type(res_type));
+  if (is_udt_type) {
+    OX (tenant_id = get_tenant_id_by_object_id(user_type->get_user_type_id()));
+    OZ (resolve_ctx_.schema_guard_.get_udt_info(
+        tenant_id, user_type->get_user_type_id(), udt_info));
+    CK (OB_NOT_NULL(udt_info));
+    OX (object_expr->set_database_id(udt_info->get_database_id()));
+    OX (object_expr->set_coll_schema_version(udt_info->get_schema_version()));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < object_type->get_member_count(); ++i) {
     const ObPLDataType *pl_type = object_type->get_record_member_type(i);
     ObExprResType elem_type;

@@ -127,6 +127,7 @@ enum ObTxAbortCause
   STOP = 6,
   PARTICIPANT_STATE_INCOMPLETE = 7,
   PARTICIPANTS_SET_INCOMPLETE = 8,
+  END_STMT_FAIL = 9,
 };
 
 enum class ObTxClass { USER, SYS };
@@ -148,6 +149,8 @@ enum class ObTxIsolationLevel
 };
 
 extern ObTxIsolationLevel tx_isolation_from_str(const ObString &s);
+
+extern const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation);
 
 enum class ObTxAccessMode
 {
@@ -654,6 +657,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
   bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
+  void set_explicit() { flags_.EXPLICIT_ = true; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -812,6 +816,7 @@ public:
   // TODO xa
   bool is_valid() const { return tx_id_.is_valid(); }
   const ObTransID &tid() const { return tx_id_; }
+  bool need_rollback() const  { return state_ == ObTxDesc::State::ABORTED; }
 };
 
 class TxCtxRoleState

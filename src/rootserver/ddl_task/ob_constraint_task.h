@@ -97,6 +97,7 @@ public:
       const share::ObDDLType ddl_type,
       const int64_t schema_version,
       const obrpc::ObAlterTableArg &alter_table_arg,
+      const int64_t consumer_group_id,
       const int64_t parent_task_id = 0,
       const int64_t status = share::ObDDLTaskStatus::WAIT_TRANS_END,
       const int64_t snapshot_version = 0);

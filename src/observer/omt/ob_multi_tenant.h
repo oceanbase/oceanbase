@@ -181,7 +181,7 @@ protected:
                                         const int64_t mem_limit,
                                         ObTenantMeta &meta);
   int create_virtual_tenants();
-  int remove_tenant(const uint64_t tenant_id, bool &lock_succ);
+  int remove_tenant(const uint64_t tenant_id, bool &remove_tenant_succ);
   uint32_t get_tenant_lock_bucket_idx(const uint64_t tenant_id);
   int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit,
                                  const UpdateTenantConfigOpt &opt);

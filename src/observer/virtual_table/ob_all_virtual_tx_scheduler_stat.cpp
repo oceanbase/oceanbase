@@ -23,10 +23,7 @@ namespace observer
 
 ObGVTxSchedulerStat::ObGVTxSchedulerStat()
     : ObVirtualTableScannerIterator(),
-      ip_buffer_(),
-      XA_buffer_(),
-      parts_buffer_(),
-      savepoints_buffer_(),
+      xid_(),
       tx_scheduler_stat_iter_()
 {
 }
@@ -41,9 +38,10 @@ void ObGVTxSchedulerStat::reset()
   // release tenant resources first
   omt::ObMultiTenantOperator::reset();
   ip_buffer_[0] = '\0';
-  XA_buffer_[0] = '\0';
   parts_buffer_[0] = '\0';
+  tx_desc_addr_buffer_[0] = '\0';
   savepoints_buffer_[0] = '\0';
+  xid_.reset();
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -101,6 +99,7 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
     }
   } else {
     const int64_t col_count = output_column_ids_.count();
+    xid_ = tx_scheduler_stat.xid_;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -127,16 +126,6 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
         case CLUSTER_ID:
           cur_row_.cells_[i].set_int(tx_scheduler_stat.cluster_id_);
           break;
-        case XA_TX_ID:
-          if (!tx_scheduler_stat.xid_.empty()) {
-            (void)tx_scheduler_stat.xid_.to_string(XA_buffer_, OB_MAX_BUFFER_SIZE);
-            cur_row_.cells_[i].set_varchar(XA_buffer_);
-            cur_row_.cells_[i].set_default_collation_type();
-          } else {
-            cur_row_.cells_[i].set_varchar(ObString("NULL"));
-            cur_row_.cells_[i].set_default_collation_type();
-          }
-          break;
         case COORDINATOR:
           cur_row_.cells_[i].set_int(tx_scheduler_stat.coord_id_.id());
           break;
@@ -146,15 +135,18 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
             cur_row_.cells_[i].set_varchar(parts_buffer_);
             cur_row_.cells_[i].set_default_collation_type();
           } else {
-            cur_row_.cells_[i].set_varchar(ObString("NULL"));
-            cur_row_.cells_[i].set_default_collation_type();
+            cur_row_.cells_[i].reset();
           }
           break;
         case ISOLATION_LEVEL:
           cur_row_.cells_[i].set_int((int)tx_scheduler_stat.isolation_);
           break;
         case SNAPSHOT_VERSION:
-          cur_row_.cells_[i].set_int(tx_scheduler_stat.snapshot_version_);
+          if (tx_scheduler_stat.snapshot_version_.get_val_for_inner_table_field() != OB_INVALID_SCN_VAL) {
+            cur_row_.cells_[i].set_uint64(tx_scheduler_stat.snapshot_version_.get_val_for_inner_table_field());
+          } else {
+            cur_row_.cells_[i].reset();
+          }
           break;
         case ACCESS_MODE:
           cur_row_.cells_[i].set_int((int)tx_scheduler_stat.access_mode_);
@@ -166,13 +158,29 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(tx_scheduler_stat.flag_);
           break;
         case ACTIVE_TS:
-          cur_row_.cells_[i].set_timestamp(tx_scheduler_stat.active_ts_);
+          if (is_valid_timestamp_(tx_scheduler_stat.active_ts_)) {
+            cur_row_.cells_[i].set_timestamp(tx_scheduler_stat.active_ts_);
+          } else {
+            cur_row_.cells_[i].reset();
+          }
           break;
         case EXPIRE_TS:
-          cur_row_.cells_[i].set_timestamp(tx_scheduler_stat.expire_ts_);
+          if (is_valid_timestamp_(tx_scheduler_stat.expire_ts_)) {
+            cur_row_.cells_[i].set_timestamp(tx_scheduler_stat.expire_ts_);
+          } else {
+            cur_row_.cells_[i].reset();
+          }
           break;
         case TIMEOUT_US:
           cur_row_.cells_[i].set_int(tx_scheduler_stat.timeout_us_);
+          break;
+        case REF_CNT:
+          cur_row_.cells_[i].set_int(tx_scheduler_stat.ref_cnt_);
+          break;
+        case TX_DESC_ADDR:
+          tx_desc_addr_buffer_[0] = 0;
+          snprintf(tx_desc_addr_buffer_, 18, "0x%lx", (uint64_t)tx_scheduler_stat.tx_desc_addr_);
+          cur_row_.cells_[i].set_varchar(tx_desc_addr_buffer_);
           break;
         case SAVEPOINTS:
           if (0 < tx_scheduler_stat.savepoints_.count()) {
@@ -180,8 +188,7 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
             cur_row_.cells_[i].set_varchar(savepoints_buffer_);
             cur_row_.cells_[i].set_default_collation_type();
           } else {
-            cur_row_.cells_[i].set_varchar(ObString("NULL"));
-            cur_row_.cells_[i].set_default_collation_type();
+            cur_row_.cells_[i].reset();
           }
           break;
         case SAVEPOINTS_TOTAL_CNT:
@@ -192,6 +199,29 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
           break;
         case CAN_EARLY_LOCK_RELEASE:
           cur_row_.cells_[i].set_bool(tx_scheduler_stat.can_elr_);
+          break;
+        case GTRID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_gtrid_str());
+            cur_row_.cells_[i].set_default_collation_type();
+          } else {
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case BQUAL:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_bqual_str());
+            cur_row_.cells_[i].set_default_collation_type();
+          } else {
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case FORMAT_ID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_int(xid_.get_format_id());
+          } else {
+            cur_row_.cells_[i].set_int(-1);
+          }
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -205,6 +235,15 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
   }
 
   return ret;
+}
+
+bool ObGVTxSchedulerStat::is_valid_timestamp_(const int64_t timestamp) const
+{
+  bool ret_bool = true;
+  if (INT64_MAX == timestamp || 0 > timestamp) {
+    ret_bool = false;
+  }
+  return ret_bool;
 }
 
 }

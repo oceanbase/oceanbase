@@ -73,6 +73,8 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
   const SCN &start_scn, storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
+  static const int64_t CHECK_TIME_INTERVAL = 1_s;
+  static const int64_t MAX_ADVANCE_TIME_INTERVAL = 60_s;
   const int64_t advance_checkpoint_timeout = GCONF._advance_checkpoint_timeout;
   LOG_INFO("backup advance checkpoint timeout", K(tenant_id), K(advance_checkpoint_timeout));
   if (start_scn < SCN::min_scn()) {
@@ -83,19 +85,30 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
     int64_t i = 0;
     const bool check_archive = false;
     const int64_t start_ts = ObTimeUtility::current_time();
+    int64_t last_advance_checkpoint_ts = ObTimeUtility::current_time();
     do {
       const int64_t cur_ts = ObTimeUtility::current_time();
+      const int64_t advance_checkpoint_interval = MIN(std::pow(2, (2 * i + 1)) * 1000 * 1000, MAX_ADVANCE_TIME_INTERVAL);
+      const bool need_advance_checkpoint = (0 == i) || (cur_ts - last_advance_checkpoint_ts >= advance_checkpoint_interval);
       if (cur_ts - start_ts > advance_checkpoint_timeout) {
         ret = OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
         LOG_WARN("backup advance checkpoint by flush timeout", K(ret), K(tenant_id), K(ls_id), K(start_scn));
-      } else if (OB_FAIL(ls->advance_checkpoint_by_flush(start_scn))) {
-        if (OB_NO_NEED_UPDATE == ret) {
-          // clog checkpoint ts has passed start log ts
-          ret = OB_SUCCESS;
-          break;
+      } else if (need_advance_checkpoint) {
+        if (OB_FAIL(ls->advance_checkpoint_by_flush(start_scn))) {
+          if (OB_NO_NEED_UPDATE == ret) {
+            // clog checkpoint ts has passed start log ts
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id));
+          }
         } else {
-          LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id));
+          last_advance_checkpoint_ts = ObTimeUtility::current_time();
+          i++;
         }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else if (OB_FAIL(ls->get_ls_meta(ls_meta))) {
         LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(ls_meta.check_valid_for_backup())) {
@@ -116,10 +129,14 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
               K(tenant_id),
               K(ls_id),
               K(clog_checkpoint_scn),
-              K(start_scn));
-          sleep(1);
+              K(start_scn),
+              K(need_advance_checkpoint),
+              K(advance_checkpoint_interval),
+              K(cur_ts),
+              K(last_advance_checkpoint_ts));
         }
-        i++;
+        ob_usleep(CHECK_TIME_INTERVAL);
+        share::dag_yield();
       }
     } while (OB_SUCC(ret));
   }
@@ -2119,7 +2136,9 @@ int ObPrefetchBackupInfoTask::inner_process_()
     if (OB_SUCC(ret)) {
       ObArray<ObBackupProviderItem> items;
       int64_t file_id = 0;
-      if (OB_FAIL(task_mgr_->deliver(items, file_id))) {
+      if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+        LOG_INFO("backup task already failed", "result_code", ls_backup_ctx_->get_result_code());
+      } else if (OB_FAIL(task_mgr_->deliver(items, file_id))) {
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
           if (!is_run_out) {

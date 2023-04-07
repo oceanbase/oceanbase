@@ -1726,6 +1726,20 @@ enum class TxEndAction : int8_t
   KILL_TX_FORCEDLY
 };
 
+inline bool IS_CORNER_IMPL(const char *func, const int64_t line, const int64_t ppm)
+{
+  int ret = common::OB_SUCCESS;
+  bool bool_ret = false;
+#ifdef ENABLE_DEBUG_LOG
+  bool_ret = (ObRandom::rand(0, 999999) < ppm);
+  TRANS_LOG(WARN, "IS_CORNER", K(func), K(line));
+#endif
+  UNUSED(ret);
+  return bool_ret;
+}
+
+#define IS_CORNER(ppm) IS_CORNER_IMPL(__FUNCTION__, __LINE__, ppm)
+
 } // transaction
 } // oceanbase
 

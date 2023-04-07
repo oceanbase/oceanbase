@@ -5457,6 +5457,10 @@ def_table_schema(
 
 # 449 : __all_wait_for_partition_split_tablet
 # 450 : __all_external_table_file
+# 451 : __all_task_opt_stat_gather_history
+# 452 : __all_table_opt_stat_gather_history
+# 453 : __all_zone_storage
+# 454 : __all_zone_storage_operation
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -6558,21 +6562,25 @@ def_table_schema(
   ('trans_id', 'int'),
   ('state', 'int'),
   ('cluster_id', 'int'),
-  ('XA_trans_id', 'varchar:1024'),
   ('coordinator', 'int'),
-  ('participants', 'varchar:1024'),
+  ('participants', 'varchar:1024', 'true'),
   ('isolation_level', 'int'),
-  ('snapshot_version', 'int'),
+  ('snapshot_version', 'uint', 'true'),
   ('access_mode', 'int'),
   ('tx_op_sn', 'int'),
   ('flag', 'int'),
   ('active_time', 'timestamp', 'true'),
   ('expire_time', 'timestamp', 'true'),
   ('timeout_us', 'int'),
-  ('savepoints', 'varchar:1024'),
+  ('ref_cnt', 'int'),
+  ('tx_desc_addr', 'varchar:20'),
+  ('savepoints', 'varchar:1024', 'true'),
   ('savepoints_total_cnt', 'int'),
   ('internal_abort_cause', 'int'),
   ('can_early_lock_release', 'bool'),
+  ('gtrid', 'varbinary:128', 'true'),
+  ('bqual', 'varbinary:128', 'true'),
+  ('format_id', 'int', 'false', '1'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11246,7 +11254,11 @@ def_table_schema(
     ('archive_scn', 'uint'),
     ('checkpoint_scn', 'uint'),
     ('min_rec_scn', 'uint'),
-    ('min_rec_scn_log_type', 'varchar:32')
+    ('min_rec_scn_log_type', 'varchar:32'),
+    ('restore_handler_role', 'varchar:32'),
+    ('restore_proposal_id', 'int'),
+    ('restore_context_info', 'varchar:1024'),
+    ('restore_err_context_info', 'varchar:1024')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -11419,6 +11431,13 @@ def_table_schema(
 # 12378: __all_virtual_dup_ls_tablet_set
 # 12379: __all_virtual_dup_ls_tablets
 # 12380: __all_virtual_tx_data
+# 12381: __all_virtual_task_opt_stat_gather_history
+# 12382: __all_virtual_table_opt_stat_gather_history
+# 12383: __all_virtual_opt_stat_gather_monitor
+# 12384: __all_virtual_thread
+# 12385: __all_virtual_arbitration_member_info
+# 12386: __all_virtual_server_storage
+# 12387: __all_virtual_arbitration_service_status
 #
 # 余留位置
 #
@@ -11700,6 +11719,12 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 
 # 15291: __all_virtual_backup_transferring_tablets
 # 15292: __all_virtual_external_table_file
+# 15293: __all_data_dictionary_in_log
+# 15294: __all_task_opt_stat_gather_history
+# 15295: __all_table_opt_stat_gather_history
+# 15296: __all_virtual_opt_stat_gather_monitor
+# 15297: __all_virtual_long_ops_status_ora
+# 15298: __all_virtual_thread
 
 ################################################################################
 # System View (20000,30000]
@@ -25145,7 +25170,6 @@ def_table_schema(
       ELSE 'UNKNOWN'
       END AS STATE,
     cluster_id AS CLUSTER_ID,
-    XA_trans_id AS XA_TX_ID,
     coordinator AS COORDINATOR,
     participants AS PARTICIPANTS,
     CASE
@@ -25164,17 +25188,16 @@ def_table_schema(
       ELSE 'UNKNOWN'
       END AS ACCESS_MODE,
     tx_op_sn AS TX_OP_SN,
-    flag AS FLAG,
     active_time AS ACTIVE_TIME,
     expire_time AS EXPIRE_TIME,
-    timeout_us AS TIMEOUT_US,
-    savepoints AS SAVEPOINTS,
-    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
     CASE
       WHEN can_early_lock_release = 0 THEN 'FALSE'
       WHEN can_early_lock_release = 1 THEN 'TRUE'
       ELSE 'UNKNOWN'
-      END AS CAN_EARLY_LOCK_RELEASE
+      END AS CAN_EARLY_LOCK_RELEASE,
+    format_id AS FORMATID,
+    HEX(gtrid) AS GLOBALID,
+    HEX(bqual) AS BRANCHID
     FROM oceanbase.__all_virtual_trans_scheduler
 """.replace("\n", " "),
 )
@@ -25612,6 +25635,21 @@ def_table_schema(
 # 21371: V$OB_TABLET_STATS
 # 21372: CDB_OB_ACCESS_POINT
 # 21373: DBA_OB_ACCESS_POINT
+# 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
+# 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
+# 21376: GV$OB_OPT_STAT_GATHER_MONITOR
+# 21377: V$OB_OPT_STAT_GATHER_MONITOR
+# 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
+# 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+# 21380: GV$OB_THREAD
+# 21381: V$OB_THREAD
+# 21382: GV$OB_ARBITRATION_MEMBER_INFO
+# 21383: V$OB_ARBITRATION_MEMBER_INFO
+# 21384: DBA_OB_ZONE_STORAGE
+# 21385: GV$OB_SERVER_STORAGE
+# 21386: V$OB_SERVER_STORAGE
+# 21387: GV$OB_ARBITRATION_SERVICE_STATUS
+# 21388: V$OB_ARBITRATION_SERVICE_STATUS
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43016,6 +43054,9 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 25227: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
+# 25228: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+
 #### End Data Dictionary View
 ################################################################################
 
@@ -48288,7 +48329,7 @@ def_table_schema(
     svr_port AS SVR_PORT,
     session_id AS SESSION_ID,
     trans_id AS TX_ID,
-    CASE
+    CAST (CASE
       WHEN state = 0 THEN 'INVALID'
       WHEN state = 1 THEN 'IDLE'
       WHEN state = 2 THEN 'EXPLICIT_ACTIVE'
@@ -48307,38 +48348,36 @@ def_table_schema(
       WHEN state = 15 THEN 'SUB_ROLLBACKING'
       WHEN state = 16 THEN 'SUB_ROLLBACKED'
       ELSE 'UNKNOWN'
-      END AS STATE,
+      END AS VARCHAR2(18)) AS STATE,
     cluster_id AS CLUSTER_ID,
-    XA_trans_id AS XA_TX_ID,
     coordinator AS COORDINATOR,
     participants AS PARTICIPANTS,
-    CASE
+    CAST (CASE
       WHEN isolation_level = -1 THEN 'INVALID'
       WHEN isolation_level = 0 THEN 'READ UNCOMMITTED'
       WHEN isolation_level = 1 THEN 'READ COMMITTED'
       WHEN isolation_level = 2 THEN 'REPEATABLE READ'
       WHEN isolation_level = 3 THEN 'SERIALIZABLE'
       ELSE 'UNKNOWN'
-      END AS ISOLATION_LEVEL,
+      END AS VARCHAR2(16)) AS ISOLATION_LEVEL,
     snapshot_version AS SNAPSHOT_VERSION,
-    CASE
+    CAST (CASE
       WHEN access_mode = -1 THEN 'INVALID'
       WHEN access_mode = 0 THEN 'READ_WRITE'
       WHEN access_mode = 1 THEN 'READ_ONLY'
       ELSE 'UNKNOWN'
-      END AS ACCESS_MODE,
+      END AS VARCHAR2(10)) AS ACCESS_MODE,
     tx_op_sn AS TX_OP_SN,
-    flag AS FLAG,
     active_time AS ACTIVE_TIME,
     expire_time AS EXPIRE_TIME,
-    timeout_us AS TIMEOUT_US,
-    savepoints AS SAVEPOINTS,
-    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
-    CASE
+    CAST (CASE
       WHEN can_early_lock_release = 0 THEN 'FALSE'
       WHEN can_early_lock_release = 1 THEN 'TRUE'
       ELSE 'UNKNOWN'
-      END AS CAN_EARLY_LOCK_RELEASE
+      END AS VARCHAR2(7)) AS CAN_EARLY_LOCK_RELEASE,
+    format_id AS FORMATID,
+    RAWTOHEX(gtrid) AS GLOBALID,
+    RAWTOHEX(bqual) AS BRANCHID
     FROM SYS.ALL_VIRTUAL_TRANS_SCHEDULER
 """.replace("\n", " "),
 )
@@ -48455,6 +48494,17 @@ def_table_schema(
 # 28179:  GV$OB_LOCKS
 # 28180:  V$OB_LOCKS
 # 28181:  DBA_OB_ACCESS_POINT
+# 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
+# 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
+# 28184:  V$OB_OPT_STAT_GATHER_MONITOR
+# 28185:  GV$SESSION_LONGOPS_ORA
+# 28186:  V$SESSION_LONGOPS_ORA
+# 28187:  GV$OB_THREAD
+# 28188:  V$OB_THREAD
+# 28189:  GV$OB_ARBITRATION_MEMBER_INFO
+# 28190:  V$OB_ARBITRATION_MEMBER_INFO
+# 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
+# 28192:  V$OB_ARBITRATION_SERVICE_STATUS
 
 ################################################################################
 # Lob Table (50000, 70000)

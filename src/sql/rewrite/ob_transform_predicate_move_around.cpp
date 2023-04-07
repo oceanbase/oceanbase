@@ -1812,7 +1812,7 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, pullup_preds,
                                                            table_set, input_preds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
+  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
     LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(input_preds, sel_stmt.get_having_exprs()))) {
     LOG_WARN("failed to append having predicates", K(ret));
@@ -1836,15 +1836,32 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   return ret;
 }
 
-int ObTransformPredicateMoveAround::get_exprs_cnt_exec(ObIArray<ObRawExpr *> &pullup_preds,
-                                                        ObIArray<ObRawExpr *> &conds)
+int ObTransformPredicateMoveAround::get_exprs_cnt_exec(ObDMLStmt &stmt,
+                                                       ObIArray<ObRawExpr *> &pullup_preds,
+                                                       ObIArray<ObRawExpr *> &conds)
 {
   int ret = OB_SUCCESS;
+  ObSqlBitSet<> right_rel_ids;
+  SemiInfo *semi_info = NULL;
+  int32_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_semi_infos().count(); ++i) {
+    if (OB_ISNULL(semi_info = stmt.get_semi_infos().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("semi info is null", K(ret));
+    } else if (OB_FALSE_IT(idx = stmt.get_table_bit_index(semi_info->right_table_id_))) {
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect idx", K(ret));
+    } else if (OB_FAIL(right_rel_ids.add_member(idx))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < pullup_preds.count(); i++)  {
     ObRawExpr *expr = pullup_preds.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret));
+    } else if (expr->get_relation_ids().overlap(right_rel_ids)) {
     } else if (!expr->has_flag(CNT_DYNAMIC_PARAM)) {
       //do nothing
     } else if (OB_FAIL(conds.push_back(expr))) {
@@ -1880,7 +1897,7 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(stmt, pullup_preds,
                                                            table_set, all_conds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(pullup_preds, all_conds))) { //exec param stored in pullup is useful.
+  } else if (OB_FAIL(get_exprs_cnt_exec(stmt, pullup_preds, all_conds))) { //exec param stored in pullup is useful.
     LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(all_conds, predicates))) {
     LOG_WARN("failed to append push down predicates", K(ret));

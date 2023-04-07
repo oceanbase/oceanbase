@@ -48,6 +48,10 @@ enum IOStatColumn
   CHECKPOINT_SCN,
   MIN_REC_SCN,
   MIN_REC_SCN_LOG_TYPE,
+  RESTORE_HANDLER_ROLE,
+  RESTORE_HANDLER_PROPOSAL_ID,
+  RESTORE_CONTEXT_INFO,
+  RESTORE_ERR_CONTEXT_INFO,
 };
 
 class ObAllVirtualHADiagnose : public common::ObVirtualTableScannerIterator
@@ -68,6 +72,7 @@ private:
   char log_handler_takeover_log_type_str_[VARCHAR_32] = {'\0'};
   char gc_state_str_[VARCHAR_32] = {'\0'};
   char min_rec_log_scn_log_type_str_[VARCHAR_32] = {'\0'};
+  char restore_handler_role_str_[VARCHAR_32] = {'\0'};
   omt::ObMultiTenant *omt_;
 };
 } // namespace observer

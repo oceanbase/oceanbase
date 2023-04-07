@@ -171,7 +171,9 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       is_load_data_exec_session_(false),
       pl_exact_err_msg_(),
       is_ps_prepare_stage_(false),
-      got_conn_res_(false),
+      got_tenant_conn_res_(false),
+      got_user_conn_res_(false),
+      conn_res_user_id_(OB_INVALID_ID),
       mem_context_(nullptr),
       cur_exec_ctx_(nullptr),
       restore_auto_commit_(false),
@@ -1647,14 +1649,6 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     audit_record_.sql_cs_type_ = CS_TYPE_INVALID;
   }
 
-  if (OB_SUCC(ret) && OB_INVALID_STMT_ID != audit_record_.ps_stmt_id_) {
-    ObPsStmtId inner_stmt_id = OB_INVALID_STMT_ID;
-    if (OB_SUCC(get_inner_ps_stmt_id(audit_record_.ps_stmt_id_, inner_stmt_id))) {
-      audit_record_.ps_inner_stmt_id_ = inner_stmt_id;
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
   audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
   audit_record_.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
   return audit_record_;

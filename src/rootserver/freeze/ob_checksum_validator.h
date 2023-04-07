@@ -17,6 +17,7 @@
 #include "share/ob_tablet_replica_checksum_iterator.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_zone_merge_info.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -161,7 +162,6 @@ public:
   {
     major_merge_start_us_ = major_merge_start_us;
   }
-  uint64_t get_special_table_id() const { return special_table_id_; }
   // sync data from __all_tablet_replica_checksum to __all_tablet_checksum at table granularity
   int write_tablet_checksum_at_table_level(const volatile bool &stop,
                                            const ObArray<share::ObTabletLSPair> &pairs,
@@ -169,6 +169,8 @@ public:
                                            const share::ObTableCompactionInfo &table_compaction_info,
                                            const uint64_t table_id,
                                            const int64_t expected_epoch);
+  // table_id of the table containing first tablet in sys ls
+  static const uint64_t MAJOR_MERGE_SPECIAL_TABLE_ID = share::OB_ALL_CORE_TABLE_TID;
 
 private:
   virtual int check_all_table_verification_finished(const volatile bool &stop,
@@ -185,15 +187,13 @@ private:
                                       const share::schema::ObSimpleTableSchemaV2 *simple_schema,
                                       hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
                                       ObMergeTimeStatistics &merge_time_statistics);
-  int check_need_validate(const bool is_primary_service,
-                          const share::SCN &frozen_scn,
-                          bool &need_validate) const;
   int check_cross_cluster_checksum(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
                                    const share::SCN &frozen_scn);
   void sort_tablet_ids(ObArray<ObTabletID> &tablet_ids);
   int check_column_checksum(const ObArray<share::ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
                             const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   bool is_first_tablet_in_sys_ls(const share::ObTabletReplicaChecksumItem &item) const;
+  int check_if_all_tablet_checksum_exist(const share::SCN &frozen_scn);
   bool check_waiting_tablet_checksum_timeout() const;
   // handle the table, update its all tablets' status if needed. And update its compaction_info in @table_compaction_map
   int handle_table_verification_finished(const volatile bool &stop,
@@ -213,8 +213,7 @@ private:
   const static int64_t MAX_BATCH_INSERT_COUNT = 100;
   // record the time when starting to major merge, used for check_waiting_tablet_checksum_timeout
   int64_t major_merge_start_us_;
-  // record the table_id of the table which contains first tablet in sys ls
-  uint64_t special_table_id_;
+  bool is_all_tablet_checksum_exist_;
 };
 
 // Mainly to verify checksum between (global and local) index table and main table
@@ -268,8 +267,7 @@ private:
                          const share::ObTableCompactionInfo &index_compaction_info,
                          const share::schema::ObSimpleTableSchemaV2 *index_simple_schema,
                          share::schema::ObSchemaGetterGuard &schema_guard,
-                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
-                         const int64_t expected_epoch);
+                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
   // This function is specially designed to make it easier for troubleshooting. Moreover, this
   // function will not modify table_compaction_map, which ensures major compaction will not be
   // affected by this function.

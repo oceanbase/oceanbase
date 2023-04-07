@@ -56,6 +56,7 @@ int takeover_state_to_string(const TakeOverState log_type,
 
 struct RCDiagnoseInfo {
   RCDiagnoseInfo() { reset(); }
+  ~RCDiagnoseInfo() { reset(); }
   void reset();
   int64_t id_;
   TakeOverState state_;
