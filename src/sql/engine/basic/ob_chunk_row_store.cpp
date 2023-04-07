@@ -1232,7 +1232,6 @@ int ObChunkRowStore::load_next_block(ChunkIterator& it)
       } else {
         // first read disk data then read memory data, so it must free cur_iter_blk_
         if (NULL != it.cur_iter_blk_) {
-          callback_free(it.cur_iter_blk_->get_buffer()->mem_size());
           allocator_->free(it.cur_iter_blk_);
           it.cur_iter_blk_ = NULL;
           it.cur_iter_blk_buf_ = nullptr;

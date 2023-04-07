@@ -456,24 +456,13 @@ int ObExprInOrNotIn::ObExprInCtx::exist_in_static_engine_hashset_vecs(
   return ret;
 }
 
-int ObExprInOrNotIn::ObExprInCtx::set_cmp_types(const ObExprCalcType& cmp_type, const int64_t row_dimension)
-{
-  int ret = OB_SUCCESS;
-  if (cmp_types_.count() < row_dimension) {
-    ret = cmp_types_.push_back(cmp_type);
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
-int ObExprInOrNotIn::ObExprInCtx::init_cmp_types(const int64_t row_dimension, ObExecContext* exec_ctx)
+int ObExprInOrNotIn::ObExprInCtx::init_cmp_types(const int64_t row_dimension, ObExecContext *exec_ctx)
 {
   cmp_types_.set_allocator(&(exec_ctx->get_allocator()));
-  return cmp_types_.init(row_dimension);
+  return cmp_types_.prepare_allocate(row_dimension);
 }
 
-const ObExprCalcType& ObExprInOrNotIn::ObExprInCtx::get_cmp_types(const int64_t idx) const
+ObExprCalcType &ObExprInOrNotIn::ObExprInCtx::get_cmp_types(const int64_t idx)
 {
   return cmp_types_[idx];
 }
@@ -960,9 +949,11 @@ int ObExprInOrNotIn::hash_calc_for_vector(ObObj& result, const ObObj* objs, cons
         for (int64_t i = 0; OB_SUCC(ret) && i < right_param_num; ++i, right_start_idx += row_dimension) {
           int null_idx = 0;
           for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension; ++j) {
-            const ObObj& right_obj = objs[right_start_idx + j];
-            const ObExprCalcType& cmp_type = cmp_types.at(row_dimension * i + j);
-            in_ctx->set_cmp_types(cmp_type, row_dimension);
+            const ObObj &right_obj = objs[right_start_idx + j];
+            const ObExprCalcType &cmp_type = cmp_types.at(row_dimension * i + j);
+            if (!right_obj.is_null() || ObNullType == in_ctx->get_cmp_types(j).get_type()) {
+              in_ctx->get_cmp_types(j) = cmp_type;
+            }
             if (OB_FAIL(to_type(cmp_type.get_type(), cmp_type.get_collation_type(), cast_ctx, right_obj, out_obj))) {
               LOG_WARN("failed to cast obj", K(ret));
             } else {

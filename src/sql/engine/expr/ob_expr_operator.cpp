@@ -3200,13 +3200,13 @@ ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const
 }
 
 // for static_typing_engine
-int ObBitwiseExprOperator::set_calc_type(ObExprResType& type)
+int ObBitwiseExprOperator::set_calc_type(ObExprResType& type, bool static_engine)
 {
   if (lib::is_oracle_mode()) {
     type.set_calc_type(ObNumberType);
     type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
     type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
-  } else {
+  } else if (static_engine) { // old engine use get_uint64() to dynamic cast
     if (ObNumberType == type.get_type()) {
       type.set_calc_type(ObNumberType);
       type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
@@ -3220,10 +3220,14 @@ int ObBitwiseExprOperator::set_calc_type(ObExprResType& type)
   return OB_SUCCESS;
 }
 
-int ObBitwiseExprOperator::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObBitwiseExprOperator::calc_result_type1(ObExprResType &type,
+                                             ObExprResType &type1,
+                                             ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
+  CK (OB_NOT_NULL(type_ctx.get_session()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
     if (is_oracle_mode()) {
       type.set_number();
       type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
@@ -3234,17 +3238,11 @@ int ObBitwiseExprOperator::calc_result_type1(ObExprResType& type, ObExprResType&
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     }
     ObExprOperator::calc_result_flag1(type, type1);
-    const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-    if (OB_ISNULL(session)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast basic session to sql session failed", K(ret));
-    } else if (session->use_static_typing_engine()) {
-      if (OB_FAIL(set_calc_type(type1))) {
-        LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
-      } else {
-        ObCastMode cm = lib::is_oracle_mode() ? CM_NONE : CM_STRING_INTEGER_TRUNC;
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK | cm);
-      }
+    if (OB_FAIL(set_calc_type(type1, type_ctx.get_session()->use_static_typing_engine()))) {
+      LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
+    } else {
+      ObCastMode cm = lib::is_oracle_mode() ? CM_NONE : CM_STRING_INTEGER_TRUNC;
+      type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK | cm);
     }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -3252,11 +3250,15 @@ int ObBitwiseExprOperator::calc_result_type1(ObExprResType& type, ObExprResType&
   return ret;
 }
 
-int ObBitwiseExprOperator::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprTypeCtx& type_ctx) const
+int ObBitwiseExprOperator::calc_result_type2(ObExprResType &type,
+                                             ObExprResType &type1,
+                                             ObExprResType &type2,
+                                             ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
+  CK (OB_NOT_NULL(type_ctx.get_session()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
     if (is_oracle_mode()) {
       type.set_number();
       type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
@@ -3267,19 +3269,13 @@ int ObBitwiseExprOperator::calc_result_type2(
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     }
     ObExprOperator::calc_result_flag2(type, type1, type2);
-    const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-    if (OB_ISNULL(session)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast basic session to sql session failed", K(ret));
-    } else if (session->use_static_typing_engine()) {
-      if (OB_FAIL(set_calc_type(type1))) {
-        LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
-      } else if (OB_FAIL(set_calc_type(type2))) {
-        LOG_WARN("set_calc_type for type2 failed", K(ret), K(type2));
-      } else {
-        ObCastMode cm = lib::is_oracle_mode() ? CM_NONE : CM_STRING_INTEGER_TRUNC;
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK | cm);
-      }
+    if (OB_FAIL(set_calc_type(type1, type_ctx.get_session()->use_static_typing_engine()))) {
+      LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
+    } else if (OB_FAIL(set_calc_type(type2, type_ctx.get_session()->use_static_typing_engine()))) {
+      LOG_WARN("set_calc_type for type2 failed", K(ret), K(type2));
+    } else {
+      ObCastMode cm = lib::is_oracle_mode() ? CM_NONE : CM_STRING_INTEGER_TRUNC;
+      type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK | cm);
     }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;

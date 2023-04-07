@@ -908,6 +908,13 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode& node)
           }
           if (OB_SUCC(ret)) {
             create_index_arg->sql_mode_ = session_info_->get_sql_mode();
+            bool strict_mode = true;
+            if (OB_FAIL(session_info_->is_create_table_strict_mode(strict_mode))) {
+              SQL_RESV_LOG(WARN, "failed to get variable ob_create_table_strict_mode");
+            } else {
+              obrpc::ObCreateTableMode create_mode = strict_mode ? obrpc::OB_CREATE_TABLE_MODE_STRICT : obrpc::OB_CREATE_TABLE_MODE_LOOSE;
+              create_index_arg->create_mode_ = create_mode;
+            }
           }
           if (OB_SUCC(ret)) {
             if (table_schema_->is_old_no_pk_table() && table_schema_->is_partitioned_table() &&

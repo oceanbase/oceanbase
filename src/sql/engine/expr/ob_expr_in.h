@@ -239,12 +239,11 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
     int get_hashset_vecs_all_null(const int64_t idx, bool& is_all_null) const;
     inline void set_param_exist_null(bool exist_null);
     inline bool is_param_exist_null() const;
-    inline int set_cmp_types(const ObExprCalcType& cmp_type, const int64_t row_dimension);
     int64_t get_static_engine_hashset_size() const
     {
       return static_engine_hashset_.size();
     }
-    inline const ObExprCalcType& get_cmp_types(const int64_t idx) const;
+    inline ObExprCalcType &get_cmp_types(const int64_t idx);
 
     bool is_hash_calc_disabled() const
     {

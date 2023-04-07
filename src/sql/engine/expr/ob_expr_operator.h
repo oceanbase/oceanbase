@@ -1457,7 +1457,7 @@ public:
   virtual ~ObBitwiseExprOperator()
   {}
   // for static_typing_engine
-  static int set_calc_type(ObExprResType& type);
+  static int set_calc_type(ObExprResType &type, bool static_engine);
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result_type2(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
