@@ -64,7 +64,7 @@ public:
   int prepare_init_plan();
   void reuse();
   int rewind(bool reset_onetime_plan = false);
-  //int rescan_chlid(int64_t child_idx);
+  //int rescan_child(int64_t child_idx);
   int init_mem_entity();
   int init_hashmap(const int64_t param_num)
   {

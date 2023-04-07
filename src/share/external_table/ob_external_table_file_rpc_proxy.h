@@ -26,7 +26,7 @@ public:
   DEFINE_TO(ObExtenralTableRpcProxy);
   virtual ~ObExtenralTableRpcProxy() {}
   // sync rpc for das task result
-  RPC_AP(PR5 flush_file_kvcahce, obrpc::OB_FLUSH_EXTERNAL_TABLE_FILE_CACHE, (share::ObFlushExternalTableFileCacheReq), share::ObFlushExternalTableFileCacheRes);
+  RPC_AP(PR5 flush_file_kvcache, obrpc::OB_FLUSH_EXTERNAL_TABLE_FILE_CACHE, (share::ObFlushExternalTableFileCacheReq), share::ObFlushExternalTableFileCacheRes);
   RPC_AP(PR5 load_external_file_list, obrpc::OB_LOAD_EXTERNAL_FILE_LIST, (share::ObLoadExternalFileListReq), share::ObLoadExternalFileListRes);
 };
 }  // namespace obrpc

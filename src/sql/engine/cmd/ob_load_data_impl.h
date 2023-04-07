@@ -930,7 +930,7 @@ public:
   int wait_all_task_finished(ObPhysicalPlanCtx &plan_ctx);
   int generate_set_expr_strs(const ObSQLSessionInfo *session_info);
   bool find_insert_column_info(const uint64_t target_column_id, int64_t &found_idx);
-  int recursively_replace_varables(ObRawExpr *&raw_expr,
+  int recursively_replace_variables(ObRawExpr *&raw_expr,
                                    common::ObIAllocator &allocator,
                                    const ObSQLSessionInfo &session_info);
   int analyze_exprs_and_replace_variables(common::ObIAllocator &allocator, const ObSQLSessionInfo &session_info);

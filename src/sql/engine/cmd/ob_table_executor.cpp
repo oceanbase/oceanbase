@@ -564,7 +564,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       }
     }
 
-    // only CTAS or create temperary table will make session_id != 0. If such table detected, set
+    // only CTAS or create temporary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
     if (0 != table_schema.get_session_id()) {
       LOG_TRACE("CTAS or temporary table create detected", K(table_schema));
@@ -922,7 +922,7 @@ int ObAlterTableExecutor::flush_external_file_cache(
     OZ (GCTX.external_table_proxy_->to(all_servers.at(i))
                                             .by(tenant_id)
                                             .timeout(timeout)
-                                            .flush_file_kvcahce(req, async_cb));
+                                            .flush_file_kvcache(req, async_cb));
     if (OB_SUCC(ret)) {
       send_task_count++;
     }
@@ -1826,11 +1826,11 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
         || obrpc::ObAlterTableArg::REORGANIZE_PARTITION == arg.alter_part_type_
         || obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
       ObPartition **partition_array = table_schema.get_part_array();
-      int64_t realy_part_num = OB_INVALID_PARTITION_ID;
+      int64_t real_part_num = OB_INVALID_PARTITION_ID;
       if (obrpc::ObAlterTableArg::SPLIT_PARTITION == arg.alter_part_type_) {
-        realy_part_num = table_schema.get_part_option().get_part_num();
+        real_part_num = table_schema.get_part_option().get_part_num();
       } else {
-        realy_part_num = table_schema.get_partition_num();
+        real_part_num = table_schema.get_partition_num();
       }
       if (table_schema.is_range_part()) {
         if (OB_FAIL(ObPartitionExecutorUtils::set_range_part_high_bound(ctx,
@@ -1847,7 +1847,7 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
         } else if (OB_FAIL(ObPartitionExecutorUtils::cast_list_expr_to_obj(ctx,
                                                                            stmt::T_CREATE_TABLE,
                                                                            false, // is_subpart
-                                                                           realy_part_num,
+                                                                           real_part_num,
                                                                            partition_array,
                                                                            NULL,
                                                                            stmt.get_part_fun_exprs(),
@@ -2137,7 +2137,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       bool use_parallel_truncate = false;
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
       if (OB_FAIL(check_use_parallel_truncate(truncate_table_arg, use_parallel_truncate))) {
-        LOG_WARN("fail to check use parallel trunate", KR(ret), K(truncate_table_arg));
+        LOG_WARN("fail to check use parallel truncate", KR(ret), K(truncate_table_arg));
       } else if (!use_parallel_truncate) {
         if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
           LOG_WARN("rpc proxy alter table failed", K(ret));
@@ -2352,7 +2352,7 @@ int ObFlashBackTableToScnExecutor::execute(ObExecContext &ctx, ObFlashBackTableT
       LOG_WARN("get common rpc proxy failed", K(ret));
     } else if (OB_ISNULL(common_rpc_proxy)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cmmon rpc proxy should not be null", K(ret));
+      LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_FAIL(common_rpc_proxy->flashback_table_to_time_point(arg))) {
       LOG_WARN("rpc proxy flashback table failed", K(ret));
     }
