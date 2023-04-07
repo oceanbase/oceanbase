@@ -797,13 +797,15 @@ int ObMultipleMerge::open()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMultipleMerge has not been inited, ", K(ret));
-  } else if (OB_ISNULL(access_param_)) {
+  } else if (OB_UNLIKELY(nullptr == access_param_ || nullptr == access_ctx_ || nullptr == access_ctx_->stmt_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null access_param", K(ret));
+    LOG_WARN("Unexpected null access info", K(ret), KP(access_param_), KP(access_ctx_));
+  } else if (OB_FAIL(cur_row_.reserve(access_param_->get_max_out_col_cnt()))) {
+    STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
+  } else if (OB_FAIL(nop_pos_.init(*access_ctx_->stmt_allocator_, access_param_->get_max_out_col_cnt()))) {
+    STORAGE_LOG(WARN, "Fail to init nop pos, ", K(ret));
   } else {
-    if (OB_NOT_NULL(access_ctx_)
-        && OB_NOT_NULL(access_ctx_->stmt_allocator_)
-        && access_param_->iter_param_.is_use_iter_pool()) {
+    if (access_param_->iter_param_.is_use_iter_pool()) {
       if (OB_FAIL(alloc_iter_pool(*access_ctx_->stmt_allocator_))) {
         LOG_WARN("Failed to init iter pool", K(ret));
       } else {

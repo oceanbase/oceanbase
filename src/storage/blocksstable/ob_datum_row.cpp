@@ -275,10 +275,11 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
     // skip
   } else if (OB_FAIL(datum_buffer_.reserve(capacity))) {
     STORAGE_LOG(WARN, "Failed to reserve datum buffer", K(ret), K(capacity));
+  } else if (OB_FAIL(obj_buf_.reserve(capacity))) {
+    STORAGE_LOG(WARN, "Failed to reserve obj buf", K(ret), K(capacity));
   } else {
     storage_datums_ = datum_buffer_.get_datums();
     old_row_.reset();
-    obj_buf_.reset();
   }
   if (OB_SUCC(ret)) {
     mvcc_row_flag_.reset();
