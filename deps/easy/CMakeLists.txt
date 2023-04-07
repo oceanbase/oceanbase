@@ -55,4 +55,8 @@ target_link_libraries(easy_base
 target_compile_features(easy_base INTERFACE cxx_std_11)
 
 add_subdirectory(src)
-add_subdirectory(test EXCLUDE_FROM_ALL)
+if(OB_BUILD_UNITTEST)
+  add_subdirectory(test EXCLUDE_FROM_ALL)
+else()
+  add_subdirectory(test EXCLUDE_FROM_ALL)
+endif()
