@@ -90,6 +90,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   ObDDLTaskInfo info;
   bool oracle_mode = false;
   bool need_exec_new_inner_sql = true;
+  const ObTableSchema *data_table_schema = nullptr;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -107,17 +108,22 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     LOG_WARN("sys variable schema is NULL", K(ret));
   } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
     LOG_WARN("get oracle mode failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, data_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(data_table_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
   } else {
     if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                            data_table_id_,
                                                            dest_table_id_,
-                                                           schema_version_,
+                                                           data_table_schema->get_schema_version(),
                                                            snapshot_version_,
                                                            execution_id_,
                                                            task_id_,
                                                            parallelism_,
                                                            use_heap_table_ddl_plan_,
-                                                           false/*use_schema_version_hint_for_src_table*/,
+                                                           true/*use_schema_version_hint_for_src_table*/,
                                                            &col_name_map_,
                                                            sql_string))) {
       LOG_WARN("fail to generate build replica sql", K(ret));

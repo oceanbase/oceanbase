@@ -968,16 +968,17 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     int64_t table_task_status = 0;
     int64_t execution_id = -1;
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, execution_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        need_retry_ = false;
+      }
       LOG_WARN("select for update failed", K(ret), K(task_id_));
-    } else if (old_status != task_status_) {
-      ret = OB_EAGAIN;
-      LOG_WARN("task status has changed", K(ret));
     } else if (table_task_status == FAIL && old_status != table_task_status) {
       // task failed marked by user
       real_new_status = FAIL;
       ret_code_ = OB_CANCELED;
-    } else if (table_task_status == SUCCESS && old_status != table_task_status) {
-      real_new_status = SUCCESS;
+    } else if (old_status != table_task_status) {
+      // refresh status
+      real_new_status = static_cast<ObDDLTaskStatus>(table_task_status);
     } else if (old_status == real_new_status) {
       // do nothing
     } else {

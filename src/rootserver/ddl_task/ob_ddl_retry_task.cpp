@@ -692,8 +692,13 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_UNLIKELY(ObDDLTaskStatus::DROP_SCHEMA != curr_task_status)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status updated", K(ret), K(task_id), K(curr_task_status));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, tenant_id, task_id, new_task_status))) {
     LOG_WARN("update task status failed", K(ret));
+  } else {
+    LOG_INFO("update task status to wait child task finish", K(ret));
   }
   return ret;
 }
