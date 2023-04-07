@@ -1010,8 +1010,8 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     }
 
     if (OB_CANCELED == real_ret_code) {
-      // (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
-      //     trace_id_, tenant_id_, sql_exec_addr_); // ignore return code
+      (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
+          trace_id_, tenant_id_, task_id_, snapshot_version_, sql_exec_addr_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
   }
@@ -3146,17 +3146,16 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
     common::ObMySQLProxy &proxy,
     const common::ObCurTraceId::TraceId &trace_id,
     const uint64_t tenant_id,
+    const int64_t task_id,
+    const int64_t snapshot_version,
     const common::ObAddr &sql_exec_addr)
 {
   int ret = OB_SUCCESS;
   char ip_str[common::OB_IP_STR_BUFF];
 
-  if (OB_UNLIKELY(!proxy.is_inited()) || !sql_exec_addr.is_valid()) {
+  if (OB_UNLIKELY(!proxy.is_inited() || trace_id.is_invalid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
-  } else if (!sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
   } else {
     LOG_INFO("start ddl kill inner sql session", K(ret), K(trace_id));
     ObSqlString sql_string;
@@ -3167,17 +3166,47 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
       if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get trace id string failed", K(ret), K(trace_id), K(tenant_id));
-      } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\""
-          " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%cINTO%cSELECT%c\" ",
-          OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-          trace_id_str,
-          ip_str,
-          sql_exec_addr.get_port(),
-          spec_charater,
-          spec_charater,
-          spec_charater,
-          spec_charater))) {
-        LOG_WARN("assign sql string failed", K(ret));
+      } else if (!sql_exec_addr.is_valid()) {
+        if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+            " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
+            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+            OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
+            trace_id_str,
+            tenant_id,
+            spec_charater,
+            spec_charater,
+            task_id,
+            spec_charater,
+            spec_charater,
+            spec_charater,
+            snapshot_version,
+            spec_charater))) {
+          LOG_WARN("assign sql string failed", K(ret));
+        }
+      } else {
+        if (!sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
+        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\" "
+            " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
+            " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+            OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
+            trace_id_str,
+            tenant_id,
+            ip_str,
+            sql_exec_addr.get_port(),
+            spec_charater,
+            spec_charater,
+            task_id,
+            spec_charater,
+            spec_charater,
+            spec_charater,
+            snapshot_version,
+            spec_charater))) {
+          LOG_WARN("assign sql string failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) { // default use OB_SYS_TENANT_ID
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
       } else if (OB_ISNULL((result = res.get_result()))) {
@@ -3195,10 +3224,12 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
             }
           } else {
             EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
-            if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_id))){
-              LOG_WARN("fail to kill session", K(ret), K(session_id), K(trace_id));
-            } else {
-              LOG_WARN("succ to kill session", K(ret), K(session_id), K(trace_id));
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_id))){
+                LOG_WARN("fail to kill session", K(ret), K(session_id), K(trace_id));
+              } else {
+                LOG_WARN("succ to kill session", K(ret), K(session_id), K(trace_id));
+              }
             }
           }
         }

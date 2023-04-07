@@ -535,7 +535,7 @@ int ObInnerSqlRpcP::process()
     }
     /* init session info */
     const int64_t group_id = transmit_arg.get_consumer_group_id();
-    if (OB_NOT_NULL(tmp_session)) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(tmp_session)) {
       tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
       tmp_session->switch_tenant(transmit_arg.get_tenant_id());
       ObString sql_stmt(sql_str.ptr());
