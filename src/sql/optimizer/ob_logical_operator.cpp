@@ -2640,7 +2640,10 @@ int ObLogicalOperator::extract_specific_exprs(ObRawExpr* raw_expr, ObIArray<Expr
       change_ctx = true;
     }
   } else if (!raw_expr->has_const_or_const_expr_flag() && is_shared_expr(ctx, raw_expr)) {
-    if (OB_FAIL(add_var_to_array_no_dup(shared_exprs, raw_expr))) {
+    if (LOG_TABLE_SCAN == type_ && static_cast<ObLogTableScan *>(this)->get_is_index_global() &&
+        static_cast<ObLogTableScan *>(this)->get_is_global_index_back()) {
+      // do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(shared_exprs, raw_expr))) {
       LOG_WARN("failed to add expr", K(ret));
     } else {
       change_ctx = true;
