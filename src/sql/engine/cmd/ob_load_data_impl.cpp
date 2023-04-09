@@ -2329,6 +2329,7 @@ int ObLoadDataSPImpl::ToolBox::release_resources()
                    K(ret), "wait_seconds", log_print_cnt * 10, K(gid), K(ref_cnt));
         }
       }
+      job_status->~ObLoadDataStat();
     }
   }
 
@@ -3009,6 +3010,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       ObLoadDataGID::generate_new_id(temp_gid);
       job_status->tenant_id_ = tenant_id;
       job_status->job_id_ = temp_gid.id;
+      job_status->allocator_.set_tenant_id(tenant_id);
       OZ(ob_write_string(job_status->allocator_,
                          load_args.combined_name_, job_status->table_name_));
       OZ(ob_write_string(job_status->allocator_,

@@ -409,5 +409,19 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
   return ret;
 }
 
+// PLEASE check the input parameter in public interface
+bool ObLinkScanOp::need_tx(const ObSQLSessionInfo *my_session) const
+{
+  bool ret_bool = false;
+  if (MY_SPEC.has_for_update_) {
+    // case 1, if select for update, tm_rm_start is required to be called.
+    ret_bool = true;
+  } else if (my_session->is_in_transaction()) {
+    // case 2, if select in transaction, tm_rm_start is required to be called.
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

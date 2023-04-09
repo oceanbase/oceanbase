@@ -88,7 +88,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
         } else if (is_tenant_standby) {
           ret = OB_STANDBY_READ_ONLY;
-          FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+          FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
           LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
         }
 
@@ -101,6 +101,13 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           } else {
             break;
           }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (is_server_stopped()) {
+          ret = OB_TIMEOUT;
+          FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
+          LOG_WARN("server is stopping, check whether the ddl task finish successfully or not", K(ret), K(tenant_id), K(task_id));
         } else {
           ob_usleep(retry_interval);
         }
@@ -147,8 +154,15 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
       LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
     } else if (is_tenant_standby) {
       ret = OB_STANDBY_READ_ONLY;
-      FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+      FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
       LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_server_stopped()) {
+      ret = OB_TIMEOUT;
+      FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
+      LOG_WARN("server is stopping, check whether the ddl task finish successfully or not", K(ret), K(tenant_id), K(task_id));
     }
   }
   return ret;
@@ -226,7 +240,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
         } else if (is_tenant_standby) {
           ret = OB_STANDBY_READ_ONLY;
-          FORWARD_USER_ERROR(ret, "DDL not finish, need check");
+          FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
           LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
           break;
         }
@@ -239,6 +253,13 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           } else {
             break;
           }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (is_server_stopped()) {
+          ret = OB_TIMEOUT;
+          FORWARD_USER_ERROR(ret, "DDL execution status is undecided, please check later if it finishes successfully or not.");
+          LOG_WARN("server is stopping, check whether the ddl task finish successfully or not", K(ret), K(tenant_id), K(task_id));
         } else {
           ob_usleep(retry_interval);
         }

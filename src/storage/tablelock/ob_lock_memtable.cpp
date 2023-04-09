@@ -49,7 +49,7 @@ ObLockMemtable::ObLockMemtable()
     freeze_scn_(SCN::min_scn()),
     flushed_scn_(SCN::min_scn()),
     rec_scn_(SCN::max_scn()),
-    pre_rec_scn_(),
+    pre_rec_scn_(SCN::max_scn()),
     max_committed_scn_(),
     is_frozen_(false),
     freezer_(nullptr),
@@ -98,7 +98,7 @@ int ObLockMemtable::init(
 void ObLockMemtable::reset()
 {
   rec_scn_.set_max();
-  pre_rec_scn_.reset();
+  pre_rec_scn_.set_max();
   max_committed_scn_.reset();
   ls_id_.reset();
   ObITable::reset();
@@ -519,7 +519,14 @@ int ObLockMemtable::update_lock_status(
   } else if ((OUT_TRANS_LOCK == op_info.op_type_ || OUT_TRANS_UNLOCK == op_info.op_type_)
              && LOCK_OP_COMPLETE == status) {
     RLockGuard guard(flush_lock_);
-    rec_scn_.dec_update(commit_scn);
+    if (commit_scn <= freeze_scn_) {
+      LOG_INFO("meet disordered replay, will dec_update pre_rec_scn_", K(ret),
+               K(op_info), K(commit_scn), K(rec_scn_), K(pre_rec_scn_),
+               K(freeze_scn_), K(ls_id_));
+      pre_rec_scn_.dec_update(commit_scn);
+    } else {
+      rec_scn_.dec_update(commit_scn);
+    }
     max_committed_scn_.inc_update(commit_scn);
     LOG_INFO("out_trans update_lock_status", K(ret), K(op_info), K(commit_scn), K(status), K(rec_scn_), K(ls_id_));
   }
@@ -740,10 +747,27 @@ SCN ObLockMemtable::get_rec_scn()
   LOG_INFO("rec_scn of ObLockMemtable is ",
            K(rec_scn_), K(flushed_scn_), K(pre_rec_scn_),
            K(freeze_scn_), K(max_committed_scn_), K(is_frozen_), K(ls_id_));
-  if (!pre_rec_scn_.is_valid()) {
+  // If pre_rec_scn_ is max, it means that previous memtable
+  // has already been flushed. In ohter words, it means that
+  // rec_scn_ is ready to work, so we can return rec_scn_.
+  // You can regard max_scn as an invalid value for pre_rec_scn_ here.
+  // (As a matter of fact, max_scn means pre_rec_scn_ or rec_scn_
+  // will not block checkpoint advancing.)
+  //
+  // Specifically, if there's a commit_scn which is smaller
+  // than the freeze_scn_, the pre_rec_scn_ will be set to
+  // an valid value (i.e. not max_scn) again, it's a special
+  // case in disordered replay.
+  // You can see details about this case in update_lock_status.
+  if (pre_rec_scn_.is_max()) {
     return rec_scn_;
   } else {
-    return pre_rec_scn_;
+    if (pre_rec_scn_ > rec_scn_) {
+      LOG_INFO("prec_rec_scn_ is larger than rec_scn_!", K(pre_rec_scn_),
+               K(rec_scn_), K(flushed_scn_), K(freeze_scn_),
+               K(max_committed_scn_), K(is_frozen_), K(ls_id_));
+    }
+    return share::SCN::min(pre_rec_scn_, rec_scn_);
   }
 }
 
@@ -761,7 +785,7 @@ int ObLockMemtable::on_memtable_flushed()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(flush_lock_);
-  pre_rec_scn_.reset();
+  pre_rec_scn_.set_max();
   if (freeze_scn_ > flushed_scn_) {
     flushed_scn_ = freeze_scn_;
   } else {
@@ -802,7 +826,7 @@ int ObLockMemtable::flush(SCN recycle_scn,
       LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
                K(is_frozen_), K(ls_id_));
     } else if (is_active_memtable()) {
-      freeze_scn_ = max_committed_scn_;
+      freeze_scn_.inc_update(max_committed_scn_);
       if (flushed_scn_ >= freeze_scn_) {
         LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
       } else {

@@ -295,8 +295,7 @@ public:
   int acquire_more_worker(int64_t num, int64_t &succ_num);
   void check_worker_count();
   void check_worker_count(ObThWorker &w);
-  int try_clear_worker();
-
+  int clear_worker();
   lib::ObMutex workers_lock_;
 
 protected:
@@ -323,7 +322,7 @@ public:
   }
   ~GroupMap() {}
 	int create_and_insert_group(int32_t group_id, ObTenant *tenant, share::ObCgroupCtrl *cgroup_ctrl, ObResourceGroup *&group);
-  int try_wait_group();
+  void wait_group();
   void destroy_group();
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -513,6 +512,7 @@ public:
     return 0;
   }
 private:
+  static void* wait(void* tenant);
   // update CPU usage
   void update_token_usage();
   // acquire workers if tenant doesn't have sufficient worker.
@@ -557,7 +557,7 @@ protected:
   // workers can make progress.
   int64_t token_cnt_ CACHE_ALIGNED;
   int64_t total_worker_cnt_ CACHE_ALIGNED;
-
+  pthread_t gc_thread_;
   bool stopped_;
   bool wait_mtl_finished_;
 

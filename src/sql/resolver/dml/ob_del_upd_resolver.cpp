@@ -2953,6 +2953,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   int ret = OB_SUCCESS;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
   ObArray<ObRawExpr*> value_row;
+  ObArray<int64_t> value_idxs; //store the old order of columns in values_desc
   uint64_t value_count = OB_INVALID_ID;
   bool is_all_default = false;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_) ||
@@ -2973,6 +2974,36 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   if (FAILEDx(table_info.values_vector_.reserve(node->num_child_ * table_info.values_desc_.count()))) {
     // works for most cases. except label security/timestamp generation needs extend memory
     LOG_WARN("reserve memory fail", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    //move generated columns behind basic columns before resolve values
+    ObArray<ObColumnRefRawExpr*> tmp_values_desc;
+    if (OB_FAIL(value_idxs.reserve(table_info.values_desc_.count()))) {
+      LOG_WARN("fail to reserve memory", K(ret));
+    } else if (OB_FAIL(tmp_values_desc.reserve(table_info.values_desc_.count()))) {
+      LOG_WARN("fail to reserve memory", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < 2; ++i) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_info.values_desc_.count(); ++j) {
+        if (OB_ISNULL(table_info.values_desc_.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("inalid value desc", K(j), K(table_info.values_desc_));
+        } else if ((i == 0 && !table_info.values_desc_.at(j)->is_generated_column())
+                   || (i == 1 && table_info.values_desc_.at(j)->is_generated_column())) {
+          if (OB_FAIL(tmp_values_desc.push_back(table_info.values_desc_.at(j)))) {
+            LOG_WARN("fail to push back values_desc_", K(ret));
+          } else if (OB_FAIL(value_idxs.push_back(j))) {
+            LOG_WARN("fail to push back value index", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      table_info.values_desc_.reuse();
+      if (OB_FAIL(append(table_info.values_desc_, tmp_values_desc))) {
+        LOG_WARN("fail to append new values_desc");
+      }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
     ParseNode *vector_node = node->children_[i];
@@ -3004,17 +3035,18 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
           ObRawExpr *expr = NULL;
           ObRawExpr *tmp_expr = NULL;
           const ObColumnRefRawExpr *column_expr = NULL;
-          if (OB_ISNULL(vector_node->children_[j])
+          const ParseNode *value_node = NULL;
+          if (OB_ISNULL(value_node = vector_node->children_[value_idxs.at(j)])
               || OB_ISNULL(column_expr = table_info.values_desc_.at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("inalid children node", K(j), K(vector_node));
-          } else if (T_EMPTY == vector_node->children_[j]->type_) {
+          } else if (T_EMPTY == value_node->type_) {
             //nothing todo
           } else {
             uint64_t column_id = column_expr->get_column_id();
             ObDefaultValueUtils utils(del_upd_stmt, &params_, this);
             bool is_generated_column = false;
-            if (OB_FAIL(resolve_sql_expr(*(vector_node->children_[j]), expr))) {
+            if (OB_FAIL(resolve_sql_expr(*value_node, expr))) {
               LOG_WARN("resolve sql expr failed", K(ret));
             } else if (OB_ISNULL(expr)) {
               ret = OB_ERR_UNEXPECTED;

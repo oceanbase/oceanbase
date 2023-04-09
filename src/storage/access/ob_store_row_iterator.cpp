@@ -135,9 +135,9 @@ void ObStoreRowIterPool::return_iter(ObStoreRowIterator *iter)
       }
     }
     if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "Failed to return iter", K(ret), K(typeid(*iter).name()));
       iter->~ObStoreRowIterator();
       allocator_.free(iter);
-      STORAGE_LOG(ERROR, "Failed to return iter", K(ret), K(typeid(*iter).name()));
     }
   }
 }

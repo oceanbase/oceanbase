@@ -1290,10 +1290,10 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
     if (OB_ISNULL(view_select)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null select expr", K(ret));
-    } else if (OB_ISNULL(col_expr = parent_stmt->get_column_expr_by_id(view_table->table_id_,
+    } else if (NULL == (col_expr = parent_stmt->get_column_expr_by_id(view_table->table_id_,
                                                                       i + OB_APP_MIN_COLUMN_ID))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expect column expr", K(i), K(ret));
+      // unused select item, skip following procedure
+      find = true;
     } else if (OB_FAIL(old_column_exprs.push_back(col_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     }

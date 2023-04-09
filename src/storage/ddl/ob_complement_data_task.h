@@ -153,6 +153,7 @@ public:
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
   virtual int create_first_task() override;
+  virtual bool ignore_warning() override;
   // report replica build status to RS.
   int report_replica_build_status();
 private:

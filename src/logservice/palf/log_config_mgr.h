@@ -291,8 +291,8 @@ public:
                                      LogConfigInfo &new_config_info) const;
   int pre_sync_config_log_and_mode_meta(const common::ObMember &server, const int64_t proposal_id);
   int start_change_config(int64_t &proposal_id,
-                          int64_t &election_epoch) const;
-  int start_degrade();
+                          int64_t &election_epoch,
+                          const LogConfigChangeType &type);
   int end_degrade();
   int is_state_changed(bool &need_rlock, bool &need_wlock) const;
   int change_config(const LogConfigChangeArgs &args,
@@ -325,6 +325,7 @@ public:
                                  const int64_t new_replica_num,
                                  bool &added_member_has_new_version) const;
   int sync_meta_for_arb_election_leader();
+  bool need_sync_to_degraded_learners() const;
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();
@@ -370,6 +371,7 @@ private:
   typedef common::ObFunction<bool(const LogLearner &)> LogLearnerCond;
   typedef common::ObFunction<int(const LogLearner &)> LogLearnerAction;
   static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = 2 * 1000 * 1000;
+  static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = 1 * 1000 * 1000;
 private:
   int set_initial_config_info_(const LogConfigInfo &config_info,
                                const int64_t proposal_id,
@@ -424,14 +426,16 @@ private:
                                      const int64_t conn_timeout_us,
                                      const bool force_remote_check,
                                      LSN &max_flushed_end_lsn,
-                                     bool &has_same_version) const;
+                                     bool &has_same_version,
+                                     int64_t &last_slide_log_id) const;
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
                                   const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
                                   bool &added_member_has_new_version,
-                                  LSN &added_member_flushed_end_lsn) const;
+                                  LSN &added_member_flushed_end_lsn,
+                                  int64_t &added_member_last_slide_log_id) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
@@ -507,6 +511,8 @@ private:
   bool need_change_config_bkgd_;
   LogConfigVersion bkgd_config_version_;
   bool is_sw_interrupted_by_degrade_;
+  bool will_upgrade_;
+  int64_t last_start_upgrade_time_us_;
   // In our current implement, leader won't send config change log to followers and learners
   // after config change log has committed. Considering following scenario:
   // Paxos group (A, B, C), their config version are all 1, user switches leader from A to B.
@@ -525,6 +531,7 @@ private:
   mutable int64_t barrier_print_log_time_;
   mutable int64_t last_check_init_state_time_us_;
   mutable int64_t check_config_print_time_;
+  mutable int64_t start_wait_barrier_time_us_;
   mutable int64_t last_wait_barrier_time_us_;
   mutable LSN last_wait_committed_end_lsn_;
   int64_t last_sync_meta_for_arb_election_leader_time_us_;

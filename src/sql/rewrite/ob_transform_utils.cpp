@@ -7050,10 +7050,18 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
     LOG_WARN("failed to remove const exprs", K(ret));
   } else if (OB_FAIL(append(select_exprs, shared_exprs))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (select_exprs.empty()) {
+    if (OB_FAIL(create_dummy_select_item(*view_stmt, ctx))) {
+      LOG_WARN("Failed to create dummy select item", K(ret));
+    }
   } else if (OB_FAIL(create_columns_for_view(ctx, *table, stmt, select_exprs, column_exprs))) {
     LOG_WARN("failed to create columns for view", K(ret));
   } else if (OB_FAIL(stmt->replace_relation_exprs(select_exprs, column_exprs))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(stmt->adjust_subquery_list())) {
     LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*stmt))) {

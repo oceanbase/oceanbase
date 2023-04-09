@@ -315,7 +315,7 @@ DEF_INT(global_write_halt_residual_memory, OB_CLUSTER_PARAMETER, "30", "(0, 100)
         "disable write to memstore when observer memstore free memory(plus memory hold by blockcache) lower than this limit, Range: (0, 100)"
         "limit calc by (memory_limit - system_memory) * global_write_halt_residual_memory/100",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(px_workers_per_cpu_quota, OB_CLUSTER_PARAMETER, "10", "[0,20]",
+DEF_INT(px_workers_per_cpu_quota, OB_TENANT_PARAMETER, "10", "[0,20]",
         "the ratio(integer) between the number of system allocated px workers vs "
         "the maximum number of threads that can be scheduled concurrently. Range: [0, 20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

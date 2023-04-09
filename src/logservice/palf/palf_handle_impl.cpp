@@ -535,6 +535,7 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
       resp.is_normal_replica_ = true;
       resp.max_flushed_end_lsn_ = max_flushed_end_lsn;
       resp.need_update_config_meta_ = false;
+      resp.last_slide_log_id_ = sw_.get_last_slide_log_id();
 
     }
 
@@ -884,7 +885,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
                                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  int degrade_ret = OB_EAGAIN;
+  bool doing_degrade = false;
   int64_t proposal_id = INVALID_PROPOSAL_ID;
   int64_t election_epoch = INVALID_PROPOSAL_ID;
   bool is_already_finished = false;
@@ -908,12 +909,10 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
   } else if (!args.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(args));
-  } else if (OB_FAIL(config_mgr_.start_change_config(proposal_id, election_epoch))) {
+    // a degrade operation will interrupt startworking log running in background
+  } else if (OB_FAIL(config_mgr_.start_change_config(proposal_id, election_epoch, args.type_))) {
     PALF_LOG(WARN, "start_change_config failed", KR(ret), KPC(this), K(args));
-    // interrupt startworking log running in background
-  } else if (DEGRADE_ACCEPTOR_TO_LEARNER == args.type_ &&
-      OB_SUCCESS != (degrade_ret = config_mgr_.start_degrade())) {
-    PALF_LOG(WARN, "start_degrade failed, eagain", KR(ret), KPC(this), K(args));
+  } else if (FALSE_IT(doing_degrade = (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER))) {
   } else if (OB_FAIL(check_args_and_generate_config_(args, proposal_id, election_epoch,
       is_already_finished, new_log_sync_memberlist, new_log_sync_replica_num))) {
     if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
@@ -1032,7 +1031,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       ATOMIC_STORE(&has_higher_prio_config_change_, false);
     }
   }
-  if (OB_SUCCESS == degrade_ret) {
+  if (doing_degrade) {
     (void) config_mgr_.end_degrade();
   }
   return ret;

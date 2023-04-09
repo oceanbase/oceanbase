@@ -100,6 +100,7 @@ int ObTableLoadTableCtx::register_job_stat()
     job_stat->store.last_commit_segment_id_ = 0;
     job_stat->store.status_ = "none";
     job_stat->store.trans_status_ = "none";
+    job_stat->allocator_.set_tenant_id(param_.tenant_id_);
     if (OB_FAIL(ObTableLoadUtils::deep_copy(schema_.table_name_, job_stat->table_name_,
                                             job_stat->allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));

@@ -221,7 +221,7 @@ Outputs & filters:
   3 - output(nil), filter(nil), rowset=256
   4 - output(nil), filter(nil), rowset=256
       access(nil)
-  5 - output(nil), filter(nil), rowset=256
+  5 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true

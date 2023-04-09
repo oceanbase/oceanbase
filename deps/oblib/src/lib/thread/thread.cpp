@@ -190,27 +190,6 @@ void Thread::dump_pth() // for debug pthread join faileds
 #endif
 }
 
-int Thread::try_wait()
-{
-  int ret = OB_SUCCESS;
-  if (pth_ != 0) {
-    int tmp = pthread_tryjoin_np(pth_, nullptr);
-    if (EBUSY == tmp) {
-      ret = OB_EAGAIN;
-      LOG_WARN("pthread_tryjoin_np failed", K(tmp), K(errno), K(tid_before_stop_));
-    } else if (0 == tmp) {
-      destroy_stack();
-      runnable_ = nullptr;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("pthread_tryjoin_np failed", K(tmp), K(errno), K(tid_before_stop_));
-      dump_pth();
-      abort();
-    }
-  }
-  return ret;
-}
-
 void Thread::wait()
 {
   int ret = 0;

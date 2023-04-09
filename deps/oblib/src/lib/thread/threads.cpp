@@ -240,19 +240,6 @@ void Threads::destroy_thread(Thread *thread)
   ob_free(thread);
 }
 
-int Threads::try_wait()
-{
-  int ret = OB_SUCCESS;
-  if (threads_ != nullptr) {
-    for (int i = 0; i < n_threads_ && OB_SUCC(ret); i++) {
-      if (threads_[i] != nullptr) {
-        ret = threads_[i]->try_wait();
-      }
-    }
-  }
-  return ret;
-}
-
 void Threads::wait()
 {
   if (threads_ != nullptr) {

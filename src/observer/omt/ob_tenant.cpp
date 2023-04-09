@@ -417,26 +417,28 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
   }
 }
 
-int ObResourceGroup::try_clear_worker()
+int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(workers_lock_);
-  if (req_queue_.size() > 0) {
-    ret = OB_EAGAIN;
+  while (req_queue_.size() > 0) {
+    ob_usleep(10L * 1000L);
   }
-  if (OB_FAIL(ret)) {
-    // try next time
-  } else if (workers_.get_size() > 0) {
+  while (workers_.get_size() > 0) {
+    int ret = OB_SUCCESS;
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
       const auto w = static_cast<ObThWorker*>(wnode->get_data());
-      w->stop();
-      if (OB_FAIL(ret)) {
-        // try next time
-      } else if (OB_SUCC(w->try_wait())) {
-        workers_.remove(wnode);
-        destroy_worker(w);
-      }
+      workers_.remove(wnode);
+      destroy_worker(w);
     }
+    if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+      LOG_INFO(
+          "Tenant has some group workers need stop",
+          K(tenant_->id()),
+          "group workers", workers_.get_size(),
+          "group type", get_group_id());
+    }
+    ob_usleep(10L * 1000L);
   }
   return ret;
 }
@@ -470,17 +472,16 @@ int GroupMap::create_and_insert_group(int32_t group_id, ObTenant *tenant, ObCgro
   return ret;
 }
 
-int GroupMap::try_wait_group()
+void GroupMap::wait_group()
 {
   int ret = OB_SUCCESS;
   ObResourceGroupNode* iter = NULL;
-  while (OB_NOT_NULL(iter = quick_next(iter)) && OB_SUCC(ret)) {
+  while (nullptr != (iter = quick_next(iter))) {
     ObResourceGroup *group = static_cast<ObResourceGroup*>(iter);
-    if (OB_FAIL(group->try_clear_worker())) {
-      // try next time
+    if (OB_FAIL(group->clear_worker())) {
+      LOG_ERROR("group clear worker failed", K(ret));
     }
   }
-  return ret;
 }
 
 void GroupMap::destroy_group()
@@ -567,6 +568,7 @@ ObTenant::ObTenant(const int64_t id,
       unit_min_cpu_(0),
       token_cnt_(0),
       total_worker_cnt_(0),
+      gc_thread_(0),
       stopped_(true),
       wait_mtl_finished_(false),
       req_queue_(),
@@ -828,61 +830,94 @@ int ObTenant::create_tenant_module()
   return ret;
 }
 
+void* ObTenant::wait(void* t)
+{
+  int ret = OB_SUCCESS;
+  ObTenant* tenant = (ObTenant*)t;
+  ob_get_tenant_id() = tenant->id_;
+  lib::set_thread_name("UnitGC");
+  tenant->handle_retry_req(true);
+  while (tenant->req_queue_.size() > 0) {
+    ob_usleep(10L * 1000L);
+  }
+  while (tenant->workers_.get_size() > 0) {
+    if (OB_SUCC(tenant->workers_lock_.trylock())) {
+      DLIST_FOREACH_REMOVESAFE(wnode, tenant->workers_) {
+        const auto w = static_cast<ObThWorker*>(wnode->get_data());
+        tenant->workers_.remove(wnode);
+        destroy_worker(w);
+      }
+      IGNORE_RETURN tenant->workers_lock_.unlock();
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_INFO(
+            "Tenant has some workers need stop", K_(tenant->id),
+            "workers", tenant->workers_.get_size(),
+            K_(tenant->req_queue));
+      }
+    }
+    ob_usleep(10L * 1000L);
+  }
+  LOG_WARN_RET(OB_SUCCESS,"start remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
+  while (tenant->nesting_workers_.get_size() > 0) {
+    int ret = OB_SUCCESS;
+    if (OB_SUCC(tenant->workers_lock_.trylock())) {
+      DLIST_FOREACH_REMOVESAFE(wnode, tenant->nesting_workers_) {
+        auto w = static_cast<ObThWorker*>(wnode->get_data());
+        tenant->nesting_workers_.remove(wnode);
+        destroy_worker(w);
+      }
+      IGNORE_RETURN tenant->workers_lock_.unlock();
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_INFO(
+            "Tenant has some nesting workers need stop",
+            K_(tenant->id),
+            "nesting workers", tenant->nesting_workers_.get_size(),
+            K_(tenant->req_queue));
+      }
+    }
+    ob_usleep(10L * 1000L);
+  }
+  LOG_WARN_RET(OB_SUCCESS, "finish remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
+  LOG_WARN_RET(OB_SUCCESS, "start remove group_map", K_(tenant->id));
+  tenant->group_map_.wait_group();
+  LOG_WARN_RET(OB_SUCCESS, "finish remove group_map", K_(tenant->id));
+  if (!is_virtual_tenant_id(tenant->id_) && !tenant->wait_mtl_finished_) {
+    ObTenantSwitchGuard guard(tenant);
+    tenant->stop_mtl_module();
+    OB_PX_TARGET_MGR.delete_tenant(tenant->id_);
+    G_RES_MGR.get_col_mapping_rule_mgr().drop_tenant(tenant->id_);
+    tenant->wait_mtl_module();
+    tenant->wait_mtl_finished_ = true;
+  }
+  return nullptr;
+}
+
 int ObTenant::try_wait()
 {
   int ret = OB_SUCCESS;
-  handle_retry_req(true);
-  if (req_queue_.size() > 0) {
-    ret = OB_EAGAIN;
-  }
-
-  if (OB_FAIL(ret)) {
-    // try next time
-  } else if (workers_.get_size() > 0 && OB_SUCC(workers_lock_.trylock())) {
-    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-      const auto w = static_cast<ObThWorker*>(wnode->get_data());
-      w->stop();
-      if (OB_FAIL(ret)) {
-        // try next time
-      } else if (OB_SUCC(w->try_wait())) {
-        workers_.remove(wnode);
-        destroy_worker(w);
-      }
+  int tmp = 0;
+  if (-1 == gc_thread_) {
+    LOG_WARN("try_wait after wait successfully", K(id_), K(wait_mtl_finished_));
+  } else if (0 == gc_thread_) {
+    if (0 != (tmp = pthread_create(&gc_thread_, nullptr, wait, this))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant gc thread create failed", K(tmp), K(errno), K(id_));
+    } else {
+      ret = OB_EAGAIN;
+      LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
     }
-    IGNORE_RETURN workers_lock_.unlock();
-  }
-
-  if (OB_FAIL(ret)) {
-    // try next time
-  } else if (nesting_workers_.get_size() > 0 && OB_SUCC(workers_lock_.trylock())) {
-    DLIST_FOREACH_REMOVESAFE(wnode, nesting_workers_) {
-      auto w = static_cast<ObThWorker*>(wnode->get_data());
-      w->stop();
-      if (OB_FAIL(ret)) {
-        // try next time
-      } else if (OB_SUCC(w->try_wait())) {
-        nesting_workers_.remove(wnode);
-        destroy_worker(w);
-      }
-    }
-    IGNORE_RETURN workers_lock_.unlock();
-  }
-
-  if (OB_FAIL(ret)) {
-    // try next time
   } else {
-    ret = group_map_.try_wait_group();
-  }
-
-  if (OB_FAIL(ret)) {
-    // try next time
-  } else if (!is_virtual_tenant_id(id_) && !wait_mtl_finished_) {
-    ObTenantSwitchGuard guard(this);
-    ObTenantBase::stop_mtl_module();
-    OB_PX_TARGET_MGR.delete_tenant(id_);
-    G_RES_MGR.get_col_mapping_rule_mgr().drop_tenant(id_);
-    ObTenantBase::wait_mtl_module();
-    wait_mtl_finished_ = true;
+    tmp = pthread_tryjoin_np(gc_thread_, nullptr);
+    if (EBUSY == tmp) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant pthread_tryjoin_np failed", K(id_));
+    } else if (0 == tmp) {
+      gc_thread_ = -1; // avoid try_wait again after wait success
+      LOG_INFO("tenant pthread_tryjoin_np successfully", K(id_));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("pthread_tryjoin_np failed", K(tmp), K(errno), K(id_));
+    }
   }
   return ret;
 }

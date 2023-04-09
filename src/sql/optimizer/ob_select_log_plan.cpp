@@ -4352,8 +4352,6 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
     // do nothing
   } else if (OB_FAIL(sub_plan->add_pushdown_filters(pushdown_filters))) {
     LOG_WARN("failed to add pushdown filters", K(ret));
-  } else if (OB_FAIL(sub_plan->init_plan_info())) {
-    LOG_WARN("failed to init equal sets", K(ret));
   } else if (OB_FAIL(sub_plan->generate_raw_plan())) {
     LOG_WARN("Failed to generate plan for sub_stmt", K(ret));
   } else if (OB_FAIL(init_selectivity_metas_for_set(sub_plan, child_offset))) {

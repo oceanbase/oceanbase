@@ -60,7 +60,7 @@ public:
   // by addr
   int64_t get_index_by_addr(const common::ObAddr &server) const;
 private:
-  typedef common::ObSEArray<T, 1> LogLearnerArray;
+  typedef common::ObSEArray<T, OB_MAX_MEMBER_NUMBER> LogLearnerArray;
   LogLearnerArray learner_array_;
 };
 

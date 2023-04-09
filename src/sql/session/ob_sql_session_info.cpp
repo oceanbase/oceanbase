@@ -2891,8 +2891,14 @@ int ObControlInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, c
     LOG_WARN("failed to resolve set by sess", K(ret));
   } else {
     sess.set_flt_control_info(con);
-    sess.set_send_control_info(false);
     sess.set_coninfo_set_by_sess(static_cast<bool>(setby_sess));
+    // if control info not changed or control info not set, not need to feedback
+    if (con == sess.get_control_info() || !sess.get_control_info().is_valid()) {
+      // not need to feedback
+      sess.set_send_control_info(true);
+      sess.get_control_info_encoder().is_changed_ = false;
+    }
+
     LOG_TRACE("deserialize control info", K(sess.get_sessid()), K(sess.get_control_info()));
   }
   return ret;

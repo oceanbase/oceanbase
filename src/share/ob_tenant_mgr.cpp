@@ -467,20 +467,18 @@ void ObVirtualTenantManager::ObTenantInfo::reset()
   is_loaded_ = false;
 }
 
-int64_t ObTenantCpuShare::calc_px_pool_share(uint64_t tenant_id, int64_t cpu_count)
+int64_t ObTenantCpuShare::calc_px_pool_share(uint64_t tenant_id, int64_t min_cpu)
 {
-  UNUSED(tenant_id);
-   /* 按照 cpu_count * concurrency * 0.1 作为默认值
-    * 但确保最少分配 3 个 线程给 px pool，
-    * 计算出的默认值小于 3 时强制设置为 3
-    *
-    * 为什么要保证至少为 3? 这是为了尽可能让 mysqltest
-    * 都能过。mysqltest 里遇到一般的右深树时，3 个线程
-    * 能够保证调度成功，2 则会超时。
-    */
-  return std::max(3L,
-      cpu_count *
-      static_cast<int64_t>(static_cast<double>(GCONF.px_workers_per_cpu_quota.get()) * 0.1));
+  int64_t share = 3;
+  int ret = OB_SUCCESS;
+  oceanbase::omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    share = 3;
+    COMMON_LOG(ERROR, "fail get tenant config. share default to 3", K(share));
+  } else {
+    share = std::max(3L, min_cpu * tenant_config->px_workers_per_cpu_quota);
+  }
+  return share;
 }
 
 } // namespace common

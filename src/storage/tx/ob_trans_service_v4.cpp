@@ -1353,7 +1353,7 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
   int ret = OB_SUCCESS;
   bool leader = false;
   int64_t epoch = 0;
-  bool readable = check_ls_readable_(ls, snapshot);
+  bool readable = check_ls_readable_(ls, snapshot, src);
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
@@ -1364,10 +1364,12 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
       // to compatible with SQL's retry-logic, trigger re-choose replica
       ret = OB_REPLICA_NOT_READABLE;
     } else {
-      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot))) {
+      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
-      } else {
+      } else if (MTL_IS_PRIMARY_TENANT()) {
         ret = OB_NOT_MASTER;
+      } else {
+        ret = OB_REPLICA_NOT_READABLE;
       }
     }
   }
@@ -1375,12 +1377,14 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
   return ret;
 }
 
-bool ObTransService::check_ls_readable_(ObLS &ls, const SCN &snapshot)
+bool ObTransService::check_ls_readable_(ObLS &ls,
+                                        const SCN &snapshot,
+                                        const ObTxReadSnapshot::SRC src)
 {
   int ret = OB_SUCCESS;
   bool readable = false;
   SCN scn;
-  if (MTL_IS_PRIMARY_TENANT()) {
+  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_IS_PRIMARY_TENANT()) {
     readable = snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   } else if (OB_FAIL(ls.get_ls_replica_readable_scn(scn))) {
     TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls.get_ls_id()));
@@ -1395,7 +1399,8 @@ bool ObTransService::check_ls_readable_(ObLS &ls, const SCN &snapshot)
 
 int ObTransService::wait_follower_readable_(ObLS &ls,
                                             const int64_t expire_ts,
-                                            const SCN &snapshot)
+                                            const SCN &snapshot,
+                                            const ObTxReadSnapshot::SRC src)
 {
   int ret = OB_REPLICA_NOT_READABLE;
   int64_t compare_timeout = 0;
@@ -1411,7 +1416,7 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
     do {
       if (OB_UNLIKELY(ObClockGenerator::getClock() >= expire_ts)) {
         ret = OB_TIMEOUT;
-      } else if (check_ls_readable_(ls, snapshot)) {
+      } else if (check_ls_readable_(ls, snapshot, src)) {
         TRANS_LOG(WARN, "read from follower", K(snapshot), K(ls.get_ls_id()), K(tenant_id));
         ret = OB_SUCCESS;
       } else if (ObClockGenerator::getClock() >= compare_expired_time) {
@@ -2429,16 +2434,17 @@ int ObTransService::assign_user_savepoint_(ObTxDesc &tx, ObTxSavePointList &save
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
-    if (tx.savepoints_.at(i).user_create_) {
+    if (tx.savepoints_.at(i).is_user_savepoint()) {
       if (OB_FAIL(savepoints.push_back(tx.savepoints_.at(i)))) {
         TRANS_LOG(WARN, "push back user create sp fail", K(ret), K(tx));
       }
     }
   }
+  TRANS_LOG(INFO, "assign user sp finish", K(ret), K(savepoints), K(tx));
   return ret;
 }
 
-int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints)
+int ObTransService::update_user_savepoint_(ObTxDesc &tx, const ObTxSavePointList &savepoints)
 {
   int ret = OB_SUCCESS;
   int j = 0;
@@ -2447,10 +2453,27 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
     for (j = 0, is_contain = false; j<tx.savepoints_.count() && !is_contain; j++) {
       is_contain = savepoints.at(i) == tx.savepoints_.at(j);
     }
-    if (!is_contain && OB_FAIL(tx.savepoints_.push_back(savepoints.at(i)))) {
-      TRANS_LOG(WARN, "push back user sp fail", K(ret));
+    if (!is_contain) {
+      if (!savepoints.at(i).is_user_savepoint()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "savepoint isn't user create", K(ret), K(tx), K(i), K(savepoints));
+      } else if (OB_FAIL(tx.savepoints_.push_back(savepoints.at(i)))) {
+        TRANS_LOG(WARN, "push back user sp fail", K(ret));
+      } else {
+        // do thing
+      }
     }
   }
+  TRANS_LOG(INFO, "update user sp finish", K(ret), K(savepoints), K(tx));
+  return ret;
+}
+
+int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList &savepoints)
+{
+  int ret = OB_SUCCESS;
+  tx.lock_.lock();
+  ret = update_user_savepoint_(tx, savepoints);
+  tx.lock_.unlock();
   return ret;
 }
 
@@ -2478,8 +2501,8 @@ int ObTransService::update_tx_with_stmt_info(const ObTxStmtInfo &tx_info, ObTxDe
   tx->op_sn_ = tx_info.op_sn_;
   tx->state_ = tx_info.state_;
   tx->update_parts_(tx_info.parts_);
-  if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint(*tx, tx_info.savepoints_))) {
-    TRANS_LOG(WARN, "update user sp fail", K(ret), K(*this), K(tx), K(tx_info));
+  if (OB_FAIL(MTL(ObTransService *)->update_user_savepoint_(*tx, tx_info.savepoints_))) {
+    TRANS_LOG(WARN, "update user sp fail", K(ret), K(tx), K(tx_info));
   }
   tx->lock_.unlock();
   return ret;
@@ -3237,6 +3260,7 @@ int ObTransService::handle_trans_collect_state(const ObCollectStateMsg &msg,
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObStateInfo state_info;
       state_info.ls_id_ = ls_id;
+      state_info.snapshot_version_ = msg.snapshot_;
       if (OB_FAIL(check_and_fill_state_info(tx_id, state_info))) {
         TRANS_LOG(WARN, "fill state info fail", K(ret), K(ls_id), K(tx_id), K(state_info));
       } else {

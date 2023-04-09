@@ -246,8 +246,8 @@ int LogNetService::post_request_to_server_(
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(log_rpc_->post_request(server, palf_id_, req))) {
-    PALF_LOG(WARN, "LogRpc post_request failed", K(ret), K(palf_id_),
-        K(req), K(server));
+    // PALF_LOG(WARN, "LogRpc post_request failed", K(ret), K(palf_id_),
+    //     K(req), K(server));
   } else {
     PALF_LOG(TRACE, "post_request_to_server_ success", K(ret), K(server), K(palf_id_), K(req));
   }
@@ -265,13 +265,13 @@ int LogNetService::post_request_to_member_list_(
   if (!req.is_valid() || !member_list.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    for (int64_t i = 0; i < member_number && OB_SUCC(ret); i++) {
+    for (int64_t i = 0; i < member_number; i++) {
       if (OB_FAIL(member_list.get_server_by_index(i, server))) {
         PALF_LOG(WARN, "ObMemberList get_server_by_index failed", K(ret),
             K(server), K(palf_id_), K(req));
       } else if (OB_FAIL(post_request_to_server_(server, req))) {
-        PALF_LOG(WARN, "post_request_to_server_ failed", K(ret),
-            K(server), K(palf_id_), K(server));
+        // PALF_LOG(WARN, "post_request_to_server_ failed", K(ret),
+        //     K(server), K(palf_id_), K(server));
       } else {
       }
     }

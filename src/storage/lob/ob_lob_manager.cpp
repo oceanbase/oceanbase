@@ -730,7 +730,8 @@ int ObLobManager::compare(ObLobLocatorV2& lob_left,
     // get lob access param
     ObLobAccessParam param_left;
     ObLobAccessParam param_right;
-
+    param_left.tx_desc_ = cmp_params.tx_desc_;
+    param_right.tx_desc_ = cmp_params.tx_desc_;
     if (OB_FAIL(build_lob_param(param_left, tmp_allocator, cmp_params.collation_left_,
                 cmp_params.offset_left_, cmp_params.compare_len_, cmp_params.timeout_, lob_left))) {
       LOG_WARN("fail to build read param left", K(ret), K(lob_left), K(cmp_params));
@@ -1179,6 +1180,7 @@ int ObLobManager::append(
         ObString data;
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
+          read_param.tx_desc_ = param.tx_desc_;
           if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -1302,6 +1304,7 @@ int ObLobManager::append(
       // prepare read full lob
       if (OB_SUCC(ret)) {
         SMART_VAR(ObLobAccessParam, read_param) {
+          read_param.tx_desc_ = param.tx_desc_;
           if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -2085,6 +2088,7 @@ int ObLobManager::write_inrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uint
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObLobAccessParam, read_param) {
+    read_param.tx_desc_ = param.tx_desc_;
     if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                 offset, param.len_, param.timeout_, lob))) {
       LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -2354,6 +2358,7 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObLobAccessParam, read_param) {
+    read_param.tx_desc_ = param.tx_desc_;
     if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                 offset, param.len_, param.timeout_, lob))) {
       LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -3188,13 +3193,23 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
         } else if (OB_FAIL(lob.get_location_info(location_info))) {
           LOG_WARN("failed to get location info", K(ret), K(lob));
         } else {
-          param.snapshot_.core_.version_.convert_for_tx(tx_info->version_);
-          param.snapshot_.core_.tx_id_ = tx_info->tx_id_;
-          param.snapshot_.core_.scn_ = tx_info->scn_;
-
-          param.snapshot_.valid_ = true;
-          param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
-          param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
+          if (OB_ISNULL(param.tx_desc_) || param.tx_desc_->get_tx_id().get_id() == tx_info->tx_id_) {
+            param.snapshot_.core_.version_.convert_for_tx(tx_info->version_);
+            param.snapshot_.core_.tx_id_ = tx_info->tx_id_;
+            param.snapshot_.core_.scn_ = tx_info->scn_;
+            param.snapshot_.valid_ = true;
+            param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
+            param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
+          } else {
+            // When param for write, param.tx_desc_ should not be null
+            // If tx indfo from lob locator is old, produce new read snapshot directly
+            transaction::ObTransService* txs = MTL(transaction::ObTransService*);
+            transaction::ObTxIsolationLevel tx_level = transaction::ObTxIsolationLevel::RC;
+            if (OB_FAIL(txs->get_ls_read_snapshot(*param.tx_desc_, tx_level, share::ObLSID(location_info->ls_id_),
+                                                  param.timeout_, param.snapshot_))) {
+              LOG_WARN("fail to get read snapshot", K(ret));
+            }
+          }
 
           param.ls_id_ = share::ObLSID(location_info->ls_id_);
           param.tablet_id_ = ObTabletID(location_info->tablet_id_);

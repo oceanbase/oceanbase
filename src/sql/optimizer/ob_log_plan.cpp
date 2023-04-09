@@ -3917,8 +3917,6 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   } else if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create plan", K(ret), K(opt_ctx.get_query_ctx()->get_sql_stmt()));
-  } else if (OB_FAIL(logical_plan->init_plan_info())) {
-    LOG_WARN("failed to init equal sets" ,K(ret));
   } else if (OB_FAIL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan())) {
     LOG_WARN("failed to optimize sub-select", K(ret));
   } else {
@@ -11197,10 +11195,14 @@ int ObLogPlan::generate_raw_plan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (FALSE_IT(dblink_id = stmt->get_dblink_id())) {
-  } else if (OB_INVALID_ID == dblink_id && OB_FAIL(generate_normal_raw_plan())) {
+  } else if (OB_INVALID_ID != dblink_id) {
+    if (OB_FAIL(generate_dblink_raw_plan())) {
+      LOG_WARN("fail to generate dblink raw plan", K(ret));
+    }
+  } else if (OB_FAIL(init_plan_info())) {
+    LOG_WARN("failed to init equal_sets");
+  } else if (OB_FAIL(generate_normal_raw_plan())) {
     LOG_WARN("fail to generate normal raw plan", K(ret));
-  } else if (OB_INVALID_ID != dblink_id && OB_FAIL(generate_dblink_raw_plan())) {
-    LOG_WARN("fail to generate dblink raw plan", K(ret));
   }
   return ret;
 }

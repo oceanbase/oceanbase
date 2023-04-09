@@ -6510,8 +6510,6 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
     LOG_WARN("failed to create plan", K(ret));
   } else if (OB_FAIL(log_plan->add_pushdown_filters(helper.pushdown_filters_))) {
     LOG_WARN("failed to add pushdown filters", K(ret));
-  } else if (OB_FAIL(log_plan->init_plan_info())) {
-    LOG_WARN("failed to init equal sets", K(ret));
   } else {
     log_plan->set_is_subplan_scan(true);
     if (parent_stmt->is_insert_stmt()) {
