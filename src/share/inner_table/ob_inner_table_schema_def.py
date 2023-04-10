@@ -11448,6 +11448,7 @@ def_table_schema(
 # 12391: __all_virtual_wr_sysstat
 # 12392: __all_virtual_kv_connection
 # 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+# 12394: __all_virtual_ls_transfer_member_list_lock_info
 #
 # 余留位置
 #
