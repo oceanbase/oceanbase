@@ -873,7 +873,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_ISNULL: {
         if (OB_FAIL(process_isnull_node(node, expr))) {
-          LOG_WARN("fail to process ifnull node", K(ret), K(node));
+          LOG_WARN("fail to process isnull node", K(ret), K(node));
         }
         break;
       }
@@ -891,7 +891,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_JSON_VALUE: {
         if (OB_FAIL(process_json_value_node(node, expr))) {
-          LOG_WARN("fail to process js value node", K(ret), K(node));
+          LOG_WARN("fail to process json value node", K(ret), K(node));
         }
         break;
       }
