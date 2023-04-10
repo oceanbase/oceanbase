@@ -221,19 +221,19 @@ int ObLongopsIterator::init(ObLongopsMgr *longops_mgr)
   return ret;
 }
 
-int ObLongopsIterator::get_next(ObLongopsValue &value)
+int ObLongopsIterator::get_next(const uint64_t tenant_id, ObLongopsValue &value)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLongopsIterator has not been inited", K(ret));
-  } else if (OB_UNLIKELY(key_cursor_ >= key_snapshot_.count())) {
-    ret = OB_ITER_END;
   } else {
     bool need_retry = true;
     while (OB_SUCC(ret) && need_retry && key_cursor_ < key_snapshot_.count()) {
       const ObILongopsKey &key = key_snapshot_.at(key_cursor_);
-      if (OB_FAIL(longops_mgr_->get_longops(key, value))) {
+      if (!is_sys_tenant(tenant_id) && key.tenant_id_ != tenant_id) {
+        // Normal user tenants can only check their own longops tasks.
+      } else if (OB_FAIL(longops_mgr_->get_longops(key, value))) {
         if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
           LOG_WARN("fail to get parition stat", K(ret), K(key));
         } else {
@@ -244,6 +244,11 @@ int ObLongopsIterator::get_next(ObLongopsValue &value)
         need_retry = false;
       }
       ++key_cursor_;
+    }
+
+    if (OB_SUCC(ret)) {
+      // reach the end, but get no longops record.
+      ret = need_retry && key_cursor_ >= key_snapshot_.count() ? OB_ITER_END : ret;
     }
   }
   return ret;

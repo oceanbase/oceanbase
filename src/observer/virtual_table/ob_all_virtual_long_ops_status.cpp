@@ -45,7 +45,7 @@ int ObAllVirtualLongOpsStatus::inner_get_next_row(ObNewRow *&row)
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (!longops_iter_.is_inited() && OB_FAIL(ObLongopsMgr::get_instance().begin_iter(longops_iter_))) {
     LOG_WARN("fail to begin longops iter", K(ret));
-  } else if (OB_FAIL(longops_iter_.get_next(longops_value_))) {
+  } else if (OB_FAIL(longops_iter_.get_next(effective_tenant_id_, longops_value_))) {
     LOG_WARN("fail to get next longops value", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {

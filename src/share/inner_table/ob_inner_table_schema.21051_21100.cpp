@@ -260,7 +260,7 @@ int ObInnerTableSchema::gv_session_longops_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CAST(sid AS SIGNED) AS SID,            CAST(trace_id AS CHAR(64)) AS TRACE_ID,            CAST(op_name AS CHAR(64)) AS OPNAME,            CAST(TARGET AS CHAR(64)) AS TARGET,            CAST(SVR_IP AS CHAR(46)) AS SVR_IP,            CAST(SVR_PORT AS SIGNED) AS SVR_PORT,            CAST(USEC_TO_TIME(START_TIME) AS DATE) AS START_TIME,            CAST(ELAPSED_TIME/1000000 AS SIGNED) AS ELAPSED_SECONDS,            CAST(REMAINING_TIME AS SIGNED) AS TIME_REMAINING,            CAST(USEC_TO_TIME(LAST_UPDATE_TIME) AS DATE) AS LAST_UPDATE_TIME,            CAST(MESSAGE AS CHAR(512)) AS MESSAGE     FROM oceanbase.__all_virtual_long_ops_status )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CAST(sid AS SIGNED) AS SID,            CAST(trace_id AS CHAR(64)) AS TRACE_ID,            CAST(op_name AS CHAR(64)) AS OPNAME,            CAST(TARGET AS CHAR(64)) AS TARGET,            CAST(SVR_IP AS CHAR(46)) AS SVR_IP,            CAST(SVR_PORT AS SIGNED) AS SVR_PORT,            CAST(USEC_TO_TIME(START_TIME) AS DATE) AS START_TIME,            CAST(ELAPSED_TIME/1000000 AS SIGNED) AS ELAPSED_SECONDS,            CAST(REMAINING_TIME AS SIGNED) AS TIME_REMAINING,            CAST(USEC_TO_TIME(LAST_UPDATE_TIME) AS DATE) AS LAST_UPDATE_TIME,            CAST(MESSAGE AS CHAR(512)) AS MESSAGE     FROM oceanbase.__all_virtual_virtual_long_ops_status_mysql_sys_agent )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

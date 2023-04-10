@@ -7356,7 +7356,6 @@ def_table_schema(
     table_name     = '__all_virtual_long_ops_status',
     table_id       = '11081',
     table_type     = 'VIRTUAL_TABLE',
-    in_tenant_space = True,
     gm_columns     = [],
     rowkey_columns = [
       ],
@@ -7377,9 +7376,7 @@ def_table_schema(
       ('message', 'varchar:MAX_LONG_OPS_MESSAGE_LENGTH'),
       ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
       ],
-
-    partition_columns = ['svr_ip', 'svr_port'],
-    vtable_route_policy = 'distributed',
+  vtable_route_policy = 'only_rs',
 )
 
 # 11082: __all_virtual_rebalance_unit_migrate_stat is deprecated in 4.0.
@@ -11447,7 +11444,7 @@ def_table_schema(
 # 12390: __all_virtual_wr_statname
 # 12391: __all_virtual_wr_sysstat
 # 12392: __all_virtual_kv_connection
-# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
 #
 # 余留位置
@@ -11734,7 +11731,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15294: __all_task_opt_stat_gather_history
 # 15295: __all_table_opt_stat_gather_history
 # 15296: __all_virtual_opt_stat_gather_monitor
-# 15297: __all_virtual_long_ops_status_ora
+def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
 # 15298: __all_virtual_thread
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
@@ -11742,7 +11739,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
-# 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
+
 
 # [15306, 15375] for oracle inner_table index
 ################################################################################
@@ -13814,7 +13811,7 @@ def_table_schema(
            CAST(REMAINING_TIME AS SIGNED) AS TIME_REMAINING,
            CAST(USEC_TO_TIME(LAST_UPDATE_TIME) AS DATE) AS LAST_UPDATE_TIME,
            CAST(MESSAGE AS CHAR(512)) AS MESSAGE
-    FROM oceanbase.__all_virtual_long_ops_status
+    FROM oceanbase.__all_virtual_virtual_long_ops_status_mysql_sys_agent
 """.replace("\n", " ")
 )
 
@@ -48532,14 +48529,60 @@ def_table_schema(
 # 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
 # 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
 # 28184:  V$OB_OPT_STAT_GATHER_MONITOR
-# 28185:  GV$SESSION_LONGOPS_ORA
-# 28186:  V$SESSION_LONGOPS_ORA
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  table_name      = 'GV$SESSION_LONGOPS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28185',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(sid AS NUMBER) AS SID,
+           CAST(trace_id AS VARCHAR2(64)) AS TRACE_ID,
+           CAST(op_name AS VARCHAR2(64)) AS OPNAME,
+           CAST(TARGET AS VARCHAR2(64)) AS TARGET,
+           CAST(SVR_IP AS VARCHAR2(46)) AS SVR_IP,
+           CAST(SVR_PORT AS NUMBER) AS SVR_PORT,
+           TO_CHAR(TO_DATE('19700101','YYYYMMDD') + START_TIME / 86400 / 1000000
+              + TO_NUMBER(SUBSTR(TZ_OFFSET(SESSIONTIMEZONE), 1, 3)) / 24) AS START_TIME,
+           CAST(ELAPSED_TIME/1000000 AS NUMBER) AS ELAPSED_SECONDS,
+           CAST(REMAINING_TIME AS NUMBER) AS TIME_REMAINING,
+           TO_CHAR(TO_DATE('19700101','YYYYMMDD') + LAST_UPDATE_TIME / 86400 / 1000000
+              + TO_NUMBER(SUBSTR(TZ_OFFSET(SESSIONTIMEZONE), 1, 3)) / 24) AS LAST_UPDATE_TIME,
+           CAST(MESSAGE AS VARCHAR2(512)) AS MESSAGE
+    FROM SYS.ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  table_name      = 'V$SESSION_LONGOPS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28186',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT * FROM SYS.GV$SESSION_LONGOPS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " ")
+)
+
 # 28187:  GV$OB_THREAD
 # 28188:  V$OB_THREAD
 # 28189:  GV$OB_ARBITRATION_MEMBER_INFO
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
 # 28192:  V$OB_ARBITRATION_SERVICE_STATUS
+
 
 ################################################################################
 # Lob Table (50000, 70000)

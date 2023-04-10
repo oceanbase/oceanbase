@@ -1090,6 +1090,7 @@ def gen_sys_agent_virtual_table_def(table_id, keywords):
   new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "_SYS_AGENT")
   new_keywords["partition_expr"] = []
   new_keywords["partition_columns"] = []
+  new_keywords["vtable_route_policy"] = "local"
   all_only_sys_table_name[keywords["table_name"]] = True
   all_agent_virtual_tables.append(new_keywords)
   return new_keywords
@@ -1097,7 +1098,7 @@ def gen_sys_agent_virtual_table_def(table_id, keywords):
 def __gen_mysql_vt(table_id, keywords, table_name_suffix):
   if keywords.has_key('in_tenant_space') and keywords['in_tenant_space']:
     raise Exception("base table should not in_tenant_space")
-  elif 'SYSTEM_TABLE' != keywords['table_type']:
+  elif 'SYSTEM_TABLE' != keywords['table_type'] and 'VIRTUAL_TABLE' != keywords['table_type']:
     raise Exception("unsupported table type", keywords['table_type'])
   new_keywords = copy.deepcopy(keywords)
   new_keywords["table_type"] = 'VIRTUAL_TABLE'
@@ -1118,6 +1119,7 @@ def gen_mysql_sys_agent_virtual_table_def(table_id, keywords):
   new_keywords = __gen_mysql_vt(table_id, keywords, "_mysql_sys_agent")
   new_keywords["partition_expr"] = []
   new_keywords["partition_columns"] = []
+  new_keywords["vtable_route_policy"] = "local"
   mysql_compat_agent_tables[keywords["table_name"]] = True
   all_agent_virtual_tables.append(new_keywords)
   return new_keywords
