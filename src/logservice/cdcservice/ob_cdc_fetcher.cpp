@@ -159,9 +159,9 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
 
-  LOG_INFO("fetch_log done", K(req), K(resp));
-
   resp.set_err(ret);
+
+  LOG_INFO("fetch_log done", K(req), K(resp));
   return ret;
 }
 
@@ -224,9 +224,9 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
 
-  LOG_INFO("fetch_missing_log done", K(req), K(resp));
-
   resp.set_err(ret);
+
+  LOG_INFO("fetch_missing_log done", K(req), K(resp));
   return ret;
 }
 

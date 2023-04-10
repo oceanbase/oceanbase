@@ -421,7 +421,7 @@ private:
 
   static int update_replica_merge_status(
       const ObTabletID &tablet_id,
-      const int merge_status,
+      const bool merge_status,
       hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map);
 
 

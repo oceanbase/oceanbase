@@ -219,9 +219,9 @@ int ObTableAccessParam::init(
      // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
      // disable blockscan if use index skip scan as no large range to scan
     if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||
-        scan_param.use_index_skip_scan())) {
+                    scan_param.use_index_skip_scan() ||
+                    !scan_param.scan_flag_.is_use_block_cache())) {
       iter_param_.disable_blockscan();
-
     }
     if (scan_param.need_switch_param_) {
       iter_param_.set_use_iter_pool_flag();

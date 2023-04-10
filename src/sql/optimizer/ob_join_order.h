@@ -1159,6 +1159,8 @@ struct NullAwareAntiJoinInfo {
       BaseTableOptInfo *table_opt_info_;
       ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
       ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
+
+      ObSEArray<ObExprConstraint, 4> expr_constraints_;
     };
 
     struct DeducedExprInfo {
@@ -2295,14 +2297,16 @@ struct NullAwareAntiJoinInfo {
                                ObIArray<ObRawExpr *> &pushdown_quals);
 
     int get_generated_col_index_qual(const int64_t table_id,
-                                     ObIArray<ObRawExpr *> &quals);
+                                     ObIArray<ObRawExpr *> &quals,
+                                     PathHelper &helper);
 
     int build_prefix_index_compare_expr(ObRawExpr &column_expr,
                                         ObRawExpr *prefix_expr,
                                         ObItemType type,
                                         ObRawExpr &value_expr,
                                         ObRawExpr *escape_expr,
-                                        ObRawExpr *&new_op_expr);
+                                        ObRawExpr *&new_op_expr,
+                                        PathHelper &helper);
 
     int get_prefix_str_idx_exprs(ObRawExpr *expr,
                                 ObColumnRefRawExpr *column_expr,
@@ -2310,11 +2314,13 @@ struct NullAwareAntiJoinInfo {
                                 ObRawExpr *escape_expr,
                                 const TableItem *table_item,
                                 ObItemType type,
-                                ObRawExpr *&new_expr);
+                                ObRawExpr *&new_expr,
+                                PathHelper &helper);
 
     int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                     const TableItem *table_item,
-                                    ObRawExpr *&new_expr);
+                                    ObRawExpr *&new_expr,
+                                    PathHelper &helper);
 
     int deduce_common_gen_col_index_expr(ObRawExpr *qual,
                                         const TableItem *table_item,

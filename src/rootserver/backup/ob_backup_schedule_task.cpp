@@ -18,6 +18,7 @@
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ls/ob_ls_table_operator.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 namespace oceanbase 
 {
 using namespace common;
@@ -400,6 +401,13 @@ int ObBackupDataLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   } else if (OB_FAIL(rpc_proxy.timeout(timeout).to(get_dst()).backup_ls_data(arg))) {
     LOG_WARN("fail to send backup ls data task", K(ret), K(arg));
   } else {
+    ROOTSERVICE_EVENT_ADD("backup", "send backup data task",
+                          "tenant_id", arg.tenant_id_,
+                          "task_id", arg.task_id_,
+                          "trace_id", arg.trace_id_,
+                          "turn_id", arg.turn_id_,
+                          "retry_id", arg.retry_id_,
+                          "dst_server", arg.dst_server_);
     LOG_INFO("start to backup ls data", K(arg));
   }
   return ret;

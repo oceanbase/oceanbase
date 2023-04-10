@@ -88,8 +88,9 @@ public:
     return ((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
              status_ == Status::RESTORE_FAILED);
   }
-  // if restore status is not in [RESTORE_START, RESTORE_SYS_TABLETS], log_replay_service can replay log.
-  bool can_replay_log() const { return ! (status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS); }
+  // if restore status is not in [RESTORE_START, RESTORE_SYS_TABLETS] or restore_failed, log_replay_service can replay log.
+  bool can_replay_log() const { return ! (status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS)
+                                       && status_ != Status::RESTORE_FAILED; }
   bool can_restore_log() const { return status_ == RESTORE_NONE || (status_ >= QUICK_RESTORE && status_ < RESTORE_FAILED); }
   Status get_status() const { return status_; }
   int set_status(int32_t status);

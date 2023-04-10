@@ -256,6 +256,8 @@ public:
       common::ObMySQLProxy &proxy,
       const common::ObCurTraceId::TraceId &trace_id,
       const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t snapshot_version,
       const common::ObAddr &sql_exec_addr);
 
 private:

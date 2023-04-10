@@ -1258,7 +1258,7 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
 
 int ObCheckTabletDataComplementOp::update_replica_merge_status(
     const ObTabletID &tablet_id,
-    const int merge_status,
+    const bool merge_status,
     hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map)
 {
   int ret = OB_SUCCESS;
@@ -1269,7 +1269,7 @@ int ObCheckTabletDataComplementOp::update_replica_merge_status(
     int32_t commited_count = 0;
     if (OB_SUCC(tablets_commited_map.get_refactored(tablet_id, commited_count))) {
       // overwrite
-      if (true == merge_status) {
+      if (merge_status) {
         commited_count++;
         if (OB_FAIL(tablets_commited_map.set_refactored(tablet_id, commited_count, true /* overwrite */))) {
           LOG_WARN("fail to insert map status", K(ret));
@@ -1277,7 +1277,7 @@ int ObCheckTabletDataComplementOp::update_replica_merge_status(
       }
     } else if (OB_HASH_NOT_EXIST == ret) {  // new insert
       ret = OB_SUCCESS;
-      if (true == merge_status) {
+      if (merge_status) {
         commited_count = 1;
         if (OB_FAIL(tablets_commited_map.set_refactored(tablet_id, commited_count, true /* overwrite */))) {
           LOG_WARN("fail to insert map status", K(ret));

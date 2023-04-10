@@ -816,8 +816,7 @@ bool LogStateMgr::is_reconfirm_timeout_()
     bool_ret = is_sw_timeout;
     if (bool_ret) {
       if (palf_reach_time_interval(1 * 1000 * 1000, check_reconfirm_timeout_time_)) {
-        PALF_LOG_RET(ERROR, OB_TIMEOUT, "leader reconfirm timeout", K_(palf_id), K(start_id),
-            K(is_sw_timeout), K_(reconfirm));
+        PALF_LOG_RET(WARN, OB_TIMEOUT, "leader reconfirm timeout", K_(palf_id), K(start_id), K(is_sw_timeout), K_(reconfirm));
         (void) sw_->report_log_task_trace(start_id);
       }
     } else if (palf_reach_time_interval(100 * 1000, check_reconfirm_timeout_time_)) {
@@ -886,7 +885,7 @@ bool LogStateMgr::check_leader_log_sync_state_()
     // sw is not empty, check log sync state
     if (now_us - last_check_start_id_time_us_ > PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US) {
       if (palf_reach_time_interval(10 * 1000 * 1000, log_sync_timeout_warn_time_)) {
-        PALF_LOG_RET(ERROR, OB_TIMEOUT, "log sync timeout on leader", K_(palf_id), K_(self), K(now_us), K(last_check_start_id_time_us_), K(start_id));
+        PALF_LOG_RET(WARN, OB_TIMEOUT, "log sync timeout on leader", K_(palf_id), K_(self), K(now_us), K(last_check_start_id_time_us_), K(start_id));
         (void) sw_->report_log_task_trace(start_id);
       }
     }

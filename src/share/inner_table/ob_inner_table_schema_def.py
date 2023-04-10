@@ -11447,6 +11447,7 @@ def_table_schema(
 # 12390: __all_virtual_wr_statname
 # 12391: __all_virtual_wr_sysstat
 # 12392: __all_virtual_kv_connection
+# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
 #
 # 余留位置
 #
@@ -11740,6 +11741,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
+# 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
+
+# [15306, 15375] for oracle inner_table index
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -25674,6 +25678,8 @@ def_table_schema(
 # 21396: CDB_WR_SYSSTAT
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
+# 21399: GV$OB_LOCKS
+# 21400: V$OB_LOCKS
 
 ################################################################################
 # Oracle System View (25000, 30000]
