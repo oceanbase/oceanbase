@@ -231,6 +231,11 @@ void Thread::destroy_stack()
     stack_addr_ = nullptr;
     pth_ = 0;
   }
+#else
+  if (stack_addr_ != nullptr) {
+    stack_addr_ = nullptr;
+    pth_ = 0;
+  }
 #endif
 }
 
