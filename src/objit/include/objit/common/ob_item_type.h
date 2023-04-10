@@ -791,6 +791,7 @@ typedef enum ObItemType
   T_FUN_ORA_JSON_OBJECTAGG = 1685,
   T_FUN_SYS_JSON_EXISTS = 1686,
   T_FUN_SYS_TREAT = 1687,
+  T_NULLX_CLAUSE = 1688,   // null clause on json expr
 
   ///< @note add new oracle only function type before this line
 

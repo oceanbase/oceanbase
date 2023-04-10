@@ -274,7 +274,7 @@ int ObLoadDataBase::memory_check_remote(uint64_t tenant_id, bool &need_wait_mino
 
 /*
  * if param_a != param_b: this variable is from a field of data file,
- * calc the correspond field index via param string value
+ * calc the corresponding field index via param string value
  * return the index
 */
 int ObLoadDataBase::calc_param_offset(const ObObj &param_a,

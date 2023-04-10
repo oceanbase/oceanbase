@@ -1858,7 +1858,6 @@ int ObDRWorker::check_ls_locality_match_(
                                        &server_mgr,
                                        &zone_mgr,
                                        dr_ls_info);
-  const LATask *task = nullptr;
   if (!dr_ls_info.has_leader()) {
     LOG_WARN("has no leader, maybe not report yet",
              KR(ret), K(dr_ls_info));
@@ -1867,20 +1866,14 @@ int ObDRWorker::check_ls_locality_match_(
              KR(ret), K(dr_ls_info));
   } else if (OB_FAIL(locality_alignment.build())) {
     LOG_WARN("fail to build locality alignment", KR(ret));
-  } else if (OB_SUCCESS != (tmp_ret = locality_alignment.get_next_locality_alignment_task(task))) {
-    if (OB_ITER_END == tmp_ret) {
-      ret = OB_SUCCESS;
-      locality_is_matched = true;
-    } else {
-      ret = OB_SUCCESS;
-      LOG_WARN("fail to get next locality alignment task", KR(tmp_ret));
-    }
-  } else {
+  } else if (0 != locality_alignment.get_task_array_cnt()) {
     locality_is_matched = false;
+  } else {
+    locality_is_matched = true;
   }
   ObTaskController::get().allow_next_syslog();
   LOG_INFO("the locality matched check for this logstream", KR(ret), K(locality_is_matched),
-           K(dr_ls_info), KPC(task));
+           K(dr_ls_info), "task_cnt", locality_alignment.get_task_array_cnt());
   return ret;
 }
 

@@ -873,7 +873,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_ISNULL: {
         if (OB_FAIL(process_isnull_node(node, expr))) {
-          LOG_WARN("fail to process ifnull node", K(ret), K(node));
+          LOG_WARN("fail to process isnull node", K(ret), K(node));
         }
         break;
       }
@@ -891,7 +891,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_JSON_VALUE: {
         if (OB_FAIL(process_json_value_node(node, expr))) {
-          LOG_WARN("fail to process js value node", K(ret), K(node));
+          LOG_WARN("fail to process json value node", K(ret), K(node));
         }
         break;
       }
@@ -928,6 +928,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_SYS_JSON_OBJECT: {
         if (OB_FAIL(process_ora_json_object_node(node, expr))) {
           LOG_WARN("fail to process lnnvl node", K(ret), K(node));
+        }
+        break;
+      }
+      case T_NULLX_CLAUSE: {
+        modification_type_to_int(const_cast<ParseNode&>(*node));
+        // deal node
+        if (OB_FAIL(SMART_CALL(recursive_resolve(node, expr)))) {
+          LOG_WARN("fail to process node with children only", K(ret),
+              K(node->type_), K(node));
         }
         break;
       }
@@ -5348,6 +5357,12 @@ int ObRawExprResolverImpl::pre_check_json_path_valid(const ParseNode *node)
   }
 
   return ret;
+}
+
+// json expr change T_NULLX_CLAUSE to T_INT
+void ObRawExprResolverImpl::modification_type_to_int(ParseNode &node)
+{
+  node.type_ = T_INT;
 }
 
 int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawExpr *&expr)

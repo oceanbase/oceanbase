@@ -253,6 +253,7 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
                                     || T_QUESTIONMARK == ctx.tree_->type_
                                     || T_COLLATION == ctx.tree_->type_
                                     || T_CAST_ARGUMENT == ctx.tree_->type_
+                                    || T_NULLX_CLAUSE == ctx.tree_->type_
                                     || (T_SFU_INT == ctx.tree_->type_ && -1 != ctx.tree_->value_)
                                     || T_SFU_DECIMAL == ctx.tree_->type_);
       }
@@ -1459,8 +1460,9 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
     } else if (OB_FAIL(sql_info.not_param_index_.add_member(node->value_))) {
       SQL_PC_LOG(WARN, "failed to add member", K(node->value_));
     }
-  } else if (T_CAST_ARGUMENT == node->type_
-             || T_COLLATION == node->type_) { //如果是cast类型，则需要添加N个cast节点对应的常数, 因为正常parse不识别为常量, 但fast parse时会识别为常量
+  } else if (T_CAST_ARGUMENT == node->type_        //如果是cast类型，则需要添加N个cast节点对应的常数, 因为正常parse不识别为常量, 但fast parse时会识别为常量
+             || T_COLLATION == node->type_
+             || T_NULLX_CLAUSE == node->type_) { // deal null clause on json expr
     for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
       if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
         SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));

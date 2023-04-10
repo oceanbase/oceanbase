@@ -644,7 +644,7 @@ function main() {
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
   fi
-  case $command in 
+  case $command in
     -V | --version)
     obd --version
     ;;

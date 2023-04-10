@@ -236,7 +236,7 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
   // 删 config
   for (int i = 0; i < del_tenants.count(); ++i) {
     if (OB_FAIL(del_tenant_config(del_tenants.at(i)))) {
-      LOG_WARN("fail add tenant config", K(i), K(del_tenants.at(i)), K(ret));
+      LOG_WARN("fail del tenant config, will try later", K(i), K(del_tenants.at(i)), K(ret));
     } else {
       LOG_INFO("del dropped tenant config succ.", K(i), K(del_tenants.at(i)));
     }
@@ -320,8 +320,9 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   } else {
     static const int DEL_TRY_TIMES = 30;
     static const int64_t TIME_SLICE_PERIOD = 10000;
-    for (int i =  0; i < DEL_TRY_TIMES; ++i) {
+    for (int i =  0, ret = OB_EAGAIN; i < DEL_TRY_TIMES; ++i) {
       if (config->is_ref_clear()) {
+        ret = OB_SUCCESS;
         break;
       }
       ob_usleep(TIME_SLICE_PERIOD);

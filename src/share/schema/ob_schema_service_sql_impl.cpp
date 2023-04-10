@@ -706,6 +706,14 @@ int ObSchemaServiceSQLImpl::get_not_core_table_schemas(
       }
       begin = end;
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < not_core_schemas.count(); ++i) {
+      if (OB_ISNULL(not_core_schemas.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::cascaded_generated_column(*not_core_schemas.at(i)))) {
+        LOG_WARN("cascaded_generated_column failed", KR(ret), KPC(not_core_schemas.at(i)));
+      }
+    }
     if (FAILEDx(sort_tables_partition_info(not_core_schemas))) {
       LOG_WARN("fail to sort tables partition info", KR(ret), K(tenant_id));
     }

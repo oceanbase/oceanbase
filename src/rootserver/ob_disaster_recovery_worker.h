@@ -591,6 +591,7 @@ private:
     int build();
     int get_next_locality_alignment_task(
         const LATask *&task);
+    int64_t get_task_array_cnt() const { return task_array_.count(); }
   private:
     int generate_paxos_replica_number();
     int build_locality_stat_map();

@@ -612,6 +612,9 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
             } else if (conn_->is_driver_client()) {
               // will not track session variables, do nothing
               okp.set_use_standard_serialize(true);
+              if (OB_FAIL(ObMPUtils::add_nls_format(okp, session, true))) {
+                LOG_WARN("fail to add_nls_format", K(ret));
+              }
             } else {
               if (OB_FAIL(ObMPUtils::add_changed_session_info(okp, session))) {
                 SERVER_LOG(WARN, "fail to add changed session info", K(ret));

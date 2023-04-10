@@ -3767,7 +3767,44 @@ int ObRawExprUtils::create_to_type_expr(ObRawExprFactory &expr_factory,
   }
   return ret;
 }
-
+int ObRawExprUtils::create_instr_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObRawExpr *first_expr,
+                                       ObRawExpr *second_expr,
+                                       ObRawExpr *third_expr,
+                                       ObRawExpr *fourth_expr,
+                                       ObSysFunRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_INSTR, out_expr))) {
+    LOG_WARN("create to_type expr failed", K(ret));
+  } else if (OB_ISNULL(out_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("to_type is null");
+  } else {
+    out_expr->set_func_name(N_INSTR);
+    if (NULL == third_expr) {
+      if (OB_FAIL(out_expr->set_param_exprs(first_expr, second_expr))) {
+        LOG_WARN("add param expr failed", K(ret));
+      }
+    } else if (NULL == fourth_expr) {
+      if (OB_FAIL(out_expr->set_param_exprs(first_expr, second_expr, third_expr))) {
+        LOG_WARN("add param expr failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(out_expr->add_param_expr(first_expr)) ||
+          OB_FAIL(out_expr->add_param_expr(second_expr)) ||
+          OB_FAIL(out_expr->add_param_expr(third_expr)) ||
+          OB_FAIL(out_expr->add_param_expr(fourth_expr))) {
+        LOG_WARN("add param expr failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
+    LOG_WARN("formalize to_type expr failed", K(ret));
+  }
+  return ret;
+}
 int ObRawExprUtils::create_substr_expr(ObRawExprFactory &expr_factory,
                                        ObSQLSessionInfo *session_info,
                                        ObRawExpr *first_expr,
@@ -3793,6 +3830,26 @@ int ObRawExprUtils::create_substr_expr(ObRawExprFactory &expr_factory,
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
+    LOG_WARN("formalize to_type expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprUtils::create_concat_expr(ObRawExprFactory &expr_factory,
+                                       ObSQLSessionInfo *session_info,
+                                       ObRawExpr *first_expr,
+                                       ObRawExpr *second_expr,
+                                       ObOpRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_OP_CNN, out_expr))) {
+   LOG_WARN("create expr failed", K(ret));
+  } else if (OB_FAIL(out_expr->add_param_expr(first_expr)) ||
+               OB_FAIL(out_expr->add_param_expr(second_expr))) {
+    LOG_WARN("add param expr failed", K(ret));
+  }
+
   if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
     LOG_WARN("formalize to_type expr failed", K(ret));
   }
@@ -6046,16 +6103,12 @@ bool ObRawExprUtils::has_prefix_str_expr(const ObRawExpr &expr,
         && param_expr1->get_result_type().is_string_or_lob_locator_type()
         && param_expr1->same_as(orig_column_expr)) {
       if (3 == tmp->get_param_count()) {
+        int64_t one = 1;
         const ObRawExpr *param_expr2 = tmp->get_param_expr(1);
         if (param_expr2 != NULL && param_expr2->is_const_raw_expr()) {
           const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(param_expr2);
-          int64_t cmp_val = 1;
-          if (const_expr->get_value().is_int() &&
-              const_expr->get_value().get_int() == 1) {
-            bret = true;
-            substr_expr = tmp;
-          } else if (const_expr->get_value().is_number() &&
-                     const_expr->get_value().get_number().compare(cmp_val) == 0) {
+          if ((const_expr->get_value().is_int() && const_expr->get_value().get_int() == 1) ||
+               (const_expr->get_value().is_oracle_decimal()  && 0 == const_expr->get_value().get_number().compare(one))) {
             bret = true;
             substr_expr = tmp;
           }
