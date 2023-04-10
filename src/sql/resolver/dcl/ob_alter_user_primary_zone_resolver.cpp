@@ -51,8 +51,17 @@ int ObAlterUserPrimaryZoneResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("unexpected null user or null primary zone", K(primary_zone_node), K(user_node), K(ret));
     } else {
       ObString user_name;
+      ObString host_name;
       user_name.assign_ptr(user_node->children_[0]->str_value_,
                             static_cast<int32_t>(user_node->children_[0]->str_len_));
+      host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+      if (OB_FAIL(check_dcl_on_inner_user(parse_tree.type_,
+                                          params_.session_info_->get_priv_user_id(),
+                                          user_name,
+                                          host_name))) {
+        LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
+                  K(params_.session_info_->get_user_name()), K(user_name));
+      }
       OZ(ObDatabaseResolver<ObAlterUserPrimaryZoneStmt>::resolve_primary_zone(
           stmt, primary_zone_node));
       stmt->set_tenant_id(params_.session_info_->get_effective_tenant_id());

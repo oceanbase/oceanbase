@@ -65,7 +65,6 @@ int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
             to_host.assign_ptr(rename_info->children_[3]->str_value_,
                                static_cast<int32_t>(rename_info->children_[3]->str_len_));
           }
-
           if ((0 == to_user.case_compare(OB_RESTORE_USER_NAME)) || (0 == from_user.case_compare(OB_RESTORE_USER_NAME))) {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("__oceanbase_inner_restore_user is reserved", K(ret));
@@ -73,6 +72,12 @@ int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
             LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, from_user.length(), from_user.ptr());
           } else if (to_user.length() > OB_MAX_USER_NAME_LENGTH) {
             LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, to_user.length(), to_user.ptr());
+          } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                                     session_info_->get_priv_user_id(),
+                                                     from_user,
+                                                     from_host))) {
+            LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                     K(ret), K(session_info_->get_user_name()), K(from_user));
           } else if (OB_FAIL(rename_user_stmt->add_rename_info(from_user, from_host, to_user, to_host))) {
             LOG_WARN("Failed to add user to ObRenameUserStmt", K(ret));
           } else {

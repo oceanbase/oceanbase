@@ -321,16 +321,16 @@ int ObAlterUserProfileResolver::resolve_default_role(const ParseNode &parse_tree
     }
     OZ (params_.schema_checker_->get_user_info(tenant_id, user_name, host_name, user_info),
           tenant_id, user_name, host_name);
-    if (ret == OB_USER_NOT_EXIST) {
+    if (ret == OB_USER_NOT_EXIST || OB_ISNULL(user_info)) {
+      ret = OB_USER_NOT_EXIST;
       LOG_USER_ERROR(OB_USER_NOT_EXIST, user_name.length(), user_name.ptr());
-    }
-    if (OB_SUCC(ret)) {
-      if (user_info == NULL) {
-        ret = OB_USER_NOT_EXIST;
-        LOG_USER_ERROR(OB_USER_NOT_EXIST, user_name.length(), user_name.ptr());
-      } else {
-        arg.user_id_ = user_info->get_user_id();
-      }
+    } else if (OB_FAIL(check_dcl_on_inner_user(parse_tree.type_,
+                                               session_info_->get_priv_user_id(),
+                                               user_info->get_user_id()))) {
+      LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
+               K(session_info_->get_user_name()), K(user_name));
+    } else {
+      arg.user_id_ = user_info->get_user_id();
     }
 
     /* 2. resolve default role */
@@ -403,8 +403,14 @@ int ObAlterUserProfileResolver::resolve(const ParseNode &parse_tree)
       arg.profile_name_ = ObString(profile_name->str_len_, profile_name->str_value_);
     }
     arg.tenant_id_ = params_.session_info_->get_effective_tenant_id();
+    if (OB_FAIL(check_dcl_on_inner_user(parse_tree.type_,
+                                        session_info_->get_priv_user_id(),
+                                        arg.user_name_,
+                                        arg.host_name_))) {
+      LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
+               K(params_.session_info_->get_user_name()), K(arg.user_name_));
+    }
   }
-
   if (OB_SUCC(ret) && T_SET_ROLE != parse_tree.type_
       && ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(
