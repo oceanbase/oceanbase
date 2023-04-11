@@ -58,7 +58,8 @@ struct ObKVEntryTraverseOp
   typedef common::hash::HashMapPair<ObILibCacheKey *, ObILibCacheNode *> LibCacheKVEntry;
   explicit ObKVEntryTraverseOp(LCKeyValueArray *key_val_list,
                                const CacheRefHandleID ref_handle)
-    : ref_handle_(ref_handle),
+    : total_mem_used_(0),
+      ref_handle_(ref_handle),
       key_value_list_(key_val_list)
   {
   }
@@ -85,13 +86,16 @@ struct ObKVEntryTraverseOp
         PL_CACHE_LOG(WARN, "fail to push back key", K(ret));
       } else {
         entry.second->inc_ref_count(ref_handle_);
+        total_mem_used_ += entry.second->get_mem_size();
       }
     }
     return ret;
   }
+  int64_t get_total_mem_used() const { return total_mem_used_; }
   CacheRefHandleID get_ref_handle() { return ref_handle_; } const
   LCKeyValueArray *get_key_value_list() { return key_value_list_; }
 
+  int64_t total_mem_used_;
   const CacheRefHandleID ref_handle_;
   LCKeyValueArray *key_value_list_;
 };
@@ -324,6 +328,7 @@ public:
   int cache_evict_all_obj();
   //evict plan, adjust mem between hwm and lwm
   int cache_evict();
+  int cache_evict_by_glitch_node();
   int cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql_id);
   int cache_evict_by_ns(ObLibCacheNameSpace ns);
   template<typename CallBack = ObKVEntryTraverseOp>
