@@ -1803,28 +1803,27 @@ bool ObSQLSessionInfo::get_changed_package_state_num() const
 int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
-  ObPLExecCtx pl_ctx(NULL, &exec_ctx, NULL, NULL, NULL, NULL);
-  ObArray<ObString> key;
-  ObArray<ObObj> value;
+  ObArenaAllocator allocator;
+  ObPLExecCtx pl_ctx(&allocator, &exec_ctx, NULL, NULL, NULL, NULL);
   if (0 != package_state_map_.size()) {
     FOREACH(it, package_state_map_) {
       ObPLPackageState *package_state = it->second;
       if (package_state->is_package_info_changed()) {
-        pl_ctx.allocator_ = &(package_state->get_pkg_allocator());
+        ObSEArray<ObString, 4> key;
+        ObSEArray<ObObj, 4> value;
         if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
-          LOG_WARN("convert package state to string kv failed",
-            K(ret), KPC(package_state));
+          LOG_WARN("convert package state to string kv failed", K(ret));
+        } else {
+          ObSessionVariable sess_var;
+          int tmp_ret = OB_SUCCESS;
+          for (int64_t i = 0; OB_SUCC(ret) && i < key.count(); i++) {
+            sess_var.value_ = value[i];
+            sess_var.meta_ = value[i].get_meta();
+            if (OB_FAIL(ObBasicSessionInfo::replace_user_variable(key[i], sess_var))) {
+              LOG_WARN("add user var failed", K(ret));
+            }
+          }
         }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObSessionVariable sess_var;
-    for (int64_t i = 0; i < key.count(); i++) {
-      sess_var.value_ = value[i];
-      sess_var.meta_ = value[i].get_meta();
-      if (OB_FAIL(ObBasicSessionInfo::replace_user_variable(key[i], sess_var))) {
-        LOG_WARN("add user var failed", K(ret));
       }
     }
   }
