@@ -478,7 +478,7 @@ int ObMPUtils::process_flt_extra_info(const char *buf,
             LOG_WARN("failed to deserialize full link trace extra info",
                                       KP(buf), K(ret), K(pos), K(v_len));
           } else {
-            _OBTRACE_LOG(INFO, "%s", drv_span.span_info_.ptr());
+            _FLT_LOG(INFO, "%s", drv_span.span_info_.ptr());
           }
           break;
         }

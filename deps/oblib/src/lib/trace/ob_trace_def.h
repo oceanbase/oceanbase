@@ -73,11 +73,9 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
   // for ps end
 
   // for das
-  FLT_DEF_SPAN(get_das_id, "fetch das task id")
   FLT_DEF_SPAN(do_local_das_task, "execute local das task")
   FLT_DEF_SPAN(do_remote_das_task, "execute remote das task")
     FLT_DEF_SPAN(das_rpc_process, "das task rpc process")
-  FLT_DEF_SPAN(rescan_das_task, "rescan das task")
   FLT_DEF_SPAN(close_das_task, "close das task")
   FLT_DEF_SPAN(fetch_das_extra_result, "fetch das extra result")
     FLT_DEF_SPAN(fetch_das_result_process, "fetch das result process")
@@ -85,6 +83,9 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
 #endif // __HIGH_LEVEL_SPAN
 
 #ifdef __MIDDLE_LEVEL_SPAN
+  // for das
+  FLT_DEF_SPAN(get_das_id, "fetch das task id")
+  FLT_DEF_SPAN(rescan_das_task, "rescan das task")
 #endif // __MIDDLE_LEVEL_SPAN
 
 #ifdef __LOW_LEVEL_SPAN

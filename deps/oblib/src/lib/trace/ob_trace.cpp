@@ -108,7 +108,7 @@ void flush_trace()
           }
         }
         INIT_SPAN(span->source_span_);
-        _OBTRACE_LOG(INFO,
+        _FLT_LOG(INFO,
                      TRACE_PATTERN "%s}",
                      UUID_TOSTRING(trace.get_trace_id()),
                      __span_type_mapper[span->span_type_],
@@ -128,7 +128,7 @@ void flush_trace()
       }
       span = next;
     }
-    PRINT_OB_LOG_TRACE_BUF(OBTRACE, INFO);
+    PRINT_OB_LOG_TRACE_BUF(FLT, INFO);
     if (need_cancle_trace_mode) {
       CANCLE_OB_LOG_TRACE_MODE();
     }
