@@ -92,12 +92,23 @@ int ObTenantMemoryPrinter::print_tenant_usage()
       }
       int tenant_cnt = 0;
       static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
+      common::get_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
       lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
-      mallocator->get_unrecycled_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
       for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
         uint64_t id = all_tenant_ids[i];
-        mallocator->print_tenant_memory_usage(id);
-        mallocator->print_tenant_ctx_memory_usage(id);
+        if (!is_virtual_tenant_id(id)) {
+          bool is_deleted_tenant = true;
+          for (int j = 0; j < mtl_tenant_ids.count(); ++j) {
+            if (id == mtl_tenant_ids[j]) {
+              is_deleted_tenant = false;
+              break;
+            }
+          }
+          if (is_deleted_tenant) {
+            mallocator->print_tenant_memory_usage(id);
+            mallocator->print_tenant_ctx_memory_usage(id);
+          }
+        }
       }
     }
 
