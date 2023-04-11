@@ -1267,7 +1267,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   observer::ObReqTimeGuard req_timeinfo_guard;
 
-  bool has_tenant_resource = false;
+  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   transaction::ObTxDesc *tx_desc = nullptr;
 
   SMART_VAR(ObInnerSQLResult, res, get_session())
@@ -1278,23 +1278,20 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
     } else if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (GCTX.omt_->is_available_tenant(tenant_id)) {
-      has_tenant_resource = true;
+    } else if (local_execute) {
       if (OB_FAIL(switch_tenant(tenant_id))) {
         LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
       }
     } else {
-      has_tenant_resource = false;
-      LOG_WARN("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
+      LOG_DEBUG("tenant may be not in server", K(ret), K(local_execute), K(tenant_id), K(MYADDR));
     }
-
     if (OB_SUCC(ret)) {
       if (!is_in_trans()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inner conn must be already in trans", K(ret));
-      } else if (OB_FAIL(res.init(has_tenant_resource))) {
-        LOG_WARN("init result set", K(ret), K(has_tenant_resource));
-      } else if (has_tenant_resource) {
+      } else if (OB_FAIL(res.init(local_execute))) {
+        LOG_WARN("init result set", K(ret), K(local_execute));
+      } else if (local_execute) {
         transaction::ObTxParam tx_param;
         tx_param.access_mode_ = transaction::ObTxAccessMode::RW;
         tx_param.isolation_ = get_session().get_tx_isolation();
@@ -1303,6 +1300,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
         tx_param.lock_timeout_us_ = get_session().get_trx_lock_timeout();
 
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid tx_desc");
         } else {
           MTL_SWITCH(tenant_id) {
@@ -1442,7 +1440,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   observer::ObReqTimeGuard req_timeinfo_guard;
 
-  bool has_tenant_resource = false;
+  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   transaction::ObTxDesc *tx_desc = nullptr;
 
   SMART_VAR(ObInnerSQLResult, res, get_session())
@@ -1453,23 +1451,21 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
     } else if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (GCTX.omt_->is_available_tenant(tenant_id)) {
-      has_tenant_resource = true;
+    } else if (local_execute) {
       if (OB_FAIL(switch_tenant(tenant_id))) {
         LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
       }
     } else {
-      has_tenant_resource = false;
-      LOG_WARN("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
+      LOG_DEBUG("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
     }
 
     if (OB_SUCC(ret)) {
       if (!is_in_trans()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inner conn must be already in trans", K(ret));
-      } else if (OB_FAIL(res.init(has_tenant_resource))) {
-        LOG_WARN("init result set", K(ret), K(has_tenant_resource));
-      } else if (has_tenant_resource) {
+      } else if (OB_FAIL(res.init(local_execute))) {
+        LOG_WARN("init result set", K(ret), K(local_execute));
+      } else if (local_execute) {
         transaction::ObTxParam tx_param;
         tx_param.access_mode_ = transaction::ObTxAccessMode::RW;
         tx_param.isolation_ = get_session().get_tx_isolation();
@@ -1478,6 +1474,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
         tx_param.lock_timeout_us_ = get_session().get_trx_lock_timeout();
 
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid tx_desc");
         } else {
           MTL_SWITCH(tenant_id) {
