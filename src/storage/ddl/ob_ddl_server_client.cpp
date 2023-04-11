@@ -120,6 +120,9 @@ int ObDDLServerClient::copy_table_dependents(const obrpc::ObCopyTableDependentsA
         if (OB_ENTRY_NOT_EXIST == ret) {
           LOG_WARN("ddl task not exist", K(ret), K(arg));
           break;
+        } else if (OB_NOT_SUPPORTED == ret) {
+          LOG_WARN("not supported copy table dependents", K(ret), K(arg));
+          break;
         } else {
           LOG_INFO("ddl task exist, try again", K(arg));
           ret = OB_SUCCESS;
@@ -157,6 +160,9 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).abort_redef_table(arg))) {
         LOG_WARN("abort redef table failed", K(ret), K(arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
+          break;
+        } else if (OB_NOT_SUPPORTED == ret) {
+          LOG_WARN("not supported abort direct load task", K(ret), K(arg));
           break;
         } else {
           LOG_INFO("ddl task exist, try again", K(arg));
@@ -215,6 +221,9 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
       } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).finish_redef_table(finish_redef_arg))) {
         LOG_WARN("finish redef table failed", K(ret), K(finish_redef_arg));
         if (OB_ENTRY_NOT_EXIST == ret) {
+          break;
+        } else if (OB_NOT_SUPPORTED == ret) {
+          LOG_WARN("not supported finish redef table", K(ret), K(finish_redef_arg));
           break;
         } else {
           LOG_INFO("ddl task exist, try again", K(finish_redef_arg));
