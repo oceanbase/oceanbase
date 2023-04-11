@@ -829,6 +829,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
     ObLLVMBasicBlock continue_begin;
     ObLLVMBasicBlock do_body;
     ObLLVMBasicBlock alter_while;
+    ObLLVMValue count_value;
 
     if (OB_FAIL(generator_.get_helper().create_block(ObString("while_begin"), generator_.get_func(), while_begin))) {
       LOG_WARN("failed to create block", K(s), K(ret));
@@ -839,6 +840,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("after_while"), generator_.get_func(), alter_while))) {
       LOG_WARN("failed to create block", K(s), K(ret));
+    } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
+      LOG_WARN("failed to create_ialloca", K(ret));
     } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), while_begin, alter_while))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(while_begin))) {
@@ -849,13 +852,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
       ObLLVMValue p_result_obj;
       ObLLVMValue result;
       ObLLVMValue is_false;
-      ObLLVMValue count_value;
       ObLLVMValue stack;
       if (OB_ISNULL(s.get_body()) || OB_ISNULL(s.get_cond_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("a if must have then body", K(s), K(s.get_body()), K(s.get_cond()), K(ret));
-      } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
-        LOG_WARN("failed to create_ialloca", K(ret));
       } else if (OB_FAIL(generator_.get_helper().create_br(continue_begin))) {
         LOG_WARN("failed to create_br", K(ret));
       } else if (OB_FAIL(generator_.set_current(continue_begin))) {
