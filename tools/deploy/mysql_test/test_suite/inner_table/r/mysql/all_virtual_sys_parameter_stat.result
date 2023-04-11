@@ -262,6 +262,7 @@ _enable_protocol_diagnose
 _enable_px_batch_rescan
 _enable_px_bloom_filter_sync
 _enable_px_ordered_coord
+_enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
 _enable_tenant_sql_net_thread
 _enable_trace_session_leak

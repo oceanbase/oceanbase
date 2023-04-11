@@ -8956,6 +8956,7 @@ do { \
 
     if (OB_SUCC(ret)) {
       int64_t idx_cnt = access_idxs.count();
+      int64_t idents_cnt = obj_access_idents.count();
       CK (OB_LIKELY(idx_cnt != 0));
       if (OB_FAIL(ret)) {
       } else if (access_idxs.at(idx_cnt - 1).is_system_procedure()) {
@@ -8964,7 +8965,7 @@ do { \
           ObArray<ObRawExpr*> params;
           OZ (stmt_factory_.allocate(PL_RAISE_APPLICATION_ERROR, current_block_, stmt));
           CK (OB_NOT_NULL(raise_stmt = static_cast<ObPLRaiseAppErrorStmt *>(stmt)));
-          OZ (obj_access_idents.at(idx_cnt-1).extract_params(0, params));
+          OZ (obj_access_idents.at(idents_cnt-1).extract_params(0, params));
           for (int64_t  i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             int64_t expr_idx = OB_INVALID_ID;
             CK (OB_NOT_NULL(params.at(i)));
@@ -9007,8 +9008,7 @@ do { \
             if (OB_SUCC(ret)
                 && package_routine_info->is_udt_routine()
                 && !package_routine_info->is_udt_static_routine()) {
-              int64_t idents_cnt = obj_access_idents.count();
-              if (idents_cnt >0 && obj_access_idents.at(idents_cnt - 1).udf_info_.is_udt_udf_) {
+              if (idents_cnt > 0 && obj_access_idents.at(idents_cnt - 1).udf_info_.is_udt_udf_) {
                 call_stmt->set_is_object_udf();
               }
               const ObIArray<ObPLRoutineParam *> &routine_params
@@ -9041,14 +9041,14 @@ do { \
                       question_expr->set_result_type(type);
                       OZ (question_expr->extract_info());
                       OZ (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
-                      OZ (obj_access_idents.at(idx_cnt - 1)
+                      OZ (obj_access_idents.at(idents_cnt - 1)
                             .params_.push_back(std::make_pair(question_expr, 0)));
                       OZ (func.add_expr(question_expr));
                       if (OB_SUCC(ret) && 0 == self_param_pos) {
-                        std::rotate(obj_access_idents.at(idx_cnt-1).params_.begin(),
-                                obj_access_idents.at(idx_cnt-1).params_.begin()
-                                  + obj_access_idents.at(idx_cnt-1).params_.count() - 1,
-                                obj_access_idents.at(idx_cnt-1).params_.end());
+                        std::rotate(obj_access_idents.at(idents_cnt-1).params_.begin(),
+                                obj_access_idents.at(idents_cnt-1).params_.begin()
+                                  + obj_access_idents.at(idents_cnt-1).params_.count() - 1,
+                                obj_access_idents.at(idents_cnt-1).params_.end());
                       }
                     }
                   }
@@ -9058,19 +9058,19 @@ do { \
                   CK (OB_NOT_NULL(null_expr));
                   OZ (null_expr->extract_info());
                   OZ (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
-                  OZ (obj_access_idents.at(idx_cnt - 1)
+                  OZ (obj_access_idents.at(idents_cnt - 1)
                         .params_.push_back(std::make_pair(null_expr, 0)));
                   if (OB_SUCC(ret) && 0 == self_param_pos) {
-                    std::rotate(obj_access_idents.at(idx_cnt-1).params_.begin(),
-                                obj_access_idents.at(idx_cnt-1).params_.begin()
-                                  + obj_access_idents.at(idx_cnt-1).params_.count() - 1,
-                                obj_access_idents.at(idx_cnt-1).params_.end());
+                    std::rotate(obj_access_idents.at(idents_cnt-1).params_.begin(),
+                                obj_access_idents.at(idents_cnt-1).params_.begin()
+                                  + obj_access_idents.at(idents_cnt-1).params_.count() - 1,
+                                obj_access_idents.at(idents_cnt-1).params_.end());
                   }
                 }
               }
             }
             // end mock self param
-            OZ (obj_access_idents.at(idx_cnt-1).extract_params(0, params));
+            OZ (obj_access_idents.at(idents_cnt-1).extract_params(0, params));
             if (OB_FAIL(ret)){
             } else if (package_routine_info->get_param_count() != 0) {
               OZ (resolve_call_param_list(params, package_routine_info->get_params(), call_stmt, func));

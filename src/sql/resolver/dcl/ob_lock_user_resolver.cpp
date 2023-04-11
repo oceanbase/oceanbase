@@ -95,10 +95,14 @@ int ObLockUserResolver::resolve(const ParseNode &parse_tree)
                 host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
                                      static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
               }
-              if (OB_FAIL(lock_user_stmt->add_user(user_name, host_name))) {
+              if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                                  session_info_->get_priv_user_id(),
+                                                  user_name,
+                                                  host_name))) {
+                LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                          K(ret), K(params_.session_info_->get_user_name()), K(user_name));
+              } else if (OB_FAIL(lock_user_stmt->add_user(user_name, host_name))) {
                 SQL_RESV_LOG(WARN, "Add user error", K(user_name), K(host_name), K(ret));
-              } else {
-                //do nothing
               }
             }
           }

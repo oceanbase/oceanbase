@@ -108,7 +108,15 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         host_name = session_host_name;
         set_pwd_stmt->set_for_current_user(true);
       }
-
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                            params_.session_info_->get_priv_user_id(),
+                                            user_name,
+                                            host_name))) {
+          LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
+                   K(params_.session_info_->get_priv_user_id()), K(user_name));
+        }
+      }
       if (OB_SUCC(ret)) {
         // replace password to *** in query_string for audit
         ObString masked_sql;

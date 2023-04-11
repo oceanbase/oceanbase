@@ -361,3 +361,104 @@ int ObDCLResolver::mask_password_for_passwd_node(ObIAllocator *allocator,
   LOG_DEBUG("finish mask_password_for_passwd_node", K(src), K(masked_sql));
   return ret;
 }
+
+int ObDCLResolver::check_dcl_on_inner_user(const ObItemType &type,
+                                           const uint64_t &session_user_id,
+                                           const ObString &user_name,
+                                           const ObString &host_name) {
+  int ret = OB_SUCCESS;
+  uint64_t user_id = OB_INVALID_ID;
+  bool is_valid = true;
+  if (GCONF._enable_reserved_user_dcl_restriction) {
+    if (T_ALTER_USER_DEFAULT_ROLE == type ||
+        T_ALTER_USER_PRIMARY_ZONE == type ||
+        T_ALTER_USER_PROFILE == type ||
+        T_DROP_USER == type ||
+        T_GRANT == type ||
+        T_LOCK_USER == type ||
+        T_RENAME_USER == type ||
+        T_REVOKE == type ||
+        T_REVOKE_ALL == type ||
+        T_REVOKE_ROLE == type ||
+        T_SET_PASSWORD == type ||
+        T_SET_ROLE == type ||
+        T_SYSTEM_REVOKE == type) {
+      if (user_name.empty() || session_user_id == OB_INVALID_ID) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed. get empty user name or invalid session user id", K(ret), K(user_name),
+                 K(session_user_id));
+      } else if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed. get NULL ptr", K(ret), K(schema_checker_), K(params_.session_info_));
+      } else if (OB_FAIL(schema_checker_->get_user_id(
+                                                  params_.session_info_->get_effective_tenant_id(),
+                                                  user_name,
+                                                  host_name,
+                                                  user_id))) {
+        if (OB_USER_NOT_EXIST == ret) {
+          ret = OB_ERR_USER_OR_ROLE_DOES_NOT_EXIST;
+          LOG_USER_ERROR(OB_ERR_USER_OR_ROLE_DOES_NOT_EXIST, user_name.length(), user_name.ptr());
+        }
+        LOG_WARN("failed to get user id", K(ret), K(user_name));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_SYS_USER_ID == user_id ||
+            OB_ORA_SYS_USER_ID == user_id ||
+            OB_ORA_AUDITOR_USER_ID == user_id ||
+            OB_ORA_LBACSYS_USER_ID == user_id) {
+          if (session_user_id != user_id &&
+              OB_SYS_USER_ID != session_user_id &&
+              OB_ORA_SYS_USER_ID != session_user_id) {
+            is_valid = false;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_valid) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify on reserved user");
+  }
+  return ret;
+}
+
+int ObDCLResolver::check_dcl_on_inner_user(const ObItemType &type,
+                                           const uint64_t &session_user_id,
+                                           const uint64_t &user_id) {
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (GCONF._enable_reserved_user_dcl_restriction) {
+    if (T_ALTER_USER_DEFAULT_ROLE == type ||
+        T_ALTER_USER_PRIMARY_ZONE == type ||
+        T_ALTER_USER_PROFILE == type ||
+        T_DROP_USER == type ||
+        T_GRANT == type ||
+        T_LOCK_USER == type ||
+        T_RENAME_USER == type ||
+        T_REVOKE == type ||
+        T_REVOKE_ALL == type ||
+        T_REVOKE_ROLE == type ||
+        T_SET_PASSWORD == type ||
+        T_SET_ROLE == type ||
+        T_SYSTEM_REVOKE == type) {
+      if (OB_INVALID_ID == user_id || OB_INVALID_ID == session_user_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed.invalid session user id/user id", K(ret), K(user_id), K(session_user_id));
+      } else if (OB_SYS_USER_ID == user_id ||
+                 OB_ORA_SYS_USER_ID == user_id ||
+                 OB_ORA_AUDITOR_USER_ID == user_id ||
+                 OB_ORA_LBACSYS_USER_ID == user_id) {
+        if (session_user_id != user_id &&
+            OB_SYS_USER_ID != session_user_id &&
+            OB_ORA_SYS_USER_ID != session_user_id) {
+          is_valid = false;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_valid) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify on reserved user");
+  }
+  return ret;
+}

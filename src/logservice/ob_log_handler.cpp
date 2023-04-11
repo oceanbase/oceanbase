@@ -134,7 +134,12 @@ int ObLogHandler::stop()
     tg.click("unreg cb end");
     if (OB_FAIL(apply_status_->stop())) {
       CLOG_LOG(INFO, "apply_status stop failed", KPC(this), KPC(apply_status_), KR(ret));
-    } else if (palf_handle_.is_valid()) {
+    } else if (false == palf_handle_.is_valid()) {
+    // Note: we disable log sync in here, therefore executing ObLogHander::offline()
+    // is safe after ObLogHandler::stop() has been executed
+    } else if (OB_FAIL(palf_handle_.disable_sync())) {
+      CLOG_LOG(WARN, "disable_sync failed", KPC(this), KR(ret));
+    } else {
       tg.click("apply stop end");
       palf_env_->close(palf_handle_);
       tg.click("palf close end");
@@ -1200,14 +1205,15 @@ int ObLogHandler::diagnose(LogHandlerDiagnoseInfo &diagnose_info) const
   return ret;
 }
 
+// reentrant
 int ObLogHandler::offline()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
+    PALF_LOG(INFO, "ObLogHandler has already been destroyed", K(ret), KPC(this));
   } else if (OB_FAIL(disable_replay())) {
     CLOG_LOG(WARN, "disable_replay failed", K(ret), KPC(this));
-  } else if (OB_FAIL(disable_sync())) {
+  } else if (OB_FAIL(disable_sync()) && OB_NOT_INIT != ret) {
     CLOG_LOG(WARN, "disable_sync failed", K(ret), KPC(this));
   } else {
     WLockGuard guard(lock_);

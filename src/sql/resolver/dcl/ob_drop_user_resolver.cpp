@@ -127,8 +127,12 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
           } else if (is_inner_user_or_role(user_info->get_user_id())) {
             ret = OB_ERR_NO_PRIVILEGE;
             SQL_RESV_LOG(WARN, "Can not drop internal user", K(ret));
+          } else if (OB_FAIL(check_dcl_on_inner_user(top_node->type_,
+                                                     params_.session_info_->get_priv_user_id(),
+                                                     user_info->get_user_id()))) {
+            LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                     K(ret), K(params_.session_info_->get_user_name()), K(user_name));
           }
-
           if (OB_SUCC(ret)) {
             if (OB_FAIL(drop_user_stmt->add_user(user_name, host_name))) {
               LOG_WARN("Add user error", K(user_name), K(ret));

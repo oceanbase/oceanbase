@@ -13,6 +13,7 @@
 #ifdef AGENT_VIRTUAL_TABLE_LOCATION_SWITCH
 
 case OB_ALL_VIRTUAL_COLL_TYPE_SYS_AGENT_TID:
+case OB_ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_PACKAGE_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT_TID:
 case OB_ALL_VIRTUAL_ROUTINE_SYS_AGENT_TID:
@@ -29,6 +30,7 @@ case OB_TENANT_VIRTUAL_CONCURRENT_LIMIT_SQL_AGENT_TID:
 case OB_TENANT_VIRTUAL_OUTLINE_AGENT_TID:
 case OB_TENANT_VIRTUAL_TABLE_INDEX_AGENT_TID:
 case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID:
+case OB_ALL_VIRTUAL_VIRTUAL_LONG_OPS_STATUS_MYSQL_SYS_AGENT_TID:
 
 #endif
 
@@ -40,6 +42,24 @@ case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID:
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_ALL_COLL_TYPE_TID;
       const bool sys_tenant_base_table = false;
+      const bool only_sys_data = true;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        agent_iter->~ObAgentVirtualTable();
+        allocator.free(agent_iter);
+        agent_iter = NULL;
+      } else {
+       vt_iter = agent_iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT_TID: {
+      ObAgentVirtualTable *agent_iter = NULL;
+      const uint64_t base_tid = OB_ALL_VIRTUAL_LONG_OPS_STATUS_TID;
+      const bool sys_tenant_base_table = true;
       const bool only_sys_data = true;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
         SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
@@ -327,6 +347,24 @@ case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID:
     case OB_ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT_TID: {
       ObAgentVirtualTable *agent_iter = NULL;
       const uint64_t base_tid = OB_ALL_TENANT_TID;
+      const bool sys_tenant_base_table = true;
+      const bool only_sys_data = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data, Worker::CompatMode::MYSQL))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        agent_iter->~ObAgentVirtualTable();
+        allocator.free(agent_iter);
+        agent_iter = NULL;
+      } else {
+       vt_iter = agent_iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_VIRTUAL_LONG_OPS_STATUS_MYSQL_SYS_AGENT_TID: {
+      ObAgentVirtualTable *agent_iter = NULL;
+      const uint64_t base_tid = OB_ALL_VIRTUAL_LONG_OPS_STATUS_TID;
       const bool sys_tenant_base_table = true;
       const bool only_sys_data = false;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {

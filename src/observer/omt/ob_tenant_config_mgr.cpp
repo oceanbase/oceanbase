@@ -320,7 +320,8 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   } else {
     static const int DEL_TRY_TIMES = 30;
     static const int64_t TIME_SLICE_PERIOD = 10000;
-    for (int i =  0, ret = OB_EAGAIN; i < DEL_TRY_TIMES; ++i) {
+    ret = OB_EAGAIN;
+    for (int i = 0; i < DEL_TRY_TIMES; ++i) {
       if (config->is_ref_clear()) {
         ret = OB_SUCCESS;
         break;

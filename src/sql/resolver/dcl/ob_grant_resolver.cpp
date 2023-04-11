@@ -1072,6 +1072,12 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
             ret = OB_WRONG_USER_NAME_LENGTH;
             LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+          } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                                     session_info_->get_priv_user_id(),
+                                                     user_name,
+                                                     host_name))) {
+            LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                     K(ret), K(session_info_->get_user_name()), K(user_name));
           } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
             LOG_WARN("Add grantee error", K(user_name), K(ret));
           } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {
@@ -1307,6 +1313,12 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                 if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
                   ret = OB_WRONG_USER_NAME_LENGTH;
                   LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+                } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
+                                                           session_info_->get_priv_user_id(),
+                                                           user_name,
+                                                           host_name))) {
+                  LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+                           K(ret), K(session_info_->get_user_name()), K(user_name));
                 } else if (OB_FAIL(grant_stmt->add_grantee(user_name))) {
                   LOG_WARN("Add grantee error", K(user_name), K(ret));
                 } else if (OB_FAIL(grant_stmt->add_user(user_name, host_name, pwd, need_enc))) {

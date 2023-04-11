@@ -40,6 +40,13 @@ protected:
                                      int64_t profile_id,
                                      common::ObString &password, 
                                      common::ObString &user_name);
+  int check_dcl_on_inner_user(const ObItemType &type,
+                              const uint64_t &session_user_id,
+                              const ObString &user_name,
+                              const ObString &host_name);
+  int check_dcl_on_inner_user(const ObItemType &type,
+                              const uint64_t &session_user_id,
+                              const uint64_t &user_id);
   static int mask_password_for_single_user(ObIAllocator *allocator,
                                            const common::ObString &src,
                                            const ParseNode *user_node,
