@@ -180,7 +180,7 @@ void ObMallocAllocator::free(void *ptr)
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   // directly free object instead of using tenant allocator.
   ObTenantCtxAllocator::common_free(ptr);
-#endif // PERF_MODE
+#endif // OB_USE_ASAN
 }
 
 ObTenantCtxAllocatorGuard ObMallocAllocator::get_tenant_ctx_allocator_without_tlcache(

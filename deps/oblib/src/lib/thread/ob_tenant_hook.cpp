@@ -1,7 +1,6 @@
 #ifndef _OCEABASE_TENANT_PRELOAD_H_
 #define _OCEABASE_TENANT_PRELOAD_H_
 
-#ifndef PERF_MODE
 #define _GNU_SOURCE 1
 #include "lib/worker.h"
 #include <dlfcn.h>
@@ -140,19 +139,4 @@ int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespe
 
 } /* extern "C" */
 
-#else
-int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
-                         pthread_mutex_t *__restrict __mutex)
-{
-  return pthread_cond_wait(__cond, __mutex);
-}
-
-int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
-                              pthread_mutex_t *__restrict __mutex,
-                              const struct timespec *__restrict __abstime)
-{
-  return pthread_cond_timedwait(__cond, __mutex, __abstime);
-}
-
-#endif /* PERF_MODE */
 #endif /* _OCEABASE_TENANT_PRELOAD_H_ */
