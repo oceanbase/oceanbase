@@ -22,6 +22,7 @@ namespace lib
 {
 static const int32_t AOBJECT_BACKTRACE_COUNT = 16;
 static const int32_t AOBJECT_BACKTRACE_SIZE = sizeof(void*) * AOBJECT_BACKTRACE_COUNT;
+static const int32_t MAX_BACKTRACE_LENGTH = 512;
 static const int32_t MAX_MALLOC_SAMPLER_NUM = (1<<15) - 1;
 
 class ObMallocSampleLimiter
@@ -51,7 +52,6 @@ struct ObMallocSampleKey
   bool operator==(const ObMallocSampleKey &other) const;
   int64_t tenant_id_;
   int64_t ctx_id_;
-  int32_t bt_size_;
   char label_[lib::AOBJECT_LABEL_SIZE + 1];
   void *bt_[AOBJECT_BACKTRACE_COUNT];
 };
@@ -140,7 +140,7 @@ inline int64_t ObMallocSampleKey::hash() const
   hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
   hash_val = murmurhash(&ctx_id_, sizeof(ctx_id_), hash_val);
   hash_val = murmurhash(label_, sizeof(label_), hash_val);
-  hash_val = murmurhash(bt_, bt_size_ * sizeof(void*), hash_val);
+  hash_val = murmurhash(bt_, sizeof(bt_), hash_val);
   return hash_val;
 }
 
@@ -148,20 +148,9 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
 {
   bool ret = true;
   if (tenant_id_ != other.tenant_id_ || ctx_id_ != other.ctx_id_
-        || 0 != STRNCMP(label_, other.label_, sizeof(label_))) {
+      || 0 != STRNCMP(label_, other.label_, sizeof(label_))
+      || 0 != MEMCMP((char*)bt_, (char*)other.bt_, sizeof(bt_))) {
     ret = false;
-  }
-  if (ret) {
-    if (other.bt_size_ != bt_size_) {
-      ret = false;
-    } else {
-      for (int i = 0; i < bt_size_; ++i) {
-        if ((int64_t)bt_[i] != (int64_t)other.bt_[i]) {
-          ret = false;
-          break;
-        }
-      }
-    }
   }
   return ret;
 }
@@ -169,7 +158,7 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
 #define ob_malloc_sample_backtrace(obj, size)                                                       \
   {                                                                                                 \
     if (OB_UNLIKELY(obj->on_malloc_sample_)) {                                                      \
-      void *addrs[100] = {nullptr};                                                                 \
+      void *addrs[100];                                                                 \
       int bt_len = backtrace(addrs, ARRAYSIZEOF(addrs));                                            \
       MEMCPY(&obj->data_[size], (char*)addrs, AOBJECT_BACKTRACE_SIZE);                              \
       if (AOBJECT_BACKTRACE_COUNT > bt_len) {                                                       \
@@ -177,7 +166,6 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
       }                                                                                             \
     }                                                                                               \
   }
-
 } // end of namespace lib
 } // end of namespace oceanbase
 

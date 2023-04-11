@@ -147,8 +147,8 @@ inline int ObAllocator::init()
     blk_mgr = pm;
     pm_ = pm;
   } else {
-    blk_mgr_.tenant_id_ = attr_.tenant_id_;
-    blk_mgr_.ctx_id_ = attr_.ctx_id_;
+    blk_mgr_.set_tenant_id(attr_.tenant_id_);
+    blk_mgr_.set_ctx_id(attr_.ctx_id_);
     blk_mgr = &blk_mgr_;
   }
   if (OB_SUCC(ret)) {

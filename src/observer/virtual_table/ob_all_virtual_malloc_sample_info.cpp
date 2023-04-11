@@ -118,7 +118,7 @@ int ObMallocSampleInfo::fill_row(ObNewRow *&row)
           break;
         }
       case BACKTRACE: {
-          parray(bt_, sizeof(bt_), (int64_t*)*&(it_->first.bt_), it_->first.bt_size_);
+          IGNORE_RETURN parray(bt_, sizeof(bt_), (int64_t*)it_->first.bt_, AOBJECT_BACKTRACE_COUNT);
           cells[i].set_varchar(bt_);
           cells[i].set_collation_type(
               ObCharset::get_default_collation(ObCharset::get_default_charset()));

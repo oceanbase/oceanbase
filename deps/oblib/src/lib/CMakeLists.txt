@@ -246,6 +246,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/alloc_struct.cpp
   alloc/block_set.cpp
   alloc/memory_dump.cpp
+  alloc/ob_free_log_printer.cpp
   alloc/ob_malloc_allocator.cpp
   alloc/ob_malloc_callback.cpp
   alloc/ob_malloc_sample_struct.cpp

@@ -64,14 +64,12 @@ public:
     return tenant_id_ < tenant_id ||
       (tenant_id_ == tenant_id && id_ < id);
   }
-  int set_tenant_ctx(const uint64_t tenant_id, const uint64_t ctx_id);
+  int set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id);
   void set_max_chunk_cache_cnt(const int cnt)
   { bs_.set_max_chunk_cache_cnt(cnt); }
   void reset();
   int64_t get_hold() const;
   int64_t get_tid() const { return tid_; }
-  int64_t get_tenant_id() const { return tenant_id_; }
-  int64_t get_ctx_id() const { return ctx_id_; }
   // IBlockMgr interface
   virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr=default_memattr) override;
   virtual void free_block(ABlock *block) override;
@@ -135,7 +133,7 @@ inline ObPageManager::~ObPageManager()
   }
 }
 
-inline int ObPageManager::set_tenant_ctx(const uint64_t tenant_id, const uint64_t ctx_id)
+inline int ObPageManager::set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id)
 {
   int ret = OB_SUCCESS;
   auto &pmc = ObPageManagerCenter::get_instance();

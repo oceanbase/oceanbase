@@ -56,7 +56,7 @@ AObject *ObjectSet::alloc_object(
   const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
   const uint64_t all_size = align_up2(adj_size + AOBJECT_META_SIZE, 16);
 
-  const int64_t ctx_id = blk_mgr_->ctx_id_;
+  const int64_t ctx_id = blk_mgr_->get_ctx_id();
   abort_unless(ctx_id == attr.ctx_id_);
   if (OB_UNLIKELY(common::ObCtxIds::LIBEASY == ctx_id)) {
     do_free_dirty_list();
@@ -279,8 +279,8 @@ void ObjectSet::free_normal_object(AObject *obj)
   normal_used_bytes_ -= obj->nobjs_ * AOBJECT_CELL_BYTES;
 
   AObject *newobj = merge_obj(obj);
-  auto ctx_id = blk_mgr_->ctx_id_;
-  auto tenant_id = blk_mgr_->tenant_id_;
+  auto ctx_id = blk_mgr_->get_ctx_id();
+  auto tenant_id = blk_mgr_->get_tenant_id();
   if (newobj->nobjs_ == cells_per_block_) {
     hold_bytes_ -= ablock_size_;
     normal_hold_bytes_ -= ablock_size_;
@@ -376,7 +376,7 @@ void ObjectSet::free_object(AObject *obj)
     memset(obj->data_, 0xAA, obj->alloc_bytes_);
   }
 #endif
-  const int64_t ctx_id = blk_mgr_->ctx_id_;
+  const int64_t ctx_id = blk_mgr_->get_ctx_id();
   ObDisableDiagnoseGuard diagnose_disable_guard;
   if (ctx_id == common::ObCtxIds::LIBEASY) {
     if (locker_->trylock()) {
@@ -560,8 +560,8 @@ bool ObjectSet::build_free_lists()
 {
   abort_unless(NULL == bm_ && NULL == free_lists_);
   ObMemAttr attr;
-  attr.tenant_id_ = blk_mgr_->tenant_id_;
-  attr.ctx_id_ = blk_mgr_->ctx_id_;
+  attr.tenant_id_ = blk_mgr_->get_tenant_id();
+  attr.ctx_id_ = blk_mgr_->get_ctx_id();
   attr.label_ = common::ObModIds::OB_OBJ_FREELISTS;
   ABlock *new_block = alloc_block(sizeof (FreeList) * (cells_per_block_ + 1) +
       sizeof (BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);
