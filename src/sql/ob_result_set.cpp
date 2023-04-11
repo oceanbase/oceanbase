@@ -930,7 +930,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
         // 1) it is a rollback, which will succeed immediately
         // 2) the commit submit/starting failed, in this case
         //    the connection will be released
-        // so the error code should  not override, and return to plan-driver
+        // so the error code should not override, and return to plan-driver
         // to decide whether a packet should be sent to client
         ret = save_ret == OB_SUCCESS ? ret : save_ret;
         async = true;
