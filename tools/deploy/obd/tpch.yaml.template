@@ -9,7 +9,6 @@ oceanbase-ce:
     home_path: ${home_path}
   global:
     production_mode: false
-    devname: lo
     cluster_id: 1
     memory_limit: '80G'
     datafile_disk_percentage: '50'
