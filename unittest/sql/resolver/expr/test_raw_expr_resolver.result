@@ -639,19 +639,19 @@
   ],
   "children": [
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":1,
-          "precision":1,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -659,29 +659,59 @@
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":1
-      }
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        }
+      ]
     },
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":1,
-          "precision":1,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -689,14 +719,44 @@
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":1
-      }
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        }
+      ]
     }
   ]
 }
@@ -729,19 +789,19 @@
   ],
   "children": [
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":3,
-          "precision":3,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -749,29 +809,59 @@
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":100
-      }
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":3,
+              "precision":3,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":100
+          }
+        }
+      ]
     },
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":1,
-          "precision":1,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -779,14 +869,44 @@
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":0
-      }
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":0
+          }
+        }
+      ]
     }
   ]
 }
@@ -821,37 +941,7 @@
   ],
   "children": [
      {
-      "item_type":"T_INT",
-      "result_type": {
-        "meta": {
-          "type":"BIGINT",
-          "collation":"binary",
-          "coercibility":"NUMERIC"
-        },
-        "accuracy": {
-          "length":3,
-          "precision":3,
-          "scale":0
-        },
-        "flag":1,
-        "calc_type": {
-          "type":"NULL",
-          "collation":"invalid_type",
-          "coercibility":"INVALID"
-        }
-      },
-      "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
-      ],
-      "rel_id": [
-      ],
-      "value": {
-        "BIGINT":100
-      }
-    },
-     {
-      "item_type":"T_OP_AND",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -872,41 +962,12 @@
       },
       "expr_info": [
         "IS_CONST_EXPR",
-        "CNT_CONST"
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
       "children": [
-         {
-          "item_type":"T_INT",
-          "result_type": {
-            "meta": {
-              "type":"BIGINT",
-              "collation":"binary",
-              "coercibility":"NUMERIC"
-            },
-            "accuracy": {
-              "length":1,
-              "precision":1,
-              "scale":0
-            },
-            "flag":1,
-            "calc_type": {
-              "type":"NULL",
-              "collation":"invalid_type",
-              "coercibility":"INVALID"
-            }
-          },
-          "expr_info": [
-            "IS_CONST",
-            "CNT_CONST"
-          ],
-          "rel_id": [
-          ],
-          "value": {
-            "BIGINT":0
-          }
-        },
          {
           "item_type":"T_INT",
           "result_type": {
@@ -936,6 +997,155 @@
           "value": {
             "BIGINT":100
           }
+        }
+      ]
+    },
+     {
+      "item_type":"T_OP_AND",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST_EXPR",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "children": [
+         {
+          "item_type":"T_OP_BOOL",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST_EXPR",
+            "CNT_CONST",
+            "IS_INNER_ADDED_EXPR"
+          ],
+          "rel_id": [
+          ],
+          "children": [
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":0
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_BOOL",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST_EXPR",
+            "CNT_CONST",
+            "IS_INNER_ADDED_EXPR"
+          ],
+          "rel_id": [
+          ],
+          "children": [
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":3,
+                  "precision":3,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":100
+              }
+            }
+          ]
         }
       ]
     }
@@ -2414,19 +2624,19 @@
   ],
   "children": [
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":2,
-          "precision":2,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -2434,14 +2644,44 @@
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":10
-      }
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":2,
+              "precision":2,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":10
+          }
+        }
+      ]
     }
   ]
 }
