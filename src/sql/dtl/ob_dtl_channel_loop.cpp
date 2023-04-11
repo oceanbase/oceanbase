@@ -373,12 +373,7 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
       LOG_WARN("unexpect next idx", K(next_idx_), K(chan_cnt), K(ret));
     } else {
       chan = chans_[next_idx_];
-      if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(chan->get_peer(), get_process_query_time()))) {
-        ret = OB_RPC_CONNECT_ERROR;
-        LOG_WARN("peer no in communication, maybe crashed", K(ret), K(chan->get_peer()),
-                  K(static_cast<int64_t>(GCONF.cluster_id)));
-        break;
-      } else if (nullptr == pred || pred->pred_process(next_idx_, chan)) {
+      if (nullptr == pred || pred->pred_process(next_idx_, chan)) {
         if (OB_SUCC(chan->process1(&process_func_, 0, last_row_in_buffer))) {
           nth_channel = next_idx_;
           first_data_get_ = true;
