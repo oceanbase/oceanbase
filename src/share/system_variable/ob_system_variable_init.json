@@ -1135,18 +1135,6 @@
     "background_cn": "",
     "ref_url": "ob/product_functionality_review/pw3wd2"
   },
-  "ob_default_replica_num": {
-    "id": 10000,
-    "name": "ob_default_replica_num",
-    "value": "1",
-    "data_type": "int",
-    "info": "The default replica number of table per zone if not specified when creating table.",
-    "flags": "GLOBAL | SESSION",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
   "default_storage_engine": {
     "id": 93,
     "name": "default_storage_engine",
@@ -1155,6 +1143,18 @@
     "info": "The default storage engine of OceanBase",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
     "publish_version": "400",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_default_replica_num": {
+    "id": 10000,
+    "name": "ob_default_replica_num",
+    "value": "1",
+    "data_type": "int",
+    "info": "The default replica number of table per zone if not specified when creating table.",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""

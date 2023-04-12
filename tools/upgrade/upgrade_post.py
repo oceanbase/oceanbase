@@ -7355,7 +7355,7 @@
 #sys_var_dict["_optimizer_adaptive_cursor_sharing"] = {"id": 10050, "name": "_optimizer_adaptive_cursor_sharing", "value": "0", "data_type": 5, "info": "Enable use of adaptive cursor sharing", "flags": 147}
 #sys_var_dict["ob_timestamp_service"] = {"id": 10051, "name": "ob_timestamp_service", "value": "1", "data_type": 5, "info": "the type of timestamp service", "flags": 129}
 #sys_var_dict["plugin_dir"] = {"id": 10052, "name": "plugin_dir", "value": "./plugin_dir/", "data_type": 22, "info": "the dir to place plugin dll", "flags": 5}
-#sys_var_dict["undo_retention"] = {"id": 10053, "name": "undo_retention", "value": "0", "data_type": 5, "info": "specifies (in seconds) the low threshold value of undo retention.", "flags": 1, "min_val": "0", "max_val": "4294967295"}
+#sys_var_dict["undo_retention"] = {"id": 10053, "name": "undo_retention", "value": "1800", "data_type": 5, "info": "specifies (in seconds) the low threshold value of undo retention.", "flags": 1, "min_val": "0", "max_val": "4294967295"}
 #sys_var_dict["_ob_use_parallel_execution"] = {"id": 10054, "name": "_ob_use_parallel_execution", "value": "1", "data_type": 5, "info": "auto use parallel execution", "flags": 211}
 #sys_var_dict["ob_sql_audit_percentage"] = {"id": 10055, "name": "ob_sql_audit_percentage", "value": "3", "data_type": 5, "info": "The limited percentage of tenant memory for sql audit", "flags": 129, "min_val": "0", "max_val": "100"}
 #sys_var_dict["ob_enable_sql_audit"] = {"id": 10056, "name": "ob_enable_sql_audit", "value": "1", "data_type": 5, "info": "wether use sql audit in session", "flags": 129}

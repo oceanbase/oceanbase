@@ -1573,7 +1573,7 @@ static struct VarsInit{
     ObSysVars[138].info_ = "specifies (in seconds) the low threshold value of undo retention." ;
     ObSysVars[138].name_ = "undo_retention" ;
     ObSysVars[138].data_type_ = ObIntType ;
-    ObSysVars[138].value_ = "0" ;
+    ObSysVars[138].value_ = "1800" ;
     ObSysVars[138].min_val_ = "0" ;
     ObSysVars[138].max_val_ = "4294967295" ;
     ObSysVars[138].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
