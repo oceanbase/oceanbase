@@ -6510,20 +6510,6 @@ int ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_
       case T_OP_NOT_IN:
       case T_OP_EXISTS:
       case T_OP_NOT_EXISTS:
-
-      // all int is 8 byte in datum, so safe for expr to use get_int() for tinyint type
-      case T_TINYINT:
-      case T_SMALLINT:
-      case T_MEDIUMINT:
-      case T_INT32:
-      case T_INT:
-
-      case T_UTINYINT:
-      case T_USMALLINT:
-      case T_UMEDIUMINT:
-      case T_UINT32:
-      case T_UINT64:
-
       case T_OP_XOR:
       case T_OP_BOOL:  {
         need_bool_expr = false;

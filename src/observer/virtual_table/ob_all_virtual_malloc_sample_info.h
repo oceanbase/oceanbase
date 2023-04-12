@@ -45,7 +45,7 @@ private:
     ALLOC_BYTES,
   };
   char ip_buf_[common::OB_IP_STR_BUFF];
-  char bt_[512];
+  char bt_[lib::MAX_BACKTRACE_LENGTH];
   lib::ObMallocSampleMap::const_iterator it_;
   lib::ObMallocSampleMap malloc_sample_map_;
   int64_t col_count_;

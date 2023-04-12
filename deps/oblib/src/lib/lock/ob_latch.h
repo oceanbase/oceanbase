@@ -37,7 +37,6 @@ extern bool USE_CO_LATCH;
   do {                              \
   } while(0)
 
-#ifndef PERF_MODE
 #define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)                             \
   do {                                                                            \
     if (lib::is_diagnose_info_enabled()) {                                        \
@@ -53,11 +52,7 @@ extern bool USE_CO_LATCH;
       }                                                                           \
     }                                                                             \
   } while(0)
-#else
-#define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)
-#endif
 
-#ifndef PERF_MODE
 #define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)                            \
   do {                                                                                     \
     if (lib::is_diagnose_info_enabled()) {                                                 \
@@ -81,9 +76,6 @@ extern bool USE_CO_LATCH;
       }                                                                                    \
     }                                                                                      \
   } while(0)
-#else
-#define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)
-#endif
 
 struct ObLatchWaitMode
 {
@@ -111,13 +103,8 @@ public:
   inline bool is_locked();
   inline uint32_t get_wid();
   int64_t to_string(char* buf, const int64_t buf_len);
-#ifndef PERF_MODE
   void enable_record_stat(bool enable) { record_stat_ = enable; }
   bool need_record_stat() const { return record_stat_; }
-#else
-  void enable_record_stat(bool enable) { UNUSED(enable); }
-  bool need_record_stat() const { return false; }
-#endif
 
 private:
   OB_INLINE uint64_t low_try_lock(const int64_t max_spin_cnt, const uint32_t lock_value);
@@ -128,9 +115,7 @@ private:
   static const uint32_t WAIT_MASK = 1<<31;
   lib::ObFutex lock_;
   //volatile int32_t lock_;
-#ifndef PERF_MODE
   bool record_stat_;
-#endif
 };
 
 class ObLatch;
@@ -239,13 +224,8 @@ public:
   inline bool is_wrlocked_by(const uint32_t *puid = NULL) const;
   inline uint32_t get_wid() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
-#ifndef PERF_MODE
   void enable_record_stat(bool enable) { record_stat_ = enable; }
   bool need_record_stat() const { return record_stat_; }
-#else
-  void enable_record_stat(bool enable) { UNUSED(enable); }
-  bool need_record_stat() const { return false; }
-#endif
   uint32_t val() const { return lock_; }
   static thread_local uint32_t* current_lock;
   static thread_local uint32_t* current_wait;
@@ -280,9 +260,7 @@ private:
   static const uint32_t WAIT_MASK = 1<<31;
   static const uint32_t MAX_READ_LOCK_CNT = 1<<24;
   volatile uint32_t lock_;
-#ifndef PERF_MODE
   bool record_stat_;
-#endif
 };
 
 struct ObLDLockType

@@ -11742,6 +11742,8 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__
 
 
 # [15306, 15375] for oracle inner_table index
+# 15376: __all_virtual_log_restore_source
+
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -25678,6 +25680,8 @@ def_table_schema(
 # 21398: V$OB_KV_CONNECTIONS
 # 21399: GV$OB_LOCKS
 # 21400: V$OB_LOCKS
+# 21401: CDB_OB_LOG_RESTORE_SOURCE
+# 21402: DBA_OB_LOG_RESTORE_SOURCE
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43088,6 +43092,7 @@ def_table_schema(
 # 25230: DBA_WR_SNAPSHOT
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
+# 25233: DBA_OB_LOG_RESTORE_SOURCE
 
 #### End Data Dictionary View
 ################################################################################

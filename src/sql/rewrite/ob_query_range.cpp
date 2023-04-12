@@ -4309,6 +4309,10 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           result = r_cur;
         } else if (r_cur->is_like_key()) {
           result = l_cur;
+        } else if (l_cur->is_in_key()) {
+          result = l_cur;
+        } else if (r_cur->is_in_key()) {
+          result = r_cur;
         } else if (!l_cur->is_normal_key() || !r_cur->is_normal_key()
                    || l_cur->is_always_true() || l_cur->is_always_false()
                    || r_cur->is_always_true() || r_cur->is_always_false()) {

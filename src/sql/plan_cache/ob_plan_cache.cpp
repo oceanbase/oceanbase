@@ -1040,6 +1040,58 @@ int ObPlanCache::cache_evict()
   return ret;
 }
 
+int ObPlanCache::cache_evict_by_glitch_node()
+{
+  int ret = OB_SUCCESS;
+  int64_t cache_evict_num = 0;
+  ObGlobalReqTimeService::check_req_timeinfo();
+  if (get_mem_hold() > get_mem_high()) {
+    LCKeyValueArray co_list;
+    ObKVEntryTraverseOp traverse_op(&co_list, PCV_EXPIRE_BY_MEM_HANDLE);
+    if (OB_FAIL(cache_key_node_map_.foreach_refactored(traverse_op))) {
+      SQL_PC_LOG(WARN, "traversing cache_key_node_map failed", K(ret));
+    } else {
+      int64_t N = co_list.count();
+      int64_t mem_to_free = traverse_op.get_total_mem_used() / 2;
+      SQL_PC_LOG(INFO, "cache evict plan by glitch node start",
+             K_(tenant_id),
+             "mem_hold", get_mem_hold(),
+             "mem_high", get_mem_high(),
+             "mem_to_free", mem_to_free,
+             "cache_obj_num", get_cache_obj_size(),
+             "cache_node_num", cache_key_node_map_.size());
+      LCKeyValueArray to_evict_list;
+      std::pop_heap(co_list.begin(), co_list.end(), [](const LCKeyValue &left, const LCKeyValue &right) {
+        return left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
+      });
+      for (int64_t i = 0; OB_SUCC(ret) && mem_to_free > 0 && i < N; i++) {
+        mem_to_free -= co_list.at(i).node_->get_mem_size();
+        ++cache_evict_num;
+        if (OB_FAIL(to_evict_list.push_back(co_list.at(i)))) {
+          SQL_PC_LOG(WARN, "failed to add to evict obj", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(batch_remove_cache_node(to_evict_list))) {
+        SQL_PC_LOG(WARN, "failed to remove lib cache node", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+        if (nullptr != co_list.at(i).node_) {
+          co_list.at(i).node_->dec_ref_count(PCV_EXPIRE_BY_MEM_HANDLE);
+        }
+      }
+      SQL_PC_LOG(INFO, "cache evict plan by glitch node end",
+             K_(tenant_id),
+             "cache_evict_num", cache_evict_num,
+             "mem_hold", get_mem_hold(),
+             "mem_high", get_mem_high(),
+             "mem_low", get_mem_low(),
+             "cache_obj_num", get_cache_obj_size(),
+             "cache_node_num", cache_key_node_map_.size());
+    }
+  }
+  return ret;
+}
 // int ObPlanCache::load_plan_baseline()
 // {
 //   int ret = OB_SUCCESS;
@@ -1107,8 +1159,8 @@ bool ObPlanCache::calc_evict_num(int64_t &plan_cache_evict_num)
   //然后计算需要淘汰的条数
   if (ret) {
     if (pc_hold > 0) {
-      plan_cache_evict_num = (int64_t)(((double)mem_to_free /
-               (double)pc_hold) * (double)(cache_key_node_map_.size()));
+      double evict_percent = static_cast<double>(mem_to_free) / static_cast<double>(pc_hold);
+      plan_cache_evict_num = static_cast<int64_t>(std::ceil(evict_percent * static_cast<double>(cache_key_node_map_.size())));
     } else {
       plan_cache_evict_num = 0;
     }
@@ -2041,6 +2093,8 @@ void ObPlanCacheEliminationTask::run_plan_cache_task()
   }
   if (OB_FAIL(plan_cache_->cache_evict())) {
     SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
+  }  else if (OB_FAIL(plan_cache_->cache_evict_by_glitch_node())) {
+    SQL_PC_LOG(ERROR, "Plan cache evict by glitch failed, please check", K(ret));
   }
 }
 

@@ -46,9 +46,7 @@ public:
  */
 ObLatchMutex::ObLatchMutex()
   : lock_()
-    #ifndef PERF_MODE
     ,record_stat_(true)
-    #endif
 {
 }
 
@@ -573,9 +571,7 @@ void ObLockDiagnose::print()
 
 ObLatch::ObLatch()
   : lock_(0)
-    #ifndef PERF_MODE
     , record_stat_(true)
-    #endif
 {
 }
 

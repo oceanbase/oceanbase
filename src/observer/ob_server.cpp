@@ -1497,7 +1497,7 @@ int ObServer::init_config()
     LOG_ERROR("some config setting is not valid", KR(ret));
   } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
     LOG_ERROR("reload memory config failed", KR(ret));
-  } else if (OB_FAIL(set_running_mode())) {
+  } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
     LOG_ERROR("set running mode failed", KR(ret));
   } else {
     int32_t local_port = static_cast<int32_t>(config_.rpc_port);
@@ -1624,7 +1624,8 @@ int ObServer::init_pre_setting()
     const int64_t reserved_memory = std::min(config_.cache_wash_threshold.get_value(),
         static_cast<int64_t>(static_cast<double>(limit_memory) * KVCACHE_FACTOR));
     const int64_t reserved_urgent_memory = config_.memory_reserved;
-    if (LEAST_MEMORY_SIZE >= limit_memory) {
+    if (!is_arbitration_mode()
+        && LEAST_MEMORY_SIZE >= limit_memory) {
       ret = OB_INVALID_CONFIG;
       LOG_ERROR("memory limit for oceanbase isn't sufficient",
                 "need", LEAST_MEMORY_SIZE,

@@ -14,6 +14,7 @@
 
 #include "lib/alloc/memory_dump.h"
 #include <setjmp.h>
+#include "lib/alloc/ob_free_log_printer.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/rc/context.h"
 #include "lib/utility/utility.h"
@@ -428,13 +429,7 @@ int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
     ObMallocSampleKey key;
     key.tenant_id_ = tenant_id;
     key.ctx_id_ = ctx_id;
-    void **backtrace = reinterpret_cast<void**>(&object->data_[offset]);
-    int32_t bt_size = 0;
-    while (bt_size < AOBJECT_BACKTRACE_COUNT && nullptr != backtrace[bt_size]) {
-      key.bt_[bt_size] = backtrace[bt_size];
-      ++bt_size;
-    }
-    key.bt_size_ = bt_size;
+    MEMCPY((char*)key.bt_, &object->data_[offset], AOBJECT_BACKTRACE_SIZE);
     STRNCPY(key.label_, object->label_, sizeof(key.label_));
     key.label_[sizeof(key.label_) - 1] = '\0';
     ObMallocSampleValue *item = malloc_sample_map.get(key);
@@ -581,6 +576,7 @@ void ObMemoryDump::handle(void *task)
       ObLatchWGuard guard(iter_lock_, common::ObLatchIds::MEM_DUMP_ITER_LOCK);
       std::swap(r_stat_, w_stat_);
     }
+    ObFreeLogPrinter::get_instance().disable_free_log();
   } else {
     int fd = -1;
     if (-1 == (fd = ::open(LOG_FILE,

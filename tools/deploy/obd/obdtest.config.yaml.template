@@ -15,7 +15,6 @@
     - src_path: {{%% DEPLOY_PATH %%}}/wallet
       target_path: wallet
   global:
-    devname: lo
     production_mode: false
     cluster_id: 1
     memory_limit: '60G'

@@ -1964,8 +1964,8 @@ int select_malloc_sample_info(lua_State *L)
       gen.next_column(it->first.label_);
       // back_trace
       {
-        char bt[512];
-        parray(bt, sizeof(bt), (int64_t*)*&(it->first.bt_), it->first.bt_size_);
+        char bt[MAX_BACKTRACE_LENGTH];
+        IGNORE_RETURN parray(bt, sizeof(bt), (int64_t*)it->first.bt_, AOBJECT_BACKTRACE_COUNT);
         gen.next_column(bt);
       }
       // ctx_name
