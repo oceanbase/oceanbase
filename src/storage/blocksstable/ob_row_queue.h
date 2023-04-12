@@ -21,9 +21,9 @@ namespace blocksstable {
 
 class ObRowQueue {
 public:
-  ObRowQueue() : cell_cnt_(0), cur_pos_(0), row_type_(MAX_ROW_STORE), is_inited_(false)
+  ObRowQueue() : col_cnt_(0), cur_pos_(0), row_type_(MAX_ROW_STORE), is_inited_(false)
   {}
-  int init(const ObRowStoreType row_type, const int64_t cell_cnt);
+  int init(const ObRowStoreType row_type, const int64_t col_cnt);
   int add_empty_row(common::ObIAllocator& allocator);
   int add_row(const storage::ObStoreRow& row, common::ObIAllocator& allocator);
   int get_next_row(const storage::ObStoreRow*& row);
@@ -57,7 +57,7 @@ public:
   }
   void reset()
   {
-    cell_cnt_ = 0;
+    col_cnt_ = 0;
     cur_pos_ = 0;
     row_type_ = MAX_ROW_STORE;
     rows_.reset();
@@ -69,14 +69,14 @@ public:
     cur_pos_ = 0;
     rows_.reuse();
   }
-  TO_STRING_KV(K_(cell_cnt), K_(cur_pos), "count", rows_.count(), K_(row_type));
+  TO_STRING_KV(K_(col_cnt), K_(cur_pos), "count", rows_.count(), K_(row_type));
 
 private:
   int alloc_row(storage::ObStoreRow*& row, common::ObIAllocator& allocator);
 
 private:
   static const int64_t DEFAULT_MULTIVERSION_ROW_COUNT = 64;
-  int64_t cell_cnt_;
+  int64_t col_cnt_;
   int64_t cur_pos_;
   common::ObRawSEArray<storage::ObStoreRow*, DEFAULT_MULTIVERSION_ROW_COUNT> rows_;
   ObRowStoreType row_type_;

@@ -1170,7 +1170,10 @@ bool ObMacroRowIterator::is_trans_state_table_valid() const
 
 /*************************ObMinorMergeMacroRowIterator************************************/
 ObMinorMergeMacroRowIterator::ObMinorMergeMacroRowIterator()
-    : obj_copy_(obj_copy_allocator_), row_queue_(), check_first_row_compacted_(true)
+  : obj_copy_allocator_("MergeRowQueue"),
+    obj_copy_(obj_copy_allocator_),
+    row_queue_(),
+    check_first_row_compacted_(true)
 
 {
   for (int i = 0; i < RNPI_MAX; ++i) {
@@ -1181,8 +1184,6 @@ ObMinorMergeMacroRowIterator::ObMinorMergeMacroRowIterator()
 
 ObMinorMergeMacroRowIterator::~ObMinorMergeMacroRowIterator()
 {
-  row_queue_.reset();
-  obj_copy_allocator_.reuse();
   reset();
 }
 

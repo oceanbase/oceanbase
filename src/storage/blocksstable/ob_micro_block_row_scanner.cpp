@@ -1297,7 +1297,7 @@ ObMultiVersionMicroBlockMinorMergeRowScanner::ObMultiVersionMicroBlockMinorMerge
     : trans_version_col_idx_(ObIMicroBlockReader::INVALID_ROW_INDEX),
       sql_sequence_col_store_idx_(ObIMicroBlockReader::INVALID_ROW_INDEX),
       sql_sequence_col_idx_(ObIMicroBlockReader::INVALID_ROW_INDEX),
-      row_allocator_(common::ObModIds::OB_SSTABLE_READER),
+      row_allocator_("MergeRowQueue"),
       allocator_(common::ObModIds::OB_SSTABLE_READER),
       row_queue_(),
       obj_copy_(row_allocator_),
@@ -1532,9 +1532,9 @@ void ObMultiVersionMicroBlockMinorMergeRowScanner::reset()
 {
   trans_version_col_idx_ = ObIMicroBlockReader::INVALID_ROW_INDEX;
   sql_sequence_col_idx_ = ObIMicroBlockReader::INVALID_ROW_INDEX;
-  row_allocator_.reset();  // clear row memory
-  allocator_.reset();
   row_queue_.reset();
+  allocator_.reset();
+  row_allocator_.reset(); // clear row memory
   if (FLAT_ROW_STORE == context_->read_out_type_) {
     for (int i = 0; i < RNPI_MAX; ++i) {
       if (OB_NOT_NULL(nop_pos_[i])) {

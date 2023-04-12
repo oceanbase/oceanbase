@@ -20,18 +20,17 @@ using namespace storage;
 
 namespace blocksstable {
 
-int ObRowQueue::init(const ObRowStoreType row_type, const int64_t cell_cnt)
+int ObRowQueue::init(const ObRowStoreType row_type, const int64_t col_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
-  } else if (OB_UNLIKELY(0 >= cell_cnt) || OB_UNLIKELY(row_type >= MAX_ROW_STORE) ||
-             (SPARSE_ROW_STORE == row_type_ && !GCONF._enable_sparse_row)) {
+  } else if (OB_UNLIKELY(0 >= col_cnt || col_cnt >= OB_ROW_MAX_COLUMNS_COUNT || row_type != FLAT_ROW_STORE)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(cell_cnt), K(row_type));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(col_cnt), K(row_type));
   } else {
-    cell_cnt_ = cell_cnt;
+    col_cnt_ = col_cnt;
     cur_pos_ = 0;
     row_type_ = row_type;
     is_inited_ = true;
@@ -53,7 +52,7 @@ int ObRowQueue::add_empty_row(ObIAllocator& allocator)
     STORAGE_LOG(WARN, "row is NULL", K(ret));
   } else {
     row->row_val_.count_ = 0;
-    row->capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
+    row->capacity_ = col_cnt_;
     row->flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
     row->from_base_ = false;
     row->row_type_flag_.reset();
@@ -100,43 +99,27 @@ int ObRowQueue::get_next_row(const ObStoreRow*& row)
   return ret;
 }
 
-int ObRowQueue::alloc_row(ObStoreRow*& row, ObIAllocator& allocator)
+int ObRowQueue::alloc_row(ObStoreRow *&row, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else {
-    void* buf = NULL;
-    int64_t malloc_column_count = OB_ROW_MAX_COLUMNS_COUNT;
-    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObStoreRow)))) {
+    char *buf = nullptr;
+    if (OB_ISNULL(buf =
+          reinterpret_cast<char *>(allocator.alloc(sizeof(ObStoreRow) + sizeof(ObObj) * col_cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc store row", K(ret));
     } else {
       row = new (buf) ObStoreRow;
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * malloc_column_count))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc cells", K(ret));
-      } else {  // alloc cell array
-        MEMSET(buf, 0, sizeof(ObObj) * malloc_column_count);
-        row->row_val_.cells_ = new (buf) ObObj[malloc_column_count];
-      }
+      row->row_val_.cells_ = new (buf + sizeof(ObStoreRow)) ObObj[col_cnt_];
       // alloc column id array
-      if (OB_SUCC(ret) && SPARSE_ROW_STORE == row_type_) {
-        if (OB_ISNULL(buf = allocator.alloc(sizeof(uint16_t) * malloc_column_count))) {
-          ret = common::OB_ALLOCATE_MEMORY_FAILED;
-          STORAGE_LOG(WARN, "alloc column ids failed", K(ret), K(malloc_column_count));
-        } else {
-          row->column_ids_ = (uint16_t*)buf;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        row->is_sparse_row_ = (SPARSE_ROW_STORE == row_type_);
-        row->row_val_.count_ = malloc_column_count;
-        row->capacity_ = malloc_column_count;
-        row->row_val_.projector_ = NULL;
-        row->row_val_.projector_size_ = 0;
-      }
+      row->is_sparse_row_ = false;
+      row->row_val_.count_ = col_cnt_;
+      row->capacity_ = col_cnt_;
+      row->row_val_.projector_ = NULL;
+      row->row_val_.projector_size_ = 0;
     }
   }
   return ret;
