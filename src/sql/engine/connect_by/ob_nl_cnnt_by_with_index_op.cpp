@@ -267,6 +267,10 @@ int ObNLConnectByWithIndexOp::calc_connect_by_root_exprs(bool is_root)
         }
       }
       if (OB_SUCC(ret)) {
+        if (OB_NOT_NULL(connect_by_root_row_)) {
+          mem_context_->get_malloc_allocator().free(connect_by_root_row_);
+          connect_by_root_row_ = NULL;
+        }
         if (OB_FAIL(ObStoredDatumRow::build(
                 connect_by_root_row_, spec.connect_by_root_exprs_, eval_ctx_, mem_context_->get_malloc_allocator()))) {
           LOG_WARN("failed to build store row", K(ret));
