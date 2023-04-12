@@ -123,7 +123,6 @@ int ObExprExtract::calc(T& result, const int64_t date_unit, const T& date, ObObj
   if (date.is_null()) {
     result.set_null();
   } else {
-    int ret = OB_SUCCESS;
     int warning = OB_SUCCESS;
     int& cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
 
@@ -204,8 +203,6 @@ int ObExprExtract::calc_oracle(T& result, const int64_t date_unit, const T& date
 
     // 1. check the extraction field is valid
     switch (type) {
-      // see oracle doc EXTRACT (datetime) :
-      // https://docs.oracle.com/cd/B28359_01/server.111/b28286/functions052.htm#SQLRF00639
       case ObDateTimeType:
         valid_expr = !extract_timezone_field && !extract_time_field;
         break;
