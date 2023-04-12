@@ -4759,7 +4759,9 @@ int ObPartitionStorage::check_is_schema_changed(const int64_t column_checksum_me
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "wrong column iterator", K(ret));
     } else if (NULL != (base_column = base_table_schema.get_column_schema((*iter)->get_column_id()))) {
-      if (CCM_VALUE_ONLY == column_checksum_method && ob_is_integer_type((*iter)->get_meta_type().get_type()) &&
+      if ((*iter)->is_virtual_generated_column()) {
+        // skip checking virtual generated column
+      } else if (CCM_VALUE_ONLY == column_checksum_method && ob_is_integer_type((*iter)->get_meta_type().get_type()) &&
           ob_is_integer_type(base_column->get_meta_type().get_type())) {
         is_column_changed = (*iter)->get_meta_type().get_type() < base_column->get_meta_type().get_type();
       } else if (CCM_VALUE_ONLY == column_checksum_method && ob_is_string_type((*iter)->get_meta_type().get_type()) &&
