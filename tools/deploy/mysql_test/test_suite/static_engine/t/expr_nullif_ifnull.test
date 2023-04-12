@@ -159,8 +159,6 @@ drop table t1;
 --sleep 2
 
 
-
---echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37798920
 create table t1 (pk double) PARTITION BY key (pk) partitions 1;
 insert into t1 values( NULLIF( 100.2345, 1 ));
 select * from t1;

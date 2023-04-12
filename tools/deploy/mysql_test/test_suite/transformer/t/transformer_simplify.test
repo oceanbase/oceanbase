@@ -2159,7 +2159,6 @@ drop table if exists t1;
 drop table if exists t2;
 --enable_warnings
 
-## bug: https://work.aone.alibaba-inc.com/issue/39934374
 --disable_warnings
 --explain_protocol 0
 drop table if exists t1;
@@ -2172,7 +2171,6 @@ select /*+no_rewrie*/(SELECT SUM(c1)  FROM t1 GROUP BY c1 WITH ROLLUP) from dual
 --explain_protocol 0
 drop table if exists t1;
 
-#Bugfix: https://work.aone.alibaba-inc.com/issue/47667866
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

@@ -388,7 +388,6 @@ int ObAutoincrementService::get_handle(AutoincParam& param, CacheHandle*& handle
         } else {
           if (OB_FAIL(table_node->rpc_mutex_.trylock())) {
             if (OB_EAGAIN == ret) {
-              // 已经有人在做预取，当前线程放弃预取
               ret = OB_SUCCESS;
             } else {
               LOG_ERROR("rpc mutext try lock failed", K(ret));
@@ -665,18 +664,6 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
         LOG_ERROR("failed to set", K(param), K(ret));
       } else {
         table_node->prefetch_node_.reset();
-        // 注意场景：如果主切到其它节点后没有被访问过，又切回来，
-        // reset 掉 curr_node 不是最优的选择
-        // table_node->curr_node_.reset();
-        //
-        // UPDATE: 3.1, 2021-06-24:
-        // 给客户解释这个跳变还是很困难，尝试修复问题，不跳
-        // 理论上，这种场景下 curr_node 还可以继续使用。
-        // curr_node_state_is_pending_ 通过这个变量尝试继续使用curr_node
-        // https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0#floor-3
-        // 有了这个修复后，下面两种情况都不会跳变：
-        //  - 一个分区来回切主，只要本地 cache 是系统中值最大的 cach，则不会跳变
-        //  - 新分区到来，只要本地 cache 是系统中值最大的 cache，则不会跳变
         table_node->curr_node_state_is_pending_ = true;
       }
     }
@@ -1035,12 +1022,6 @@ int ObAutoincrementService::get_server_set(
   return ret;
 }
 
-/* 本函数核心做几件事：
- * 1. 将 value_to_sync 写入内部表
- *   - value_to_sync 比当前 table node 里记录的 sync 值大，才会执行写入
- * 2. 通知 table 所在的所有 server 有更新
- * 3. 本地处理更新 table node
- */
 int ObAutoincrementService::sync_insert_value(
     AutoincParam& param, CacheHandle*& cache_handle, const uint64_t value_to_sync)
 {
@@ -1129,8 +1110,6 @@ int ObAutoincrementService::sync_insert_value(
           } else {
             // if insert_value > global_sync
             // 1. mock a insert value large enough
-            // (因为本地已经消耗了这个cache里的部分值，其余server
-            // 肯定不需要关心本地已经cache过的这段值，所以插入到内部表之前做了一个推高)
             // 2. update __all_sequence(may get global_sync)
             // 3. sync to other server
             // 4. adjust cache_handle(prefetch) and table node
@@ -1310,11 +1289,6 @@ int ObAutoincrementService::sync_insert_value(
         }
         if (OB_SUCC(ret)) {
 
-          // 决策要点：当 insert_value 比当前 cache 的值大，则一定需要取新缓存
-          // 此时面临一个问题：如果其他线程正在取缓存，我们这边还要不要取？
-          //  - 如果不取，万一存在另一方取了一个很小的 table node 呢？
-          // 最终决策，这边一定要取 table node。
-          // 决策原因：sync insert value 的场景并不多，效率可接受
           if (OB_FAIL(table_node->rpc_mutex_.lock())) {
             LOG_WARN("fail get rpc mutex lock", K(*table_node), K(ret));
           } else {

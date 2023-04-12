@@ -178,7 +178,6 @@ private:
 private:
   // we need define schema_guard_ together with part_shuffle_keys_,
   // because part_shuffle_keys_ may refer to the memory of schema_guard_.
-  // see https://work.aone.alibaba-inc.com/issue/33570337
   share::schema::ObSchemaGetterGuard schema_guard_;
   // table informations.
   common::ObSEArray<ObPhyTableLoc, 8> table_locations_;

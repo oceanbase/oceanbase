@@ -19913,7 +19913,6 @@ select nvl(null, c22) from t1;
 
 explain_protocol: 0
 set timestamp = 1600000000;
-##bugfix: https://work.aone.alibaba-inc.com/issue/37931049
 select ifnull(null, utc_time(4));
 +---------------------------+
 | ifnull(null, utc_time(4)) |

@@ -399,7 +399,6 @@ select * from t1 where name regexp '(A[1])|(A[2])|(A[3])|(A[4])|(A[5])|(A[6])|(A
 select * from t1 where name regexp 'CC[13]1|a{21}[23][EO][123][Es][12]a{15}aa[34][EW]aaaaaaa[X]a';
 select * from t1 where name regexp 'a?b';
 
-##bug:https://aone.alibaba-inc.com/req/34761589
 select * from t1 where name regexp 'a' "bc" '|de';
 select * from t1 where name regexp "a" '|' "b" '|' "c";
 select * from t1 where name regexp "a"'()'"b";
@@ -443,7 +442,6 @@ create table t (c1 char(20));
 insert into t values ('');
 select c1 regexp 'ddd' from t;
 
-##bug:https://work.aone.alibaba-inc.com/issue/43976234
 
 --disable_warnings
 drop table if exists t1, t2;

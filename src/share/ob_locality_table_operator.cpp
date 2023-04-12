@@ -364,7 +364,6 @@ int ObLocalityTableOperator::load_region(const ObAddr& addr, const bool& is_self
                 region_priority = UINT64_MAX;
                 if (ObPrimaryZoneUtil::no_need_to_check_primary_zone(tenant_schema->get_primary_zone()) ||
                     !is_self_cluster) {
-                  // fix bug: https://work.aone.alibaba-inc.com/issue/34933159
                   region_priority = 0;
                   // FIXME: do not process the semantics of leader balance of primary_zone
                   LOG_INFO("tenant_schema primary_zone is NULL, or no need calc region priority",

@@ -7573,7 +7573,6 @@ select nullif(z0_test0,'中文字符') from t1;
 +---------------------------------+
 drop table t1;
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37798920
 create table t1 (pk double) PARTITION BY key (pk) partitions 1;
 insert into t1 values( NULLIF( 100.2345, 1 ));
 select * from t1;

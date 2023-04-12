@@ -83,7 +83,6 @@ select regexp_replace('abcadef', 'a. ', 'X', 1, 2, NULL) from dual;
 select regexp_replace(12341834, 1.3, 99, '1', '2') from dual;
 select regexp_replace('我是好人', '是.', '.....') from dual;
 
-#Bugfix: https://work.aone.alibaba-inc.com/issue/47307978
 select regexp_substr('data
          first:one
          second:two', '^(.+:.+)$',1,2,'m') as extracted_value

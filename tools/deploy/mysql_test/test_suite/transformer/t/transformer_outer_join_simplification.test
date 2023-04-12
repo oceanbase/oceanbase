@@ -3248,7 +3248,6 @@ rollback;
 
 set autocommit=1;
 
-# bug: https://work.aone.alibaba-inc.com/issue/21423384
 --disable_warnings
 drop table if exists t1, t2, t3, t4, t5, t6;
 drop table t1_temp, t2_temp, t3_temp, t4_temp, t5_temp, t6_temp, t7_temp, t8_temp, t9_temp, t10_temp, t11_temp, t12_temp, t13_temp, t14_temp, t15_temp;
@@ -3286,7 +3285,6 @@ set autocommit=0;
 select * from t1 right join t2 on t1.c1 = t2.c1 join t3 on t2.c1 = t3.c1;
 select /*+NO_REWRITE*/ * from t1 right join t2 on t1.c1 = t2.c1 join t3 on t2.c1 = t3.c1;
 
-# bug: https://work.aone.alibaba-inc.com/issue/21426141
 ## t1 is the right table for outer join,
 ## subquery unnest will add a invalid-null-reject condition: t3.c2 = t1.c2
 select * from t2 left join t1 on t1.c1 = t2.c1 where not exists (select 1 from t3 where t3.c2 = t1.c2);

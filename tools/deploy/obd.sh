@@ -581,7 +581,6 @@ Options:
 --cp                                     Exec copy.sh.
 --reboot                                 Redeploy cluster before mysqltest
 
-https://yuque.antfin-inc.com/docs/share/7f5dc9e8-dbe8-4f59-852d-b7ce57b88fdd
 """
 }
 

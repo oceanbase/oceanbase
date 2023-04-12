@@ -141,7 +141,6 @@ struct TableNode : public common::LinkHashValue<AutoincKey> {
   // we are not sure if curr_node is avaliable.
   // it will become avaliable again after fetch a new node
   // and combine them together.
-  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0
   bool curr_node_state_is_pending_;
 };
 

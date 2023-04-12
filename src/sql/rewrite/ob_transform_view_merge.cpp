@@ -348,7 +348,6 @@ int ObTransformViewMerge::check_can_be_unnested(
         can_be = false;
       }
     }
-    // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
     if (OB_SUCC(ret) && can_be) {
       bool has_rand = false;
       if (OB_FAIL(child_stmt->has_rand(has_rand))) {

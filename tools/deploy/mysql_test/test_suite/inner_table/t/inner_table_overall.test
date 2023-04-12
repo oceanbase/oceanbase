@@ -620,7 +620,6 @@ select * from  oceanbase.__all_virtual_tenant_disk_stat limit 1;
 select * from  oceanbase.__all_virtual_tenant_memstore_allocator_info limit 1;
 select * from  oceanbase.__all_virtual_tenant_memstore_info limit 1;
 select * from  oceanbase.__all_virtual_tenant_stat limit 1;
-#bug: https://work.aone.alibaba-inc.com/issue/27146409
 #select * from  oceanbase.__all_virtual_trace_log limit 1;
 select * from  oceanbase.__all_virtual_trans_audit limit 1;
 select * from  oceanbase.__all_virtual_trans_lock_stat limit 1;

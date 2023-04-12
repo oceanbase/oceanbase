@@ -8,7 +8,6 @@ drop database if exists cte_st;
 create database cte_st;
 use cte_st;
 
---echo ## bugfix: https://work.aone.alibaba-inc.com/issue/37502128
 --result_format 4
 --error 1146
 with cte1(c1, c2) as
@@ -31,7 +30,6 @@ WITH my_cte AS (SELECT 1+n FROM my_cte WHERE n<10 UNION ALL SELECT 1 AS n) SELEC
 
 
 
---echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37501730
 create table t1(deptno number, loc varchar(100));
 CREATE TABLE t2(EMPNO DECIMAL(4) UNIQUE,ENAME VARCHAR(10) NOT NULL,JOB VARCHAR(9),MGR DECIMAL(4),HIREDATE DATE,SAL DECIMAL(7,2),COMM DECIMAL(7,2),DEPTNO INT);
 --error 1066
@@ -41,7 +39,6 @@ temp AS (SELECT p.deptno,p.job FROM t2 p WHERE p.job NOT IN ('CLERK','ANALYST') 
 SELECT e.deptno,e.loc,p.job FROM temp e,temp p WHERE e.deptno = p.deptno ORDER BY 1,2,3;
 
 
---echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37715234
 CREATE TABLE employees (
   id         INT PRIMARY KEY NOT NULL,
   name       VARCHAR(100) NOT NULL,
@@ -56,7 +53,7 @@ INSERT INTO employees VALUES(4610, 'Sarah', 29);
 INSERT INTO employees VALUES(72, 'Pierre', 29);
 INSERT INTO employees VALUES(123, 'Adil', 692);
 
-## result not correct. https://aone.alibaba-inc.com/task/35657687
+## result not correct
 WITH RECURSIVE employee_paths (id, name, path) AS
 (
   SELECT id, name, 1
@@ -83,7 +80,7 @@ WITH RECURSIVE employee_paths (id, name, path) AS
 SELECT * FROM employee_paths ORDER BY name;
 
 
---echo ##bugfix: https://work.aone.alibaba-inc.com/issue/42792696
+--echo
 
 create table t1_from_cte as (with recursive cte as (select 1 as c union all select c+1 from cte where c < 3) select * from cte);
 create table t2_from_cte as (with recursive cte(c) as (select 1 union all select c+1 from cte where c < 3) select * from cte);

@@ -10,7 +10,6 @@
  * test_hfilter_parser.cpp
  *
  * Authors:
- *   Zhifeng YANG <zhuweng.yzf@alipay.com>
  *
  */
 #include "observer/table/ob_htable_filter_parser.h"
