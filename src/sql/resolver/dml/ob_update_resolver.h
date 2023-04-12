@@ -57,11 +57,6 @@ private:
 
   int check_view_updatable();
 
-  // following two funcs are for forigien key self reference(engine 3.0)
-  // e.g.: update t1 set col = const_val;
-  //       will add remove_const above const_val when col is parent column of a foreign key.
-  //       see ObTableModifyOp::do_handle()
-  int try_add_remove_const_expr(IndexDMLInfo& index_info);
   bool is_parent_col_self_ref_fk(
       uint64_t parent_col_id, const common::ObIArray<share::schema::ObForeignKeyInfo>& fk_infos);
   int try_add_rowid_column_to_stmt(const ObTableAssignment& tas);

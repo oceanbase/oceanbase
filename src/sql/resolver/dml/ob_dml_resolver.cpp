@@ -4890,6 +4890,55 @@ int ObDMLResolver::resolve_assignments(const ParseNode& parse_node, ObTablesAssi
   return ret;
 }
 
+/*
+ * When the "dml ignore" statement writes NULL to a column with not null constraint,
+ * it implicitly changes the NULL to the built-in default value in the database.
+ * Therefore, during execution,
+ * the memory corresponding to the new row expr being modified is changed.
+ * However, the constant expr's frame cannot be modified,
+ * as doing so may cause some memory issues.
+ * Add the remove_const expr to all assignment in the update assignment
+ * to ensure that the corresponding frame of the update assignment is allowed to be modified.
+ * */
+int ObDMLResolver::try_add_remove_const_expr(ObTablesAssignments &assigns)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(session_info_) && OB_NOT_NULL(schema_checker_));
+  if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
+    for (int i = 0; OB_SUCC(ret) && i < assigns.count(); ++i) {
+      ObAssignments &assignments = assigns.at(i).assignments_;
+      const ObTableSchema *table_schema = NULL;
+      uint64_t ref_table_id = assignments.at(0).base_table_id_;
+      if (OB_FAIL(schema_checker_->get_table_schema(ref_table_id, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is not exist", K(ret), K(ref_table_id));
+      } else if (table_schema->is_user_table()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < assignments.count(); ++j) {
+          ObAssignment &assign = assignments.at(j);
+          if (OB_ISNULL(assign.expr_) || OB_ISNULL(assign.column_expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("assign expr is invalid", K(ret), K(assign.expr_), K(assign.column_expr_));
+          } else if (assign.expr_->has_const_or_const_expr_flag()) {
+            ObRawExpr *new_expr = NULL;
+            if (OB_ISNULL(params_.expr_factory_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr factory is null", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
+                           *params_.expr_factory_, *session_info_, assign.expr_, new_expr))) {
+              LOG_WARN("build remove const expr failed", K(ret));
+            } else {
+              assign.expr_ = new_expr;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // Check the pad flag on generated_column is consistent with the sql_mode on session.
 // For the upgraded cluster, the flag is not set, so only returns error if the dependent column
 // is char type and the generated column is stored or used by an index

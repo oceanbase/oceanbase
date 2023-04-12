@@ -234,6 +234,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
     if (OB_FAIL(update_stmt->refill_global_index_dml_info(
             *params_.expr_factory_, session_info_->use_static_typing_engine()))) {
       LOG_WARN("init index assignment info failed", K(ret));
+    } else if (OB_FAIL(try_add_remove_const_expr(update_stmt->get_tables_assignments()))) {
+      LOG_WARN("try add remove const expr failed", K(ret));
     }
   }
 
@@ -242,10 +244,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
     for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns.count(); ++i) {
       ObIArray<IndexDMLInfo>& index_infos = all_table_columns.at(i).index_dml_infos_;
       for (int64_t j = 0; OB_SUCC(ret) && j < index_infos.count(); ++j) {
-        IndexDMLInfo& index_info = index_infos.at(j);
-        if (OB_FAIL(try_add_remove_const_expr(index_info))) {
-          LOG_WARN("add value expr failed", K(ret));
-        } else if (OB_FAIL(add_rowkey_ids(index_info.index_tid_, index_info.primary_key_ids_))) {
+        IndexDMLInfo &index_info = index_infos.at(j);
+        if (OB_FAIL(add_rowkey_ids(index_info.index_tid_, index_info.primary_key_ids_))) {
           LOG_WARN("fail init index key ids", K(ret));
         } else if (OB_FAIL(get_part_key_ids(index_info.index_tid_, index_info.part_key_ids_))) {
           LOG_WARN("fail init part key ids", K(ret));
@@ -270,34 +270,6 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
     }
   }
 
-  return ret;
-}
-
-int ObUpdateResolver::try_add_remove_const_expr(IndexDMLInfo& index_info)
-{
-  int ret = OB_SUCCESS;
-  CK(OB_NOT_NULL(session_info_) && OB_NOT_NULL(schema_checker_));
-  if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
-    const ObTableSchema* table_schema = NULL;
-    OZ(schema_checker_->get_table_schema(index_info.index_tid_, table_schema));
-    CK(OB_NOT_NULL(table_schema));
-    if (OB_SUCC(ret) && table_schema->is_user_table()) {
-      const ObIArray<ObForeignKeyInfo>& fk_infos = table_schema->get_foreign_key_infos();
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_info.assignments_.count(); ++i) {
-        ObAssignment& assign = index_info.assignments_.at(i);
-        CK(OB_NOT_NULL(assign.expr_) && OB_NOT_NULL(assign.column_expr_));
-        if (OB_FAIL(ret)) {
-        } else if (assign.expr_->has_const_or_const_expr_flag() &&
-                   is_parent_col_self_ref_fk(assign.column_expr_->get_column_id(), fk_infos)) {
-          ObRawExpr* new_expr = NULL;
-          CK(OB_NOT_NULL(params_.expr_factory_));
-          OZ(ObRawExprUtils::build_remove_const_expr(*params_.expr_factory_, *session_info_, assign.expr_, new_expr));
-          CK(OB_NOT_NULL(new_expr));
-          OX(assign.expr_ = new_expr);
-        }
-      }
-    }
-  }
   return ret;
 }
 

@@ -246,7 +246,8 @@ protected:
       const int64_t part_num, const int64_t subpart_num, int64_t& partition_id);
   int check_basic_column_generated(const ObColumnRefRawExpr* col_expr, ObDMLStmt* dml_stmt, bool& is_generated);
   // used by both UpdateResolver and InsertResolver
-  int resolve_assignments(const ParseNode& parse_node, ObTablesAssignments& assigns, ObStmtScope scope);
+  int resolve_assignments(const ParseNode &parse_node, ObTablesAssignments &assigns, ObStmtScope scope);
+  int try_add_remove_const_expr(ObTablesAssignments &assigns);
 
   int resolve_additional_assignments(ObTablesAssignments& assigns, const ObStmtScope scope);
   // used for partition by key(), which use to build the sql expression info

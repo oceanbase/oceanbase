@@ -113,6 +113,12 @@ int ObInsertResolver::resolve(const ParseNode& parse_tree)
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(try_add_remove_const_expr(insert_stmt->get_table_assignments()))) {
+      LOG_WARN("try add remove const expr failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_stmt->formalize_stmt(session_info_))) {
       LOG_WARN("pull stmt all expr relation ids failed", K(ret));
     }
