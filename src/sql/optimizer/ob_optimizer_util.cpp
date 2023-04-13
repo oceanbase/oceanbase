@@ -8096,6 +8096,7 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
   double avg_len = 0;
   bool has_hint = false;
   can_sort_opt = true;
+  bool old_can_opt = false;
   const ObOptParamHint opt_params = plan.get_optimizer_context().get_global_hint().opt_params_;
   if (OB_FAIL(opt_params.has_opt_param(ObOptParamHint::ENABLE_NEWSORT, has_hint))) {
     LOG_WARN("failed to check whether has hint param", K(ret));
@@ -8115,7 +8116,9 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
         LOG_WARN("failed to add sort key expr", K(ret));
       } else { /* do nothing */ }
     }
+    old_can_opt = can_sort_opt;
 
+    // add width / row size policy, EN_ENABLE_NEWSORT_FORCE tracepoint will skip it
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (!can_sort_opt) {
@@ -8138,7 +8141,7 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
     int tmp_ret = OB_SUCCESS;
     tmp_ret = OB_E(EventTable::EN_ENABLE_NEWSORT_FORCE) OB_SUCCESS;
     if (OB_SUCCESS != tmp_ret) {
-      can_sort_opt = true;
+      can_sort_opt = old_can_opt;
     }
   }
   return ret;
