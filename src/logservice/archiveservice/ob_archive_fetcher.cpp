@@ -433,12 +433,17 @@ int ObArchiveFetcher::get_max_lsn_scn_(const ObLSID &id, palf::LSN &lsn, SCN &sc
   return ret;
 }
 
-// 消费LogFetchTask任务条件必须满足条件:
-// 1. 日志量足够压缩
-// 2. 该日志流归档任务有效(leader/backup_zone)
-// 以及以上条件其中一条:
-// 3. 日志流delay超过一定阈值
-// 4. 可以塞满任务
+// Archive Memory usage limit function is reached mainly in this function,
+// so the basic rule to check if need delay based on the send_task count and send_task_status count.
+//  1) send_task count means total task count for single ls;
+//  2) send_task_status means total ls count. For archive, a ls leader gone and backed,
+//     it has different archive context and different send_task_status.
+//
+// If any one reach the upper limit, just need delay.
+//
+// The archive progress lag is smaller than target, just need delay.
+//
+// The buffer to archive is not enough and not reach the block end, just need delay.
 int ObArchiveFetcher::check_need_delay_(const ObLSID &id,
     const ArchiveWorkStation &station,
     const LSN &cur_lsn,
@@ -457,33 +462,37 @@ int ObArchiveFetcher::check_need_delay_(const ObLSID &id,
   int64_t ls_archive_task_count = 0;
   int64_t send_task_status_count = 0;
 
-  if (FALSE_IT(check_capacity_enough_(commit_lsn, cur_lsn, end_lsn, data_enough, data_full))) {
-  } else if (data_full) {
-    // data is full, do archive
-  } else if (! data_enough) {
-    // data not enough to fill unit, just wait
-    need_delay = true;
-    ARCHIVE_LOG(TRACE, "data not enough, need delay", K(id), K(station), K(commit_lsn),
-        K(cur_lsn), K(end_lsn), K(data_enough));
-  } else {
-    GET_LS_TASK_CTX(ls_mgr_, id) {
-      if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_scn))) {
-        ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(id), K(station));
-      } else if (OB_FAIL(ls_archive_task->get_send_task_count(station, send_task_count))) {
-        ARCHIVE_LOG(WARN, "get send task count failed", K(ret), K(id), K(station));
-      } else if (true == (need_delay = (send_task_count >= MAX_LS_SEND_TASK_COUNT_LIMIT))) {
-        ARCHIVE_LOG(TRACE, "send_task_count exceed threshold, need delay",
-            K(id), K(station), K(send_task_count));
-      } else if (true == (need_delay = ! check_scn_enough_(fetch_scn, commit_scn))) {
-        ARCHIVE_LOG(TRACE, "scn not enough, need delay", K(id),
-            K(station), K(fetch_scn), K(commit_scn));
+  GET_LS_TASK_CTX(ls_mgr_, id) {
+    if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_scn))) {
+      ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(id), K(station));
+    } else if (OB_FAIL(ls_archive_task->get_send_task_count(station, send_task_count))) {
+      ARCHIVE_LOG(WARN, "get send task count failed", K(ret), K(id), K(station));
+    } else if (send_task_count >= MAX_LS_SEND_TASK_COUNT_LIMIT) {
+      need_delay = true;
+      ARCHIVE_LOG(TRACE, "send_task_count exceed threshold, need delay",
+          K(id), K(station), K(send_task_count));
+    } else if (! check_scn_enough_(fetch_scn, commit_scn)) {
+      need_delay = true;
+      ARCHIVE_LOG(TRACE, "scn not enough, need delay", K(id),
+          K(station), K(fetch_scn), K(commit_scn));
+    } else {
+      ls_archive_task_count = ls_mgr_->get_ls_task_count();
+      send_task_status_count = archive_sender_->get_send_task_status_count();
+      if (ls_archive_task_count < send_task_status_count) {
+        need_delay = true;
+        ARCHIVE_LOG(TRACE, "archive_sender_ task status count more than ls archive task count, just wait",
+            K(ls_archive_task_count), K(send_task_status_count), K(need_delay));
       } else {
-        ls_archive_task_count = ls_mgr_->get_ls_task_count();
-        send_task_status_count = archive_sender_->get_send_task_status_count();
-        if (ls_archive_task_count < send_task_status_count) {
+        check_capacity_enough_(commit_lsn, cur_lsn, end_lsn, data_enough, data_full);
+        if (data_full) {
+          // although data buffer not enough, but data reaches the end of the block, do archive
+          ARCHIVE_LOG(TRACE, "data buffer reach clog block end, do archive",
+              K(id), K(station), K(end_lsn), K(commit_lsn));
+        } else if (! data_enough) {
+          // data not enough to fill unit, just wait
           need_delay = true;
-          ARCHIVE_LOG(TRACE, "archive_sender_ task status count more than ls archive task count, just wait",
-              K(ls_archive_task_count), K(send_task_status_count), K(need_delay));
+          ARCHIVE_LOG(TRACE, "data not enough, need delay", K(id), K(station), K(commit_lsn),
+              K(cur_lsn), K(end_lsn), K(data_enough));
         }
       }
     }
