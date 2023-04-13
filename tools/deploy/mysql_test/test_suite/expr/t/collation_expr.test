@@ -203,10 +203,13 @@ select collation(unhex('42'));
 select collation(unhex(null));
 
 # regexp
+--error 3995
 select collation(uc regexp b) from coll_test;
+--error 3995
 select cmp_meta(uc regexp b) from coll_test;
 select cmp_meta(uc regexp ub) from coll_test;
 select cmp_meta(b regexp b) from coll_test;
+--error 3995
 select cmp_meta(uc regexp b) from coll_test;
 select cmp_meta(uc regexp 'abc') from coll_test;
 

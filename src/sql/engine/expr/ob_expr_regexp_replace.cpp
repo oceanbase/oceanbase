@@ -49,7 +49,9 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
   ObRawExpr * raw_expr = type_ctx.get_raw_expr();
   CK(NULL != type_ctx.get_raw_expr());
   int64_t max_allowed_packet = 0;
-  const ObRawExpr *real_expr = NULL;
+  const ObRawExpr *real_text = NULL;
+  const ObRawExpr *real_pattern = NULL;
+  bool is_case_sensitive = false;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(param_num < 2 || param_num > 6)) {
     ret = OB_ERR_PARAM_SIZE;
@@ -59,13 +61,15 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
     LOG_WARN("get unexpected null", K(ret), K(type_ctx.get_session()));
   } else if (OB_FAIL(type_ctx.get_session()->get_max_allowed_packet(max_allowed_packet))) {
     LOG_WARN("failed to get max allowed packet", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(raw_expr->get_param_expr(0), real_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(raw_expr->get_param_expr(0), real_text))) {
     LOG_WARN("fail to get real expr without cast", K(ret));
-  } else if (OB_ISNULL(real_expr)) {
+  } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(raw_expr->get_param_expr(1), real_pattern))) {
+    LOG_WARN("fail to get real expr without cast", K(ret));
+  } else if (OB_ISNULL(real_text) || OB_ISNULL(real_pattern)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("real expr is invalid", K(ret), K(real_expr));
+    LOG_WARN("real expr is invalid", K(ret), K(real_text), K(real_pattern));
   } else {
-    const ObExprResType &text = real_expr->get_result_type();
+    const ObExprResType &text = real_text->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
       if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
@@ -86,23 +90,32 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
                 *type_ctx.get_session(), input_params, type, PREFER_VAR_LEN_CHAR));
         OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, input_params));
         OX(type.set_length_semantics(type_ctx.get_session()->get_actual_nls_length_semantics()));
+        is_case_sensitive = ObCharset::is_bin_sort(types[0].get_collation_type());
       } else {
+        const ObExprResType &pattern = real_pattern->get_result_type();
         const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
                 ? type_ctx.get_session()->get_actual_nls_length_semantics()
                 : common::LS_BYTE);
-        if (text.is_lob()) {
-          type.set_type(text.get_type());
+        ObObjMeta real_types[2] = {text, pattern};
+        if (text.is_blob()) {
+          type.set_blob();
+        } else if (pattern.is_blob()) {
+          type.set_blob();
         } else {
           type.set_clob();
           type.set_length_semantics(text.is_varchar_or_char() ? text.get_length_semantics() : default_length_semantics);
         }
         //建表列的最大长度
         type.set_length(max_allowed_packet);
-        ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
+        if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 3))) {
+          LOG_WARN("types are not compatible with binary.", K(ret));
+        } else {
+          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx.get_coll_type());
+          is_case_sensitive = ObCharset::is_bin_sort(type.get_collation_type());
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_calc_collation_type());
       bool need_utf8 = false;
       switch (param_num) {
         case 6/*match type*/:

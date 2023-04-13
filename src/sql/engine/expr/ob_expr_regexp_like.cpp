@@ -51,10 +51,21 @@ int ObExprRegexpLike::calc_result_typeN(ObExprResType &type,
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("param number of regexp_replace at least 2 and at most 3", K(ret), K(param_num));
   } else {
+    bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_collation_type());
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
       if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("the parameter is not castable", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret) && is_mysql_mode()) {
+      ObExprResType cmp_type;
+      if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 2))) {
+        LOG_WARN("types are not compatible with binary.", K(ret));
+      } else if (OB_FAIL(aggregate_charsets_for_comparison(cmp_type, types, 2, type_ctx.get_coll_type()))) {
+        LOG_WARN("fail to aggregate charsets for comparison");
+      } else {
+        is_case_sensitive = ObCharset::is_bin_sort(cmp_type.get_calc_collation_type());
       }
     }
     if (OB_SUCC(ret)) {
@@ -66,7 +77,6 @@ int ObExprRegexpLike::calc_result_typeN(ObExprResType &type,
       //we set the calc collation type to utf8 and convert it to utf16 in excution stage, because the ICU regexp engine is used uft16,
       //we need convert it the need collation in advance, and no need to think about in regexp.
       //lob TODO,jiangxiu.wt
-      bool is_case_sensitive = ObCharset::is_bin_sort(types[0].get_calc_collation_type());
       bool need_utf8 = false;
       types[1].set_calc_type(ObVarcharType);
       types[1].set_calc_collation_level(CS_LEVEL_IMPLICIT);
