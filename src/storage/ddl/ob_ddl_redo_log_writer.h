@@ -283,6 +283,7 @@ public:
                            const blocksstable::MacroBlockId &macro_block_id);
   int write_commit_log(ObTabletHandle &tablet_handle,
                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                       const bool allow_remote_write,
                        const ObITable::TableKey &table_key,
                        const int64_t table_id,
                        const int64_t execution_id,

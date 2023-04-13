@@ -2044,6 +2044,7 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       SCN commit_scn;
       if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
                                                        ddl_kv_mgr_handle,
+                                                       false,
                                                        table_key,
                                                        arg_.table_id_,
                                                        arg_.execution_id_,

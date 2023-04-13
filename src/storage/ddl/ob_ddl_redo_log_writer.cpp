@@ -1101,7 +1101,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
-  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
+  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));
     } else {
@@ -1214,6 +1214,7 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
 
 int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
                                              ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                                             const bool allow_remote_write,
                                              const ObITable::TableKey &table_key,
                                              const int64_t table_id,
                                              const int64_t execution_id,
@@ -1250,7 +1251,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_commit_log(tablet_handle, ddl_kv_mgr_handle, log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), handle))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
