@@ -43,48 +43,44 @@ const int64_t ObSqlWorkAreaProfile::MIN_BOUND_SIZE[ObSqlWorkAreaType::MAX_TYPE] 
 
 int64_t ObSqlWorkAreaProfile::get_dop()
 {
-  int64_t dop = 1;
-  if (OB_NOT_NULL(exec_ctx_)) {
-    dop = ObPxSqcUtil::get_actual_worker_count(exec_ctx_);
-  }
-  return dop;
+  return dop_;
 }
 
 uint64_t ObSqlWorkAreaProfile::get_plan_id()
 {
-  uint64_t plan_id = UINT64_MAX;
-  if (OB_NOT_NULL(exec_ctx_)) {
-    plan_id = ObPxSqcUtil::get_plan_id(exec_ctx_);
-  }
-  return plan_id;
+  return plan_id_;
 }
 
 uint64_t ObSqlWorkAreaProfile::get_exec_id()
 {
-  uint64_t exec_id = UINT64_MAX;
-  if (OB_NOT_NULL(exec_ctx_)) {
-    exec_id = ObPxSqcUtil::get_exec_id(exec_ctx_);
-  }
-  return exec_id;
+  return exec_id_;
 }
 
 const char* ObSqlWorkAreaProfile::get_sql_id()
 {
-  const char* sql_id = nullptr;
-  if (OB_NOT_NULL(exec_ctx_)) {
-    sql_id = ObPxSqcUtil::get_sql_id(exec_ctx_);
-  }
-  return sql_id;
+  return sql_id_.ptr();
 }
 
 uint64_t ObSqlWorkAreaProfile::get_session_id()
 {
-  uint64_t session_id = UINT64_MAX;
-  if (OB_NOT_NULL(exec_ctx_)) {
-    session_id = ObPxSqcUtil::get_session_id(exec_ctx_);
-  }
-  return session_id;
+  return session_id_;
 }
+
+int ObSqlWorkAreaProfile::set_exec_info(ObExecContext &exec_ctx)
+  {
+    int ret = OB_SUCCESS;
+    dop_ = ObPxSqcUtil::get_actual_worker_count(&exec_ctx);
+    plan_id_ = ObPxSqcUtil::get_plan_id(&exec_ctx);
+    exec_id_ = ObPxSqcUtil::get_exec_id(&exec_ctx);
+    session_id_ = ObPxSqcUtil::get_session_id(&exec_ctx);
+    ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
+    if (OB_NOT_NULL(plan_ctx) && OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+      OZ (ob_write_string(exec_ctx.get_allocator(),
+                          plan_ctx->get_phy_plan()->get_sql_id_string(),
+                          sql_id_));
+    }
+    return ret;
+  }
 
 ////////////////////////////////////////////////////////////////////////////////////
 int ObSqlWorkAreaIntervalStat::analyze_profile(
