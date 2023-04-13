@@ -508,7 +508,7 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
 /******************ObCopyMacroBlockHandle*********************/
 ObCopyMacroBlockHandle::ObCopyMacroBlockHandle()
   : is_reuse_macro_block_(false),
-    end_key_buf_(),
+    end_key_buf_("CMacBlockHandle"),
     read_handle_()
 {
 }

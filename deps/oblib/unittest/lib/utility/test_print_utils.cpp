@@ -96,7 +96,7 @@ TEST(print_utility, to_cstring)
   const int size = 1300;
   const int number = 10;
   char data[size * number];
-  char *buffer = (char*)ob_malloc(sizeof(MyTuple) * number);
+  char *buffer = (char*)ob_malloc(sizeof(MyTuple) * number, ObNewModIds::TEST);
   MyTuple *tuples[number];
   for (int n = 0; n < number; ++n) {
     memset(&data[n * size], 'a' + n, size - 1);

@@ -196,7 +196,7 @@ TEST(TestObIteratableHashSet, hash_full)
 {
   const uint64_t N = 10000;
   typedef ObIteratableHashSet<int64_t, N> HashSetType;
-  HashSetType *hashset = (HashSetType *)ob_malloc(sizeof(HashSetType));
+  HashSetType *hashset = (HashSetType *)ob_malloc(sizeof(HashSetType), ObNewModIds::TEST);
   ASSERT_TRUE(NULL != hashset);
   new(hashset) HashSetType();
   ASSERT_TRUE(NULL != hashset);

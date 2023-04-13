@@ -337,10 +337,10 @@ int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
       LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
     } else if (OB_FAIL(sql_mem_mgr->allocator_.init(
               lib::ObMallocAllocator::get_instance(),
-              OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+              OB_MALLOC_NORMAL_BLOCK_SIZE,
+              ObMemAttr(common::OB_SERVER_TENANT_ID, "SqlMemMgr")))) {
       LOG_WARN("failed to init fifo allocator", K(ret));
     } else {
-      sql_mem_mgr->allocator_.set_label("SqlMemMgr");
       int64_t work_area_interval_size = sizeof(ObSqlWorkAreaInterval) * INTERVAL_NUM;
       sql_mem_mgr->wa_intervals_ = reinterpret_cast<ObSqlWorkAreaInterval*>(
                                     sql_mem_mgr->allocator_.alloc(work_area_interval_size));

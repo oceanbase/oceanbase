@@ -24,8 +24,8 @@ ObMicroBlockWriter::ObMicroBlockWriter()
   :micro_block_size_limit_(0),
    column_count_(0),
    rowkey_column_count_(0),
-   data_buffer_(0, "MicrBlocWriter", false),
-   index_buffer_(0, "MicrBlocWriter", false),
+   data_buffer_("MicrBlocWriter"),
+   index_buffer_("MicrBlocWriter"),
    col_desc_array_(nullptr),
    need_calc_column_chksum_(false),
    is_inited_(false)

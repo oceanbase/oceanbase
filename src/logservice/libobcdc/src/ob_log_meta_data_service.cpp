@@ -289,7 +289,7 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
   int64_t data_size = 0;
   share::SCN start_scn;
 
-  if (OB_ISNULL(data_dict_in_log_info_buffer = static_cast<char*>(ob_malloc(buffer_size)))) {
+  if (OB_ISNULL(data_dict_in_log_info_buffer = static_cast<char*>(ob_malloc(buffer_size, "DataDictMetaInf")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc buffer for datadict metainfo failed", KR(ret), K(buffer_size));
   } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {

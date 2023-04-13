@@ -44,7 +44,7 @@ class ObAllocator : public ObIAllocator
   friend class lib::__MemoryContext__;
   friend class ObParallelAllocator;
 public:
-  ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr = default_memattr,
+  ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr,
               const bool use_pm=false,
               const uint32_t ablock_size=lib::INTACT_NORMAL_AOBJECT_SIZE);
   virtual ~ObAllocator() {}
@@ -176,7 +176,7 @@ class ObParallelAllocator : public ObIAllocator
 public:
   ObParallelAllocator(ObAllocator &root_allocator,
                       __MemoryContext__ *mem_context,
-                      const ObMemAttr &attr=default_memattr,
+                      const ObMemAttr &attr,
                       const int parallel=4,
                       const uint32_t ablock_size=lib::INTACT_NORMAL_AOBJECT_SIZE);
   virtual ~ObParallelAllocator();

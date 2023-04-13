@@ -448,8 +448,8 @@ ObLogMetaManager::MetaInfo<Type>::MetaInfo() :
     base_allocator_(common::ObModIds::OB_LOG_META_INFO),
     fifo_allocator_()
 {
-  fifo_allocator_.init(&base_allocator_, common::OB_MALLOC_NORMAL_BLOCK_SIZE);
-  fifo_allocator_.set_label(common::ObModIds::OB_LOG_META_INFO);
+  fifo_allocator_.init(&base_allocator_, common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                       ObMemAttr(common::OB_SERVER_TENANT_ID, common::ObModIds::OB_LOG_META_INFO));
 }
 
 template <class Type>

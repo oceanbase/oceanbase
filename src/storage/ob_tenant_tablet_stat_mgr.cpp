@@ -370,7 +370,8 @@ int ObTabletStreamPool::init(
   } else if (max_free_list_num <= 0 || max_dynamic_node_num < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(max_free_list_num), K(max_dynamic_node_num));
-  } else if (OB_FAIL(dynamic_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+  } else if (OB_FAIL(dynamic_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                             ObMemAttr(MTL_ID(), LABEL)))) {
     LOG_WARN("failed to init fifo allocator", K(ret));
   } else if (OB_FAIL(free_list_.init(max_free_list_num, &free_list_allocator_))) {
     LOG_WARN("failed to init free list", K(ret), K(max_free_list_num));
@@ -378,7 +379,6 @@ int ObTabletStreamPool::init(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for stream node in free list", K(ret), K(max_free_list_num));
   } else {
-    dynamic_allocator_.set_label(LABEL);
     ObTabletStreamNode *node = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < max_free_list_num; ++i) {
       node = new (buf + i) ObTabletStreamNode(FIXED_ALLOC);

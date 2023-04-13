@@ -117,11 +117,11 @@ int ObBackupTaskSchedulerQueue::init(
     LOG_WARN("invalid argument", K(ret), K(bucket_num), K(rpc_proxy), K(task_scheduler));
   } else if (OB_FAIL(task_map_.create(bucket_num, OB_BACKUP_TASK_SCHEDULER))) {
     LOG_WARN("fail to init task map", K(ret), K(bucket_num));
-  } else if (OB_FAIL(task_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
+  } else if (OB_FAIL(task_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                          ObMemAttr(common::OB_SERVER_TENANT_ID, OB_BACKUP_TASK_SCHEDULER)))) {
     LOG_WARN("fail to init task allocator", K(ret));
   } else {
     max_size_ = max_size;
-    task_allocator_.set_label(OB_BACKUP_TASK_SCHEDULER);
     tenant_stat_map_ = &tenant_stat_map;
     server_stat_map_ = &server_stat_map;
     server_mgr_ = &server_manager;

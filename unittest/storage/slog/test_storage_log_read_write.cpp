@@ -226,7 +226,7 @@ TEST_F(TestStorageLogRW, test_basic)
   // test read multi-param normal-size log
   for (int i = 0; i < 10; i++) {
     disk_addr = param_arr.at(i).disk_addr_;
-    buf = ob_malloc(disk_addr.size_);
+    buf = ob_malloc(disk_addr.size_, ObNewModIds::TEST);
     ret = ObStorageLogReader::read_log(slogger_->get_dir(), disk_addr, disk_addr.size_, buf, pos, OB_SERVER_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     cmp = MEMCMP(slog_arr1[i].buf_, (char *)buf + pos, data_len[i]);
@@ -273,7 +273,7 @@ TEST_F(TestStorageLogRW, test_basic)
   // test read multi-param large-size log
   for (int i = 0; i < 10; i++) {
     disk_addr = param_arr2.at(i).disk_addr_;
-    buf = ob_malloc(disk_addr.size_);
+    buf = ob_malloc(disk_addr.size_, ObNewModIds::TEST);
     ret = ObStorageLogReader::read_log(slogger2->get_dir(), disk_addr, disk_addr.size_, buf, pos, OB_SERVER_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     cmp = MEMCMP(slog_arr2[i].buf_, (char *)buf + pos, data_len[i]);

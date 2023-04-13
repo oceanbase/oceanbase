@@ -540,7 +540,7 @@ int MockObServer::assign_resp_tx_state_(ObResp &resp, ObTxDesc *tx_desc, ObTxnFr
 #define ENCODE_TX_STATE_(t)                                             \
   if (OB_SUCC(ret) && ctx.t##_changed_) {                               \
     int64_t len = tx_node_.txn_free_route__get_##t##_state_serialize_size(tx_desc, ctx); \
-    char *buf = (char*)ob_malloc(len);                                  \
+    char *buf = (char*)ob_malloc(len, ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST));                                  \
     int64_t pos = 0;                                                    \
     if (OB_FAIL(tx_node_.txn_free_route__serialize_##t##_state(session_.get_sessid(), tx_desc, ctx, buf, len, pos))) { \
       TRANS_LOG(ERROR, "serialize fail", K(ret), K(tx_desc));           \

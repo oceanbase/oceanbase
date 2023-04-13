@@ -68,10 +68,10 @@ int ObLSRestoreHandler::init(ObLS *ls)
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("nullptr ls", K(ret));
-  } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
+  } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                     ObMemAttr(common::OB_SERVER_TENANT_ID, OB_LS_RESTORE_HANDLER)))) {
     LOG_WARN("fail to init allocator", K(ret));
   } else {
-    allocator_.set_label(OB_LS_RESTORE_HANDLER);
     ls_ = ls;
     rebuild_seq_ = ls->get_rebuild_seq();
     is_inited_ = true;

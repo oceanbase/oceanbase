@@ -148,7 +148,7 @@ TEST_F(TestParser, general_parser)
   ObDataInFileStruct file_struct;
   file_struct.field_term_str_ = "|";
 
-  void *temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE));
+  void *temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE, ObNewModIds::TEST));
   ASSERT_TRUE(temp_buf != NULL);
   ObLoadFileBuffer *buffer = new(temp_buf)ObLoadFileBuffer(OB_MALLOC_BIG_BLOCK_SIZE
                                                            - sizeof(ObLoadFileBuffer) - 1024);
@@ -228,11 +228,11 @@ TEST_F(TestParser, general_parser_escape)
   file_struct.field_enclosed_char_ = '"';
 
   void *temp_buf =  NULL;
-  temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE));
+  temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE, ObNewModIds::TEST));
   ASSERT_TRUE(temp_buf != NULL);
   ObLoadFileBuffer *buffer = new(temp_buf)ObLoadFileBuffer(OB_MALLOC_BIG_BLOCK_SIZE
                                                            - sizeof(ObLoadFileBuffer) - 1024);
-  temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE));
+  temp_buf = (ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE, ObNewModIds::TEST));
   ASSERT_TRUE(temp_buf != NULL);
   ObLoadFileBuffer *escape = new(temp_buf)ObLoadFileBuffer(OB_MALLOC_BIG_BLOCK_SIZE
                                                            - sizeof(ObLoadFileBuffer) - 1024);

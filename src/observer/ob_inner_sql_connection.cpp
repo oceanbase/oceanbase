@@ -1409,7 +1409,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
         char *tmp_str = nullptr;
         int64_t pos = 0;
         ObString sql;
-        if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size())))) {
+        if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
         } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
@@ -1528,7 +1528,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
           arg.lock_mode_ = lock_mode;
           arg.timeout_us_ = timeout_us;
 
-          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size())))) {
+          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
           } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
@@ -1545,7 +1545,7 @@ int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
           arg.lock_mode_ = lock_mode;
           arg.timeout_us_ = timeout_us;
 
-          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size())))) {
+          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
           } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {

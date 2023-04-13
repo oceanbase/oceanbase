@@ -269,7 +269,7 @@ ObBackupFileWriteCtx::ObBackupFileWriteCtx()
       max_file_size_(0),
       io_fd_(),
       dev_handle_(NULL),
-      data_buffer_(),
+      data_buffer_("BackupCtx"),
       bandwidth_throttle_(NULL)
 {}
 
@@ -399,6 +399,7 @@ ObBackupDataCtx::ObBackupDataCtx()
       macro_index_buffer_node_(),
       meta_index_buffer_node_(),
       file_trailer_(),
+      tmp_buffer_("BackupCtx"),
       bandwidth_throttle_(NULL)
 {}
 

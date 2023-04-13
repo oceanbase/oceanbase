@@ -433,7 +433,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
   LSN lsn;
   EXPECT_EQ(OB_SUCCESS, iterator.next());
   EXPECT_EQ(OB_SUCCESS, iterator.get_entry(entry, lsn));
-  char *buf = static_cast<char*>(ob_malloc_align(LOG_DIO_ALIGN_SIZE, MAX_LOG_BUFFER_SIZE));
+  char *buf = static_cast<char*>(ob_malloc_align(LOG_DIO_ALIGN_SIZE, MAX_LOG_BUFFER_SIZE,
+                                                 ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST)));
   int64_t pos = 0;
   LogWriteBuf write_buf;
   write_buf.push_back(buf, MAX_LOG_BUFFER_SIZE);

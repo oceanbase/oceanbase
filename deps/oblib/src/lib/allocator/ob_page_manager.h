@@ -25,7 +25,6 @@ namespace oceanbase
 {
 namespace common
 {
-using oceanbase::common::default_memattr;
 using lib::BlockSet;
 using lib::AChunk;
 using lib::ABlock;
@@ -71,7 +70,7 @@ public:
   int64_t get_hold() const;
   int64_t get_tid() const { return tid_; }
   // IBlockMgr interface
-  virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr=default_memattr) override;
+  virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override;
   virtual void free_block(ABlock *block) override;
   virtual int64_t sync_wash(int64_t wash_size) override
   {

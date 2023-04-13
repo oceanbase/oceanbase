@@ -159,7 +159,7 @@ TEST_F(TestObMapQueue, push_pop_test)
 	EXPECT_TRUE(map_queue.is_inited());
 
 	// malloc array
-	Type *array = (Type *)ob_malloc(sizeof(Type) * VALUE_COUNT);
+	Type *array = (Type *)ob_malloc(sizeof(Type) * VALUE_COUNT, ObNewModIds::TEST);
 	OB_ASSERT(NULL != array);
 
 	for (int64_t test_type = 0, test_cnt = 4; test_type < test_cnt; ++test_type) {
@@ -344,7 +344,7 @@ TEST_F(TestObMapQueue, DISABLED_performance)
 	TestPopWorker pop_workers[POP_THREAD_NUM];
 
 	// malloc array
-	Type *array = (Type *)ob_malloc(sizeof(Type) * VALUE_COUNT);
+	Type *array = (Type *)ob_malloc(sizeof(Type) * VALUE_COUNT, ObNewModIds::TEST);
 	OB_ASSERT(NULL != array);
 	memset(array, 0, sizeof(Type) * VALUE_COUNT);
 

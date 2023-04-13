@@ -265,7 +265,7 @@ TEST_F(TestLSTabletService, test_serialize_tablet)
 
   int64_t tablet_length = orig_tablet->get_serialize_size();
   int64_t pos = 0;
-  char *buf = static_cast<char *>(ob_malloc(tablet_length));
+  char *buf = static_cast<char *>(ob_malloc(tablet_length, ObNewModIds::TEST));
   ret = orig_tablet->serialize(buf, tablet_length, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -294,7 +294,7 @@ TEST_F(TestLSTabletService, test_serialize_linked_list_tablet)
   // serialize and deserialize linked list
   int64_t tablets_length = tablet_head->get_serialize_size();
   int64_t se_pos = 0;
-  char *buf = static_cast<char *>(ob_malloc(tablets_length));
+  char *buf = static_cast<char *>(ob_malloc(tablets_length, ObNewModIds::TEST));
   ret = tablet_head->serialize(buf, tablets_length, se_pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -335,7 +335,7 @@ TEST_F(TestLSTabletService, test_deserialize_tablet_with_allocator)
   // serialize and deserialize linked list
   int64_t tablets_length = tablet_head->get_serialize_size();
   int64_t se_pos = 0;
-  char *buf = static_cast<char *>(ob_malloc(tablets_length));
+  char *buf = static_cast<char *>(ob_malloc(tablets_length, ObNewModIds::TEST));
   ret = tablet_head->serialize(buf, tablets_length, se_pos);
   ASSERT_EQ(OB_SUCCESS, ret);
 

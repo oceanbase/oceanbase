@@ -1491,7 +1491,7 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
   ARRAY_FOREACH_NORET(parts, i) {
     if (parts[i].epoch_ <= 0) {
       int64_t len = tx.get_serialize_size() + sizeof(ObTxDesc);
-      char *buf = (char*)ob_malloc(len);
+      char *buf = (char*)ob_malloc(len, "TxDesc");
       int64_t pos = sizeof(ObTxDesc);
       if (OB_FAIL(tx.serialize(buf, len, pos))) {
         TRANS_LOG(WARN, "serialize tx fail", KR(ret), K(tx));

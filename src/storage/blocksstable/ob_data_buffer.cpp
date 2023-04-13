@@ -23,7 +23,7 @@ namespace oceanbase
 namespace blocksstable
 {
 ObSelfBufferWriter::ObSelfBufferWriter(
-    const int64_t size, const char *label, const bool need_align)
+    const char *label, const int64_t size, const bool need_align)
     : ObBufferWriter(NULL, 0, 0), label_(label), is_aligned_(need_align),
       macro_block_mem_ctx_()
 {

@@ -35,11 +35,12 @@ public:
   {
     reset();
   }
-  virtual void *alloc(const int64_t size) override
+  virtual void *alloc(const int64_t size, const ObMemAttr &attr) override
   {
-    return alloc(size, default_memattr);
+    UNUSED(attr);
+    return alloc(size);
   }
-  virtual void* alloc(const int64_t size, const ObMemAttr &attr) override
+  virtual void* alloc(const int64_t size) override
   {
     void *p = NULL;
     if (size > MAX_RESERVE_SIZE - 1 - pos_) {

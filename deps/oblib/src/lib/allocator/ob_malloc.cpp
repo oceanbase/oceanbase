@@ -19,7 +19,6 @@
 #include <execinfo.h>
 #endif
 
-oceanbase::common::ObMemAttr oceanbase::common::default_memattr;
 
 int oceanbase::common::ObMemBuf::ensure_space(const int64_t size, const lib::ObLabel &label)
 {

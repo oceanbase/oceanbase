@@ -30,7 +30,6 @@ void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   abort_unless(attr.tenant_id_ == tenant_id_);
   abort_unless(attr.ctx_id_ == ctx_id_);
-  BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME ALLOC]size:%ld", size);
   void *ptr = common_alloc(size, attr, *this, obj_mgr_);
   return ptr;
 }
@@ -44,7 +43,6 @@ int64_t ObTenantCtxAllocator::get_obj_hold(void *ptr)
 
 void* ObTenantCtxAllocator::realloc(const void *ptr, const int64_t size, const ObMemAttr &attr)
 {
-  BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME REALLOC]size:%ld", size);
   void *nptr = common_realloc(ptr, size, attr, *this, obj_mgr_);
   return nptr;
 }
@@ -401,6 +399,9 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   void *ret = nullptr;
+  if (!attr.label_.is_valid()) {
+    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME ALLOC", K(size));
+  }
   bool sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
   const int64_t alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
   AObject *obj = allocator.alloc_object(alloc_size, attr);
@@ -443,6 +444,9 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   void *nptr = NULL;
+  if (!attr.label_.is_valid()) {
+    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
+  }
   AObject *obj = NULL;
   if (NULL != ptr) {
     obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);

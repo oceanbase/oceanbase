@@ -789,7 +789,7 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
                                                     ObSharedGuard<char> ptr;
                                                     ptr.assign((char*)"detector", [](char*){});
                                                     report_info.set_module_name(ptr);
-                                                    char *buffer = (char *)ob_malloc(sizeof(char) * 64);
+                                                    char *buffer = (char *)ob_malloc(sizeof(char) * 64, "DeadLockDA");
                                                     if (OB_NOT_NULL(buffer)) {
                                                       last_trans_id.to_string(buffer, 64);
                                                       buffer[63] = '\0';

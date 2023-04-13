@@ -66,8 +66,8 @@ TEST_F(TestDataBuffer, test_ObSelfBufferWriter)
 {
   int ret = OB_SUCCESS;
   int64_t big_size = 256L * 1024L * 1024L * 1024L * 1024L * 1024L;//256TB
-  ObSelfBufferWriter buf_align(4096, ObModIds::TEST, true);
-  ObSelfBufferWriter buf_not_align(0, ObModIds::TEST, false);
+  ObSelfBufferWriter buf_align(ObModIds::TEST, 4096, true);
+  ObSelfBufferWriter buf_not_align(ObModIds::TEST, 0, false);
   ret = buf_align.ensure_space(ALIGNED_SIZE);
   ASSERT_EQ(ret, OB_SUCCESS);
 

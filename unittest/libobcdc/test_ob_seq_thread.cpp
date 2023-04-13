@@ -48,11 +48,12 @@ public:
 TEST_F(TestSeqThread, basic)
 {
   CThread thread;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, ObNewModIds::TEST);
   // Parameter not legal
-  EXPECT_EQ(OB_INVALID_ARGUMENT, thread.init(257, 100));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, thread.init(0, 0));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, thread.init(257, 100, attr));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, thread.init(0, 0, attr));
 
-  EXPECT_EQ(OB_SUCCESS, thread.init(256, 10000));
+  EXPECT_EQ(OB_SUCCESS, thread.init(256, 10000, attr));
   EXPECT_EQ(OB_SUCCESS, thread.start());
   for (int64_t index = 0; index < 1000; index++) {
     EXPECT_EQ(OB_SUCCESS, thread.push((void*)(index + 1), index, 0));

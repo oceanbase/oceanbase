@@ -86,7 +86,7 @@ public:
   }
   virtual int alloc_undo_status_node(ObUndoStatusNode *&undo_status_node) override
   {
-    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE);
+    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE, ObNewModIds::TEST);
     undo_status_node = new (ptr) ObUndoStatusNode();
     return OB_SUCCESS;
   }

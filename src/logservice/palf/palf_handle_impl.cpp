@@ -4039,7 +4039,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
       } else if (FALSE_IT(last_log_buf_len = curr_group_entry.get_group_entry_size())
                  || FALSE_IT(last_log_start_lsn = curr_log_lsn)) {
       } else if (NULL ==
-          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len)))) {
+          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len, "PalfHandleImpl")))) {
         tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
         PALF_LOG(WARN, "alloc memory for last_log_buf in flashback failed", K(ret));
       } else if (OB_TMP_FAIL(curr_group_entry.serialize(last_log_buf, last_log_buf_len, pos))) {

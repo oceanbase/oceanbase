@@ -159,7 +159,7 @@ ObIBackupMultiLevelIndexBuilder::ObIBackupMultiLevelIndexBuilder()
       root_(NULL),
       write_ctx_(NULL),
       allocator_(),
-      buffer_writer_()
+      buffer_writer_("BackupIndMerger")
 {}
 
 ObIBackupMultiLevelIndexBuilder::~ObIBackupMultiLevelIndexBuilder()
@@ -479,7 +479,7 @@ int ObIBackupMultiLevelIndexBuilder::get_index_tree_height_(int64_t &height) con
 int ObIBackupMultiLevelIndexBuilder::flush_trailer_()
 {
   int ret = OB_SUCCESS;
-  ObSelfBufferWriter buffer_writer;
+  ObSelfBufferWriter buffer_writer("BackupInd");
   ObBackupMultiLevelIndexTrailer *trailer = NULL;
   const int64_t trailer_len = sizeof(ObBackupMultiLevelIndexTrailer);
   int64_t tree_height = 0;
@@ -532,7 +532,7 @@ ObIBackupIndexMerger::ObIBackupIndexMerger()
     : is_inited_(false),
       merge_param_(),
       offset_(),
-      buffer_writer_(),
+      buffer_writer_("BackupIndMerger"),
       dev_handle_(NULL),
       io_fd_(),
       write_ctx_(),

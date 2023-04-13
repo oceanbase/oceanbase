@@ -69,7 +69,6 @@ namespace lib
 
 using std::nullptr_t;
 using lib::ObMemAttr;
-using oceanbase::common::default_memattr;
 class Flow;
 class __MemoryContext__;
 enum class ContextSource
@@ -331,14 +330,12 @@ public:
   const DynamicInfo &get_dynamic_info() const { return di_; }
   const StaticInfo &get_static_info() const { return *reinterpret_cast<StaticInfo*>(static_id_); }
   void *allocf(const int64_t size,
-               const ObMemAttr &attr=default_memattr)
+               const ObMemAttr &attr)
   {
     return freeable_alloc_->alloc(size, attr);
   }
-  void *allocp(const int64_t size,
-               const ObMemAttr &attr=default_memattr)
+  void *allocp(const int64_t size)
   {
-    UNUSEDx(attr);
     void *ptr = nullptr;
     ptr = arena_alloc_.alloc(size);
     return ptr;
@@ -759,15 +756,14 @@ private:
 };
 
 inline void *ctxalf(const int64_t size,
-                    const ObMemAttr &attr=default_memattr)
+                    const ObMemAttr &attr)
 {
   return CURRENT_CONTEXT->allocf(size, attr);
 }
 
-inline void *ctxalp(const int64_t size,
-                    const ObMemAttr &attr=default_memattr)
+inline void *ctxalp(const int64_t size)
 {
-  return CURRENT_CONTEXT->allocp(size, attr);
+  return CURRENT_CONTEXT->allocp(size);
 }
 
 inline void ctxfree(void *ptr)

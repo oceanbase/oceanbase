@@ -32,7 +32,7 @@ TEST(ObDataDictMetaInfoItem, test_data_dict_meta_info_item)
   const int64_t __MB__ = 1L << 20;
   const int64_t item_cnt = 100;
   const int64_t buf_size = 2 * __MB__;
-  char *buf = static_cast<char*>(ob_malloc(buf_size));
+  char *buf = static_cast<char*>(ob_malloc(buf_size, ObNewModIds::TEST));
   int64_t pos = 0;
   DataDictMetaInfoItemArr item_arr;
   for (int64_t i = 0; i < item_cnt; i++) {
@@ -54,7 +54,7 @@ TEST(ObDataDictMetaInfoHeader, test_data_dict_meta_info_header)
   ObRandom random;
   const int64_t __MB__ = 1L << 20;
   const int64_t buf_size = 2 * __MB__;
-  char *buf = static_cast<char*>(ob_malloc(buf_size));
+  char *buf = static_cast<char*>(ob_malloc(buf_size, ObNewModIds::TEST));
   header.magic_ = random.get_int32() && 0xFFFF;
   header.meta_version_ = 1;
   header.item_cnt_ = random.get_int32();
@@ -118,7 +118,7 @@ TEST(ObDataDictMetaInfo, test_data_dict_meta_info)
     EXPECT_EQ(meta_info_item_arr.at(i), item_arr.at(i));
   }
 
-  char *new_buf = static_cast<char*>(ob_malloc(buffer_size));
+  char *new_buf = static_cast<char*>(ob_malloc(buffer_size, ObNewModIds::TEST));
   int64_t new_ser_pos = 0;
   EXPECT_EQ(OB_SUCCESS, meta_info.serialize(new_buf, buffer_size, new_ser_pos));
   ObDataDictMetaInfo new_meta_info;
