@@ -6071,6 +6071,7 @@ int ObSelectResolver::check_ntile_validity(const ObRawExpr *expr,
   } else if (expr->is_column_ref_expr() ||
              expr->is_aggr_expr() ||
              expr->is_win_func_expr() ||
+             expr->get_expr_type() == T_FUN_SYS_RANDOM ||
              expr->get_expr_type() == T_FUN_SYS_RAND) {
     is_valid = false;
   } else if (expr->is_exec_param_expr()) {

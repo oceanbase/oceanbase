@@ -709,6 +709,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
   int ret = OB_SUCCESS;
   is_const_inherit = true;
   if (T_FUN_SYS_RAND == type_
+      || T_FUN_SYS_RANDOM == type_
+      || T_FUN_SYS_GENERATOR == type_
       || T_FUN_SYS_UUID == type_
       || T_FUN_SYS_UUID_SHORT == type_
       || T_FUN_SYS_SEQ_NEXTVAL == type_
@@ -768,6 +770,7 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_UID == type_
           || T_FUN_SYS_USER == type_
           || T_FUN_SYS_CUR_TIMESTAMP == type_
+          || T_FUN_SYS_RANDOM == type_
           || T_FUN_SYS_GUID == type_
           || T_FUN_SYS_CUR_DATE == type_
           || T_FUN_SYS_USERENV == type_
@@ -815,6 +818,7 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_UTC_TIMESTAMP == type_
           || T_FUN_SYS_UTC_DATE == type_
           || T_FUN_SYS_RAND == type_
+          || T_FUN_SYS_RANDOM == type_
           || T_FUN_SYS_UUID == type_
           || T_FUN_SYS_UUID_SHORT == type_
           || T_FUN_SYS_SLEEP == type_
@@ -3576,6 +3580,7 @@ bool ObSysFunRawExpr::inner_same_as(
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
+             T_FUN_SYS_RANDOM == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
              T_OP_GET_SYS_VAR == get_expr_type()) {

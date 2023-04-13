@@ -37,6 +37,14 @@ int ObFunctionTableOp::inner_open()
   int ret = OB_SUCCESS;
   node_idx_ = 0;
   already_calc_ = false;
+  if (OB_ISNULL(MY_SPEC.value_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("value expr is not init", K(ret));
+  } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_) {
+    next_row_func_ = &ObFunctionTableOp::inner_get_next_row_udf;
+  } else {
+    next_row_func_ = &ObFunctionTableOp::inner_get_next_row_sys_func;
+  }
   return ret;
 }
 
@@ -115,6 +123,11 @@ int ObFunctionTableOp::get_current_result(ObObj &result)
 }
 
 int ObFunctionTableOp::inner_get_next_row()
+{
+  return (this->*next_row_func_)();
+}
+
+int ObFunctionTableOp::inner_get_next_row_udf()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
@@ -204,6 +217,29 @@ int ObFunctionTableOp::inner_get_next_row()
   }
   return ret;
 }
+
+int ObFunctionTableOp::inner_get_next_row_sys_func()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = nullptr;
+  ObDatum *value = nullptr;
+  clear_evaluated_flag();
+  if (OB_ISNULL(plan_ctx = ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get plan ctx", K(ret), K(plan_ctx));
+  } else if (OB_FAIL(ctx_.check_status())) {
+    LOG_WARN("failed to check status ", K(ret));
+  } else if (OB_FAIL(MY_SPEC.value_expr_->eval(eval_ctx_, value))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failed to eval value expr", K(ret));
+    }
+  } else {
+    MY_SPEC.column_exprs_.at(0)->locate_datum_for_write(eval_ctx_).set_datum(*value);
+    MY_SPEC.column_exprs_.at(0)->set_evaluated_projected(eval_ctx_);
+  }
+  return ret;
+}
+
 
 } // end namespace sql
 } // end namespace oceanbase

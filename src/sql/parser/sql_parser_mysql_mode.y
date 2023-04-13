@@ -9798,6 +9798,21 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, $3);
 }
+| TABLE '(' simple_expr ')' %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, NULL);
+}
+| TABLE '(' simple_expr ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $5);
+}
+| TABLE '(' simple_expr ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $6);
+}
+;
+
+
 
 dml_table_name:
 relation_factor opt_use_partition
@@ -16225,6 +16240,11 @@ NAME_OB
 {
   make_name_node($$, result->malloc_pool_, "format");
 }
+| NORMAL
+{
+  make_name_node($$, result->malloc_pool_, "normal");
+}
+
 ;
 
 column_label:

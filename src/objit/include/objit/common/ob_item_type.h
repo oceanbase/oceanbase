@@ -797,6 +797,12 @@ typedef enum ObItemType
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
+  T_FUN_SYS_GENERATOR = 1802,
+  T_FUN_SYS_ZIPF = 1803,
+  T_FUN_SYS_NORMAL = 1804,
+  T_FUN_SYS_UNIFORM = 1805,
+  T_FUN_SYS_RANDOM = 1806,
+  T_FUN_SYS_RANDSTR = 1807,
   T_FUN_SYS_END = 2000,
 
   T_MAX_OP = 3000,

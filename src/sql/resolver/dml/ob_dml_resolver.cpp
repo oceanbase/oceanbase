@@ -4066,12 +4066,8 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   CK (OB_NOT_NULL(function_table_expr));
   OZ (function_table_expr->deduce_type(session_info_));
   if (OB_SUCC(ret)) {
-    if (!function_table_expr->get_result_type().is_ext()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ORA-22905: cannot access rows from a non-nested table item",
-               K(ret), K(function_table_expr->get_result_type()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "access rows from a non-nested table item");
-    } else {
+    if (function_table_expr->get_result_type().is_ext()) {
+      // PL collection used in TABLE(), extract PL info from schema
       CK(OB_NOT_NULL(schema_checker_));
       if (OB_SUCC(ret)) {
         ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
@@ -4134,6 +4130,8 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
         OZ (stmt->add_global_dependency_table(table_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
       }
+    } else if (OB_SUCC(ret) && function_table_expr->is_sys_func_expr()) {
+      // xxx
     }
   }
   OZ (stmt->add_table_item(session_info_, item));
@@ -7586,7 +7584,8 @@ int ObDMLResolver::check_json_table_column_constrain(ObDmlJtColDef *col_def)
 }
 
 int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_item,
-                                                      const ObDataType &data_type,
+                                                      const common::ObObjMeta &meta_type,
+                                                      const common::ObAccuracy &accuracy,
                                                       const ObString &column_name,
                                                       uint64_t column_id,
                                                       ColumnItem *&col_item)
@@ -7602,8 +7601,8 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   OZ (params_.expr_factory_->create_raw_expr(T_REF_COLUMN, col_expr));
   CK (OB_NOT_NULL(col_expr));
   OX (col_expr->set_ref_id(table_item.table_id_, column_id));
-  OX (result_type.set_meta(data_type.get_meta_type()));
-  OX (result_type.set_accuracy(data_type.get_accuracy()));
+  OX (result_type.set_meta(meta_type));
+  OX (result_type.set_accuracy(accuracy));
   OX (col_expr->set_result_type(result_type));
   if (table_item.get_object_name().empty()) {
     OX (col_expr->set_column_name(column_name));
@@ -8425,6 +8424,22 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
                                                       ObIArray<ColumnItem> &col_items)
 {
   int ret = OB_SUCCESS;
+  CK (OB_LIKELY(table_item.is_function_table()));
+  CK (OB_NOT_NULL(table_item.function_table_expr_));
+  if (OB_SUCC(ret)) {
+    if (table_item.function_table_expr_->get_result_type().is_ext()) {
+      ret = resolve_function_table_column_item_udf(table_item, col_items);
+    } else {
+      ret = resolve_function_table_column_item_sys_func(table_item, col_items);
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table_item,
+                                                          ObIArray<ColumnItem> &col_items)
+{
+  int ret = OB_SUCCESS;
   ObRawExpr *table_expr = NULL;
   ColumnItem *col_item = NULL;
   ObDMLStmt *stmt = get_stmt();
@@ -8468,7 +8483,8 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
       //exist, ignore resolve...
     } else {
       OZ (resolve_function_table_column_item(table_item,
-                                            *(coll_type->get_element_type().get_data_type()),
+                                            coll_type->get_element_type().get_data_type()->get_meta_type(),
+                                            coll_type->get_element_type().get_data_type()->get_accuracy(),
                                             ObString("COLUMN_VALUE"),
                                             OB_APP_MIN_COLUMN_ID,
                                             col_item));
@@ -8516,7 +8532,8 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
         //exist, ignore resolve...
       } else {
         OZ (resolve_function_table_column_item(table_item,
-                                               *(pl_type->get_data_type()),
+                                               pl_type->get_data_type()->get_meta_type(),
+                                               pl_type->get_data_type()->get_accuracy(),
                                                column_name,
                                                OB_APP_MIN_COLUMN_ID + i,
                                                col_item));
@@ -8526,6 +8543,38 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
     }
   }
 
+  return ret;
+}
+
+int ObDMLResolver::resolve_function_table_column_item_sys_func(const TableItem &table_item,
+                                                               ObIArray<ColumnItem> &col_items)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *table_expr = NULL;
+  ColumnItem *col_item = NULL;
+  ObDMLStmt *stmt = get_stmt();
+  const ObUserDefinedType *user_type = NULL;
+
+  CK (OB_NOT_NULL(stmt));
+  CK (OB_LIKELY(table_item.is_function_table()));
+  CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
+  OZ (table_expr->deduce_type(session_info_));
+  if (OB_FAIL(ret)) { // do nothing ...
+  } else if (!ObResolverUtils::is_expr_can_be_used_in_table_function(*table_expr)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "access rows from a non-nested table item");
+  } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, ObString("COLUMN_VALUE")))) {
+    //exist, ignore resolve...
+  } else {
+    OZ (resolve_function_table_column_item(table_item,
+                                           table_expr->get_result_meta(),
+                                           table_expr->get_accuracy(),
+                                           ObString("COLUMN_VALUE"),
+                                           OB_APP_MIN_COLUMN_ID,
+                                           col_item));
+  }
+  CK (OB_NOT_NULL(col_item));
+  OZ (col_items.push_back(*col_item));
   return ret;
 }
 

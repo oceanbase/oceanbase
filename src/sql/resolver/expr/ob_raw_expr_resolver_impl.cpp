@@ -5732,8 +5732,13 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     }
 
     if (OB_SUCC(ret)) {
+      // deal with exceptions
       if (0 == name.case_compare("nextval")) {
         ret = OB_ERR_FUNCTION_UNKNOWN;
+        LOG_USER_ERROR(OB_ERR_FUNCTION_UNKNOWN, name.length(), name.ptr());
+      } else if (T_FROM_SCOPE != ctx_.current_scope_ && 0 == name.case_compare("generator")) {
+        ret = OB_ERR_FUNCTION_UNKNOWN;
+        LOG_USER_ERROR(OB_ERR_FUNCTION_UNKNOWN, name.length(), name.ptr());
       }
     }
 
@@ -5811,24 +5816,9 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
         }
 
-        const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_name);
-        if (OB_SUCC(ret) && T_FUN_SYS_NAME_CONST == expr_type && current_columns_count != ctx_.columns_->count()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
-          LOG_WARN("params of name_const contain column references", K(ret));
-        } else if ((T_FUN_SYS_UUID2BIN == expr_type ||
-                    T_FUN_SYS_BIN2UUID == expr_type) &&
-                    func_expr->get_param_count() == 2) {
-          //add bool expr for the second param
-          ObRawExpr *param_expr = func_expr->get_param_expr(1);
-          ObRawExpr *new_param_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
-            LOG_WARN("create_bool_expr failed", K(ret));
-          } else if (OB_ISNULL(new_param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("new param_expr is NULL", K(ret));
-          } else {
-            func_expr->replace_param_expr(1, new_param_expr);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(process_sys_func_params(*func_expr))) {
+            LOG_WARN("fail process sys func params", K(ret));
           }
         }
       }
@@ -5874,6 +5864,44 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     }
   }
 
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr)
+{
+  int ret = OB_SUCCESS;
+  const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_expr.get_func_name());
+  switch (expr_type)
+  {
+    case T_FUN_SYS_UUID2BIN:
+    case T_FUN_SYS_BIN2UUID:
+      if (2 == func_expr.get_param_count()) {
+        //add bool expr for the second param
+        ObRawExpr *param_expr = func_expr.get_param_expr(1);
+        ObRawExpr *new_param_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
+          LOG_WARN("create_bool_expr failed", K(ret));
+        } else if (OB_ISNULL(new_param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new param_expr is NULL", K(ret));
+        } else {
+          func_expr.replace_param_expr(1, new_param_expr);
+        }
+      }
+      break;
+    case T_FUN_SYS_GENERATOR:
+      if (1 == func_expr.get_param_count()) {
+        ObItemType type = func_expr.get_param_expr(0)->get_expr_type();
+        if (T_QUESTIONMARK != type && T_INT != type && T_NUMBER != type) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("the func expr param is invalid", K(*func_expr.get_param_expr(0)), K(ret));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "generator function. The argument should be a constant integer");
+        }
+      }
+      break;
+    default:
+      break;
+  }
   return ret;
 }
 

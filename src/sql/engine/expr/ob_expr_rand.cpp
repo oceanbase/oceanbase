@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "lib/time/ob_time_utility.h" /* time */
-#include "sql/engine/expr/ob_expr_random.h"
+#include "sql/engine/expr/ob_expr_rand.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -20,39 +20,43 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-OB_SERIALIZE_MEMBER((ObExprRandom, ObFuncExprOperator), is_seed_const_);
+OB_SERIALIZE_MEMBER((ObExprRand, ObFuncExprOperator), is_seed_const_);
 
-ObExprRandom::ObExprRandomCtx::ObExprRandomCtx()
-	: gen_()
+const uint64_t ObExprRand::ObExprRandCtx::max_value_ = 0x3FFFFFFFL;
+
+ObExprRand::ObExprRandCtx::ObExprRandCtx()
+	: seed1_(1), seed2_(1)
 {
 }
 
-ObExprRandom::ObExprRandomCtx::~ObExprRandomCtx()
+ObExprRand::ObExprRandCtx::~ObExprRandCtx()
 {
 }
 
-void ObExprRandom::ObExprRandomCtx::set_seed(uint64_t seed)
+void ObExprRand::ObExprRandCtx::set_seed(uint32_t seed)
 {
-  gen_.seed(seed);
+	seed1_ = static_cast<uint32_t>(seed * 0x10001L + 55555555L) % max_value_;
+	seed2_ = static_cast<uint32_t>(seed * 0x10000001L) % max_value_;
 }
 
-void ObExprRandom::ObExprRandomCtx::get_next_random(int64_t &res)
+void ObExprRand::ObExprRandCtx::get_next_random(double &res)
 {
-  uint64_t rd = gen_();
-  res = rd + INT64_MIN;
+	seed1_ = (seed1_ * 3 + seed2_) % max_value_;
+	seed2_ = (seed1_ + seed2_ + 33) % max_value_;
+	res = static_cast<double> (seed1_) / static_cast<double> (max_value_);
 }
 
-ObExprRandom::ObExprRandom(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM, "random", ZERO_OR_ONE, NOT_ROW_DIMENSION),
+ObExprRand::ObExprRand(common::ObIAllocator &alloc)
+	: ObFuncExprOperator(alloc, T_FUN_SYS_RAND, "rand", ZERO_OR_ONE, NOT_ROW_DIMENSION),
 		is_seed_const_(true)
 {
 }
 
-ObExprRandom::~ObExprRandom()
+ObExprRand::~ObExprRand()
 {
 }
 
-int ObExprRandom::calc_result_typeN(ObExprResType &type,
+int ObExprRand::calc_result_typeN(ObExprResType &type,
 		                                ObExprResType *types,
 		                                int64_t param_num,
 																		common::ObExprTypeCtx &type_ctx) const
@@ -67,15 +71,15 @@ int ObExprRandom::calc_result_typeN(ObExprResType &type,
 		if(param_num == 1) {
 			types[0].set_calc_type(ObIntType);
 		}
-		type.set_int();
+		type.set_double();
 	}
 	return ret;
 }
 
-int ObExprRandom::assign(const ObExprOperator &other)
+int ObExprRand::assign(const ObExprOperator &other)
 {
   int ret = OB_SUCCESS;
-  const ObExprRandom *tmp_other = dynamic_cast<const ObExprRandom*>(&other);
+  const ObExprRand *tmp_other = dynamic_cast<const ObExprRand*>(&other);
   if (OB_UNLIKELY(NULL == tmp_other)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument. wrong type for other", K(ret), K(other));
@@ -89,7 +93,7 @@ int ObExprRandom::assign(const ObExprOperator &other)
   return ret;
 }
 
-int ObExprRandom::calc_random_expr_const_seed(const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprRand::calc_random_expr_const_seed(const ObExpr &expr, ObEvalCtx &ctx,
                                  ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
@@ -102,35 +106,39 @@ int ObExprRandom::calc_random_expr_const_seed(const ObExpr &expr, ObEvalCtx &ctx
   } else {
     uint64_t op_id = expr.expr_ctx_id_;
     ObExecContext &exec_ctx = ctx.exec_ctx_;
-    ObExprRandomCtx *random_ctx = NULL;
-    if (OB_ISNULL(random_ctx = static_cast<ObExprRandomCtx *>(
-                exec_ctx.get_expr_op_ctx(op_id)))) {
-      if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, random_ctx))) {
-        LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
-      } else {
-        uint64_t seed = 0;
+    ObExprRandCtx *random_ctx = NULL;
+		if (OB_ISNULL(random_ctx = static_cast<ObExprRandCtx *>(
+            exec_ctx.get_expr_op_ctx(op_id)))) {
+			if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, random_ctx))) {
+				LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
+			} else {
+        uint32_t seed = 0;
         if (expr.arg_cnt_ == 1) {
           if(!seed_datum->is_null()) {
-            seed = static_cast<uint64_t> (seed_datum->get_int());
+            seed = static_cast<uint32_t> (seed_datum->get_int());
           }
         } else {
           // use timestamp as the seed for rand expression
-          seed = static_cast<uint64_t> (ObTimeUtility::current_time());
+          seed = static_cast<uint32_t> (ObTimeUtility::current_time());
         }
         random_ctx->set_seed(seed);
+			}
+		}
+		if (OB_SUCC(ret)) {
+      if (OB_ISNULL(random_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("random ctx is NULL", K(ret));
+      } else {
+        double rand_res = 0.0;
+        random_ctx->get_next_random(rand_res);
+        res_datum.set_double(rand_res);
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      int64_t rand_res = 0;
-      random_ctx->get_next_random(rand_res);
-      res_datum.set_int(rand_res);
-    }
+		}
   }
   return ret;
 }
 
-int ObExprRandom::calc_random_expr_nonconst_seed(const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprRand::calc_random_expr_nonconst_seed(const ObExpr &expr, ObEvalCtx &ctx,
                                  ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
@@ -143,8 +151,8 @@ int ObExprRandom::calc_random_expr_nonconst_seed(const ObExpr &expr, ObEvalCtx &
   } else {
     uint64_t op_id = expr.expr_ctx_id_;
     ObExecContext &exec_ctx = ctx.exec_ctx_;
-    ObExprRandomCtx *random_ctx = NULL;
-		if (OB_ISNULL(random_ctx = static_cast<ObExprRandomCtx *>(
+    ObExprRandCtx *random_ctx = NULL;
+		if (OB_ISNULL(random_ctx = static_cast<ObExprRandCtx *>(
             exec_ctx.get_expr_op_ctx(op_id)))) {
 			if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, random_ctx))) {
 				LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
@@ -155,33 +163,32 @@ int ObExprRandom::calc_random_expr_nonconst_seed(const ObExpr &expr, ObEvalCtx &
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("random ctx is NULL", K(ret));
       } else {
-				uint64_t seed = 0;
+				uint32_t seed = 0;
 				if(!seed_datum->is_null()) {
-					seed = static_cast<uint64_t>(seed_datum->get_int());
+					seed = static_cast<uint32_t>(seed_datum->get_int());
 				}
-        int64_t rand_res = 0;
+        double rand_res = 0.0;
 				random_ctx->set_seed(seed);
         random_ctx->get_next_random(rand_res);
-        res_datum.set_int(rand_res);
+        res_datum.set_double(rand_res);
       }
 		}
   }
   return ret;
 }
 
-int ObExprRandom::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+int ObExprRand::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   if (is_seed_const_) {
-    rt_expr.eval_func_ = ObExprRandom::calc_random_expr_const_seed;
+    rt_expr.eval_func_ = ObExprRand::calc_random_expr_const_seed;
   } else {
-    rt_expr.eval_func_ = ObExprRandom::calc_random_expr_nonconst_seed;
+    rt_expr.eval_func_ = ObExprRand::calc_random_expr_nonconst_seed;
   }
   return ret;
 }
 } /* namespace sql */
 } /* namespace oceanbase */
-

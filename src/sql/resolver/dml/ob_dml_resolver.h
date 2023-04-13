@@ -668,7 +668,8 @@ protected:
                                          const common::ObString &column_name,
                                          ColumnItem *&col_item);
   int resolve_function_table_column_item(const TableItem &table_item,
-                                         const ObDataType &data_type,
+                                         const common::ObObjMeta &meta_type,
+                                         const common::ObAccuracy &accuracy,
                                          const ObString &column_name,
                                          uint64_t column_id,
                                          ColumnItem *&col_item);
@@ -775,6 +776,10 @@ protected:
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
 private:
+  int resolve_function_table_column_item_udf(const TableItem &table_item,
+                                             common::ObIArray<ColumnItem> &col_items);
+  int resolve_function_table_column_item_sys_func(const TableItem &table_item,
+                                                  common::ObIArray<ColumnItem> &col_items);
   int add_column_ref_to_set(ObRawExpr *&expr, ObIArray<TableItem*> *table_list);
   int check_table_exist_or_not(uint64_t tenant_id, uint64_t &database_id,
                                  common::ObString &table_name, common::ObString &db_name);

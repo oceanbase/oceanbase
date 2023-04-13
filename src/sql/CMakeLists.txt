@@ -466,7 +466,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_quarter.cpp
   engine/expr/ob_expr_quote.cpp
   engine/expr/ob_expr_radians.cpp
+  engine/expr/ob_expr_rand.cpp
   engine/expr/ob_expr_random.cpp
+  engine/expr/ob_expr_randstr.cpp
   engine/expr/ob_expr_random_bytes.cpp
   engine/expr/ob_expr_rawtohex.cpp
   engine/expr/ob_expr_regexp.cpp
@@ -513,6 +515,10 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_subquery_ns_equal.cpp
   engine/expr/ob_expr_subquery_ref.cpp
   engine/expr/ob_expr_substr.cpp
+  engine/expr/ob_expr_generator_func.cpp
+  engine/expr/ob_expr_zipf.cpp
+  engine/expr/ob_expr_uniform.cpp
+  engine/expr/ob_expr_normal.cpp
   engine/expr/ob_expr_substrb.cpp
   engine/expr/ob_expr_substring_index.cpp
   engine/expr/ob_expr_sys_connect_by_path.cpp

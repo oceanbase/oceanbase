@@ -10,32 +10,33 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_SQL_OB_EXPR_FUNC_RANDOM_H_
-#define OCEANBASE_SQL_OB_EXPR_FUNC_RANDOM_H_
+#ifndef OCEANBASE_SQL_OB_EXPR_FUNC_RAND_H_
+#define OCEANBASE_SQL_OB_EXPR_FUNC_RAND_H_
 
-#include <random>
 #include "sql/engine/expr/ob_expr_operator.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-class ObExprRandom: public ObFuncExprOperator
+class ObExprRand: public ObFuncExprOperator
 {
   OB_UNIS_VERSION(1);
-	class ObExprRandomCtx: public ObExprOperatorCtx
+	class ObExprRandCtx: public ObExprOperatorCtx
 	{
 	public:
-		ObExprRandomCtx();
-		virtual ~ObExprRandomCtx();
-		void set_seed(uint64_t seed);
-		void get_next_random(int64_t &res);
+		ObExprRandCtx();
+		virtual ~ObExprRandCtx();
+		void set_seed(uint32_t seed);
+		void get_next_random(double &res);
 	private:
-    std::mt19937_64 gen_;
+		static const uint64_t max_value_;
+		uint64_t seed1_;
+		uint64_t seed2_;
 	};
 public:
-	explicit ObExprRandom(common::ObIAllocator &alloc);
-	virtual ~ObExprRandom();
+	explicit ObExprRand(common::ObIAllocator &alloc);
+	virtual ~ObExprRand();
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
                                 int64_t param_num,
@@ -55,10 +56,10 @@ public:
 private:
 	bool is_seed_const_;
 	// disallow copy
-	DISALLOW_COPY_AND_ASSIGN(ObExprRandom);
+	DISALLOW_COPY_AND_ASSIGN(ObExprRand);
 };
 
-inline void ObExprRandom::set_seed_const(bool is_seed_const)
+inline void ObExprRand::set_seed_const(bool is_seed_const)
 {
 	is_seed_const_ = is_seed_const;
 }

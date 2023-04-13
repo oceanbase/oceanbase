@@ -716,7 +716,7 @@ public:
                                             ObRawExprFactory &expr_factory,
                                             ObSQLSessionInfo &session_info,
                                             ObDataTypeCastParams &dtc_params);
-
+  static bool is_expr_can_be_used_in_table_function(const ObRawExpr &expr);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,
