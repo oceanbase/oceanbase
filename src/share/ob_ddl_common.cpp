@@ -473,7 +473,7 @@ int ObDDLUtil::generate_build_replica_sql(
     ObArray<int64_t> order_column_ids;
     bool is_shadow_column = false;
     int64_t real_parallelism = std::max(1L, parallelism);
-    real_parallelism = std::min(64L, real_parallelism);
+    real_parallelism = std::min(ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
     // get dest table column names
     if (OB_FAIL(dest_table_schema->get_column_ids(column_ids))) {
       LOG_WARN("fail to get column ids", K(ret));
