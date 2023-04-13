@@ -6,6 +6,7 @@
 // SQL层错误码值域[-5000, -6000)，含各种schema相关错误
 // 事务层错误码值域[-6000, -7000),含clog，memtable等
 // Election错误码值域[-7000, -7100)
+// GIS错误码值域  [-7201, -7300)
 // 致命错误[-8000, -9000)，客户端收到8xxx错误，需要关闭SQL连接
 // backup [-9000, -9500)
 // pl [-9500, -10000)
@@ -20,23 +21,24 @@
 //we have ob errno, mysql errno, oracle errno. ob errno used in source code, mysql/oracle errno used in error packet encoding.
 //developer only use ob errno in source code, and specify the mapping relation between ob errno and mysql/oracle errnor in this file.
 //
-//C0: int OB_MAX_ERROR_CODE                           -----> ob errno
-//C1: char *ERROR_NAME[OB_MAX_ERROR_CODE];            -----> store ob errno name
-//M1: int MYSQL_ERRNO[OB_MAX_ERROR_CODE];             -----> store mysql errno
-//M2: char *SQLSTATE[OB_MAX_ERROR_CODE];              -----> store mysql errstate
-//M3: char *STR_ERROR[OB_MAX_ERROR_CODE];             -----> store mysql errmsg without parameter
-//M4: char *STR_USER_ERROR[OB_MAX_ERROR_CODE];        -----> store mysql errmsg with parameter
-//R1: int ORACLE_ERRNO[OB_MAX_ERROR_CODE];            -----> store oracle errno
-//R2: char *ORACLE_SQLSTATE[OB_MAX_ERROR_CODE];       -----> store oracle errstate
-//R3: char *ORACLE_STR_ERROR[OB_MAX_ERROR_CODE];      -----> store oracle errno without parameter
-//R4: char *ORACLE_STR_USER_ERROR[OB_MAX_ERROR_CODE]; -----> store oracle errno with parameter
+//DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4, R1, R2, R3, R4)
+//C0: ob error code
+//C1: ob error symbol name
+//M1: mysql compatible error code, use C0 when M1 equals -1
+//M2: SQLSTATE
+//M3: mysql error message without parameters
+//M4: mysql error message with parameters
+//R1: oracle compatible error code
+//R2: oracle error message prefix
+//R3: oracle error message without parameters
+//R4: oracle error message with parameters
 //
-//DEFINE_ERROR(C1, C0, M1, M2, M3)                            <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, -600, M2, M3, M3)
-//DEFINE_ERROR_EXT(C1, C0, M1, M2, M3, M4)                    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, -600, M2, M3, M4)
-//DEFINE_ORACLE_ERROR(C1, C0, M1, M2, M3, R1, R3)             <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, ORA, R3, R3)
-//DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4) <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, ORA, R3, R4)
-//DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3)                <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, PLS, R3, R3)
-//DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4)    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, PLS, R3, R4)
+//DEFINE_ERROR(C1, C0, M1, M2, M3)                            <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4=M3, R1=-600, R2=ORA, R3~=M3, R4~=M3)
+//DEFINE_ERROR_EXT(C1, C0, M1, M2, M3, M4)                    <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4, R1=-600, R2=ORA, R3~=M3, R4~=M4)
+//DEFINE_ORACLE_ERROR(C1, C0, M1, M2, M3, R1, R3)             <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4=M3, R1, R2=ORA, R3, R4=R3)
+//DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4) <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4, R1, R2=ORA, R3, R4)
+//DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3)                <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4=M3, R1, R2=PLS, R3, R4=R3)
+//DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4)    <==>   DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4, R1, R2=PLS, R3, R4)
 //
 //DEFINE_ERROR(C1, C0, M1, M2, M3)
 //   M1 = (M1 == -1 ? C0 : M1)
@@ -56,7 +58,8 @@
 //DEFINE_ORACLE_ERROR(C1, C0, M1, M2, M3, R1, R3)
 //   M1 = (M1 == -1 ? C0 : M1)
 //   M4 = M3
-//   R4 = R3//   R2 = ORA
+//   R2 = ORA
+//   R4 = R3
 //
 //DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4)
 //   M1 = (M1 == -1 ? C0 : M1)
