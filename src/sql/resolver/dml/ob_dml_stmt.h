@@ -970,6 +970,7 @@ public:
   int add_autoinc_param(share::AutoincParam &autoinc_param) { return autoinc_params_.push_back(autoinc_param); }
   inline void set_dblink_id(int64_t id) { dblink_id_ = id; }
   inline int64_t get_dblink_id() const { return dblink_id_; }
+  inline bool is_dblink_stmt() const { return OB_INVALID_ID != dblink_id_; }
   inline void set_reverse_link() { is_reverse_link_ = true; }
   inline bool is_reverse_link() const { return is_reverse_link_; }
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);

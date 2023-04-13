@@ -294,6 +294,8 @@ int ObLinkScanOp::inner_get_next_row()
   } else if (OB_FAIL(result_->next())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next row", K(ret));
+    } else {
+      reset_result();
     }
   } else {
     const ObIArray<ObExpr *> &output = spec_.output_;
@@ -358,6 +360,7 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
   if (iter_end_) {
     brs_.size_ = 0;
     brs_.end_ = true;
+    reset_result();
   } else {
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
     auto loop_cnt = common::min(max_row_cnt, MY_SPEC.max_batch_size_);

@@ -622,6 +622,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int64_t max_table_hint = 1;
   ObDMLStmt *target_stmt = &stmt;
   ObSQLSessionInfo *session = ctx_.get_session_info();
+  int64_t link_stmt_count = 0;
   if (OB_ISNULL(target_stmt) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -645,7 +646,10 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
                                                session_enable_parallel,
                                                session_force_parallel_dop))) {
     LOG_WARN("failed to get session parallel info", K(ret));
+  } else if (OB_FAIL(calc_link_stmt_count(*target_stmt, link_stmt_count))) {
+    LOG_WARN("calc link stmt count failed", K(ret));
   } else {
+    ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
     parallel = ctx_.get_global_hint().get_parallel_hint();
     if (parallel <= 0) {
       parallel = ObGlobalHint::DEFAULT_PARALLEL;
@@ -787,6 +791,45 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
           LOG_WARN("check has trigger on table failed", K(ret));
         } else if (trigger_exists) {
           ctx_.set_has_trigger(true);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizer::calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  if (stmt.is_dblink_stmt()) {
+    count += 1;
+  } else {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(calc_link_stmt_count(*child_stmts.at(i), count)))) {
+        LOG_WARN("failed to extract column usage info", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const common::ObIArray<TableItem*> &table_items = stmt.get_table_items();
+      for (int64_t i = 0; i < table_items.count() && OB_SUCC(ret); i++) {
+        const TableItem *table_item = table_items.at(i);
+        if (OB_ISNULL(table_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null ptr", K(ret));
+        } else if (table_item->is_temp_table()) {
+          if (OB_ISNULL(table_item->ref_query_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null ptr", K(ret));
+          } else if (OB_FAIL(SMART_CALL(calc_link_stmt_count(*table_item->ref_query_, count)))) {
+            LOG_WARN("failed to extract column usage info", K(ret));
+          }
         }
       }
     }

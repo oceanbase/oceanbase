@@ -3993,16 +3993,26 @@ int ObSelectLogPlan::generate_dblink_raw_plan()
     //do nothing
   } else if (OB_FAIL(allocate_link_scan_as_top(top))) {
     LOG_WARN("failed to allocate link dml as top", K(ret));
+  } else {
+    top->set_dblink_id(dblink_id);
+    ObLogLinkScan *link_scan = static_cast<ObLogLinkScan *>(top);
+    if (OB_FAIL(link_scan->set_link_stmt(stmt))) {
+      LOG_WARN("failed to set link stmt", K(ret));
+    } else if (0 == dblink_id) {
+      link_scan->set_reverse_link(true);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (optimizer_context_.has_multiple_link_stmt()
+             && OB_FAIL(allocate_material_as_top(top))) {
+    LOG_WARN("allocate material above link scan failed", K(ret));
   } else if (OB_FAIL(make_candidate_plans(top))) {
     LOG_WARN("failed to make candidate plans", K(ret));
-  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt(stmt))) {
-    LOG_WARN("failed to set link stmt", K(ret));
   } else {
     top->mark_is_plan_root();
     top->get_plan()->set_plan_root(top);
-    top->set_dblink_id(dblink_id);
     if (0 == dblink_id) {
-      static_cast<ObLogLinkScan *>(top)->set_reverse_link(true);
       // reset dblink info, to avoid affecting the next execution flow
       query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
     } else {
