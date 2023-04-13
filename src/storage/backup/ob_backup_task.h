@@ -159,6 +159,7 @@ public:
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
 
 private:
+  int inner_init_before_run_();
   int get_batch_size_(int64_t &batch_size);
   int prepare_backup_tablet_provider_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
       ObLSBackupCtx &ls_backup_ctx, ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy,
