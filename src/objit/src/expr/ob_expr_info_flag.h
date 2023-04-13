@@ -22,7 +22,7 @@ enum ObExprInfoFlag
 {
   IS_CONST = 0x0,   // const expression, e.g. 1.2, 'abc'
   IS_COLUMN,        // column expression, e.g. C1, T1.C1
-  IS_STATIC_PARAM,         // vaiable expression, e.g. ?
+  IS_STATIC_PARAM,         // variable expression, e.g. ?
   IS_AGG,           // aggregate function, e.g. max, avg
   IS_FUNC,          // system function
   IS_IN,

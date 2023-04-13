@@ -167,7 +167,7 @@ private:
   char *buf_;
   int64_t buf_len_;
   // avoid to update pos_ between different printers(mainly ObRawExprPrinter
-  // and ObSelectStmtPrinter), we definate pointer of pos_ rather than object
+  // and ObSelectStmtPrinter), we definite pointer of pos_ rather than object
   int64_t *pos_;
   ObStmtScope scope_;
   bool only_column_namespace_;

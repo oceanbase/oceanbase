@@ -167,7 +167,7 @@ struct ObQueryHint {
   int64_t outline_stmt_id_;
   ObSEArray<ObHints, 8, common::ModulePageAllocator, true> qb_hints_;  // hints with qb name
   ObSEArray<ObHints, 8, common::ModulePageAllocator, true> stmt_id_hints_; // hints without qb name, used before transform
-  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> trans_list_; // tranform hints from outline data, need keep order
+  ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> trans_list_; // transform hints from outline data, need keep order
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> outline_trans_hints_; // tranform hints to generate outline data
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
   ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id

@@ -377,7 +377,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     // 以防calc_result_typeX没有对其进行设置
     // 理想情况下，不应该要这个循环，所有calc_type的设置都在calc_result_typeX中完成
 
-    // For avg(), internally it will call 'divison', which requires that both input are
+    // For avg(), internally it will call 'division', which requires that both input are
     // casted into number. However, this requirements are not remembered in the input_types
     // for the avg() expression but as the calc_type for the input expression itself. This
     // demands that we set the calculation type here.

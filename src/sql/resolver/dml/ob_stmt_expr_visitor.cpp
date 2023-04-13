@@ -133,7 +133,7 @@ int ObSharedExprChecker::init(ObDMLStmt &stmt)
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt_expr_set.destroy())) {
-      LOG_WARN("failed to detroy stmt expr set", K(ret));
+      LOG_WARN("failed to destroy stmt expr set", K(ret));
     }
   }
   return ret;
