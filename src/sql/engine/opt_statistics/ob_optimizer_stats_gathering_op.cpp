@@ -88,26 +88,23 @@ ObOptimizerStatsGatheringOp::ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx
 {
 }
 
-void ObOptimizerStatsGatheringOp::destroy() {
-  table_stats_map_.destroy();
-  column_stats_map_.destroy();
-  part_map_.destroy();
-  arena_.reset();
+void ObOptimizerStatsGatheringOp::destroy()
+{
+  reset();
   ObOperator::destroy();
 }
 
-void ObOptimizerStatsGatheringOp::reset() {
-}
-
-void ObOptimizerStatsGatheringOp::reuse_stats() {
+void ObOptimizerStatsGatheringOp::reset()
+{
   FOREACH(it, column_stats_map_) {
     if (OB_NOT_NULL(it->second)) {
-      it->second->reset();
+      it->second->~ObOptColumnStat();
       it->second = NULL;
     }
   }
-  table_stats_map_.reuse();
-  column_stats_map_.reuse();
+  table_stats_map_.destroy();
+  column_stats_map_.destroy();
+  part_map_.destroy();
   arena_.reset();
 }
 
@@ -192,7 +189,6 @@ int ObOptimizerStatsGatheringOp::inner_get_next_row()
           LOG_WARN("failed to call msg end", K(ret));
         }
       }
-      reuse_stats();
       if (OB_SUCC(ret)) {
         ret = OB_ITER_END;
       }
@@ -241,10 +237,8 @@ int ObOptimizerStatsGatheringOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("failed to call msg end", K(ret));
         }
       }
-      reuse_stats();
     }
   }
-
   return ret;
 }
 
