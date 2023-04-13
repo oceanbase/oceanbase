@@ -4285,6 +4285,10 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
     res_gt = l_gt->in_keypart_->get_min_offset() <= r_gt->in_keypart_->get_min_offset() ? l_gt : r_gt;
     // if in key do and with normal key here,
     // the result is in key
+  } else if (l_gt->is_in_key()) {
+    res_gt = l_gt->in_keypart_->get_min_offset() <= r_gt->pos_.offset_ ? l_gt : r_gt;
+  } else if (r_gt->is_in_key()) {
+    res_gt = r_gt->in_keypart_->get_min_offset() <= l_gt->pos_.offset_ ? r_gt : l_gt;
   } else if (l_gt->pos_.offset_ < r_gt->pos_.offset_) {
     res_gt = l_gt; //两个向量做and，右边向量前缀缺失，直接用左边向量的结果
   } else if (r_gt->pos_.offset_ < l_gt->pos_.offset_) {
@@ -5347,7 +5351,14 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
           ObKeyPart *cur1_next = cur1->get_next();
           ObKeyPart *cur2_next = cur2->get_next();
           if (cur1->is_in_key() && cur2->is_in_key()) {
-            if (!cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (cur1->and_next_ != NULL || cur2->and_next_ != NULL) {
+              if (OB_FAIL(remove_precise_range_expr(cur1->in_keypart_->get_min_offset() + 1))) {
+                LOG_WARN("remove precise range expr failed", K(ret));
+              } else if (query_range_ctx_ != NULL) {
+                query_range_ctx_->cur_expr_is_precise_ = false;
+              }
+            }
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
               if (OB_FAIL(union_in_with_in(or_list,
                                            cur1, cur2,
                                            exec_ctx,
@@ -5360,8 +5371,17 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
               }
             }
           } else if (cur1->is_in_key()) {
+            if ((!cur1->in_keypart_->is_single_in()) &&
+                 cur2->and_next_ != NULL && cur2->and_next_->is_in_key()) {
+              // (c1,c2) in or (c1 and c2 in ) is regarded as not precise
+              if (OB_FAIL(remove_precise_range_expr(cur1->in_keypart_->get_min_offset() + 1))) {
+                LOG_WARN("remove precise range expr failed", K(ret));
+              } else if (query_range_ctx_ != NULL) {
+                query_range_ctx_->cur_expr_is_precise_ = false;
+              }
+            }
             bool need_remove_normal = false;
-            if (!cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
               if (OB_FAIL(union_in_with_normal(cur1, cur2,
                                                exec_ctx,
                                                dtc_params,
@@ -5379,7 +5399,15 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
           } else if (cur2->is_in_key()) {
             ObKeyPart *cur1_next = cur1->get_next();
             bool need_remove_normal = false;
-            if (!cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if ((!cur2->in_keypart_->is_single_in()) &&
+                 cur1->and_next_ != NULL && cur1->and_next_->is_in_key()) {
+              if (OB_FAIL(remove_precise_range_expr(cur2->in_keypart_->get_min_offset() + 1))) {
+                LOG_WARN("remove precise range expr failed", K(ret));
+              } else if (query_range_ctx_ != NULL) {
+                query_range_ctx_->cur_expr_is_precise_ = false;
+              }
+            }
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
               if (OB_FAIL(union_in_with_normal(cur2, cur1,
                                                exec_ctx,
                                                dtc_params,
@@ -5514,12 +5542,7 @@ int ObQueryRange::union_in_with_in(ObKeyPartList &or_list,
       }
     } else if (OB_FAIL(cur1->in_keypart_->union_in_key(cur2->in_keypart_))) {
       LOG_WARN("failed to union in key", K(ret));
-    } else if (cur1->and_next_ != NULL || cur2->and_next_ != NULL) {
-      if (OB_FAIL(remove_precise_range_expr(cur1->in_keypart_->get_max_offset() + 1))) {
-        LOG_WARN("remove precise range expr failed", K(ret));
-      } else if (query_range_ctx_ != NULL) {
-        query_range_ctx_->cur_expr_is_precise_ = false;
-      }
+    } else {
       cur1->and_next_ = NULL;
     }
     has_union = true;
@@ -5531,10 +5554,6 @@ int ObQueryRange::union_in_with_in(ObKeyPartList &or_list,
       LOG_WARN("failed to align in keys", K(ret));
     } else if (OB_FAIL(cur1->in_keypart_->union_in_key(cur2->in_keypart_))) {
       LOG_WARN("failed to union in key", K(ret));
-    } else if (OB_FAIL(remove_precise_range_expr(cur1->in_keypart_->get_max_offset() + 1))) {
-      LOG_WARN("remove precise range expr failed", K(ret));
-    } else if (query_range_ctx_ != NULL) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
     }
     has_union = true;
   } else if (OB_FAIL(align_in_keys(cur1, cur2, false))) {
@@ -8420,14 +8439,6 @@ bool ObQueryRange::is_strict_in_graph(const ObKeyPart *root, const int64_t start
         } else if (start_pos != j && NULL != cur_and->or_next_) {
           // except the first item, others can't has or_next
           bret = false;
-        } else if (cur_and->and_next_ != NULL && cur_and->or_next_ != NULL) {
-          // (c1,c2) in () or (c1 and c2 in ()) --> regard as not strict in
-          // TODO: should make it precise @zhenglailei.zll
-          ObKeyPart *or_next = cur_and->or_next_;
-          if (or_next->is_in_key() && !or_next->in_keypart_->is_single_in() &&
-              or_next->in_keypart_->get_min_offset() == cur_and->pos_.offset_) {
-            bret = false;
-          }
         }
         cur_and = cur_and->and_next_;
       }
