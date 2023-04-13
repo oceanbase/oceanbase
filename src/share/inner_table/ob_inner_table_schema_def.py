@@ -11446,6 +11446,7 @@ def_table_schema(
 # 12392: __all_virtual_kv_connection
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
+# 12395: __all_virtual_timestamp_service
 #
 # 余留位置
 #
@@ -25683,6 +25684,7 @@ def_table_schema(
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
+# 21404: V$OB_TIMESTAMP_SERVICE
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48591,6 +48593,7 @@ def_table_schema(
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
 # 28192:  V$OB_ARBITRATION_SERVICE_STATUS
+# 28193:  V$OB_TIMESTAMP_SERVICE
 
 ################################################################################
 # Lob Table (50000, 70000)
