@@ -76,7 +76,6 @@ int ObLongopsMgr::register_longops(ObILongopsStat *stat)
   } else {
     ObBucketHashWLockGuard guard(bucket_lock_, stat->get_longops_key().hash());
     if (OB_FAIL(map_.set_refactored(stat->get_longops_key(), stat))) {
-      LOG_WARN("failed to set map", K(ret), KPC(stat));
       if (OB_HASH_EXIST == ret) {
         ret = OB_ENTRY_EXIST;
       }

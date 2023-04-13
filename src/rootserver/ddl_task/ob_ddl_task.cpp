@@ -1280,7 +1280,7 @@ int ObDDLTask::copy_longops_stat(ObLongopsValue &value)
   int ret = OB_SUCCESS;
   value.trace_id_ = trace_id_;
   value.tenant_id_ = tenant_id_;
-  value.start_time_ = stat_info_.start_time_;
+  value.start_time_ = gmt_create_;
   value.finish_time_ = stat_info_.finish_time_;
   value.elapsed_seconds_ = (ObTimeUtility::current_time() - stat_info_.start_time_);
   value.time_remaining_ = stat_info_.time_remaining_;
@@ -2642,7 +2642,7 @@ int ObDDLTaskRecordOperator::check_is_adding_constraint(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt(" SELECT tenant_id, task_id, object_id, target_object_id, ddl_type, "
+      if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
           "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
           "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
           "WHERE object_id = %" PRIu64 " && ddl_type IN (%d, %d, %d)", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
@@ -2734,7 +2734,7 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT tenant_id, task_id, object_id, target_object_id, ddl_type,"
+      if (OB_FAIL(sql_string.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type,"
           "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id,"
           "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
           "WHERE tenant_id = %lu AND object_id = %lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
@@ -2842,7 +2842,7 @@ int ObDDLTaskRecordOperator::get_ddl_task_record(const int64_t task_id,
   if (OB_UNLIKELY(!proxy.is_inited())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
-  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT tenant_id, task_id, object_id, target_object_id, ddl_type, "
+  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
       "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
       "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s WHERE task_id=%lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME, task_id))) {
     LOG_WARN("assign sql string failed", K(ret), K(task_id));
@@ -2869,7 +2869,7 @@ int ObDDLTaskRecordOperator::get_all_ddl_task_record(common::ObMySQLProxy &proxy
   if (OB_UNLIKELY(!proxy.is_inited())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
-  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT tenant_id, task_id, object_id, target_object_id, ddl_type, "
+  } else if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
         "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
         "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s ", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME))) {
     LOG_WARN("assign sql string failed", K(ret));
@@ -3016,6 +3016,8 @@ int ObDDLTaskRecordOperator::fill_task_record(
     ObString ddl_stmt_str;
     char *buf_ddl_stmt_str = nullptr;
     char *buf_task_message = nullptr;
+
+    EXTRACT_INT_FIELD_MYSQL(*result_row, "create_time", task_record.gmt_create_, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result_row, "task_id", task_record.task_id_, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result_row, "parent_task_id", task_record.parent_task_id_, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result_row, "tenant_id", task_record.tenant_id_, uint64_t);

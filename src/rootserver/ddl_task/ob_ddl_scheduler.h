@@ -272,7 +272,8 @@ private:
   int alloc_ddl_task(T *&ddl_task);
   void free_ddl_task(ObDDLTask *ddl_task);
   void destroy_all_tasks();
-  int inner_schedule_ddl_task(ObDDLTask *ddl_task);
+  int inner_schedule_ddl_task(ObDDLTask *ddl_task,
+                              const ObDDLTaskRecord &task_record);
   int create_build_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,
