@@ -56,6 +56,9 @@
     TRANS_LOG(ERROR, "trans act on txn temporary node", KR(ret),        \
               K(session->get_txn_free_route_ctx()),                     \
               K(session->get_tx_id()), KPC(session));                   \
+    if (session->get_tx_desc()) {                                       \
+      session->get_tx_desc()->dump_and_print_trace();                   \
+    }                                                                   \
   }
 
 namespace oceanbase
