@@ -48,6 +48,16 @@ int ObExprToBlob::calc_result_type1(ObExprResType &type,
     type.set_blob();
     type.set_collation_type(CS_TYPE_BINARY);
     if (ob_is_string_tc(text.get_type())) {
+      ObLength length = text.get_length();
+      if (LS_CHAR == text.get_length_semantics()) {
+        length *= ObCharset::get_charset(text.get_collation_type())->mbmaxlen;
+      }
+      length = (length / 2) + (length % 2);
+      type.set_length(length);
+    } else { // input is blob or raw type
+      type.set_length(text.get_length());
+    }
+    if (ob_is_string_tc(text.get_type())) {
       text.set_calc_type(common::ObRawType);
     }
   } else {

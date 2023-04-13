@@ -3770,6 +3770,7 @@ int ObDDLResolver::check_string_column_length(const ObColumnSchemaV2 &column, co
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check_string_column_length failed", K(ret), K(column));
   }
   return ret;
 }

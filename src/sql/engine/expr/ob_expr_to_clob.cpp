@@ -17,6 +17,7 @@
 #include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 
 namespace oceanbase
 {
@@ -55,10 +56,25 @@ int ObExprToClob::calc_result_type1(ObExprResType &type,
     type.set_clob();
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_collation_type(nls_param.nls_collation_);
+    text.set_calc_collation_type(nls_param.nls_collation_);
     if (!text.is_clob()) {
       text.set_calc_type(ObVarcharType);
+      ObLength res_len = -1;
+      ObExprResType tmp_calc_type; // for deducing res len
+      tmp_calc_type.set_varchar(); // set calc type of param to tmp_calc_type
+      tmp_calc_type.set_length_semantics(LS_BYTE); // length_semantics of res type clob is byte
+      tmp_calc_type.set_collation_type(nls_param.nls_collation_);
+      if (OB_FAIL(ObExprResultTypeUtil::deduce_max_string_length_oracle(
+                  type_ctx.get_session()->get_dtc_params(), text, tmp_calc_type, res_len))) {
+        LOG_WARN("fail to deduce result length", K(ret), K(text), K(type));
+      } else {
+        text.set_calc_length_semantics(text.is_character_type() ? text.get_length_semantics() : LS_BYTE);
+        text.set_calc_length(text.is_character_type() ? text.get_length() : res_len);
+        type.set_length(res_len);
+      }
+    } else {
+      type.set_length(text.get_length());
     }
-    text.set_calc_collation_type(nls_param.nls_collation_);
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("wrong type of argument in function to_clob", K(ret), K(text));

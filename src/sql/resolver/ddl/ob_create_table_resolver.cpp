@@ -1748,6 +1748,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               } else if (column.is_string_type() || column.is_json() || column.is_geometry()) {
                 if (column.is_geometry() && T_REF_COLUMN == select_item.expr_->get_expr_type()) {
                   column.set_srs_id((static_cast<ObColumnRefRawExpr*>(select_item.expr_))->get_srs_id());
+                } else if (ObHexStringType == column.get_data_type()) {
+                  column.set_data_type(ObVarcharType);
                 }
                 if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()
                     || column.get_meta_type().is_geometry()) {
