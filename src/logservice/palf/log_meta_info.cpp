@@ -584,6 +584,24 @@ int LogConfigMeta::generate_for_default(
   return ret;
 }
 
+// generate a mock ConfigMeta for arb server
+int LogConfigMeta::generate_for_default_in_arb(
+    const int64_t proposal_id,
+    const LogConfigInfo &prev_config_info,
+    const LogConfigInfo &curr_config_info)
+{
+  int ret = OB_SUCCESS;
+  if (INVALID_PROPOSAL_ID == proposal_id) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    version_ = LOG_CONFIG_META_VERSION_INC;
+    proposal_id_ = proposal_id;
+    prev_ = prev_config_info;
+    curr_ = curr_config_info;
+  }
+  return ret;
+}
+
 int LogConfigMeta::generate(
     const int64_t proposal_id,
     const LogConfigInfo &prev_config_info,
