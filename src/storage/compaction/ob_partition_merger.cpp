@@ -1161,6 +1161,8 @@ int ObPartitionMinorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
       }
     } else if (OB_FAIL(close())){
       STORAGE_LOG(WARN, "failed to close partition merger", K(ret));
+    } else if (ctx.param_.tablet_id_.is_special_merge_tablet()) {
+      // do nothing
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(collect_merge_stat(merge_param.merge_type_, merge_helper, ctx))) {
