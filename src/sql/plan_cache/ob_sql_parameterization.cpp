@@ -255,7 +255,8 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
                                     || T_CAST_ARGUMENT == ctx.tree_->type_
                                     || T_NULLX_CLAUSE == ctx.tree_->type_
                                     || (T_SFU_INT == ctx.tree_->type_ && -1 != ctx.tree_->value_)
-                                    || T_SFU_DECIMAL == ctx.tree_->type_);
+                                    || T_SFU_DECIMAL == ctx.tree_->type_
+                                    || T_WEIGHT_STRING_LEVEL_PARAM == ctx.tree_->type_);
       }
     } else {
       ctx.is_fast_parse_const_ = false;
@@ -452,7 +453,7 @@ bool ObSqlParameterization::is_ignore_scale_check(TransformTreeCtx &ctx, const P
 *       select weight_string("AAA" as char(1) level 1-2 );
 *       select weight_string("AAA" as char(1) level 1,2,3,4,5,6,7,8,9,10,11 );
 *       select weight_string("AAA" as char(1) level 1 desc,2 asc ,3 desc ,4 reverse,5,6,7,8,9 reverse,10,11 );
-*    解法：由于这个函数是一个debug的函数，是用来测试collation是否正确的。不是特别需要使用plan_cache来提高性能。为了解决在check_and_generate_param_info()内的"const number of fast parse and normal parse is different"的ERROR。在sql_info.sql_traits_中新增了bool变量，命名为has_weight_string_func_stmt_，表示sql中是否包含wegiht_string函数。如果该变量为True,则跳过报错的逻辑。
+*    解法：创建一个新的item_type(T_WEIGHT_STRING_LEVEL_PARAM) ，根据不同的语法来设置不同的param_num_,这样normal_parser就可以和faster_parser相等了，等到具体处理T_WEIGHT_STRING_LEVEL_PARAM的时候,把它转换为T_INT进行后续的处理。
 */
 int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                                           const ObSQLSessionInfo &session_info)
@@ -858,15 +859,9 @@ int ObSqlParameterization::check_and_generate_param_info(const ObIArray<ObPCPara
   if (sql_info.total_ != raw_params.count()) {
     ret = OB_NOT_SUPPORTED;
 #if !defined(NDEBUG)
-    if ( sql_info.sql_traits_.has_weight_string_func_stmt_ ) {
-      // do nothing
-    }
-    else {
-      ret = OB_NOT_SUPPORTED;
-      SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
-            "fast_parse_const_num", raw_params.count(),
-            "normal_parse_const_num", sql_info.total_);
-    }
+    SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
+               "fast_parse_const_num", raw_params.count(),
+               "normal_parse_const_num", sql_info.total_);
 #endif
   }
   ObPCParam *pc_param = NULL;
@@ -1462,7 +1457,8 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
     }
   } else if (T_CAST_ARGUMENT == node->type_        //如果是cast类型，则需要添加N个cast节点对应的常数, 因为正常parse不识别为常量, 但fast parse时会识别为常量
              || T_COLLATION == node->type_
-             || T_NULLX_CLAUSE == node->type_) { // deal null clause on json expr
+             || T_NULLX_CLAUSE == node->type_ // deal null clause on json expr
+             || T_WEIGHT_STRING_LEVEL_PARAM == node->type_) {
     for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
       if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
         SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
@@ -1554,7 +1550,6 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
           && (5 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_FIVE = 5;
         bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1}; //0表示参数化, 1 表示不参数化
-        sql_info.sql_traits_.has_weight_string_func_stmt_ = true;
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark weight_string arg", K(ret));
         }

@@ -3116,9 +3116,9 @@ ws_level_list_item
 }
 | ws_level_list ',' ws_level_list_item
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
   $$->value_ = $3->value_ | $1->value_;
-  $$->param_num_ = 1;
+  $$->param_num_ = $1->param_num_ + $3->param_num_;
 }
 ;
 
@@ -3134,7 +3134,7 @@ ws_level_number ws_level_flags
 ws_level_range:
 ws_level_number '-' ws_level_number
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
   uint32_t res = 0;
   uint32_t start = $1->value_ ;
   uint32_t end = $3->value_ ;
@@ -3145,7 +3145,7 @@ ws_level_number '-' ws_level_number
     res |= (1 << start);
   }
   $$->value_ = res;
-  $$->param_num_ = 1;
+  $$->param_num_ = 2;
 }
 ;
 
