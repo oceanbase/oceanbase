@@ -32,7 +32,7 @@ class MyAllocator : public ObIAllocator
 public:
   void *alloc(const int64_t size)
   {
-    void *ptr = ob_malloc(size);
+    void *ptr = ob_malloc(size, "test");
     ptr_set.insert(ptr);
     return ptr;
   }
