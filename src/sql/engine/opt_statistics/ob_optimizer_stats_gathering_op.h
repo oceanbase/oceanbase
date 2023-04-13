@@ -106,6 +106,7 @@ public:
 
 private:
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 100;
+  void reuse_stats();
   inline TabStatIndMap& get_tab_stat_map() { return table_stats_map_;};
   inline ColStatIndMap& get_col_stat_map() { return column_stats_map_;};
 

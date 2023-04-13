@@ -108,6 +108,20 @@ void ObOptimizerStatsGatheringOp::reset()
   arena_.reset();
 }
 
+void ObOptimizerStatsGatheringOp::reuse_stats()
+{
+  FOREACH(it, column_stats_map_) {
+    if (OB_NOT_NULL(it->second)) {
+      it->second->reset();
+      it->second = NULL;
+    }
+  }
+  table_stats_map_.reuse();
+  column_stats_map_.reuse();
+  part_map_.reuse();
+  arena_.reset();
+}
+
 int ObOptimizerStatsGatheringOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -189,6 +203,7 @@ int ObOptimizerStatsGatheringOp::inner_get_next_row()
           LOG_WARN("failed to call msg end", K(ret));
         }
       }
+      reuse_stats();
       if (OB_SUCC(ret)) {
         ret = OB_ITER_END;
       }
@@ -237,6 +252,7 @@ int ObOptimizerStatsGatheringOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("failed to call msg end", K(ret));
         }
       }
+      reuse_stats();
     }
   }
   return ret;
