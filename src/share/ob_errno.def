@@ -640,6 +640,7 @@ DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop proc
 DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
+//DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
