@@ -5465,6 +5465,7 @@ def_table_schema(
 # 456 : __wr_snapshot
 # 457 : __wr_statname
 # 458 : __wr_sysstat
+# 459 : __all_balance_task_helper
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11447,6 +11448,7 @@ def_table_schema(
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
 # 12395: __all_virtual_timestamp_service
+# 12396: __all_virtual_resource_pool_mysql_sys_agent
 #
 # 余留位置
 #
@@ -11750,6 +11752,7 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__
 # 15380: __all_virtual_balance_task_history
 # 15381: __all_virtual_transfer_task
 # 15382: __all_virtual_transfer_task_history
+# 15383: __all_virtual_resource_pool_sys_agent
 
 ################################################################################
 # System View (20000,30000]
