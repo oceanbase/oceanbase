@@ -660,6 +660,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
+  void clear_interrupt() { flags_.INTERRUPTED_ = false; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
