@@ -468,7 +468,6 @@ int ObDASRef::close_all_task()
   int ret = OB_SUCCESS;
   int last_end_ret = OB_SUCCESS;
   if (has_task()) {
-    NG_TRACE(close_das_task_begin);
     FLTSpanGuard(close_das_task);
     ObSQLSessionInfo *session = nullptr;
 
@@ -506,7 +505,6 @@ int ObDASRef::close_all_task()
     if (task_map_.created()) {
       task_map_.destroy();
     }
-    NG_TRACE(close_das_task_end);
   }
   return ret;
 }

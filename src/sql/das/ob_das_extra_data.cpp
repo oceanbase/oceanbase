@@ -51,7 +51,6 @@ int ObDASExtraData::init(const int64_t task_id,
 int ObDASExtraData::fetch_result()
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(fetch_das_extra_result_begin);
   FLTSpanGuard(fetch_das_extra_result);
   ObDASDataFetchReq req;
   int64_t tenant_id = MTL_ID();
@@ -74,7 +73,6 @@ int ObDASExtraData::fetch_result()
     LOG_TRACE("das fetch task result", KR(ret), K(req), K(result_));
     has_more_ = result_.has_more();
   }
-  NG_TRACE(fetch_das_extra_result_end);
   return ret;
 }
 

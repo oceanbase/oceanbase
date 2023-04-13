@@ -185,12 +185,10 @@ int ObDASSyncAccessP::process()
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("DAS sync access remote process", K_(arg));
-  NG_TRACE(das_sync_rpc_process_begin);
   FLTSpanGuard(das_sync_rpc_process);
   if (OB_FAIL(ObDASSyncRpcProcessor::process())) {
     LOG_WARN("failed to process das sync rpc", K(ret));
   }
-  NG_TRACE(das_sync_rpc_process_end);
   return OB_SUCCESS;
 }
 
@@ -198,12 +196,10 @@ int ObDASAsyncAccessP::process()
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("DAS async access remote process", K_(arg));
-  NG_TRACE(das_async_rpc_process_begin);
   FLTSpanGuard(das_async_rpc_process);
   if (OB_FAIL(ObDASAsyncRpcProcessor::process())) {
     LOG_WARN("failed to process das async rpc", K(ret));
   }
-  NG_TRACE(das_async_rpc_process_end);
   return OB_SUCCESS;
 }
 
@@ -269,7 +265,6 @@ int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr)
 int ObDASSyncFetchP::process()
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(fetch_das_result_process_begin);
   FLTSpanGuard(fetch_das_result_process);
   ObDASDataFetchReq &req = arg_;
   ObDASDataFetchRes &res = result_;
@@ -300,7 +295,6 @@ int ObDASSyncFetchP::process()
   } else {
     res.set_has_more(has_more);
   }
-  NG_TRACE(fetch_das_result_process_end);
   return ret;
 }
 
