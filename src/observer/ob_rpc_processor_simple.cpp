@@ -1975,6 +1975,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
     LOG_WARN("invalid arguments", K(ret), K_(arg));
   } else {
     MTL_SWITCH(tenant_id) {
+      ObRole role = INVALID_ROLE;
       ObDDLSSTableRedoWriter sstable_redo_writer;
       MacroBlockId macro_block_id;
       ObMacroBlockHandle macro_handle;
@@ -1983,6 +1984,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       ObLSHandle ls_handle;
       ObTabletHandle tablet_handle;
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
+      ObLS *ls = nullptr;
 
       // restruct write_info
       write_info.buffer_ = arg_.redo_info_.data_buffer_.ptr();
@@ -1991,7 +1993,15 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
       if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(arg_.redo_info_.table_key_.tablet_id_, tablet_handle))) {
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (ObRole::LEADER != role) {
+        ret = OB_NOT_MASTER;
+        LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(ls->get_tablet(arg_.redo_info_.table_key_.tablet_id_, tablet_handle))) {
         LOG_WARN("get tablet failed", K(ret));
       } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         LOG_WARN("get ddl kv manager failed", K(ret));
@@ -2018,18 +2028,28 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
   uint64_t tenant_id = arg_.tenant_id_;
 
   MTL_SWITCH(tenant_id) {
+    ObRole role = INVALID_ROLE;
     const ObITable::TableKey &table_key = arg_.table_key_;
     ObDDLSSTableRedoWriter sstable_redo_writer;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObTabletHandle tablet_handle;
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    ObLS *ls = nullptr;
     if (OB_UNLIKELY(!arg_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K_(arg));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
       LOG_WARN("get ls failed", K(ret), K(arg_));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+    } else if (OB_FAIL(ls->get_ls_role(role))) {
+      LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+    } else if (ObRole::LEADER != role) {
+      ret = OB_NOT_MASTER;
+      LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+    } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
