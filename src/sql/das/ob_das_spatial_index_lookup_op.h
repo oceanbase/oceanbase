@@ -46,7 +46,7 @@ public:
            ObDASScanRtDef *index_rtdef,
            transaction::ObTxDesc *tx_desc,
            transaction::ObTxReadSnapshot *snapshot,
-           const ObMbrFilterArray *mbr_filters);
+           storage::ObTableScanParam &scan_param);
   int reset_lookup_state();
   int filter_by_mbr(const ObObj &mbr_obj, bool &pass_through);
   int get_next_row();

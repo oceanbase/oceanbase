@@ -41,18 +41,21 @@ int ObSpatialIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
                                  ObDASScanRtDef *index_rtdef,
                                  ObTxDesc *tx_desc,
                                  ObTxReadSnapshot *snapshot,
-                                 const ObMbrFilterArray *mbr_filters)
+                                 ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObLocalIndexLookupOp::init(lookup_ctdef, lookup_rtdef, index_ctdef,
                                          index_rtdef, tx_desc, snapshot))) {
     LOG_WARN("ObLocalIndexLookupOp init failed", K(ret));
-  } else if (OB_ISNULL(mbr_filters)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mbr filter is null", K(ret));
   } else {
-    mbr_filters_ = mbr_filters;
+    mbr_filters_ = &scan_param.mbr_filters_;
     is_inited_ = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < scan_param.key_ranges_.count(); i++) {
+      if (scan_param.key_ranges_.at(i).is_whole_range()) {
+        is_whole_range_ = true;
+      }
+    }
+    is_whole_range_ |= (mbr_filters_->count() == 0);
   }
   return ret;
 }
@@ -137,7 +140,6 @@ int ObSpatialIndexLookupOp::get_next_row()
     if (OB_FAIL(sorter_.init(buf_limit, file_buf_size, expire_timestamp, tenant_id, &comparer_))) {
       STORAGE_LOG(WARN, "fail to init external sorter", K(ret));
     } else {
-      is_whole_range_ = (mbr_filters_->count() == 0);
       is_inited_ = true;
       while (OB_SUCC(ret)) {
         index_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
