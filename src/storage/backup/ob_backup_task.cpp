@@ -99,6 +99,8 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
             // clog checkpoint ts has passed start log ts
             ret = OB_SUCCESS;
             break;
+          } else if (OB_EAGAIN == ret) {
+            ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id));
           }
