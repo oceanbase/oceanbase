@@ -1010,6 +1010,37 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_
   }
   return ret;
 }
+
+void ObDDLUtil::get_ddl_rpc_timeout_for_database(const int64_t tenant_id, const int64_t database_id, int64_t &ddl_rpc_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t tablet_count = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  ObArray<uint64_t> table_ids;
+  int64_t total_tablet_cnt = 0;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(database_id));
+  } else if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_ids_in_database(tenant_id,
+                                                            database_id,
+                                                            table_ids))) {
+    LOG_WARN("failed to get table ids in database", K(ret));
+  }
+  for (int64_t i = 0; i < table_ids.count(); i++) {
+    int64_t tablet_count = 0;
+    if (OB_SUCCESS != get_tablet_count(tenant_id, table_ids[i], tablet_count)) {
+      tablet_count = 0;
+    }
+    total_tablet_cnt += tablet_count;
+  }
+  (void)get_ddl_rpc_timeout(total_tablet_cnt, ddl_rpc_timeout_us);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
+  return;
+}
+
 int ObDDLUtil::get_ddl_tx_timeout(const int64_t tablet_count, int64_t &ddl_tx_timeout_us)
 {
   int ret = OB_SUCCESS;
