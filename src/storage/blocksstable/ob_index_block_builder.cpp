@@ -672,24 +672,12 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
     ObIndexBlockRowDesc row_desc(data_desc);
     for (int64_t i = 0; OB_SUCC(ret) && i < roots_.count(); ++i) {
       ObMacroMetasArray *macro_metas = roots_[i]->macro_metas_;
-      int64_t prev_macro_seq = -1;
       for (int64_t j = 0; OB_SUCC(ret) && j < macro_metas->count(); ++j) {
         ObDataMacroBlockMeta *macro_meta = macro_metas->at(j);
         if (OB_ISNULL(macro_meta)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected null macro meta", K(ret), K(j), KPC(roots_.at(i)));
-        } else if (curr_logical_version == macro_meta->get_logic_id().logic_version_) {
-          // latest logical version, check whether data sequence is monotonically increasing
-          if (OB_UNLIKELY(macro_meta->get_logic_id().data_seq_ <= prev_macro_seq)) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(ERROR, "unexpected duplicate macro block sequence in one single sstable build task",
-                K(ret), K(curr_logical_version), KPC(macro_meta), K(prev_macro_seq), K_(index_store_desc));
-          } else {
-            prev_macro_seq = macro_meta->get_logic_id().data_seq_;
-          }
-        }
-
-        if (FAILEDx(index_builder_.append_row(*macro_meta, row_desc))) {
+        } else if (OB_FAIL(index_builder_.append_row(*macro_meta, row_desc))) {
           STORAGE_LOG(WARN, "fail to append row", K(ret), KPC(macro_meta), K(j), KPC(roots_.at(i)));
         }
       }
