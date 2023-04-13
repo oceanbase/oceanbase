@@ -7026,7 +7026,7 @@ int ObPartTransCtx::handle_trans_ask_state_resp(const ObAskStateRespMsg &msg)
         if (OB_FAIL(state_info_array_.push_back(msg.state_info_array_.at(i)))) {
           TRANS_LOG(WARN, "push back state info array fail", K(ret));
         }
-      } else if (state_info_array_.at(j-1).snapshot_version_ < msg.state_info_array_.at(i).snapshot_version_) {
+      } else if (state_info_array_.at(j-1).need_update(msg.state_info_array_.at(i))) {
         state_info_array_.at(j-1) = msg.state_info_array_.at(i);
       }
     }
@@ -7128,7 +7128,7 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
     if (!is_contain) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "state info array has wrong participiants", K(ret), K(msg), KPC(this));
-    } else if (state_info_array_.at(i-1).snapshot_version_ < msg.state_info_.snapshot_version_) {
+    } else if (state_info_array_.at(i-1).need_update(msg.state_info_)) {
       state_info_array_.at(i-1) = msg.state_info_;
     }
     if (OB_SUCC(ret)) {
