@@ -3153,7 +3153,13 @@ int ObLogSlidingWindow::majority_cb(
     ret = OB_ERR_NULL_VALUE;
   } else {
     log_task = static_cast<ObLogTask *>(log_data);
-    if (ObLogType::OB_LOG_START_MEMBERSHIP != log_task->get_log_type()) {
+    if (ObLogType::OB_LOG_START_MEMBERSHIP != log_task->get_log_type()
+        // Towards to the log which reconfirmed by the new leader, it may call
+        // majority_cb without really replaying it which means the real log
+        // position may lag behind the max majority log too much and cause the
+        // freeze process to hang(which will check the freeze log ts is ahead
+        // the max majority log ts).
+        && !log_task->is_empty_cb()) {
       try_update_max_majority_log(log_id, log_task->get_submit_timestamp());
     }
     if (OB_FAIL(log_task->submit_log_succ_cb(partition_key_, log_id, batch_committed, batch_first_participant))) {

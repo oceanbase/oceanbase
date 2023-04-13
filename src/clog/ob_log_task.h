@@ -153,6 +153,7 @@ public:
   const ObLogCursor& get_log_cursor() const;
   bool is_log_cursor_valid() const;
   bool is_checksum_verified(const int64_t data_checksum) const;
+  bool is_empty_cb() const;
   // common::ObTraceProfile *get_trace_profile() {return trace_profile_;}
   // int report_trace();
 

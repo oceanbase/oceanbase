@@ -269,6 +269,11 @@ int ObLogTask::set_log_cursor_without_stat(const ObLogCursor& cursor)
   return ret;
 }
 
+bool ObLogTask::is_empty_cb() const
+{
+  return NULL == submit_cb_;
+}
+
 int ObLogTask::submit_log_succ_cb(const common::ObPartitionKey& pkey, const uint64_t log_id, const bool batch_committed,
     const bool batch_first_participant)
 {
