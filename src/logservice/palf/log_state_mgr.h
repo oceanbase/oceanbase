@@ -92,6 +92,10 @@ public:
   virtual int disable_sync();
   virtual bool is_sync_enabled() const;
   virtual bool is_allow_vote() const;
+  virtual bool is_allow_vote_persisted() const;
+  //only modify allow_vote_
+  virtual int disable_vote_in_mem();
+  //modify allow_vote_ and allow_vote_persisted_
   virtual int disable_vote();
   virtual int enable_vote();
   virtual LogReplicaType get_replica_type() const;
@@ -102,7 +106,7 @@ public:
   virtual bool is_changing_config_with_arb() const;
   TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_), "replica_type",         \
       replica_type_2_str(replica_type_), "state", replica_state_to_string(state_), K_(prepare_meta),   \
-      K_(leader), K_(leader_epoch), K_(is_sync_enabled), K_(allow_vote), K_(pending_end_lsn),          \
+      K_(leader), K_(leader_epoch), K_(is_sync_enabled), K_(allow_vote), K_(allow_vote_persisted), K_(pending_end_lsn),          \
       K_(scan_disk_log_finished), K_(last_check_start_id), K_(is_changing_config_with_arb),            \
       K_(reconfirm_start_time_us), KP_(palf_role_change_cb), K_(allow_vote));
 private:
@@ -191,6 +195,8 @@ private:
   // whether this replica is allowed to reply ack when receiving logs
   // it's true by default
   bool allow_vote_;
+  // value of allow_vote persisted_, will be modified after meta is flushed
+  bool allow_vote_persisted_;
   // whether this replica is an arbitration replica
   LogReplicaType replica_type_;
   // is changing config with arbitration member, stop appending logs

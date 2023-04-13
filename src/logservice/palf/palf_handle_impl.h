@@ -183,6 +183,38 @@ struct LSKey {
   TO_STRING_KV(K_(id));
 };
 
+struct RebuildMetaInfo
+{
+public:
+  RebuildMetaInfo() {reset();}
+  ~ RebuildMetaInfo() {reset();}
+  void reset()
+  {
+    committed_end_lsn_.reset();
+    last_submit_lsn_.reset();
+    last_submit_log_pid_ = INVALID_PROPOSAL_ID;
+  }
+  bool is_valid() const
+  {
+    return (committed_end_lsn_.is_valid()
+            && last_submit_lsn_.is_valid()
+            && INVALID_PROPOSAL_ID != last_submit_log_pid_);
+  }
+  bool operator==(const RebuildMetaInfo &other) const
+  {
+    return (committed_end_lsn_ == other.committed_end_lsn_
+            && last_submit_lsn_ == other.last_submit_lsn_
+            && last_submit_log_pid_ == other.last_submit_log_pid_);
+  }
+  TO_STRING_KV(K_(committed_end_lsn),
+               K_(last_submit_lsn),
+               K_(last_submit_log_pid));
+public:
+  LSN committed_end_lsn_;
+  LSN last_submit_lsn_;
+  int64_t last_submit_log_pid_;
+};
+
 // 日志服务的接口类，logservice以外的模块使用日志服务，只允许调用IPalfHandleImpl的接口
 class IPalfHandleImpl : public common::LinkHashValue<LSKey>
 {
@@ -576,7 +608,14 @@ public:
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
   // This interface is idempotent.
-  virtual int disable_vote() = 0;
+  // @param[in] need_check_log_missing: reason for rebuilding. True means log missing, False means data
+  // missing
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_OP_NOT_ALLOWED: no need to rebuilds. rebuilding should be abandoned.
+  // OB_LEADER_NOT_EXIST: no leader when double checking. rebuilding should retry.
+  virtual int disable_vote(const bool need_check_log_missing) = 0;
   // @brief: store a persistent flag which means this paxos replica
   // can reply ack when receiving logs.
   // By default, paxos replica can reply ack.
@@ -710,7 +749,7 @@ public:
   int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) override final;
   int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) override final;
   bool is_vote_enabled() const override final;
-  int disable_vote() override final;
+  int disable_vote(const bool need_check_log_missing) override final;
   int enable_vote() override final;
 public:
   int delete_block(const block_id_t &block_id) override final;
@@ -909,7 +948,11 @@ private:
                              const LogModeMeta &mode_meta);
   int after_flush_snapshot_meta_(const LSN &lsn);
   int after_flush_replica_property_meta_(const bool allow_vote);
-  int set_allow_vote_flag_(const bool allow_vote);
+  /*
+   *param[in] need_check_log_missing: for disable_vote invoke by rebuilding,
+   true means need double check whether log is actually missing
+   * */
+  int set_allow_vote_flag_(const bool allow_vote, const bool need_check_log_missing);
   int get_prev_log_info_(const LSN &lsn, LogInfo &log_info);
   int get_prev_log_info_for_fetch_(const LSN &prev_lsn,
                                    const LSN &curr_lsn,
@@ -991,6 +1034,8 @@ private:
   int leader_sync_mode_meta_to_arb_member_();
   void is_in_sync_(bool &is_log_sync, bool &is_use_cache);
   int get_leader_max_scn_(SCN &max_scn, LSN &end_lsn);
+  void gen_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta) const;
+  void get_last_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta_info) const;
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {
@@ -1077,8 +1122,9 @@ private:
   int64_t append_size_stat_time_us_;
   int64_t replace_member_print_time_us_;
   mutable int64_t config_change_print_time_us_;
-  mutable SpinLock last_rebuild_lsn_lock_;
+  mutable SpinLock last_rebuild_meta_info_lock_;//protect last_rebuild_lsn_ and last_rebuild_meta_info_
   LSN last_rebuild_lsn_;
+  RebuildMetaInfo last_rebuild_meta_info_;//used for double checking whether it is necessary to rebuild
   LSN last_record_append_lsn_;
   // NB: only set has_set_deleted_ to true when this palf_handle has been deleted.
   bool has_set_deleted_;

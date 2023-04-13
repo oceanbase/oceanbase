@@ -542,7 +542,7 @@ public:
   // @param[out] null.
   DELEGATE_WITH_RET(log_handler_, enable_vote, int);
   // @breif, palf disable vote
-  // @param[in] null.
+  // @param[in] need_check.
   // @param[out] null.
   DELEGATE_WITH_RET(log_handler_, disable_vote, int);
   DELEGATE_WITH_RET(log_handler_, add_member, int);

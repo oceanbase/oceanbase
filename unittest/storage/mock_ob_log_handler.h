@@ -412,7 +412,11 @@ public:
     return OB_SUCCESS;
   }
   int enable_vote() { return OB_SUCCESS; }
-  int disable_vote() { return OB_SUCCESS; }
+  int disable_vote(const bool need_check_log_missing)
+  {
+    UNUSED(need_check_log_missing);
+    return OB_SUCCESS;
+  }
   int get_election_leader(common::ObAddr &addr) const
   {
     UNUSED(addr);

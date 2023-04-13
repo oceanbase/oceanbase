@@ -404,11 +404,11 @@ int PalfHandle::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
-int PalfHandle::disable_vote()
+int PalfHandle::disable_vote(const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->disable_vote();
+  ret = palf_handle_impl_->disable_vote(need_check_log_missing);
   return ret;
 }
 

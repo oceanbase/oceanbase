@@ -135,7 +135,7 @@ public:
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
   virtual bool is_replay_enabled() const = 0;
-  virtual int disable_vote() = 0;
+  virtual int disable_vote(const bool need_check_log_missing) = 0;
   virtual int enable_vote() = 0;
   virtual int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) = 0;
   virtual int unregister_rebuild_cb() = 0;
@@ -458,10 +458,16 @@ public:
   // @brief, get max decided log ts considering both apply and replay.
   // @param[out] int64_t&, max decided log ts ns.
   int get_max_decided_scn(share::SCN &scn) override final;
-  // @brief: store a persistent flag which means this paxos replica
-  // can not reply ack when receiving logs.
+  // @brief: store a persistent flag which means this paxos replica  can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
-  int disable_vote() override final;
+  // @param[in] need_check_log_missing: for rebuildinng caused by log missing, need check whether log
+  // is actually missing
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_OP_NOT_ALLOW: no need to rebuilds, log is available. rebuilding should be abandoned.
+  // OB_LEADER_NOT_EXIST: no leader when double checking. rebuilding should retry.
+  int disable_vote(const bool need_check_log_missing) override final;
   // @brief: store a persistent flag which means this paxos replica
   // can reply ack when receiving logs.
   // By default, paxos replica can reply ack.

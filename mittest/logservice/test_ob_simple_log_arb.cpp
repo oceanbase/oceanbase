@@ -134,7 +134,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   EXPECT_TRUE(is_upgraded(leader, id));
 
   // test disbale vote
-  palf_list[another_f_idx]->palf_handle_impl_->disable_vote();
+  palf_list[another_f_idx]->palf_handle_impl_->disable_vote(false/*no need check log missing*/);
   EXPECT_TRUE(is_degraded(leader, another_f_idx));
   palf_list[another_f_idx]->palf_handle_impl_->enable_vote();
   EXPECT_TRUE(is_upgraded(leader, id));

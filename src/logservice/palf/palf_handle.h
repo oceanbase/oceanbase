@@ -325,9 +325,10 @@ public:
   bool is_vote_enabled() const;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
+  // @param[in] need_check_log_missing: for rebuildinng caused by log missing, need check whether log
   // By default, paxos replica can reply ack.
   // @return:
-  int disable_vote();
+  int disable_vote(const bool need_check_log_missing);
   // @brief: store a persistent flag which means this paxos replica
   // can reply ack when receiving logs.
   // By default, paxos replica can reply ack.
