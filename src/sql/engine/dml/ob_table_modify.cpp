@@ -331,7 +331,7 @@ int ObTableModify::ObTableModifyCtx::check_stack()
 
 /**
  * TODO
- * after we support nested table like: http://www.orafaq.com/wiki/NESTED_TABLE,
+ * after we support nested table like: wiki/NESTED_TABLE,
  * we must consider :PARENT if base table is nested table, so some const variable
  * below should change, and before_row / after_row procedure should add parameter
  * for :PARENT.
@@ -1064,6 +1064,11 @@ int ObTableModify::validate_row(ObExprCtx& expr_ctx, ObCastCtx& column_conv_ctx,
                                            ob_is_blob_locator(res_type.get_type(), res_type.get_collation_type()))) {
           column_conv_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
         }
+
+        if (ob_is_json(res_type.get_type())) {
+          column_conv_ctx.cast_mode_ |= CM_COLUMN_CONVERT;
+        }
+
         if (OB_UNLIKELY(res_type.is_null())) {
           // The column type cannot be null, and the result type is null, indicating that
           // the conversion type of the column is empty, and no type conversion is required
@@ -1093,7 +1098,7 @@ int ObTableModify::check_row_null(ObExecContext &ctx, const ObNewRow &calc_row,
 {
   int ret = OB_SUCCESS;
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {
-    //兼容oracle, 如果有instead of trigger,不检查NOT NULL约束
+    // for consistent with oracle sake, iff instead of trigger, no need check NOT NULL constrain
     OV(calc_row.get_count() == column_infos.count(), OB_ERR_UNEXPECTED, calc_row, column_infos);
     for (int i = 0; OB_SUCC(ret) && i < update_col_infos.count(); i++) {
       int64_t col_idx = update_col_infos.at(i).projector_index_;
