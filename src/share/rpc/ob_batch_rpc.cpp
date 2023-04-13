@@ -284,7 +284,7 @@ void ObBatchRpcBase::do_work()
 {
   if (is_inited_) {
     const int64_t start_ts = common::ObTimeUtility::current_time();
-    static const int64_t CLEAN_SVR_INTERVAL = 15 * 24 * 3600 * 1000 * 1000l;  // clean server when idle time reachs 15d
+    static const int64_t CLEAN_SVR_INTERVAL = 3600 * 1000 * 1000l;  // clean server when idle time reachs 1h
     bool need_gc = false;
     RpcBuffer* iter = NULL;
     while(NULL != (iter = buffer_map_->quick_next(iter))) {
