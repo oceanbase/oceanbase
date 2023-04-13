@@ -1149,6 +1149,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   table_iter.resume();
   int64_t memtable_cnt = 0;
   read_memtable_only_ = false;
+  bool read_released_memtable = false;
   while (OB_SUCC(ret)) {
     ObITable *table_ptr = nullptr;
     bool need_table = true;
@@ -1174,6 +1175,8 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
       } else if (table_ptr->is_memtable()) {
+        read_released_memtable = read_released_memtable ||
+            memtable::ObMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
         ++memtable_cnt;
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {
@@ -1193,6 +1196,13 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   if (OB_SUCC(ret) && memtable_cnt == tables_.count()) {
     read_memtable_only_ = true;
   }
+  #ifdef ENABLE_DEBUG_LOG
+  if (GCONF.enable_defensive_check() && read_released_memtable) {
+    for (int64_t i = 0; i < tables_.count(); ++i) {
+      LOG_INFO("dump read tables", KPC(tables_.at(i)));
+    }
+  }
+  #endif
   return ret;
 }
 
