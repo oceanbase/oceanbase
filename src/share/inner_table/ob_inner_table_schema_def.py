@@ -25682,6 +25682,7 @@ def_table_schema(
 # 21400: V$OB_LOCKS
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
+# 21403: DBA_OB_EXTERNAL_TABLE_FILE
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43093,6 +43094,9 @@ def_table_schema(
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
 # 25233: DBA_OB_LOG_RESTORE_SOURCE
+# 25234: DBA_OB_EXTERNAL_TABLE_FILES
+# 25235: USER_OB_ETERNAL_TABLE_FILES
+# 25236  ALL_OB_EXTERNAL_TABLE_FILES
 
 #### End Data Dictionary View
 ################################################################################
@@ -48587,7 +48591,6 @@ def_table_schema(
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
 # 28192:  V$OB_ARBITRATION_SERVICE_STATUS
-
 
 ################################################################################
 # Lob Table (50000, 70000)
