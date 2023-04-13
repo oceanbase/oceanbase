@@ -11449,6 +11449,7 @@ def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywor
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
 # 12395: __all_virtual_timestamp_service
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
+# 12397: __all_virtual_px_p2p_datahub
 #
 # 余留位置
 #
@@ -11753,6 +11754,7 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__
 # 15381: __all_virtual_transfer_task
 # 15382: __all_virtual_transfer_task_history
 # 15383: __all_virtual_resource_pool_sys_agent
+# 15384: __all_virtual_px_p2p_datahub
 
 ################################################################################
 # System View (20000,30000]
@@ -25708,6 +25710,10 @@ def_table_schema(
 # 21416: CDB_OB_TRANSFER_TASK_HISTORY
 # 21417: ALL_OB_EXTERNAL_TABLE_FILE
 # 21418: CDB_OB_EXTERNAL_TABLE_FILE
+# 21419: GV$OB_PX_P2P_DATAHUB
+# 21420: V$OB_PX_P2P_DATAHUB
+# 21421: GV$SQL_JOIN_FILTER
+# 21422: V$SQL_JOIN_FILTER
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43127,6 +43133,10 @@ def_table_schema(
 # 25240: DBA_OB_BALANCE_TASK_HISTORY
 # 25241: DBA_OB_TRANSFER_TASKS
 # 25242: DBA_OB_TRANSFER_TASK_HISTORY
+# 25243: GV$OB_PX_P2P_DATAHUB
+# 25244: V$OB_PX_P2P_DATAHUB
+# 25245: GV$SQL_JOIN_FILTER
+# 25246: V$SQL_JOIN_FILTER
 
 #### End Data Dictionary View
 ################################################################################
