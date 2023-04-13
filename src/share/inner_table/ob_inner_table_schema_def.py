@@ -11744,6 +11744,12 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__
 
 # [15306, 15375] for oracle inner_table index
 # 15376: __all_virtual_log_restore_source
+# 15377: __all_virtual_balance_job
+# 15378: __all_virtual_balance_job_history
+# 15379: __all_virtual_balance_task
+# 15380: __all_virtual_balance_task_history
+# 15381: __all_virtual_transfer_task
+# 15382: __all_virtual_transfer_task_history
 
 ################################################################################
 # System View (20000,30000]
@@ -25685,6 +25691,18 @@ def_table_schema(
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
 # 21404: V$OB_TIMESTAMP_SERVICE
+# 21405: DBA_OB_BALANCE_JOBS
+# 21406: CDB_OB_BALANCE_JOBS
+# 21407: DBA_OB_BALANCE_JOB_HISTORY
+# 21408: CDB_OB_BALANCE_JOB_HISTORY
+# 21409: DBA_OB_BALANCE_TASKS
+# 21410: CDB_OB_BALANCE_TASKS
+# 21411: DBA_OB_BALANCE_TASK_HISTORY
+# 21412: CDB_OB_BALANCE_TASK_HISTORY
+# 21413: DBA_OB_TRANSFER_TASKS
+# 21414: CDB_OB_TRANSFER_TASKS
+# 21415: DBA_OB_TRANSFER_TASK_HISTORY
+# 21416: CDB_OB_TRANSFER_TASK_HISTORY
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43099,6 +43117,12 @@ def_table_schema(
 # 25234: DBA_OB_EXTERNAL_TABLE_FILES
 # 25235: USER_OB_ETERNAL_TABLE_FILES
 # 25236  ALL_OB_EXTERNAL_TABLE_FILES
+# 25237: DBA_OB_BALANCE_JOBS
+# 25238: DBA_OB_BALANCE_JOB_HISTORY
+# 25239: DBA_OB_BALANCE_TASKS
+# 25240: DBA_OB_BALANCE_TASK_HISTORY
+# 25241: DBA_OB_TRANSFER_TASKS
+# 25242: DBA_OB_TRANSFER_TASK_HISTORY
 
 #### End Data Dictionary View
 ################################################################################
