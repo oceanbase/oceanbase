@@ -127,7 +127,15 @@ private:
                const int64_t align_buf_size,
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool);
-  bool check_read_out_of_lower_bound_(const block_id_t &block_id) const;
+  // @ret val:
+  //   OB_SUCCESS
+  //   OB_ERR_OUT_OF_LOWER_BOUND
+  //   OB_ERR_OUT_OF_UPPER_BOUND
+  //      in flashback, (flashback_block_id, max_block_id] may be deleted, however, fetch log may read
+  //      some blocks in range of (flashback_block_id, max_block_id].
+  //   OB_NEED_RETRY
+  //   OB_ERR_UNEXPECTED
+  int check_read_out_of_bound_(const block_id_t &block_id) const;
   int inner_switch_block_();
   int append_block_header_used_for_meta_storage_();
   int append_block_header_(const LSN &block_min_lsn, const share::SCN &block_min_scn);

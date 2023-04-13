@@ -603,20 +603,29 @@ int LogStorage::do_init_(const char *base_dir,
   return ret;
 }
 
-bool LogStorage::check_read_out_of_lower_bound_(const block_id_t &block_id) const
+int LogStorage::check_read_out_of_bound_(const block_id_t &block_id) const
 {
-  bool bool_ret = false;
   int ret = OB_SUCCESS;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))
       && OB_ENTRY_NOT_EXIST != ret) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
+  } else if (max_block_id == block_id) {
+    ret = OB_NEED_RETRY;
+    PALF_LOG(WARN, "the block to be read is in flashback, need read retry", K(min_block_id), K(max_block_id), K(block_id));
+  } else if (max_block_id < block_id) {
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    PALF_LOG(WARN, "read something out of upper bound, the blocks may be deleted by flashback",
+        K(min_block_id), K(max_block_id), K(block_id));
+  } else if (min_block_id > block_id) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
+    PALF_LOG(TRACE, "read something out of lower bound", K(min_block_id), K(max_block_id), K(block_id));
   } else {
-    bool_ret = (min_block_id > block_id || max_block_id < block_id || OB_ENTRY_NOT_EXIST == ret);
-    PALF_LOG(TRACE, "curr block id range", K(min_block_id), K(max_block_id));
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, the block may be deleted by human", K(min_block_id), K(max_block_id), K(block_id));
   }
-  return bool_ret;
+  return ret;
 }
 
 int LogStorage::inner_switch_block_()
@@ -763,13 +772,7 @@ int LogStorage::read_block_header_(const block_id_t block_id,
   }
 
   if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    if (true == check_read_out_of_lower_bound_(block_id)) {
-      ret = OB_ERR_OUT_OF_LOWER_BOUND;
-      PALF_LOG(WARN, "this block has been deleted", K(ret), K(block_id));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(WARN, "unexpected error, maybe deleted by human or flashabck!!!", K(ret), K(block_id), KPC(this));
-    }
+    ret = check_read_out_of_bound_(block_id);
   }
   return ret;
 }
@@ -834,13 +837,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   }
 
   if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    if (true == check_read_out_of_lower_bound_(lsn_2_block(read_lsn, logical_block_size_))) {
-      ret = OB_ERR_OUT_OF_LOWER_BOUND;
-      PALF_LOG(WARN, "this block has been deleted", K(ret), K(read_lsn));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "unexpected error, maybe deleted by human!!!", K(ret), K(read_lsn));
-    }
+    ret = check_read_out_of_bound_(lsn_2_block(read_lsn, logical_block_size_));
   }
   return ret;
 }

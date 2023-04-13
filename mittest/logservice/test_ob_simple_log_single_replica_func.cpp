@@ -1671,6 +1671,54 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
 
 }
 
+TEST_F(TestObSimpleLogClusterSingleReplica, read_block_in_flashback)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "read_block_in_flashback");
+  OB_LOGGER.set_log_level("TRACE");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  PalfEnv *palf_env = NULL;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2 * 32 + 2, id, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.get_palf_handle_impl()->get_max_lsn()));
+
+  block_id_t min_block_id, max_block_id;
+  LogStorage *log_storage = &leader.get_palf_handle_impl()->log_engine_.log_storage_;
+  EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  EXPECT_EQ(2, max_block_id);
+  SCN scn;
+  char block_name_tmp[OB_MAX_FILE_NAME_LENGTH];
+  EXPECT_EQ(OB_SUCCESS, block_id_to_tmp_string(max_block_id, block_name_tmp, OB_MAX_FILE_NAME_LENGTH));
+  char block_name[OB_MAX_FILE_NAME_LENGTH];
+  EXPECT_EQ(OB_SUCCESS, block_id_to_string(max_block_id, block_name, OB_MAX_FILE_NAME_LENGTH));
+  ::renameat(log_storage->block_mgr_.dir_fd_, block_name, log_storage->block_mgr_.dir_fd_, block_name_tmp);
+  EXPECT_EQ(-1, ::openat(log_storage->block_mgr_.dir_fd_, block_name, LOG_READ_FLAG));
+  EXPECT_EQ(OB_NEED_RETRY, read_log(leader));
+  EXPECT_EQ(OB_NEED_RETRY, log_storage->get_block_min_scn(max_block_id, scn));
+
+  // 测试边界场景，read_log_tail_为文件中间，最后一个文件完全被flashback掉, 此时log_tail_是最后一个文件头
+  log_storage->log_tail_ = LSN(2*PALF_BLOCK_SIZE);
+  EXPECT_EQ(OB_NEED_RETRY, read_log(leader));
+  EXPECT_EQ(OB_NEED_RETRY, log_storage->get_block_min_scn(max_block_id, scn));
+
+  // 测试边界场景，read_log_tail_最后一个文件头，最后一个文件完全被flashback掉
+  log_storage->log_tail_ = LSN(2*PALF_BLOCK_SIZE);
+  log_storage->readable_log_tail_ = LSN(2*PALF_BLOCK_SIZE);
+  EXPECT_EQ(OB_ITER_END, read_log(leader));
+  EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_storage->get_block_min_scn(max_block_id, scn));
+
+  // 测试边界场景，readable_log_tail_还没改变前检验是否可读通过，直接读文件时报错文件不存在。
+  log_storage->log_tail_ = LSN(3*PALF_BLOCK_SIZE);
+  log_storage->readable_log_tail_ = LSN(3*PALF_BLOCK_SIZE);
+  // 设置max_block_id_为1是为了构造check_read_out_of_bound返回OB_ERR_OUT_OF_UPPER_BOUND的场景
+  log_storage->block_mgr_.max_block_id_ = 1;
+  // log_storage返回OB_ERR_OUT_OF_UPPER_BOUND, iterator将其转换为OB_ITER_END
+  EXPECT_EQ(OB_ITER_END, read_log(leader));
+  EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_storage->get_block_min_scn(max_block_id, scn));
+}
+
 
 } // namespace unittest
 } // namespace oceanbase
