@@ -45,7 +45,7 @@ public:
       const enum ObKVCachePolicy policy = LRU);
 protected:
   virtual bool add_handle_ref(MBWrapper *mb_wrapper) = 0;
-  virtual void de_handle_ref(MBWrapper *mb_wrapper) = 0;
+  virtual void de_handle_ref(MBWrapper *mb_wrapper, const bool do_retire = true) = 0;
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
       const int64_t block_size, MBWrapper *&mb_wrapper) = 0;
   virtual int free(MBWrapper *mb_wrapper) = 0;
@@ -84,12 +84,12 @@ public:
                              ObKVMemBlockHandle *&mb_handle);
   virtual int alloc_mbhandle(ObKVCacheInst &inst, ObKVMemBlockHandle *&mb_handle);
   virtual int alloc_mbhandle(const ObKVCacheInstKey &inst_key, ObKVMemBlockHandle *&mb_handle);
-  virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle);
+  virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle, const bool do_retire);
   virtual int mark_washable(ObKVMemBlockHandle *mb_handle);
 
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num);
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle);
-  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle);
+  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true);
   int64_t get_handle_ref_cnt(const ObKVMemBlockHandle *mb_handle);
   virtual int64_t get_block_size() const { return block_size_; }
   // implement functions of ObIMBWrapperMgr
@@ -111,6 +111,7 @@ private:
     const int64_t size_need_washed = INT64_MAX,
     const bool force_flush = false);
   int inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
+  void purge_mb_handle_retire_station();
 
 private:
   static const int64_t SYNC_WASH_MB_TIMEOUT_US = 100 * 1000; // 100ms
@@ -213,9 +214,9 @@ private:
   }
 
   int insert_mb_handle(common::ObDLink *head, ObKVMemBlockHandle *mb_handle);
-  int remove_mb_handle(ObKVMemBlockHandle *mb_handle);
-  void retire_mb_handle(ObKVMemBlockHandle *mb_handle);
-  void retire_mb_handles(HazardList &retire_list);
+  int remove_mb_handle(ObKVMemBlockHandle *mb_handle, const bool do_retire);
+  void retire_mb_handle(ObKVMemBlockHandle *mb_handle, const bool do_retire);
+  void retire_mb_handles(HazardList &retire_list, const bool do_retire);
   void reuse_mb_handles(HazardList &reclaim_list);
   bool try_supply_mb(const int64_t mb_count);
 private:
