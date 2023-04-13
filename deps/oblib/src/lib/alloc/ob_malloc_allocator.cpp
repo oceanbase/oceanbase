@@ -539,38 +539,6 @@ int ObMallocAllocator::set_tenant_ctx_idle(const uint64_t tenant_id,
   return ret;
 }
 
-int ObMallocAllocator::get_chunks(AChunk **chunks, int cap, int &cnt)
-{
-  int ret = OB_SUCCESS;
-  ObDisableDiagnoseGuard disable_diagnose_guard;
-  for (int64_t slot = 0; OB_SUCC(ret) && slot < PRESERVED_TENANT_COUNT; ++slot) {
-    ObTenantCtxAllocatorGuard tas[16]; // TODO: should be dynamic array, but enough so far
-    int tas_cnt = 0;
-    {
-      BucketRLockGuard guard(locks_[slot], GETTID() % BucketLock::BUCKET_COUNT);
-      ObTenantCtxAllocator *ta = allocators_[slot];
-      while (OB_SUCC(ret) && ta != nullptr && tas_cnt < ARRAYSIZEOF(tas)) {
-        tas[tas_cnt++] = ObTenantCtxAllocatorGuard(ta);
-        ta = ta->get_next();
-      }
-      if (tas_cnt >= ARRAYSIZEOF(tas)) {
-        LOG_WARN("array size not enough");
-        // ignore ret
-      }
-    }
-    while (OB_SUCC(ret) && tas_cnt--) {
-      auto ta = tas[tas_cnt].ref_allocator();
-      for (int64_t ctx_id = 0; OB_SUCC(ret) &&ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-        ta[ctx_id].get_chunks(chunks, cap, cnt);
-        if (cnt >= cap) {
-          ret = OB_SIZE_OVERFLOW;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int64_t ObMallocAllocator::sync_wash(uint64_t tenant_id, uint64_t from_ctx_id, int64_t wash_size)
 {
   int64_t washed_size = 0;

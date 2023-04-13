@@ -133,7 +133,6 @@ public:
   void print_tenant_memory_usage(uint64_t tenant_id) const;
   int set_tenant_ctx_idle(
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
-  int get_chunks(AChunk** chunks, int cap, int& cnt);
   int64_t sync_wash(uint64_t tenant_id, uint64_t from_ctx_id, int64_t wash_size);
   int64_t sync_wash();
   int recycle_tenant_allocator(uint64_t tenant_id);
