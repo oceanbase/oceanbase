@@ -426,7 +426,9 @@ ObMvccTransNode* ObMemtableRowCompactor::construct_compact_node_(const int64_t s
         }
         ret = (OB_ITER_END == ret) ? OB_SUCCESS : ret;
       }
-      if (OB_SUCC(ret) && OB_FAIL(writer.row_finish())) {
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(writer.row_finish())) {
         TRANS_LOG(WARN, "compact cell writer row finish error", K(ret));
       } else {
         // Build trans node & insert it to its place.
