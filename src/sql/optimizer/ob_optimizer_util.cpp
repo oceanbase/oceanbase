@@ -8088,7 +8088,8 @@ int ObOptimizerUtil::get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs,
 
 int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys,
                                                 bool &can_sort_opt,
-                                                ObLogPlan& plan)
+                                                ObLogPlan& plan,
+                                                double card)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> sort_keys;
@@ -8126,8 +8127,18 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
       LOG_WARN("failed to estimate width for output join column exprs", K(ret));
     } else if (avg_len > 256) {
       can_sort_opt = false;
+    } else if (avg_len < 64 && card < 100000) {
+      can_sort_opt = false;
+    } else if (avg_len > 64 && avg_len < 128 && card < 1500000 ) {
+      can_sort_opt = false;
     } else {
       // do nothing
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_ENABLE_NEWSORT_FORCE) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      can_sort_opt = true;
     }
   }
   return ret;

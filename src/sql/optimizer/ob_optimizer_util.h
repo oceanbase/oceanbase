@@ -1380,7 +1380,8 @@ public:
 
   static int check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys,
                                         bool &can_sort_opt,
-                                        ObLogPlan& plan);
+                                        ObLogPlan& plan,
+                                        double card);
 
   static int extract_equal_join_conditions(const ObIArray<ObRawExpr *> &equal_join_conditions,
                                            const ObRelIds &left_tables,

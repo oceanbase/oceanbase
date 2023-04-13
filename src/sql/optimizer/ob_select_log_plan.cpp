@@ -586,7 +586,10 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   ObLogGroupBy *rollup_distributor = NULL;
   ObLogGroupBy *rollup_collector = NULL;
   bool can_sort_opt = true;
-  if (OB_FAIL(append(pre_group_exprs, group_by_exprs)) ||
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(append(pre_group_exprs, group_by_exprs)) ||
       OB_FAIL(append(pre_group_exprs, rollup_exprs))) {
     LOG_WARN("failed to append pre group exprs", K(ret));
   } else if (OB_FAIL(allocate_group_by_as_top(top,
@@ -624,7 +627,7 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
                                                     rd_sort_keys))) {
     LOG_WARN("failed to make sort keys", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(rd_sort_keys,
-                                                                can_sort_opt, *this))) {
+                                                                can_sort_opt, *this, top->get_card()))) {
     LOG_WARN("failed to check encode sortkey expr", K(ret));
   } else if (false
       && (OB_FAIL(ObSQLUtils::create_encode_sortkey_expr(get_optimizer_context().get_expr_factory(),

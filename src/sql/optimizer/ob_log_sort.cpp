@@ -86,8 +86,10 @@ int ObLogSort::get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs)
 int ObLogSort::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
   bool can_sort_opt = true;
-  if (OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (NULL != topn_expr_ && OB_FAIL(all_exprs.push_back(topn_expr_))) {
@@ -97,7 +99,7 @@ int ObLogSort::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (NULL != topk_offset_expr_ && OB_FAIL(all_exprs.push_back(topk_offset_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(sort_keys_,
-                                                  can_sort_opt, *get_plan()))) {
+                              can_sort_opt, *get_plan(), child->get_card()))) {
     LOG_WARN("failed to check encode sortkey expr", K(ret));
   } else if (NULL != topn_expr_ && FALSE_IT(can_sort_opt = false)) {
     // do nothing
