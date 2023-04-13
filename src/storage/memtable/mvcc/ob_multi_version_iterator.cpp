@@ -23,6 +23,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_data_functor.h"
 #include "storage/tx_table/ob_tx_table.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -477,7 +478,10 @@ ObMultiVersionRowIterator::ObMultiVersionRowIterator()
       version_range_(),
       value_iter_(),
       query_engine_(NULL),
-      query_engine_iter_(NULL)
+      query_engine_iter_(NULL),
+      insert_row_count_(0),
+      update_row_count_(0),
+      delete_row_count_(0)
 {
 }
 
@@ -592,9 +596,26 @@ int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value,
                                             *tnode,
                                             false     /*need_row_latch*/))) {
     TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*value), K(*tnode));
+  } else if (!tnode->is_aborted()) {
+    const blocksstable::ObDmlFlag dml_flag = tnode->get_dml_flag();
+
+    if (blocksstable::ObDmlFlag::DF_INSERT == dml_flag) {
+      ++insert_row_count_;
+    } else if (blocksstable::ObDmlFlag::DF_UPDATE == dml_flag) {
+      ++update_row_count_;
+    } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
+      ++delete_row_count_;
+    }
   }
 
   return ret;
+}
+
+void ObMultiVersionRowIterator::get_tnode_dml_stat(storage::ObTransNodeDMLStat &stat) const
+{
+  stat.insert_row_count_ += insert_row_count_;
+  stat.update_row_count_ += update_row_count_;
+  stat.delete_row_count_ += delete_row_count_;
 }
 
 void ObMultiVersionRowIterator::reset()
@@ -609,6 +630,10 @@ void ObMultiVersionRowIterator::reset()
     query_engine_iter_ = NULL;
   }
   query_engine_ = NULL;
+
+  insert_row_count_ = 0;
+  update_row_count_ = 0;
+  delete_row_count_ = 0;
 }
 
 

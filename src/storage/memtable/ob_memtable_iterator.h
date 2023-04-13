@@ -32,6 +32,11 @@
 namespace oceanbase
 {
 
+namespace storage
+{
+struct ObTransNodeDMLStat;
+}
+
 namespace memtable
 {
 
@@ -246,6 +251,8 @@ public:
       storage::ObTableAccessContext &context,
       storage::ObITable *table,
       const void *query_range) override;
+  int get_tnode_stat(storage::ObTransNodeDMLStat &tnode_stat) const;
+
 public:
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();

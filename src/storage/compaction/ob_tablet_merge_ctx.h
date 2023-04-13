@@ -24,6 +24,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/scn.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -252,6 +253,7 @@ public:
   int64_t rebuild_seq_;
   uint64_t data_version_;
   ObMediumCompactionInfoList merge_list_;
+  ObTransNodeDMLStat tnode_stat_; // collect trans node dml stat on memtable, only worked in mini compaction.
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
                K_(is_full_merge), K_(merge_level),

@@ -21,6 +21,12 @@
 
 namespace oceanbase
 {
+
+namespace storage
+{
+struct ObTransNodeDMLStat;
+}
+
 namespace compaction
 {
 struct ObPartitionMergeLoserTreeItem
@@ -205,6 +211,9 @@ public:
   ObPartitionMinorMergeHelper()
   {}
   virtual ~ObPartitionMinorMergeHelper() { reset(); }
+  int collect_tnode_dml_stat(
+      const ObMergeType &merge_type,
+      storage::ObTransNodeDMLStat &tnode_stat) const;
 protected:
   ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable) override;
 };

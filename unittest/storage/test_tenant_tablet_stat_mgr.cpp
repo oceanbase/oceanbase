@@ -139,8 +139,6 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   tablet_stat.query_cnt_ = 100;
   tablet_stat.scan_logical_row_cnt_ = 100;
   tablet_stat.scan_physical_row_cnt_ = 100;
-  tablet_stat.merge_physical_row_cnt_ = 100;
-  tablet_stat.merge_logical_row_cnt_ = 100;
 
   {
     int64_t step = 1;
@@ -205,8 +203,6 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stream)
   tablet_stat.query_cnt_ = 100;
   tablet_stat.scan_logical_row_cnt_ = 100;
   tablet_stat.scan_physical_row_cnt_ = 100;
-  tablet_stat.merge_physical_row_cnt_ = 100;
-  tablet_stat.merge_logical_row_cnt_ = 100;
 
   ObTabletStream stream;
   auto &curr_buckets = stream.curr_buckets_;
@@ -249,8 +245,6 @@ TEST_F(TestTenantTabletStatMgr, get_all_tablet_stat)
   tablet_stat.query_cnt_ = 100;
   tablet_stat.scan_logical_row_cnt_ = 100;
   tablet_stat.scan_physical_row_cnt_ = 100;
-  tablet_stat.merge_physical_row_cnt_ = 100;
-  tablet_stat.merge_logical_row_cnt_ = 100;
 
   ObTabletStream stream;
   auto &curr_buckets = stream.curr_buckets_;
@@ -388,8 +382,6 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
   tablet_stat.query_cnt_ = 100;
   tablet_stat.scan_logical_row_cnt_ = 100;
   tablet_stat.scan_physical_row_cnt_ = 100;
-  tablet_stat.merge_physical_row_cnt_ = 100;
-  tablet_stat.merge_logical_row_cnt_ = 100;
 
   ret = stat_mgr_->report_stat(tablet_stat);
   ASSERT_EQ(OB_SUCCESS, ret);

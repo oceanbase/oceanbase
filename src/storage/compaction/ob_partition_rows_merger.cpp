@@ -952,6 +952,31 @@ ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(const ObMerg
  * ---------------------------------------------------------ObPartitionMinorMergeHelper--------------------------------------------------------------
  */
 
+int ObPartitionMinorMergeHelper::collect_tnode_dml_stat(
+    const ObMergeType &merge_type,
+    storage::ObTransNodeDMLStat &tnode_stat) const
+{
+  int ret = OB_SUCCESS;
+  tnode_stat.reset();
+
+  if (OB_UNLIKELY(!is_mini_merge(merge_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid argument", K(ret), K(merge_type));
+  }
+
+  const MERGE_ITER_ARRAY &merge_iters = get_merge_iters();
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_iters.count(); ++i) {
+    const ObPartitionMergeIter *iter = merge_iters.at(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get unexpected null merge iter", K(ret));
+    } else if (OB_FAIL(iter->collect_tnode_dml_stat(tnode_stat))) {
+      STORAGE_LOG(WARN, "failed to collect mt stat", K(ret));
+    }
+  }
+  return ret;
+}
+
 ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param,
                                                                     const bool is_base_iter,
                                                                     const bool is_small_sstable)

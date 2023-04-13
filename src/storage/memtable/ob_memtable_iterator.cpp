@@ -26,6 +26,7 @@
 #include "ob_memtable_context.h"
 #include "ob_memtable.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -788,6 +789,19 @@ int ObMemtableMultiVersionScanIterator::init(
   }
   if (OB_FAIL(ret)) {
     reset();
+  }
+  return ret;
+}
+
+int ObMemtableMultiVersionScanIterator::get_tnode_stat(
+    storage::ObTransNodeDMLStat &tnode_stat) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret), KPC(this));
+  } else {
+    row_iter_.get_tnode_dml_stat(tnode_stat);
   }
   return ret;
 }

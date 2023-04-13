@@ -1193,37 +1193,21 @@ int ObTabletMergeFinishTask::try_report_tablet_stat_after_mini(ObTabletMergeCtx 
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
-  ObQueryFlag query_flag(ObQueryFlag::Forward,
-                         true,   /*is daily merge scan*/
-                         true,   /*is read multiple macro block*/
-                         true,   /*sys task scan, read one macro block in single io*/
-                         false,  /*full row scan flag, obsoleted*/
-                         false,  /*index back*/
-                         false); /*query_stat*/
-  ObTableEstimateBaseInput base_input(query_flag,
-                                      tablet_id.id(),
-                                      ctx.tables_handle_.get_tables(),
-                                      ctx.tablet_handle_);
-  ObDatumRange whole_range;
-  whole_range.set_whole_range();
-  ObSEArray<ObDatumRange, 1> ranges;
-  ObPartitionEst part_estimate;
-  ObSEArray<ObEstRowCountRecord, MAX_SSTABLE_CNT_IN_STORAGE> records;
 
-  if (OB_FAIL(ranges.push_back(whole_range))) {
-    LOG_WARN("failed to add ranges", K(ret), K(ranges), K(whole_range));
-  } else if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(
-      base_input, ranges, part_estimate, records))) {
-    LOG_WARN("failed to estimate row counts", K(ret), K(part_estimate), K(records));
-  } else if (0 == part_estimate.logical_row_count_ &&
-      ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= part_estimate.physical_row_count_) {
+  const ObTransNodeDMLStat &tnode_stat = ctx.tnode_stat_;
+
+  if (tablet_id.is_special_merge_tablet()) {
+    // no need report
+  } else if (ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
+    // insufficient data, skip to report
   } else {
     ObTabletStat report_stat;
     report_stat.ls_id_ = ctx.param_.ls_id_.id(),
     report_stat.tablet_id_ = ctx.param_.tablet_id_.id();
     report_stat.merge_cnt_ = 1;
-    report_stat.merge_logical_row_cnt_ = part_estimate.logical_row_count_;
-    report_stat.merge_physical_row_cnt_ = part_estimate.physical_row_count_;
+    report_stat.insert_row_cnt_ = tnode_stat.insert_row_count_;
+    report_stat.update_row_cnt_ = tnode_stat.update_row_count_;
+    report_stat.delete_row_cnt_ = tnode_stat.delete_row_count_;
     if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(report_stat))) {
       STORAGE_LOG(WARN, "failed to report tablet stat", K(ret));
     }

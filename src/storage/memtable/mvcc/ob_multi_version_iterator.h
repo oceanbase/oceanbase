@@ -24,6 +24,11 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+struct ObTransNodeDMLStat;
+}
+
 namespace memtable
 {
 class ObMvccAccessCtx;
@@ -112,6 +117,7 @@ public:
            const common::ObVersionRange &version_range,
            const ObMvccScanRange &range);
   int get_next_row(const ObMemtableKey *&key, ObMultiVersionValueIterator *&value_iter);
+  void get_tnode_dml_stat(storage::ObTransNodeDMLStat &mt_stat) const;
   void reset();
 private:
   int try_cleanout_mvcc_row_(ObMvccRow *value);
@@ -124,6 +130,9 @@ private:
   ObMultiVersionValueIterator value_iter_;
   ObQueryEngine *query_engine_;
   ObIQueryEngineIterator *query_engine_iter_;
+  int64_t insert_row_count_;
+  int64_t update_row_count_;
+  int64_t delete_row_count_;
 };
 
 }

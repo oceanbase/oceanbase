@@ -15,6 +15,25 @@ using namespace oceanbase::common;
 using namespace oceanbase::storage;
 
 
+bool ObTransNodeDMLStat::empty() const
+{
+  return 0 >= insert_row_count_ &&
+         0 >= update_row_count_ &&
+         0 >= delete_row_count_;
+}
+
+void ObTransNodeDMLStat::atomic_inc(const ObTransNodeDMLStat &other)
+{
+  if (other.empty()) {
+    // do nothing
+  } else {
+    (void) ATOMIC_AAFx(&insert_row_count_, other.insert_row_count_, 0/*placeholder*/);
+    (void) ATOMIC_AAFx(&update_row_count_, other.update_row_count_, 0/*placeholder*/);
+    (void) ATOMIC_AAFx(&delete_row_count_, other.delete_row_count_, 0/*placeholder*/);
+  }
+}
+
+
 /************************************* ObTabletStatKey *************************************/
 ObTabletStatKey::ObTabletStatKey(
   const int64_t ls_id,
@@ -88,7 +107,7 @@ bool ObTabletStat::check_need_report() const
       bret = true;
     }
   } else if (0 != merge_cnt_) { // report by compaction
-    bret = MERGE_REPORT_MIN_ROW_CNT <= merge_physical_row_cnt_;
+    bret = MERGE_REPORT_MIN_ROW_CNT <= insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
   } else { // invalid tablet stat
     bret = false;
   }
@@ -116,8 +135,9 @@ ObTabletStat& ObTabletStat::operator+=(const ObTabletStat &other)
     pushdown_micro_block_cnt_ += other.pushdown_micro_block_cnt_;
     exist_row_total_table_cnt_ += other.exist_row_total_table_cnt_;
     exist_row_read_table_cnt_ += other.exist_row_read_table_cnt_;
-    merge_physical_row_cnt_ += other.merge_physical_row_cnt_;
-    merge_logical_row_cnt_ += other.merge_logical_row_cnt_;
+    insert_row_cnt_ += other.insert_row_cnt_;
+    update_row_cnt_ += other.update_row_cnt_;
+    delete_row_cnt_ += other.delete_row_cnt_;
   }
   return *this;
 }
@@ -133,8 +153,9 @@ ObTabletStat& ObTabletStat::archive(int64_t factor)
     pushdown_micro_block_cnt_ /= factor;
     exist_row_total_table_cnt_ /= factor;
     exist_row_read_table_cnt_ /= factor;
-    merge_physical_row_cnt_ /= factor;
-    merge_logical_row_cnt_ /= factor;
+    insert_row_cnt_ /= factor;
+    update_row_cnt_ /= factor;
+    delete_row_cnt_ /= factor;
   }
   return *this;
 }
@@ -147,9 +168,11 @@ bool ObTabletStat::is_hot_tablet() const
 bool ObTabletStat::is_insert_mostly() const
 {
   bool bret = false;
-  if (merge_physical_row_cnt_ < BASIC_ROW_CNT_THRESHOLD) {
+  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
+  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
+    // do nothing
   } else {
-    bret = merge_logical_row_cnt_ >= (merge_physical_row_cnt_ / BASE_FACTOR * INSERT_PIVOT_FACTOR);
+    bret = insert_row_cnt_ * BASE_FACTOR / total_row_cnt >= INSERT_PIVOT_FACTOR;
   }
   return bret;
 }
@@ -157,12 +180,27 @@ bool ObTabletStat::is_insert_mostly() const
 bool ObTabletStat::is_update_mostly() const
 {
   bool bret = false;
-  if (0 == merge_physical_row_cnt_ || merge_physical_row_cnt_ < BASIC_ROW_CNT_THRESHOLD) {
+  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
+  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
+    // do nothing
   } else {
-    bret = merge_logical_row_cnt_ >= (merge_physical_row_cnt_ / BASE_FACTOR * UPDATE_PIVOT_FACTOR);
+    bret = update_row_cnt_ * BASE_FACTOR / total_row_cnt >= UPDATE_PIVOT_FACTOR;
   }
   return bret;
 }
+
+bool ObTabletStat::is_delete_mostly() const
+{
+  bool bret = false;
+  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
+  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
+    // do nothing
+  } else {
+    bret = delete_row_cnt_ * BASE_FACTOR / total_row_cnt >= DELETE_PIVOT_FACTOR;
+  }
+  return bret;
+}
+
 
 bool ObTabletStat::is_inefficient_scan() const
 {
