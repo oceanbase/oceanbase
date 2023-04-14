@@ -2238,6 +2238,7 @@ DEFINE_ERROR_EXT(OB_ERR_SP_NO_DROP_SP, -9743, ER_SP_NO_DROP_SP, "HY000", "Can't 
 DEFINE_ORACLE_ERROR(OB_ERR_RECOMPILATION_OBJECT, -9744, -1, "HY000", "errors during recompilation/revalidation of object", 4045, "errors during recompilation/revalidation of %.*s.%.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_VARIABLE_NOT_IN_SELECT_LIST, -9745, -1, "HY000", "variable not in select list", 1007, "variable not in select list");
 DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into multiple record targets not supported", 494, "coercion into multiple record targets not supported");
+DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!
