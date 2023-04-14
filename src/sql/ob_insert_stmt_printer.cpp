@@ -66,8 +66,7 @@ int ObInsertStmtPrinter::print_basic_stmt()
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ should not be NULL", K(ret));
-  } else if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
-             OB_FAIL(print_cte_define())) {
+  } else if (OB_FAIL(print_temp_table_as_cte())) {
     LOG_WARN("failed to print cte", K(ret));
   } else if (OB_FAIL(print_insert())) {
     LOG_WARN("fail to print select", K(ret), K(*stmt_));

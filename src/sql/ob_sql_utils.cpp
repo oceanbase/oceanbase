@@ -2062,6 +2062,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                 schema_guard,
                                 print_params);
     printer.set_is_root(true);
+    printer.enable_print_temp_table_as_cte();
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print select stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2072,7 +2073,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_INSERT_ALL: {
     ObInsertAllStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertAllStmt*>(stmt),
                                    schema_guard, print_params);
-    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
@@ -2085,7 +2085,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_INSERT: {
     ObInsertStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertStmt*>(stmt),
                                 schema_guard, print_params);
-    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
@@ -2097,7 +2096,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_DELETE: {
     ObDeleteStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObDeleteStmt*>(stmt),
                                 schema_guard, print_params);
-    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print delete stmt", K(ret));
@@ -2109,7 +2107,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_UPDATE: {
     ObUpdateStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObUpdateStmt*>(stmt),
                                 schema_guard, print_params);
-    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print update stmt", K(ret));
@@ -2122,7 +2119,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
     ObMergeStmtPrinter printer(buf, buf_len, &pos,
                                 static_cast<const ObMergeStmt*>(stmt),
                                 schema_guard, print_params);
-    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("failed to print merge stmt", K(ret));
