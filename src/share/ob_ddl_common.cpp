@@ -548,7 +548,7 @@ int ObDDLUtil::generate_build_replica_sql(
     ObArray<int64_t> order_column_ids;
     bool is_shadow_column = false;
     int64_t real_parallelism = std::max(1L, parallelism);
-    real_parallelism = std::min(64L, real_parallelism);
+    real_parallelism = std::min(ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,

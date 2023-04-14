@@ -175,7 +175,7 @@ int ObComplementDataParam::split_task_ranges(
       LOG_WARN("compute total task count failed", K(ret));
     } else if (OB_FAIL(tablet_service->split_multi_ranges(tablet_id, 
                                                           ranges, 
-                                                          min(max(expected_task_count, 1), hint_parallelism),
+                                                          min(min(max(expected_task_count, 1), hint_parallelism), ObMacroDataSeq::MAX_PARALLEL_IDX + 1),
                                                           allocator_, 
                                                           multi_range_split_array))) {
       LOG_WARN("split multi ranges failed", K(ret));
@@ -998,6 +998,8 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     } else if (OB_ISNULL(param_) || OB_UNLIKELY(!param_->is_valid()) || OB_ISNULL(context_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(param_), KP(context_), K(ret));
+    } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
+      LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
     } else {
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *hidden_table_schema = nullptr;
