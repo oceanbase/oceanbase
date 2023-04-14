@@ -4,6 +4,8 @@ BASE_DIR=$(git rev-parse --show-toplevel 2>/dev/null)
 DEPLOY_PATH="$BASE_DIR/tools/deploy"
 OBSERVER_BIN="$BASE_DIR/tools/deploy/bin/observer"
 OBD_CLUSTER_PATH="$DEPLOY_PATH"/.obd/cluster
+OBD_LOCAL_VERSION_PATH="$DEPLOY_PATH"/.obd/version
+OBD_DEPS_PATH="$BASE_DIR/deps/init/oceanbase.el7.x86_64.deps"
 shopt -s expand_aliases
 source $DEPLOY_PATH/activate_obd.sh
 tag="latest"
@@ -590,6 +592,20 @@ Options:
 function main() {
   entrance=${OBD_SH_ENTRANCE:-obd.sh}
   variables_parpare
+  if [[ -f ${OBD_LOCAL_VERSION_PATH} ]]
+  then
+    obd_local_version=`cat ${OBD_LOCAL_VERSION_PATH}`
+    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E 'ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+'`
+    obd_deps_version=${obd_deps_version/-/.}
+    if [[ ${obd_local_version} != ${obd_deps_version} ]]
+    then
+      obd_local_version=`obd --version | grep -E '^OceanBase Deploy:' | awk '{print $3}'`
+      if [[ ${obd_local_version} != ${obd_deps_version} ]]
+      then
+        echo -e "\033[33m[WARN]\033[0m current obd version is not the latest version, use 'sh build.sh init' to update"
+      fi
+    fi
+  fi
   command="$1"
   shift
   extra_args=""
