@@ -16545,12 +16545,13 @@ ERROR_P
 {
   (void)($1) ; /* make bison mute */
   ParseNode *type_node = NULL;
-  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  malloc_terminal_node(type_node, result->malloc_pool_, T_NULLX_CLAUSE);
   type_node->value_ = 1;
-  type_node->is_hidden_const_ = 1;
+  type_node->param_num_ = 1;
 
   ParseNode *v_node = NULL;
   malloc_terminal_node(v_node, result->malloc_pool_, T_NULL);
+  v_node->is_hidden_const_ = 1;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, v_node);
 }
