@@ -982,7 +982,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       } else if (tablet_id.is_special_merge_tablet()) { // data tablet
         // do nothing
       } else {
-        ObMediumCompactionScheduleFunc func(ls, *tablet);
+        ObMediumCompactionScheduleFunc func(ls, tablet);
         ObITable *latest_major = tablet->get_table_store().get_major_sstables().get_boundary_table(true/*last*/);
         if (OB_NOT_NULL(latest_major) && latest_major->get_snapshot_version() >= merge_version) {
           tablet_merge_finish = true;
@@ -998,11 +998,15 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
         }
         LOG_DEBUG("schedule tablet medium", K(ret), K(ls_id), K(tablet_id), K(tablet_merge_finish),
             KPC(latest_major), K(merge_version));
+        bool could_schedule_next_medium = true;
+        bool check_medium_finish = false;
         if (!is_leader || OB_ISNULL(latest_major)) {
           // follower or no major: do nothing
+          could_schedule_next_medium = false;
         } else if (tablet->get_medium_compaction_info_list().need_check_finish()) { // need check finished
           if (OB_TMP_FAIL(func.check_medium_finish(ls_locality))) {
             LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
+          } else if (FALSE_IT(check_medium_finish = true)) {
           } else if (ObTimeUtility::fast_current_time() <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
@@ -1011,8 +1015,9 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
               LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
             }
           }
-        } else if (could_major_merge
-          && (!tablet_merge_finish || enable_adaptive_compaction_)
+        }
+        if (could_schedule_next_medium && could_major_merge
+          && (!tablet_merge_finish || enable_adaptive_compaction_ || check_medium_finish)
           && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
             tablet_merge_finish ? 0 : merge_version, schedule_stats_))) { // schedule another round
           LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));
