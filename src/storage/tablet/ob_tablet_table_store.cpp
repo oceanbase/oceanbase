@@ -1341,79 +1341,87 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
     J_KV(KP(this), KP_(tablet_ptr), K_(major_tables), K_(minor_tables), K_(memtables), K_(is_ready_for_read));
     J_COMMA();
     J_ARRAY_START();
-    for (int64_t i = 0; i < major_tables_.count_; ++i) {
-      ObITable *table = major_tables_[i];
-      if (NULL != table && table->is_sstable()) {
-        J_OBJ_START();
-        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
-             "tablet_id", table->get_key().tablet_id_,
-             "scn_range", table->get_key().scn_range_,
-             "ref", table->get_ref(),
-             "snapshot_version", table->get_snapshot_version(),
-             "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
-             "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
-        J_OBJ_END();
-        J_COMMA();
+    if (major_tables_.is_valid()) {
+      for (int64_t i = 0; i < major_tables_.count_; ++i) {
+        ObITable *table = major_tables_[i];
+        if (NULL != table && table->is_sstable()) {
+          J_OBJ_START();
+          J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
+              "tablet_id", table->get_key().tablet_id_,
+              "scn_range", table->get_key().scn_range_,
+              "ref", table->get_ref(),
+              "snapshot_version", table->get_snapshot_version(),
+              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
+              "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
+          J_OBJ_END();
+          J_COMMA();
+        }
       }
     }
-    for (int64_t i = 0; i < minor_tables_.count_; ++i) {
-      ObITable *table = minor_tables_[i];
-      if (NULL != table && table->is_sstable()) {
-        J_OBJ_START();
-        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
-             "tablet_id", table->get_key().tablet_id_,
-             "scn_range", table->get_key().scn_range_,
-             "ref", table->get_ref(),
-             "contain_uncommitted_row", static_cast<ObSSTable *>(table)->get_meta().contain_uncommitted_row() ? "yes" : "no",
-             "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
-             "upper_trans_version", static_cast<ObSSTable *>(table)->get_upper_trans_version(),
-             "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
-        J_OBJ_END();
-        J_COMMA();
+    if (minor_tables_.is_valid()) {
+      for (int64_t i = 0; i < minor_tables_.count_; ++i) {
+        ObITable *table = minor_tables_[i];
+        if (NULL != table && table->is_sstable()) {
+          J_OBJ_START();
+          J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
+              "tablet_id", table->get_key().tablet_id_,
+              "scn_range", table->get_key().scn_range_,
+              "ref", table->get_ref(),
+              "contain_uncommitted_row", static_cast<ObSSTable *>(table)->get_meta().contain_uncommitted_row() ? "yes" : "no",
+              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
+              "upper_trans_version", static_cast<ObSSTable *>(table)->get_upper_trans_version(),
+              "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
+          J_OBJ_END();
+          J_COMMA();
+        }
       }
     }
-    for (int64_t i = 0; i < ddl_sstables_.count_; ++i) {
-      ObITable *table = ddl_sstables_[i];
-      if (NULL != table && table->is_sstable()) {
-        J_OBJ_START();
-        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
-             "tablet_id", table->get_key().tablet_id_,
-             "scn_range", table->get_key().scn_range_,
-             "ref", table->get_ref(),
-             "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
-             "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
-        J_OBJ_END();
-        J_COMMA();
+    if (ddl_sstables_.is_valid()) {
+      for (int64_t i = 0; i < ddl_sstables_.count_; ++i) {
+        ObITable *table = ddl_sstables_[i];
+        if (NULL != table && table->is_sstable()) {
+          J_OBJ_START();
+          J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
+              "tablet_id", table->get_key().tablet_id_,
+              "scn_range", table->get_key().scn_range_,
+              "ref", table->get_ref(),
+              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
+              "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
+          J_OBJ_END();
+          J_COMMA();
+        }
       }
     }
-
-    for (int64_t i = 0; i < ddl_mem_sstables_.count_; ++i) {
-      ObITable *table = ddl_mem_sstables_[i];
-      if (NULL != table && table->is_sstable()) {
-        J_OBJ_START();
-        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
-             "tablet_id", table->get_key().tablet_id_,
-             "scn_range", table->get_key().scn_range_,
-             "ref", table->get_ref(),
-             "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
-             "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
-        J_OBJ_END();
-        J_COMMA();
+    if (ddl_mem_sstables_.is_valid()) {
+      for (int64_t i = 0; i < ddl_mem_sstables_.count_; ++i) {
+        ObITable *table = ddl_mem_sstables_[i];
+        if (NULL != table && table->is_sstable()) {
+          J_OBJ_START();
+          J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
+              "tablet_id", table->get_key().tablet_id_,
+              "scn_range", table->get_key().scn_range_,
+              "ref", table->get_ref(),
+              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
+              "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
+          J_OBJ_END();
+          J_COMMA();
+        }
       }
     }
-
-    for (int64_t i = 0; i < extend_tables_.count_; ++i) {
-      ObITable *table = extend_tables_[i];
-      if (NULL != table && table->is_sstable()) {
-        J_OBJ_START();
-        J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
-             "tablet_id", table->get_key().tablet_id_,
-             "scn_range", table->get_key().scn_range_,
-             "ref", table->get_ref(),
-             "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
-             "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
-        J_OBJ_END();
-        J_COMMA();
+    if (extend_tables_.is_valid()) {
+      for (int64_t i = 0; i < extend_tables_.count_; ++i) {
+        ObITable *table = extend_tables_[i];
+        if (NULL != table && table->is_sstable()) {
+          J_OBJ_START();
+          J_KV(K(i), "ptr", table, "type", ObITable::get_table_type_name(table->get_key().table_type_),
+              "tablet_id", table->get_key().tablet_id_,
+              "scn_range", table->get_key().scn_range_,
+              "ref", table->get_ref(),
+              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version(),
+              "table_mode_flag", static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().table_mode_.mode_flag_);
+          J_OBJ_END();
+          J_COMMA();
+        }
       }
     }
     J_ARRAY_END();

@@ -1246,10 +1246,11 @@ int ObPartitionMinorRowMergeIter::collect_tnode_dml_stat(
 
   if (OB_ISNULL(table_)) {
     // do nothing
-  } else if (OB_UNLIKELY(!table_->is_memtable())) {
+  } else if (OB_UNLIKELY(!table_->is_data_memtable() ||
+      typeid(row_iter_) != typeid(memtable::ObMemtableMultiVersionScanIterator))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support to get mt stat from memtable", K(ret), KPC(table_));
-  } else if (OB_ISNULL(iter = reinterpret_cast<memtable::ObMemtableMultiVersionScanIterator *>(row_iter_))) {
+  } else if (OB_ISNULL(iter = static_cast<memtable::ObMemtableMultiVersionScanIterator *>(row_iter_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null row iter", K(ret), KPC(row_iter_));
   } else if (OB_FAIL(iter->get_tnode_stat(tnode_stat))) {
