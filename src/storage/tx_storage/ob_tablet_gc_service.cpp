@@ -351,7 +351,10 @@ int ObTabletGCHandler::check_tablet_gc_for_standby_(bool &cannot_gc, ObTabletHan
   rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
   ObTabletTxMultiSourceDataUnit tx_data;
   share::ObAllTenantInfo tenant_info;
-  if (OB_ISNULL(info)) {
+  const uint64_t tenant_id = MTL_ID();
+  if (!is_user_tenant(tenant_id)) {
+    // do nothing
+  } else if (OB_ISNULL(info)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObTenantRecoveryReportor should not be null", KR(ret));
   } else if (OB_FAIL(info->get_tenant_info(tenant_info))) {
