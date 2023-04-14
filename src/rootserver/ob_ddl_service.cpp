@@ -8750,9 +8750,14 @@ int ObDDLService::check_can_alter_table_constraints(
             }
             if (OB_FAIL(ret)) {
             } else if (CONSTRAINT_TYPE_PRIMARY_KEY == (*res)->get_constraint_type()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("alter table drop/modify pk not supported now", K(ret), K((*res)->get_constraint_type()));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table drop primary key");
+              if (obrpc::ObAlterTableArg::DROP_CONSTRAINT == op_type) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected err", K(ret), KPC(*res), K(inc_table_schema));
+              } else {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("alter pk constraint state not supported now", K(ret), K((*res)->get_constraint_type()));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter state of primary key constraint");
+              }
             } else {
               const_cast<ObConstraint *>(*iter)->set_constraint_id((*res)->get_constraint_id());
               const_cast<ObConstraint *>(*iter)->set_constraint_type((*res)->get_constraint_type());
