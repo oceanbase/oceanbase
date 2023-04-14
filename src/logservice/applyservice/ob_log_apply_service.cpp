@@ -308,7 +308,7 @@ int ObApplyStatus::init(const share::ObLSID &id,
       max_applied_cb_scn_.reset();
       get_info_debug_time_ = OB_INVALID_TIMESTAMP;
       try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
-      fs_cb_ = ObApplyFsCb(this);
+      IGNORE_RETURN new (&fs_cb_) ObApplyFsCb(this);
       is_in_stop_state_ = false;
       if (OB_FAIL(palf_handle_.register_file_size_cb(&fs_cb_))) {
         CLOG_LOG(ERROR, "failed to register cb", K(ret), K(id));

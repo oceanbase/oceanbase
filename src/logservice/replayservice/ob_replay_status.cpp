@@ -604,7 +604,7 @@ int ObReplayStatus::init(const share::ObLSID &id,
     check_enable_debug_time_ = OB_INVALID_TIMESTAMP;
     palf_env_ = palf_env;
     rp_sv_ = rp_sv;
-    fs_cb_ = ObReplayFsCb(this);
+    IGNORE_RETURN new (&fs_cb_) ObReplayFsCb(this);
     is_inited_ = true;
     if (OB_FAIL(palf_handle_.register_file_size_cb(&fs_cb_))) {
       CLOG_LOG(ERROR, "failed to register cb", K(ret));
@@ -1241,7 +1241,6 @@ int ObReplayStatus::check_replay_barrier(ObLogReplayTask *replay_task,
                                          const int64_t replay_queue_idx)
 {
   int ret = OB_SUCCESS;
-  int64_t replay_hint = replay_task->replay_hint_;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "replay status not inited", K(ret));
@@ -1250,6 +1249,7 @@ int ObReplayStatus::check_replay_barrier(ObLogReplayTask *replay_task,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "check_replay_barrier invalid argument", KP(replay_task), K(replay_queue_idx));
   } else if (replay_task->is_pre_barrier_) {
+    int64_t replay_hint = replay_task->replay_hint_;
     int64_t nv = -1;
     if (NULL == (replay_log_buf = static_cast<ObLogReplayBuffer *>(replay_task->log_buf_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1394,7 +1394,7 @@ int ObReplayStatus::diagnose(ReplayDiagnoseInfo &diagnose_info)
   }
   if (OB_SUCC(ret) || OB_STATE_NOT_MATCH == ret) {
     ret = OB_SUCCESS;
-    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("is_enabled:%s"
+    if (OB_FAIL(diagnose_info.diagnose_str_.append_fmt("is_enabled:%s; "
                                                        "ret:%d; "
                                                        "min_unreplayed_lsn:%ld; "
                                                        "min_unreplayed_scn:%lu; "
