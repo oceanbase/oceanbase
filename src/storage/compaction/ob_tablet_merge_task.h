@@ -98,6 +98,7 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
   TO_STRING_KV("merge_type",merge_type_to_str(merge_type_), K_(merge_version), K_(ls_id), K_(tablet_id), KP(report_), K_(for_diagnose), K_(is_tenant_major_merge));
 
   bool for_diagnose_;
+  bool need_swap_tablet_flag_;
   bool is_tenant_major_merge_;
   storage::ObMergeType merge_type_;
   int64_t merge_version_;
@@ -281,14 +282,19 @@ class ObTabletMergeExecutePrepareTask: public share::ObITask
 public:
   ObTabletMergeExecutePrepareTask();
   virtual ~ObTabletMergeExecutePrepareTask();
-  int init(const ObGetMergeTablesResult &result, ObTabletMergeCtx &ctx);
+  int init(const ObGetMergeTablesResult &result, ObTabletMergeCtx &ctx, const bool need_swap_tablet_flag);
   virtual int process() override;
 protected:
   virtual int prepare_compaction_filter() { return OB_SUCCESS; }
+  int get_tablet_and_result();
+  int get_result_by_table_key();
+  const static int64_t TABLET_KEY_ARRAY_CNT = 20;
 
   bool is_inited_;
+  bool need_swap_tablet_flag_;
   ObTabletMergeCtx *ctx_;
   ObGetMergeTablesResult result_;
+  ObSEArray<ObITable::TableKey, TABLET_KEY_ARRAY_CNT> table_key_array_;
 };
 
 // for minor merge
@@ -310,7 +316,7 @@ public:
       const ObGetMergeTablesResult &result,
       storage::ObLSHandle &ls_handle);
   template<class T>
-  int create_first_task(const ObGetMergeTablesResult &result);
+  int create_first_task(const ObGetMergeTablesResult &result, const bool need_swap_tablet_flag);
   virtual bool operator == (const ObIDag &other) const override;
   const share::ObScnRange& get_merge_range() const { return merge_scn_range_; }
 
@@ -318,7 +324,7 @@ public:
 private:
   int prepare_compaction(const ObGetMergeTablesResult &result);
   virtual int prepare_compaction_filter() { return OB_SUCCESS; }
-  virtual int create_first_task(const ObGetMergeTablesResult &result);
+  virtual int create_first_task(const ObGetMergeTablesResult &result, const bool need_swap_tablet_flag);
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeExecuteDag);
 
   share::ObScnRange merge_scn_range_;
@@ -332,7 +338,7 @@ public:
   {}
   virtual ~ObTxTableMinorExecuteDag() = default;
 private:
-  virtual int create_first_task(const ObGetMergeTablesResult &result) override;
+  virtual int create_first_task(const ObGetMergeTablesResult &result, const bool need_swap_tablet_flag) override;
   DISALLOW_COPY_AND_ASSIGN(ObTxTableMinorExecuteDag);
   ObTransStatusFilter compaction_filter_;
 };

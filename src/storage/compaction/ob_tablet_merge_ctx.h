@@ -177,10 +177,10 @@ struct ObTabletMergeCtx
   int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
 
-  int try_swap_tablet_handle(const ObTablesHandleArray &tables_handle);
+  int try_swap_tablet_handle();
 public:
   int get_medium_compaction_info_to_store();
-
+  static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
   int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
@@ -202,6 +202,7 @@ public:
         is_multi_version_merge(param_.merge_type_) ?
             scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
+  int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
 
   typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w

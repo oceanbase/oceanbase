@@ -679,6 +679,24 @@ int ObTabletMergeCtx::inner_init_for_medium()
   return ret;
 }
 
+int ObTabletMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_result)
+{
+  int ret = OB_SUCCESS;
+  ObGetMergeTablesParam get_merge_table_param;
+  get_merge_table_param.merge_type_ = param_.merge_type_;
+  get_merge_table_param.merge_version_ = param_.merge_version_;
+  if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[param_.merge_type_](
+          get_merge_table_param,
+          *ls_handle_.get_ls(),
+          *tablet_handle_.get_obj(),
+          get_merge_table_result))) {
+    if (OB_NO_NEED_MERGE != ret) {
+      LOG_WARN("failed to get merge tables", K(ret), KPC(this), K(get_merge_table_result));
+    }
+  }
+  return ret;
+}
+
 int ObTabletMergeCtx::init_get_medium_compaction_info(
     const int64_t medium_snapshot,
     ObGetMergeTablesResult &get_merge_table_result)
@@ -1196,7 +1214,16 @@ int ObTabletMergeCtx::prepare_merge_progress()
   return ret;
 }
 
-int ObTabletMergeCtx::try_swap_tablet_handle(const ObTablesHandleArray &tables_handle)
+bool ObTabletMergeCtx::need_swap_tablet(const ObTablet &tablet,
+                                             const int64_t row_count,
+                                             const int64_t macro_count)
+{
+  return tablet.get_memtable_mgr()->has_memtable()
+    && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
+      || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
+}
+
+int ObTabletMergeCtx::try_swap_tablet_handle()
 {
   int ret = OB_SUCCESS;
   // check need swap tablet when compaction
@@ -1204,6 +1231,7 @@ int ObTabletMergeCtx::try_swap_tablet_handle(const ObTablesHandleArray &tables_h
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("mini merge not support swap tablet", K(ret), K_(param));
   } else {
+    ObTablesHandleArray &tables_handle = tables_handle_;
     int64_t row_count = 0;
     int64_t macro_count = 0;
     const ObSSTable *table = nullptr;
@@ -1212,21 +1240,18 @@ int ObTabletMergeCtx::try_swap_tablet_handle(const ObTablesHandleArray &tables_h
       row_count += table->get_meta().get_row_count();
       macro_count += table->get_meta().get_basic_meta().get_data_macro_block_count();
     }
-    if (tablet_handle_.get_obj()->get_table_store().get_memtables_count() > 0
-      && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
-      || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD)) {
-      ObTabletHandle alloc_handle;
+    if (need_swap_tablet(*tablet_handle_.get_obj(), row_count, macro_count)) {
+      tables_handle_.reset(); // clear tables array
       const ObTabletMapKey key(param_.ls_id_, param_.tablet_id_);
       if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(
-        WashTabletPriority::WTP_HIGH, key, allocator_, alloc_handle, true/*force_alloc_new*/))) {
+        WashTabletPriority::WTP_LOW, key, allocator_, tablet_handle_, true/*force_alloc_new*/))) {
         LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
+      } else if (OB_FAIL(inner_init_for_medium())) {
+        LOG_WARN("failed to init for medium", K(ret), K(param_));
+      } else if (OB_FAIL(tablet_handle_.get_obj()->clear_memtables_on_table_store())) {
+        LOG_WARN("failed to clear memtables on table_store", K(ret), K(param_));
       } else {
-        tablet_handle_ = alloc_handle;
-        if (OB_FAIL(alloc_handle.get_obj()->clear_memtables_on_table_store())) {
-          LOG_WARN("failed to clear memtables on table_store", K(ret), K(param_));
-        } else {
-          LOG_INFO("success to swap tablet handle", K(ret), K(macro_count), K(row_count), K(tablet_handle_.get_obj()->get_table_store()));
-        }
+        LOG_INFO("success to swap tablet handle", K(ret), K(tablet_handle_), K(tables_handle_));
       }
     }
   }
