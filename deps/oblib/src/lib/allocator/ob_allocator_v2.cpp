@@ -30,7 +30,6 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
     ret = init();
   }
   if (OB_SUCC(ret)) {
-    BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, !attr.label_.is_valid(), "[OB_MOD_DO_NOT_USE_ME ALLOC]size:%ld", size);
     ObMemAttr inner_attr = attr_;
     if (attr.label_.is_valid()) {
       inner_attr.label_ = attr.label_;

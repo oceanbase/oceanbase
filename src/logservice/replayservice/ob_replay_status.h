@@ -437,6 +437,7 @@ public:
       lsn_.reset();
       scn_.set_min();
       log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+      replay_hint_ = 0;
       is_submit_err_ = false;
       err_ts_ = 0;
       err_ret_ = common::OB_SUCCESS;

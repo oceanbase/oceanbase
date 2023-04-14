@@ -358,6 +358,43 @@ void ObSSTablePrinter::print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo
   }
 }
 
+void ObSSTablePrinter::print_macro_meta(const ObDataMacroBlockMeta *macro_meta)
+{
+  print_title("Data Macro Block Meta");
+  print_line("version", macro_meta->val_.version_);
+  print_line("length", macro_meta->val_.length_);
+  print_line("data_checksum", macro_meta->val_.data_checksum_);
+  print_line("rowkey_count", macro_meta->val_.rowkey_count_);
+  print_line("column_count", macro_meta->val_.column_count_);
+  print_line("micro_block_count", macro_meta->val_.micro_block_count_);
+  print_line("occupy_size", macro_meta->val_.occupy_size_);
+  print_line("data_size", macro_meta->val_.data_size_);
+  print_line("data_zsize", macro_meta->val_.data_zsize_);
+  print_line("original_size", macro_meta->val_.original_size_);
+  print_line("progressive_merge_round", macro_meta->val_.progressive_merge_round_);
+  print_line("block_offset", macro_meta->val_.block_offset_);
+  print_line("block_size", macro_meta->val_.block_size_);
+  print_line("row_count", macro_meta->val_.row_count_);
+  print_line("row_count_delta", macro_meta->val_.row_count_delta_);
+  print_line("max_merged_trans_version", macro_meta->val_.max_merged_trans_version_);
+  print_line("is_encrypted", macro_meta->val_.is_encrypted_);
+  print_line("is_deleted", macro_meta->val_.is_deleted_);
+  print_line("contain_uncommitted_row", macro_meta->val_.contain_uncommitted_row_);
+  print_line("is_last_row_last_flag", macro_meta->val_.is_last_row_last_flag_);
+  print_line("compressor_type", macro_meta->val_.compressor_type_);
+  print_line("master_key_id", macro_meta->val_.master_key_id_);
+  print_line("encrypt_id", macro_meta->val_.encrypt_id_);
+  print_line("row_store_type", macro_meta->val_.row_store_type_);
+  print_line("schema_version", macro_meta->val_.schema_version_);
+  print_line("snapshot_version", macro_meta->val_.snapshot_version_);
+  print_line("logic_id: data_seq", macro_meta->val_.logic_id_.data_seq_);
+  print_line("logic_id: logic_version", macro_meta->val_.logic_id_.logic_version_);
+  print_line("logic_id: tablet_id", macro_meta->val_.logic_id_.tablet_id_);
+  print_line("has_string_out_row", macro_meta->val_.has_string_out_row_);
+  print_line("all_lob_in_row", macro_meta->val_.all_lob_in_row_);
+  print_end_line();
+}
+
 void ObSSTablePrinter::print_micro_header(const ObMicroBlockHeader *micro_block_header)
 {
   print_title("Micro Header");

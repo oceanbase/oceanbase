@@ -44,7 +44,7 @@ public:
   ObConcurrentSeqQueue();
   ~ObConcurrentSeqQueue();
 public:
-  int init(const int64_t queue_size, const ObMemAttr &memattr = default_memattr);
+  int init(const int64_t queue_size, const ObMemAttr &memattr);
   /// @retval OB_SUCCESS  success
   /// @retval OB_TIMEOUT  timeout
   /// @retval other value fail

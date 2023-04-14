@@ -23,6 +23,24 @@ namespace oceanbase
 namespace storage
 {
 
+struct ObTransNodeDMLStat
+{
+public:
+  ObTransNodeDMLStat() { reset(); }
+  ~ObTransNodeDMLStat() { reset(); }
+  void reset() { MEMSET(this, 0, sizeof(*this)); }
+  bool empty() const;
+  void atomic_inc(const ObTransNodeDMLStat &other);
+  int64_t get_dml_count() const { return insert_row_count_ + update_row_count_ + delete_row_count_; }
+
+  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count));
+public:
+  int64_t insert_row_count_;
+  int64_t update_row_count_;
+  int64_t delete_row_count_;
+};
+
+
 struct ObTabletStatKey
 {
 public:
@@ -56,19 +74,21 @@ public:
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
   bool is_update_mostly() const;
+  bool is_delete_mostly() const;
   bool is_inefficient_scan() const;
   bool is_inefficient_insert() const;
   bool is_inefficient_pushdown() const;
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(query_cnt), K_(merge_cnt), K_(scan_logical_row_cnt),
                K_(scan_physical_row_cnt), K_(scan_micro_block_cnt), K_(pushdown_micro_block_cnt),
-               K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(merge_physical_row_cnt),
-               K_(merge_logical_row_cnt));
+               K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(insert_row_cnt),
+               K_(update_row_cnt), K_(delete_row_cnt));
 
 public:
   static constexpr int64_t ACCESS_FREQUENCY = 5;
   static constexpr int64_t BASE_FACTOR = 10;
   static constexpr int64_t INSERT_PIVOT_FACTOR = 5;
   static constexpr int64_t UPDATE_PIVOT_FACTOR = 4;
+  static constexpr int64_t DELETE_PIVOT_FACTOR = 3;
   static constexpr int64_t SCAN_READ_FACTOR = 2;
   static constexpr int64_t EXIST_READ_FACTOR = 7;
   static constexpr int64_t BASIC_TABLE_CNT_THRESHOLD = 5;
@@ -89,8 +109,9 @@ public:
   uint64_t pushdown_micro_block_cnt_;
   uint64_t exist_row_total_table_cnt_;
   uint64_t exist_row_read_table_cnt_;
-  uint64_t merge_physical_row_cnt_;
-  uint64_t merge_logical_row_cnt_;
+  uint64_t insert_row_cnt_;
+  uint64_t update_row_cnt_;
+  uint64_t delete_row_cnt_;
 };
 
 

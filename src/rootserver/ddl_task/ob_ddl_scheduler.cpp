@@ -1775,7 +1775,7 @@ int ObDDLScheduler::schedule_build_index_task(
       LOG_WARN("init global_index_task failed", K(ret), K(task_record));
     } else if (OB_FAIL(build_index_task->set_trace_id(task_record.trace_id_))) {
       LOG_WARN("init build index task failed", K(ret));
-    } else if (OB_FAIL(inner_schedule_ddl_task(build_index_task))) {
+    } else if (OB_FAIL(inner_schedule_ddl_task(build_index_task, task_record))) {
       if (OB_ENTRY_EXIST != ret) {
         LOG_WARN("inner schedule task failed", K(ret), K(*build_index_task));
       }
@@ -1802,7 +1802,7 @@ int ObDDLScheduler::schedule_drop_primary_key_task(const ObDDLTaskRecord &task_r
     LOG_WARN("init drop primary key task failed", K(ret));
   } else if (OB_FAIL(drop_pk_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(drop_pk_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(drop_pk_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*drop_pk_task));
     }
@@ -1828,7 +1828,7 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     LOG_WARN("init table redefinition task failed", K(ret));
   } else if (OB_FAIL(redefinition_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(redefinition_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(redefinition_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
@@ -1857,7 +1857,7 @@ int ObDDLScheduler::schedule_column_redefinition_task(const ObDDLTaskRecord &tas
     LOG_WARN("init column redefinition task failed", K(ret));
   } else if (OB_FAIL(redefinition_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(redefinition_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(redefinition_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
@@ -1883,7 +1883,7 @@ int ObDDLScheduler::schedule_ddl_retry_task(const ObDDLTaskRecord &task_record)
     LOG_WARN("init ddl retry task failed", K(ret));
   } else if (OB_FAIL(ddl_retry_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(ddl_retry_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(ddl_retry_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
@@ -1909,7 +1909,7 @@ int ObDDLScheduler::schedule_constraint_task(const ObDDLTaskRecord &task_record)
     LOG_WARN("init constraint task failed", K(ret));
   } else if (OB_FAIL(constraint_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(constraint_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(constraint_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
@@ -1935,7 +1935,7 @@ int ObDDLScheduler::schedule_modify_autoinc_task(const ObDDLTaskRecord &task_rec
     LOG_WARN("init constraint task failed", K(ret));
   } else if (OB_FAIL(modify_autoinc_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(modify_autoinc_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(modify_autoinc_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
@@ -1961,7 +1961,7 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
     LOG_WARN("init drop index task failed", K(ret));
   } else if (OB_FAIL(drop_index_task->set_trace_id(task_record.trace_id_))) {
     LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(inner_schedule_ddl_task(drop_index_task))) {
+  } else if (OB_FAIL(inner_schedule_ddl_task(drop_index_task, task_record))) {
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
@@ -1989,9 +1989,11 @@ int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
     } else if (OB_FAIL(longops_stat->init(ddl_task))) {
       LOG_WARN("failed to init longops stat", K(ret), KPC(ddl_task));
     } else if (OB_FAIL(longops_mgr.register_longops(longops_stat))) {
-      LOG_WARN("failed to register longops", K(ret));
       if (OB_ENTRY_EXIST == ret) {
+        LOG_WARN("longops already registered", K(ret));
         ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to register longops", K(ret));
       }
     } else {
       ddl_task->set_longops_stat(longops_stat);
@@ -2040,7 +2042,8 @@ int ObDDLScheduler::remove_ddl_task(ObDDLTask *ddl_task)
   return ret;
 }
 
-int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
+int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
+                                            const ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ddl_task)) {
@@ -2052,6 +2055,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
   } else {
     int tmp_ret = OB_SUCCESS;
     bool longops_added = true;
+    ddl_task->set_gmt_create(task_record.gmt_create_);
     if (OB_TMP_FAIL(add_task_to_longops_mgr(ddl_task))) {
       longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));

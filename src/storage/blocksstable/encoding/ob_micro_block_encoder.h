@@ -52,9 +52,6 @@ public:
   // int ObMacroBlockWriter::get_current_micro_block_buffer(const char *&buf, int64_t &size)
   static const int64_t DEFAULT_DATA_BUFFER_SIZE = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
 
-  // For rowkey_buffer_, length, must great than OB_MAX_ROW_KEY_LENGTH
-  static const int64_t DEFAULT_ROWKEY_BUFFER_SIZE = 20 * 1024;
-
   struct CellCopyIndex
   {
     uint32_t index_;
@@ -155,7 +152,6 @@ private:
   ObMicroBlockEncodingCtx ctx_;
   ObMicroBlockHeader *header_;
   ObSelfBufferWriter data_buffer_;
-  ObSelfBufferWriter rowkey_buffer_;
   ObConstDatumRowArray datum_rows_;
   common::ObArray<ObColDatums *> all_col_datums_;
   int64_t buffered_rows_checksum_;

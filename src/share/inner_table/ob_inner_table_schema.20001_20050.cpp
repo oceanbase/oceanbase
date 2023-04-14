@@ -160,7 +160,7 @@ int ObInnerTableSchema::schemata_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT 'def' AS CATALOG_NAME,          DATABASE_NAME AS SCHEMA_NAME,          'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME,          'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME,          NULL AS SQL_PATH,          'NO' as DEFAULT_ENCRYPTION   FROM oceanbase.__all_database a   WHERE a.tenant_id = 0     and in_recyclebin = 0     and database_name != '__recyclebin' )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT 'def' AS CATALOG_NAME,          DATABASE_NAME AS SCHEMA_NAME,          b.charset AS DEFAULT_CHARACTER_SET_NAME,          b.collation AS DEFAULT_COLLATION_NAME,          NULL AS SQL_PATH,          'NO' as DEFAULT_ENCRYPTION   FROM oceanbase.__all_database a left join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type   WHERE a.tenant_id = 0     and in_recyclebin = 0     and database_name != '__recyclebin' )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

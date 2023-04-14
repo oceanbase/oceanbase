@@ -33,7 +33,7 @@ public:
 
   virtual void SetUp()
   {
-    ASSERT_EQ(0, queue_.init(1024));
+    ASSERT_EQ(0, queue_.init(1024, ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST)));
     produce_seq_ = 0;
     consume_seq_ = 0;
     consume_thread_counter_ = 0;
@@ -70,7 +70,7 @@ TEST_F(TestConSeqQueue, basic)
   ObConcurrentSeqQueue queue;
   void *data = 0;
 
-  EXPECT_EQ(0, queue.init(1024));
+  EXPECT_EQ(0, queue.init(1024, ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST)));
 
   EXPECT_EQ(0, queue.push((void*)0, 0, 0));
   EXPECT_EQ(0, queue.push((void*)1, 1, 0));

@@ -22,6 +22,7 @@
 #include "sql/engine/expr/ob_expr_arg_case.h"
 #include "sql/engine/expr/ob_expr_oracle_decode.h"
 #include "sql/engine/expr/ob_expr_to_type.h"
+#include "sql/engine/expr/ob_expr_rand.h"
 #include "sql/engine/expr/ob_expr_random.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
@@ -586,6 +587,11 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
           break;
         }
         case T_FUN_SYS_RAND: {
+          ObExprRand *rand_op = static_cast<ObExprRand*> (op);
+          ret = visit_rand_expr(static_cast<ObOpRawExpr&> (expr), rand_op);
+          break;
+        }
+        case T_FUN_SYS_RANDOM: {
           ObExprRandom *rand_op = static_cast<ObExprRandom*> (op);
           ret = visit_random_expr(static_cast<ObOpRawExpr&> (expr), rand_op);
           break;
@@ -1294,6 +1300,26 @@ inline int ObExprGeneratorImpl::visit_subquery_cmp_expr(ObOpRawExpr &expr, ObSub
       subquery_op->set_real_param_num(static_cast<int32_t>(expr.get_param_count()));
       subquery_op->set_left_is_iter(false);
       subquery_op->set_right_is_iter(true);
+    }
+  }
+  return ret;
+}
+
+inline int ObExprGeneratorImpl::visit_rand_expr(ObOpRawExpr &expr, ObExprRand * rand_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rand_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("decode expr op is null", K(ret));
+  } else {
+    int64_t num_param = expr.get_param_exprs().count();
+    if (num_param > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected number of arguments", K(num_param));
+    } else if (num_param == 1) {
+      rand_op->set_seed_const(expr.get_param_expr(0)->is_const_expr());
+    } else {
+      rand_op->set_seed_const(true);
     }
   }
   return ret;

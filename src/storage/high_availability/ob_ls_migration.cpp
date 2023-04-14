@@ -1035,6 +1035,7 @@ int ObStartMigrationTask::deal_with_local_ls_()
   int64_t proposal_id = 0;
   ObLSMeta local_ls_meta;
   logservice::ObLogService *log_service = nullptr;
+  DEBUG_SYNC(BEFORE_MIGRATION_DISABLE_VOTE);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
@@ -1058,6 +1059,16 @@ int ObStartMigrationTask::deal_with_local_ls_()
       ret = OB_ERR_SYS;
       LOG_WARN("leader cannot as add, migrate, change dst",
           K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+    }
+  } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_
+      && OB_FAIL(ls->disable_vote(true/*need_check*/))) {
+    LOG_WARN("failed to disable vote", K(ret), KPC(ctx_));
+    if (OB_OP_NOT_ALLOW == ret) {
+      if (ls->is_offline() && OB_FAIL(ls->online())) {
+        LOG_WARN("failed to online ls", K(ret), KPC(ctx_));
+      } else {
+        ret = OB_NO_NEED_REBUILD;
+      }
     }
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to disable log", K(ret), KPC(ctx_));
@@ -3012,9 +3023,6 @@ int ObDataTabletsMigrationTask::ls_online_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
-  } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_
-      && OB_FAIL(ls->disable_vote())) {
-    LOG_WARN("failed to disable vote", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls->online())) {
     LOG_WARN("failed to online ls", K(ret), KPC(ctx_));
   } else {

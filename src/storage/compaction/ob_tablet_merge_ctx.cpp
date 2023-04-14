@@ -529,7 +529,8 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     time_guard_(),
     rebuild_seq_(-1),
     data_version_(0),
-    merge_list_()
+    merge_list_(),
+    tnode_stat_()
 {
   merge_scn_.set_max();
 }

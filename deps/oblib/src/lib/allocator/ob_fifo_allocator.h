@@ -90,7 +90,7 @@ public:
 
   int init(ObIAllocator *allocator,
            const int64_t page_size,
-           const ObMemAttr &attr=default_memattr,
+           const ObMemAttr &attr,
            const int64_t init_size=0,
            const int64_t idle_size=256L << 10,
            const int64_t max_size=INT64_MAX);

@@ -325,7 +325,7 @@ public:
     int ret = OB_SUCCESS;
     const int64_t buf_size = sizeof(task);
     void *ptr = NULL;
-    if (NULL == (ptr = ob_malloc(buf_size))) {
+    if (NULL == (ptr = ob_malloc(buf_size, ObNewModIds::TEST))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "ob_malloc failed", K(ret), K(buf_size));
     } else {

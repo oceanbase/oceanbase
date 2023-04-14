@@ -22,10 +22,8 @@ namespace sql
 {
 OB_SERIALIZE_MEMBER((ObExprRandom, ObFuncExprOperator), is_seed_const_);
 
-const uint64_t ObExprRandom::ObExprRandomCtx::max_value_ = 0x3FFFFFFFL;
-
 ObExprRandom::ObExprRandomCtx::ObExprRandomCtx()
-	: seed1_(1), seed2_(1)
+	: gen_()
 {
 }
 
@@ -33,21 +31,19 @@ ObExprRandom::ObExprRandomCtx::~ObExprRandomCtx()
 {
 }
 
-void ObExprRandom::ObExprRandomCtx::set_seed(uint32_t seed)
+void ObExprRandom::ObExprRandomCtx::set_seed(uint64_t seed)
 {
-	seed1_ = static_cast<uint32_t>(seed * 0x10001L + 55555555L) % max_value_;
-	seed2_ = static_cast<uint32_t>(seed * 0x10000001L) % max_value_;
+  gen_.seed(seed);
 }
 
-void ObExprRandom::ObExprRandomCtx::get_next_random(double &res)
+void ObExprRandom::ObExprRandomCtx::get_next_random(int64_t &res)
 {
-	seed1_ = (seed1_ * 3 + seed2_) % max_value_;
-	seed2_ = (seed1_ + seed2_ + 33) % max_value_;
-	res = static_cast<double> (seed1_) / static_cast<double> (max_value_);
+  uint64_t rd = gen_();
+  res = rd + INT64_MIN;
 }
 
 ObExprRandom::ObExprRandom(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_RAND, "rand", ZERO_OR_ONE, NOT_ROW_DIMENSION),
+	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM, "random", ZERO_OR_ONE, NOT_ROW_DIMENSION),
 		is_seed_const_(true)
 {
 }
@@ -71,7 +67,7 @@ int ObExprRandom::calc_result_typeN(ObExprResType &type,
 		if(param_num == 1) {
 			types[0].set_calc_type(ObIntType);
 		}
-		type.set_double();
+		type.set_int();
 	}
 	return ret;
 }
@@ -107,33 +103,29 @@ int ObExprRandom::calc_random_expr_const_seed(const ObExpr &expr, ObEvalCtx &ctx
     uint64_t op_id = expr.expr_ctx_id_;
     ObExecContext &exec_ctx = ctx.exec_ctx_;
     ObExprRandomCtx *random_ctx = NULL;
-		if (OB_ISNULL(random_ctx = static_cast<ObExprRandomCtx *>(
-            exec_ctx.get_expr_op_ctx(op_id)))) {
-			if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, random_ctx))) {
-				LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
-			} else {
-        uint32_t seed = 0;
+    if (OB_ISNULL(random_ctx = static_cast<ObExprRandomCtx *>(
+                exec_ctx.get_expr_op_ctx(op_id)))) {
+      if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, random_ctx))) {
+        LOG_WARN("failed to create operator ctx", K(ret), K(op_id));
+      } else {
+        uint64_t seed = 0;
         if (expr.arg_cnt_ == 1) {
           if(!seed_datum->is_null()) {
-            seed = static_cast<uint32_t> (seed_datum->get_int());
+            seed = static_cast<uint64_t> (seed_datum->get_int());
           }
         } else {
           // use timestamp as the seed for rand expression
-          seed = static_cast<uint32_t> (ObTimeUtility::current_time());
+          seed = static_cast<uint64_t> (ObTimeUtility::current_time());
         }
         random_ctx->set_seed(seed);
-			}
-		}
-		if (OB_SUCC(ret)) {
-      if (OB_ISNULL(random_ctx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("random ctx is NULL", K(ret));
-      } else {
-        double rand_res = 0.0;
-        random_ctx->get_next_random(rand_res);
-        res_datum.set_double(rand_res);
       }
-		}
+    }
+
+    if (OB_SUCC(ret)) {
+      int64_t rand_res = 0;
+      random_ctx->get_next_random(rand_res);
+      res_datum.set_int(rand_res);
+    }
   }
   return ret;
 }
@@ -163,14 +155,14 @@ int ObExprRandom::calc_random_expr_nonconst_seed(const ObExpr &expr, ObEvalCtx &
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("random ctx is NULL", K(ret));
       } else {
-				uint32_t seed = 0;
+				uint64_t seed = 0;
 				if(!seed_datum->is_null()) {
-					seed = static_cast<uint32_t>(seed_datum->get_int());
+					seed = static_cast<uint64_t>(seed_datum->get_int());
 				}
-        double rand_res = 0.0;
+        int64_t rand_res = 0;
 				random_ctx->set_seed(seed);
         random_ctx->get_next_random(rand_res);
-        res_datum.set_double(rand_res);
+        res_datum.set_int(rand_res);
       }
 		}
   }

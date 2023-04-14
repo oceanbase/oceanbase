@@ -92,7 +92,7 @@ int ObMicroBlockEncoder::try_encoder(ObIColumnEncoder *&encoder, const int64_t c
 }
 
 ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
-    data_buffer_(0, blocksstable::OB_ENCODING_LABEL_DATA_BUFFER),
+    data_buffer_(blocksstable::OB_ENCODING_LABEL_DATA_BUFFER),
     datum_rows_(), all_col_datums_(),
     buffered_rows_checksum_(0), estimate_size_(0), estimate_size_limit_(0),
     header_size_(0), expand_pct_(DEFAULT_ESTIMATE_REAL_SIZE_PCT),

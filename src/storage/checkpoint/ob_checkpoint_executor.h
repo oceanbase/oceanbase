@@ -86,6 +86,7 @@ public:
 
   int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
+  int traversal_flush() const;
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
 

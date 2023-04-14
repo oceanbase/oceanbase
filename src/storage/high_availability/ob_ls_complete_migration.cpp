@@ -315,6 +315,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   bool is_finish = false;
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
+  int32_t result = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -342,11 +343,15 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         // TODO: muwei should not do this before ls create finished.
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
           LOG_WARN("failed to get migration status", K(ret), K(ctx_));
+        } else if (OB_FAIL(ctx_.get_result(result))) {
+          LOG_WARN("failed to get result", K(ret), K(ctx_));
         } else if (ctx_.is_failed()) {
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
             if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
+            } else if (OB_NO_NEED_REBUILD == result) {
+              new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
             } else {
               new_migration_status = current_migration_status;
             }
@@ -354,15 +359,14 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
             LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(new_migration_status));
           }
         } else {
-          if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_
-              && OB_FAIL(ls->clear_saved_info())) {
-            LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));
-          } else {
-            new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
-          }
+          new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
         }
 
         if (OB_FAIL(ret)) {
+          //TODO(muwei): no need clear
+        } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_ && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == new_migration_status
+            && OB_FAIL(ls->clear_saved_info())) {
+          LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));
         } else if (OB_FAIL(ls->set_migration_status(new_migration_status, ctx_.rebuild_seq_))) {
           LOG_WARN("failed to set migration status", K(ret), K(current_migration_status), K(new_migration_status), K(ctx_));
         } else {

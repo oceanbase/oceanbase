@@ -5465,6 +5465,7 @@ def_table_schema(
 # 456 : __wr_snapshot
 # 457 : __wr_statname
 # 458 : __wr_sysstat
+# 459 : __all_balance_task_helper
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11446,6 +11447,9 @@ def_table_schema(
 # 12392: __all_virtual_kv_connection
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
+# 12395: __all_virtual_timestamp_service
+# 12396: __all_virtual_resource_pool_mysql_sys_agent
+# 12397: __all_virtual_px_p2p_datahub
 #
 # 余留位置
 #
@@ -11743,6 +11747,14 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__
 
 # [15306, 15375] for oracle inner_table index
 # 15376: __all_virtual_log_restore_source
+# 15377: __all_virtual_balance_job
+# 15378: __all_virtual_balance_job_history
+# 15379: __all_virtual_balance_task
+# 15380: __all_virtual_balance_task_history
+# 15381: __all_virtual_transfer_task
+# 15382: __all_virtual_transfer_task_history
+# 15383: __all_virtual_resource_pool_sys_agent
+# 15384: __all_virtual_px_p2p_datahub
 
 ################################################################################
 # System View (20000,30000]
@@ -11807,11 +11819,11 @@ def_table_schema(
   view_definition = """
   SELECT 'def' AS CATALOG_NAME,
          DATABASE_NAME AS SCHEMA_NAME,
-         'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME,
-         'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME,
+         b.charset AS DEFAULT_CHARACTER_SET_NAME,
+         b.collation AS DEFAULT_COLLATION_NAME,
          NULL AS SQL_PATH,
          'NO' as DEFAULT_ENCRYPTION
-  FROM oceanbase.__all_database a
+  FROM oceanbase.__all_database a left join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type
   WHERE a.tenant_id = 0
     and in_recyclebin = 0
     and database_name != '__recyclebin'
@@ -25682,6 +25694,26 @@ def_table_schema(
 # 21400: V$OB_LOCKS
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
+# 21403: DBA_OB_EXTERNAL_TABLE_FILE
+# 21404: V$OB_TIMESTAMP_SERVICE
+# 21405: DBA_OB_BALANCE_JOBS
+# 21406: CDB_OB_BALANCE_JOBS
+# 21407: DBA_OB_BALANCE_JOB_HISTORY
+# 21408: CDB_OB_BALANCE_JOB_HISTORY
+# 21409: DBA_OB_BALANCE_TASKS
+# 21410: CDB_OB_BALANCE_TASKS
+# 21411: DBA_OB_BALANCE_TASK_HISTORY
+# 21412: CDB_OB_BALANCE_TASK_HISTORY
+# 21413: DBA_OB_TRANSFER_TASKS
+# 21414: CDB_OB_TRANSFER_TASKS
+# 21415: DBA_OB_TRANSFER_TASK_HISTORY
+# 21416: CDB_OB_TRANSFER_TASK_HISTORY
+# 21417: ALL_OB_EXTERNAL_TABLE_FILE
+# 21418: CDB_OB_EXTERNAL_TABLE_FILE
+# 21419: GV$OB_PX_P2P_DATAHUB
+# 21420: V$OB_PX_P2P_DATAHUB
+# 21421: GV$SQL_JOIN_FILTER
+# 21422: V$SQL_JOIN_FILTER
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43093,6 +43125,18 @@ def_table_schema(
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
 # 25233: DBA_OB_LOG_RESTORE_SOURCE
+# 25234: DBA_OB_EXTERNAL_TABLE_FILES
+# 25235: ALL_OB_ETERNAL_TABLE_FILES
+# 25237: DBA_OB_BALANCE_JOBS
+# 25238: DBA_OB_BALANCE_JOB_HISTORY
+# 25239: DBA_OB_BALANCE_TASKS
+# 25240: DBA_OB_BALANCE_TASK_HISTORY
+# 25241: DBA_OB_TRANSFER_TASKS
+# 25242: DBA_OB_TRANSFER_TASK_HISTORY
+# 25243: GV$OB_PX_P2P_DATAHUB
+# 25244: V$OB_PX_P2P_DATAHUB
+# 25245: GV$SQL_JOIN_FILTER
+# 25246: V$SQL_JOIN_FILTER
 
 #### End Data Dictionary View
 ################################################################################
@@ -48587,7 +48631,7 @@ def_table_schema(
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
 # 28192:  V$OB_ARBITRATION_SERVICE_STATUS
-
+# 28193:  V$OB_TIMESTAMP_SERVICE
 
 ################################################################################
 # Lob Table (50000, 70000)

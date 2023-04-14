@@ -685,14 +685,12 @@ struct ObSqlTraits
   bool is_modify_tenant_stmt_;
   bool is_cause_implicit_commit_;
   bool is_commit_stmt_;
-  bool has_weight_string_func_stmt_; // sql中是否包含weight_string函数
   ObItemType stmt_type_;
 
   ObSqlTraits() : is_readonly_stmt_(false),
                   is_modify_tenant_stmt_(false),
                   is_cause_implicit_commit_(false),
                   is_commit_stmt_(false),
-                  has_weight_string_func_stmt_(false),
                   stmt_type_(T_INVALID)
   {
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -704,14 +702,12 @@ struct ObSqlTraits
     is_modify_tenant_stmt_ = false;
     is_cause_implicit_commit_ = false;
     is_commit_stmt_ = false;
-    has_weight_string_func_stmt_ = false;
     stmt_type_ = T_INVALID;
   }
    TO_STRING_KV(K(is_readonly_stmt_),
                 K(is_modify_tenant_stmt_),
                 K(is_cause_implicit_commit_),
                 K(is_commit_stmt_),
-                K(has_weight_string_func_stmt_),
                 K(stmt_type_));
 };
 

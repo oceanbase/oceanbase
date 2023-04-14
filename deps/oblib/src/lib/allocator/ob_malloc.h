@@ -29,8 +29,7 @@ inline void ob_print_mod_memory_usage(bool print_to_std = false,
   UNUSEDx(print_to_std, print_glibc_malloc_stats);
 }
 
-extern ObMemAttr default_memattr;
-inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr = default_memattr)
+inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr)
 {
   void *ptr = NULL;
   auto allocator = lib::ObMallocAllocator::get_instance();
@@ -70,7 +69,7 @@ inline void *ob_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr)
 
 void *ob_malloc_align(
     const int64_t alignment, const int64_t nbyte,
-    const ObMemAttr &attr = default_memattr);
+    const ObMemAttr &attr);
 void ob_free_align(void *ptr);
 
 // Deprecated interface

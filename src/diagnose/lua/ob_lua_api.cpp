@@ -104,7 +104,7 @@ static ObFIFOAllocator &get_global_allocator()
 {
   static ObFIFOAllocator allocator;
   if (OB_UNLIKELY(!allocator.is_inited())) {
-    IGNORE_RETURN allocator.init(&LuaAllocator::get_instance(), (1 << 13) - 8, default_memattr, 0, 0, INT64_MAX);
+    IGNORE_RETURN allocator.init(&LuaAllocator::get_instance(), (1 << 13) - 8, lib::ObMemAttr(OB_SERVER_TENANT_ID, "LuaAlloc"), 0, 0, INT64_MAX);
   }
   return allocator;
 }

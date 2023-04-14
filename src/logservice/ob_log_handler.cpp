@@ -1136,7 +1136,7 @@ int ObLogHandler::set_region(const common::ObRegion &region)
   return ret;
 }
 
-int ObLogHandler::disable_vote()
+int ObLogHandler::disable_vote(const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1145,7 +1145,7 @@ int ObLogHandler::disable_vote()
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
-    ret = palf_handle_.disable_vote();
+    ret = palf_handle_.disable_vote(need_check_log_missing);
   }
   return ret;
 }

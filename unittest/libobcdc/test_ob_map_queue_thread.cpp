@@ -71,7 +71,7 @@ public:
 
 void TestObMapQueueThread::generate_data(const int64_t count, Type *&datas)
 {
-	datas = (Type *)ob_malloc(sizeof(Type) * count);
+	datas = (Type *)ob_malloc(sizeof(Type) * count, ObNewModIds::TEST);
 	OB_ASSERT(NULL != datas);
 	for (int64_t idx = 0; idx < count; idx++) {
 		datas[idx].reset(idx, idx % THREAD_NUM);

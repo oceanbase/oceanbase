@@ -349,8 +349,8 @@ public:
 
 public:
   ObSelfBufferWriter(
+      const char *label,
       const int64_t size = 0,
-      const char *label = 0,
       const bool need_align = false);
   virtual ~ObSelfBufferWriter();
   int ensure_space(const int64_t size);

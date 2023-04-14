@@ -441,7 +441,7 @@ TEST_F(TestObTxLog, test_compat_bytes)
             K(fill_commit_info.get_serialize_size()));
   ASSERT_EQ(true, fill_commit_info.is_dup_tx());
   ASSERT_EQ(false, fill_commit_info.get_participants().empty());
-  void *tmp_buf = ob_malloc(1 * 1024 * 1024);
+  void *tmp_buf = ob_malloc(1 * 1024 * 1024, ObNewModIds::TEST);
   int64_t pos = 0;
   fill_commit_info.compat_bytes_.set_object_flag(2, false);
   fill_commit_info.compat_bytes_.set_object_flag(5, false);

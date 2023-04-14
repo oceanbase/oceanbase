@@ -22,12 +22,12 @@ struct MyPageAllocator: public ObIAllocator
   {
     UNUSED(attr);
     alloc_count_++;
-    return ob_malloc(sz);
+    return ob_malloc(sz, ObNewModIds::TEST);
   }
   void *alloc(const int64_t sz)
   {
     alloc_count_++;
-    return ob_malloc(sz);
+    return ob_malloc(sz, ObNewModIds::TEST);
   }
   void free(void *p)
   {

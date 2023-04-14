@@ -71,6 +71,7 @@ TEST_F(TestContext, Basic)
   int64_t used = g_pm.used_;
   ASSERT_EQ(0, used);
   void *ptr = nullptr;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, ObNewModIds::TEST);
   WITH_CONTEXT(mem_context) {
     ptr = ctxalp(100);
     ASSERT_NE(ptr, nullptr);
@@ -103,7 +104,7 @@ TEST_F(TestContext, Basic)
         for (int i = 0; i < 64; ++i) {
           ptr = ctxalp(1024);
           ASSERT_NE(ptr, nullptr);
-          ptr = ctxalf(100);
+          ptr = ctxalf(100, attr);
           ASSERT_NE(ptr, nullptr);
           ObArenaAllocator &arena_alloc = CURRENT_CONTEXT->get_arena_allocator();
           ptr = arena_alloc.alloc(1024);
@@ -125,8 +126,8 @@ TEST_F(TestContext, Basic)
         {
           // In order to allow the object_set inside current_ctx to allocate free_list in advance
           // Don't let the memory occupied by free_list affect subsequent verification
-          ctxalf(8192 - 1000);
-          ptr = ctxalf(2000);
+          ctxalf(8192 - 1000, attr);
+          ptr = ctxalf(2000, attr);
           ASSERT_NE(ptr, nullptr);
           ctxfree(ptr);
         }

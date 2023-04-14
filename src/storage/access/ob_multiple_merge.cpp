@@ -646,8 +646,9 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
 
 void ObMultipleMerge::report_tablet_stat()
 {
-  if (0 == access_ctx_->table_store_stat_.physical_read_cnt_ &&
-      0 == access_ctx_->table_store_stat_.micro_access_cnt_) {
+  if (OB_ISNULL(access_ctx_) || OB_ISNULL(access_param_)) {
+  } else if (0 == access_ctx_->table_store_stat_.physical_read_cnt_
+      && (0 == access_ctx_->table_store_stat_.micro_access_cnt_ || !access_param_->iter_param_.enable_pd_blockscan())) {
     // empty query, ignore it
   } else {
     int tmp_ret = OB_SUCCESS;
@@ -657,7 +658,7 @@ void ObMultipleMerge::report_tablet_stat()
     tablet_stat.query_cnt_ = 1;
     tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_store_stat_.logical_read_cnt_;
     tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.physical_read_cnt_;
-    tablet_stat.scan_micro_block_cnt_ = access_ctx_->table_store_stat_.micro_access_cnt_;
+    tablet_stat.scan_micro_block_cnt_ = access_param_->iter_param_.enable_pd_blockscan() ? access_ctx_->table_store_stat_.micro_access_cnt_ : 0;
     tablet_stat.pushdown_micro_block_cnt_ = access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
     if (OB_TMP_FAIL(MTL(storage::ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
       STORAGE_LOG_RET(WARN, tmp_ret, "failed to report tablet stat", K(tmp_ret), K(tablet_stat));
@@ -1149,6 +1150,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   table_iter.resume();
   int64_t memtable_cnt = 0;
   read_memtable_only_ = false;
+  bool read_released_memtable = false;
   while (OB_SUCC(ret)) {
     ObITable *table_ptr = nullptr;
     bool need_table = true;
@@ -1174,6 +1176,8 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
       } else if (table_ptr->is_memtable()) {
+        read_released_memtable = read_released_memtable ||
+            memtable::ObMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
         ++memtable_cnt;
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {
@@ -1193,6 +1197,13 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   if (OB_SUCC(ret) && memtable_cnt == tables_.count()) {
     read_memtable_only_ = true;
   }
+  #ifdef ENABLE_DEBUG_LOG
+  if (GCONF.enable_defensive_check() && read_released_memtable) {
+    for (int64_t i = 0; i < tables_.count(); ++i) {
+      LOG_INFO("dump read tables", KPC(tables_.at(i)));
+    }
+  }
+  #endif
   return ret;
 }
 

@@ -298,6 +298,7 @@ bool need_reject_geometry_type(ObItemType item_type)
       || item_type == T_FUN_SYS_CEILING
       || (item_type >= T_OP_NEG && item_type <= T_OP_ABS)
       || item_type == T_FUN_SYS_RAND
+      || item_type == T_FUN_SYS_RANDOM
       || item_type == T_OP_SIGN
       || item_type == T_FUN_SYS_DEGREES
       || item_type == T_FUN_SYS_RADIANS

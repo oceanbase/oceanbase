@@ -283,6 +283,7 @@ public:
                            const blocksstable::MacroBlockId &macro_block_id);
   int write_commit_log(ObTabletHandle &tablet_handle,
                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                       const bool allow_remote_write,
                        const ObITable::TableKey &table_key,
                        const int64_t table_id,
                        const int64_t execution_id,
@@ -292,6 +293,10 @@ public:
   OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:
   int switch_to_remote_write();
+  int remote_write_macro_redo(const int64_t task_id, const ObDDLMacroBlockRedoInfo &redo_info);
+  int remote_write_commit_log(const obrpc::ObRpcRemoteWriteDDLCommitLogArg &arg, SCN &commit_scn);
+  template <typename T>
+  int retry_remote_write_ddl_clog(T function);
 private:
   bool is_inited_;
   bool remote_write_;

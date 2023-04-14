@@ -372,8 +372,8 @@ ObMicroBlockCompressor::ObMicroBlockCompressor()
   : is_none_(false),
     micro_block_size_(0),
     compressor_(NULL),
-    comp_buf_(0, "MicrBlocComp"),
-    decomp_buf_(0, "MicrBlocDecomp")
+    comp_buf_("MicrBlocComp"),
+    decomp_buf_("MicrBlocDecomp")
 {
 }
 
@@ -478,7 +478,7 @@ int ObMicroBlockCompressor::decompress(const char *in, const int64_t in_size,
  */
 ObMacroBlock::ObMacroBlock()
   : spec_(NULL),
-    data_(0, "MacrBlocData"),
+    data_("MacrBlocData"),
     macro_header_(),
     data_base_offset_(0),
     last_rowkey_(),

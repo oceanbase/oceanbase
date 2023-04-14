@@ -969,7 +969,8 @@ TEST_F(TestIndexTree, test_merge_info_build_row)
   // test deep_copy of macro_meta with given allocator
   ObArenaAllocator arena_allocator;
   ObFIFOAllocator safe_allocator;
-  OK(safe_allocator.init(&arena_allocator, OB_MALLOC_BIG_BLOCK_SIZE));
+  OK(safe_allocator.init(&arena_allocator, OB_MALLOC_BIG_BLOCK_SIZE,
+                         ObMemAttr(OB_SERVER_TENANT_ID, ObNewModIds::TEST)));
   ObDataMacroBlockMeta *copy_meta = nullptr;
   ObDataMacroBlockMeta &large_meta = *merge_info_list->at(0);
   int64_t test_col_cnt = 100;

@@ -111,10 +111,6 @@ const static int32_t JSN_EXIST_DEFAULT = 3;
   } \
 }
 
-ObJsonNull* ObJsonTableOp::js_null_ = nullptr;
-ObJsonArray* ObJsonTableOp::js_arr_ = nullptr;
-ObJsonObject* ObJsonTableOp::js_obj_ = nullptr;
-
 int JtFuncHelpler::cast_to_int(ObIJsonBase *j_base, ObObjType dst_type, int64_t &val)
 {
   INIT_SUCC(ret);
@@ -1023,11 +1019,11 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
       }
     } else if (col_type == COL_TYPE_QUERY) {
       if (info.on_error_ == JSN_QUERY_EMPTY || info.on_error_ == JSN_QUERY_EMPTY_ARRAY) {
-        col_node.curr_ = ObJsonTableOp::get_js_array();
+        col_node.curr_ = ctx->jt_op_->get_js_array();
         col_node.is_null_result_ = false;
         ret = ctx->is_need_end_ ? OB_ITER_END : OB_SUCCESS;
       } else if (info.on_error_ == JSN_QUERY_EMPTY_OBJECT) {
-        col_node.curr_ = ObJsonTableOp::get_js_object();
+        col_node.curr_ = ctx->jt_op_->get_js_object();
         col_node.is_null_result_ = false;
         ret = ctx->is_need_end_ ? OB_ITER_END : OB_SUCCESS;
       } else if (info.on_error_ == JSN_QUERY_NULL || info.on_error_ == JSN_QUERY_IMPLICIT) {
@@ -1350,7 +1346,7 @@ int JtColNode::check_col_res_type(JtScanCtx* ctx)
   return ret;
 }
 
-void JtColNode::proc_query_on_error(int& ret, bool& is_null)
+void JtColNode::proc_query_on_error(JtScanCtx* ctx, int& ret, bool& is_null)
 {
   ret = OB_SUCCESS;
   if (col_info_.on_error_ == JSN_QUERY_ERROR) {
@@ -1358,10 +1354,10 @@ void JtColNode::proc_query_on_error(int& ret, bool& is_null)
     iter_ = curr_ = NULL;
     LOG_WARN("result can't be returned without array wrapper", K(ret));
   } else if (col_info_.on_error_ == JSN_QUERY_EMPTY || col_info_.on_error_ == JSN_QUERY_EMPTY_ARRAY) {
-    iter_ = curr_ = ObJsonTableOp::get_js_array();
+    iter_ = curr_ = ctx->jt_op_->get_js_array();
     is_null = false;
   } else if (col_info_.on_error_ == JSN_QUERY_EMPTY_OBJECT) {
-    iter_ = curr_ = ObJsonTableOp::get_js_object();
+    iter_ = curr_ = ctx->jt_op_->get_js_object();
     is_null = false;
   } else if (col_info_.on_error_ == JSN_QUERY_NULL || col_info_.on_error_ == JSN_QUERY_IMPLICIT) {
     iter_ = curr_ = NULL;
@@ -1391,7 +1387,7 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
         ret = OB_SUCCESS;
 
         if (col_info_.on_empty_ ==  JSN_QUERY_IMPLICIT) {
-          proc_query_on_error(ret, is_null_result_);
+          proc_query_on_error(ctx, ret, is_null_result_);
           if (col_info_.on_error_ == JSN_QUERY_ERROR) {
             ret = OB_ERR_JSON_VALUE_NO_VALUE;
           }
@@ -1399,17 +1395,17 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
         break;
       }
       case JSN_QUERY_EMPTY: {
-        iter_ = curr_ = ObJsonTableOp::get_js_array();
+        iter_ = curr_ = ctx->jt_op_->get_js_array();
         is_null_result_ = false;
         break;
       }
       case JSN_QUERY_EMPTY_ARRAY: {
-        iter_ = curr_ = ObJsonTableOp::get_js_array();
+        iter_ = curr_ = ctx->jt_op_->get_js_array();
         is_null_result_ = false;
         break;
       }
       case JSN_QUERY_EMPTY_OBJECT: {
-        iter_ = curr_ = ObJsonTableOp::get_js_object();
+        iter_ = curr_ = ctx->jt_op_->get_js_object();
         is_null_result_ = false;
         break;
       }
@@ -1608,7 +1604,7 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
             || col_info_.wrapper_ == JSN_QUERY_WITHOUT_ARRAY_WRAPPER
             || col_info_.wrapper_ == JSN_QUERY_WRAPPER_IMPLICIT) {
           if (hit.size() > 1) {
-            proc_query_on_error(ret, is_null_result_);
+            proc_query_on_error(ctx, ret, is_null_result_);
             if (col_info_.on_error_ == JSN_QUERY_ERROR) {
               ret = OB_ERR_WITHOUT_ARR_WRAPPER;
               LOG_WARN("result can't be returned without array wrapper", K(ret));
@@ -2624,19 +2620,7 @@ int ObJsonTableOp::init()
       jt_ctx_.is_evaled_ = false;
       jt_ctx_.is_charset_converted_ = false;
       jt_ctx_.res_obj_ = nullptr;
-
-      js_null_ = static_cast<ObJsonNull*>(allocator_->alloc(sizeof(ObJsonNull)));
-      js_arr_ = static_cast<ObJsonArray*>(allocator_->alloc(sizeof(ObJsonArray)));
-      js_obj_ = static_cast<ObJsonObject*>(allocator_->alloc(sizeof(ObJsonObject)));
-
-      if (OB_ISNULL(js_null_) || OB_ISNULL(js_arr_) || OB_ISNULL(js_obj_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate js node", KP(js_null_), KP(js_arr_), KP(js_obj_), K(ret));
-      } else {
-        js_null_ = new (js_null_) ObJsonNull();
-        js_arr_ = new (js_arr_) ObJsonArray(allocator_);
-        js_obj_ = new (js_obj_) ObJsonObject(allocator_);
-      }
+      jt_ctx_.jt_op_ = this;
     }
   }
 

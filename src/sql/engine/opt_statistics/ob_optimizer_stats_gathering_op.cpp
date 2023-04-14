@@ -88,18 +88,28 @@ ObOptimizerStatsGatheringOp::ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx
 {
 }
 
-void ObOptimizerStatsGatheringOp::destroy() {
+void ObOptimizerStatsGatheringOp::destroy()
+{
+  reset();
+  ObOperator::destroy();
+}
+
+void ObOptimizerStatsGatheringOp::reset()
+{
+  FOREACH(it, column_stats_map_) {
+    if (OB_NOT_NULL(it->second)) {
+      it->second->~ObOptColumnStat();
+      it->second = NULL;
+    }
+  }
   table_stats_map_.destroy();
   column_stats_map_.destroy();
   part_map_.destroy();
   arena_.reset();
-  ObOperator::destroy();
 }
 
-void ObOptimizerStatsGatheringOp::reset() {
-}
-
-void ObOptimizerStatsGatheringOp::reuse_stats() {
+void ObOptimizerStatsGatheringOp::reuse_stats()
+{
   FOREACH(it, column_stats_map_) {
     if (OB_NOT_NULL(it->second)) {
       it->second->reset();
@@ -108,6 +118,7 @@ void ObOptimizerStatsGatheringOp::reuse_stats() {
   }
   table_stats_map_.reuse();
   column_stats_map_.reuse();
+  part_map_.reuse();
   arena_.reset();
 }
 
@@ -244,7 +255,6 @@ int ObOptimizerStatsGatheringOp::inner_get_next_batch(const int64_t max_row_cnt)
       reuse_stats();
     }
   }
-
   return ret;
 }
 

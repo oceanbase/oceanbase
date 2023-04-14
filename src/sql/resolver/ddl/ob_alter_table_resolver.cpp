@@ -626,6 +626,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             bool is_constraint = false; // 表示除去外键及唯一键以外的其他 constraint
             bool is_foreign_key = false;
             bool is_unique_key = false;
+            bool is_primary_key = false;
             ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
 
             if (OB_ISNULL(action_node->children_[0])) {
@@ -649,6 +650,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                                                        K(constraint_name));
                 } else {
                   is_constraint = OB_INVALID_ID != constraint_id;
+                  is_primary_key = lib::is_oracle_mode() && nullptr != table_schema_->get_constraint(constraint_id)
+                    && CONSTRAINT_TYPE_PRIMARY_KEY == table_schema_->get_constraint(constraint_id)->get_constraint_type();
                 }
               } else { // tmp table in mysql mode
                 ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
@@ -706,7 +709,16 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
               }
             }
             if (OB_SUCC(ret)) {
-              if (is_constraint) {
+              if (is_primary_key) {
+                alter_table_stmt->set_alter_table_index();
+                if (action_node->num_child_ <= 0) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected err", K(ret));
+                } else if (OB_FALSE_IT(action_node->children_[0]->type_ = T_PRIMARY_KEY_DROP)) {
+                } else if (OB_FAIL(resolve_drop_primary(node))) {
+                  LOG_WARN("resolve drop primary key failed", K(ret), K(constraint_name));
+                }
+              } else if (is_constraint) {
                 if (OB_FAIL(resolve_constraint_options(*action_node, node.num_child_ > 1))) {
                   SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
                 }

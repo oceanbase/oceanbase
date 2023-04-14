@@ -85,7 +85,7 @@ ObVirtualTenantManager::ObVirtualTenantManager()
   : tenant_map_(NULL),
     tenant_pool_(),
     allocator_(ObModIds::OB_TENANT_INFO),
-    memattr_(default_memattr),
+    memattr_(OB_SERVER_TENANT_ID, ObModIds::OB_TENANT_INFO),
     is_inited_(false)
 {
 }

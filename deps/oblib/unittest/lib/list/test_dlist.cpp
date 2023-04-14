@@ -57,7 +57,7 @@ TEST_F(TestObDList, encode_decode)
   ASSERT_TRUE(list.add_last(&node2));
 
   int64_t buf_size = get_dlist_serialize_size(list);
-  char *buf = static_cast<char*>(ob_malloc(buf_size));
+  char *buf = static_cast<char*>(ob_malloc(buf_size, ObNewModIds::TEST));
   int64_t buf_len = buf_size;
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, serialize_dlist(list, buf, buf_len, pos));

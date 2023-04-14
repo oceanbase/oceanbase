@@ -32,6 +32,7 @@ class ObExprAbs;
 class ObExprArgCase;
 class ObExprOracleDecode;
 class ObSubQueryRelationalExpr;
+class ObExprRand;
 class ObExprRandom;
 class ObExprTypeToStr;
 class ObExprUDF;
@@ -115,6 +116,7 @@ private:
   inline int visit_strcmp_expr(ObNonTerminalRawExpr &expr, ObExprStrcmp *strcmp_op);
   inline int visit_abs_expr(ObNonTerminalRawExpr &expr, ObExprAbs *abs_op);
   inline int visit_argcase_expr(ObNonTerminalRawExpr &expr, ObExprArgCase *argcase_op);
+  inline int visit_rand_expr(ObOpRawExpr &expr, ObExprRand * rand_op);
   inline int visit_random_expr(ObOpRawExpr &expr, ObExprRandom * rand_op);
   inline int visit_column_conv_expr(ObRawExpr &expr, ObBaseExprColumnConv *column_conv_op);
   inline int visit_enum_set_expr(ObNonTerminalRawExpr &expr, ObExprTypeToStr *enum_set_op);

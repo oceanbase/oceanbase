@@ -23,10 +23,10 @@ namespace common
 class ObSafeArena : public ObIAllocator
 {
 public:
-  ObSafeArena(const lib::ObLabel &label, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE, ObMemAttr attr = default_memattr)
-      : arena_alloc_(label, page_size, attr.tenant_id_),
-        lock_(ObLatchIds::OB_AREAN_ALLOCATOR_LOCK),
-        attr_(attr)
+  ObSafeArena(const lib::ObLabel &label, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
+              int64_t tenant_id = OB_SERVER_TENANT_ID)
+      : arena_alloc_(label, page_size, tenant_id),
+        lock_(ObLatchIds::OB_AREAN_ALLOCATOR_LOCK)
   {}
 
   virtual ~ObSafeArena() {}
@@ -34,7 +34,8 @@ public:
 public:
   virtual void *alloc(const int64_t sz) override
   {
-    return alloc(sz, attr_);
+    ObSpinLockGuard guard(lock_);
+    return arena_alloc_.alloc(sz);
   }
 
   virtual void* alloc(const int64_t sz, const ObMemAttr &attr) override
@@ -81,7 +82,6 @@ public:
 private:
   ObArenaAllocator arena_alloc_;
   ObSpinLock lock_;
-  ObMemAttr attr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSafeArena);

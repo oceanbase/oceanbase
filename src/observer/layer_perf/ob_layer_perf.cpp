@@ -131,7 +131,7 @@ int ObLayerPerf::do_clog_layer_perf()
     palf::LSN lsn;
     share::SCN zero, ts_ns;
     LOG_INFO("perf layer append", KP(r_), KP(buf));
-    if (nullptr == (cb = static_cast<PerfLogCb*>(ob_malloc(sizeof(PerfLogCb))))) {
+    if (nullptr == (cb = static_cast<PerfLogCb*>(ob_malloc(sizeof(PerfLogCb), "PerfLogCb")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allo mem", K(ret));
     } else if (FALSE_IT(new (cb) PerfLogCb(r_))) {

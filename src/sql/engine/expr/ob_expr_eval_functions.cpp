@@ -133,6 +133,8 @@
 #include "ob_expr_fun_default.h"
 #include "ob_expr_substrb.h"
 #include "ob_expr_remainder.h"
+#include "ob_expr_rand.h"
+#include "ob_expr_randstr.h"
 #include "ob_expr_random.h"
 #include "ob_expr_width_bucket.h"
 #include "ob_expr_sys_extract_utc.h"
@@ -310,6 +312,12 @@
 #include "ob_expr_cast.h"
 #include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
+#include "ob_expr_generator_func.h"
+#include "ob_expr_random.h"
+#include "ob_expr_randstr.h"
+#include "ob_expr_zipf.h"
+#include "ob_expr_normal.h"
+#include "ob_expr_uniform.h"
 
 namespace oceanbase
 {
@@ -317,6 +325,11 @@ using namespace common;
 namespace sql
 {
 
+//
+// this file is for function serialization
+// Without maps defined here, you can not get correct function ptr
+// when serialize between different observer versions
+//
 extern int cast_eval_arg(const ObExpr &, ObEvalCtx &, ObDatum &);
 extern int anytype_to_varchar_char_explicit(const ObExpr &, ObEvalCtx &, ObDatum &);
 extern int anytype_anytype_explicit(const ObExpr &, ObEvalCtx &, ObDatum &);
@@ -712,8 +725,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprFunDefault::calc_default_expr,                                /* 316 */
   ObExprSubstrb::calc_substrb_expr,                                   /* 317 */
   ObExprRemainder::calc_remainder_expr,                               /* 318 */
-  ObExprRandom::calc_random_expr_const_seed,                          /* 319 */
-  ObExprRandom::calc_random_expr_nonconst_seed,                       /* 320 */
+  ObExprRand::calc_random_expr_const_seed,                            /* 319 */
+  ObExprRand::calc_random_expr_nonconst_seed,                         /* 320 */
   ObExprWidthBucket::calc_width_bucket_expr,                          /* 321 */
   ObExprSysExtractUtc::calc_sys_extract_utc,                          /* 322 */
   ObExprToClob::calc_to_clob_expr,                                    /* 323 */
@@ -980,6 +993,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprDecode::eval_decode,                                          /* 580 */
   ObExprICUVersion::eval_version,                                     /* 581 */
   ObExprCast::eval_cast_multiset,                                     /* 582 */
+  ObExprGeneratorFunc::eval_next_value,                               /* 583 */
+  ObExprZipf::eval_next_value,                                        /* 584 */
+  ObExprNormal::eval_next_value,                                      /* 585 */
+  ObExprUniform::eval_next_int_value,                                 /* 586 */
+  ObExprUniform::eval_next_real_value,                                /* 587 */
+  ObExprUniform::eval_next_number_value,                              /* 588 */
+  ObExprRandom::calc_random_expr_const_seed,                          /* 589 */
+  ObExprRandom::calc_random_expr_nonconst_seed,                       /* 590 */
+  ObExprRandstr::calc_random_str                                      /* 591 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -668,7 +668,9 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
   } else if (OB_FAIL(data_desc.assign(index_store_desc_))) {
     STORAGE_LOG(WARN, "fail to assign data desc", K(ret), K_(index_store_desc));
   } else {
+    const int64_t curr_logical_version = index_store_desc_.get_logical_version();
     ObIndexBlockRowDesc row_desc(data_desc);
+    ObLogicMacroBlockId prev_logic_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < roots_.count(); ++i) {
       ObMacroMetasArray *macro_metas = roots_[i]->macro_metas_;
       for (int64_t j = 0; OB_SUCC(ret) && j < macro_metas->count(); ++j) {
@@ -676,8 +678,15 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
         if (OB_ISNULL(macro_meta)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected null macro meta", K(ret), K(j), KPC(roots_.at(i)));
+        } else if (OB_UNLIKELY(macro_meta->get_logic_id() == prev_logic_id)) {
+          // Since we rely on upper stream of sstable writing process to ensure the uniqueness of logic id
+          // and we don't want more additional memory/time consumption, we only check continuous ids here
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(ERROR, "unexpected duplicate logic macro id", K(ret), KPC(macro_meta), K(prev_logic_id));
         } else if (OB_FAIL(index_builder_.append_row(*macro_meta, row_desc))) {
           STORAGE_LOG(WARN, "fail to append row", K(ret), KPC(macro_meta), K(j), KPC(roots_.at(i)));
+        } else {
+          prev_logic_id = macro_meta->get_logic_id();
         }
       }
     }

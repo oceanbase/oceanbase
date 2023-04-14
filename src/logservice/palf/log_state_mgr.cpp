@@ -56,6 +56,7 @@ LogStateMgr::LogStateMgr()
     scan_disk_log_finished_(false),
     is_sync_enabled_(true),
     allow_vote_(true),
+    allow_vote_persisted_(true),
     replica_type_(NORMAL_REPLICA),
     is_changing_config_with_arb_(false),
     last_set_changing_config_with_arb_time_us_(OB_INVALID_TIMESTAMP),
@@ -100,6 +101,7 @@ int LogStateMgr::init(const int64_t palf_id,
     state_ = INIT;
     scan_disk_log_finished_ = false;
     allow_vote_ = replica_property_meta.allow_vote_;
+    allow_vote_persisted_ = replica_property_meta.allow_vote_;
     replica_type_ = replica_property_meta.replica_type_;
     is_sync_enabled_ = !is_arb_replica();
     is_inited_ = true;
@@ -1098,6 +1100,24 @@ bool LogStateMgr::is_allow_vote() const
   return ATOMIC_LOAD(&allow_vote_);
 }
 
+bool LogStateMgr::is_allow_vote_persisted() const
+{
+
+  return ATOMIC_LOAD(&allow_vote_persisted_);
+}
+
+int LogStateMgr::disable_vote_in_mem()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ATOMIC_STORE(&allow_vote_, false);
+    PALF_LOG(INFO, "disable_vote_in_mem success", K(ret), K_(palf_id), K_(self));
+  }
+  return ret;
+}
+
 int LogStateMgr::disable_vote()
 {
   int ret = OB_SUCCESS;
@@ -1105,6 +1125,7 @@ int LogStateMgr::disable_vote()
     ret = OB_NOT_INIT;
   } else {
     ATOMIC_STORE(&allow_vote_, false);
+    ATOMIC_STORE(&allow_vote_persisted_, false);
     PALF_LOG(INFO, "disable_vote success", K(ret), K_(palf_id), K_(self));
   }
   return ret;
@@ -1117,6 +1138,7 @@ int LogStateMgr::enable_vote()
     ret = OB_NOT_INIT;
   } else {
     ATOMIC_STORE(&allow_vote_, true);
+    ATOMIC_STORE(&allow_vote_persisted_, true);
     PALF_LOG(INFO, "enable_vote success", K(ret), K_(palf_id), K_(self));
   }
   return ret;

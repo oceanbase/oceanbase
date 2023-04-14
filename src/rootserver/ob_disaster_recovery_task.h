@@ -184,7 +184,7 @@ public:
                skip_change_member_list_(false),
                generate_time_(common::ObTimeUtility::current_time()),
                priority_(ObDRTaskPriority::MAX_PRI),
-               comment_(""),
+               comment_("DRTask"),
                schedule_time_(0),
                execute_time_(0),
                task_id_() {}

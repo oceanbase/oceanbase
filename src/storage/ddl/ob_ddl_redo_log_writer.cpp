@@ -108,8 +108,8 @@ int ObDDLCtrlSpeedItem::refresh()
   } else {
     // archive is not on if ignore = true.
     write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
-    disk_used_stop_write_threshold_ = (palf_opt.disk_options_.log_disk_utilization_threshold_ +
-                                       palf_opt.disk_options_.log_disk_utilization_limit_threshold_) / 2;
+    disk_used_stop_write_threshold_ = min(palf_opt.disk_options_.log_disk_utilization_threshold_,
+                                       palf_opt.disk_options_.log_disk_utilization_limit_threshold_);
     need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
   }
   LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_),
@@ -1101,7 +1101,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
-  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
+  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));
     } else {
@@ -1182,11 +1182,8 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
   }
 
   if (OB_SUCC(ret) && remote_write_) {
-    if (OB_FAIL(ObDDLMacroBlockRedoWriter::remote_write_macro_redo(task_id,
-                                                                   leader_addr_,
-                                                                   leader_ls_id_,
-                                                                   redo_info))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K_(leader_ls_id), K_(leader_addr));
+    if (OB_FAIL(retry_remote_write_ddl_clog( [&]() { return remote_write_macro_redo(task_id, redo_info); }))) {
+      LOG_WARN("remote write redo failed", K(ret), K(task_id));
     }
   }
   return ret;
@@ -1214,6 +1211,7 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
 
 int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
                                              ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                                             const bool allow_remote_write,
                                              const ObITable::TableKey &table_key,
                                              const int64_t table_id,
                                              const int64_t execution_id,
@@ -1250,7 +1248,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_commit_log(tablet_handle, ddl_kv_mgr_handle, log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), handle))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
@@ -1264,18 +1262,11 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
-    ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLCommitLogArg arg;
-    obrpc::Int64 log_ns;
     if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), table_id, execution_id, ddl_task_id))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLCommitLogArg", K(ret));
-    } else if (OB_ISNULL(srv_rpc_proxy)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_commit_log(arg, log_ns))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
-    } else if (OB_FAIL(commit_scn.convert_for_tx(log_ns))) {
-      LOG_WARN("convert for tx failed", K(ret));
+    } else if (OB_FAIL(retry_remote_write_ddl_clog( [&]() { return remote_write_commit_log(arg, commit_scn); }))) {
+      LOG_WARN("remote write ddl commit log failed", K(ret), K(arg));
     }
   }
   return ret;
@@ -1305,6 +1296,61 @@ int ObDDLSSTableRedoWriter::switch_to_remote_write()
   } else {
     remote_write_ = true;
     LOG_INFO("switch to remote write", K(ret), K_(tablet_id));
+  }
+  return ret;
+}
+
+template <typename T>
+int ObDDLSSTableRedoWriter::retry_remote_write_ddl_clog(T function)
+{
+  int ret = OB_SUCCESS;
+  int retry_cnt = 0;
+  const int64_t MAX_REMOTE_WRITE_RETRY_CNT = 800;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(switch_to_remote_write())) {
+      LOG_WARN("flush ls leader location failed", K(ret));
+    } else if (OB_FAIL(function())) {
+      if (OB_NOT_MASTER == ret && retry_cnt++ < MAX_REMOTE_WRITE_RETRY_CNT) {
+        ob_usleep(10 * 1000); // 10 ms.
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("remote write macro redo failed", K(ret), K_(leader_ls_id), K_(leader_addr));
+      }
+    } else {
+      break; // remote write ddl clog successfully.
+    }
+  }
+  return ret;
+}
+
+int ObDDLSSTableRedoWriter::remote_write_macro_redo(const int64_t task_id, const ObDDLMacroBlockRedoInfo &redo_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLMacroBlockRedoWriter::remote_write_macro_redo(task_id,
+                                                                leader_addr_,
+                                                                leader_ls_id_,
+                                                                redo_info))) {
+    LOG_WARN("remote write macro redo failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLSSTableRedoWriter::remote_write_commit_log(const obrpc::ObRpcRemoteWriteDDLCommitLogArg &arg, SCN &commit_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
+  obrpc::Int64 log_ns;
+  int retry_cnt = 0;
+  if (OB_ISNULL(srv_rpc_proxy)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_commit_log(arg, log_ns))) {
+    LOG_WARN("remote write macro redo failed", K(ret), K_(leader_ls_id), K_(leader_addr));
+  } else if (OB_FAIL(commit_scn.convert_for_tx(log_ns))) {
+    LOG_WARN("convert for tx failed", K(ret));
   }
   return ret;
 }

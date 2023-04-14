@@ -91,7 +91,7 @@ struct ModulePageAllocator: public ObIAllocator
         tenant_id_(tenant_id),
         ctx_id_(ctx_id) {}
   explicit ModulePageAllocator(ObIAllocator &allocator,
-                               const lib::ObLabel &label = lib::ObLabel())
+                               const lib::ObLabel &label = ObModIds::OB_MODULE_PAGE_ALLOCATOR)
       : allocator_(&allocator),
         label_(label),
         tenant_id_(OB_SERVER_TENANT_ID),
@@ -1095,7 +1095,8 @@ public:
 public:
   void *alloc(const int64_t sz) override
   {
-    return alloc(sz, default_memattr);
+    ObSpinLockGuard guard(lock_);
+    return arena_.alloc(sz);
   }
   void *alloc(const int64_t sz, const ObMemAttr &attr) override
   {

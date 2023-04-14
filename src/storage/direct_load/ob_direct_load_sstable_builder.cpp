@@ -336,7 +336,7 @@ int ObDirectLoadDataBlockWriter2::write_large_item(const ObDirectLoadExternalRow
   int ret = OB_SUCCESS;
   char *new_buf;
   const int64_t align_buf_size = upper_align(new_buf_size, DIO_ALIGN_SIZE);
-  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size)))) {
+  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size, ObModIds::OB_SQL_LOAD_DATA)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", KR(ret), K(align_buf_size));
   } else {

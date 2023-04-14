@@ -112,9 +112,7 @@ void ObKVCacheStore::destroy()
     }
 
     // free all mb handles cached by threads
-    HazardList reclaim_list;
-    get_retire_station().purge(reclaim_list);
-    reuse_mb_handles(reclaim_list);
+    purge_mb_handle_retire_station();
 
     ob_free(mb_handles_);
     mb_handles_ = NULL;
@@ -338,8 +336,8 @@ bool ObKVCacheStore::wash()
       }
       current_time = ObTimeUtility::current_time();
       wash_time = current_time - start_time;
-      
-    } 
+    }
+    purge_mb_handle_retire_station();
     COMMON_LOG(INFO, "Wash time detail, ", K(compute_wash_size_time), K(refresh_score_time), K(wash_time));
   }
 
@@ -590,7 +588,7 @@ int ObKVCacheStore::try_flush_washable_mb(
               }
             }
           }
-          de_handle_ref(handle);
+          de_handle_ref(handle, false /* do_retire */);
         }
         if (can_try_wash) {
           void *buf = nullptr;
@@ -676,7 +674,7 @@ int ObKVCacheStore::try_flush_washable_mb(
 
     COMMON_LOG(INFO, "ObKVCache try flush washable memblock details", K(ret), K(force_flush), K(tenant_id),
                K(cache_id), K(size_washed), K(size_need_washed));
-    retire_mb_handles(retire_list);
+    retire_mb_handles(retire_list, true /* do retire */);
 
     COMMON_LOG(DEBUG, "Try flush cache result", K(size_washed), K(size_need_washed), K(tenant_id), K(cache_id), K(ret));
   }
@@ -709,6 +707,13 @@ int ObKVCacheStore::inner_push_memblock_info(const ObKVMemBlockHandle &handle, O
   }
 
   return ret;
+}
+
+void ObKVCacheStore::purge_mb_handle_retire_station()
+{
+  HazardList reclaim_list;
+  get_retire_station().purge(reclaim_list);
+  reuse_mb_handles(reclaim_list);
 }
 
 int ObKVCacheStore::get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos)
@@ -849,7 +854,7 @@ int ObKVCacheStore::mark_washable(ObKVMemBlockHandle *mb_handle)
   return ret;
 }
 
-int ObKVCacheStore::free_mbhandle(ObKVMemBlockHandle *mb_handle)
+int ObKVCacheStore::free_mbhandle(ObKVMemBlockHandle *mb_handle, const bool do_retire)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -866,7 +871,7 @@ int ObKVCacheStore::free_mbhandle(ObKVMemBlockHandle *mb_handle)
       COMMON_LOG(ERROR, "do_wash_mb failed", K(ret));
     } else {
       free_mb(*mb_handle->inst_->mb_list_handle_.get_resource_handle(), tenant_id, buf);
-      if (OB_FAIL(remove_mb_handle(mb_handle))) {
+      if (OB_FAIL(remove_mb_handle(mb_handle, do_retire))) {
         COMMON_LOG(WARN, "remove_mb failed", K(ret));
       }
     }
@@ -950,7 +955,7 @@ int ObKVCacheStore::alloc_mbhandle(
   return ret;
 }
 
-void ObKVCacheStore::de_handle_ref(ObKVMemBlockHandle *mb_handle)
+void ObKVCacheStore::de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire)
 {
   int ret = OB_SUCCESS;
   uint32_t ref_cnt = 0;
@@ -960,7 +965,7 @@ void ObKVCacheStore::de_handle_ref(ObKVMemBlockHandle *mb_handle)
   } else if (OB_FAIL(mb_handle->handle_ref_.dec_ref_cnt_and_inc_seq_num(ref_cnt))) {
     COMMON_LOG(ERROR, "Fail to dec ref cnt, ", K(ret));
   } else if (0 == ref_cnt) {
-    if (OB_FAIL(free_mbhandle(mb_handle))) {
+    if (OB_FAIL(free_mbhandle(mb_handle, do_retire))) {
       COMMON_LOG(WARN, "free_mbhandle failed", K(ret));
     }
   }
@@ -1393,7 +1398,7 @@ int ObKVCacheStore::insert_mb_handle(ObDLink *head, ObKVMemBlockHandle *mb_handl
   return ret;
 }
 
-int ObKVCacheStore::remove_mb_handle(ObKVMemBlockHandle *mb_handle)
+int ObKVCacheStore::remove_mb_handle(ObKVMemBlockHandle *mb_handle, const bool do_retire)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -1403,30 +1408,34 @@ int ObKVCacheStore::remove_mb_handle(ObKVMemBlockHandle *mb_handle)
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments", K(ret), KP(mb_handle));
   } else {
-    {
+    if (do_retire) {
+      // default
       QClockGuard guard(get_qclock());
       dl_del(mb_handle);
+    } else {
+      // sync wash has already get qclock
+      dl_del(mb_handle);
     }
-    retire_mb_handle(mb_handle);
+    retire_mb_handle(mb_handle, do_retire);
   }
   return ret;
 }
 
-void ObKVCacheStore::retire_mb_handle(ObKVMemBlockHandle *mb_handle)
+void ObKVCacheStore::retire_mb_handle(ObKVMemBlockHandle *mb_handle, const bool do_retire)
 {
   if (NULL != mb_handle) {
     HazardList retire_list;
     retire_list.push(&mb_handle->retire_link_);
-    retire_mb_handles(retire_list);
+    retire_mb_handles(retire_list, do_retire);
   }
 }
 
-void ObKVCacheStore::retire_mb_handles(HazardList &retire_list)
+void ObKVCacheStore::retire_mb_handles(HazardList &retire_list, const bool do_retire)
 {
   if (retire_list.size() > 0) {
     HazardList reclaim_list;
-    int64_t retire_limit = RETIRE_LIMIT;
-    if (wash_itid_ == get_itid()) {
+    int64_t retire_limit = do_retire ? RETIRE_LIMIT : INT64_MAX;
+    if (wash_itid_ == get_itid()) {  // wash thread should not sync wash
       retire_limit = WASH_THREAD_RETIRE_LIMIT;
     }
     get_retire_station().retire(reclaim_list, retire_list, retire_limit);

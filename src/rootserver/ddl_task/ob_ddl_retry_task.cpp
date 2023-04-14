@@ -355,11 +355,13 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
     obrpc::ObCommonRpcProxy common_rpc_proxy = root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout);
     switch(task_type_) {
       case ObDDLType::DDL_DROP_DATABASE: {
+        int64_t timeout_us = 0;
         obrpc::ObDropDatabaseRes drop_database_res;
         obrpc::ObDropDatabaseArg *arg = static_cast<obrpc::ObDropDatabaseArg *>(ddl_arg_);
         arg->is_add_to_scheduler_ = false;
         arg->task_id_ = task_id_;
-        if (OB_FAIL(common_rpc_proxy.drop_database(*arg, drop_database_res))) {
+        ObDDLUtil::get_ddl_rpc_timeout_for_database(tenant_id_, object_id_, timeout_us);
+        if (OB_FAIL(common_rpc_proxy.timeout(timeout_us).drop_database(*arg, drop_database_res))) {
           LOG_WARN("fail to drop database", K(ret));
         } else {
           affected_rows_ = drop_database_res.affected_row_;

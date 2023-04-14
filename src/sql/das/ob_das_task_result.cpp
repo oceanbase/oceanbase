@@ -165,7 +165,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
         bool added = false;
         if (is_vectorized) {
           void *buf = NULL;
-          if (OB_ISNULL(buf = ob_malloc(sizeof(ObChunkDatumStore::StoredRow *) * max_batch_size))) {
+          if (OB_ISNULL(buf = ob_malloc(sizeof(ObChunkDatumStore::StoredRow *) * max_batch_size, "DASTaskResMgr"))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc stored row array failed", KR(ret));
           } else {
@@ -177,7 +177,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
         } else if (OB_FAIL(datum_store.init(4 * 1024 * 1024, // 4MB
                                      MTL_ID(),
                                      common::ObCtxIds::DEFAULT_CTX_ID,
-                                     "ObDASTaskResultMgr",
+                                     "DASTaskResMgr",
                                      true))) {
           LOG_WARN("init datum store failed", KR(ret));
         } else if (OB_FAIL(datum_store.alloc_dir_id())) {
@@ -374,7 +374,7 @@ int ObDASTaskResultMgr::iterator_task_result(int64_t task_id,
              && OB_FAIL(datum_store.init(INT64_MAX,
                                          MTL_ID(),
                                          common::ObCtxIds::DEFAULT_CTX_ID,
-                                         "ObDASTaskResultMgr",
+                                         "DASTaskResMgr",
                                          false))) {
     LOG_WARN("init datum store failed", KR(ret));
   } else {

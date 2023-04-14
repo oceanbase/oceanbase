@@ -322,17 +322,16 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
     int ls_cnt = 0;
     for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
-      ObLSTxService *ls_tx_ser = nullptr;
+      ObCheckpointExecutor *checkpoint_executor = nullptr;
       if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
         STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
-      } else if (OB_ISNULL(ls_tx_ser = ls->get_tx_svr())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "ls_tx_ser should not be null", K(ret), K(ls->get_ls_id()));
-      } else if (OB_FAIL(ls_tx_ser->traversal_flush())) {
-        STORAGE_LOG(WARN, "ls_tx_ser flush failed", K(ret), K(ls->get_ls_id()));
+      } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
+      } else if (OB_FAIL(checkpoint_executor->traversal_flush())) {
+        STORAGE_LOG(WARN, "traversal_flush failed", K(ret), K(ls->get_ls_id()));
       }
     }
     if (ret == OB_ITER_END) {

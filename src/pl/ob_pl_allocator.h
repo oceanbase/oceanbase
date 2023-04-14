@@ -51,7 +51,7 @@ public:
   virtual void *alloc(const int64_t size, const ObMemAttr &attr) override;
   virtual void *alloc(const int64_t size) override
   {
-    return alloc(size, default_memattr);
+    return alloc(size, ObMemAttr(MTL_ID(), ObModIds::OB_PL_TEMP));
   }
   virtual void free(void *ptr) override { UNUSED(ptr); }
   virtual void reset();

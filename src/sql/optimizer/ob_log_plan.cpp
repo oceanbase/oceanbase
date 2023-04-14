@@ -6115,6 +6115,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   AggregateAlgo second_aggr_algo;
   AggregateAlgo third_aggr_algo;
   bool can_sort_opt = true;
+  ObLogicalOperator *child = NULL;
 
   // 1. prepare to allocate the first group by
   if (OB_ISNULL(top)) {
@@ -6186,7 +6187,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                         rd_second_sort_keys))) {
         LOG_WARN("failed to make sort keys", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(rd_second_sort_keys,
-                                                                    can_sort_opt, *this))) {
+                                                                    can_sort_opt, *this, top->get_card()))) {
         LOG_WARN("failed to check encode sortkey expr", K(ret));
       } else if (false
           && (OB_FAIL(ObSQLUtils::create_encode_sortkey_expr(get_optimizer_context().get_expr_factory(),

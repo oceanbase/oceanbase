@@ -30,6 +30,12 @@
 namespace oceanbase
 {
 using namespace blocksstable;
+
+namespace storage
+{
+struct ObTransNodeDMLStat;
+}
+
 namespace compaction
 {
 struct ObMergeParameter;
@@ -82,6 +88,7 @@ public:
   virtual int get_curr_micro_block(const blocksstable::ObMicroBlock *&micro_block) {UNUSED(micro_block);  return OB_NOT_SUPPORTED; }
   virtual int64_t get_iter_row_count() const { return iter_row_count_; }
   virtual int64_t get_ghost_row_count() const { return 0; }
+  virtual int collect_tnode_dml_stat(storage::ObTransNodeDMLStat &tnode_stat) const { UNUSED(tnode_stat); return OB_NOT_SUPPORTED; }
   OB_INLINE bool is_compact_completed_row() const
   {
     bool bret = false;
@@ -221,6 +228,7 @@ public:
   virtual int64_t get_ghost_row_count() const override { return ghost_row_count_; }
   virtual OB_INLINE bool is_multi_version_minor_iter() const { return true; }
   virtual bool is_curr_row_commiting() const;
+  virtual int collect_tnode_dml_stat(storage::ObTransNodeDMLStat &tnode_stat) const override;
   virtual void reset_first_multi_version_row_flag()
   {
     if (nullptr != curr_row_) {

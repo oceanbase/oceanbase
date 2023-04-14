@@ -59,7 +59,7 @@ ObLSReplicaTaskDisplayInfo::ObLSReplicaTaskDisplayInfo()
     source_replica_type_(REPLICA_TYPE_FULL),
     source_replica_paxos_replica_number_(OB_INVALID_COUNT),
     execute_server_(),
-    comment_("")
+    comment_("LSReplicaTask")
 {
 }
 

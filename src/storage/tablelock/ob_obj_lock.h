@@ -313,7 +313,7 @@ class ObOBJLockMap
 public:
   ObOBJLockMap() :
       lock_map_(),
-      allocator_(),
+      allocator_("ObOBJLockMap"),
       is_inited_(false)
   {}
   int init();

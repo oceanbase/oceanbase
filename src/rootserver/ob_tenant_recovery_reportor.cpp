@@ -401,7 +401,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
         max_replayable_point = replayable_point;
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_ITER_END == ret) {
       logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
       if (OB_FAIL(log_service->update_replayable_point(replayable_point))) {
         LOG_WARN("logservice update_replayable_point failed", KR(ret), K(replayable_point));

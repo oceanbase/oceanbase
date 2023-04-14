@@ -32,6 +32,7 @@ const int64_t init_size = 0;
 
 int64_t glibc_alloc_count = 0;
 int64_t glibc_free_count = 0;
+const ObMemAttr default_memattr(OB_SERVER_TENANT_ID, ObNewModIds::TEST);
 
 #define MOCK_ALIGN 512
 #define MOCK_ALLOC_ALIGN 1
@@ -978,7 +979,7 @@ TEST(TestFIFO, init_idle_max)
   MockAllocator mock_allocator;
   ObFIFOAllocator fa;
   // invalid arg
-  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, 0));
+  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, 0, default_memattr));
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, -1));
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, -1));
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, 0, -1));

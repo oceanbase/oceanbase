@@ -148,7 +148,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     nested_sql_flags_(0),
     has_for_update_(false),
     has_var_assign_(false),
-    is_var_assign_only_in_root_stmt_(false)
+    is_var_assign_only_in_root_stmt_(false),
+    has_multiple_link_stmt_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -474,6 +475,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_has_var_assign(bool v) { has_var_assign_ = v; }
   inline bool is_var_assign_only_in_root_stmt() { return is_var_assign_only_in_root_stmt_; }
   inline void set_is_var_assign_only_in_root_stmt(bool v) { is_var_assign_only_in_root_stmt_ = v; }
+  inline bool has_multiple_link_stmt() const { return has_multiple_link_stmt_; }
+  inline void set_has_multiple_link_stmt(bool v) { has_multiple_link_stmt_ = v; }
 
 private:
   ObSQLSessionInfo *session_info_;
@@ -545,6 +548,7 @@ private:
   bool has_for_update_;
   bool has_var_assign_;
   bool is_var_assign_only_in_root_stmt_;
+  bool has_multiple_link_stmt_;
 };
 }
 }

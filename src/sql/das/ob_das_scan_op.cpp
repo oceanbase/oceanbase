@@ -370,7 +370,7 @@ int ObDASScanOp::do_local_index_lookup()
       op->set_rowkey_iter(result_);
       result_ = op;
       if (OB_FAIL(op->init(get_lookup_ctdef(), get_lookup_rtdef(), scan_ctdef_, scan_rtdef_,
-                           trans_desc_, snapshot_, &scan_param_.mbr_filters_))) {
+                           trans_desc_, snapshot_, scan_param_))) {
         LOG_WARN("init spatial lookup op failed", K(ret));
       } else {
         op->set_tablet_id(related_tablet_ids_.at(0));

@@ -56,6 +56,9 @@
     TRANS_LOG(ERROR, "trans act on txn temporary node", KR(ret),        \
               K(session->get_txn_free_route_ctx()),                     \
               K(session->get_tx_id()), KPC(session));                   \
+    if (session->get_tx_desc()) {                                       \
+      session->get_tx_desc()->dump_and_print_trace();                   \
+    }                                                                   \
   }
 
 namespace oceanbase
@@ -524,6 +527,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OX (session_id = session->get_sessid());
   OX (tx_desc = session->get_tx_desc());
   OX (is_plain_select = plan->is_plain_select());
+  OX (tx_desc->clear_interrupt());
   if (OB_SUCC(ret) && !is_plain_select) {
     OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level), session_id, *tx_desc);
   }

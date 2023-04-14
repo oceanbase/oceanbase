@@ -483,6 +483,19 @@ void ObTxDesc::print_trace()
   }
 }
 
+void ObTxDesc::dump_and_print_trace()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_.trylock())) {
+    TRANS_LOG(WARN, "acquire lock fail", K(ret), KP(this), K(tx_id_));
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    TRANS_LOG(INFO, "[tx desc dump]", KPC(this));
+    print_trace_();
+    lock_.unlock();
+  }
+}
+
 bool ObTxDesc::in_tx_or_has_extra_state()
 {
   ObSpinLockGuard guard(lock_);

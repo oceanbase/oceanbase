@@ -125,8 +125,9 @@ int ObPageManagerCenter::print_tenant_stat(int64_t tenant_id,
     }
     return return_ret;
   };
-  rb_tree_.iter_rbtree(&rb_tree_, start, cb, &arg);
-
+  if (NULL != start) {
+    rb_tree_.iter_rbtree(&rb_tree_, start, cb, &arg);
+  }
   return ret;
 }
 

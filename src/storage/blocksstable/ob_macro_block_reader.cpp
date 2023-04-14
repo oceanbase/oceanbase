@@ -551,6 +551,8 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
         LOG_WARN("Fail to open leaf index micro block", K(ret));
       } else if (OB_FAIL(dump_sstable_micro_block(0, true, macro_iter))) {
         LOG_WARN("Fail to dump leaf index micro block", K(ret));
+      } else if (OB_FAIL(dump_macro_block_meta_block(macro_iter))) {
+        LOG_WARN("Fail to dump macro meta block in macro block", K(ret));
       }
     }
   }
@@ -685,6 +687,34 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
   }
   if (nullptr != hex_print_buf_) {
     ObSSTablePrinter::print_hex_micro_block(*block_data, hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
+  }
+  return ret;
+}
+
+int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIterator &macro_iter)
+{
+  int ret = OB_SUCCESS;
+  const ObMicroBlockData *micro_data = nullptr;
+  const ObDatumRow *row = nullptr;
+  ObDataMacroBlockMeta macro_meta;
+  ObSSTablePrinter::print_title("Macro Meta Micro Block");
+  if (OB_FAIL(macro_iter.open_leaf_index_micro_block(true /*macro meta*/))) {
+    LOG_WARN("Fail to open macro meta block in macro block", K(ret));
+  } else if (OB_FAIL(macro_iter.get_curr_micro_block_data(micro_data))) {
+    LOG_WARN("Fail to get curr micro block data", K(ret));
+  } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected invalid micro block data", K(ret), KPC(micro_data));
+  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, 0, true))) {
+    LOG_WARN("Failed to dump sstble micro block header", K(ret));
+  } else if (OB_FAIL(macro_iter.get_next_row(row))) {
+    LOG_WARN("Failed to get next meta block row", K(ret));
+  } else if (OB_FAIL(macro_meta.parse_row(*const_cast<ObDatumRow *>(row)))) {
+    LOG_WARN("Failed to parse macro block meta", K(ret));
+  } else {
+    ObSSTablePrinter::print_store_row(
+            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, true, is_trans_sstable_);
+    ObSSTablePrinter::print_macro_meta(&macro_meta);
   }
   return ret;
 }

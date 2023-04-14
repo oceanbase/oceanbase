@@ -766,7 +766,7 @@ int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleImplGuard &leader,
   PalfAppendOptions opts;
   ObRole role;
   while (buf == NULL) {
-    buf = static_cast<char *>(ob_malloc(buf_len));
+    buf = static_cast<char *>(ob_malloc(buf_len, ObNewModIds::TEST));
   }
   bool state;
   if (OB_FAIL(generate_data(buf, buf_len, real_log_data_size, data_len))) {

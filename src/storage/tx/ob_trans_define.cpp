@@ -610,6 +610,19 @@ int ObCoreLocalPartitionAuditInfo::init(int64_t array_len)
   return ret;
 }
 
+bool ObStateInfo::need_update(const ObStateInfo &state_info)
+{
+  bool need_update = true;
+  if (ObTxState::PRE_COMMIT <= state_ && state_ <= ObTxState::CLEAR) {
+    need_update = false;
+  } else if (snapshot_version_ > state_info.snapshot_version_) {
+    need_update = false;
+  } else if (state_info.state_ < state_) {
+    need_update = false;
+  }
+  return need_update;
+}
+
 void ObAddrLogId::reset()
 {
   addr_.reset();

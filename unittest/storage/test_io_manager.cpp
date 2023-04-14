@@ -1610,7 +1610,7 @@ int IOPerfRunner::init(const int64_t absolute_ts, const IOPerfLoad &load)
     // prepare write buffer
     if (OB_SUCC(ret) && ObIOMode::WRITE == load_.mode_ && nullptr == write_buf_) {
       const int64_t buf_size = load_.size_ + DIO_READ_ALIGN_SIZE;
-      void *tmp_buf = ob_malloc(buf_size);
+      void *tmp_buf = ob_malloc(buf_size, ObNewModIds::TEST);
       if (nullptr == tmp_buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret), K(buf_size));

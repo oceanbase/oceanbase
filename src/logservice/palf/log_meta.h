@@ -31,11 +31,12 @@ public:
   LogMeta(const LogMeta &rmeta);
 
 public:
-  int generate_by_default(const AccessMode &access_mode,
-                          const LogReplicaType &replica_type);
   int generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
                                  const AccessMode &access_mode,
                                  const LogReplicaType &replica_type);
+  int generate_by_palf_base_info_in_arb(const PalfBaseInfo &palf_base_info,
+                                        const AccessMode &access_mode,
+                                        const LogReplicaType &replica_type);
 
   int load(const char *buf, int64_t buf_len);
   bool is_valid() const;

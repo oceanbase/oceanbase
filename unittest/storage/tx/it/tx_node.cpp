@@ -429,7 +429,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
       ObTxFreeRoutePushStateResp resp;
       resp.ret_ = ret;
       int64_t buf_len = resp.get_serialize_size();
-      char *buf = (char*)ob_malloc(buf_len);
+      char *buf = (char*)ob_malloc(buf_len, ObNewModIds::TEST);
       int64_t pos = 0;
       OZ(resp.serialize(buf, buf_len, pos));
       pkt->resp_ = ObString(buf_len, buf);

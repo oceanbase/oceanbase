@@ -76,10 +76,19 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
   } else if (OB_UNLIKELY(!is_type_valid(type1.get_type()) || !is_type_valid(type2.get_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the param is not castable", K(ret), K(type1), K(type2));
-  } else if (OB_FAIL(ObCharset::aggregate_collation(type1.get_calc_collation_level(),
-                                              type1.get_calc_collation_type(),
-                                              type2.get_calc_collation_level(),
-                                              type2.get_calc_collation_type(),
+  } else if ((ObExprRegexContext::is_binary_string(type1) || ObExprRegexContext::is_binary_string(type2))
+              && (!ObExprRegexContext::is_binary_compatible(type1) || !ObExprRegexContext::is_binary_compatible(type2))) {
+    const char *coll_name1 = ObCharset::collation_name(type1.get_collation_type());
+    const char *coll_name2 = ObCharset::collation_name(type2.get_collation_type());
+    ObString collation1 = ObString::make_string(coll_name1);
+    ObString collation2 = ObString::make_string(coll_name2);
+    ret = OB_ERR_MYSQL_CHARACTER_SET_MISMATCH;
+    LOG_USER_ERROR(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, collation1.length(), collation1.ptr(), collation2.length(), collation2.ptr());
+    LOG_WARN("If one of the params is binary string, all of the params should be implicitly castable to binary charset.", K(ret), K(type1), K(type2));
+  } else if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(),
+                                              type1.get_collation_type(),
+                                              type2.get_collation_level(),
+                                              type2.get_collation_type(),
                                               res_cs_level,
                                               res_cs_type))) {
       LOG_WARN("fail to aggregate collation", K(ret), K(type1), K(type2));

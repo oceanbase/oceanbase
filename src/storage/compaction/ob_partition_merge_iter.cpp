@@ -1238,6 +1238,28 @@ bool ObPartitionMinorRowMergeIter::is_curr_row_commiting() const
   return bret;
 }
 
+int ObPartitionMinorRowMergeIter::collect_tnode_dml_stat(
+    storage::ObTransNodeDMLStat &tnode_stat) const
+{
+  int ret = OB_SUCCESS;
+  memtable::ObMemtableMultiVersionScanIterator *iter = nullptr;
+
+  if (OB_ISNULL(table_)) {
+    // do nothing
+  } else if (OB_UNLIKELY(!table_->is_data_memtable() ||
+      typeid(row_iter_) != typeid(memtable::ObMemtableMultiVersionScanIterator))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support to get mt stat from memtable", K(ret), KPC(table_));
+  } else if (OB_ISNULL(iter = static_cast<memtable::ObMemtableMultiVersionScanIterator *>(row_iter_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null row iter", K(ret), KPC(row_iter_));
+  } else if (OB_FAIL(iter->get_tnode_stat(tnode_stat))) {
+    LOG_WARN("failed to get mt stat", K(ret));
+  }
+  return ret;
+}
+
+
 /*
  *ObPartitionMinorMacroMergeIter
  */

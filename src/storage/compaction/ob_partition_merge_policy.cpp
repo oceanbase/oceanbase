@@ -1522,7 +1522,7 @@ int ObAdaptiveMergePolicy::check_tombstone_situation(
       || ls_id.id() != tablet_stat.ls_id_ || tablet_id.id() != tablet_stat.tablet_id_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(tablet), K(tablet_stat));
-  } else if (tablet_stat.is_hot_tablet() && tablet_stat.is_update_mostly()) {
+  } else if (tablet_stat.is_hot_tablet() && (tablet_stat.is_update_mostly() || tablet_stat.is_delete_mostly())) {
     reason = AdaptiveMergeReason::TOMBSTONE_SCENE;
   }
   LOG_DEBUG("check_tombstone_situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(tablet_stat));

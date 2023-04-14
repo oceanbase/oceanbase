@@ -1241,7 +1241,9 @@ int ObXACtx::revert_tx_for_dblink_callback(ObTxDesc *&tx_desc)
     tx_desc = NULL;
   }
 
-  try_exit_();
+  if (is_terminated_) {
+    try_exit_();
+  }
 
   TRANS_LOG(INFO, "revert tx for dblink callback", K(ret), K(*this));
   return ret;
@@ -2347,6 +2349,9 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
+  } else if (is_exiting_) {
+    ret = OB_TRANS_IS_EXITING;
+    TRANS_LOG(WARN, "xa ctx is exiting", K(ret), K(*this));
   } else if (OB_ISNULL(xa_branch_info_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "branch info array is null", K(ret), KP(xa_branch_info_), K(xid));

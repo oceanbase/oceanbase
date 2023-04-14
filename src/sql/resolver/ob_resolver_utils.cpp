@@ -3074,6 +3074,19 @@ int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFu
   return ret;
 }
 
+bool ObResolverUtils::is_expr_can_be_used_in_table_function(const ObRawExpr &expr)
+{
+  bool bret = false;
+  if (expr.get_result_type().is_ext()) {
+    // for UDF
+    bret = true;
+  } else if (T_FUN_SYS_GENERATOR == expr.get_expr_type()) {
+    // for generator(N) stream function
+    bret = true;
+  }
+  return bret;
+}
+
 int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFuncType part_func_type,
                                                              const ObExprResType &column_type,
                                                              const ObString &column_name,

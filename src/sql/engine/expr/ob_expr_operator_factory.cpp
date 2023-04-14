@@ -202,7 +202,13 @@
 #include "sql/engine/expr/ob_expr_estimate_ndv.h"
 #include "sql/engine/expr/ob_expr_left.h"
 #include "sql/engine/expr/ob_expr_space.h"
+#include "sql/engine/expr/ob_expr_rand.h"
+#include "sql/engine/expr/ob_expr_randstr.h"
 #include "sql/engine/expr/ob_expr_random.h"
+#include "sql/engine/expr/ob_expr_generator_func.h"
+#include "sql/engine/expr/ob_expr_zipf.h"
+#include "sql/engine/expr/ob_expr_normal.h"
+#include "sql/engine/expr/ob_expr_uniform.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "sql/engine/expr/ob_expr_rownum.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
@@ -762,7 +768,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBitCount);
     REG_OP(ObExprFindInSet);
     REG_OP(ObExprLeft);
-    REG_OP(ObExprRandom);
+    REG_OP(ObExprRand);
     REG_OP(ObExprMakeSet);
     REG_OP(ObExprEstimateNdv);
     REG_OP(ObExprSysOpOpnsize);
@@ -969,6 +975,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprEncode);
     REG_OP(ObExprDecode);
     REG_OP(ObExprICUVersion);
+    REG_OP(ObExprGeneratorFunc);
+    REG_OP(ObExprZipf);
+    REG_OP(ObExprNormal);
+    REG_OP(ObExprUniform);
+    REG_OP(ObExprRandom);
+    REG_OP(ObExprRandstr);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1258,7 +1270,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprJsonArray);
   REG_OP_ORCL(ObExprJsonObject);
   REG_OP_ORCL(ObExprTreat);
-
+  REG_OP_ORCL(ObExprGeneratorFunc);
+  REG_OP_ORCL(ObExprZipf);
+  REG_OP_ORCL(ObExprNormal);
+  REG_OP_ORCL(ObExprUniform);
+  REG_OP_ORCL(ObExprRandom);
+  REG_OP_ORCL(ObExprRandstr);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

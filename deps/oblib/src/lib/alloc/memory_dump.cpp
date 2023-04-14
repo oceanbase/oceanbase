@@ -613,11 +613,31 @@ void ObMemoryDump::handle(void *task)
         // chunk
         int cnt = 0;
         if (m_task->dump_all_) {
-          ret = ObMallocAllocator::get_instance()->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
+          int tenant_cnt = 0;
+          get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
+          std::sort(tenant_ids_, tenant_ids_ + tenant_cnt);
+          for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
+            uint64_t tenant_id = tenant_ids_[tenant_idx];
+            for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
+              auto ta =
+                ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+              if (nullptr == ta) {
+                ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                            ctx_id);
+              }
+              if (nullptr != ta) {
+                ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
+              }
+            }
+          }
         } else if (m_task->dump_tenant_ctx_) {
           auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(m_task->tenant_id_,
-                                                                                 m_task->ctx_id_);
-          if (ta != nullptr) {
+                                                                                m_task->ctx_id_);
+          if (nullptr == ta) {
+            ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(m_task->tenant_id_,
+                                                                                        m_task->ctx_id_);
+          }
+          if (nullptr != ta) {
             ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
           }
         } else {

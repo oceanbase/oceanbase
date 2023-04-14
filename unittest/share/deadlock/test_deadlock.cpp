@@ -153,7 +153,8 @@ public:
     cout << "\n<<<<<<<<<<<<<<<<<<<<" << "start case" << case_num << ">>>>>>>>>>>>>>>>>>>>" << endl;
     // do not use rpc, will core dump
     // ASSERT_EQ(OB_SUCCESS, MTL(ObDeadLockDetectorMgr*)->init());
-    oceancase::unittest::MockDeadLockRpc *rpc = (oceancase::unittest::MockDeadLockRpc *)ob_malloc(sizeof(oceancase::unittest::MockDeadLockRpc));
+    oceancase::unittest::MockDeadLockRpc *rpc = (oceancase::unittest::MockDeadLockRpc *)ob_malloc(sizeof(oceancase::unittest::MockDeadLockRpc),
+                                                                                                  ObNewModIds::TEST);
     rpc = new (rpc) oceancase::unittest::MockDeadLockRpc();
     MTL(ObDeadLockDetectorMgr*)->rpc_ = rpc;
 

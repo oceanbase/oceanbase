@@ -820,6 +820,17 @@ public:
   int cancel_dag_net(const ObDagId &dag_id);
   int get_complement_data_dag_progress(const ObIDag *dag, int64_t &row_scanned, int64_t &row_inserted);
 
+  OB_INLINE bool is_ha_dag(ObDagType::ObDagTypeEnum type) const
+  {
+    return ObDagType::DAG_TYPE_MIGRATE <= type &&
+           ObDagType::DAG_TYPE_REMOVE_MEMBER >= type;
+  }
+  OB_INLINE bool is_ha_dag_net(ObDagNetType::ObDagNetTypeEnum type) const
+  {
+    return ObDagNetType::DAG_NET_TYPE_MIGARTION <= type &&
+           ObDagNetType::DAG_NET_TYPE_BACKUP_CLEAN >= type;
+  }
+
 private:
   typedef common::ObDList<ObIDag> DagList;
   typedef common::ObDList<ObIDagNet> DagNetList;
@@ -938,6 +949,7 @@ private:
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX];
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];
   common::ObFIFOAllocator allocator_;
+  common::ObFIFOAllocator ha_allocator_;
   PriorityWorkerList waiting_workers_; // workers waiting for time slice to run
   PriorityWorkerList running_workers_; // running workers
   WorkerList free_workers_; // free workers who have not been assigned to any task
@@ -991,7 +1003,9 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "Dag Object is too large", K(ret), K(sizeof(T)));
   } else {
-    if (NULL == (buf = allocator_.alloc(sizeof(T)))) {
+    T tmp_dag;
+    common::ObFIFOAllocator *allocator = is_ha_dag(tmp_dag.get_type()) ? &ha_allocator_ : &allocator_;
+    if (NULL == (buf = allocator->alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag", K(ret));
     } else {
@@ -1014,8 +1028,13 @@ template<typename T>
 void ObTenantDagScheduler::free_dag_net(T *&dag_net)
 {
   if (OB_NOT_NULL(dag_net)) {
+    const bool ha_dag_net = is_ha_dag_net(dag_net->get_type());
     dag_net->~T();
-    allocator_.free(dag_net);
+    if (ha_dag_net) {
+      ha_allocator_.free(dag_net);
+    } else {
+      allocator_.free(dag_net);
+    }
     dag_net = nullptr;
   }
 }
@@ -1031,22 +1050,26 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param, T
   if (IS_NOT_INIT) {
     ret = common::OB_NOT_INIT;
     COMMON_LOG(WARN, "scheduler is not init", K(ret));
-  } else if (NULL == (buf = allocator_.alloc(sizeof(T)))) {
-    ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    COMMON_LOG(WARN, "failed to alloc dag_net", K(ret));
-  } else if (FALSE_IT(dag_net = new (buf) T())) {
-  } else if (OB_FAIL(dag_net->init_by_param(param))) {
-    COMMON_LOG(WARN, "failed to init dag_net", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(dag_net->init_dag_id_())) {
-  } else if (OB_FAIL(add_dag_net(dag_net))) {
-    if (common::OB_HASH_EXIST == ret) {
-      ret = common::OB_TASK_EXIST;
-      COMMON_LOG(DEBUG, "dag_net is in blocking_dag_net_map now", K(ret), KPC(dag_net));
-    } else {
-      COMMON_LOG(WARN, "failed to add dag_net", K(ret), KPC(dag_net));
-    }
   } else {
-    notify();
+    T tmp_dag_net;
+    common::ObFIFOAllocator *allocator =  is_ha_dag_net(tmp_dag_net.get_type()) ? &ha_allocator_ : &allocator_;
+    if (NULL == (buf = allocator->alloc(sizeof(T)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "failed to alloc dag_net", K(ret));
+    } else if (FALSE_IT(dag_net = new (buf) T())) {
+    } else if (OB_FAIL(dag_net->init_by_param(param))) {
+      COMMON_LOG(WARN, "failed to init dag_net", K(ret), KPC(dag_net));
+    } else if (FALSE_IT(dag_net->init_dag_id_())) {
+    } else if (OB_FAIL(add_dag_net(dag_net))) {
+      if (common::OB_HASH_EXIST == ret) {
+        ret = common::OB_TASK_EXIST;
+        COMMON_LOG(DEBUG, "dag_net is in blocking_dag_net_map now", K(ret), KPC(dag_net));
+      } else {
+        COMMON_LOG(WARN, "failed to add dag_net", K(ret), KPC(dag_net));
+      }
+    } else {
+      notify();
+    }
   }
   if (OB_FAIL(ret)) {
     free_dag_net(dag_net); // free dag_net

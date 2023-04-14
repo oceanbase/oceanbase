@@ -173,7 +173,7 @@ TEST_F(TestBlockSet, BigBlockOrigin)
   void *p = NULL;
 
   while (cnt--) {
-    p = ob_malloc(sz);
+    p = ob_malloc(sz, ObNewModIds::TEST);
     check_ptr(p);
     ob_free(p);
   }

@@ -108,7 +108,7 @@ public:
   {
     int ret = OB_SUCCESS;
     int64_t size = msg.get_serialize_size() + 1 /*for msg category*/ + sizeof(int16_t) /* for tx_msg.type_ */;
-    char *buf = (char*)ob_malloc(size);
+    char *buf = (char*)ob_malloc(size, ObNewModIds::TEST);
     buf[0] = 0; // 0 not callback msg
     int64_t pos = 1;
     int16_t msg_type = msg.type_;
@@ -131,7 +131,7 @@ public:
   {
     int ret = OB_SUCCESS;
     int64_t size = msg.get_serialize_size() + 1 /*for msg category*/ + sizeof(int16_t) /* for tx_msg.type_ */;
-    char *buf = (char*)ob_malloc(size);
+    char *buf = (char*)ob_malloc(size, ObNewModIds::TEST);
     buf[0] = 0; // not callback msg
     int64_t pos = 1;
     int16_t msg_type = msg.type_;
@@ -148,7 +148,7 @@ public:
   {
     int ret = OB_SUCCESS;
     int64_t size = msg.get_serialize_size() + 1 + sizeof(int16_t);
-    char *buf = (char*)ob_malloc(size);
+    char *buf = (char*)ob_malloc(size, ObNewModIds::TEST);
     buf[0] = 0; // not callback msg
     int64_t pos = 1;
     int16_t msg_type = TX_MSG_TYPE::TX_FREE_ROUTE_PUSH_STATE;
@@ -180,7 +180,7 @@ int ObFakeTransRpc::send_msg_callback(const ObAddr &recv,
   int ret = OB_SUCCESS;
   TxMsgCallbackMsg rmsg(msg, addr_, rslt);
   int64_t size = rmsg.get_serialize_size() + 1 /*  for msg_category */;
-  char *buf = (char*)ob_malloc(size);
+  char *buf = (char*)ob_malloc(size, ObNewModIds::TEST);
   buf[0] = 1;// callback
   int64_t pos = 1;
   OZ(rmsg.serialize(buf, size, pos));

@@ -1783,19 +1783,21 @@ public:
 
   virtual void* alloc(const int64_t sz) override
   {
-    return alloc(sz, common::default_memattr);
+    return NULL == allocator_ ? NULL : allocator_->alloc(sz);
   }
 
   virtual void* alloc(const int64_t sz, const common::ObMemAttr &attr) override
   {
-    void *ret = NULL;
-    if (allocator_) {
-      ret = allocator_->alloc(sz, attr);
-    }
-    return ret;
+    return NULL == allocator_ ? NULL : allocator_->alloc(sz, attr);
   }
 
-  virtual void free(void *p) override { allocator_->free(p); }
+  virtual void free(void *p) override
+  {
+    if (allocator_) {
+      allocator_->free(p);
+      p = NULL;
+    }
+  }
   virtual ~ObSchemaAllocator() {};
 private:
   common::ObIAllocator *allocator_;

@@ -120,6 +120,7 @@ private:
       const int64_t micro_idx,
       const bool is_index_block,
       ObMacroBlockRowBareIterator &macro_bare_iter);
+  int dump_macro_block_meta_block(ObMacroBlockRowBareIterator &macro_bare_iter);
   int dump_sstable_micro_header(
       const ObMicroBlockData &micro_data,
       const int64_t micro_idx,

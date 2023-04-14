@@ -783,7 +783,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHashTable);
 
 public:
-  ObHashTable() : allocer_(NULL),
+  ObHashTable() : default_bucket_allocer_(ObModIds::OB_HASH_BUCKET),
+                  allocer_(NULL),
                   bucket_allocer_(&default_bucket_allocer_),
                   bucket_num_(0),
                   size_(0)
@@ -823,7 +824,6 @@ public:
       //memset(buckets_, 0, sizeof(hashbucket) * bucket_num);
       bucket_num_ = bucket_num;
       allocer_ = allocer;
-      allocer_->inc_ref();
       bucket_allocer_ = bucket_allocer;
     }
     return ret;
@@ -847,7 +847,6 @@ public:
           buckets_[i].node = NULL;
         }
       }
-      allocer_->dec_ref();
       allocer_ = NULL;
       //delete[] buckets_;
       //buckets_ = NULL;

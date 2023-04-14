@@ -350,6 +350,16 @@ bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigTenantMemoryChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = 0 == value || (value >= ObUnitResource::UNIT_MIN_MEMORY);
+  }
+  return is_valid;
+}
+
 bool ObConfigQueryRateLimitChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;

@@ -64,6 +64,7 @@ PalfHandleImpl::PalfHandleImpl()
     replace_member_print_time_us_(OB_INVALID_TIMESTAMP),
     config_change_print_time_us_(OB_INVALID_TIMESTAMP),
     last_rebuild_lsn_(),
+    last_rebuild_meta_info_(),
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
     palf_env_impl_(NULL),
@@ -1216,27 +1217,44 @@ bool PalfHandleImpl::is_vote_enabled() const
   return bool_ret;
 }
 
-int PalfHandleImpl::disable_vote()
+/*brief:disable_vote(need_check_log_missing), this function is reenterable.
+ * step 1: check voting status, if already disabled, just return
+ * step 2: for need_check_log_missing situation, double check whether it is really necessary to rebuild
+ * step 3: set voting flag as false when necessary
+ */
+int PalfHandleImpl::disable_vote(const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;
   const PRIORITY_SEED_BIT new_election_inner_priority_seed = PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    // Update election priority firstly
-  } else if (OB_FAIL(election_.add_inner_priority_seed_bit(new_election_inner_priority_seed))
-      && OB_ENTRY_EXIST != ret) {
-    // Because this interface is idempotent, so we need ignore err code OB_ENTRY_EXIST.
-    PALF_LOG(WARN, "election add_inner_priority_seed_bit for rebuild failed", KPC(this));
-    // Update allow_vote flag
-  } else if (OB_FAIL(set_allow_vote_flag_(false))) {
-    PALF_LOG(WARN, "set_allow_vote_flag failed", KPC(this));
-    // rollback election priority when it encounters failure
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = election_.clear_inner_priority_seed_bit(new_election_inner_priority_seed))) {
-      PALF_LOG(WARN, "election clear_inner_priority_seed_bit for rebuild failed", K(tmp_ret), KPC(this));
-    }
   } else {
-    PALF_EVENT("disable_vote success", palf_id_, KPC(this));
+    //step 1: check vote status.
+    bool vote_disabled = false;
+    do {
+      RLockGuard guard(lock_);
+      if (!state_mgr_.is_allow_vote()) {
+        PALF_LOG(INFO, "vote has already been disabled", KPC(this));
+        vote_disabled = true;
+      }
+    } while(0);
+
+    if (!vote_disabled) {
+      if (OB_FAIL(election_.add_inner_priority_seed_bit(new_election_inner_priority_seed)) && OB_ENTRY_EXIST != ret) {
+        // Because this interface is idempotent, so we need ignore err code OB_ENTRY_EXIST.
+        PALF_LOG(WARN, "election add_inner_priority_seed_bit for rebuild failed", KPC(this));
+        // Update allow_vote flag
+      } else if (OB_FAIL(set_allow_vote_flag_(false, need_check_log_missing))) {
+        PALF_LOG(WARN, "set_allow_vote_flag failed", KPC(this));
+        // rollback election priority when it encounters failure
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = election_.clear_inner_priority_seed_bit(new_election_inner_priority_seed))) {
+          PALF_LOG(WARN, "election clear_inner_priority_seed_bit for rebuild failed", K(tmp_ret), KPC(this));
+        }
+      } else {
+        PALF_EVENT("disable_vote success", palf_id_, KPC(this), K(need_check_log_missing));
+      }
+    }
   }
   return ret;
 }
@@ -1248,14 +1266,14 @@ int PalfHandleImpl::enable_vote()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     // Update allow_vote flag firstly
-  } else if (OB_FAIL(set_allow_vote_flag_(true))) {
+  } else if (OB_FAIL(set_allow_vote_flag_(true, false/*no need check log misingg*/))) {
     PALF_LOG(WARN, "set_allow_vote_flag failed", KPC(this));
   } else if (OB_FAIL(election_.clear_inner_priority_seed_bit(election_inner_priority_seed))
       && OB_ENTRY_NOT_EXIST != ret) {
     PALF_LOG(WARN, "election clear_inner_priority_seed_bit for rebuild failed", KPC(this));
     // rollback allow_vote flag when it encounters failure
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = set_allow_vote_flag_(false))) {
+    if (OB_SUCCESS != (tmp_ret = set_allow_vote_flag_(false, false/*no need check log misingg*/))) {
       PALF_LOG(WARN, "rollback allow_vote flag failed", K(tmp_ret), KPC(this));
     }
   } else {
@@ -1264,7 +1282,8 @@ int PalfHandleImpl::enable_vote()
   return ret;
 }
 
-int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote)
+int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote,
+                                         const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(replica_meta_lock_);
@@ -1272,24 +1291,47 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote)
     ret = OB_NOT_SUPPORTED;
     PALF_LOG(WARN, "can not enable_vote/disable_vote in arb_member", K(ret), KPC(this));
   } else {
-    RLockGuard guard(lock_);
-    FlushMetaCbCtx flush_meta_cb_ctx;
-    flush_meta_cb_ctx.type_ = REPLICA_PROPERTY_META;
-    flush_meta_cb_ctx.allow_vote_ = allow_vote;
-    LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
-    replica_property_meta.allow_vote_ = allow_vote;
-    if (false == allow_vote
-        && LEADER == state_mgr_.get_role()
-        && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))
-        && OB_NOT_MASTER != ret) {  // ignore not master err code
-      PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-    } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
-      PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
+    WLockGuard guard(lock_);
+    if (!allow_vote && need_check_log_missing) {
+      //disable_vote and need check whether log is actually missing
+      RebuildMetaInfo last_rebuild_meta_info;
+      RebuildMetaInfo rebuild_meta_info;
+      get_last_rebuild_meta_info_(last_rebuild_meta_info);
+      if (last_rebuild_meta_info.is_valid()) {
+        //check with local rebuild meta info
+        (void)gen_rebuild_meta_info_(rebuild_meta_info);
+        ret = (last_rebuild_meta_info == rebuild_meta_info) ? OB_SUCCESS : OB_OP_NOT_ALLOW;
+        PALF_LOG(INFO, "double check whether need disable_vote", K(last_rebuild_meta_info),
+                 K(rebuild_meta_info), KPC(this));
+      } else {
+        ret = OB_OP_NOT_ALLOW;
+        PALF_LOG(INFO, "maybe restart during rebuild, just return OB_OP_NOT_ALLOW", KPC(this));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      FlushMetaCbCtx flush_meta_cb_ctx;
+      flush_meta_cb_ctx.type_ = REPLICA_PROPERTY_META;
+      flush_meta_cb_ctx.allow_vote_ = allow_vote;
+      LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
+      replica_property_meta.allow_vote_ = allow_vote;
+      if (false == allow_vote
+          && LEADER == state_mgr_.get_role()
+          && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))
+          && OB_NOT_MASTER != ret) {  // ignore not master err code
+        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
+      } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
+        PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
+      } else {
+        if (!allow_vote) {
+          //for disble_vote, modify allow_vote in memory under protection of wlock
+          state_mgr_.disable_vote_in_mem();
+        }
+      }
     }
   }
   // wait until replica_property_meta has been flushed
   if (OB_SUCC(ret)) {
-    while(allow_vote != state_mgr_.is_allow_vote()) {
+    while(allow_vote != state_mgr_.is_allow_vote_persisted()) {
       ob_usleep(500);
     }
   }
@@ -1498,7 +1540,7 @@ int PalfHandleImpl::get_binary_search_range_(const SCN &scn,
     max_block_id = (committed_block_id < max_block_id)? committed_block_id : max_block_id;
     // optimization: cache last_locate_scn_ to shrink binary search range
     SpinLockGuard guard(last_locate_lock_);
-    if (is_valid_block_id(last_locate_block_) &&
+   if (is_valid_block_id(last_locate_block_) &&
         min_block_id <= last_locate_block_ &&
         max_block_id >= last_locate_block_) {
       if (scn < last_locate_scn_) {
@@ -2664,7 +2706,7 @@ int PalfHandleImpl::get_last_rebuild_lsn(LSN &last_rebuild_lsn) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    SpinLockGuard guard(last_rebuild_lsn_lock_);
+    SpinLockGuard guard(last_rebuild_meta_info_lock_);
     last_rebuild_lsn = last_rebuild_lsn_;
   }
   return ret;
@@ -2702,6 +2744,19 @@ int PalfHandleImpl::check_need_advance_base_info_(const LSN &base_lsn,
   return ret;
 }
 
+void PalfHandleImpl::gen_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta) const
+{
+  int64_t unused_log_id = -1;
+  sw_.get_committed_end_lsn(rebuild_meta.committed_end_lsn_);
+  sw_.get_last_submit_log_info(rebuild_meta.last_submit_lsn_, unused_log_id, rebuild_meta.last_submit_log_pid_);
+}
+
+void PalfHandleImpl::get_last_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta_info) const
+{
+  SpinLockGuard guard(last_rebuild_meta_info_lock_);
+  rebuild_meta_info = last_rebuild_meta_info_;
+}
+
 // caller should hold wlock when calling this function
 int PalfHandleImpl::check_need_rebuild_(const LSN &base_lsn,
                                         const LogInfo &base_prev_log_info,
@@ -2714,6 +2769,8 @@ int PalfHandleImpl::check_need_rebuild_(const LSN &base_lsn,
   int64_t last_submit_log_id;
   int64_t last_submit_log_pid;
   bool unused_bool;
+  need_rebuild = false;
+  need_fetch_log = false;
   if (!base_lsn.is_valid() || !base_prev_log_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), KPC(this), K(base_lsn), K(base_prev_log_info));
@@ -2723,8 +2780,7 @@ int PalfHandleImpl::check_need_rebuild_(const LSN &base_lsn,
   } else if (OB_FAIL(sw_.get_committed_end_lsn(committed_end_lsn))) {
     PALF_LOG(WARN, "get_committed_end_lsn failed", KR(ret), K_(palf_id));
   } else if (base_lsn <= committed_end_lsn) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "base_lsn is less than or equal to local committed_end_lsn",
+    PALF_LOG(INFO, "base_lsn is less than or equal to local committed_end_lsn",
         K(ret), K_(palf_id), K(base_lsn), K(committed_end_lsn));
   } else if (OB_FAIL(sw_.get_last_submit_log_info(last_submit_lsn, last_submit_log_id, last_submit_log_pid))) {
     PALF_LOG(WARN, "get_last_submit_log_info failed", KR(ret), K_(palf_id));
@@ -2802,11 +2858,12 @@ int PalfHandleImpl::handle_notify_rebuild_req(const common::ObAddr &server,
   // this will cause wrong rebuild.
   bool need_rebuild = false;
   bool need_fetch_log = false;
+  RebuildMetaInfo rebuild_meta_info;
   do {
     int tmp_ret = OB_SUCCESS;
     // leader may send multiple notify_rebuild_req, when next req arrives, previous on_rebuild may
     // hold rlock, so try hold wlock and release it after timeout (1ms).
-    const int64_t until_timeout_us = common::ObTimeUtility::current_time() + 1;
+    const int64_t until_timeout_us = common::ObTimeUtility::current_time() + 1000;
     WLockGuardWithTimeout guard(lock_, until_timeout_us, tmp_ret);
     if (OB_SUCCESS != tmp_ret) {
       PALF_LOG(INFO, "notify_rebuild wait lock timeout", K(ret), KPC(this), K(server), K(base_lsn),
@@ -2819,22 +2876,28 @@ int PalfHandleImpl::handle_notify_rebuild_req(const common::ObAddr &server,
       PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K(server), K(base_lsn));
     } else if (OB_FAIL(check_need_rebuild_(base_lsn, base_prev_log_info, need_rebuild, need_fetch_log))) {
       PALF_LOG(WARN, "check_need_rebuild failed", K(ret), KPC(this), K(server), K(base_lsn), K(base_prev_log_info));
-    }
+    } else if (need_rebuild) {
+      //set rebuild_meta_info
+      gen_rebuild_meta_info_(rebuild_meta_info);
+    } else {}
   } while (0);
 
+  if (OB_SUCC(ret)) {
   // can not hold wlock when exec on_rebuild
-  if (need_rebuild) {
-    if (OB_FAIL(rebuild_cb_wrapper_.on_rebuild(palf_id_, base_lsn))) {
-      PALF_LOG(WARN, "on_rebuild failed", K(ret), K(server), K(base_lsn));
-    } else {
-      PALF_EVENT("on_rebuild success", palf_id_, K(ret), K_(self), K(server), K(base_lsn));
-    }
-    // Whether on_rebuild returns OB_SUCCESS or not, set value for rebuild_base_lsn_
-    SpinLockGuard rebuild_guard(last_rebuild_lsn_lock_);
-    last_rebuild_lsn_ = base_lsn;
-  } else if (need_fetch_log && OB_FAIL(sw_.try_fetch_log(FetchTriggerType::NOTIFY_REBUILD,
-      base_prev_log_info.lsn_, base_lsn, base_prev_log_info.log_id_+1))) {
+    if (need_rebuild) {
+      if (OB_FAIL(rebuild_cb_wrapper_.on_rebuild(palf_id_, base_lsn))) {
+        PALF_LOG(WARN, "on_rebuild failed", K(ret), K(server), K(base_lsn));
+      } else {
+        PALF_EVENT("on_rebuild success", palf_id_, K(ret), K_(self), K(server), K(base_lsn));
+      }
+      // Whether on_rebuild returns OB_SUCCESS or not, set value for rebuild_base_lsn_
+      SpinLockGuard rebuild_guard(last_rebuild_meta_info_lock_);
+      last_rebuild_lsn_ = base_lsn;
+      last_rebuild_meta_info_ = rebuild_meta_info;
+    } else if (need_fetch_log && OB_FAIL(sw_.try_fetch_log(FetchTriggerType::NOTIFY_REBUILD,
+                                                           base_prev_log_info.lsn_, base_lsn, base_prev_log_info.log_id_+1))) {
       PALF_LOG(WARN, "try_fetch_log failed", KR(ret), KPC(this), K(server), K(base_lsn), K(base_prev_log_info));
+    }
   }
   return ret;
 }
@@ -4039,7 +4102,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
       } else if (FALSE_IT(last_log_buf_len = curr_group_entry.get_group_entry_size())
                  || FALSE_IT(last_log_start_lsn = curr_log_lsn)) {
       } else if (NULL ==
-          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len)))) {
+          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len, "PalfHandleImpl")))) {
         tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
         PALF_LOG(WARN, "alloc memory for last_log_buf in flashback failed", K(ret));
       } else if (OB_TMP_FAIL(curr_group_entry.serialize(last_log_buf, last_log_buf_len, pos))) {
@@ -4107,7 +4170,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
   } else {
     LSN last_rebuild_lsn;
     do {
-      SpinLockGuard guard(last_rebuild_lsn_lock_);
+      SpinLockGuard guard(last_rebuild_meta_info_lock_);
       last_rebuild_lsn = last_rebuild_lsn_;
     } while (0);
 

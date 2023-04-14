@@ -165,6 +165,9 @@ public:
   int generate_for_default(const int64_t proposal_id,
                            const LogConfigInfo &prev_config_info,
                            const LogConfigInfo &curr_config_info);
+  int generate_for_default_in_arb(const int64_t proposal_id,
+                                  const LogConfigInfo &prev_config_info,
+                                  const LogConfigInfo &curr_config_info);
   int generate(const int64_t proposal_id,
                const LogConfigInfo &prev_config_info,
                const LogConfigInfo &curr_config_info,

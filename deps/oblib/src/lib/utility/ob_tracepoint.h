@@ -672,6 +672,8 @@ class EventTable
       EN_FETCH_TABLE_INFO_RPC = 1112,
       // END OF STORAGE HA - 1101 - 2000
 
+      EN_ENABLE_NEWSORT_FORCE = 1200,
+
       // Transaction // 2001 - 2100
       // Transaction free route
       EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR = 2001,

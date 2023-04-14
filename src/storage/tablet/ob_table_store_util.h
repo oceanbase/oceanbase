@@ -42,6 +42,7 @@ public:
     const common::ObIArray<ObITable *> &tables,
     const int64_t start_pos = 0);
   bool empty() const { return count_ <= 0; }
+  bool is_valid() const { return is_inited_ && count_ > 0; }
   int64_t count() const { return count_; }
   virtual void destroy();
 

@@ -52,7 +52,7 @@ bool TPSymbolTable::SymbolEntry::find(const char* name)
         has_found = (STRNCMP(name_, name, sizeof(name_)) == 0);
         break;
       } else if (TP_BCAS(&lock_, lock, SETTING)) {
-        strncpy(name_, name, sizeof(name_));
+        strncpy(name_, name, sizeof(name_) - 1);
         has_found = true;
         TP_AS(&lock_, OK);
       }

@@ -39,7 +39,8 @@ public:
     random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_ctx_(nullptr),
     min_size_(0), row_count_(0), input_size_(0), bucket_size_(0),
     chunk_size_(0), cache_size_(-1), one_pass_size_(0), expect_size_(OB_INVALID_ID),
-    global_bound_size_(INT64_MAX), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
+    global_bound_size_(INT64_MAX), dop_(-1), plan_id_(-1), exec_id_(-1), sql_id_(),
+    session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
     calc_count_(0)
@@ -66,6 +67,7 @@ public:
     bucket_size_ = bucket_size;
   }
 
+  int set_exec_info(ObExecContext &exec_ctx);
   OB_INLINE void set_operator_type(ObPhyOperatorType op_type) { op_type_ = op_type; }
   OB_INLINE void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
   OB_INLINE void set_exec_ctx(ObExecContext *exec_ctx) { exec_ctx_ = exec_ctx; }
@@ -173,6 +175,11 @@ private:
   int64_t one_pass_size_;
   int64_t expect_size_;
   int64_t global_bound_size_;
+  int64_t dop_;
+  int64_t plan_id_;
+  int64_t exec_id_;
+  ObString sql_id_;
+  int64_t session_id_;
   // 取 min(cache_size, global_bound_size)
   // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size
   // 也就是expect_size

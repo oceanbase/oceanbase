@@ -112,7 +112,7 @@ ObBackupIndexBufferNode::ObBackupIndexBufferNode()
       next_(NULL),
       read_count_(0),
       write_count_(0),
-      buffer_writer_()
+      buffer_writer_("BackupTmpFile")
 {}
 
 ObBackupIndexBufferNode::~ObBackupIndexBufferNode()

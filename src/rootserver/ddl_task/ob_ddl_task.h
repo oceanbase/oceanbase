@@ -76,6 +76,7 @@ public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
 public:
+  uint64_t gmt_create_;
   int64_t task_id_;
   int64_t parent_task_id_;
   share::ObDDLType ddl_type_;
@@ -462,6 +463,8 @@ public:
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
   int64_t get_parallelism() const { return parallelism_; }
+  uint64_t get_gmt_create() const { return gmt_create_; }
+  void set_gmt_create(uint64_t gmt_create) { gmt_create_ = gmt_create; }
   static int deep_copy_table_arg(common::ObIAllocator &allocator,
                                  const obrpc::ObDDLArg &source_arg,
                                  obrpc::ObDDLArg &dest_arg);
@@ -575,6 +578,7 @@ protected:
   TraceId sys_task_id_;
   int64_t err_code_occurence_cnt_; // occurence count for all error return codes not in white list.
   share::ObDDLLongopsStat *longops_stat_;
+  uint64_t gmt_create_;
   ObDDLTaskStatInfo stat_info_;
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;

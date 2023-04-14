@@ -444,10 +444,12 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       session->set_start_stmt();
     }
 
-    pl::ObPLCtxGuard guard(ctx.exec_ctx_.get_pl_ctx(), ret);
-
     ObEvalCtx::TempAllocGuard memory_guard(ctx);
     ObArenaAllocator &allocator = memory_guard.get_allocator();
+    int64_t cur_obj_count = 0;
+    if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+      cur_obj_count = ctx.exec_ctx_.get_pl_ctx()->get_objects().count();
+    }
 
     ObObj *objs = nullptr;
     if (expr.arg_cnt_ > 0) {
@@ -505,11 +507,11 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, tmp_result, result, true));
         OZ (pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session()));
         CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
-        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
+        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count));
         OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
       } else {
         result = tmp_result;
-        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
+        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count));
       }
     } else {
       result = tmp_result;

@@ -18,6 +18,7 @@ namespace oceanbase
 namespace rootserver
 {
 class ObDDLTask;
+class ObDDLTaskRecord;
 }
 namespace share
 {

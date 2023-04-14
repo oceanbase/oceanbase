@@ -586,7 +586,10 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   ObLogGroupBy *rollup_distributor = NULL;
   ObLogGroupBy *rollup_collector = NULL;
   bool can_sort_opt = true;
-  if (OB_FAIL(append(pre_group_exprs, group_by_exprs)) ||
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(append(pre_group_exprs, group_by_exprs)) ||
       OB_FAIL(append(pre_group_exprs, rollup_exprs))) {
     LOG_WARN("failed to append pre group exprs", K(ret));
   } else if (OB_FAIL(allocate_group_by_as_top(top,
@@ -624,7 +627,7 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
                                                     rd_sort_keys))) {
     LOG_WARN("failed to make sort keys", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(rd_sort_keys,
-                                                                can_sort_opt, *this))) {
+                                                                can_sort_opt, *this, top->get_card()))) {
     LOG_WARN("failed to check encode sortkey expr", K(ret));
   } else if (false
       && (OB_FAIL(ObSQLUtils::create_encode_sortkey_expr(get_optimizer_context().get_expr_factory(),
@@ -3990,16 +3993,26 @@ int ObSelectLogPlan::generate_dblink_raw_plan()
     //do nothing
   } else if (OB_FAIL(allocate_link_scan_as_top(top))) {
     LOG_WARN("failed to allocate link dml as top", K(ret));
+  } else {
+    top->set_dblink_id(dblink_id);
+    ObLogLinkScan *link_scan = static_cast<ObLogLinkScan *>(top);
+    if (OB_FAIL(link_scan->set_link_stmt(stmt))) {
+      LOG_WARN("failed to set link stmt", K(ret));
+    } else if (0 == dblink_id) {
+      link_scan->set_reverse_link(true);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (optimizer_context_.has_multiple_link_stmt()
+             && OB_FAIL(allocate_material_as_top(top))) {
+    LOG_WARN("allocate material above link scan failed", K(ret));
   } else if (OB_FAIL(make_candidate_plans(top))) {
     LOG_WARN("failed to make candidate plans", K(ret));
-  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt(stmt))) {
-    LOG_WARN("failed to set link stmt", K(ret));
   } else {
     top->mark_is_plan_root();
     top->get_plan()->set_plan_root(top);
-    top->set_dblink_id(dblink_id);
     if (0 == dblink_id) {
-      static_cast<ObLogLinkScan *>(top)->set_reverse_link(true);
       // reset dblink info, to avoid affecting the next execution flow
       query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
     } else {

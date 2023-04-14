@@ -475,8 +475,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         || T_OP_GET_PACKAGE_VAR == expr.get_expr_type()
         || T_OP_GET_SUBPROGRAM_VAR == expr.get_expr_type()
         || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && !lib::is_oracle_mode())
-        || T_FUN_SYS_SLEEP == expr.get_expr_type()
         || T_FUN_NORMAL_UDF == expr.get_expr_type()
+        || T_FUN_SYS_GENERATOR == expr.get_expr_type()
         || (T_FUN_UDF == expr.get_expr_type()
             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())) {
       if (OB_FAIL(expr.add_flag(IS_STATE_FUNC))) {
@@ -486,7 +486,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_VALUES))) {
         LOG_WARN("failed to add flag IS_VALUES", K(ret));
       }
-    } else if (T_FUN_SYS_RAND == expr.get_expr_type() &&
+    } else if ((T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_RANDOM == expr.get_expr_type()) &&
                !expr.has_flag(CNT_COLUMN)) {
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));

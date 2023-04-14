@@ -336,7 +336,6 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         break;
       }
     case TableItem::FUNCTION_TABLE: {
-      CK (lib::is_oracle_mode());
       DATA_PRINTF("TABLE(");
       OZ (expr_printer_.do_print(table_item->function_table_expr_, T_FROM_SCOPE));
       DATA_PRINTF(")");

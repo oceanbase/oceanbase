@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_OB_EXPR_FUNC_RANDOM_H_
 #define OCEANBASE_SQL_OB_EXPR_FUNC_RANDOM_H_
 
+#include <random>
 #include "sql/engine/expr/ob_expr_operator.h"
 
 namespace oceanbase
@@ -27,12 +28,10 @@ class ObExprRandom: public ObFuncExprOperator
 	public:
 		ObExprRandomCtx();
 		virtual ~ObExprRandomCtx();
-		void set_seed(uint32_t seed);
-		void get_next_random(double &res);
+		void set_seed(uint64_t seed);
+		void get_next_random(int64_t &res);
 	private:
-		static const uint64_t max_value_;
-		uint64_t seed1_;
-		uint64_t seed2_;
+    std::mt19937_64 gen_;
 	};
 public:
 	explicit ObExprRandom(common::ObIAllocator &alloc);

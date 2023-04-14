@@ -279,7 +279,8 @@ TEST_F(TestTenantResource, mtl_switch)
 
 TEST_F(TestTenantResource, tenant_base_set)
 {
-  transaction::ObTransService* trans_service = (transaction::ObTransService*)ob_malloc(sizeof(transaction::ObTransService));
+  transaction::ObTransService* trans_service = (transaction::ObTransService*)ob_malloc(sizeof(transaction::ObTransService),
+                                                                                      ObNewModIds::TEST);
   ObTenantBase tenant_base(1);
   tenant_base.set(trans_service);
   ObTenantEnv::set_tenant(&tenant_base);

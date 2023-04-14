@@ -99,6 +99,8 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
             // clog checkpoint ts has passed start log ts
             ret = OB_SUCCESS;
             break;
+          } else if (OB_EAGAIN == ret) {
+            ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id));
           }
@@ -496,8 +498,6 @@ ObLSBackupDataDagNet::~ObLSBackupDataDagNet()
 int ObLSBackupDataDagNet::init_by_param(const ObIDagInitParam *param)
 {
   int ret = OB_SUCCESS;
-  ObLSBackupParam backup_param;
-  int64_t batch_size = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("dag net init twice", K(ret));
@@ -506,9 +506,24 @@ int ObLSBackupDataDagNet::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("get invalid args", K(ret), KP(param));
   } else if (OB_FAIL(param_.assign(*(static_cast<const ObLSBackupDagNetInitParam *>(param))))) {
     LOG_WARN("failed to assign param", K(ret));
-  } else if (OB_FAIL(param_.convert_to(backup_param))) {
+  } else if (OB_FAIL(this->set_dag_id(param_.job_desc_.trace_id_))) {
+    LOG_WARN("failed to set dag id", K(ret), K_(param));
+  } else {
+    is_inited_ = true;
+    index_kv_cache_ = &OB_BACKUP_INDEX_CACHE;
+    backup_data_type_ = param_.backup_data_type_;
+    report_ctx_ = param_.report_ctx_;
+  }
+  return ret;
+}
+
+int ObLSBackupDataDagNet::inner_init_before_run_()
+{
+  int ret = OB_SUCCESS;
+  ObLSBackupParam backup_param;
+  int64_t batch_size = 0;
+  if (OB_FAIL(param_.convert_to(backup_param))) {
     LOG_WARN("failed to convert param", K(param_));
-  } else if (FALSE_IT(backup_data_type_ = param_.backup_data_type_)) {
   } else if (OB_FAIL(ls_backup_ctx_.open(backup_param, backup_data_type_, *param_.report_ctx_.sql_proxy_))) {
     LOG_WARN("failed to open log stream backup ctx", K(ret), K(backup_param));
   } else if (OB_FAIL(prepare_backup_tablet_provider_(backup_param, backup_data_type_, ls_backup_ctx_,
@@ -518,13 +533,8 @@ int ObLSBackupDataDagNet::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("failed to get batch size", K(ret));
   } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size))) {
     LOG_WARN("failed to init task mgr", K(ret), K(batch_size));
-  } else if (OB_FAIL(this->set_dag_id(param_.job_desc_.trace_id_))) {
-    LOG_WARN("failed to set dag id", K(ret), K_(param));
   } else {
-    is_inited_ = true;
     ls_backup_ctx_.stat_mgr_.mark_begin(backup_data_type_);
-    index_kv_cache_ = &OB_BACKUP_INDEX_CACHE;
-    report_ctx_ = param_.report_ctx_;
   }
   return ret;
 }
@@ -544,6 +554,8 @@ int ObLSBackupDataDagNet::start_running()
   } else if (OB_ISNULL(scheduler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler));
+  } else if (OB_FAIL(inner_init_before_run_())) {
+    LOG_WARN("failed to inner init before run", K(ret));
   } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to param", K(ret), K_(param));
   } else if (FALSE_IT(init_param.backup_stage_ = start_stage_)) {

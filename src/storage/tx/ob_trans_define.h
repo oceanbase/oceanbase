@@ -1468,6 +1468,7 @@ public:
     version_ = state_info.version_;
     snapshot_version_ = state_info.snapshot_version_;
   }
+  bool need_update(const ObStateInfo &state_info);
   TO_STRING_KV(K_(ls_id), K_(state), K_(version), K_(snapshot_version))
   OB_UNIS_VERSION(1);
 public:

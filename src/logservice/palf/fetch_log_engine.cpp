@@ -204,7 +204,7 @@ int FetchLogEngine::submit_fetch_log_task(FetchLogTask *fetch_log_task)
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), KP(fetch_log_task));
   } else if (OB_FAIL(push_task_into_cache_(fetch_log_task))) {
-    PALF_LOG(WARN, "push_task_into_cache_ failed", K(ret), KPC(fetch_log_task), K_(fetch_task_cache));
+    PALF_LOG(WARN, "push_task_into_cache_ failed", K(ret), KPC(fetch_log_task));
   } else if (OB_FAIL(TG_PUSH_TASK(tg_id_, fetch_log_task))) {
     PALF_LOG(WARN, "push failed", K(ret), KPC(fetch_log_task));
   } else {

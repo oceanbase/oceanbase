@@ -3249,7 +3249,6 @@ int ObSql::optimize_stmt(
   FLTSpanGuard(optimize);
   logical_plan = NULL;
   LOG_TRACE("stmt to generate plan", K(stmt));
-  NG_TRACE(optimize_begin);
   OPT_TRACE_TITLE("START GENERATE PLAN");
   if (OB_FAIL(optimizer.optimize(stmt, logical_plan))) {
     LOG_WARN("Failed to optimize logical plan", K(ret));

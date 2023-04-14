@@ -792,10 +792,17 @@ typedef enum ObItemType
   T_FUN_SYS_JSON_EXISTS = 1686,
   T_FUN_SYS_TREAT = 1687,
   T_NULLX_CLAUSE = 1688,   // null clause on json expr
+  T_WEIGHT_STRING_LEVEL_PARAM = 1689, // `level 1-2` and `level 1,2,3` clause on json expr
 
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
+  T_FUN_SYS_GENERATOR = 1802,
+  T_FUN_SYS_ZIPF = 1803,
+  T_FUN_SYS_NORMAL = 1804,
+  T_FUN_SYS_UNIFORM = 1805,
+  T_FUN_SYS_RANDOM = 1806,
+  T_FUN_SYS_RANDSTR = 1807,
   T_FUN_SYS_END = 2000,
 
   T_MAX_OP = 3000,

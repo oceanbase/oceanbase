@@ -479,7 +479,7 @@ ObITabletMetaBackupReader::~ObITabletMetaBackupReader()
 
 /* ObTabletMetaBackupReader */
 
-ObTabletMetaBackupReader::ObTabletMetaBackupReader() : ObITabletMetaBackupReader(), buffer_writer_()
+ObTabletMetaBackupReader::ObTabletMetaBackupReader() : ObITabletMetaBackupReader(), buffer_writer_("BackupReader")
 {}
 
 ObTabletMetaBackupReader::~ObTabletMetaBackupReader()
@@ -537,7 +537,7 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
 
 /* ObSSTableMetaBackupReader */
 
-ObSSTableMetaBackupReader::ObSSTableMetaBackupReader() : ObITabletMetaBackupReader(), sstable_array_(), buffer_writer_()
+ObSSTableMetaBackupReader::ObSSTableMetaBackupReader() : ObITabletMetaBackupReader(), sstable_array_(), buffer_writer_("BackupReader")
 {}
 
 ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
@@ -632,7 +632,7 @@ int ObSSTableMetaBackupReader::get_macro_block_id_list_(
 /* ObTabletPhysicalIDMetaBackupReader */
 
 ObTabletPhysicalIDMetaBackupReader::ObTabletPhysicalIDMetaBackupReader()
-    : is_inited_(false), ctx_(NULL), tablet_id_(), buffer_writer_()
+    : is_inited_(false), ctx_(NULL), tablet_id_(), buffer_writer_("BackupReader")
 {}
 
 ObTabletPhysicalIDMetaBackupReader::~ObTabletPhysicalIDMetaBackupReader()

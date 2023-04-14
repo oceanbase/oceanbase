@@ -40,7 +40,7 @@ inline int ObProtoEncodeParam::save_large_packet(const char *start, const int64_
   } else if (OB_UNLIKELY(NULL != large_pkt_buf_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("large pkt buf has already exist", KP(start), K(len), K(ret));
-  } else if (OB_ISNULL(large_pkt_buf_ = (char *)ob_malloc(len))) {
+  } else if (OB_ISNULL(large_pkt_buf_ = (char *)ob_malloc(len, "ProtoEncodePara"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc mem", K(len), K(ret));
   } else {

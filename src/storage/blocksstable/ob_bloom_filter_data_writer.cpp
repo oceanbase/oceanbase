@@ -24,7 +24,7 @@ namespace blocksstable
 {
 ObBloomFilterMicroBlockWriter::ObBloomFilterMicroBlockWriter()
   : bf_micro_header_(NULL),
-    data_buffer_(0, ObModIds::OB_BF_DATA_WRITER, false),
+    data_buffer_(ObModIds::OB_BF_DATA_WRITER),
     is_inited_(false)
 {
 }
@@ -123,7 +123,7 @@ int ObBloomFilterMicroBlockWriter::write(const ObBloomFilterCacheValue &bf_cache
 }
 
 ObBloomFilterMacroBlockWriter::ObBloomFilterMacroBlockWriter()
-  : data_buffer_(0, ObModIds::OB_BF_DATA_WRITER, false),
+  : data_buffer_(ObModIds::OB_BF_DATA_WRITER),
     bf_macro_header_(NULL),
     common_header_(),
     compressor_(),

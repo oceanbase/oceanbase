@@ -43,7 +43,12 @@ int ObSqlMemMgrProcessor::init(
     LOG_WARN("unexpected cache size got", K(lbt()), K(cache_size), K(op_id), K(op_type));
     cache_size = DEFAULT_CACHE_SIZE;
   }
-  if (OB_FAIL(alloc_dir_id(dir_id_))) {
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get exec ctx", K(ret));
+  } else if (OB_FAIL(profile_.set_exec_info(*exec_ctx))) {
+    LOG_WARN("failed to set exec info", K(ret));
+  } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
       tmp_enable_auto_mem_mgr = true;

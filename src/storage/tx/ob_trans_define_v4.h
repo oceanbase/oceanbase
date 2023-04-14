@@ -616,6 +616,7 @@ public:
   bool is_in_tx() const { return state_ > State::IDLE; }
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
+  void dump_and_print_trace();
   bool in_tx_or_has_extra_state();
   bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
@@ -659,6 +660,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
+  void clear_interrupt() { flags_.INTERRUPTED_ = false; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

@@ -605,7 +605,7 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
   for (share::ObTenantSwitchGuard g = share::_make_tenant_switch_guard(); g.loop_num_ == 0; g.loop_num_++) \
     if (OB_SUCC(g.switch_to(tenant_id)))
 
-  inline void *mtl_malloc(int64_t nbyte, const common::ObMemAttr & attr = default_memattr)
+  inline void *mtl_malloc(int64_t nbyte, const common::ObMemAttr &attr)
   {
     common::ObMemAttr inner_attr = attr;
     if (OB_SERVER_TENANT_ID == inner_attr.tenant_id_ &&
@@ -627,7 +627,7 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     return ob_free(ptr);
   }
 
-  inline void *mtl_malloc_align(int64_t alignment, int64_t nbyte, const common::ObMemAttr & attr = default_memattr)
+  inline void *mtl_malloc_align(int64_t alignment, int64_t nbyte, const common::ObMemAttr &attr)
   {
     common::ObMemAttr inner_attr = attr;
     if (OB_SERVER_TENANT_ID == inner_attr.tenant_id_ &&

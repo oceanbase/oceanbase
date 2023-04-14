@@ -204,10 +204,10 @@ int ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
-                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+                OB_MALLOC_NORMAL_BLOCK_SIZE,
+                ObMemAttr(common::OB_SERVER_TENANT_ID, "DTLBufAlloc")))) {
     LOG_WARN("failed to init alocator", K(ret));
   } else {
-    allocator_.set_label("DTLBufAlloc");
     free_list_.reset();
   }
   return ret;
@@ -360,10 +360,10 @@ int ObDtlLocalFirstBufferCacheManager::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
-                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
+                OB_MALLOC_NORMAL_BLOCK_SIZE,
+                ObMemAttr(common::OB_SERVER_TENANT_ID, ObModIds::OB_SQL_DTL)))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
-    allocator_.set_label(ObModIds::OB_SQL_DTL);
     if (OB_FAIL(hash_table_.init(BUCKET_NUM, CONCURRENT_CNT))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(buffer_info_mgr_.init())) {

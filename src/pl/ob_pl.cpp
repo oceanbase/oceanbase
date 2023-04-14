@@ -200,6 +200,19 @@ void ObPLCtx::reset_obj()
   objects_.reset();
 }
 
+void ObPLCtx::reset_obj_range_to_end(int64_t index)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (index < objects_.count() && index >= 0) {
+    for (int64_t i = objects_.count() - 1; i >= index; i--) {
+      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
+        LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
+      }
+      objects_.pop_back();
+    }
+  }
+}
+
 ObPLCtx::~ObPLCtx()
 {
   reset_obj();

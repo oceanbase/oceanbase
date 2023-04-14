@@ -117,10 +117,10 @@ int ObDRTaskQueue::init(
   } else if (OB_FAIL(task_map_.create(bucket_num, "DRTaskQ"))) {
     LOG_WARN("fail to create task map", KR(ret), K(bucket_num));
   } else if (OB_FAIL(task_alloc_.init(
-          ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
+          ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
+          ObMemAttr(common::OB_SERVER_TENANT_ID, "DRTaskQ")))) {
     LOG_WARN("fail to init task allocator", KR(ret));
   } else {
-    task_alloc_.set_label("DRTaskQ");
     config_ = &config;
     rpc_proxy_ = rpc_proxy;
     server_mgr_ = server_mgr;

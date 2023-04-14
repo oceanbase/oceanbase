@@ -58,7 +58,7 @@ public:
 public:
   int init(const int64_t thread_num,
       const int64_t queue_size,
-      const ObMemAttr &memattr = default_memattr);
+      const ObMemAttr &memattr);
   void destroy();
 
 public:

@@ -42,7 +42,7 @@ public:
     //   p = obj->data_;
     // }
     // return p;
-    return oceanbase::common::ob_malloc(size);
+    return oceanbase::common::ob_malloc(size, ObNewModIds::TEST);
   }
 
   void Free(void *ptr)
@@ -66,22 +66,9 @@ TEST_F(TestObjectMgr, Basic2)
 
     while (cnt--) {
       int i = 0;
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
-      p[i++] = ob_malloc(sz);
+      for (int j = 0; j < 16; ++j) {
+        p[i++] = ob_malloc(sz, ObNewModIds::TEST);
+      }
       while (i--) {
         ob_free(p[i]);
       }

@@ -3116,9 +3116,9 @@ ws_level_list_item
 }
 | ws_level_list ',' ws_level_list_item
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
   $$->value_ = $3->value_ | $1->value_;
-  $$->param_num_ = 1;
+  $$->param_num_ = $1->param_num_ + $3->param_num_;
 }
 ;
 
@@ -3134,7 +3134,7 @@ ws_level_number ws_level_flags
 ws_level_range:
 ws_level_number '-' ws_level_number
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
   uint32_t res = 0;
   uint32_t start = $1->value_ ;
   uint32_t end = $3->value_ ;
@@ -3145,7 +3145,7 @@ ws_level_number '-' ws_level_number
     res |= (1 << start);
   }
   $$->value_ = res;
-  $$->param_num_ = 1;
+  $$->param_num_ = 2;
 }
 ;
 
@@ -9798,6 +9798,21 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, $3);
 }
+| TABLE '(' simple_expr ')' %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, NULL);
+}
+| TABLE '(' simple_expr ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $5);
+}
+| TABLE '(' simple_expr ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $6);
+}
+;
+
+
 
 dml_table_name:
 relation_factor opt_use_partition
@@ -16225,6 +16240,11 @@ NAME_OB
 {
   make_name_node($$, result->malloc_pool_, "format");
 }
+| NORMAL
+{
+  make_name_node($$, result->malloc_pool_, "normal");
+}
+
 ;
 
 column_label:
@@ -16545,12 +16565,13 @@ ERROR_P
 {
   (void)($1) ; /* make bison mute */
   ParseNode *type_node = NULL;
-  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  malloc_terminal_node(type_node, result->malloc_pool_, T_NULLX_CLAUSE);
   type_node->value_ = 1;
-  type_node->is_hidden_const_ = 1;
+  type_node->param_num_ = 1;
 
   ParseNode *v_node = NULL;
   malloc_terminal_node(v_node, result->malloc_pool_, T_NULL);
+  v_node->is_hidden_const_ = 1;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, v_node);
 }

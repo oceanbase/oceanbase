@@ -142,10 +142,10 @@ bool ObWorkingSet::add_handle_ref(WorkingSetMB *ws_mb)
   return added;
 }
 
-void ObWorkingSet::de_handle_ref(WorkingSetMB *ws_mb)
+void ObWorkingSet::de_handle_ref(WorkingSetMB *ws_mb, const bool do_retire)
 {
   if (NULL != ws_mb) {
-    mb_handle_allocator_->de_handle_ref(ws_mb->mb_handle_);
+    mb_handle_allocator_->de_handle_ref(ws_mb->mb_handle_, do_retire);
   }
 }
 
@@ -347,7 +347,7 @@ bool ObWorkingSet::try_reuse_mb(WorkingSetMB *ws_mb, ObKVMemBlockHandle *&mb_han
       if (ATOMIC_BCAS((uint32_t*)(&reused_handle->status_), FULL, FREE)) {
         if (reused_handle->handle_ref_.try_check_and_inc_seq_num(seq_num)) {
           int ret = OB_SUCCESS;
-          if (OB_FAIL(mb_handle_allocator_->free_mbhandle(reused_handle))) {
+          if (OB_FAIL(mb_handle_allocator_->free_mbhandle(reused_handle, true /* do_retire */))) {
             LOG_WARN("free_mbhandle failed", K(ret));
           } else {
             reused = true;

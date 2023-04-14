@@ -244,7 +244,7 @@ int ObStorageHATabletsBuilder::get_tablet_info_restore_reader_(ObICopyTabletInfo
   } else if (!param_.is_leader_restore_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get tablet info restore reader get invalid argument", K(ret), K(param_));
-  } else if (FALSE_IT(buf = ob_malloc(sizeof(ObCopyTabletInfoRestoreReader)))) {
+  } else if (FALSE_IT(buf = ob_malloc(sizeof(ObCopyTabletInfoRestoreReader), "TabletReader"))) {
   } else if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), KP(buf));
@@ -470,7 +470,7 @@ int ObStorageHATabletsBuilder::get_tablets_sstable_restore_reader_(ObICopySSTabl
   } else if (!param_.is_leader_restore_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get tablets sstable restore reader get invalid argument", K(ret), K(param_));
-  } else if (FALSE_IT(buf = ob_malloc(sizeof(ObCopySSTableInfoRestoreReader)))) {
+  } else if (FALSE_IT(buf = ob_malloc(sizeof(ObCopySSTableInfoRestoreReader), "TabletReader"))) {
   } else if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), KP(buf));

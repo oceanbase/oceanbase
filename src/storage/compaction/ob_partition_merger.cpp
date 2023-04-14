@@ -1161,7 +1161,39 @@ int ObPartitionMinorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
       }
     } else if (OB_FAIL(close())){
       STORAGE_LOG(WARN, "failed to close partition merger", K(ret));
+    } else if (ctx.param_.tablet_id_.is_special_merge_tablet()) {
+      // do nothing
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(collect_merge_stat(merge_param.merge_type_, merge_helper, ctx))) {
+        STORAGE_LOG(WARN, "failed to collect merge stat", K(tmp_ret), K(merge_param));
+      }
     }
+  }
+  return ret;
+}
+
+int ObPartitionMinorMerger::collect_merge_stat(
+    const ObMergeType &merge_type,
+    ObPartitionMinorMergeHelper &merge_helper,
+    ObTabletMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObTransNodeDMLStat tnode_stat;
+
+  if (OB_UNLIKELY(!is_mini_merge(merge_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(merge_type));
+  } else if (OB_FAIL(merge_helper.collect_tnode_dml_stat(merge_type, tnode_stat))) {
+    STORAGE_LOG(WARN, "failed to get memtable stat", K(ret));
+  } else if (tnode_stat.empty()) {
+    // do nothing
+  } else if (OB_LIKELY(1 >= ctx.get_concurrent_cnt())) {
+    // serial mini compaction
+    ctx.tnode_stat_ = tnode_stat;
+  } else {
+    // parallel mini compaction
+    ctx.tnode_stat_.atomic_inc(tnode_stat);
   }
   return ret;
 }

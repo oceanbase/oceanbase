@@ -42,7 +42,7 @@ public:
 struct ObMallocWrapper: public AllocInterface
 {
 public:
-  void* alloc() { return common::ob_malloc(ISIZE); }
+  void* alloc() { return common::ob_malloc(ISIZE, ObNewModIds::TEST); }
   void free(void* p) { common::ob_free(p); }
 };
 

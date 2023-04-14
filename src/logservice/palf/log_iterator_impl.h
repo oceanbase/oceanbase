@@ -106,7 +106,8 @@ public:
   //      - if the end_lsn get from get_file_end_lsn is smaller than 'log_tail_' of LogStorage, and it's
   //        not the exact boundary of LogGroupEntry(for PalgGroupeBufferIterator, or LogEntry for PalfBufferIterator),
   //        OB_NEED_RETRY may be return.
-  //
+  //      - if read_data_from_storage_ is concurrent with the last step of flashback, opening last block on disk may be failed
+  //        due to rename, return OB_NEED_RETRY in this case.(TODO by runlin: retry by myself)
   //   OB_ERR_OUT_LOWER_BOUND
   //      - block has been recycled
   //   OB_CHECKSUM_ERROR

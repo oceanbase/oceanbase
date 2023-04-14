@@ -102,7 +102,7 @@ void TestLogSlidingWindow::SetUp()
     OB_ASSERT(FALSE);
   }
   alloc_mgr_ = new (buf) common::ObTenantMutilAllocator(tenant_id);
-  data_buf_ = (char*)ob_malloc(64 * 1024 * 1024);
+  data_buf_ = (char*)ob_malloc(64 * 1024 * 1024, attr);
   // init MTL
   ObTenantBase tbase(tenant_id);
   ObTenantEnv::set_tenant(&tbase);
@@ -949,7 +949,7 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   // non-continous buf
   group_header.reset();
   write_buf.reset();
-  char *second_buf = (char *)ob_malloc(second_part_len);
+  char *second_buf = (char *)ob_malloc(second_part_len, ObNewModIds::TEST);
   EXPECT_TRUE(NULL != second_buf);
   memcpy(second_buf, data_buf_ + first_part_len, second_part_len);
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, first_part_len));

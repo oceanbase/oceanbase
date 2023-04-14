@@ -519,7 +519,9 @@ int ObLogSubPlanFilter::check_and_set_use_batch()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+  ObLogPlan *plan = NULL;
+  if (OB_ISNULL(plan = get_plan())
+      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_batch_rescans_))) {
@@ -528,6 +530,7 @@ int ObLogSubPlanFilter::check_and_set_use_batch()
   // check use batch
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_batch_rescans_ && i < get_num_of_child(); i++) {
     ObLogicalOperator *child = get_child(i);
+    bool contains_invalid_startup = false;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -538,8 +541,12 @@ int ObLogSubPlanFilter::check_and_set_use_batch()
       enable_das_batch_rescans_ = false;
     } else if (OB_FAIL(check_if_match_das_batch_rescan(child, enable_das_batch_rescans_))) {
       LOG_WARN("failed to check match das batch rescan", K(ret));
-    } else {
-      // do nothing
+    } else if (enable_das_batch_rescans_) {
+      if (OB_FAIL(plan->contains_startup_with_exec_param(child, contains_invalid_startup))) {
+        LOG_WARN("failed to check contains invalid startup", K(ret));
+      } else if (contains_invalid_startup) {
+        enable_das_batch_rescans_ = false;
+      }
     }
   }
   // set use batch

@@ -40,6 +40,7 @@ namespace compaction
 {
 struct ObTabletMergeCtx;
 struct ObMergeParameter;
+class ObPartitionMinorMergeHelper;
 
 class ObPartitionMerger
 {
@@ -144,6 +145,10 @@ protected:
   virtual int append_bloom_filter(const blocksstable::ObDatumRow &row);
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
 private:
+  int collect_merge_stat(
+      const storage::ObMergeType &merge_type,
+      compaction::ObPartitionMinorMergeHelper &merge_helper,
+      ObTabletMergeCtx &ctx);
   int check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters, const bool contain_multi_trans, bool &add_shadow_row);
   int merge_single_iter(ObPartitionMergeIter &merge_ite);
   int check_first_committed_row(const MERGE_ITER_ARRAY &merge_iters);
