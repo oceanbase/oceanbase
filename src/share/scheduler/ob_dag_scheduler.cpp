@@ -435,6 +435,7 @@ void ObIDag::reset()
   is_stop_ = false;
   dag_net_ = nullptr;
   list_idx_ = DAG_LIST_MAX;
+  allocator_.reset();
 }
 
 int ObIDag::add_task(ObITask &task)
@@ -674,7 +675,7 @@ int ObIDag::basic_init(const int64_t total,
                  const int64_t page_size)
 {
   int ret = OB_SUCCESS;
-  const lib::ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_SCHEDULER);
+  const lib::ObMemAttr mem_attr(MTL_ID(), "DagTask");
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "dag init twice", K(ret));
@@ -1560,6 +1561,7 @@ int ObTenantDagScheduler::init(
 {
   int ret = OB_SUCCESS;
   const lib::ObMemAttr mem_attr(tenant_id, ObModIds::OB_SCHEDULER);
+  const lib::ObMemAttr ha_mem_attr(tenant_id, "HAScheduler");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "scheduler init twice", K(ret));
@@ -1572,6 +1574,10 @@ int ObTenantDagScheduler::init(
         K(total_mem_limit), K(hold_mem_limit), K(page_size));
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(), page_size,
                                   mem_attr, 0, hold_mem_limit, total_mem_limit))) {
+    COMMON_LOG(WARN, "failed to init allocator", K(ret), K(total_mem_limit), K(hold_mem_limit),
+        K(page_size));
+  } else if (OB_FAIL(ha_allocator_.init(lib::ObMallocAllocator::get_instance(), page_size,
+                                  ha_mem_attr, 0, hold_mem_limit, total_mem_limit))) {
     COMMON_LOG(WARN, "failed to init allocator", K(ret), K(total_mem_limit), K(hold_mem_limit),
         K(page_size));
   } else if (OB_FAIL(dag_map_.create(dag_limit, "DagMap", "DagNode", tenant_id))) {
@@ -1659,8 +1665,13 @@ void ObTenantDagScheduler::destroy()
     }
     if (dag_net_map_[RUNNING_DAG_NET_MAP].created()) {
       for (DagNetMap::iterator iter = dag_net_map_[RUNNING_DAG_NET_MAP].begin(); iter != dag_net_map_[RUNNING_DAG_NET_MAP].end(); ++iter) {
+        const bool ha_dag_net = is_ha_dag_net(iter->second->get_type());
         iter->second->~ObIDagNet();
-        allocator_.free(iter->second);
+        if (ha_dag_net) {
+          ha_allocator_.free(iter->second);
+        } else {
+          allocator_.free(iter->second);
+        }
       } // end of for
       dag_net_map_[RUNNING_DAG_NET_MAP].destroy();
     }
@@ -1669,6 +1680,7 @@ void ObTenantDagScheduler::destroy()
     }
 
     allocator_.reset();
+    ha_allocator_.reset();
     scheduler_sync_.destroy();
     dag_cnt_ = 0;
     dag_limit_ = 0;
@@ -1720,8 +1732,13 @@ void ObTenantDagScheduler::inner_free_dag(ObIDag &dag)
   if (OB_UNLIKELY(nullptr != dag.prev_ || nullptr != dag.next_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "dag is in dag_list", K(dag), K(dag.prev_), K(dag.next_));
   }
+  const bool ha_dag = is_ha_dag(dag.get_type());
   dag.~ObIDag();
-  allocator_.free(&dag);
+  if (ha_dag) {
+    ha_allocator_.free(&dag);
+  } else {
+    allocator_.free(&dag);
+  }
 }
 
 void ObTenantDagScheduler::get_default_config()
