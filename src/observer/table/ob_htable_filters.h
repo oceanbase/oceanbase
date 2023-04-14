@@ -300,6 +300,7 @@ public:
   int add_filter(Filter *filter);
   Operator get_operator() const { return op_; }
   virtual void reset() override;
+  virtual bool has_filter_row() override { return true; }
 
   TO_STRING_KV("filter", "FilterList",
                "op", operator_to_string(op_),
