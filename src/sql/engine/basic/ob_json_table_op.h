@@ -28,6 +28,7 @@ namespace oceanbase
 {
 namespace sql
 {
+struct JtScanCtx;
 static const int64_t DEFAULT_STR_LENGTH = -1;
 class ObExpr;
 struct JtScanCtx;
@@ -122,7 +123,7 @@ public:
   virtual int get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value);
 
 
-  void proc_query_on_error(int& err_code, bool& is_null);
+  void proc_query_on_error(JtScanCtx *ctx, int& err_code, bool& is_null);
 
 
   // fixed member
@@ -359,6 +360,8 @@ public:
   common::ObFixedArray<ObJtColInfo*, common::ObIAllocator> cols_def_;
 };
 
+class ObJsonTableOp;
+
 struct JtScanCtx {
     JtScanCtx()
       : row_alloc_(),
@@ -369,6 +372,7 @@ struct JtScanCtx {
   ObExecContext* exec_ctx_;
   common::ObArenaAllocator row_alloc_;
   ObIAllocator *op_exec_alloc_;
+  ObJsonTableOp* jt_op_;
 
   bool is_evaled_;
   bool is_cover_error_;
@@ -393,7 +397,10 @@ public:
       allocator_(&exec_ctx.get_allocator()),
       is_inited_(false),
       is_evaled_(false),
-      in_(nullptr)
+      in_(nullptr),
+      j_null_(),
+      j_arr_(allocator_),
+      j_obj_(allocator_)
   {
     const ObJsonTableSpec* spec_ptr = reinterpret_cast<const ObJsonTableSpec*>(&spec);
     col_count_ = spec_ptr->column_exprs_.count();
@@ -406,9 +413,9 @@ public:
   //virtual int inner_get_next_batch(int64_t max_row_cnt) override;
   virtual int inner_close() override;
   virtual void destroy() override;
-  static ObJsonNull* get_js_null() { return js_null_; }
-  static ObJsonArray* get_js_array() { return js_arr_; }
-  static ObJsonObject* get_js_object() { return js_obj_; }
+  ObJsonNull* get_js_null() { return &j_null_; }
+  ObJsonArray* get_js_array() { return &j_arr_; }
+  ObJsonObject* get_js_object() { return &j_obj_; }
   TO_STRING_KV(K_(is_inited),
                K_(col_count));
 
@@ -433,9 +440,9 @@ private:
   JtScanCtx jt_ctx_;
 
 private:
-  static ObJsonNull* js_null_;
-  static ObJsonArray* js_arr_;
-  static ObJsonObject* js_obj_;
+  ObJsonNull j_null_;
+  ObJsonArray j_arr_;
+  ObJsonObject j_obj_;
 };
 
 } // end namespace sql
