@@ -2322,7 +2322,7 @@ int ObTablet::get_msd_from_memtables(
   ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
   if (is_ls_inner_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_table_store().get_memtables(memtables, true/*need_active*/))) {
+  } else if (OB_FAIL(get_memtables(memtables, true/*need_active*/))) {
     LOG_WARN("failed to get memtables", K(ret), KPC(this));
   } else if (memtables.empty()) {
     // do nothing
