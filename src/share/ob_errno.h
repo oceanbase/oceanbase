@@ -1448,6 +1448,8 @@ constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
 constexpr int OB_ALREADY_IN_ARCHIVE_MODE = -9091;
 constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
 constexpr int OB_RESTORE_LOG_TO_END = -9093;
+constexpr int OB_LS_RESTORE_FAILED = -9094;
+constexpr int OB_NO_TABLET_NEED_BACKUP = -9095;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -3489,6 +3491,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
 #define OB_RESTORE_LOG_TO_END__USER_ERROR_MSG "Restore log to end"
+#define OB_LS_RESTORE_FAILED__USER_ERROR_MSG "Restore log stream failed"
+#define OB_NO_TABLET_NEED_BACKUP__USER_ERROR_MSG "No tablet need backup"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -5531,6 +5535,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
 #define OB_RESTORE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9093, Restore log to end"
+#define OB_LS_RESTORE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9094, Restore log stream failed"
+#define OB_NO_TABLET_NEED_BACKUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9095, No tablet need backup"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
@@ -5793,7 +5799,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2038];
+extern int g_all_ob_errnos[2040];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
