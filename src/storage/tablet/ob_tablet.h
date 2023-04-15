@@ -862,7 +862,8 @@ int ObTablet::save_multi_source_data_unit(
       const int64_t start = ObTimeUtility::current_time();
       while (OB_SUCC(ret) &&
              memtable->get_logging_blocked() &&
-             share::SCN::max_scn() == memtable_scn) {
+             share::SCN::max_scn() == memtable_scn &&
+             !for_replay) {
         if (ObTimeUtility::current_time() - start > 100 * 1000) {
           ret = OB_BLOCK_FROZEN;
           TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
