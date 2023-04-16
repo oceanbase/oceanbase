@@ -1244,23 +1244,34 @@ int ObIndexChecksumValidator::handle_data_table(
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObArray<uint64_t>, data_tables_to_update) {
+  SMART_VARS_2((ObArray<uint64_t>, data_tables_to_update),
+               (ObArray<uint64_t>, filtered_tables_to_update)) {
     // check tables that are not index table, return those need to be marked as INDEX_CKM_VERIFIED
     if (OB_FAIL(check_data_table(table_schemas, table_compaction_map, ori_table_ids, data_tables_to_update))) {
       LOG_WARN("fail to check data table with index", KR(ret), K_(tenant_id), K(frozen_scn));
     }
-    // mark tables exist in @data_tables_to_update as INDEX_CKM_VERIFIED
+    // filter table_ids exist in @data_tables_to_update and @table_ids from table_compaction_map
     hash::ObHashMap<uint64_t, ObTableCompactionInfo>::iterator iter = table_compaction_map.begin();
     for (; !stop && OB_SUCC(ret) && (iter != table_compaction_map.end()); ++iter) {
       const uint64_t cur_table_id = iter->first;
-      const ObTableCompactionInfo &table_compaction_info = iter->second;
       if (exist_in_table_array(cur_table_id, table_ids)
           && exist_in_table_array(cur_table_id, data_tables_to_update)) {
-        if (OB_FAIL(update_data_table_verified(cur_table_id, table_compaction_info,
-                                               frozen_scn, table_compaction_map))) {
-          LOG_WARN("fail to update data table to verified status", KR(ret), K(cur_table_id),
-                  K(frozen_scn), K(table_compaction_info));
+        if (OB_FAIL(filtered_tables_to_update.push_back(cur_table_id))) {
+          LOG_WARN("fail to push back", KR(ret), K(cur_table_id));
         }
+      }
+    }
+    // mark these table as INDEX_CKM_VERIFIED
+    const int64_t filtered_tables_to_update_cnt = filtered_tables_to_update.count();
+    for (int64_t i = 0; !stop && OB_SUCC(ret) && (i < filtered_tables_to_update_cnt); ++i) {
+      const uint64_t cur_table_id = filtered_tables_to_update.at(i);
+      ObTableCompactionInfo cur_table_compaction_info;
+      if (OB_FAIL(table_compaction_map.get_refactored(cur_table_id, cur_table_compaction_info))) {
+        LOG_WARN("fail to get refactored", KR(ret), K(cur_table_id));
+      } else if (OB_FAIL(update_data_table_verified(cur_table_id, cur_table_compaction_info,
+                                                    frozen_scn, table_compaction_map))) {
+        LOG_WARN("fail to update data table to verified status", KR(ret), K(cur_table_id),
+                 K(frozen_scn), K(cur_table_compaction_info));
       }
     }
   }
