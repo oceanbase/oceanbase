@@ -71,7 +71,6 @@ private:
 
 // px trans interface
 public:
-  static const int32_t PX_DEFAULT_SESSION_ID = 1;
   int px_start_trans(const table::ObTableLoadTransId &trans_id);
   int px_finish_trans(const table::ObTableLoadTransId &trans_id);
   int px_abandon_trans(const table::ObTableLoadTransId &trans_id);

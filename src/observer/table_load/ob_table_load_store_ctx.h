@@ -109,6 +109,8 @@ public:
   int get_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
   int get_trans_ctx(const table::ObTableLoadTransId &trans_id,
                     ObTableLoadTransCtx *&trans_ctx) const;
+  int get_segment_trans(const table::ObTableLoadSegmentID &segment_id,
+                        ObTableLoadStoreTrans *&trans);
   int get_active_trans_ids(common::ObIArray<table::ObTableLoadTransId> &trans_id_array) const;
   int get_committed_trans_ids(table::ObTableLoadArray<table::ObTableLoadTransId> &trans_id_array,
                               common::ObIAllocator &allocator) const;
