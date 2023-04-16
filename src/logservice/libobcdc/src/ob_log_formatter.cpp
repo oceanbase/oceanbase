@@ -242,7 +242,7 @@ int ObLogFormatter::push(IStmtTask *stmt_task, volatile bool &stop_flag)
         ++stmt_count;
       } else {
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("push task into formatter fail", KR(ret), K(push_task), K(hash_value));
+          LOG_ERROR("push task into formatter fail", KR(ret), K(push_task), K(hash_value), K(stmt_count));
         }
       }
     } // while
@@ -1369,16 +1369,17 @@ int ObLogFormatter::fill_rowkey_cols_(
         LOG_ERROR("rowkey_column is expected output to user", KR(ret),
             K(tb_schema_info), K(rowkey_index), K(column_schema_info), KPC(simple_table_schema));
       } else {
+        const int16_t rowkey_usr_index = column_schema_info->get_usr_column_idx();
         // If the primary key column has been modified, the value after the modification is used, otherwise the value before the modification is used
-        if (NULL == rv->new_columns_[rowkey_index]) {
-          rv->new_columns_[rowkey_index] = &(cv_node->string_value_);
+        if (NULL == rv->new_columns_[rowkey_usr_index]) {
+          rv->new_columns_[rowkey_usr_index] = &(cv_node->string_value_);
         }
 
-        rv->is_rowkey_[rowkey_index] = true;
-        rv->is_changed_[rowkey_index] = true;
+        rv->is_rowkey_[rowkey_usr_index] = true;
+        rv->is_changed_[rowkey_usr_index] = true;
 
-        if (rv->contain_old_column_ && NULL == rv->old_columns_[rowkey_index]) {
-          rv->old_columns_[rowkey_index] = &(cv_node->string_value_);
+        if (rv->contain_old_column_ && NULL == rv->old_columns_[rowkey_usr_index]) {
+          rv->old_columns_[rowkey_usr_index] = &(cv_node->string_value_);
         }
       }
     } // for
