@@ -824,9 +824,20 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt *select_stmt,
         /*do nothing*/
       }
     } else {
-      view_stmt->get_select_items().reset();
-      if (OB_FAIL(append(view_stmt->get_select_items(), select_stmt->get_select_items()))) {
-        LOG_WARN("view stmt replace select items failed", K(ret));
+      for (int64_t i = 0 ; i < view_stmt->get_select_item_size(); i ++) {
+        ObRawExpr *expr = NULL;
+        if (OB_ISNULL(expr = view_stmt->get_select_item(i).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null expr", K(ret));
+        } else {
+          expr->set_alias_column_name(ObString::make_empty_string());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        view_stmt->get_select_items().reset();
+        if (OB_FAIL(append(view_stmt->get_select_items(), select_stmt->get_select_items()))) {
+          LOG_WARN("view stmt replace select items failed", K(ret));
+        }
       }
     }
     if (OB_FAIL(ret)) {

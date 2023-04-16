@@ -49,10 +49,7 @@ int ObSelectStmtPrinter::do_print()
           K(column_list_->count()), K(select_stmt->get_select_item_size()));
     } else {
       expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_, param_store_);
-      if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
-           OB_FAIL(print_cte_define())) {
-        LOG_WARN("failed to print cte", K(ret));
-      } else if (stmt_->is_unpivot_select()) {
+      if (stmt_->is_unpivot_select()) {
         if (OB_FAIL(print_unpivot())) {
           LOG_WARN("fail to print_unpivot",
                    KPC(stmt_->get_transpose_item()), K(ret));
@@ -77,11 +74,9 @@ int ObSelectStmtPrinter::print()
     LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(print_with())) {
+    if (OB_FAIL(print_with())) {
       LOG_WARN("print with failed");
-    } else if (print_params_.print_with_cte_ &&
-               OB_FAIL(print_cte_define())) {
+    } else if (OB_FAIL(print_temp_table_as_cte())) {
       LOG_WARN("failed to print cte", K(ret));
     } else if (select_stmt->is_set_stmt()) {
       if (select_stmt->is_recursive_union() &&
@@ -119,7 +114,7 @@ int ObSelectStmtPrinter::print_unpivot()
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
 
-    if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
+    if (OB_FAIL(print_temp_table_as_cte())) {
       LOG_WARN("failed to print cte", K(ret));
     }
 
@@ -283,7 +278,6 @@ int ObSelectStmtPrinter::print_set_op_stmt()
                                        print_params_,
                                        /*force_col_alias*/true);
       stmt_printer.set_column_list(column_list_);
-      stmt_printer.disable_print_cte();
       ObString set_op_str = ObString::make_string(
                                 ObSelectStmt::set_operator_str(select_stmt->get_set_op()));
       if (OB_FAIL(stmt_printer.do_print())) {

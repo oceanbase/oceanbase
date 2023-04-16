@@ -71,8 +71,7 @@ int ObInsertAllStmtPrinter::print_multi_insert_stmt()
   } else if (OB_UNLIKELY(!stmt_->is_insert_all_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Not a valid insert stmt", K(stmt_->get_stmt_type()), K(ret));
-  } else if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
-             OB_FAIL(print_cte_define())) {
+  } else if (OB_FAIL(print_temp_table_as_cte())) {
     LOG_WARN("failed to print cte", K(ret));
   } else if (OB_FAIL(print_multi_insert(insert_stmt))) {
     LOG_WARN("fail to print select", K(ret), K(*stmt_));
