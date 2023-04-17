@@ -3035,8 +3035,9 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
           ObRawExpr *expr = NULL;
           ObRawExpr *tmp_expr = NULL;
           const ObColumnRefRawExpr *column_expr = NULL;
-          const ParseNode *value_node = NULL;
-          if (OB_ISNULL(value_node = vector_node->children_[value_idxs.at(j)])
+          //for case: values(), read the first child
+          const ParseNode *value_node = (1 == vector_node->num_child_) ? vector_node->children_[0] : vector_node->children_[value_idxs.at(j)];
+          if (OB_ISNULL(value_node)
               || OB_ISNULL(column_expr = table_info.values_desc_.at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("inalid children node", K(j), K(vector_node));

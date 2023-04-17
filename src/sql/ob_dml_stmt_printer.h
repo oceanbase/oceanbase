@@ -119,8 +119,8 @@ public:
                    common::ObObjPrintParams print_params,
                    const ParamStore *param_store = NULL);
   virtual ~ObDMLStmtPrinter();
-  void enable_print_cte() { print_params_.print_with_cte_ = true; }
-  void disable_print_cte() { print_params_.print_with_cte_ = false; }
+  void enable_print_temp_table_as_cte() { print_cte_ = true; }
+  void disable_print_temp_table_as_cte() { print_cte_ = false; }
   void init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt *stmt);
   virtual int do_print() = 0;
 
@@ -147,12 +147,12 @@ public:
   enum SubqueryPrintParam {
     PRINT_BRACKET          =  1 << 0,
     FORCE_COL_ALIAS        =  1 << 1,
-    PRINT_CTE              =  1 << 2
+    PRINT_CTE       =  1 << 2
   };
 
   int print_subquery(const ObSelectStmt *subselect_stmt,
                      uint64_t subquery_print_params);
-  int print_cte_define();
+  int print_temp_table_as_cte();
 
   int print_quote_for_const(ObRawExpr* expr, bool &print_quote);
   int print_expr_except_const_number(ObRawExpr* expr, ObStmtScope scope);
@@ -177,6 +177,7 @@ protected:
   int64_t *pos_;
   const ObDMLStmt *stmt_;
   bool is_root_;
+  bool print_cte_;
   ObSchemaGetterGuard *schema_guard_;
   ObObjPrintParams print_params_;
   ObRawExprPrinter expr_printer_;

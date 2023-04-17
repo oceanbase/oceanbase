@@ -813,6 +813,34 @@ int ObTableLoadStoreCtx::get_trans_ctx(const ObTableLoadTransId &trans_id,
   return ret;
 }
 
+int ObTableLoadStoreCtx::get_segment_trans(const ObTableLoadSegmentID &segment_id,
+                                           ObTableLoadStoreTrans *&trans)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
+  } else {
+    obsys::ObRLockGuard guard(rwlock_);
+    SegmentCtx *segment_ctx = nullptr;
+    if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get segment ctx", KR(ret));
+      }
+    } else if (OB_ISNULL(segment_ctx->current_trans_)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("active segment trans not exist", KR(ret), KPC(segment_ctx));
+    } else {
+      trans = segment_ctx->current_trans_;
+      trans->inc_ref_count();
+    }
+    if (OB_NOT_NULL(segment_ctx)) {
+      segment_ctx_map_.revert(segment_ctx);
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadStoreCtx::get_active_trans_ids(ObIArray<ObTableLoadTransId> &trans_id_array) const
 {
   int ret = OB_SUCCESS;

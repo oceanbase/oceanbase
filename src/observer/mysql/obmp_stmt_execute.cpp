@@ -63,6 +63,19 @@ using namespace sql;
 using namespace pl;
 namespace observer
 {
+inline int ObPSAnalysisChecker::detection(const int64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (!need_check_) {
+  } else if (*pos_ + len > end_pos_) {
+    ret = OB_ERR_MALFORMED_PS_PACKET;
+    LOG_USER_ERROR(OB_ERR_MALFORMED_PS_PACKET);
+    LOG_ERROR("malformed ps data packet, please check the number and content of data packet parameters", K(ret), KP(pos_), KP(begin_pos_),
+    K(end_pos_ - begin_pos_), K(len), K(data_len_), K(remain_len()));
+  }
+  return ret;
+}
+
 ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       retry_ctrl_(/*ctx_.retry_info_*/),
@@ -506,28 +519,32 @@ int ObMPStmtExecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
+    analysis_checker_.init(pos, pkt.get_clen());
     int32_t stmt_id = -1; //INVALID_STMT_ID
-    ObMySQLUtil::get_int4(pos, stmt_id);
-    stmt_id_ = stmt_id;
-
-    // pos += 1; //skip flags
-    int8_t flag = 0;
-    ObMySQLUtil::get_int1(pos, flag);
-    const uint8_t ARRAYBINDING_MODE = 8;
-    const uint8_t SAVE_EXCEPTION_MODE = 16;
-    is_arraybinding_ = flag & ARRAYBINDING_MODE;
-    is_save_exception_ = flag & SAVE_EXCEPTION_MODE;
-    ps_cursor_type_ = 0 != (flag & CURSOR_TYPE_READ_ONLY)
-                        ? ObExecutePsCursorType
-                        : ObNormalType;
-
-    // 4 bytes, iteration-count, used for checksum
     uint32_t ps_stmt_checksum = 0;
-    ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
-
     ObSQLSessionInfo *session = NULL;
-    if (is_arraybinding_) {
-      OZ (init_for_arraybinding(alloc));
+    PS_DEFENSE_CHECK(9) // stmt_id(4) + flag(1) + checksum(4)
+    {
+      ObMySQLUtil::get_int4(pos, stmt_id);
+      stmt_id_ = stmt_id;
+
+      // pos += 1; //skip flags
+      int8_t flag = 0;
+      ObMySQLUtil::get_int1(pos, flag);
+      const uint8_t ARRAYBINDING_MODE = 8;
+      const uint8_t SAVE_EXCEPTION_MODE = 16;
+      is_arraybinding_ = flag & ARRAYBINDING_MODE;
+      is_save_exception_ = flag & SAVE_EXCEPTION_MODE;
+      ps_cursor_type_ = 0 != (flag & CURSOR_TYPE_READ_ONLY)
+                          ? ObExecutePsCursorType
+                          : ObNormalType;
+
+      // 4 bytes, iteration-count, used for checksum
+      ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
+
+      if (is_arraybinding_) {
+        OZ (init_for_arraybinding(alloc));
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_session(session))) {
@@ -611,10 +628,13 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
     uint8_t type = 0;
     int8_t flag = 0;
     if (1 == new_param_bound_flag) {
-      ObMySQLUtil::get_uint1(pos, type);
-      ObMySQLUtil::get_int1(pos, flag);
-      if (OB_FAIL(param_types.push_back(static_cast<EMySQLFieldType>(type)))) {
-        LOG_WARN("fail to push back", K(type), K(i));
+      PS_DEFENSE_CHECK(2) // type(1) + flag(1)
+      {
+        ObMySQLUtil::get_uint1(pos, type);
+        ObMySQLUtil::get_int1(pos, flag);
+        if (OB_FAIL(param_types.push_back(static_cast<EMySQLFieldType>(type)))) {
+          LOG_WARN("fail to push back", K(type), K(i));
+        }
       }
     } else {
       if (num_of_params != param_types.count()) {
@@ -634,9 +654,12 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
         if (OB_FAIL(decode_type_info(pos, type_name_info))) {
           LOG_WARN("failed to decode type info", K(ret));
         } else if (type_name_info.type_name_.empty()) {
-          type_name_info.is_elem_type_ = true;
-          ObMySQLUtil::get_uint1(pos, elem_type);
           ObObjType ob_elem_type;
+          type_name_info.is_elem_type_ = true;
+          PS_DEFENSE_CHECK(1) // elem_type(1)
+          {
+            ObMySQLUtil::get_uint1(pos, elem_type);
+          }
           OZ (ObSMUtils::get_ob_type(
             ob_elem_type, static_cast<EMySQLFieldType>(elem_type)), elem_type);
           OX (type_name_info.elem_type_.set_obj_type(ob_elem_type));
@@ -718,6 +741,19 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
   return ret;
 }
 
+bool ObMPStmtExecute::is_contain_complex_element(const sql::ParamTypeArray &param_types) const
+{
+  bool b_ret = false;
+  for (int64_t i = 0; i < param_types.count(); i++) {
+    const obmysql::EMySQLFieldType field_type = param_types.at(i);
+    if (MYSQL_TYPE_COMPLEX == field_type) {
+      b_ret = true;
+      break;
+    }
+  }
+  return b_ret;
+}
+
 int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
                                     const char* &pos,
                                     uint32_t ps_stmt_checksum,
@@ -793,17 +829,20 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       int64_t bitmap_types = (params_num_ + 7) / 8;
       const char *bitmap = pos;
       pos += bitmap_types;
-      // Step2: 获取new_param_bound_flag字段
-      ObMySQLUtil::get_int1(pos, new_param_bound_flag);
       ParamTypeArray &param_types = ps_session_info->get_param_types();
       ParamTypeInfoArray param_type_infos;
       ParamCastArray param_cast_infos;
 
       ParamTypeArray returning_param_types;
       ParamTypeInfoArray returning_param_type_infos;
-
-      if (new_param_bound_flag == 1) {
-        param_types.reuse();
+      int64_t len = bitmap_types + 1/*new_param_bound_flag*/;
+      PS_DEFENSE_CHECK(len) // bitmap_types
+      {
+        // Step2: 获取new_param_bound_flag字段
+        ObMySQLUtil::get_int1(pos, new_param_bound_flag);
+        if (new_param_bound_flag == 1) {
+          param_types.reuse();
+        }
       }
       if (OB_FAIL(ret)) {
         // do nothing
@@ -839,6 +878,8 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
                                                      param_types,
                                                      param_type_infos))) {
         LOG_WARN("fail to parse input params type", K(ret));
+      } else if (is_contain_complex_element(param_types)) {
+        analysis_checker_.need_check_ = false;
       }
 
       // Step3-2: 获取returning into params type信息
@@ -920,8 +961,11 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
     if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
       LOG_WARN("failed to get length", K(ret));
     } else {
-      type_info.relation_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
-      buf += length;
+      PS_DEFENSE_CHECK(length)
+      {
+        type_info.relation_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
+        buf += length;
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -929,8 +973,11 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
     if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
       LOG_WARN("failed to get length", K(ret));
     } else {
-      type_info.type_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
-      buf += length;
+      PS_DEFENSE_CHECK(length)
+      {
+        type_info.type_name_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(length));
+        buf += length;
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2000,7 +2047,8 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                              const char *& data,
                                              const common::ObTimeZoneInfo *tz_info,
                                              ObObj &param,
-                                             bool is_complex_element)
+                                             bool is_complex_element,
+                                             ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   UNUSED(charset);
@@ -2009,74 +2057,89 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
     case MYSQL_TYPE_SHORT:
     case MYSQL_TYPE_LONG:
     case MYSQL_TYPE_LONGLONG: {
-      if (OB_FAIL(parse_integer_value(type, data, param, allocator, is_complex_element))) {
+      if (OB_FAIL(parse_integer_value(type, data, param, allocator, is_complex_element, checker))) {
         LOG_WARN("parse integer value from client failed", K(ret));
       }
       break;
     }
     case MYSQL_TYPE_FLOAT: {
       float value = 0;
-      MEMCPY(&value, data, sizeof(value));
-      data += sizeof(value);
-      param.set_float(value);
+      PS_STATIC_DEFENSE_CHECK(checker, sizeof(value))
+      {
+        MEMCPY(&value, data, sizeof(value));
+        data += sizeof(value);
+        param.set_float(value);
+      }
       break;
     }
     case MYSQL_TYPE_ORA_BINARY_FLOAT: {
       float value = 0;
-      MEMCPY(&value, data, sizeof(value));
-      data += sizeof(value);
-      param.set_float(value);
+      PS_STATIC_DEFENSE_CHECK(checker, sizeof(value))
+      {
+        MEMCPY(&value, data, sizeof(value));
+        data += sizeof(value);
+        param.set_float(value);
+      }
       break;
     }
     case MYSQL_TYPE_DOUBLE: {
       double value = 0;
-      MEMCPY(&value, data, sizeof(value));
-      data += sizeof(value);
-      if (lib::is_mysql_mode()) {
-        param.set_double(value);
-      } else {
-        char *buf = NULL;
-        int64_t buf_len = 0;
-        number::ObNumber nb;
-        const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
-        if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret));
-        } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
-                                                     buf, NULL, TRUE/*is_oracle_mode*/,
-                                                     FALSE/*is_binary_double*/, FALSE))) {
-        } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
-          LOG_WARN("decode double param to number failed", K(ret));
+      PS_STATIC_DEFENSE_CHECK(checker, sizeof(value))
+      {
+        MEMCPY(&value, data, sizeof(value));
+        data += sizeof(value);
+        if (lib::is_mysql_mode()) {
+          param.set_double(value);
         } else {
-          param.set_number(nb);
+          char *buf = NULL;
+          int64_t buf_len = 0;
+          number::ObNumber nb;
+          const int64_t alloc_size = OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory", K(ret));
+          } else if (FALSE_IT(buf_len = ob_gcvt_strict(value, OB_GCVT_ARG_DOUBLE, alloc_size,
+                                                      buf, NULL, TRUE/*is_oracle_mode*/,
+                                                      FALSE/*is_binary_double*/, FALSE))) {
+          } else if (OB_FAIL(nb.from_sci_opt(buf, buf_len, allocator))) {
+            LOG_WARN("decode double param to number failed", K(ret));
+          } else {
+            param.set_number(nb);
+          }
         }
       }
       break;
     }
     case MYSQL_TYPE_ORA_BINARY_DOUBLE: {
       double value = 0;
-      MEMCPY(&value, data, sizeof(value));
-      data += sizeof(value);
-      param.set_double(value);
+      PS_STATIC_DEFENSE_CHECK(checker, sizeof(value))
+      {
+        MEMCPY(&value, data, sizeof(value));
+        data += sizeof(value);
+        param.set_double(value);
+      }
       break;
     }
     case MYSQL_TYPE_YEAR: {
       int16_t value = 0;
-      ObMySQLUtil::get_int2(data, value);
-      param.set_year(static_cast<uint8_t>(value));
+      PS_STATIC_DEFENSE_CHECK(checker, 2)
+      {
+        ObMySQLUtil::get_int2(data, value);
+        param.set_year(static_cast<uint8_t>(value));
+      }
       break;
     }
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP: {
       if (OB_FAIL(parse_mysql_timestamp_value(static_cast<EMySQLFieldType>(type), data,
-                                              param, tz_info))) {
+                                              param, tz_info, checker))) {
         LOG_WARN("parse timestamp value from client failed", K(ret));
       }
       break;
     }
     case MYSQL_TYPE_TIME:{
-      if (OB_FAIL(parse_mysql_time_value(data, param))) {
+      if (OB_FAIL(parse_mysql_time_value(data, param, checker))) {
         LOG_WARN("parse timestamp value from client failed", K(ret));
       }
       break;
@@ -2086,7 +2149,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
     case MYSQL_TYPE_OB_TIMESTAMP_NANO: {
       ObTimeConvertCtx cvrt_ctx(tz_info, true);
       if (OB_FAIL(parse_oracle_timestamp_value(
-                            static_cast<EMySQLFieldType>(type), data, cvrt_ctx, param))) {
+                            static_cast<EMySQLFieldType>(type), data, cvrt_ctx, param, checker))) {
         LOG_WARN("parse timestamp value from client failed", K(ret));
       }
       break;
@@ -2115,7 +2178,10 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       if (OB_FAIL(ObMySQLUtil::get_length(data, length))) {
         LOG_ERROR("decode varchar param value failed", K(ret));
       } else {
-        str.assign_ptr(data, static_cast<ObString::obstr_size_t>(length));
+        PS_STATIC_DEFENSE_CHECK(checker, length)
+        {
+          str.assign_ptr(data, static_cast<ObString::obstr_size_t>(length));
+        }
         if (OB_FAIL(ret)) {
         } else if (MYSQL_TYPE_OB_NVARCHAR2 == type
                   || MYSQL_TYPE_OB_NCHAR == type) {
@@ -2291,13 +2357,13 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       break;
     }
     case MYSQL_TYPE_OB_INTERVAL_YM: {
-      if (OB_FAIL(parse_oracle_interval_ym_value(data, param))) {
+      if (OB_FAIL(parse_oracle_interval_ym_value(data, param, checker))) {
         LOG_WARN("failed to parse oracle interval year to month value", K(ret));
       }
       break;
     }
     case MYSQL_TYPE_OB_INTERVAL_DS:{
-      if (OB_FAIL(parse_oracle_interval_ds_value(data, param))) {
+      if (OB_FAIL(parse_oracle_interval_ds_value(data, param, checker))) {
         LOG_WARN("failed to parse oracle interval year to month value", K(ret));
       }
       break;
@@ -2356,7 +2422,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
       }
     } else {
       if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
-                                          data, tz_info, param))) {
+                                          data, tz_info, param, false, &analysis_checker_))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
         param.set_param_meta();
@@ -2440,7 +2506,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         } else {
           const char* src = tmp;
           if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
-                                              src, tz_info, param))) {
+                                              src, tz_info, param, false))) {
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
             param.set_param_meta();
@@ -2515,45 +2581,58 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
                                          const char *&data,
                                          ObObj &param,
                                          ObIAllocator &allocator,
-                                         bool is_complex_element)
+                                         bool is_complex_element,
+                                         ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   bool cast_to_number = !(lib::is_mysql_mode() || is_complex_element || MYSQL_TYPE_TINY == type);
   int64_t res_val = 0;
   switch(type) {
     case MYSQL_TYPE_TINY: {
-      int8_t value;
-      ObMySQLUtil::get_int1(data, value);
-      param.set_tinyint(value);
+      PS_STATIC_DEFENSE_CHECK(checker, 1)
+      {
+        int8_t value;
+        ObMySQLUtil::get_int1(data, value);
+        param.set_tinyint(value);
+      }
       break;
     }
     case MYSQL_TYPE_SHORT: {
-      int16_t value = 0;
-      ObMySQLUtil::get_int2(data, value);
-      if (!cast_to_number) {
-        param.set_smallint(value);
-      } else {
-        res_val = static_cast<int64_t>(value);
+      PS_STATIC_DEFENSE_CHECK(checker, 2)
+      {
+        int16_t value = 0;
+        ObMySQLUtil::get_int2(data, value);
+        if (!cast_to_number) {
+          param.set_smallint(value);
+        } else {
+          res_val = static_cast<int64_t>(value);
+        }
       }
       break;
     }
     case MYSQL_TYPE_LONG: {
-      int32_t value = 0;
-      ObMySQLUtil::get_int4(data, value);
-      if (!cast_to_number) {
-        param.set_int32(value);
-      } else {
-        res_val = static_cast<int64_t>(value);
+      PS_STATIC_DEFENSE_CHECK(checker, 4)
+      {
+        int32_t value = 0;
+        ObMySQLUtil::get_int4(data, value);
+        if (!cast_to_number) {
+          param.set_int32(value);
+        } else {
+          res_val = static_cast<int64_t>(value);
+        }
       }
       break;
     }
     case MYSQL_TYPE_LONGLONG: {
-      int64_t value = 0;
-      ObMySQLUtil::get_int8(data, value);
-      if (!cast_to_number) {
-        param.set_int(value);
-      } else {
-        res_val = value;
+      PS_STATIC_DEFENSE_CHECK(checker, 8)
+      {
+        int64_t value = 0;
+        ObMySQLUtil::get_int8(data, value);
+        if (!cast_to_number) {
+          param.set_int(value);
+        } else {
+          res_val = value;
+        }
       }
       break;
     }
@@ -2577,7 +2656,8 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
 int ObMPStmtExecute::parse_mysql_timestamp_value(const EMySQLFieldType field_type,
                                                  const char *&data,
                                                  ObObj &param,
-                                                 const common::ObTimeZoneInfo *tz_info)
+                                                 const common::ObTimeZoneInfo *tz_info,
+                                                 ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   int8_t length = 0;
@@ -2588,32 +2668,44 @@ int ObMPStmtExecute::parse_mysql_timestamp_value(const EMySQLFieldType field_typ
   int8_t min = 0;
   int8_t second = 0;
   int32_t microsecond = 0;
-  ObMySQLUtil::get_int1(data, length);
   ObPreciseDateTime value;
-  if (0 == length) {
-    value = 0;
-  } else if (4 == length) {
-    ObMySQLUtil::get_int2(data, year);
-    ObMySQLUtil::get_int1(data, month);
-    ObMySQLUtil::get_int1(data, day);
-  } else if (7 == length) {
-    ObMySQLUtil::get_int2(data, year);
-    ObMySQLUtil::get_int1(data, month);
-    ObMySQLUtil::get_int1(data, day);
-    ObMySQLUtil::get_int1(data, hour);
-    ObMySQLUtil::get_int1(data, min);
-    ObMySQLUtil::get_int1(data, second);
-  } else if (11 == length) {
-    ObMySQLUtil::get_int2(data, year);
-    ObMySQLUtil::get_int1(data, month);
-    ObMySQLUtil::get_int1(data, day);
-    ObMySQLUtil::get_int1(data, hour);
-    ObMySQLUtil::get_int1(data, min);
-    ObMySQLUtil::get_int1(data, second);
-    ObMySQLUtil::get_int4(data, microsecond);
-  } else {
-    ret = OB_ERROR;
-    LOG_WARN("invalid mysql timestamp value length", K(length));
+  PS_STATIC_DEFENSE_CHECK(checker, 1)
+  {
+    ObMySQLUtil::get_int1(data, length);
+    if (0 == length) {
+      value = 0;
+    } else if (4 == length) {
+      PS_STATIC_DEFENSE_CHECK(checker, 4)
+      {
+        ObMySQLUtil::get_int2(data, year);
+        ObMySQLUtil::get_int1(data, month);
+        ObMySQLUtil::get_int1(data, day);
+      }
+    } else if (7 == length) {
+      PS_STATIC_DEFENSE_CHECK(checker, 7)
+      {
+        ObMySQLUtil::get_int2(data, year);
+        ObMySQLUtil::get_int1(data, month);
+        ObMySQLUtil::get_int1(data, day);
+        ObMySQLUtil::get_int1(data, hour);
+        ObMySQLUtil::get_int1(data, min);
+        ObMySQLUtil::get_int1(data, second);
+      }
+    } else if (11 == length) {
+      PS_STATIC_DEFENSE_CHECK(checker, 11)
+      {
+        ObMySQLUtil::get_int2(data, year);
+        ObMySQLUtil::get_int1(data, month);
+        ObMySQLUtil::get_int1(data, day);
+        ObMySQLUtil::get_int1(data, hour);
+        ObMySQLUtil::get_int1(data, min);
+        ObMySQLUtil::get_int1(data, second);
+        ObMySQLUtil::get_int4(data, microsecond);
+      }
+    } else {
+      ret = OB_ERROR;
+      LOG_WARN("invalid mysql timestamp value length", K(length));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -2665,27 +2757,34 @@ int ObMPStmtExecute::parse_mysql_timestamp_value(const EMySQLFieldType field_typ
 }
 
 int ObMPStmtExecute::parse_oracle_timestamp_value(const obmysql::EMySQLFieldType field_type,
-    const char *&data, const ObTimeConvertCtx &cvrt_ctx, ObObj &param)
+    const char *&data, const ObTimeConvertCtx &cvrt_ctx, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   int8_t total_len = 0;
   ObObjType obj_type;
   ObOTimestampData ot_data;
   int8_t scale = -1;
-  ObMySQLUtil::get_int1(data, total_len);
-  if (OB_FAIL(ObSMUtils::get_ob_type(obj_type, field_type))) {
+  PS_STATIC_DEFENSE_CHECK(checker, 1)
+  {
+    ObMySQLUtil::get_int1(data, total_len);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSMUtils::get_ob_type(obj_type, field_type))) {
     LOG_WARN("failed to get_ob_type", K(ret));
   } else if (OB_FAIL(ObTimeConverter::decode_otimestamp(obj_type, data, total_len, cvrt_ctx, ot_data, scale))) {
     LOG_WARN("failed to decode_otimestamp", K(ret));
   } else {
-    data += total_len;
-    param.set_otimestamp_value(obj_type, ot_data);
-    param.set_scale(scale);
+    PS_STATIC_DEFENSE_CHECK(checker, total_len)
+    {
+      data += total_len;
+      param.set_otimestamp_value(obj_type, ot_data);
+      param.set_scale(scale);
+    }
   }
   return ret;
 }
 
-int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param)
+int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   int8_t length = 0;
@@ -2699,44 +2798,53 @@ int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param)
   int32_t microsecond = 0;
   struct tm tmval;
   MEMSET(&tmval, 0, sizeof(tmval));
-  ObMySQLUtil::get_int1(data, length);
   int64_t value;
-  if (0 == length) {
-    value = 0;
-  } else if (8 == length) {
-    ObMySQLUtil::get_int1(data, is_negative);
-    ObMySQLUtil::get_int4(data, day);
-    ObMySQLUtil::get_int1(data, hour);
-    ObMySQLUtil::get_int1(data, min);
-    ObMySQLUtil::get_int1(data, second);
-  } else if (12 == length) {
-    ObMySQLUtil::get_int1(data, is_negative);
-    ObMySQLUtil::get_int4(data, day);
-    ObMySQLUtil::get_int1(data, hour);
-    ObMySQLUtil::get_int1(data, min);
-    ObMySQLUtil::get_int1(data, second);
-    ObMySQLUtil::get_int4(data, microsecond);
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected time length", K(length), K(ret));
-  }
+  PS_STATIC_DEFENSE_CHECK(checker, 1)
+  {
+    ObMySQLUtil::get_int1(data, length);
+    if (0 == length) {
+      value = 0;
+    } else if (8 == length) {
+      PS_STATIC_DEFENSE_CHECK(checker, 8)
+      {
+        ObMySQLUtil::get_int1(data, is_negative);
+        ObMySQLUtil::get_int4(data, day);
+        ObMySQLUtil::get_int1(data, hour);
+        ObMySQLUtil::get_int1(data, min);
+        ObMySQLUtil::get_int1(data, second);
+      }
+    } else if (12 == length) {
+      PS_STATIC_DEFENSE_CHECK(checker, 12)
+      {
+        ObMySQLUtil::get_int1(data, is_negative);
+        ObMySQLUtil::get_int4(data, day);
+        ObMySQLUtil::get_int1(data, hour);
+        ObMySQLUtil::get_int1(data, min);
+        ObMySQLUtil::get_int1(data, second);
+        ObMySQLUtil::get_int4(data, microsecond);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected time length", K(length), K(ret));
+    }
 
-  if (OB_SUCC(ret)) {
-    ObTime ob_time;
-    if (0 != length) {
-      ob_time.parts_[DT_YEAR] = year;
-      ob_time.parts_[DT_MON] = month;
-      ob_time.parts_[DT_MDAY] = day;
-      ob_time.parts_[DT_HOUR] = hour;
-      ob_time.parts_[DT_MIN] = min;
-      ob_time.parts_[DT_SEC] = second;
-      ob_time.parts_[DT_USEC] = microsecond;
-      if (!ObTimeUtility2::is_valid_time(hour, min, second, microsecond)) {
-        ret = OB_INVALID_DATE_FORMAT;
-        LOG_WARN("invalid date format", K(ret));
-      } else {
-        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
-        value = ObTimeConverter::ob_time_to_time(ob_time);
+    if (OB_SUCC(ret)) {
+      ObTime ob_time;
+      if (0 != length) {
+        ob_time.parts_[DT_YEAR] = year;
+        ob_time.parts_[DT_MON] = month;
+        ob_time.parts_[DT_MDAY] = day;
+        ob_time.parts_[DT_HOUR] = hour;
+        ob_time.parts_[DT_MIN] = min;
+        ob_time.parts_[DT_SEC] = second;
+        ob_time.parts_[DT_USEC] = microsecond;
+        if (!ObTimeUtility2::is_valid_time(hour, min, second, microsecond)) {
+          ret = OB_INVALID_DATE_FORMAT;
+          LOG_WARN("invalid date format", K(ret));
+        } else {
+          ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+          value = ObTimeConverter::ob_time_to_time(ob_time);
+        }
       }
     }
   }
@@ -2747,7 +2855,7 @@ int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param)
   return ret;
 }
 
-int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &param)
+int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   int8_t length = 0;
@@ -2755,18 +2863,20 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
   ObIntervalDSValue value;
 
   ObMySQLUtil::get_int1(data, length);
-
-  if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
-    LOG_WARN("fail to decode interval day to second", K(ret), K(length));
-  } else {
-    param.set_interval_ds(value);
-    param.set_scale(scale);
+  PS_STATIC_DEFENSE_CHECK(checker, length)
+  {
+    if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
+      LOG_WARN("fail to decode interval day to second", K(ret), K(length));
+    } else {
+      param.set_interval_ds(value);
+      param.set_scale(scale);
+    }
   }
 
   return ret;
 }
 
-int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &param)
+int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &param, ObPSAnalysisChecker *checker)
 {
   int ret = OB_SUCCESS;
   int8_t length = 0;
@@ -2774,11 +2884,14 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
   ObIntervalYMValue value;
 
   ObMySQLUtil::get_int1(data, length);
-  if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
-    LOG_WARN("fail to decode interval year to month", K(ret), K(length));
-  } else {
-    param.set_interval_ym(value);
-    param.set_scale(scale);
+  PS_STATIC_DEFENSE_CHECK(checker, length)
+  {
+    if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
+      LOG_WARN("fail to decode interval year to month", K(ret), K(length));
+    } else {
+      param.set_interval_ym(value);
+      param.set_scale(scale);
+    }
   }
 
   return ret;

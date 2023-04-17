@@ -102,33 +102,42 @@ int ObMPStmtPrexecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
+    analysis_checker_.init(pos, pkt.get_clen());
     // stmt_id
     int32_t stmt_id = -1;
-    ObMySQLUtil::get_int4(pos, stmt_id);
-    stmt_id_ = stmt_id;
+    PS_DEFENSE_CHECK(9) // stmt_id(4) + flag(1) + iteration_count(4)
+    {
+      ObMySQLUtil::get_int4(pos, stmt_id);
+      stmt_id_ = stmt_id;
 
-    // flags
-    int8_t flag = 0;
-    ObMySQLUtil::get_int1(pos, flag);
+      // flags
+      int8_t flag = 0;
+      ObMySQLUtil::get_int1(pos, flag);
 
-    // iteration_count
-    ObMySQLUtil::get_int4(pos, iteration_count_);
+      // iteration_count
+      ObMySQLUtil::get_int4(pos, iteration_count_);
+    }
 
     // sql
     if (OB_SUCC(ret) && OB_FAIL(ObMySQLUtil::get_length(pos, sql_len_))) {
       LOG_WARN("failed to get length", K(ret));
     } else {
-      sql_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(sql_len_));
-      pos += sql_len_;
+      PS_DEFENSE_CHECK(sql_len_)
+      {
+        sql_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(sql_len_));
+        pos += sql_len_;
+      }
       LOG_DEBUG("get sql in prexecute protocol.", K(stmt_id_), K(sql_));
     }
 
     // params_num
     int32_t num = 0;
-    ObMySQLUtil::get_int4(pos, num);
-    set_param_num(num);
-
     ObSQLSessionInfo *session = NULL;
+    PS_DEFENSE_CHECK(4) // params_num
+    {
+      ObMySQLUtil::get_int4(pos, num);
+      set_param_num(num);
+    }
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(get_session(session))) {
@@ -284,49 +293,61 @@ int ObMPStmtPrexecute::before_process()
             if (OB_FAIL(request_params(session, pos, ps_stmt_checksum, *allocator_, params_num_))) {
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
-              ObMySQLUtil::get_uint4(pos, exec_mode_);
-              //
-              // is_commit_on_success_ is not use yet
-              // other exec_mode set use ==
-              is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
-              exec_mode_ = exec_mode_ & (0xffffffff - OB_OCI_COMMIT_ON_SUCCESS);
-              if (OB_OCI_BATCH_ERRORS == exec_mode_ && !is_pl_stmt(stmt_type_)) {
-                set_save_exception(true);
-              }
-              if (OB_SUCC(ret)) {
-                ObMySQLUtil::get_uint4(pos, close_stmt_count_);
-                int tmp_ret = OB_SUCCESS;
-                if (0 != close_stmt_count_) {
-                  LOG_INFO("close stmt count:", K(close_stmt_count_), K(stmt_id_));
-                  // OCI not support close_stmt_count_ is not 0 yet.
-                  // for (int64_t i = 0; i < close_stmt_count_; i++) {
-                  //   int32_t close_stmt_id = -1;
-                  //   ObMySQLUtil::get_int4(pos, close_stmt_id);
-                  //   if (OB_NOT_NULL(session->get_cursor(close_stmt_id))) {
-                  //     if (OB_FAIL(session->close_cursor(close_stmt_id))) {
-                  //       tmp_ret = ret;
-                  //       LOG_WARN("fail to close cursor", K(ret), K(stmt_id_), K(close_stmt_id), K(session->get_sessid()));
-                  //     }
-                  //   }
-                  //   if (OB_FAIL(session->close_ps_stmt(close_stmt_id))) {
-                  //     LOG_WARN("close ps stmt fail in prepare-execute.", K(stmt_id_), K(close_stmt_id));
-                  //   }
-                  //   if (OB_SUCCESS != tmp_ret) {
-                  //     ret = tmp_ret;
-                  //   }
-                  // }
+              PS_DEFENSE_CHECK(4) // exec_mode
+              {
+                ObMySQLUtil::get_uint4(pos, exec_mode_);
+                //
+                // is_commit_on_success_ is not use yet
+                // other exec_mode set use ==
+                is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
+                exec_mode_ = exec_mode_ & (0xffffffff - OB_OCI_COMMIT_ON_SUCCESS);
+                if (OB_OCI_BATCH_ERRORS == exec_mode_ && !is_pl_stmt(stmt_type_)) {
+                  set_save_exception(true);
                 }
               }
               if (OB_SUCC(ret)) {
-                ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
-                if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum
-                      || (OB_NOT_NULL(ps_session_info)
-                          && ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum())) {
-                    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-                    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
-                                                    K(ps_stmt_checksum), K(*ps_session_info));
-                } else {
-                    ObMySQLUtil::get_uint4(pos, extend_flag_);
+                PS_DEFENSE_CHECK(4) // close stmt count
+                {
+                  ObMySQLUtil::get_uint4(pos, close_stmt_count_);
+                  int tmp_ret = OB_SUCCESS;
+                  if (0 != close_stmt_count_) {
+                    LOG_INFO("close stmt count:", K(close_stmt_count_), K(stmt_id_));
+                    // OCI not support close_stmt_count_ is not 0 yet.
+                    // for (int64_t i = 0; i < close_stmt_count_; i++) {
+                    //   int32_t close_stmt_id = -1;
+                    //   ObMySQLUtil::get_int4(pos, close_stmt_id);
+                    //   if (OB_NOT_NULL(session->get_cursor(close_stmt_id))) {
+                    //     if (OB_FAIL(session->close_cursor(close_stmt_id))) {
+                    //       tmp_ret = ret;
+                    //       LOG_WARN("fail to close cursor", K(ret), K(stmt_id_), K(close_stmt_id), K(session->get_sessid()));
+                    //     }
+                    //   }
+                    //   if (OB_FAIL(session->close_ps_stmt(close_stmt_id))) {
+                    //     LOG_WARN("close ps stmt fail in prepare-execute.", K(stmt_id_), K(close_stmt_id));
+                    //   }
+                    //   if (OB_SUCCESS != tmp_ret) {
+                    //     ret = tmp_ret;
+                    //   }
+                    // }
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                PS_DEFENSE_CHECK(4) // checksum
+                {
+                  ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
+                  if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum
+                        || (OB_NOT_NULL(ps_session_info)
+                            && ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum())) {
+                      ret = OB_ERR_PREPARE_STMT_CHECKSUM;
+                      LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
+                                                      K(ps_stmt_checksum), K(*ps_session_info));
+                  } else {
+                    PS_DEFENSE_CHECK(4) // extend_flag
+                    {
+                      ObMySQLUtil::get_uint4(pos, extend_flag_);
+                    }
+                  }
                 }
               }
               if (OB_FAIL(ret)) {

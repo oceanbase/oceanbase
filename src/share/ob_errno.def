@@ -1965,10 +1965,9 @@ DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process sessio
 DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
 DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
 DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
+DEFINE_ERROR(OB_LS_RESTORE_FAILED, -9094, -1, "HY000", "Restore log stream failed");
+DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backup");
 // end of backup and restore error codes 9001 ~ 9099
-
-DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
-DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~
@@ -2238,6 +2237,7 @@ DEFINE_ERROR_EXT(OB_ERR_SP_NO_DROP_SP, -9743, ER_SP_NO_DROP_SP, "HY000", "Can't 
 DEFINE_ORACLE_ERROR(OB_ERR_RECOMPILATION_OBJECT, -9744, -1, "HY000", "errors during recompilation/revalidation of object", 4045, "errors during recompilation/revalidation of %.*s.%.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_VARIABLE_NOT_IN_SELECT_LIST, -9745, -1, "HY000", "variable not in select list", 1007, "variable not in select list");
 DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into multiple record targets not supported", 494, "coercion into multiple record targets not supported");
+DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

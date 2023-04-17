@@ -815,6 +815,8 @@ bool SingleColumnValueFilter::filter_column_value(const ObHTableCell &cell)
 
 bool SingleColumnValueFilter::filter_row()
 {
+  // If column was found, return false if it was matched, true if it was not
+  // If column not found, return true if we filter if missing, false if not
   LOG_DEBUG("[yzfdebug] filter row", K_(found_column), K_(matched_column), K_(filter_if_missing));
   return found_column_ ? (!matched_column_) : (filter_if_missing_);
 }

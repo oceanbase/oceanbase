@@ -1448,6 +1448,8 @@ constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
 constexpr int OB_ALREADY_IN_ARCHIVE_MODE = -9091;
 constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
 constexpr int OB_RESTORE_LOG_TO_END = -9093;
+constexpr int OB_LS_RESTORE_FAILED = -9094;
+constexpr int OB_NO_TABLET_NEED_BACKUP = -9095;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -1698,6 +1700,7 @@ constexpr int OB_ERR_SP_NO_DROP_SP = -9743;
 constexpr int OB_ERR_RECOMPILATION_OBJECT = -9744;
 constexpr int OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = -9745;
 constexpr int OB_ERR_MULTI_RECORD = -9746;
+constexpr int OB_ERR_MALFORMED_PS_PACKET = -9747;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3488,6 +3491,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
 #define OB_RESTORE_LOG_TO_END__USER_ERROR_MSG "Restore log to end"
+#define OB_LS_RESTORE_FAILED__USER_ERROR_MSG "Restore log stream failed"
+#define OB_NO_TABLET_NEED_BACKUP__USER_ERROR_MSG "No tablet need backup"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -3739,6 +3744,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RECOMPILATION_OBJECT__USER_ERROR_MSG "errors during recompilation/revalidation of object"
 #define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
 #define OB_ERR_MULTI_RECORD__USER_ERROR_MSG "coercion into multiple record targets not supported"
+#define OB_ERR_MALFORMED_PS_PACKET__USER_ERROR_MSG "malformed ps packet"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5529,6 +5535,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
 #define OB_RESTORE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9093, Restore log to end"
+#define OB_LS_RESTORE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9094, Restore log stream failed"
+#define OB_NO_TABLET_NEED_BACKUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9095, No tablet need backup"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
@@ -5780,6 +5788,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RECOMPILATION_OBJECT__ORA_USER_ERROR_MSG "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s"
 #define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
 #define OB_ERR_MULTI_RECORD__ORA_USER_ERROR_MSG "ORA-00494: coercion into multiple record targets not supported"
+#define OB_ERR_MALFORMED_PS_PACKET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9747, malformed ps packet"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5790,7 +5799,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2037];
+extern int g_all_ob_errnos[2040];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

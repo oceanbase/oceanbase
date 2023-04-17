@@ -6587,7 +6587,6 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
         } else {
           // reset search_state
           search_state.depth_ = copy_depth;
-          search_state.max_exist_index_ = copy_max_exist_index;
           search_state.produce_range_ = copy_produce_range;
         }
       } else if (copy_produce_range) {

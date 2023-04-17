@@ -640,7 +640,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
         ObIColumnEncoder *e = encoders_.at(idx);
         pe.type_ = static_cast<ObColumnHeader::Type>(e->get_column_header().type_);
         if (ObColumnHeader::is_inter_column_encoder(pe.type_)) {
-          pe.ref_col_idx_ = static_cast<ObColumnEqualEncoder *>(e)->get_ref_col_idx();
+          pe.ref_col_idx_ = static_cast<ObSpanColumnEncoder *>(e)->get_ref_col_idx();
         } else {
           pe.ref_col_idx_ = 0;
         }

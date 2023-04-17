@@ -105,7 +105,7 @@ public:
   void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
             ObObjPrintParams print_params, const ParamStore *param_store = NULL);
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
-  int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false);
+  int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
 private:
   int print(ObRawExpr *expr);
@@ -161,6 +161,7 @@ private:
   ObObjPrintParams print_params_;
   const ParamStore *param_store_;
   ObSchemaGetterGuard *schema_guard_;
+  bool print_cte_;
 };
 
 } // end namespace sql

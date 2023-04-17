@@ -25,7 +25,7 @@ namespace compaction
 class ObMediumCompactionScheduleFunc
 {
 public:
-  ObMediumCompactionScheduleFunc(ObLS &ls, ObTablet &tablet)
+  ObMediumCompactionScheduleFunc(ObLS &ls, ObTablet *tablet)
     : allocator_("MediumSchedule"),
       ls_(ls),
       tablet_(tablet),
@@ -141,7 +141,7 @@ protected:
 private:
   ObArenaAllocator allocator_;
   ObLS &ls_;
-  ObTablet &tablet_;
+  ObTablet *tablet_;
   bool filters_inited_;
   share::ObTabletReplicaFilterHolder filters_;
 };

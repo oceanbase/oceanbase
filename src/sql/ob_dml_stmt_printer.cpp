@@ -34,6 +34,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     pos_(pos),
     stmt_(stmt),
     is_root_(false),
+    print_cte_(false),
     schema_guard_(schema_guard),
     print_params_(print_params),
     expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store),
@@ -51,10 +52,7 @@ void ObDMLStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt 
   buf_len_ = buf_len;
   pos_ = pos;
   stmt_ = stmt;
-  print_params_.print_with_cte_ = true; // default true
-  // force print with cte regardless of the value of print_with_cte_
-  // this flag is not final solution, will be optimized later
-  print_params_.force_print_cte_ = false;
+  print_cte_ = false;
 }
 
 int ObDMLStmtPrinter::print_hint()
@@ -1310,8 +1308,8 @@ int ObDMLStmtPrinter::print_subquery(const ObSelectStmt *subselect_stmt,
                               schema_guard_,
                               print_params_,
                               subquery_print_params & FORCE_COL_ALIAS);
-  if (!(subquery_print_params & PRINT_CTE)){
-    printer.disable_print_cte();
+  if (subquery_print_params & PRINT_CTE) {
+    printer.enable_print_temp_table_as_cte();
   }
   if (subquery_print_params & PRINT_BRACKET) {
     DATA_PRINTF("(");
@@ -1325,12 +1323,17 @@ int ObDMLStmtPrinter::print_subquery(const ObSelectStmt *subselect_stmt,
   return ret;
 }
 
-int ObDMLStmtPrinter::print_cte_define()
+int ObDMLStmtPrinter::print_temp_table_as_cte()
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
   if (print_params_.print_origin_stmt_) {
     //do nothing
+  } else if (!print_cte_) {
+    //do nothing
+  } else if (print_params_.for_dblink_) {
+    // always print temp table as generated table
+    // do nothing
   } else if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));

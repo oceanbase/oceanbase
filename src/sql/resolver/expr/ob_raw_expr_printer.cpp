@@ -34,7 +34,8 @@ ObRawExprPrinter::ObRawExprPrinter()
       only_column_namespace_(false),
       tz_info_(NULL),
       param_store_(NULL),
-      schema_guard_(NULL)
+      schema_guard_(NULL),
+      print_cte_(false)
 {
 }
 
@@ -48,7 +49,8 @@ ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObS
       tz_info_(NULL),
       print_params_(print_params),
       param_store_(param_store),
-      schema_guard_(schema_guard)
+      schema_guard_(schema_guard),
+      print_cte_(false)
 {
 }
 
@@ -68,7 +70,7 @@ void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGe
   param_store_ = param_store;
 }
 
-int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace)
+int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace, bool print_cte)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -77,6 +79,7 @@ int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_col
   } else {
     scope_ = scope;
     only_column_namespace_ = only_column_namespace;
+    print_cte_ = print_cte;
     PRINT_EXPR(expr);
   }
   return ret;
@@ -317,7 +320,9 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            static_cast<ObSelectStmt*>(stmt),
                                            schema_guard_,
                                            print_params_);
-          stmt_printer.disable_print_cte();
+          if (print_cte_) {
+            stmt_printer.enable_print_temp_table_as_cte();
+          }
           if (OB_FAIL(stmt_printer.do_print())) {
             LOG_WARN("fail to print ref query", K(ret));
           }

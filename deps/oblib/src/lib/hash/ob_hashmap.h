@@ -147,11 +147,13 @@ public:
   int destroy()
   {
     int ret = ht_.destroy();
+    allocer_.clear();
     return ret;
   };
   int clear()
   {
     int ret = ht_.clear();
+    //allocer_.clear();
     return ret;
   };
   int reuse()
