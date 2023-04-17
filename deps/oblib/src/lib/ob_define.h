@@ -791,7 +791,8 @@ const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";
 
 const double TENANT_RESERVE_MEM_RATIO = 0.1;
-const int64_t LEAST_MEMORY_SIZE = 2L << 30;
+const int64_t LEAST_MEMORY_SIZE = 1L << 30;
+const int64_t LEAST_MEMORY_SIZE_FOR_NORMAL_MODE = 2L << 30;
 const int64_t SYS_MAX_ALLOCATE_MEMORY = 1L << 34;
 
 // mem factor

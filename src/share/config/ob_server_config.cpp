@@ -21,6 +21,7 @@
 #include "lib/net/ob_net_util.h"
 #include "common/ob_record_header.h"
 #include "common/ob_zone.h"
+#include "observer/ob_server.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/unit/ob_unit_resource.h"     // ObUnitResource
@@ -215,15 +216,26 @@ ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
 int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
 {
   int ret = OB_SUCCESS;
+  const bool is_arbitration_mode = OBSERVER.is_arbitration_mode();
   int64_t memory_limit = server_config.memory_limit;
   if (0 == memory_limit) {
     memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
   }
   int64_t system_memory = server_config.system_memory;
+  bool is_valid_config = true;
   if (0 == system_memory) {
     int64_t memory_limit_g = memory_limit >> 30;
-    if (memory_limit_g < 4) {
-      LOG_ERROR("memory_limit with unexpected value", K(memory_limit));
+    if (memory_limit_g < 1) {
+      // memory_limit should not be less than 1G for arbitration mode
+      is_valid_config = false;
+      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+    } else if (is_arbitration_mode) {
+      // keep system_memory = 0 for arbitration mode
+    } else if (memory_limit_g < 4) {
+      // memory_limit should not be less than 4G for non arbitration mode
+      is_valid_config = false;
+      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
     } else if (memory_limit_g <= 8) {
       system_memory = 2LL << 30;
     } else if (memory_limit_g <= 16) {
@@ -238,7 +250,8 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
       system_memory = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
     }
   }
-  if (memory_limit > system_memory) {
+  if (!is_valid_config) {
+  } else if (memory_limit > system_memory) {
     memory_limit_ = memory_limit;
     system_memory_ = system_memory;
     LOG_INFO("update memory_limit or system_memory success",
