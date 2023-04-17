@@ -417,6 +417,9 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt* source
         LOG_WARN("failed to remove duplicated agg expr", K(ret));
       } else if (OB_FAIL(source_stmt->add_select_item(*miss_select_items.at(i)))) {
         LOG_WARN("failed to add select item", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(
+                     miss_select_items.at(i)->expr_, source_stmt->get_subquery_exprs()))) {
+        LOG_WARN("failed to extract query ref exprs", K(ret));
       } else { /*do nothing*/
       }
     }
