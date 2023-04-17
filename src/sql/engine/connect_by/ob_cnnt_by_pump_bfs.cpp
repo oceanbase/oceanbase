@@ -408,6 +408,10 @@ int ObConnectByOpBFSPump::get_next_row(
         ret = OB_ERR_CBY_LOOP;
         LOG_WARN("there is a cycle", K(ret));
       }
+      if (pump_node.path_node_.prior_exprs_result_ != NULL) {
+        allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pump_node.path_node_.prior_exprs_result_));
+        pump_node.path_node_.prior_exprs_result_ = NULL;
+      }
     } else {
       next_row_found = true;
     }
