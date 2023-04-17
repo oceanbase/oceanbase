@@ -2064,7 +2064,7 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
       // todo: dependency on udt functions
       ObSchemaObjVersion obj_version;
       obj_version.object_id_ = schema_routine_info->get_routine_id();
-      obj_version.object_type_ = DEPENDENCY_PROCEDURE;
+      obj_version.object_type_ = is_procedure(routine_type) ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION;
       obj_version.version_ = schema_routine_info->get_schema_version();
       if (OB_FAIL(add_dependency_object(obj_version))) {
         LOG_WARN("add dependency object failed", "package_id", schema_routine_info->get_package_id(), K(ret));

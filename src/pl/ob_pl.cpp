@@ -3184,68 +3184,84 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
   return ret;
 }
 
-int ObPLExecState::check_pl_udt_priv(
+int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
+                                          const uint64_t tenant_id,
+                                          const uint64_t user_id,
+                                          const ObSchemaObjVersion &schema_obj,
+                                          const ObIArray<uint64_t> &role_id_array)
+{
+  int ret = OB_SUCCESS;
+  uint64_t db_id = 0;
+  const ObUDTTypeInfo *udt_info = NULL;
+  const ObRoutineInfo *routine_info = NULL;
+  const ObUserInfo *user_info = NULL;
+  uint64_t obj_tenant_id = tenant_id;
+  const uint64_t fetch_tenant_id = get_tenant_id_by_object_id(schema_obj.get_object_id());
+  ObSchemaType schema_type = schema_obj.get_schema_type();
+  ObObjectType object_type = ObObjectType::INVALID;
+
+  if (UDT_SCHEMA == schema_type) {
+    OZ (guard.get_udt_info(fetch_tenant_id, schema_obj.get_object_id(), udt_info));
+    OX (object_type = ObObjectType::TYPE);
+    if (OB_NOT_NULL(udt_info)) {
+      OX (db_id = udt_info->get_database_id());
+      OX (obj_tenant_id = udt_info->get_tenant_id());
+    }
+  } else if (ROUTINE_SCHEMA == schema_type) {
+    OZ (guard.get_routine_info(fetch_tenant_id, schema_obj.get_object_id(), routine_info));
+    OX (object_type =
+         DEPENDENCY_PROCEDURE == schema_obj.object_type_ ?
+         ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
+    if (OB_NOT_NULL(routine_info)) {
+      OX (db_id = routine_info->get_database_id());
+      OX (obj_tenant_id = routine_info->get_tenant_id());
+    }
+  }
+
+  if (OB_SUCC(ret) && (OB_NOT_NULL(udt_info) || OB_NOT_NULL(routine_info))) {
+    const ObDatabaseSchema *db_schema = NULL;
+    common::ObString database_name = OB_SYS_DATABASE_NAME;
+    uint64_t obj_owner_id = OB_SYS_USER_ID;
+    if (OB_SYS_TENANT_ID != obj_tenant_id) {
+      OZ (guard.get_database_schema(tenant_id, db_id, db_schema));
+      CK (db_schema != NULL);
+      OX(database_name = db_schema->get_database_name());
+      OZ (guard.get_user_info(tenant_id,
+                              database_name,
+                              OB_DEFAULT_HOST_NAME,
+                              user_info));
+      CK (user_info != NULL);
+      OX (obj_owner_id = user_info->get_user_id());
+    }
+    OZ (ObOraSysChecker::check_ora_obj_priv(guard,
+                        obj_tenant_id,
+                        user_id,
+                        database_name,
+                        schema_obj.get_object_id(),
+                        OBJ_LEVEL_FOR_TAB_PRIV,
+                        static_cast<uint64_t>(object_type),
+                        OBJ_PRIV_ID_EXECUTE,
+                        CHECK_FLAG_NORMAL,
+                        obj_owner_id,
+                        role_id_array));
+    if (ROUTINE_SCHEMA == schema_type && ret == OB_TABLE_NOT_EXIST) {
+      ret = OB_WRONG_COLUMN_NAME;
+    }
+  }
+  return ret;
+}
+
+int ObPLExecState::check_pl_priv(
     ObSchemaGetterGuard &guard,
     const uint64_t tenant_id,
     const uint64_t user_id,
     const DependenyTableStore &dep_obj)
 {
-  //const uint64_t obj_id,
-  //const uint64_t obj_type,
-  //const ObRawObjPriv raw_obj_priv
   int ret = OB_SUCCESS;
-  uint64_t db_id = 0;
   for (int64_t i = 0; i < dep_obj.count() && OB_SUCC(ret); i++) {
     const ObSchemaObjVersion &schema_obj = dep_obj.at(i);
-    if (UDT_SCHEMA == schema_obj.get_schema_type()) {
-      const ObUDTTypeInfo *udt_info = NULL;
-      const ObDatabaseSchema *db_schema = NULL;
-      const ObUserInfo *user_info = NULL;
-      ObString host_name(OB_DEFAULT_HOST_NAME);
-      const uint64_t fetch_tenant_id = get_tenant_id_by_object_id(schema_obj.get_object_id());
-      OZ (guard.get_udt_info(fetch_tenant_id, schema_obj.get_object_id(), udt_info));
-      if (OB_SUCC(ret) && udt_info != NULL) {
-        if (OB_SYS_TENANT_ID == udt_info->get_tenant_id()) {
-          CK (ctx_.exec_ctx_ != NULL);
-          CK (ctx_.exec_ctx_->get_my_session() != NULL);
-          OZ (ObOraSysChecker::check_ora_obj_priv(guard,
-                              OB_SYS_TENANT_ID,
-                              user_id,
-                              OB_SYS_DATABASE_NAME,
-                              schema_obj.get_object_id(),
-                              OBJ_LEVEL_FOR_TAB_PRIV,
-                              static_cast<uint64_t>(ObObjectType::TYPE),
-                              OBJ_PRIV_ID_EXECUTE,
-                              CHECK_FLAG_NORMAL,
-                              OB_SYS_USER_ID,
-                              ctx_.exec_ctx_->get_my_session()->get_enable_role_array()));
-        } else {
-          OX (db_id = udt_info->get_database_id());
-          OZ (guard.get_database_schema(tenant_id,
-                                        db_id,
-                                        db_schema));
-          CK (db_schema != NULL);
-          OZ (guard.get_user_info(tenant_id,
-                                  db_schema->get_database_name(),
-                                  host_name,
-                                  user_info));
-          CK (user_info != NULL);
-          CK (ctx_.exec_ctx_ != NULL);
-          CK (ctx_.exec_ctx_->get_my_session() != NULL);
-          OZ (ObOraSysChecker::check_ora_obj_priv(guard,
-                                tenant_id,
-                                user_id,
-                                db_schema->get_database_name(),
-                                schema_obj.get_object_id(),
-                                OBJ_LEVEL_FOR_TAB_PRIV,
-                                static_cast<uint64_t>(ObObjectType::TYPE),
-                                OBJ_PRIV_ID_EXECUTE,
-                                CHECK_FLAG_NORMAL,
-                                user_info->get_user_id(),
-                                ctx_.exec_ctx_->get_my_session()->get_enable_role_array()));
-        }
-      }
-    }
+    OZ(check_pl_execute_priv(guard, tenant_id, user_id, schema_obj,
+                             ctx_.exec_ctx_->get_my_session()->get_enable_role_array()));
   }
     // check func self priv
   return ret;
@@ -3271,7 +3287,7 @@ int ObPLExecState::execute()
         ctx_.exec_ctx_->get_sql_ctx()->schema_guard_ != NULL) {
       uint64_t user_id = ctx_.exec_ctx_->get_my_session()->get_priv_user_id();
       if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-        OZ (check_pl_udt_priv(*ctx_.exec_ctx_->get_sql_ctx()->schema_guard_,
+        OZ (check_pl_priv(*ctx_.exec_ctx_->get_sql_ctx()->schema_guard_,
                             ctx_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
                             user_id,
                             func_.get_dependency_table()));

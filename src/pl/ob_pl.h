@@ -838,7 +838,12 @@ public:
   int get_var(int64_t var_idx, ObObjParam& result);
   int set_var(int64_t var_idx, const ObObjParam& value);
   ObPLExecCtx& get_exec_ctx() { return ctx_; }
-  int check_pl_udt_priv(share::schema::ObSchemaGetterGuard &guard,
+  int check_pl_execute_priv(ObSchemaGetterGuard &guard,
+                                          const uint64_t tenant_id,
+                                          const uint64_t user_id,
+                                          const ObSchemaObjVersion &schema_obj,
+                                          const ObIArray<uint64_t> &role_id_array);
+  int check_pl_priv(share::schema::ObSchemaGetterGuard &guard,
                         const uint64_t tenant_id,
                         const uint64_t user_id,
                         const sql::DependenyTableStore &dep_obj);
