@@ -108,7 +108,7 @@ int ObMigrateUnitFinishChecker::check()
   }
   // check unit not in tenant
   if (OB_SUCCESS != (tmp_ret = try_check_migrate_unit_finish_not_in_tenant())) {
-    LOG_WARN("fail to try check migrate unit finish not in locality", KR(tmp_ret));
+    LOG_WARN("fail to try check migrate unit finish not in tenant", KR(tmp_ret));
   }
   return ret;
 }
