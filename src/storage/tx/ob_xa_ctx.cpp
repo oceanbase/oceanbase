@@ -2785,9 +2785,6 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
                   affected_rows)) || 0 == affected_rows) {
             TRANS_LOG(WARN, "fail to update xa trans record", K(ret), K(xid), K(coord),
                 K(affected_rows), K(*this));
-          } else if (OB_FAIL(MTL(ObXAService*)->insert_xa_pending_record(tenant_id_, xid, trans_id_,
-                  coord, original_sche_addr_))) {
-            TRANS_LOG(WARN, "fail to insert xa trans record", K(ret), K(xid), K(coord), K(*this));
           } else if (OB_FAIL(drive_prepare_(xid, timeout_us))) {
             // TODO, sche ctx should provide interfaces to drive xa prepare,
             TRANS_LOG(WARN, "drive prepare failed", K(ret), K(*this));
