@@ -1,56 +1,122 @@
-# What is OceanBase Database
+<p align="center">
+    <a href="https://github.com/oceanbase/oceanbase">
+        <img alt="OceanBase Logo" src="docs/Oceanbase-LogoRGB.svg" width="50%" />
+    </a>
+</p>
+<p align="center">
+    <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
+        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/releases">
+        <img alt="license" src="https://img.shields.io/badge/dynamic/json?color=blue&label=release&query=tag_name&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase%2Freleases%2Flatest" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase">
+        <img alt="stars" src="https://img.shields.io/badge/dynamic/json?color=blue&label=stars&query=stargazers_count&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase">
+        <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
+    </a>
+    <a href="https://en.oceanbase.com/docs/community-observer-en-10000000000829617">
+        <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
+    </a>
+    <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
+        <img alt="Chinese doc" src="https://img.shields.io/badge/文档-简体中文-blue" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/commits/master">
+        <img alt="last commit" src="https://img.shields.io/github/last-commit/oceanbase/oceanbase/master" />
+    </a>
+    <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
+        <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
+    </a>
+</p>
 
-OceanBase Database is a native distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
+**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
-## Core features
+# Key features
+* Transparent Scalability
+* Ultra-fast Performance
+* Real-time Operational Analytics
+* Continuous Availability
+* MySQL Compatible
+* Cost Effeciency
 
-- Scalable OLTP
-   - Linear scalability by adding nodes to the cluster
-   - Partition-level leader distribution and transparent data shuffling
-   - Optimized performance for distributed transaction through "table group" technology
-   - High concurrency updates on hot row through early lock release (ELR)
-   - 80000+ connections per node and unlimited connections in one instance through multi threads and coroutines
-   - Prevent silent data corruption (SDC) through multidimensional data consistency checksum
-   - No.1 in TPC-C benchmark with 707 million tpmC
-- Operational OLAP
-   - Process analytical tasks in one engine, no need to migrate data to OLAP engine
-   - Analyze large amounts of data on multiple nodes in one OceanBase cluster with MPP architecture
-   - Advanced SQL engine with CBO optimizer, distributed execution scheduler and global index
-   - Fast data loading through parallel DML, and with only 50% storage cost under compression
-   - Broke world record with 15.26 million QphH in TPC-H 30TB benchmark in 2021
-- Multi-tenant
-   - Create multiple tenants (instances) in one OceanBase cluster with isolated resource and access
-   - Multidimensional and transparently scale up/out for each tenant, and scaling up takes effect immediately
-   - Database consolidation: multi-tenant and flexible scaling can achieve resource pooling and improve utilization
-   - Improve management efficiency and reduce costs without compromising performance and availability
+See [key features](https://en.oceanbase.com/product/opensource) to learn more details.
 
-## Quick start
-
-See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Database.
-
-## System architecture
+# System architecture
+The operation of an OceanBase Database is supported by different components in the storage, replication, transaction, SQL, and access layers:
+* **Storage layer**: Stores the data of a table or a table partition.
+* **Replication layer**: Ensures data consistency between replicas of a partition based on consensus algorithms.
+* **Transaction layer**: Ensures the atomicity and isolation of the modifications to one or multiple partitions.
+* **SQL layer**: Translates SQL queries into executions over the storage.
+* **Access layer**: Forwards user queries to the appropriate OceanBase Database instances for processing.
 
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
 
-## Roadmap
+[Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
+# Quick start
 
+## How to deploy
+
+### 🔥 Deploy by all-in-one
+
+You can quickly deploy a standalone OceanBase Database to experience with the following commands.
+
+```shell
+# download and install all-in-one package (internet connection is required)
+$> bash -c "$(curl -s https://obbusiness-private.oss-cn-shanghai.aliyuncs.com/download-center/opensource/oceanbase-all-in-one/installer.sh)"
+$> source ~/.oceanbase-all-in-one/bin/env.sh
+
+# quickly deploy OceanBase database
+$> obd demo
+```
+### 🐳 Deploy by docker
+
+1. Pull OceanBase image (optional)
+```shell
+$> docker pull oceanbase/oceanbase-ce
+```
+2. Start an OceanBase Database instance
+```shell
+# Deploy an instance with the maximum specifications supported by the container.
+$> docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
+# Or deploy a mini standalone instance.
+$> docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+```
+3. Connect to the OceanBase Database instance
+```shell
+$> docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
+$> docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
+$> docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
+```
+
+See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850) for more details.
+
+## How to build
+
+See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a munually compiled observer.
+
+# Roadmap
+
+See [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects).
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
 
-## Case study
+# Case study
 
-For our success stories, see [Success stories](https://www.oceanbase.com/en/customer/home).
+See [success stories](https://en.oceanbase.com/customer/home).
 
-## Contributing
+# Contributing
 
-Your contributions to our code will be highly appreciated. For details about how to contribute to OceanBase, see [Contribute to OceanBase](https://github.com/oceanbase/oceanbase/wiki/Contribute-to-OceanBase).
+Contributions are highly appreciated. Read the [Contribute to OceanBase](https://github.com/oceanbase/oceanbase/wiki/Contribute-to-OceanBase) guide to getting started.
 
-## Licensing
+# License
 
 OceanBase Database is licensed under the Mulan Public License, Version 2. See the [LICENSE](LICENSE) file for more info.
 
-## Community
+# Community
 
-- [oceanbase.slack](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
-- [Forum (Simplified Chinese)](https://ask.oceanbase.com/)
-- [DingTalk 33254054 (Simplified Chinese)](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding12cfbe0afb058f3cde5ce625ff4abdf6&53108=bb418&cbdbhh=qwertyuiop&origin=1)
-- [WeChat (Simplified Chinese)](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
+Join the OceanBase community via:
+
+* [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
+* [Chinese User Forum](https://ask.oceanbase.com/)
+* DingTalk Group: 33254054 ([QR code](docs/DingTalk.JPG))
+* WeChat Group (Add the assistant with WeChat ID: OBCE666)
