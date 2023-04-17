@@ -76,7 +76,7 @@ int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx, const ObIArray<in
   return ret;
 }
 
-void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx, ObSQLSessionInfo &session_info)
+void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == ctx || !ctx->is_valid())) {
@@ -100,7 +100,7 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx, ObSQLSessionInf
       LOG_WARN("fail to abort peers ctx", KR(ret));
     }
     // 4. abort redef table, release table lock
-    if (OB_FAIL(abort_redef_table(ctx, session_info))) {
+    if (OB_FAIL(abort_redef_table(ctx))) {
       LOG_WARN("fail to abort redef table", KR(ret));
     }
   }
@@ -161,13 +161,13 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
   return ret;
 }
 
-int ObTableLoadCoordinator::abort_redef_table(ObTableLoadTableCtx *ctx, ObSQLSessionInfo &session_info)
+int ObTableLoadCoordinator::abort_redef_table(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObTableLoadRedefTableAbortArg arg;
   arg.tenant_id_ = ctx->param_.tenant_id_;
   arg.task_id_ = ctx->ddl_param_.task_id_;
-  if (OB_FAIL(ObTableLoadRedefTable::abort(arg, session_info))) {
+  if (OB_FAIL(ObTableLoadRedefTable::abort(arg, *ctx->session_info_))) {
     LOG_WARN("fail to abort redef table", KR(ret), K(arg));
   }
   return ret;
@@ -230,6 +230,7 @@ int ObTableLoadCoordinator::pre_begin_peers()
     request.schema_version_ = ctx_->ddl_param_.schema_version_;
     request.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
     request.data_version_ = ctx_->ddl_param_.data_version_;
+    request.session_info_ = ctx_->session_info_;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info = target_all_leader_info_array.at(i);
@@ -630,7 +631,7 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
   return ret;
 }
 
-int ObTableLoadCoordinator::commit_redef_table(ObSQLSessionInfo &session_info)
+int ObTableLoadCoordinator::commit_redef_table()
 {
   int ret = OB_SUCCESS;
   ObTableLoadRedefTableFinishArg arg;
@@ -639,7 +640,7 @@ int ObTableLoadCoordinator::commit_redef_table(ObSQLSessionInfo &session_info)
   arg.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
   arg.task_id_ = ctx_->ddl_param_.task_id_;
   arg.schema_version_ = ctx_->ddl_param_.schema_version_;
-  if (OB_FAIL(ObTableLoadRedefTable::finish(arg, session_info))) {
+  if (OB_FAIL(ObTableLoadRedefTable::finish(arg, *ctx_->session_info_))) {
     LOG_WARN("fail to finish redef table", KR(ret), K(arg));
   }
   return ret;
@@ -647,7 +648,7 @@ int ObTableLoadCoordinator::commit_redef_table(ObSQLSessionInfo &session_info)
 
 // commit() = px_commit_data() + px_commit_ddl()
 // used in non px_mode
-int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx, ObSQLSessionInfo &session_info,
+int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx,
                                    ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
@@ -665,7 +666,7 @@ int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx, ObSQLSessionInfo &se
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(drive_sql_stat(*exec_ctx, sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
-    } else if (OB_FAIL(commit_redef_table(session_info))) {
+    } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
@@ -701,7 +702,7 @@ int ObTableLoadCoordinator::px_commit_data(ObExecContext *exec_ctx)
 }
 
 // commit ddl procedure
-int ObTableLoadCoordinator::px_commit_ddl(ObSQLSessionInfo &session_info)
+int ObTableLoadCoordinator::px_commit_ddl()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -712,7 +713,7 @@ int ObTableLoadCoordinator::px_commit_ddl(ObSQLSessionInfo &session_info)
     obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
     if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_redef_table(session_info))) {
+    } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));

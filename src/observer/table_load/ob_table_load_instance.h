@@ -39,7 +39,8 @@ public:
     ATOMIC_AAF(&job_stat_->parsed_bytes_, parsed_bytes);
   }
 private:
-  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
+  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
+                       sql::ObSQLSessionInfo *session_info);
   int begin();
   int start_trans();
   int check_trans_committed();
@@ -61,7 +62,6 @@ private:
   static const int64_t DEFAULT_SEGMENT_ID = 1;
   ObTableLoadExecCtx *execute_ctx_;
   common::ObIAllocator *allocator_;
-  sql::ObSQLSessionInfo *session_info_;
   ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
   TransCtx trans_ctx_;
