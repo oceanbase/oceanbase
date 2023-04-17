@@ -20,6 +20,7 @@ namespace lib
 {
 struct ObRunningModeConfig
 {
+  static const int64_t MIN_MEM;
   static const int64_t MINI_MEM_LOWER;
   static const int64_t MINI_MEM_UPPER;
   bool mini_mode_ = false;

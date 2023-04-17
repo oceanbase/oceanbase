@@ -77,7 +77,7 @@ DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "16384", "[1024,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 _DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PARAMETER, "0",
         common::ObConfigMemoryLimitChecker, "[0M,)",
-        "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [4G,).",
+        "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [1G,).",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
         "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
@@ -976,8 +976,8 @@ DEF_INT(module_test_trx_memory_errsim_percentage, OB_CLUSTER_PARAMETER, "0", "[0
 DEF_CAP(sql_work_area, OB_TENANT_PARAMETER, "1G", "[10M,)",
         "Work area memory limitation for tenant",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_CAP(__easy_memory_limit, OB_CLUSTER_PARAMETER, "4G", "[1G,)",
-        "max memory size which can be used by libeasy. The default value is 4G. Range: [1G,)",
+DEF_CAP(__easy_memory_limit, OB_CLUSTER_PARAMETER, "4G", "[256M,)",
+        "max memory size which can be used by libeasy. The default value is 4G. Range: [256M,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(stack_size, OB_CLUSTER_PARAMETER, "512K", "[512K, 20M]",
         "the size of routine execution stack"
