@@ -35,7 +35,8 @@ ObNLConnectByWithIndexOp::ObNLConnectByWithIndexOp(ObExecContext &exec_ctx, cons
     is_cycle_(false),
     is_inited_(false),
     need_return_(false),
-    mem_context_(NULL)
+    mem_context_(NULL),
+    connect_by_root_row_(NULL)
 {
   state_operation_func_[CNTB_STATE_JOIN_END] = &ObNLConnectByWithIndexOp::join_end_operate;
   state_function_func_[CNTB_STATE_JOIN_END][FT_ITER_GOING] = NULL;
@@ -95,6 +96,10 @@ void ObNLConnectByWithIndexOp::reset()
   is_inited_ = false;
   sys_connect_by_path_id_ = INT64_MAX;
   need_return_ = false;
+  if (OB_NOT_NULL(connect_by_root_row_)) {
+    mem_context_->get_malloc_allocator().free(connect_by_root_row_);
+    connect_by_root_row_ = NULL;
+  }
 }
 
 int ObNLConnectByWithIndexOp::inner_open()
@@ -237,6 +242,49 @@ int ObNLConnectByWithIndexOp::restore_prior_expr()
   if (nullptr != root_row_) {
     if (OB_FAIL(root_row_->to_expr(MY_SPEC.left_prior_exprs_, eval_ctx_))) {
       LOG_WARN("failed to to expr from prior row", K(ret));
+    }
+  }
+  return ret;
+}
+
+// with index 场景下无法保证 connect_by_root_exprs_ 依赖的 datum 一只有效，提前缓存。
+int ObNLConnectByWithIndexOp::calc_connect_by_root_exprs(bool is_root)
+{
+  int ret = OB_SUCCESS;
+  const ObNLConnectBySpecBase &spec = static_cast<const ObNLConnectBySpecBase &>(spec_);
+  if (is_root) {
+    if (0 != spec.connect_by_root_exprs_.count()) {
+      ObExpr *expr = nullptr;
+      ObExpr *param = nullptr;
+      ObDatum *datum = nullptr;
+      for (int64_t i = 0; i < spec.connect_by_root_exprs_.count() && OB_SUCC(ret); ++i) {
+        if (OB_ISNULL(expr = spec.connect_by_root_exprs_.at(i))
+            || OB_UNLIKELY(1 != expr->arg_cnt_)
+            || OB_ISNULL(param = expr->args_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid expr", K(ret), K(expr));
+        } else if (OB_FAIL(param->eval(eval_ctx_, datum))) {
+          LOG_WARN("expr eval failed");
+        } else {
+          expr->locate_expr_datum(eval_ctx_) = *datum;
+          expr->set_evaluated_projected(eval_ctx_);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObStoredDatumRow::build(connect_by_root_row_, spec.connect_by_root_exprs_,
+                                            eval_ctx_, mem_context_->get_malloc_allocator()))) {
+          LOG_WARN("failed to build store row", K(ret));
+        }
+      }
+    }
+  } else {
+    if (0 != spec.connect_by_root_exprs_.count()) {
+      if (OB_ISNULL(connect_by_root_row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: connect by root row is null", K(ret));
+      } else if (OB_FAIL(connect_by_root_row_->to_expr(spec.connect_by_root_exprs_, eval_ctx_))) {
+        LOG_WARN("failed to to expr from prior row", K(ret));
+      }
     }
   }
   return ret;
