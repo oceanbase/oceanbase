@@ -1058,7 +1058,7 @@ int ObTabletMergeCtx::get_specified_medium_compaction_info_from_memtable(
   ObArenaAllocator tmp_allocator;
   ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
   ObMediumCompactionInfoList tmp_medium_list;
-  if (OB_FAIL(tablet_handle_.get_obj()->get_table_store().get_memtables(memtables, true/*need_active*/))) {
+  if (OB_FAIL(tablet_handle_.get_obj()->get_memtables(memtables, true/*need_active*/))) {
     LOG_WARN("failed to get memtables", K(ret), K(param_));
   } else if (memtables.empty()) {
     ret = OB_ENTRY_NOT_EXIST;

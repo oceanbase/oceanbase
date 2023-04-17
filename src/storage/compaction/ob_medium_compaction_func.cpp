@@ -532,7 +532,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
     bool use_storage_schema_on_tablet = true;
     if (medium_info.medium_snapshot_ > tablet_.get_snapshot_version()) {
       ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
-      if (OB_FAIL(tablet_.get_table_store().get_memtables(memtables, true/*need_active*/))) {
+      if (OB_FAIL(tablet_.get_memtables(memtables, true/*need_active*/))) {
         LOG_WARN("failed to get memtables", K(ret), KPC(this));
       } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_latest_storage_schema_from_memtable(
           allocator_, memtables, tmp_storage_schema))) {
@@ -933,7 +933,7 @@ int ObMediumCompactionScheduleFunc::get_schedule_medium_from_memtable(
     ObMediumCompactionInfoList tmp_medium_list;
     const int64_t last_major_snapshot = last_major->get_snapshot_version();
     ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
-    if (OB_FAIL(tablet.get_table_store().get_memtables(memtables, true/*need_active*/))) {
+    if (OB_FAIL(tablet.get_memtables(memtables, true/*need_active*/))) {
       LOG_WARN("failed to get memtables", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
     } else if (memtables.empty()) {
       // do nothing
