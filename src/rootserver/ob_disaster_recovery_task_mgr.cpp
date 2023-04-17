@@ -114,13 +114,13 @@ int ObDRTaskQueue::init(
              || (ObDRTaskPriority::LOW_PRI != priority && ObDRTaskPriority::HIGH_PRI != priority)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(bucket_num), KP(rpc_proxy), KP(server_mgr), K(priority));
-  } else if (OB_FAIL(task_map_.create(bucket_num, "DRTaskQ"))) {
+  } else if (OB_FAIL(task_map_.create(bucket_num, "DRTaskMap"))) {
     LOG_WARN("fail to create task map", KR(ret), K(bucket_num));
   } else if (OB_FAIL(task_alloc_.init(
           ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
     LOG_WARN("fail to init task allocator", KR(ret));
   } else {
-    task_alloc_.set_label("DRTaskQ");
+    task_alloc_.set_label("DRTaskAlloc");
     config_ = &config;
     rpc_proxy_ = rpc_proxy;
     server_mgr_ = server_mgr;
@@ -680,6 +680,9 @@ void ObDRTaskMgr::stop()
 {
   loaded_ = false;
   stopped_ = true;
+  for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
+    queues_[i].reuse();
+  }
   ObRsReentrantThread::stop();
   disaster_recovery_task_table_updater_.stop();
   ObThreadCondGuard guard(cond_);
@@ -690,7 +693,7 @@ void ObDRTaskMgr::stop()
 void ObDRTaskMgr::wait()
 {
   ObRsReentrantThread::wait();
-  disaster_recovery_task_table_updater_.wait(); 
+  disaster_recovery_task_table_updater_.wait();
 }
 
 int ObDRTaskMgr::check_inner_stat_() const
@@ -1063,7 +1066,7 @@ int ObDRTaskMgr::load_task_to_schedule_list_()
   } else {
     // clear schedule_list and wait_list in two queues
     for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
-      queues_[i].reset();
+      queues_[i].reuse();
     }
     clear_reach_concurrency_limit();
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); ++i) {

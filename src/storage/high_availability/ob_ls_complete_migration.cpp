@@ -1111,6 +1111,7 @@ int ObStartCompleteMigrationTask::change_member_list_()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
+  DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
   const int64_t start_ts = ObTimeUtility::current_time();
 
   if (!is_inited_) {
