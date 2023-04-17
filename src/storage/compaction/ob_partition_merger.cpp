@@ -1173,6 +1173,11 @@ int ObPartitionMinorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
   return ret;
 }
 
+/*
+ * TODO(@DanLing)
+ * Add mysql test case after column store branch is merged into master,
+ * cause __all_virtual_tablet_stat is on column store.
+ */
 int ObPartitionMinorMerger::collect_merge_stat(
     const ObMergeType &merge_type,
     ObPartitionMinorMergeHelper &merge_helper,
@@ -1181,9 +1186,11 @@ int ObPartitionMinorMerger::collect_merge_stat(
   int ret = OB_SUCCESS;
   ObTransNodeDMLStat tnode_stat;
 
-  if (OB_UNLIKELY(!is_mini_merge(merge_type))) {
+  if (OB_UNLIKELY(!is_mini_merge(merge_type) || !ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(merge_type));
+    LOG_WARN("get invalid argument", K(ret), K(merge_type), K(ctx));
+  } else if (ctx.param_.tablet_id_.is_special_merge_tablet()) {
+    // do nothing
   } else if (OB_FAIL(merge_helper.collect_tnode_dml_stat(merge_type, tnode_stat))) {
     STORAGE_LOG(WARN, "failed to get memtable stat", K(ret));
   } else if (tnode_stat.empty()) {
