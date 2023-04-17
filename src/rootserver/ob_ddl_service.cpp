@@ -11387,6 +11387,11 @@ int ObDDLService::create_tenant(
         ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
         ObRefreshSchemaStatus schema_status(
             new_tenant_id, OB_INVALID_TIMESTAMP, OB_INVALID_VERSION, OB_INVALID_VERSION);
+        if (arg.is_restore_) {
+          schema_status.snapshot_timestamp_ = 0;
+          schema_status.readable_schema_version_ = 0;
+          schema_status.created_schema_version_ = 0;
+        }
         tenant_schema.set_tenant_id(new_tenant_id);
         // The update of __all_core_table must be a single-partition transaction.
         // Failure to create a tenant will result in garbage data, but it will not affect
