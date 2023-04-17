@@ -109,6 +109,47 @@ void ObTxBufferNode::replace_data(const common::ObString &data)
 // ObMulSourceTxDataNotifier
 //#####################################################3
 
+int ObMulSourceTxDataNotifier::notify_table_lock(const ObTxBufferNodeArray &array,
+                                                 const ObMulSourceDataNotifyArg &arg,
+                                                 ObPartTransCtx *part_ctx,
+                                                 int64_t &total_time)
+{
+  int ret = OB_SUCCESS;
+  ObMemtableCtx *mt_ctx = nullptr;
+  ObMulSourceDataNotifyArg tmp_notify_arg = arg;
+  const NotifyType notify_type = NotifyType::TX_END;
+  if (OB_ISNULL(part_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(part_ctx));
+  } else if (OB_ISNULL(mt_ctx = part_ctx->get_memtable_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "memtable ctx should not null", KR(ret), K(part_ctx));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
+      ObTimeGuard notify_time;
+      const ObTxBufferNode &node = array.at(i);
+      const char *buf = node.data_.ptr();
+      const int64_t len = node.data_.length();
+
+      tmp_notify_arg.redo_submitted_ = node.is_submitted();
+      tmp_notify_arg.redo_synced_ = node.is_synced();
+
+      if (ObTxDataSourceType::TABLE_LOCK == node.type_) {
+        if (OB_FAIL(notify_table_lock(notify_type, buf, len, tmp_notify_arg, mt_ctx))) {
+          TRANS_LOG(WARN, "notify table lock failed", KR(ret), K(node));
+        }
+      }
+      if (notify_time.get_diff() > 1 * 1000 * 1000) {
+        TRANS_LOG(INFO, "notify one data source with too much time", K(ret), K(notify_type), K(i), K(node),
+                  K(arg), K(notify_time.get_diff()));
+      }
+      total_time += notify_time.get_diff();
+    }
+  }
+
+  return ret;
+}
+
 int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
                                       const NotifyType notify_type,
                                       const ObMulSourceDataNotifyArg &arg,
