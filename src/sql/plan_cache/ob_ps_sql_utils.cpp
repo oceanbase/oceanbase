@@ -58,8 +58,6 @@ int ObPsSqlParamHelper::find_special_paramalize(const ParseNode &parse_node, int
 //  return bret;
 //}
 
-// TODO: 这里目前比较受限，只能判断是否对整个表达式的子节点是否not param
-// 应该按照ObSqlParameterization::mark_tree()的方式来做
 int ObPsSqlParamHelper::traverse(TraverseContext &ctx, ObIArray<int64_t> &no_check_type_offsets,
     ObBitSet<> &need_check_type_offsets, ObIArray<int64_t> &not_param_offsets)
 {
@@ -133,6 +131,9 @@ int ObPsSqlParamHelper::traverse(TraverseContext &ctx, ObIArray<int64_t> &no_che
         ctx.node_ = parent.children_[i];
         if (OB_FAIL(traverse(ctx, no_check_type_offsets, need_check_type_offsets, not_param_offsets))) {
           LOG_WARN("visit child node failed", K(i));
+        }
+        if (is_set) {
+          ctx.is_child_not_param_ = false;  // unset
         }
       }
       if (ctx.insert_vector_level_ >= INSERT_VALUE_VECTOR_CHILD_LEVEL) {
