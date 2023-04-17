@@ -587,14 +587,14 @@ function main() {
   if [[ -f ${OBD_LOCAL_VERSION_PATH} ]]
   then
     obd_local_version=`cat ${OBD_LOCAL_VERSION_PATH}`
-    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E 'ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+'`
+    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E '^ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+' | head -n1`
     obd_deps_version=${obd_deps_version/-/.}
     if [[ ${obd_local_version} != ${obd_deps_version} ]]
     then
       obd_local_version=`obd --version | grep -E '^OceanBase Deploy:' | awk '{print $3}'`
       if [[ ${obd_local_version} != ${obd_deps_version} ]]
       then
-        echo -e "\033[33m[WARN]\033[0m current obd version is not the latest version, use 'sh build.sh init' to update"
+        echo -e "\033[33m[WARN]\033[0m current obd version is not the latest version, use 'bash dep_create.sh all' in 'deps/3rd' dir to update"
       fi
     fi
   fi
