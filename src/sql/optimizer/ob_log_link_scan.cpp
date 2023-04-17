@@ -22,8 +22,14 @@ ObLogLinkScan::ObLogLinkScan(ObLogPlan &plan)
 int ObLogLinkScan::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); ++i) {
-    ObRawExpr *expr = output_exprs_.at(i);
+  const ObSelectStmt *stmt = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
+    ObRawExpr *expr = stmt->get_select_item(i).expr_;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expr", K(ret));
