@@ -47,6 +47,8 @@ static void easy_io_print_status(easy_io_t *eio);
 static void easy_signal_handler(int sig);
 static void easy_listen_close(easy_listen_t *l);
 
+int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                      void *(*start_routine) (void *), void *arg);
 /**
  * 初始化easy_io
  */
@@ -273,7 +275,7 @@ int easy_eio_start(easy_io_t *eio)
     easy_list_for_each_entry(tp, &eio->thread_pool_list, list_node) {
         easy_thread_pool_for_each(th, tp, 0) {
             int err = 0;
-            if ((err = pthread_create(&(th->tid), NULL, th->on_start, (void *)th))) {
+            if ((err = ob_pthread_create(&(th->tid), NULL, th->on_start, (void *)th))) {
                 ret = EASY_ERROR;
                 th->tid = 0;
                 easy_error_log("easy_io_start, pthread_create error: %d(%d), idx: %d", err, errno, th->idx);

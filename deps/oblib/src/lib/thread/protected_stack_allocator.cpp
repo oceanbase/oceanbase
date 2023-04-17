@@ -156,5 +156,16 @@ void StackMgr::erase(ObStackHeader *header)
   }
 }
 
+ObStackHeaderGuard::ObStackHeaderGuard()
+{
+  header_.pth_ = (uint64_t)pthread_self();
+  g_stack_mgr.insert(&header_);
+}
+
+ObStackHeaderGuard::~ObStackHeaderGuard()
+{
+  g_stack_mgr.erase(&header_);
+}
+
 }  // lib
 }  // oceanbase

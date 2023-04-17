@@ -11436,7 +11436,32 @@ def_table_schema(
 # 12381: __all_virtual_task_opt_stat_gather_history
 # 12382: __all_virtual_table_opt_stat_gather_history
 # 12383: __all_virtual_opt_stat_gather_monitor
-# 12384: __all_virtual_thread
+
+def_table_schema(
+  owner             = 'fengshuo.fs',
+  table_name        = '__all_virtual_thread',
+  table_id          = '12384',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('tid',                 'int'),
+    ('tname',               'varchar:16'),
+    ('status',              'varchar:32'),
+    ('wait_event',          'varchar:64'),
+    ('latch_wait',          'varchar:16'),
+    ('latch_hold',          'varchar:256'),
+    ('trace_id',            'varchar:40'),
+    ('loop_ts',             'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12385: __all_virtual_arbitration_member_info
 # 12386: __all_virtual_server_storage
 # 12387: __all_virtual_arbitration_service_status
@@ -11735,8 +11760,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15294: __all_task_opt_stat_gather_history
 # 15295: __all_table_opt_stat_gather_history
 # 15296: __all_virtual_opt_stat_gather_monitor
+
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
-# 15298: __all_virtual_thread
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
+
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
 # 15301: __all_virtual_wr_statname
@@ -25671,8 +25698,47 @@ def_table_schema(
 # 21377: V$OB_OPT_STAT_GATHER_MONITOR
 # 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
 # 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
-# 21380: GV$OB_THREAD
-# 21381: V$OB_THREAD
+
+def_table_schema(
+  owner           = 'fengshuo.fs',
+  table_name      = 'GV$OB_THREAD',
+  table_id        = '21380',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT svr_ip AS SVR_IP,
+       svr_port AS SVR_PORT,
+       tenant_id AS TENANT_ID,
+       tid AS TID,
+       tname AS TNAME,
+       status AS STATUS,
+       latch_wait AS LATCH_WAIT,
+       latch_hold AS LATCH_HOLD,
+       trace_id AS TRACE_ID
+FROM oceanbase.__all_virtual_thread
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'fengshuo.fs',
+  table_name      = 'V$OB_THREAD',
+  table_id        = '21381',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  *
+FROM oceanbase.GV$OB_THREAD
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
 # 21382: GV$OB_ARBITRATION_MEMBER_INFO
 # 21383: V$OB_ARBITRATION_MEMBER_INFO
 # 21384: DBA_OB_ZONE_STORAGE
@@ -48625,8 +48691,50 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28187:  GV$OB_THREAD
-# 28188:  V$OB_THREAD
+def_table_schema(
+  owner           = 'fengshuo.fs',
+  table_name      = 'GV$OB_THREAD',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28187',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT svr_ip AS SVR_IP,
+       svr_port AS SVR_PORT,
+       tenant_id AS TENANT_ID,
+       tid AS TID,
+       tname AS TNAME,
+       status AS STATUS,
+       latch_wait AS LATCH_WAIT,
+       latch_hold AS LATCH_HOLD,
+       trace_id AS TRACE_ID
+FROM SYS.ALL_VIRTUAL_THREAD
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'fengshuo.fs',
+  table_name      = 'V$OB_THREAD',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28188',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  *
+FROM SYS.GV$OB_THREAD
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
 # 28189:  GV$OB_ARBITRATION_MEMBER_INFO
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS

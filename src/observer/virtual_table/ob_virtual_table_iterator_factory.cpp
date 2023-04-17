@@ -196,6 +196,7 @@
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
 #include "observer/virtual_table/ob_all_virtual_plan_table.h"
+#include "observer/virtual_table/ob_all_virtual_thread.h"
 
 namespace oceanbase
 {
@@ -2317,6 +2318,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           //   }
           //   break;
           // }
+          case OB_ALL_VIRTUAL_THREAD_TID: {
+            ObAllVirtualThread *all_virtual_thread = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualThread, all_virtual_thread))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_thread);
+            }
+            break;
+          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

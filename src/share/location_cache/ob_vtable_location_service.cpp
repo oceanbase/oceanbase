@@ -79,7 +79,7 @@ int ObVTableLocationService::init(
     //TODO move vtable location cache from kvcache to inner cache
   } else if (OB_FAIL(vtable_cache_.init(OB_VTABLE_CACHE_NAME, 1000))) {
     LOG_WARN("vtable_cache init failed", KR(ret));
-  } else if (OB_FAIL(update_queue_.init(this, 1/*thread_cnt*/, 100/*queue_size*/))) {
+  } else if (OB_FAIL(update_queue_.init(this, 1/*thread_cnt*/, 100/*queue_size*/, "VTblLocAsyncUp"))) {
     LOG_WARN("update_queue init failed", KR(ret));
   } else {
     server_tracer_ = &server_tracer;

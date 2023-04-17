@@ -26,7 +26,9 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/thread/ob_thread_name.h"
+#include "lib/thread/protected_stack_allocator.h"
 #include "lib/utility/utility.h"
+#include "lib/thread/thread.h"
 
 extern "C" {
   #include <lua.h>
@@ -166,6 +168,7 @@ int ObUnixDomainListener::run()
       ATOMIC_STORE(&stop_, false);
       worker_ = std::thread([=]() {
         lib::set_thread_name("LuaHandler");
+        lib::ObStackHeaderGuard stack_header_guard;
         constexpr int64_t EPOLL_EVENT_BUFFER_SIZE = 32;
         constexpr int64_t TIMEOUT = 1000;
         struct epoll_event events[EPOLL_EVENT_BUFFER_SIZE];
@@ -174,6 +177,7 @@ int ObUnixDomainListener::run()
         while (OB_LIKELY(!ATOMIC_LOAD(&stop_))) {
           int conn_fd = -1;
           int ret = OB_SUCCESS;
+          lib::Thread::update_loop_ts();
           int64_t event_cnt = epoll_wait(epoll_fd, events, EPOLL_EVENT_BUFFER_SIZE, TIMEOUT);
           if (event_cnt < 0) {
             if (EINTR == errno) {

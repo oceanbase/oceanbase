@@ -51,6 +51,7 @@
 #include "share/rc/ob_tenant_module_init_ctx.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/engine/px/ob_px_worker.h"
+#include "lib/thread/protected_stack_allocator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -373,7 +374,9 @@ void ObResourceGroup::check_worker_count()
         if (w->has_set_stop()) {
           workers_.remove(wnode);
           destroy_worker(w);
-        } else if (w->has_req_flag() && w->is_blocking() && w->is_default_worker()) {
+        } else if (w->has_req_flag()
+                   && Thread::is_blocking_
+                   && w->is_default_worker()) {
           ++token;
         }
       }
@@ -832,10 +835,12 @@ int ObTenant::create_tenant_module()
 
 void* ObTenant::wait(void* t)
 {
+  ObStackHeaderGuard stack_header_guard;
   int ret = OB_SUCCESS;
   ObTenant* tenant = (ObTenant*)t;
   ob_get_tenant_id() = tenant->id_;
   lib::set_thread_name("UnitGC");
+  lib::Thread::update_loop_ts();
   tenant->handle_retry_req(true);
   while (tenant->req_queue_.size() > 0) {
     ob_usleep(10L * 1000L);
@@ -1351,7 +1356,9 @@ void ObTenant::check_worker_count()
         if (w->has_set_stop()) {
           workers_.remove(wnode);
           destroy_worker(w);
-        } else if (w->has_req_flag() && w->is_blocking() && w->is_default_worker()) {
+        } else if (w->has_req_flag()
+                   && Thread::is_blocking_
+                   && w->is_default_worker()) {
           ++token;
         }
       }

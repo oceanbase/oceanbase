@@ -1,4 +1,3 @@
-#include <sys/prctl.h>
 #define MAX_PN_LISTEN 256
 #define MAX_PN_GRP (1<<17)
 #define MAX_PN_PER_GRP 64
@@ -60,7 +59,7 @@ static pn_listen_t* locate_listen(int idx)
 static void* listen_thread_func(void* arg)
 {
   thread_counter_reg();
-  prctl(PR_SET_NAME, "pnlisten");
+  ob_set_thread_name("pnlisten");
   pn_listen_t* l = (typeof(l))arg;
   eloop_run(&l->l.ep);
   return NULL;
@@ -69,7 +68,7 @@ static void* listen_thread_func(void* arg)
 static void* pn_thread_func(void* arg)
 {
   thread_counter_reg();
-  prctl(PR_SET_NAME, "pnio");
+  ob_set_thread_name("pnio");
   pn_t* pn = (typeof(pn))arg;
   eloop_run(&pn->ep);
   return NULL;
@@ -86,7 +85,7 @@ PN_API int pn_listen(int port, serve_cb_t cb)
     idx = -1;
   } else {
     pnl->serve_cb = cb;
-    pthread_create(&pnl->pd, NULL, listen_thread_func, pnl);
+    ob_pthread_create(&pnl->pd, NULL, listen_thread_func, pnl);
   }
   return idx;
 }
@@ -232,7 +231,7 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     pn_t* pn = pn_create(listen_id, gid, count);
     if (NULL == pn) {
       err = ENOMEM;
-    } else if (0 != (err = pthread_create(&pn->pd, NULL, pn_thread_func, pn))) {
+    } else if (0 != (err = ob_pthread_create(&pn->pd, NULL, pn_thread_func, pn))) {
       pn_destroy(pn);
     } else {
       pn_grp->pn_array[count++] = pn;
