@@ -27,22 +27,21 @@ public:
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
   static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
                       uint64_t user_id);
-  static void abort_ctx(ObTableLoadTableCtx *ctx, sql::ObSQLSessionInfo &session_info);
+  static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
   bool is_valid() const { return is_inited_; }
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
   static int abort_peers_ctx(ObTableLoadTableCtx *ctx);
-  static int abort_redef_table(ObTableLoadTableCtx *ctx, sql::ObSQLSessionInfo &session_info);
+  static int abort_redef_table(ObTableLoadTableCtx *ctx);
 
 // table load ctrl interface
 public:
   int begin();
   int finish();
-  int commit(sql::ObExecContext *exec_ctx, sql::ObSQLSessionInfo &session_info,
-             table::ObTableLoadResultInfo &result_info);
+  int commit(sql::ObExecContext *exec_ctx, table::ObTableLoadResultInfo &result_info);
   int px_commit_data(sql::ObExecContext *exec_ctx);
-  int px_commit_ddl(sql::ObSQLSessionInfo &session_info);
+  int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
 private:
   int pre_begin_peers();
@@ -50,7 +49,7 @@ private:
   int pre_merge_peers();
   int start_merge_peers();
   int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
-  int commit_redef_table(sql::ObSQLSessionInfo &session_info);
+  int commit_redef_table();
   int drive_sql_stat(sql::ObExecContext &ctx, table::ObTableLoadSqlStatistics &sql_statistics);
 private:
   int add_check_merge_result_task();

@@ -180,21 +180,87 @@ int ObTableLoadUtils::deep_copy(const ObDatumRange &src, ObDatumRange &dest, ObI
   return ret;
 }
 
+int ObTableLoadUtils::deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSessionInfo &dest, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t buf_size = src.get_serialize_size();
+  int64_t data_len = 0;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
+  } else if (OB_FAIL(src.serialize(buf, buf_size, pos))) {
+    LOG_WARN("serialize session info failed", KR(ret));
+  } else {
+    data_len = pos;
+    pos = 0;
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dest.deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize session info failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 bool ObTableLoadUtils::is_local_addr(const ObAddr &addr)
 {
   return (ObServer::get_instance().get_self() == addr);
 }
 
-int ObTableLoadUtils::init_session_info(uint64_t user_id, ObSQLSessionInfo &session_info)
+int ObTableLoadUtils::create_session_info(uint64_t user_id, sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session_info.init(0, 0, nullptr, nullptr, ObTimeUtility::current_time(), MTL_ID()))) {
-    LOG_WARN("fail to init session info", KR(ret));
+  if (OB_FAIL(create_session_info(session_info, free_session_ctx))) {
+    LOG_WARN("create session id failed", KR(ret));
+  } else if (session_info != nullptr){
+    OZ(session_info->load_default_sys_variable(false, false)); //加载默认的session参数
+    OZ(session_info->load_default_configs_in_pc());
+    OX(session_info->set_priv_user_id(user_id));
   }
-  OZ(session_info.load_default_sys_variable(false, false)); //加载默认的session参数
-  OZ(session_info.load_default_configs_in_pc());
-  OX(session_info.set_priv_user_id(user_id));
+  if (OB_FAIL(ret)) {
+    if (session_info != nullptr) {
+      observer::ObTableLoadUtils::free_session_info(session_info, free_session_ctx);
+      session_info = nullptr;
+    }
+  }
   return ret;
+}
+
+int ObTableLoadUtils::create_session_info(sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint32_t sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+  uint64_t proxy_sid = 0;
+  if (OB_FAIL(GCTX.session_mgr_->create_sessid(sid))) {
+    LOG_WARN("alloc session id failed", KR(ret));
+  } else if (OB_FAIL(GCTX.session_mgr_->create_session(
+              tenant_id, sid, proxy_sid, ObTimeUtility::current_time(), session_info))) {
+    GCTX.session_mgr_->mark_sessid_unused(sid);
+    session_info = nullptr;
+    LOG_WARN("create session failed", KR(ret), K(sid));
+  } else {
+    free_session_ctx.sessid_ = sid;
+    free_session_ctx.proxy_sessid_ = proxy_sid;
+  }
+  return ret;
+}
+
+void ObTableLoadUtils::free_session_info(sql::ObSQLSessionInfo *session_info, const sql::ObFreeSessionCtx &free_session_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (session_info == nullptr || free_session_ctx.sessid_ == sql::ObSQLSessionInfo::INVALID_SESSID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(session_info), K(free_session_ctx));
+  } else {
+    session_info->set_session_sleep();
+    GCTX.session_mgr_->revert_session(session_info);
+    GCTX.session_mgr_->free_session(free_session_ctx);
+    GCTX.session_mgr_->mark_sessid_unused(free_session_ctx.sessid_);
+    session_info = nullptr;
+  }
 }
 
 int ObTableLoadUtils::generate_credential(uint64_t tenant_id, uint64_t user_id,

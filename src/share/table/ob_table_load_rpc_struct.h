@@ -10,6 +10,8 @@
 #include "ob_table_load_define.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "observer/table_load/ob_table_load_utils.h"
 
 namespace oceanbase
 {
@@ -68,8 +70,19 @@ public:
       task_id_(0),
       schema_version_(0),
       snapshot_version_(0),
-      data_version_(0)
+      data_version_(0),
+      session_info_(nullptr)
   {
+    free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
+  }
+  ~ObTableLoadPreBeginPeerRequest()
+  {
+    if (nullptr != session_info_) {
+      if (free_session_ctx_.sessid_ != sql::ObSQLSessionInfo::INVALID_SESSID) {
+        observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
+      }
+      session_info_ = nullptr;
+    }
   }
   TO_STRING_KV(K_(table_id),
                K_(config),
@@ -101,6 +114,8 @@ public:
   // partition info
   ObTableLoadArray<ObTableLoadLSIdAndPartitionId> partition_id_array_;//orig table
   ObTableLoadArray<ObTableLoadLSIdAndPartitionId> target_partition_id_array_;//FIXME: target table
+  sql::ObSQLSessionInfo *session_info_;
+  sql::ObFreeSessionCtx free_session_ctx_;
 };
 
 class ObTableLoadPreBeginPeerResult final

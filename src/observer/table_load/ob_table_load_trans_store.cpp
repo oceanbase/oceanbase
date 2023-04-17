@@ -135,9 +135,7 @@ int ObTableLoadTransStoreWriter::init()
   } else {
     table_data_desc_ = &store_ctx_->table_data_desc_;
     collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
-    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(param_.tenant_id_, tz_info_.get_tz_map_wrap()))) {
-      LOG_WARN("fail to get tenant time zone", KR(ret), K(param_.tenant_id_));
-    } else if (OB_FAIL(init_session_ctx_array())) {
+    if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
     } else if (OB_FAIL(init_column_schemas())) {
       LOG_WARN("fail to init column schemas", KR(ret));
@@ -172,7 +170,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  ObDataTypeCastParams cast_params(&tz_info_);
+  ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_timezone_info());
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * param_.session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));

@@ -24,7 +24,6 @@ using namespace table;
 ObTableLoadInstance::ObTableLoadInstance()
   : execute_ctx_(nullptr),
     allocator_(nullptr),
-    session_info_(nullptr),
     table_ctx_(nullptr),
     job_stat_(nullptr),
     is_committed_(false),
@@ -42,7 +41,7 @@ void ObTableLoadInstance::destroy()
     if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
       LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
     } else if (!is_committed_) {
-      ObTableLoadCoordinator::abort_ctx(table_ctx_, *session_info_);
+      ObTableLoadCoordinator::abort_ctx(table_ctx_);
     }
     ObTableLoadService::put_ctx(table_ctx_);
     table_ctx_ = nullptr;
@@ -63,7 +62,6 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
   } else {
     execute_ctx_ = execute_ctx;
     allocator_ = execute_ctx->allocator_;
-    session_info_ = execute_ctx_->exec_ctx_->get_my_session();
     if (OB_FAIL(param.normalize())) {
       LOG_WARN("fail to normalize param", KR(ret));
     }
@@ -72,7 +70,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
       LOG_WARN("fail to check support direct load", KR(ret), K(param.table_id_));
     }
     // create table ctx
-    else if (OB_FAIL(create_table_ctx(param, idx_array))) {
+    else if (OB_FAIL(create_table_ctx(param, idx_array, execute_ctx_->exec_ctx_->get_my_session()))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
     // begin
@@ -93,7 +91,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
 }
 
 int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
-                                          const ObIArray<int64_t> &idx_array)
+                                          const ObIArray<int64_t> &idx_array,
+                                          sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
@@ -108,7 +107,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
   start_arg.is_load_data_ = !param.px_mode_;
   if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
-  } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *session_info_))) {
+  } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *session_info))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
   } else {
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
@@ -121,10 +120,10 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
     if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-    } else if (OB_FAIL(table_ctx->init(param, ddl_param))) {
+    } else if (OB_FAIL(table_ctx->init(param, ddl_param, session_info))) {
       LOG_WARN("fail to init table ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array,
-                                                        session_info_->get_priv_user_id()))) {
+                                                        session_info->get_priv_user_id()))) {
       LOG_WARN("fail to coordinator init ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
       LOG_WARN("fail to add ctx", KR(ret));
@@ -138,7 +137,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
       ObTableLoadRedefTableAbortArg abort_arg;
       abort_arg.tenant_id_ = param.tenant_id_;
       abort_arg.task_id_ = ddl_param.task_id_;
-      if (OB_TMP_FAIL(ObTableLoadRedefTable::abort(abort_arg, *session_info_))) {
+      if (OB_TMP_FAIL(ObTableLoadRedefTable::abort(abort_arg, *session_info))) {
         LOG_WARN("fail to abort redef table", KR(tmp_ret), K(abort_arg));
       }
     }
@@ -304,7 +303,7 @@ int ObTableLoadInstance::commit(ObTableLoadResultInfo &result_info)
       LOG_WARN("fail to check merged", KR(ret));
     }
     // commit
-    else if (OB_FAIL(coordinator.commit(execute_ctx_->exec_ctx_, *session_info_, result_info))) {
+    else if (OB_FAIL(coordinator.commit(execute_ctx_->exec_ctx_, result_info))) {
       LOG_WARN("fail to commit", KR(ret));
     } else {
       is_committed_ = true;
@@ -351,7 +350,7 @@ int ObTableLoadInstance::px_commit_ddl()
     ObTableLoadCoordinator coordinator(table_ctx_);
     if (OB_FAIL(coordinator.init())) {
       LOG_WARN("fail to init coordinator", KR(ret));
-    } else if (OB_FAIL(coordinator.px_commit_ddl(*session_info_))) {
+    } else if (OB_FAIL(coordinator.px_commit_ddl())) {
       LOG_WARN("fail to do px_commit_ddl", KR(ret));
     } else {
       is_committed_ = true;

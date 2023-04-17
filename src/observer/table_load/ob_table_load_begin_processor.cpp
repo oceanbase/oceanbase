@@ -69,12 +69,6 @@ int ObTableLoadBeginP::process()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObTableLoadUtils::init_session_info(credential_.user_id_, session_info_))) {
-      LOG_WARN("fail to init session info", KR(ret));
-    }
-  }
-
   // get the existing table ctx if it exists
   if (OB_SUCC(ret)) {
     ObTableLoadKey key(credential_.tenant_id_, table_id);
@@ -94,12 +88,17 @@ int ObTableLoadBeginP::process()
   // create new table ctx if it does not exist
   if (OB_SUCC(ret) && nullptr == table_ctx_) {
     ObTenant *tenant = nullptr;
+    sql::ObSQLSessionInfo *session_info = nullptr;
+    sql::ObFreeSessionCtx free_session_ctx;
+    free_session_ctx.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
     if (arg_.config_.flag_.data_type_ >=
         static_cast<uint64_t>(ObTableLoadDataType::MAX_DATA_TYPE)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("data type is error", KR(ret), K(arg_.config_.flag_.data_type_));
     } else if (OB_FAIL(GCTX.omt_->get_tenant(credential_.tenant_id_, tenant))) {
       LOG_WARN("fail to get tenant handle", KR(ret), K(credential_.tenant_id_));
+    } else if (OB_FAIL(ObTableLoadUtils::create_session_info(credential_.user_id_, session_info, free_session_ctx))) {
+      LOG_WARN("fail to init session info", KR(ret));
     } else {
       ObTableLoadParam param;
       param.tenant_id_ = credential_.tenant_id_;
@@ -121,11 +120,15 @@ int ObTableLoadBeginP::process()
         LOG_WARN("fail to check support direct load", KR(ret), K(table_id));
       }
       // create table ctx
-      else if (OB_FAIL(create_table_ctx(param, idx_array_, session_info_, table_ctx_))) {
+      else if (OB_FAIL(create_table_ctx(param, idx_array_, *session_info, table_ctx_))) {
         LOG_WARN("fail to create table ctx", KR(ret));
       } else {
         is_new = true;
       }
+    }
+    if (session_info != nullptr) {
+      ObTableLoadUtils::free_session_info(session_info, free_session_ctx);
+      session_info = nullptr;
     }
   }
 
@@ -149,7 +152,7 @@ int ObTableLoadBeginP::process()
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx_) {
       ObTableLoadService::remove_ctx(table_ctx_);
-      ObTableLoadCoordinator::abort_ctx(table_ctx_, session_info_);
+      ObTableLoadCoordinator::abort_ctx(table_ctx_);
     }
   }
 
@@ -215,7 +218,7 @@ int ObTableLoadBeginP::create_table_ctx(const ObTableLoadParam &param,
     if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-    } else if (OB_FAIL(table_ctx->init(param, ddl_param))) {
+    } else if (OB_FAIL(table_ctx->init(param, ddl_param, &session_info))) {
       LOG_WARN("fail to init table ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array_,
                                                         session_info.get_priv_user_id()))) {
@@ -316,7 +319,7 @@ int ObTableLoadPreBeginPeerP::create_table_ctx(const ObTableLoadParam &param,
   if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, ddl_param))) {
+  } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx,
                                                 arg_.partition_id_array_,
