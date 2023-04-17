@@ -407,32 +407,35 @@ int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
 }
 
 // remove entry from speed_handle_map.
-int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const SpeedHandleKey &speed_handle_key)
+int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> &remove_items)
 {
   int ret = OB_SUCCESS;
-  common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
-  char *buf = nullptr;
-  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", K(ret), K(speed_handle_key));
-  } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected, speed handle map is not created", K(ret));
-  } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
-    LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
-  } else if (OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
-    LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
-  } else if (OB_ISNULL(speed_handle_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, speed handle item is nullptr", K(ret), K(speed_handle_key));
-  } else {
-    if (0 == speed_handle_item->dec_ref()) {
-      speed_handle_item->~ObDDLCtrlSpeedItem();
-      speed_handle_item = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < remove_items.count(); i++) {
+    const SpeedHandleKey &speed_handle_key = remove_items.at(i);
+    common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
+    char *buf = nullptr;
+    ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ls id is invalid", K(ret), K(speed_handle_key));
+    } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected, speed handle map is not created", K(ret));
+    } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
+      LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
+    } else if (OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
+      LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
+    } else if (OB_ISNULL(speed_handle_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, speed handle item is nullptr", K(ret), K(speed_handle_key));
+    } else {
+      if (0 == speed_handle_item->dec_ref()) {
+        speed_handle_item->~ObDDLCtrlSpeedItem();
+        speed_handle_item = nullptr;
+      }
     }
   }
   return ret;
@@ -445,39 +448,12 @@ int ObDDLCtrlSpeedHandle::refresh()
 {
   int ret = OB_SUCCESS;
   // 1. remove speed_handle_item whose ls/tenant does not exist;
-  for (hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*>::const_iterator iter = speed_handle_map_.begin();
-      OB_SUCC(ret) && iter != speed_handle_map_.end(); ++iter) {
-    bool erase = false;
-    const SpeedHandleKey &speed_handle_key = iter->first;
-    if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected, speed handle item in speed_handle_map is invalid", K(ret), K(speed_handle_key));
-    } else {
-      MTL_SWITCH(speed_handle_key.tenant_id_) {
-        ObLSHandle ls_handle;
-        if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-          if (OB_LS_NOT_EXIST == ret) {
-            erase = true;
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to get ls", K(ret), K(speed_handle_key));
-          }
-        }
-      } else {
-        if (OB_TENANT_NOT_IN_SERVER == ret || OB_IN_STOP_STATE == ret) { // tenant deleted or on deleting
-          ret = OB_SUCCESS;
-          erase = true;
-        } else {
-          LOG_WARN("fail to switch tenant id", K(ret), K(MTL_ID()), K(speed_handle_key));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (erase && OB_FAIL(remove_ctrl_speed_item(speed_handle_key))) {
-      LOG_WARN("remove speed handle item failed", K(ret), K(speed_handle_key));
-    }
+  GetNeedRemoveItemsFn get_need_remove_items_fn;
+  if (OB_FAIL(speed_handle_map_.foreach_refactored(get_need_remove_items_fn))) {
+    LOG_WARN("foreach refactored failed", K(ret));
+  } else if (OB_FAIL(remove_ctrl_speed_item(get_need_remove_items_fn.remove_items_))) {
+    LOG_WARN("remove ctrl speed item failed", K(ret), "to_remove_items", get_need_remove_items_fn.remove_items_);
   }
-
   // 2. update speed and disk config.
   if (OB_SUCC(ret)) {
     UpdateSpeedHandleItemFn update_speed_handle_item_fn;
@@ -510,6 +486,42 @@ int ObDDLCtrlSpeedHandle::UpdateSpeedHandleItemFn::operator() (
     }
   } else {
     LOG_WARN("switch tenant id failed", K(ret), K(MTL_ID()), K(entry));
+  }
+  return ret;
+}
+
+int ObDDLCtrlSpeedHandle::GetNeedRemoveItemsFn::operator() (
+  hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry)
+{
+  int ret = OB_SUCCESS;
+  bool erase = false;
+  const SpeedHandleKey &speed_handle_key = entry.first;
+  if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(speed_handle_key));
+  } else {
+    MTL_SWITCH(speed_handle_key.tenant_id_) {
+      ObLSHandle ls_handle;
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          erase = true;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get ls", K(ret), K(speed_handle_key));
+        }
+      }
+    } else {
+      if (OB_TENANT_NOT_IN_SERVER == ret || OB_IN_STOP_STATE == ret) { // tenant deleted or on deleting
+        ret = OB_SUCCESS;
+        erase = true;
+      } else {
+        LOG_WARN("fail to switch tenant id", K(ret), K(MTL_ID()), K(speed_handle_key));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (erase && OB_FAIL(remove_items_.push_back(speed_handle_key))) {
+    LOG_WARN("add remove item failed", K(ret));
   }
   return ret;
 }

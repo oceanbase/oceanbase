@@ -132,6 +132,16 @@ private:
     ~UpdateSpeedHandleItemFn() = default;
     int operator() (common::hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry);
   };
+  struct GetNeedRemoveItemsFn final
+  {
+  public:
+    GetNeedRemoveItemsFn() :
+      remove_items_() { }
+    ~GetNeedRemoveItemsFn() = default;
+    int operator() (common::hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry);
+  public:
+    ObArray<SpeedHandleKey> remove_items_;
+  };
 private:
   class ObDDLCtrlSpeedItemHandle final
   {
@@ -152,7 +162,7 @@ private:
   ~ObDDLCtrlSpeedHandle();
   int refresh();
   int add_ctrl_speed_item(const SpeedHandleKey &speed_handle_key, ObDDLCtrlSpeedItemHandle &item_handle);
-  int remove_ctrl_speed_item(const SpeedHandleKey &speed_handle_key);
+  int remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> &remove_items);
 
 private:
   static const int64_t MAP_BUCKET_NUM  = 1024;
