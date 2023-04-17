@@ -4203,7 +4203,7 @@ int ObCollectionConstructRawExpr::get_schema_object_version(share::schema::ObSch
   CK (coll_schema_version_ != OB_INVALID_VERSION);
   CK (udt_id_ != common::OB_INVALID_ID);
   OX (obj_version.object_id_ = udt_id_);
-  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
   OX (obj_version.version_ = coll_schema_version_);
 
   return ret;
@@ -4296,7 +4296,7 @@ int ObObjectConstructRawExpr::get_schema_object_version(share::schema::ObSchemaO
   CK (object_schema_version_ != OB_INVALID_VERSION);
   CK (udt_id_ != common::OB_INVALID_ID);
   OX (obj_version.object_id_ = udt_id_);
-  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
   OX (obj_version.version_ = object_schema_version_);
 
   return ret;
