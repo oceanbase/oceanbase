@@ -1109,7 +1109,8 @@ DEFINE_ERROR(OB_ERR_SCHEMA_HISTORY_EMPTY, -5489, -1, "HY000", "Schema history is
 DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list"));
 DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART, -5491, -1, "42000", "DEFAULT partition must be last partition specified", 14318, "DEFAULT partition must be last partition specified");
 DEFINE_ERROR_EXT(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, -5492, ER_CHARACTER_SET_MISMATCH, "HY000", "Character set cannot be used in conjunction with binary collations in function call", "Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call.");
-
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, -5493, ER_SAME_NAME_PARTITION, "HY000", "Duplicate partition name", "Duplicate partition name %.*s", 14082, "New partition name must differ from that of any other partition or subpartition of the object.", "New partition name %.*s must differ from that of any other partition or subpartition of the object.");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, -5494, ER_SAME_NAME_PARTITION, "HY000", "Duplicate partition name", "Duplicate partition name %.*s", 14263, "New subpartition name must differ from that of any other partition or subpartition of the object.", "New subpartition name %.*s must differ from that of any other partition or subpartition of the object.");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
