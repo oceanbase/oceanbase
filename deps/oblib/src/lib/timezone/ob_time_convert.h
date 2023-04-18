@@ -157,7 +157,7 @@ extern const int64_t USECS_PER_MIN;
 #define MYSQL_TIMESTAMP_MIN_VAL -62167046400000000
 #define ORACLE_DATETIME_MIN_VAL -62135596800000000 //start from '0001-1-1 00:00:00'
 #define TIME_MAX_HOUR 838
-#define TIME_MAX_VAL (3020399 * 1000000LL)    // 838:59:59 .
+#define TIME_MAX_VAL (3020399 * 1000000LL)    // 838:59:59.
 
 struct ObIntervalLimit {
   static const ObOracleTimeLimiter YEAR;
@@ -406,7 +406,7 @@ public:
 
   static int str_is_date_format(const ObString &str, bool &date_flag);
   static int str_to_date(const ObString &str, int32_t &value, const ObDateSqlMode date_sql_mode = 0);
-  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL, const ObScale &time_scale = 0);
+  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL);
   static int str_to_year(const ObString &str, uint8_t &value);
   static int str_to_interval(const ObString &str, ObDateUnitType unit_type, int64_t &value);
   // int / double / string <- datetime(timestamp) / date / time / year.
