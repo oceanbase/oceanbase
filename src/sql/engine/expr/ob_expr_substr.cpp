@@ -455,7 +455,7 @@ int ObExprSubstr::substr(common::ObString &varchar,
           res_len = min(length, mb_len - start);
           int64_t offset = ObCharset::charpos(cs_type, varchar.ptr(), varchar.length(), start);
           res_len = ObCharset::charpos(cs_type, varchar.ptr() + offset,
-              (offset == 0) ? varchar.length() : varchar.length() - offset + 1, res_len);
+              (offset == 0) ? varchar.length() : varchar.length() - offset, res_len);
           varchar.assign_ptr(varchar.ptr() + offset, static_cast<int32_t>(res_len));
         }
       }
