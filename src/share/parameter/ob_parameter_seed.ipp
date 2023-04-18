@@ -32,7 +32,7 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 // background information about disk space configuration
 // ObServerUtils::get_data_disk_info_in_config()
-DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0", "[0M,)", "size of the data file. Range: [0, +∞)",
+DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)", "size of the data file. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
         "the percentage of disk space used by the data files. Range: [0,99] in integer",
@@ -75,7 +75,7 @@ DEF_INT(rdma_io_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,8]",
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "16384", "[1024,]",
         "the size of the task queue for each tenant. Range: [1024,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-_DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PARAMETER, "0",
+_DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PARAMETER, "0M",
         common::ObConfigMemoryLimitChecker, "[0M,)",
         "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [1G,).",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -223,7 +223,7 @@ DEF_TIME(autoinc_cache_refresh_interval, OB_CLUSTER_PARAMETER, "3600s", "[100ms,
 DEF_BOOL(enable_sql_operator_dump, OB_CLUSTER_PARAMETER, "True", "specifies whether sql operators "
          "(sort/hash join/material/window function/interm result/...) allowed to write to disk",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_chunk_row_store_mem_limit, OB_CLUSTER_PARAMETER, "0B", "[0,]",
+DEF_CAP(_chunk_row_store_mem_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]",
         "the maximum size of memory used by ChunkRowStore, 0 means follow operator's setting. Range: [0, +∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(tableapi_transport_compress_func, OB_CLUSTER_PARAMETER, "none",
@@ -505,7 +505,7 @@ DEF_TIME(recyclebin_object_expire_time, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
 
 // ========================= LogService Config Begin =====================
 
-DEF_CAP(log_disk_size, OB_CLUSTER_PARAMETER, "0", "[0M,)",
+DEF_CAP(log_disk_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the size of disk space used by the log files. Range: [0, +∞)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

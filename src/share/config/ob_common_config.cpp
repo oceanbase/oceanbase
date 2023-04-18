@@ -286,7 +286,8 @@ ObCommonConfig::~ObCommonConfig()
 
 int ObCommonConfig::add_extra_config(const char *config_str,
                                      int64_t version /* = 0 */ ,
-                                     bool check_name /* = false */)
+                                     bool check_name /* = false */,
+                                     bool check_unit /* = true */)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -353,6 +354,9 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           }
         }
         if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
+        } else if (check_unit && !(*pp_item)->check_unit(value)) {
+          ret = OB_INVALID_CONFIG;
+          LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else if (!(*pp_item)->set_value(value)) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
@@ -460,7 +464,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
     } else {
       MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
-      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf))) {
+      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf, 0, false, false))) {
         LOG_ERROR("Read server config failed", K(ret));
       }
 

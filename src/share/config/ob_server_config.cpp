@@ -193,7 +193,7 @@ int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_
                   K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
       } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - pos_data))) {
         LOG_ERROR("check data checksum failed", K(ret));
-      } else if (OB_FAIL(add_extra_config(buf + pos))) {
+      } else if (OB_FAIL(add_extra_config(buf + pos, 0, false, false))) {
         LOG_ERROR("Read server config failed", K(ret));
       } else {
         pos += header.data_length_;

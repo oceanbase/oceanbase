@@ -147,7 +147,7 @@ bool ObConfigTabletSizeChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
   const int64_t mask = (1 << 21) - 1;
-  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid, false);
   if (is_valid) {
     // value has to be a multiple of 2M
     is_valid = (value >= 0) && !(value & mask);
@@ -343,7 +343,7 @@ bool ObConfigRpcChecksumChecker::check(const ObConfigItem &t) const
 bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
-  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid, false);
   if (is_valid) {
     is_valid = 0 == value || value >= lib::ObRunningModeConfig::instance().MIN_MEM;
   }
@@ -460,7 +460,8 @@ int64_t ObConfigIntParser::get(const char *str, bool &valid)
   return value;
 }
 
-int64_t ObConfigCapacityParser::get(const char *str, bool &valid)
+int64_t ObConfigCapacityParser::get(const char *str, bool &valid,
+                                    bool check_unit /* = true */)
 {
   char *p_unit = NULL;
   int64_t value = 0;
@@ -476,7 +477,11 @@ int64_t ObConfigCapacityParser::get(const char *str, bool &valid)
     } else if (value < 0) {
       valid = false;
     } else if ('\0' == *p_unit) {
-      value <<= CAP_MB; // default
+      if (check_unit) {
+        valid = false;
+      } else {
+        value <<= CAP_MB;
+      }
     } else if (0 == STRCASECMP("b", p_unit)
         || 0 == STRCASECMP("byte", p_unit)) {
       // do nothing
@@ -671,7 +676,7 @@ bool ObCtxMemoryLimitChecker::check(const char* str, uint64_t& ctx_id, int64_t& 
     auto len = STRLEN(str);
     for (int64_t i = 0; i + 1 < len && !is_valid; ++i) {
       if (':' == str[i]) {
-        limit = ObConfigCapacityParser::get(str + i + 1, is_valid);
+        limit = ObConfigCapacityParser::get(str + i + 1, is_valid, false);
         if (is_valid) {
           int ret = OB_SUCCESS;
           SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], tmp_str) {

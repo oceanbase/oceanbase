@@ -859,6 +859,9 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
         if (ci->is_not_editable() && !arg.is_inner_) {
           ret = OB_INVALID_CONFIG; //TODO: specific report not editable
           LOG_WARN("config is not editable", "item", *item, KR(ret));
+        } else if (!ci->check_unit(item->value_.ptr())) {
+          ret = OB_INVALID_CONFIG;
+          LOG_ERROR("invalid config", "item", *item, KR(ret));
         } else if (!ci->set_value(item->value_.ptr())) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("invalid config", "item", *item, KR(ret));

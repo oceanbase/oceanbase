@@ -67,6 +67,11 @@ public:
   {
     return NULL == ck_ ? value_valid_ : value_valid_ && ck_->check(*this);
   }
+  virtual bool check_unit(const char *str) const
+  {
+    UNUSED(str);
+    return true;
+  }
   bool set_value(const common::ObString &string)
   {
     int64_t pos = 0;
@@ -412,7 +417,6 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_INTEGRAL;
   }
-
 protected:
   //use current value to do input operation
   virtual bool set(const char *str);
@@ -528,6 +532,12 @@ public:
   virtual ~ObConfigCapacityItem() {}
 
   ObConfigCapacityItem &operator = (int64_t value);
+  virtual bool check_unit(const char *str) const
+  {
+    bool is_valid;
+    IGNORE_RETURN ObConfigCapacityParser::get(str, is_valid);
+    return is_valid;
+  }
 
 protected:
   int64_t parse(const char *str, bool &valid) const;
