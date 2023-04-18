@@ -2840,12 +2840,8 @@ int ObPartTransCtx::submit_commit_log_()
     bool redo_log_submitted = false;
 
     if (OB_SUCC(ret)) {
-      const ObTxData *tx_data = NULL;
-      auto guard = ctx_tx_data_.get_tx_data();
-      if (OB_FAIL(guard.get_tx_data(tx_data))) {
-        TRANS_LOG(WARN, "get tx data failed", K(ret));
-      } else if (OB_FAIL(commit_log.init_tx_data_backup(tx_data))) {
-        TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+      if (OB_FAIL(set_start_scn_in_commit_log_(commit_log))) {
+        TRANS_LOG(WARN, "set start scn in commit log failed", K(ret), K(commit_log));
       }
     }
 
@@ -2877,8 +2873,17 @@ int ObPartTransCtx::submit_commit_log_()
           redo_log_submitted = true;
           commit_log.set_prev_lsn(log_cb->get_lsn());
           // TRANS_LOG(INFO, "submit redo and commit_info log in clog adapter success", K(*log_cb));
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(set_start_scn_in_commit_log_(commit_log))) {
+              TRANS_LOG(WARN, "set start scn in commit log failed", K(ret), K(commit_log));
+            }
+          }
+
           log_cb = NULL;
-          if (OB_FAIL(prepare_log_cb_(NEED_FINAL_CB, log_cb))) {
+
+          if(OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(prepare_log_cb_(NEED_FINAL_CB, log_cb))) {
             if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
               TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
             }
@@ -3435,6 +3440,27 @@ int ObPartTransCtx::get_prev_log_lsn_(const ObTxLogBlock &log_block,
   return ret;
 }
 
+int ObPartTransCtx::set_start_scn_in_commit_log_(ObTxCommitLog &commit_log)
+{
+  int ret = OB_SUCCESS;
+
+  const ObTxData *tx_data = NULL;
+  auto guard = ctx_tx_data_.get_tx_data();
+  if (OB_FAIL(guard.get_tx_data(tx_data))) {
+    TRANS_LOG(WARN, "get tx data failed", K(ret));
+  } else if (OB_FAIL(commit_log.init_tx_data_backup(tx_data))) {
+    TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+  }
+  else if (exec_info_.next_log_entry_no_ > 0) {
+    if (commit_log.get_tx_data_backup().get_start_log_ts() == ObTxDataBackup::PENDING_START_LOG_TS) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected start scn in commit log", K(ret), K(commit_log), KPC(this));
+    }
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::switch_log_type_(const ObTxLogType log_type,
                                      ObTwoPhaseCommitLogType &ret_log_type)
 {
@@ -3724,12 +3750,20 @@ int ObPartTransCtx::replay_update_tx_data_(const bool commit,
 int ObPartTransCtx::replace_tx_data_with_backup_(const ObTxDataBackup &backup, int64_t log_ts_ns)
 {
   int ret = OB_SUCCESS;
+  int64_t tmp_log_ts = log_ts_ns;
   if (backup.get_start_log_ts() != ObTxDataBackup::PENDING_START_LOG_TS) {
-    log_ts_ns = backup.get_start_log_ts();
+    tmp_log_ts = backup.get_start_log_ts();
+  } else if (exec_info_.next_log_entry_no_ > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid start log ts with a applied log_entry", K(ret), K(backup),
+              K(log_ts_ns), KPC(this));
   }
 
-  if (OB_FAIL(ctx_tx_data_.set_start_log_ts(log_ts_ns))) {
-    TRANS_LOG(WARN, "update tx data with backup failed.", KR(ret), K(ctx_tx_data_));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ctx_tx_data_.set_start_log_ts(tmp_log_ts))) {
+      TRANS_LOG(WARN, "update tx data with backup failed.", KR(ret), K(tmp_log_ts),
+                K(ctx_tx_data_));
+    }
   }
 
   TRANS_LOG(DEBUG, "replace tx_data", K(ret), K(backup), K(ctx_tx_data_), K(*this));
