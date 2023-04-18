@@ -101,7 +101,7 @@ int ObWindowFunctionOpInput::sync_wait(
         // guarantee next wait loop to get lock for one thread
         has_process = true;
         if (0 == ATOMIC_AAF(&sync_cnt, 1) % exit_cnt) {
-          // last thread, it will singal and exit by self
+          // last thread, it will signal and exit by self
           shared_info->cond_.signal();
           LOG_DEBUG("debug sync_cnt", K(ret), K(sync_cnt), K(lbt()));
           break;
@@ -347,7 +347,7 @@ int ObWindowFunctionOp::AggrCell::trans_self(const ObRADatumStore::StoredRow &ro
   }
 
   if (OB_SUCC(ret)) {
-    // uppon invoke trans(), forbiden it to reuse the last_result
+    // uppon invoke trans(), forbidden it to reuse the last_result
     got_result_ = false;
   }
   return ret;
@@ -376,7 +376,7 @@ int ObWindowFunctionOp::AggrCell::inv_trans_self(const ObRADatumStore::StoredRow
         }
       }
       if (OB_SUCC(ret)) {
-        // uppon invoke inv_trans(), forbiden it to reuse the last_result
+        // uppon invoke inv_trans(), forbidden it to reuse the last_result
         got_result_ = false;
       }
       aggr_processor_.get_removal_info().is_inv_aggr_ = false;
@@ -796,7 +796,7 @@ int ObWindowFunctionOp::NonAggrCellNtile::eval(RowsReader &row_reader,
       LOG_WARN("get_param_int_value failed", K(ret));
     }
   } else if (is_null) {
-    // return NULL when backets_num is NULL
+    // return NULL when bucket_num is NULL
     val.set_null();
   } else if (!is_oracle_mode()
              && !param->obj_meta_.is_numeric_type()) {
@@ -1331,7 +1331,7 @@ int ObWindowFunctionOp::init()
       if (OB_SUCC(ret) && MY_SPEC.is_participator()) {
         if (wf_info.can_push_down_) {
           if (common::OB_INVALID_COUNT == next_wf_pby_expr_cnt_to_transmit_) {
-            // next_wf_pby_expr_cnt_to_transmit_ is for pushdown tranmit to datahub
+            // next_wf_pby_expr_cnt_to_transmit_ is for pushdown transmit to datahub
             next_wf_pby_expr_cnt_to_transmit_ = wf_info.partition_exprs_.count();
           }
           if (wf_info.partition_exprs_.count() != prev_pushdown_pby_col_count) {
@@ -2342,7 +2342,7 @@ int ObWindowFunctionOp::rd_output_final_row(const int64_t idx,
   if (OB_FAIL(output_row(idx, &Stores::cur_, &cur_row))) {
     LOG_WARN("output row failed", K(ret));
   } else {
-    // apply patchs
+    // apply patches
     if (patch_first) {
       reset_first_row_same_order_cache();
       for (int64_t wf_idx = 0; OB_SUCC(ret) && wf_idx < MY_SPEC.rd_wfs_.count(); wf_idx++) {
