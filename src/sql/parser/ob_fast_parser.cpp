@@ -110,7 +110,6 @@ ObFastParserBase::ObFastParserBase(
   is_batched_multi_stmt_split_on_(fp_ctx.enable_batched_multi_stmt_),
   is_udr_mode_(fp_ctx.is_udr_mode_),
   def_name_ctx_(fp_ctx.def_name_ctx_),
-  is_mysql_compatible_comment_(false),
   cur_token_begin_pos_(0), copy_begin_pos_(0), copy_end_pos_(0),
   tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
   param_node_list_(nullptr), tail_param_node_(nullptr),
@@ -1479,10 +1478,11 @@ int ObFastParserBase::process_double_quote()
 }
 
 // Until "*/" appears, all characters before it should be ignored
-int ObFastParserBase::process_comment_content()
+int ObFastParserBase::process_comment_content(bool is_mysql_comment)
 {
   int ret = OB_SUCCESS;
-  cur_token_type_ = IGNORE_TOKEN;
+  // if is in /*! xxx */ the token tyep should be normal
+  cur_token_type_ = is_mysql_comment ? NORMAL_TOKEN : IGNORE_TOKEN;
   bool is_match = false;
   char ch = raw_sql_.scan();
   while (!raw_sql_.is_search_end()) {
@@ -2225,18 +2225,7 @@ int ObFastParserMysql::parse_next_token()
       case '/': {
         if ('*' == raw_sql_.peek()) {
           raw_sql_.scan();
-          if ('!' == raw_sql_.peek()) {
-            is_mysql_compatible_comment_ = true;
-            cur_token_type_ = IGNORE_TOKEN;
-            raw_sql_.scan(1);
-            // if is mysql_compatble_comment with version. e.g., /*!50600 xxx*/ ignore the first five digits.
-            if (is_n_continuous_digits(raw_sql_.raw_sql_, raw_sql_.cur_pos_, raw_sql_.raw_sql_len_, 5)) {
-              raw_sql_.scan(5);
-            }
-            raw_sql_.scan(1);
-          } else {
-            OZ (process_comment_content());
-          }
+          OZ (process_comment_content(('!' == raw_sql_.peek())));
         } else {
           cur_token_type_ = NORMAL_TOKEN;
           raw_sql_.scan();
@@ -2244,14 +2233,8 @@ int ObFastParserMysql::parse_next_token()
         break;
       }
       case '*': {
-        if (is_mysql_compatible_comment_ && '/' == raw_sql_.peek()) {
-          is_mysql_compatible_comment_ = false;
-          cur_token_type_ = IGNORE_TOKEN;
-          raw_sql_.scan(2);
-        } else {
-          cur_token_type_ = NORMAL_TOKEN;
-          raw_sql_.scan();
-        }
+        cur_token_type_ = NORMAL_TOKEN;
+        raw_sql_.scan();
         break;
       }
       case ';': {
