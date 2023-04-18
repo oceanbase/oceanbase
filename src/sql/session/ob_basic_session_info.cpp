@@ -3383,6 +3383,11 @@ int ObBasicSessionInfo::get_net_buffer_length(int64_t &net_buffer_len) const
   return get_int64_sys_var(SYS_VAR_NET_BUFFER_LENGTH, net_buffer_len);
 }
 
+int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const
+{
+  return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
+}
+
 ////////////////////////////////////////////////////////////////
 int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_map)
 {

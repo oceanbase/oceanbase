@@ -116,6 +116,8 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
   uint64_t cell_idx = 0;
   char *table_def_buf = NULL;
   int64_t table_def_buf_size = OB_MAX_VARCHAR_LENGTH;
+  bool strict_mode = false;
+  bool is_oracle_mode = false;
   if (OB_UNLIKELY(NULL == schema_guard_
                   || NULL == session_
                   || NULL == allocator_
@@ -138,7 +140,14 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
   } else if (OB_UNLIKELY(NULL == (table_def_buf = static_cast<char *>(allocator_->alloc(table_def_buf_size))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SERVER_LOG(ERROR, "fail to alloc table_def_buf", K(ret));
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    SERVER_LOG(WARN, "failed to check if oracle mode", K(ret));
+  } else if (OB_FAIL(session_->get_show_ddl_in_compat_mode(strict_mode))) {
+    SERVER_LOG(WARN, "failed to get _show_ddl_in_compat_mode", K(ret));
   } else {
+    //_show_ddl_in_compat_mode do not support oracle mode now
+    strict_mode &= !is_oracle_mode;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch(col_id) {
@@ -156,7 +165,7 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
         }
         case OB_APP_MIN_COLUMN_ID + 2: {
           // create_table
-          ObSchemaPrinter schema_printer(*schema_guard_);
+          ObSchemaPrinter schema_printer(*schema_guard_, strict_mode);
           int64_t pos = 0;
           if (table_schema.is_view_table()) {
             if (OB_FAIL(schema_printer.print_view_definiton(effective_tenant_id_,
