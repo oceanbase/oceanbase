@@ -719,8 +719,14 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
     ObObj tmp_obj;
     ObExpr *expr = checker_ctdef_.data_table_rowkey_expr_.at(i);
-    ObDatum &col_datum = expr->locate_expr_datum(eval_ctx_);
-    if (OB_FAIL(col_datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
+    ObDatum *col_datum = nullptr;
+    if (OB_ISNULL(expr)) {
+      LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
+    } else if (OB_FAIL(expr->eval(eval_ctx_, col_datum))) {
+      LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
+    } else if (OB_ISNULL(col_datum)) {
+      LOG_WARN("evaluated column datum in rowkey is nullptr", K(ret), K(i));
+    } else if (OB_FAIL(col_datum->to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
       LOG_WARN("convert datum to obj failed", K(ret));
     }
     // 这里需要做深拷贝
