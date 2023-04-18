@@ -1332,7 +1332,11 @@ int ObAutoincrementService::calc_prev_value(const uint64_t max_value,
   if (max_value <= offset) {
     prev_value = max_value;
   } else {
-    prev_value = ((max_value - offset) / increment) * increment + offset;
+    if (0 == increment) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      prev_value = ((max_value - offset) / increment) * increment + offset;
+    }
   }
   LOG_INFO("out of range for column. calc prev value",
            K(prev_value), K(max_value), K(offset), K(increment));
