@@ -223,7 +223,7 @@ int ObAdminServerExecutor::execute(int argc, char *argv[])
   } else {
     srv_proxy_.set_server(dst_server_);
     srv_proxy_.set_timeout(timeout_);
-    int64_t tenant_id = atoll(getenv("tenant")?:"0")?:OB_DIAG_TENANT_ID;
+    int64_t tenant_id = atoll(getenv("tenant")?:"0")?:OB_SYS_TENANT_ID;
     srv_proxy_.set_tenant(tenant_id);
     inited_ = true;
     COMMON_LOG(INFO, "process", K(cmd_.c_str()), K_(timeout), K(tenant_id));

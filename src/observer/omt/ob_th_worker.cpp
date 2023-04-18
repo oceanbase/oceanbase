@@ -85,22 +85,6 @@ void ObThWorker::destroy()
   }
 }
 
-class ObDiagTenantGuard
-{
-public:
-  ObDiagTenantGuard(ObThWorker& worker, uint64_t tenant_id): worker_(worker) {
-    if (OB_DIAG_TENANT_ID == tenant_id) {
-      worker.set_rpc_tenant(tenant_id);
-      LOG_INFO("set_rpc_tenant", K(tenant_id));
-    }
-  }
-  ~ObDiagTenantGuard() {
-    worker_.reset_rpc_tenant();
-  }
-private:
-  ObThWorker& worker_;
-};
-
 // by other thread
 void ObThWorker::resume()
 {
@@ -276,7 +260,6 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   bool need_wait_lock = false;
   int ret = OB_SUCCESS;
   reset_sql_throttle_current_priority();
-  ObDiagTenantGuard diag_guard(*this, tenant_? tenant_->id(): OB_SYS_TENANT_ID);
   set_req_flag(true);
 
   memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = false;
@@ -333,6 +316,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
             pm_hold);
   }
   set_req_flag(false);
+  reset_rpc_tenant();
 }
 
 void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)

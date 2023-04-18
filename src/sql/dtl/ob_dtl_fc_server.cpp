@@ -421,7 +421,7 @@ int ObDfcServer::get_current_tenant_dfc(uint64_t tenant_id, ObTenantDfc *&tenant
   } else if (tenant_id != tenant_dfc->get_tenant_id()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected tenant mtl", K(tenant_id), K(tenant_dfc->get_tenant_id()));
-    // if (OB_SYS_TENANT_ID == tenant_dfc->get_tenant_id() || OB_DIAG_TENANT_ID == tenant_dfc->get_tenant_id()) {
+    // if (OB_SYS_TENANT_ID == tenant_dfc->get_tenant_id()) {
     //   // 这里是为了解决 sys 租户 change tenant 到其它租户后，要求能使用 dtl 服务
     //   // 否则有 bug：https://work.aone.alibaba-inc.com/issue/27506638
     //   //

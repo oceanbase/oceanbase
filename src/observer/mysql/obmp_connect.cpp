@@ -411,47 +411,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
     }
 
     ObString host_name;
-    if (OB_DIAG_TENANT_ID == conn->tenant_id_) {
-      const ObString scramble_str(conn->scramble_buf_);
-      if (OB_FAIL(GCTX.diag_->check_passwd(hsr_.get_auth_response(), scramble_str))) {
-        LOG_WARN("diag password mismatch", K(ret));
-      } else {
-        // Attention!! must set session capability firstly
-        share::schema::ObSessionPrivInfo session_priv;
-        uint64_t db_id = OB_INVALID_ID;
-        if (ORACLE_MODE == session.get_compatibility_mode()) {
-          // https://work.aone.alibaba-inc.com/issue/31514373
-          hsr_.set_client_found_rows();
-        }
-        session.set_capability(hsr_.get_capability_flags());
-        session.set_user_priv_set(OB_PRIV_ALL);
-        session.set_db_priv_set(OB_PRIV_ALL);
-        host_name.assign_ptr(OB_SYS_HOST_NAME, static_cast<int32_t>(strlen(OB_SYS_HOST_NAME)));
-        if (OB_FAIL(session.init_tenant(OB_SYS_TENANT_NAME, OB_SYS_TENANT_ID))) {
-          LOG_WARN("failed to init_tenant", K(ret));
-        } else if (OB_FAIL(session.set_tenant(tenant_name_, OB_DIAG_TENANT_ID))) {
-          LOG_WARN("failed to set_tenant", K(ret));
-        } else if (OB_FAIL(session.set_user(user_name_, OB_SYS_HOST_NAME, 0))) {
-          LOG_WARN("failed to set_user", K(ret));
-        } else if (OB_FAIL(session.set_real_client_ip(client_ip_))) {
-          LOG_WARN("failed to set_real_client_ip", K(ret));
-        } else if (OB_FAIL(session.set_default_database(session_priv.db_))) {
-          LOG_WARN("failed to set default database", K(ret), K(session_priv.db_));
-        } else if (OB_FAIL(session.load_default_sys_variable(false, true))) {
-          LOG_WARN("failed to load system variables", K(ret));
-        } else if (OB_FAIL(session.update_database_variables(&schema_guard))) {
-          LOG_WARN("failed to update database variables", K(ret));
-        } else if (OB_FAIL(session.update_max_packet_size())) {
-          LOG_WARN("failed to update max packet size", K(ret));
-        } else if (OB_FAIL(schema_guard.get_database_id(session.get_effective_tenant_id(),
-                                                        session.get_database_name(),
-                                                        db_id))) {
-          LOG_WARN("failed to get database id", K(ret));
-        } else {
-          session.set_database_id(db_id);
-        }
-      }
-    } else {
+    if (true) {
       // TODO, checker ret
       if (tenant_name_.empty()) {
         tenant_name_ = ObString::make_string(OB_SYS_TENANT_NAME);
@@ -1728,13 +1688,6 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
       ret = OB_ERR_NO_PRIVILEGE;
       LOG_WARN("The monitor isn't allowed to login by remote client", K(get_peer()), K(ret));
     }
-  } else if (OB_DIAG_TENANT_ID == conn->tenant_id_) {
-    if (!(get_peer().is_equal_except_port(ipv4_local)
-          || get_peer().is_equal_except_port(ipv6_local)
-          || get_peer().is_equal_except_port(GCTX.self_addr())))  {
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("The diagnose isn't allowed to login by remote client", K(get_peer()), K(ret));
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -1766,24 +1719,29 @@ int ObMPConnect::check_update_tenant_id(ObSMConnection &conn, uint64_t &tenant_i
     conn.resource_group_id_ = OB_MONITOR_TENANT_ID;
   } else if (tenant_name_.case_compare(OB_DIAG_TENANT_NAME) == 0) {
     tenant_name_ = user_name_;
-    user_name_ = ObString::make_string("root");
-    if (OB_FAIL(get_tenant_id(tenant_id))) {
-      LOG_WARN("get_tenant_id failed", K(ret));
+    conn.group_id_ = OBCG_DIAG_TENANT;
+  }
+  if (OB_FAIL(get_tenant_id(tenant_id))) {
+    if (OB_ERR_TENANT_IS_LOCKED == ret) {
+      LOG_WARN("tenant is locked", K(ret), K_(tenant_name));
+      LOG_USER_ERROR(OB_ERR_TENANT_IS_LOCKED, tenant_name_.length(), tenant_name_.ptr());
     } else {
-      conn.tenant_id_ = tenant_id;
-      conn.resource_group_id_ = OB_DIAG_TENANT_ID;
+      LOG_WARN("get_tenant_id failed", K(ret));
     }
   } else {
-    if (OB_FAIL(get_tenant_id(tenant_id))) {
-      if (OB_ERR_TENANT_IS_LOCKED == ret) {
-        LOG_WARN("tenant is locked", K(ret), K_(tenant_name));
-        LOG_USER_ERROR(OB_ERR_TENANT_IS_LOCKED, tenant_name_.length(), tenant_name_.ptr());
+    conn.tenant_id_ = tenant_id;
+    conn.resource_group_id_ = tenant_id;
+    if (OBCG_DIAG_TENANT == conn.group_id_) {
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+      if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+        LOG_WARN("get_compat_mode failed", K(ret), K(tenant_id));
+      } else if (Worker::CompatMode::MYSQL == compat_mode) {
+        user_name_ = ObString::make_string(OB_SYS_USER_NAME);
+      } else if (Worker::CompatMode::ORACLE == compat_mode) {
+        user_name_ = ObString::make_string(OB_ORA_SYS_USER_NAME);
       } else {
-        LOG_WARN("get_tenant_id failed", K(ret));
+        LOG_WARN("invalid compat mode", K(ret), K(tenant_id), K(compat_mode));
       }
-    } else {
-      conn.tenant_id_ = tenant_id;
-      conn.resource_group_id_ = tenant_id;
     }
   }
   if (OB_SUCC(ret)) {

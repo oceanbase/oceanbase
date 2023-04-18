@@ -796,7 +796,6 @@ const double OB_DIAG_CPU = 1.0;
 const double OB_DATA_CPU = 2.5;
 const double OB_RS_CPU = 1.0;
 const double OB_SVR_BLACKLIST_CPU = 1.0;
-const int64_t OB_DIAG_MEMORY = 2L << 30;
 const int64_t OB_RS_MEMORY = 2L << 30;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
@@ -811,7 +810,6 @@ const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_RS_TENANT_ID = 510;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
-const uint64_t OB_DIAG_TENANT_ID = 999;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;
 const uint64_t OB_USER_TENANT_ID = 1000;
 
@@ -1809,8 +1807,7 @@ OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
   return is_virtual_tenant_id(tenant_id) &&
        (OB_EXT_LOG_TENANT_ID == tenant_id ||
-        OB_RS_TENANT_ID == tenant_id ||
-        OB_DIAG_TENANT_ID == tenant_id);
+        OB_RS_TENANT_ID == tenant_id);
 }
 
 enum ObNameCaseMode

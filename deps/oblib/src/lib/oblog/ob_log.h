@@ -31,6 +31,7 @@
 #include <cstring>
 #include <sys/uio.h>
 #include <sys/statfs.h>
+#include <signal.h>
 
 #include "lib/ob_errno.h"
 #include "ob_log_print_kv.h"
@@ -236,6 +237,7 @@ enum class ProbeAction
  PROBE_BT,
  PROBE_ABORT,
  PROBE_DISABLE,
+ PROBE_STACK,
 };
 
 //@class ObLogger
@@ -1104,6 +1106,10 @@ inline void ObLogger::check_probe(
           }
           case ProbeAction::PROBE_DISABLE: {
             disable = true;
+            break;
+          }
+          case ProbeAction::PROBE_STACK: {
+            IGNORE_RETURN raise(60);
             break;
           }
           default: {

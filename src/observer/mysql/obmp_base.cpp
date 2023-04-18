@@ -408,6 +408,8 @@ int ObMPBase::setup_user_resource_group(
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
+  } else if (conn.group_id_ == OBCG_DIAG_TENANT) {
+    // OBCG_DIAG_TENANT was set in check_update_tenant_id, DO NOT overlap it.
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
               tenant_id, user_id, group_id))) {
     LOG_WARN("fail get group id by user", K(user_id), K(tenant_id), K(ret));
