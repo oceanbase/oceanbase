@@ -64,7 +64,7 @@ public:
   void *alloc(const int64_t size) override
   {
     void *ret = nullptr;
-    if (0 != size) {
+    if (0 != size && ObLuaHandler::get_instance().memory_usage() + size + 8 < ObLuaHandler::LUA_MEMORY_LIMIT) {
 #if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
       if (OB_NOT_NULL(ret = ::malloc(size + 8))) {
 #else
@@ -72,6 +72,7 @@ public:
 #endif
         *static_cast<uint64_t *>(ret) = size;
         ret = (char*)ret + 8;
+        ObLuaHandler::get_instance().memory_update(size + 8);
       }
     }
     return ret;
@@ -85,6 +86,7 @@ public:
   {
     if (OB_NOT_NULL(ptr)) {
       const uint64_t size = *(uint64_t *)((char *)ptr - 8);
+      ObLuaHandler::get_instance().memory_update(- 8 - size);
 #if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
       ::free((void *)((char *)ptr - 8));
 #else
@@ -1575,29 +1577,13 @@ static ObFIFOAllocator &get_global_allocator()
 
 void *diagnose::alloc(const int size)
 {
-  void *ret = nullptr;
-  if (0 == size) {
-    // do nothing
-  } else if (ObLuaHandler::get_instance().memory_usage() + size + 8 < ObLuaHandler::LUA_MEMORY_LIMIT) {
-    if (OB_NOT_NULL(ret = get_global_allocator().alloc(size + 8))) {
-      *static_cast<uint64_t *>(ret) = size;
-      ret = (char*)ret + 8;
-      ObLuaHandler::get_instance().memory_update(size + 8);
-    } else {
-      OB_LOG(ERROR, "lua memory alloc failed", K(size), K(get_global_allocator().total()));
-    }
-  } else {
-    OB_LOG(ERROR, "lua memory usage over limit", K(size));
-  }
-  return ret;
+  return get_global_allocator().alloc(size);
 }
 
 void diagnose::free(void *ptr)
 {
   if (OB_NOT_NULL(ptr)) {
-    const uint64_t size = *(uint64_t *)((char *)ptr - 8);
-    ObLuaHandler::get_instance().memory_update(- 8 - size);
-    get_global_allocator().free((void *)((char *)ptr - 8));
+    get_global_allocator().free(ptr);
   }
 }
 

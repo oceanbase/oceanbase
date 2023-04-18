@@ -146,7 +146,7 @@ int ObUnixDomainListener::run()
     struct epoll_event listen_ev;
     int epoll_fd = epoll_create(256);
     s.sun_family = AF_UNIX;
-    strncpy(s.sun_path, addr, sizeof(s.sun_path));
+    strncpy(s.sun_path, addr, sizeof(s.sun_path) - 1);
     unlink(addr);
     listen_ev.events = EPOLLIN;    
     listen_ev.data.fd = listen_fd_;
