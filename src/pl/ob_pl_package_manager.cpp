@@ -755,14 +755,16 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
   OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+  if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
+    // package ref cursor variable, refrence outside, do not destruct it.
+  } else if (OB_FAIL(ret)) {
+    OZ (ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_)));
+  } else {
+    OZ (ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_)));
+  }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));
   }
-  OZ (var->get_type().free_session_var(resolve_ctx,
-                                       var->get_type().is_cursor_type() ?
-                                        package_state->get_pkg_cursor_allocator()
-                                        : package_state->get_pkg_allocator(),
-                                       old_var_val), K(package_id), K(var_idx), K(var_val));
   return ret;
 }
 

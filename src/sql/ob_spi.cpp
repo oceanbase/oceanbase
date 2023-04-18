@@ -4171,6 +4171,7 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
             for (int64_t j = coll_cnt - n; OB_SUCC(ret) && j < coll_cnt; ++j) {
               if (ith_elem.is_pl_extend()) {
                 CK (OB_NOT_NULL(table->get_allocator()));
+                OZ (ObUserDefinedType::destruct_obj(data[j], ctx->exec_ctx_->get_my_session()));
                 OZ (ObUserDefinedType::deep_copy_obj(*(table->get_allocator()), ith_elem, data[j]));
               } else {
                 new (&(data[j]))ObObj(ith_elem);
