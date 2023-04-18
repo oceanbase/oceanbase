@@ -19,6 +19,8 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_user_type.h"
+#include "sql/ob_spi.h"
+#include "pl/ob_pl_resolver.h"
 
 namespace oceanbase
 {
@@ -92,6 +94,42 @@ int ObExprObjectConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 
+int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
+{
+  int ret = OB_SUCCESS;
+  auto session = ctx.exec_ctx_.get_my_session();
+  auto &exec_ctx = ctx.exec_ctx_;
+  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
+  pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
+  pl::ObPLResolveCtx resolve_ctx(alloc,
+                                 *session,
+                                 *(exec_ctx.get_sql_ctx()->schema_guard_),
+                                 package_guard,
+                                 *(exec_ctx.get_sql_proxy()),
+                                 false);
+  pl::ObPLINS *ns = NULL;
+  if (NULL == session->get_pl_context()) {
+    OZ (package_guard.init());
+    OX (ns = &resolve_ctx);
+  } else {
+    ns = session->get_pl_context()->get_current_ctx();
+  }
+  if (OB_SUCC(ret)) {
+    ObObj new_composite;
+    int64_t ptr = 0;
+    int64_t init_size = OB_INVALID_SIZE;
+    ObArenaAllocator tmp_alloc;
+    const pl::ObUserDefinedType *user_type = NULL;
+    OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
+    CK (OB_NOT_NULL(user_type));
+    OZ (user_type->newx(alloc, ns, ptr));
+    OZ (user_type->get_size(*ns, pl::PL_TYPE_INIT_SIZE, init_size));
+    OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
+    OX (result = new_composite);
+  }
+  return ret;
+}
+
 int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -125,7 +163,11 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
   } else {
     new(record)pl::ObPLRecord(info->udt_id_, expr.arg_cnt_);
     for (int64_t i = 0; i < expr.arg_cnt_; ++i) {
-      record->get_element()[i] = objs[i];
+      if (objs[i].is_null() && info->elem_types_.at(i).is_ext()) {
+        OZ (newx(ctx, record->get_element()[i], info->elem_types_.at(i).get_udt_id()));
+      } else {
+        OX (record->get_element()[i] = objs[i]);
+      }
     }
     result.set_extend(reinterpret_cast<int64_t>(record),
                       pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(expr.arg_cnt_));
