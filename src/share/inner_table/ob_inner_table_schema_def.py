@@ -11917,10 +11917,11 @@ def_table_schema(
          b.collation AS DEFAULT_COLLATION_NAME,
          NULL AS SQL_PATH,
          'NO' as DEFAULT_ENCRYPTION
-  FROM oceanbase.__all_database a left join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type
+  FROM oceanbase.__all_database a inner join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type
   WHERE a.tenant_id = 0
     and in_recyclebin = 0
     and database_name != '__recyclebin'
+  ORDER BY a.database_id
 """.replace("\n", " "),
 
   in_tenant_space = True,
