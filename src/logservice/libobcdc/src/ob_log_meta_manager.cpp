@@ -1138,22 +1138,16 @@ int ObLogMetaManager::set_column_meta_(
         } else if (ObSetType == col_type) {
           mysql_type = obmysql::MYSQL_TYPE_SET;
         }
-      } else if (ObNumberType == col_type || ObUNumberType == col_type) {
-        col_meta->setScale(column_schema.get_data_scale());
-        col_meta->setPrecision(column_schema.get_data_precision());
       }
+
+      col_meta->setScale(column_schema.get_data_scale());
+      col_meta->setPrecision(column_schema.get_data_precision());
 
       bool signed_flag = ((type_flag & UNSIGNED_FLAG) == 0);
 
-      if (ObBitType == col_type) {
-        // the length of BIT type is required,
-        // the "length" of the BIT type is store in precision
-        col_meta->setLength(column_schema.get_data_precision());
-      } else {
-        // for types with valid length(string\enumset\rowid\json\raw\lob\geo),
-        // get_data_length returns the valid length, returns 0 for other types.
-        col_meta->setLength(column_schema.get_data_length());
-      }
+      // for types with valid length(string\enumset\rowid\json\raw\lob\geo),
+      // get_data_length returns the valid length, returns 0 for other types.
+      col_meta->setLength(column_schema.get_data_length());
 
       if (column_schema.is_tbl_part_key_column()) {
         col_meta->setPartitioned(true);
