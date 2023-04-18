@@ -204,7 +204,10 @@ public:
   virtual void SetUp();
   virtual void TearDown() {}
 
-  TestRawDecoder() {}
+  TestRawDecoder():tenant_ctx_(OB_SERVER_TENANT_ID)
+  {
+    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+  }
   virtual ~TestRawDecoder() {}
 
   void setup_obj(ObObj& obj, int64_t column_id, int64_t seed);
@@ -223,6 +226,7 @@ protected:
   ObTableReadInfo read_info_;
   int64_t full_column_cnt_;
   ObArenaAllocator allocator_;
+  share::ObTenantBase tenant_ctx_;
 };
 
 void TestRawDecoder::SetUp()

@@ -42,7 +42,10 @@ class TestIColumnEncoder : public ::testing::Test
 {
 public:
   TestIColumnEncoder(const bool is_multi_version_row = false)
-    : is_multi_version_row_(is_multi_version_row) {}
+    : is_multi_version_row_(is_multi_version_row), tenant_ctx_(OB_SERVER_TENANT_ID)
+  {
+    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+  }
   virtual ~TestIColumnEncoder() {}
   virtual void SetUp();
   virtual void TearDown() {}
@@ -57,6 +60,7 @@ protected:
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   bool is_multi_version_row_;
+  share::ObTenantBase tenant_ctx_;
 };
 
 void TestIColumnEncoder::SetUp()
