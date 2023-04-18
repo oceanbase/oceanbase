@@ -3411,5 +3411,17 @@ int ObTablet::set_frozen_for_all_memtables()
 
   return ret;
 }
+
+void ObTablet::print_memtables_for_table()
+{
+  int ret = OB_SUCCESS;
+  common::ObSArray<storage::ObITable *> memtables;
+  if (OB_FAIL(get_memtables(memtables, true))) {
+    LOG_WARN("failed to get_memtables", K(ret), KPC(this));
+  } else {
+    LOG_INFO("memtables print", K(memtables), KPC(this));
+  }
+}
+
 } // namespace storage
 } // namespace oceanbase

@@ -951,7 +951,7 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
     LOG_WARN("failed to get data", K(ret));
   } else if (OB_UNLIKELY(data.tx_id_ != tx_id)) {
     ret = OB_ERR_UNEXPECTED;
-    ObTabletCreateDeleteHelper::print_memtables_for_table(handle);
+    handle.get_obj()->print_memtables_for_table();
     LOG_WARN("cannot set log ts for unlocked tablet", K(ret), K(tx_id), K(data), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else if (OB_UNLIKELY(!data.tx_scn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1051,7 +1051,7 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
     } else {
       const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
       LOG_WARN("already unlocked or bug", K(ret), K(tablet_meta), K(scn), K(trans_flags), K(tx_data));
-      ObTabletCreateDeleteHelper::print_memtables_for_table(handle);
+      handle.get_obj()->print_memtables_for_table();
     }
   }
   return ret;
