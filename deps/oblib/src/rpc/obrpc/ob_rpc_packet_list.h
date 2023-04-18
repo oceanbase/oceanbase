@@ -965,3 +965,6 @@ PCODE_DEF(OB_LOB_QUERY, 0x1561)
 
 // 1581-1590 for workload repository
 // PCODE_DEF(OB_WR_ASYNC_SNAPSHOT_TASK, 0x1581)
+
+// session info verification
+// PCODE_DEF(OB_SESS_INFO_VERIFICATION, 0x1592)
