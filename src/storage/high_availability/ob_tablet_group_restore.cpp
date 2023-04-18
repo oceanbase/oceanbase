@@ -27,6 +27,8 @@ using namespace share;
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_UPDATE_TABLET_DATA_STATUS_FAILED);
+
 /******************ObTabletGroupRestoreCtx*********************/
 ObTabletGroupRestoreCtx::ObTabletGroupRestoreCtx()
   : ObIHADagNetCtx(),
@@ -2770,6 +2772,19 @@ int ObTabletFinishRestoreTask::update_data_status_()
       const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
       if (OB_FAIL(ls_->update_tablet_ha_data_status(tablet_restore_ctx_->tablet_id_, data_status))) {
         LOG_WARN("[HA]failed to update tablet ha data status", K(ret), KPC(tablet_restore_ctx_), K(data_status));
+      } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      if (tablet_restore_ctx_->tablet_id_.is_ls_inner_tablet()) {
+        //do nothing
+      } else {
+        ret = EN_UPDATE_TABLET_DATA_STATUS_FAILED ? : OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(ERROR, "fake EN_UPDATE_TABLET_DATA_STATUS_FAILED", K(ret));
+        }
+      }
+    }
+#endif
       }
     }
   }

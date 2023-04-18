@@ -1133,8 +1133,7 @@ int ObStorageHATabletsBuilder::update_local_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info), KP(tablet));
   } else if (tablet->get_tablet_meta().ha_status_.is_none()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("local exist tablet data is complete, no need update local tablet", K(ret), KPC(tablet));
+    LOG_INFO("local exist tablet data is complete, no need update local tablet", K(ret), KPC(tablet));
   } else if (tablet->get_tablet_meta().start_scn_ == tablet_info.param_.start_scn_) {
     //do nothing
   } else if (FALSE_IT(param.rebuild_seq_ = ls->get_rebuild_seq())) {
