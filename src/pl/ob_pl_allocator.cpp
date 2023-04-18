@@ -124,7 +124,8 @@ int ObPLPkgAllocator::copy_all_element_with_new_allocator(ObIAllocator *allocato
     for (int64_t i = 0; OB_SUCC(ret) && i < vars.count(); ++i) {
       ObObj dst;
       if (vars.at(i).is_pl_extend()
-          && vars.at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE) {
+          && vars.at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
+          && vars.at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(*allocator, vars.at(i), dst, true));
         OZ (pl::ObUserDefinedType::destruct_obj(vars.at(i), nullptr));
       } else {
