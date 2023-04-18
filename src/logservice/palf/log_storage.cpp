@@ -83,7 +83,7 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
   //
   // If we need support switch block when write failed, the solution is that:
 	// 1. only delete prev block when in append_meta interface;
-	// 2. if last meta block is empty, we alose need read its block header.
+	// 2. if last meta block is empty, we also need read its block header.
   } else if (OB_FAIL(
                  read_block_header_(last_block_id, log_block_header_))) {
     PALF_LOG(WARN, "read_block_header_ failed", K(ret), KPC(this));
@@ -312,15 +312,13 @@ int LogStorage::inner_truncate_(const LSN &lsn)
   int ret = OB_SUCCESS;
   const block_id_t lsn_block_id = lsn_2_block(lsn, logical_block_size_);
   const block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
-  // 'expected_next_block_id' used to check whether disk is integral, we make sure that either it's
-  // empty or it doesn't exist.
-  // because the padding log is submitted by next log, even if the 'lsn' is the end lsn of padding
-  // the block after 'lsn_block_id' must exist. we just set expected_next_block_id to 'lsn_block_id' + 1
-  // and the block after 'lsn_block_id' will be reset to empty.
+  // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
+  // we make sure that the content in each block_id which is greater than or equal to
+  // 'expected_next_block_id' are not been used.
   const block_id_t expected_next_block_id = lsn_block_id + 1;
-  if (lsn_block_id != log_tail_block_id && OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
+  if (lsn_block_id != log_tail_block_id && OB_FAIL(update_manifest_(expected_next_block_id))) {
     PALF_LOG(WARN,
-             "inner_truncat_ update_manifest_cb_ failed",
+             "inner_truncat_ update_manifest_ failed",
              K(ret),
              K(expected_next_block_id),
              KPC(this));
@@ -423,14 +421,14 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
-  // NB: 'expected_next_block_id' is used to check whether disk is integral, we make sure that either it's
-  // empty or it doesn't exist.
+  // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
+  // we make sure that the content in each block_id which is greater than or equal to
+  // 'expected_next_block_id' are not been used.
   // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
-  // must exist. even if the block after 'block_id' have been deleted, the block of 'expected_next_block_id'
-  // will not exist.
+  // must exist.(we will delete each block after 'block_id', not include 'block_id')
   const block_id_t expected_next_block_id = block_id + 1;
-  if (OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
-    PALF_LOG(WARN, "update_manifest_cb_ failed", K(ret), KPC(this), K(block_id),
+  if (OB_FAIL(update_manifest_(expected_next_block_id))) {
+    PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id),
 				K(expected_next_block_id), K(start_lsn_of_block));
 	} else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
     PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
@@ -557,6 +555,24 @@ int LogStorage::load_last_block_(const block_id_t min_block_id,
     // update 'curr_block_id_' of LogBlockHeader
     OB_ASSERT(curr_block_writable_size_ <= logical_block_size_);
   }
+  // update manifest when last block is empty, because we update manifest after create new block, if stop observer between
+  // create new block and update manifest, after restart we can append log to this block and will not update manifest because
+  // the last block has been created successfully before restart. and then resatrt will fail because new write option will
+  // no longer switch block. the constriaints of manifest are broken.
+  //
+  // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral, we make sure that the content
+  // in each block_id which is greater than or equal to 'expected_next_block_id' is not been used.
+  //
+  const bool in_restart = true;
+  if (logical_block_size_ == curr_block_writable_size_) {
+    const block_id_t expected_next_block_id = max_block_id + 1;
+    // for restart, update_manifest_cb_ will check whther expected_next_block_id is 'manifest' + 1
+    if (OB_FAIL(update_manifest_cb_(expected_next_block_id, in_restart))) {
+      PALF_LOG(WARN, "update_manifest_ failed", KPC(this), K(expected_next_block_id));
+    } else {
+      PALF_LOG(INFO, "need update manifest in restart", KPC(this), K(expected_next_block_id));
+    }
+  }
   return ret;
 }
 
@@ -637,8 +653,8 @@ int LogStorage::inner_switch_block_()
   const block_id_t expected_next_block_id = block_id + 1;
   if (OB_FAIL(block_mgr_.switch_next_block(block_id))) {
     PALF_LOG(ERROR, "switch_next_block failed", K(ret));
-  } else if (OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
-    PALF_LOG(WARN, "update_manifest_cb_ failed", K(ret), KPC(this), K(block_id));
+  } else if (OB_FAIL(update_manifest_(expected_next_block_id))) {
+    PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id));
   } else {
     PALF_LOG(INFO, "inner_switch_block_ success", K(ret), K(log_block_header_),
              K(block_id));
@@ -850,6 +866,11 @@ void LogStorage::reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_
   curr_block_writable_size_ = (true == last_block_exist) ? logical_block_size_ - logical_offset : 0;
   need_append_block_header_ = (curr_block_writable_size_ == logical_block_size_) ? true : false;
   log_tail_ = readable_log_tail_ = lsn;
+}
+
+int LogStorage::update_manifest_(const block_id_t expected_next_block_id, const bool in_restart)
+{
+  return update_manifest_cb_(expected_next_block_id, in_restart);
 }
 } // end namespace palf
 } // end namespace oceanbase

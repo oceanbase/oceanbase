@@ -39,7 +39,7 @@ class ReadBuf;
 class LogStorage : public ILogStorage
 {
 public:
-  using UpdateManifestCallback = ObFunction<int(const block_id_t)>;
+  using UpdateManifestCallback = ObFunction<int(const block_id_t, const bool in_restart)>;
   LogStorage();
   ~LogStorage();
   int init(const char *log_dir,
@@ -167,6 +167,7 @@ private:
                    ReadBuf &read_buf,
                    int64_t &out_read_size);
   void reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist);
+  int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;
