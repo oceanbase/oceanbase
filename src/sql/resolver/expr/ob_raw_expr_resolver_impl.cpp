@@ -5817,7 +5817,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
         }
 
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(process_sys_func_params(*func_expr))) {
+          if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count))) {
             LOG_WARN("fail process sys func params", K(ret));
           }
         }
@@ -5867,12 +5867,19 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   return ret;
 }
 
-int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr)
+int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count)
 {
   int ret = OB_SUCCESS;
   const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_expr.get_func_name());
   switch (expr_type)
   {
+    case T_FUN_SYS_NAME_CONST:
+      if (current_columns_count != ctx_.columns_->count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
+        LOG_WARN("params of name_const contain column references", K(ret));
+      }
+      break;
     case T_FUN_SYS_UUID2BIN:
     case T_FUN_SYS_BIN2UUID:
       if (2 == func_expr.get_param_count()) {
