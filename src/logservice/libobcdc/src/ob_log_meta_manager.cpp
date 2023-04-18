@@ -1201,89 +1201,79 @@ int ObLogMetaManager::set_column_meta_(
 
 template<class TABLE_SCHEMA>
 int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
-    const TABLE_SCHEMA *schema,
+    const TABLE_SCHEMA *table_schema,
     const TableSchemaInfo &tb_schema_info)
 {
   int ret = OB_SUCCESS;
   int64_t valid_pk_num = 0;
-  const int64_t rowkey_column_num = schema->get_rowkey_column_num();
   ObLogAdaptString pks(ObModIds::OB_LOG_TEMP_MEMORY);
   ObLogAdaptString pk_info(ObModIds::OB_LOG_TEMP_MEMORY);
 
-  if (OB_ISNULL(table_meta) || OB_ISNULL(schema)) {
-    LOG_ERROR("invalid argument", K(table_meta), K(schema));
+  if (OB_ISNULL(table_meta) || OB_ISNULL(table_schema)) {
+    LOG_ERROR("invalid argument", K(table_meta), K(table_schema));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
-      int64_t column_index = -1;
-      ColumnSchemaInfo *column_schema_info = NULL;
+    if (! table_schema->is_heap_table()) {
+      const int64_t rowkey_column_num = table_schema->get_rowkey_column_num();
 
-      if (OB_FAIL(tb_schema_info.get_column_schema_info_for_rowkey(i, column_schema_info))) {
-        LOG_ERROR("get_column_schema_info", KR(ret), "table_id", schema->get_table_id(),
-            "table_name", schema->get_table_name(),
-            K_(enable_output_hidden_primary_key), K(column_schema_info));
-      } else if (! column_schema_info->is_usr_column()) {
-        // filter non user column
-        META_STAT_INFO("ignore non user-required column for set_row_keys_", KPC(column_schema_info),
-            "table_name", schema->get_table_name(),
-            "table_id", schema->get_table_id(),
-            "rowkey_index", i,
-            K(rowkey_column_num));
-      } else if (! column_schema_info->is_rowkey()) { // not rowkey
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("not a heap table and have no-rowkey in TableSchema::rowley_info_", K(ret),
-            K(column_schema_info));
-      } else {
-        const auto *column_table_schema = schema->get_column_schema(column_schema_info->get_column_id());
-        if (OB_ISNULL(column_table_schema)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
+        int64_t column_index = -1;
+        ColumnSchemaInfo *column_schema_info = NULL;
+
+        if (OB_FAIL(tb_schema_info.get_column_schema_info_for_rowkey(i, column_schema_info))) {
+          LOG_ERROR("get_column_schema_info", KR(ret), "table_id", table_schema->get_table_id(),
+              "table_name", table_schema->get_table_name(),
+              K_(enable_output_hidden_primary_key), K(column_schema_info));
+        } else if (! column_schema_info->is_rowkey()) { // not rowkey
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), KPC(column_schema_info), KPC(schema), KPC(column_table_schema));
-        } else {
-          column_index = column_schema_info->get_usr_column_idx();
+          LOG_ERROR("not a heap table and have no-rowkey in TableSchema::rowley_info_", K(ret),
+              K(column_schema_info));
+        } else if (OB_FAIL(fill_primary_key_info_(
+            *table_schema,
+            *column_schema_info,
+            pks,
+            pk_info,
+            valid_pk_num))) {
+          LOG_ERROR("fill_primary_key_info_ failed", KR(ret), K(pks), K(pk_info), K(valid_pk_num), K(column_schema_info));
+        }
+      } // for
+    } else {
+      ObArray<uint64_t> logic_pks;
+      auto fn = [](uint64_t &a, uint64_t &b) { return a < b; };
 
-          if (OB_UNLIKELY(column_index < 0 || column_index >= OB_MAX_COLUMN_NUMBER)) {
-            LOG_ERROR("column_index is invalid", K(column_index),
-                "table_id", schema->get_table_id(),
-                "table_name", schema->get_table_name(),
-                "column_id", column_schema_info->get_column_id(),
-                "column_name", column_table_schema->get_column_name());
+      if (OB_FAIL(get_logic_primary_keys_for_heap_table_(*table_schema, logic_pks))) {
+        LOG_ERROR("get_logic_primary_keys_for_heap_table_ failed", KR(ret), KPC(table_schema), K(logic_pks));
+      } else if (OB_FAIL(sort_and_unique_array(logic_pks, fn))) {
+        LOG_ERROR("sort and unique logic_pks failed", KR(ret), K(logic_pks), K(table_schema));
+      } else {
+        ARRAY_FOREACH_N(logic_pks, column_id_idx, pk_count) {
+          const uint64_t column_id = logic_pks.at(column_id_idx);
+          ColumnSchemaInfo *column_schema_info = NULL;
+
+          if (OB_UNLIKELY(OB_HIDDEN_PK_INCREMENT_COLUMN_ID < column_id && OB_APP_MIN_COLUMN_ID > column_id)) {
             ret = OB_ERR_UNEXPECTED;
-          } else {
-            ret = pks.append(column_table_schema->get_column_name());
-
-            if (OB_SUCCESS == ret) {
-              if (i < (rowkey_column_num - 1)) {
-                ret = pks.append(",");
-              }
-            }
-
-            if (OB_SUCCESS == ret) {
-              if (0 == valid_pk_num) {
-                ret = pk_info.append("(");
-              } else {
-                ret = pk_info.append(",");
-              }
-            }
-
-            if (OB_SUCCESS == ret) {
-              ret = pk_info.append_int64(column_index);
-            }
-
-            if (OB_SUCCESS == ret) {
-              valid_pk_num++;
-            } else {
-              LOG_ERROR("pks or pk_info append fail", KR(ret), K(pks), K(pk_info), K(column_index));
-            }
+            LOG_ERROR("invalid column_id", KR(ret), K(column_id_idx), K(column_id), K(logic_pks), KPC(table_schema));
+          } else if (OB_FAIL(tb_schema_info.get_column_schema_info_of_column_id(column_id, column_schema_info))) {
+            LOG_ERROR("get_column_schema_info_of_column_id failed", KR(ret), K(column_id), KPC(table_schema));
+          } else if (OB_FAIL(fill_primary_key_info_(
+              *table_schema,
+              *column_schema_info,
+              pks,
+              pk_info,
+              valid_pk_num))) {
+            LOG_ERROR("fill_primary_key_info_ failed",
+                KR(ret), K(pks), K(pk_info), K(valid_pk_num), K(column_id_idx), K(column_id), K(logic_pks), K(column_schema_info));
           }
         }
       }
-    } // for
+    }
 
     if (OB_SUCC(ret)) {
-      table_meta->setHasPK((valid_pk_num > 0));
+      const bool has_pk = (valid_pk_num > 0);
+      table_meta->setHasPK((has_pk));
 
-      // 只有在存在pk的情况下，才设置主键信息
-      if (valid_pk_num > 0) {
+      // only set primary_key_info if primary key is exist
+      if (has_pk) {
         if (OB_FAIL(pk_info.append(")"))) {
           LOG_ERROR("pk_info append fail", KR(ret), K(pk_info));
         } else {
@@ -1295,7 +1285,7 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
           } else if (OB_FAIL(pks.cstr(pks_str))) {
             LOG_ERROR("get pks str fail", KR(ret), K(pks));
           }
-          // 要求cstr是有效的
+          // require cstr is valid
           else if (OB_ISNULL(pk_info_str) || OB_ISNULL(pks_str)) {
             LOG_ERROR("pk_info_str or pks_str is invalid", K(pk_info_str), K(pks_str), K(pk_info),
                 K(pks), K(valid_pk_num));
@@ -1307,12 +1297,131 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
         }
       }
 
-      META_STAT_INFO("set_primary_keys", KR(ret), "table_name", schema->get_table_name(),
-          "table_id", schema->get_table_id(),
+      META_STAT_INFO("set_primary_keys", KR(ret), "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id(),
           "has_pk", table_meta->hasPK(), "pk_info", table_meta->getPkinfo(),
           "pks", table_meta->getPKs());
     }
   }
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogMetaManager::get_logic_primary_keys_for_heap_table_(
+    const TABLE_SCHEMA &table_schema,
+    ObIArray<uint64_t> &pk_list)
+{
+  int ret = OB_SUCCESS;
+  const bool enable_output_hidden_primary_key = (1 == TCONF.enable_output_hidden_primary_key);
+  pk_list.reset();
+
+  if (table_schema.is_heap_table() && enable_output_hidden_primary_key) {
+    ObArray<ObColDesc> col_ids;
+    if (OB_FAIL(table_schema.get_column_ids(col_ids))) {
+      LOG_ERROR("get all column info failed", KR(ret), K(table_schema));
+    } else {
+      ARRAY_FOREACH_N(col_ids, col_idx, col_cnt) {
+        bool chosen = false;
+        const ObColDesc &col_desc = col_ids.at(col_idx);
+        const uint64_t column_id = col_desc.col_id_;
+        if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
+          chosen = true;
+        } else {
+          auto *column_schema = table_schema.get_column_schema(column_id);
+
+          if (OB_ISNULL(column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("invalid column_schema", KR(ret), K(column_id), K(col_desc), K(table_schema));
+          } else if (column_schema->is_tbl_part_key_column()) {
+            // if not virtual: set as logic pk
+            // otherwise set its dep columns as logic pk
+            if (column_schema->is_virtual_generated_column()) {
+              ObArray<uint64_t> deped_cols;
+              if (OB_FAIL(column_schema->get_cascaded_column_ids(deped_cols))) {
+                LOG_ERROR("get_cascaded_column_ids from column_schema failed", KR(ret), K(column_schema));
+              } else {
+                ARRAY_FOREACH_N(deped_cols, dep_col_idx, dep_col_cnt) {
+                  const uint64_t deped_col_id = deped_cols.at(dep_col_idx);
+                  if (OB_UNLIKELY(OB_HIDDEN_PK_INCREMENT_COLUMN_ID < deped_col_id && OB_APP_MIN_COLUMN_ID > deped_col_id)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_ERROR("invalid deped column", KR(ret), K(column_id), K(deped_col_id));
+                  } else if (OB_FAIL(pk_list.push_back(deped_col_id))) {
+                    LOG_ERROR("push_back column_id into pk_list failed", KR(ret), K(column_id));
+                  }
+                }
+              }
+            } else {
+              chosen = true;
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && chosen && OB_FAIL(pk_list.push_back(column_id))) {
+          LOG_ERROR("push_back column_id into pk_list failed", KR(ret), K(column_id));
+        }
+      } // for
+    }
+    LOG_INFO("get_logic_primary_keys_for_heap_table_", KR(ret),
+        "tenant_id", table_schema.get_tenant_id(),
+        "table_id", table_schema.get_table_id(),
+        "table_name", table_schema.get_table_name(),
+        K(pk_list));
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogMetaManager::fill_primary_key_info_(
+    const TABLE_SCHEMA &table_schema,
+    const ColumnSchemaInfo &column_schema_info,
+    ObLogAdaptString &pks,
+    ObLogAdaptString &pk_info,
+    int64_t &valid_pk_num)
+{
+  int ret = OB_SUCCESS;
+  int64_t column_index = column_schema_info.get_usr_column_idx();
+  const auto *column_table_schema = table_schema.get_column_schema(column_schema_info.get_column_id());
+
+  if (OB_ISNULL(column_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), K(column_schema_info), K(table_schema), KPC(column_table_schema));
+  } else if (OB_UNLIKELY(! column_schema_info.is_usr_column())) {
+      // filter non user column
+      META_STAT_INFO("ignore non user-required column for set_row_keys_",
+          "tenant_id", table_schema.get_tenant_id(),
+          "table_name", table_schema.get_table_name(),
+          "table_id", table_schema.get_table_id(),
+          K(column_schema_info));
+  } else if (OB_UNLIKELY(column_index < 0 || column_index >= OB_MAX_COLUMN_NUMBER)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column_index is invalid", KR(ret),
+        K(column_index),
+        "table_id", table_schema.get_table_id(),
+        "table_name", table_schema.get_table_name(),
+        "column_id", column_schema_info.get_column_id(),
+        "column_name", column_table_schema->get_column_name());
+  } else if (valid_pk_num > 0 && OB_FAIL(pks.append(","))) {
+    LOG_ERROR("append pks delimeter failed", KR(ret), K(valid_pk_num), K(pks));
+  } else if (pks.append(column_table_schema->get_column_name())) {
+    LOG_ERROR("append column_name into pks failed", KR(ret), K(pks), KPC(column_table_schema));
+  } else {
+    if (OB_SUCC(ret)) {
+      if (0 == valid_pk_num) {
+        ret = pk_info.append("(");
+      } else {
+        ret = pk_info.append(",");
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(pk_info.append_int64(column_index))) {
+      LOG_ERROR("append column_index into pk_info failed", KR(ret), K(column_index), K(pk_info), KPC(column_table_schema));
+    } else {
+      valid_pk_num++;
+    }
+  }
+
   return ret;
 }
 

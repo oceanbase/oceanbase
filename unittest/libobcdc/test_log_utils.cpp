@@ -318,12 +318,57 @@ TEST(utils, cstring_to_num)
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 }
 
+TEST(utils, unique_arr_uint64)
+{
+  auto fn = [](uint64_t &a, uint64_t &b) { return a < b; };
+  ObArray<uint64_t> arr;
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(0));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(2));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(1));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(3));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(1));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(2));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(3));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(2));
+  EXPECT_EQ(OB_SUCCESS, sort_and_unique_array(arr, fn));
+  EXPECT_EQ(4, arr.count());
+  EXPECT_EQ(0, arr.at(0));
+  EXPECT_EQ(1, arr.at(1));
+  EXPECT_EQ(2, arr.at(2));
+  EXPECT_EQ(3, arr.at(3));
+}
+
+TEST(utils, unique_arr_lsn)
+{
+  auto fn = [](palf::LSN &a, palf::LSN &b) { return a < b; };
+  ObSEArray<palf::LSN, 8> arr;
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(0)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(2)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(1)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(3)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(1)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(2)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(3)));
+  EXPECT_EQ(OB_SUCCESS, arr.push_back(palf::LSN(2)));
+  EXPECT_EQ(OB_SUCCESS, sort_and_unique_array(arr, fn));
+  EXPECT_EQ(4, arr.count());
+  EXPECT_EQ(palf::LSN(0), arr.at(0));
+  EXPECT_EQ(palf::LSN(1), arr.at(1));
+  EXPECT_EQ(palf::LSN(2), arr.at(2));
+  EXPECT_EQ(palf::LSN(3), arr.at(3));
+}
 }
 }
 
 int main(int argc, char **argv)
 {
- // ObLogger::get_logger().set_mod_log_levels("ALL.*:DEBUG, TLOG.*:DEBUG");
+  system("rm -f test_log_utils.log");
+  ObLogger &logger = ObLogger::get_logger();
+  bool not_output_obcdc_log = true;
+  logger.set_file_name("test_log_utils.log", not_output_obcdc_log, false);
+  logger.set_log_level(OB_LOG_LEVEL_DEBUG);
+  logger.set_mod_log_levels("ALL.*:DEBUG");
+  logger.set_enable_async_log(false);
   testing::InitGoogleTest(&argc,argv);
 //  testing::FLAGS_gtest_filter = "DO_NOT_RUN";
   return RUN_ALL_TESTS();

@@ -31,6 +31,11 @@
 
 #include "ob_data_dict_utils.h"
 
+#define NEED_SERIALIZE_AND_DESERIALIZE_DICT \
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const; \
+  int deserialize(const ObDictMetaHeader &header, const char* buf, const int64_t data_len, int64_t& pos); \
+  int64_t get_serialize_size(void) const
+
 namespace oceanbase
 {
 namespace common
@@ -74,7 +79,10 @@ public:
   ObDictMetaHeader();
   ObDictMetaHeader(const ObDictMetaType &meta_type);
   virtual ~ObDictMetaHeader() { reset(); }
-  const static int64_t DEFAULT_VERSION = 1;
+public:
+  // NOTICE: update DEFAULT_VERSION if modify serialized fields in DictxxxMeta
+  // update to 2 in 4.1 bp1: add column_ref_ids_ in ObDictColumnMeta
+  const static int64_t DEFAULT_VERSION = 2;
 public:
   OB_INLINE bool is_valid() const
   {
@@ -86,6 +94,7 @@ public:
   void reset();
   bool operator==(const ObDictMetaHeader &other) const;
 public:
+  OB_INLINE int64_t get_version() const { return version_; }
   OB_INLINE const ObDictMetaType &get_dict_meta_type() const { return meta_type_; }
   OB_INLINE void set_snapshot_scn(const share::SCN &snapshot_scn) { snapshot_scn_ = snapshot_scn; }
   OB_INLINE const share::SCN &get_snapshot_scn() const { return snapshot_scn_; }
@@ -100,7 +109,7 @@ public:
       K_(storage_type),
       K_(dict_serialized_length));
 private:
-  int16_t version_; // current version is 1. update if needed.
+  int16_t version_;
   share::SCN snapshot_scn_;
   ObDictMetaType meta_type_;
   ObDictMetaStorageType storage_type_;
@@ -109,7 +118,6 @@ private:
 
 class ObDictTenantMeta
 {
-  OB_UNIS_VERSION(1);
 public:
   // allocator should keep memory for meta until meta is not in use anymore
   explicit ObDictTenantMeta(ObIAllocator *allocator);
@@ -153,6 +161,7 @@ public:
   OB_INLINE bool is_in_recyclebin() const { return in_recyclebin_; }
   OB_INLINE const share::ObLSArray &get_ls_array() const { return ls_arr_; }
 
+  NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(tenant_id),
       K_(schema_version),
@@ -182,7 +191,6 @@ private:
 
 class ObDictDatabaseMeta
 {
-  OB_UNIS_VERSION(1);
 public:
   ObDictDatabaseMeta(ObIAllocator *allocator);
   virtual ~ObDictDatabaseMeta() { reset(); }
@@ -212,6 +220,7 @@ public:
   OB_INLINE bool is_in_recyclebin() const { return in_recyclebin_; }
   OB_INLINE common::ObNameCaseMode get_name_case_mode() const { return name_case_mode_; }
 
+  NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(tenant_id),
       K_(database_id),
@@ -243,7 +252,6 @@ private:
 
 class ObDictColumnMeta
 {
-  OB_UNIS_VERSION(1);
 public:
   ObDictColumnMeta(ObIAllocator *allocator);
   virtual ~ObDictColumnMeta() { reset(); }
@@ -288,7 +296,9 @@ public:
   OB_INLINE bool is_generated_column() const { return is_virtual_generated_column() || is_stored_generated_column(); }
   OB_INLINE bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
   OB_INLINE bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
+  int get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) const;
 
+  NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(column_id),
       K_(column_name),
@@ -335,11 +345,11 @@ private:
   common::ObObj orig_default_value_;//first default value, used for alter table add column; collation must be same with the column
   common::ObObj cur_default_value_; //collation must be same with the column
   common::ObSEArray<common::ObString, 8> extended_type_info_;//used for enum and set
+  common::ObSEArray<uint64_t, 2> column_ref_ids_;
 };
 
 class ObDictTableMeta
 {
-  OB_UNIS_VERSION(1);
 public:
   ObDictTableMeta(ObIAllocator *allocator);
   virtual ~ObDictTableMeta() { reset(); }
@@ -437,6 +447,7 @@ public:
   int get_column_meta(const uint64_t column_id, const ObDictColumnMeta *&column_meta) const;
   const ObDictColumnMeta *get_column_schema(const uint64_t column_id) const;
 public:
+  NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(tenant_id),
       K_(database_id),

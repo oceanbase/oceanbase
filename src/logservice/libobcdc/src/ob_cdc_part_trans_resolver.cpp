@@ -124,7 +124,8 @@ int64_t IObCDCPartTransResolver::MissingLogInfo::get_total_misslog_cnt() const
 
 int IObCDCPartTransResolver::MissingLogInfo::sort_and_unique_missing_log_lsn()
 {
-  return sort_and_unique_lsn_arr(miss_redo_or_state_lsn_arr_);
+  auto fn = [](palf::LSN &lsn1, palf::LSN &lsn2) { return lsn1 < lsn2; };
+  return sort_and_unique_array(miss_redo_or_state_lsn_arr_, fn);
 }
 
 // ***************  ObCDCPartTransResolver public functions ***************** //

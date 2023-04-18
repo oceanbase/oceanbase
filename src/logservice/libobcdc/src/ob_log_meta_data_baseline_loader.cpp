@@ -141,17 +141,17 @@ int ObLogMetaDataBaselineLoader::read(
     LOG_ERROR("data_dict_iterator append_log failed", KR(ret), K(tenant_id));
   } else {
     bool is_done = false;
-    datadict::ObDictMetaHeader meta_heaer;
+    datadict::ObDictMetaHeader meta_header;
 
     while (OB_SUCC(ret) && ! is_done) {
-      meta_heaer.reset();
+      meta_header.reset();
 
-      if (OB_FAIL(data_dict_iterator.next_dict_header(meta_heaer))) {
+      if (OB_FAIL(data_dict_iterator.next_dict_header(meta_header))) {
         if (OB_ITER_END != ret) {
           LOG_ERROR("data_dict_iterator next_dict_heaer failed", KR(ret), K(tenant_id));
         }
       } else {
-        const datadict::ObDictMetaType &meta_type = meta_heaer.get_dict_meta_type();
+        const datadict::ObDictMetaType &meta_type = meta_header.get_dict_meta_type();
 
         switch (meta_type) {
           case datadict::ObDictMetaType::TABLE_META:
@@ -160,7 +160,7 @@ int ObLogMetaDataBaselineLoader::read(
 
             if (OB_FAIL(dict_tenant_info->alloc_dict_table_meta(table_meta))) {
               LOG_ERROR("alloc_dict_table_meta failed", K(ret), K(tenant_id));
-            } else if (OB_FAIL(data_dict_iterator.next_dict_entry(*table_meta))) {
+            } else if (OB_FAIL(data_dict_iterator.next_dict_entry(meta_header, *table_meta))) {
               LOG_ERROR("data_dict_iterator next_dict_entry for table_meta failed", K(ret), K(tenant_id),
                   K(table_meta));
             } else if (OB_FAIL(dict_tenant_info->insert_dict_table_meta(table_meta))) {
@@ -177,7 +177,7 @@ int ObLogMetaDataBaselineLoader::read(
 
             if (OB_FAIL(dict_tenant_info->alloc_dict_db_meta(db_meta))) {
               LOG_ERROR("alloc_dict_db_meta failed", K(ret), K(tenant_id));
-            } else if (OB_FAIL(data_dict_iterator.next_dict_entry(*db_meta))) {
+            } else if (OB_FAIL(data_dict_iterator.next_dict_entry(meta_header, *db_meta))) {
               LOG_ERROR("data_dict_iterator next_dict_entry for db_meta failed", K(ret), K(tenant_id),
                   K(db_meta));
             } else if (OB_FAIL(dict_tenant_info->insert_dict_db_meta(db_meta))) {
@@ -192,7 +192,7 @@ int ObLogMetaDataBaselineLoader::read(
           {
             datadict::ObDictTenantMeta &tenant_meta = dict_tenant_info->get_dict_tenant_meta();
 
-            if (OB_FAIL(data_dict_iterator.next_dict_entry(tenant_meta))) {
+            if (OB_FAIL(data_dict_iterator.next_dict_entry(meta_header, tenant_meta))) {
               LOG_ERROR("data_dict_iterator next_dict_entry for tenant_meta failed", K(ret), K(tenant_id),
                   K(tenant_meta));
             } else {
