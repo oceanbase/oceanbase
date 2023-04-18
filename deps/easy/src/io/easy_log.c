@@ -153,6 +153,19 @@ void __tg_stat_cleanup(void *s)
   }
 }
 
+void __tg_stat_cleanup_s(void *s)
+{
+  int64_t cost = get_us() - ((struct easy_stat_time_guard_t *)s)->start;
+  int64_t *cnt = ((struct easy_stat_time_guard_t *)s)->cnt;
+  *cnt += 1;
+  int64_t *time = ((struct easy_stat_time_guard_t *)s)->time;
+  *time += cost;
+  if (cost > ev_loop_warn_threshold) {
+    easy_warn_log("easy cost too much time: %ldus, procedure: %s, size:%u", cost, ((struct easy_stat_time_guard_t *)s)->procedure,
+                  *(((struct easy_stat_time_guard_t *)s)->size));
+  }
+}
+
 void __tg_io_cleanup(void *s)
 {
   int ret = 0;
@@ -165,14 +178,16 @@ void __tg_io_cleanup(void *s)
   if (cost > ev_loop_warn_threshold) {
     ret = getloadavg(loadavg, 3);
     if (ret == 3) {
-      easy_warn_log("easy cost too much time(%ldus). loadavg(%lf, %lf, %lf), procedure: %s",
+      easy_warn_log("easy cost too much time(%ldus). loadavg(%lf, %lf, %lf), procedure: %s, size:%u",
                     cost,
                     loadavg[0],
                     loadavg[1],
                     loadavg[2],
-                    ((struct easy_stat_time_guard_t *)s)->procedure);
+                    ((struct easy_stat_time_guard_t *)s)->procedure,
+                    *(((struct easy_stat_time_guard_t *)s)->size));
     } else {
-      easy_warn_log("easy cost too much time(%ldus), procedure: %s", cost, ((struct easy_stat_time_guard_t *)s)->procedure);
+      easy_warn_log("easy cost too much time(%ldus), procedure: %s, size:%u", cost, ((struct easy_stat_time_guard_t *)s)->procedure,
+                    *(((struct easy_stat_time_guard_t *)s)->size));
     }
   }
 }

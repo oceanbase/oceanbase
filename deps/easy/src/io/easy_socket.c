@@ -196,7 +196,7 @@ char* easy_socket_err_reason(int error_no)
 ssize_t easy_socket_read(easy_connection_t *conn, char *buf, size_t size, int *pending)
 {
     ssize_t n;  
-    EASY_SOCKET_IO_TIME_GUARD(ev_read_count, ev_read_time);
+    EASY_SOCKET_IO_TIME_GUARD(ev_read_count, ev_read_time, size);
 
     do {
         n = recv(conn->fd, buf, size, 0);
@@ -236,7 +236,7 @@ ssize_t easy_socket_tcpwrite(easy_connection_t *conn, easy_list_t *l)
     ssize_t                 sended, size, wbyte, ret;
     int                     cnt, again;
 
-    EASY_SOCKET_IO_TIME_GUARD(ev_write_count, ev_write_time);
+    EASY_SOCKET_IO_TIME_GUARD(ev_write_count, ev_write_time, wbyte);
     wbyte = cnt = sended = again = 0;
 
     // foreach

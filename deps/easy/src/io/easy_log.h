@@ -78,6 +78,7 @@ uint64_t easy_fnv_hash(const char *str);
 void __tg_cleanup(void *s);
 void __tg_stat_cleanup(void *s);
 void __tg_io_cleanup(void *s);
+void __tg_stat_cleanup_s(void *s);
 
 extern int64_t ev_loop_warn_threshold;
 extern __thread int64_t ev_malloc_count;
@@ -98,6 +99,7 @@ struct easy_stat_time_guard_t {
   int64_t *cnt;
   int64_t *time;
   const char *procedure;
+  uint32_t *size;
 };
 
 struct easy_time_guard_t {
@@ -113,18 +115,28 @@ struct easy_time_guard_t {
       .procedure = __FUNCTION__,                                                                      \
   };
 
+#define EASY_STAT_TIME_GUARD_WITH_SIZE(_cnt, _time, _size)                                              \
+  struct easy_stat_time_guard_t _tg_stat_time_guard __attribute__((cleanup(__tg_stat_cleanup_s))) = {   \
+      .start = get_us(),                                                                                \
+      .cnt = &(_cnt),                                                                                   \
+      .time = &(_time),                                                                                 \
+      .procedure = __FUNCTION__,                                                                        \
+      .size = (uint32_t *)&(_size),                                                                     \
+  };
+
 #define EASY_TIME_GUARD()                                                              \
   struct easy_time_guard_t _tg_time_guard __attribute__((cleanup(__tg_cleanup))) = {   \
       .start = get_us(),                                                               \
       .procedure = __FUNCTION__,                                                       \
   };
 
-#define EASY_SOCKET_IO_TIME_GUARD(_cnt, _time)                                                     \
+#define EASY_SOCKET_IO_TIME_GUARD(_cnt, _time, _size)                                              \
   struct easy_stat_time_guard_t _tg__io_time_guard __attribute__((cleanup(__tg_io_cleanup))) = {   \
       .start = get_us(),                                                                           \
       .cnt = &(_cnt),                                                                              \
       .time = &(_time),                                                                            \
       .procedure = __FUNCTION__,                                                                   \
+      .size = (uint32_t *)&(_size),                                                                \
   };
 
 EASY_CPP_END
