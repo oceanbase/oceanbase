@@ -433,8 +433,6 @@ public:
   virtual void dec_unsubmitted_cnt() override;
   virtual void inc_unsynced_cnt() override;
   virtual void dec_unsynced_cnt() override;
-  void replay_auth();
-  void replay_done();
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
   int64_t get_checksum_log_ts() const { return trans_mgr_.get_checksum_log_ts(); }

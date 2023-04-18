@@ -34,7 +34,8 @@ namespace memtable
 class ObMemtableCtxCbAllocator;
 class ObIMemtable;
 class ObMemtable;
-enum class MutatorType; 
+class ObCallbackScope;
+enum class MutatorType;
 
 class ObITransCallback;
 struct RedoDataNode
@@ -178,7 +179,6 @@ public:
       rwlock_(ObLatchIds::MEMTABLE_CALLBACK_LIST_MGR_LOCK),
       parallel_stat_(0),
       for_replay_(false),
-      leader_changed_(false),
       callback_main_list_append_count_(0),
       callback_slave_list_append_count_(0),
       callback_slave_list_merge_count_(0),
@@ -224,6 +224,8 @@ public:
   int calc_checksum_before_log_ts(const int64_t log_ts,
                                   uint64_t &checksum,
                                   int64_t &checksum_log_ts);
+  int sync_log_fail(const ObCallbackScope &callbacks,
+                    int64_t &removed_cnt);
   void update_checksum(const uint64_t checksum,
                        const int64_t checksum_log_ts);
   int clean_unlog_callbacks(int64_t &removed_cnt);
@@ -295,7 +297,6 @@ private:
     int64_t parallel_stat_;
   };
   bool for_replay_;
-  bool leader_changed_;
   // statistics for callback remove
   int64_t callback_main_list_append_count_;
   int64_t callback_slave_list_append_count_;

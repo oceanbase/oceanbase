@@ -474,6 +474,42 @@ public:
   VIRTUAL_TO_STRING_KV("CleanUnlogCallback", "CleanUnlogCallback");
 };
 
+class ObSyncLogFailFunctor : public ObITxCallbackFunctor
+{
+public:
+  ObSyncLogFailFunctor() {}
+
+  virtual int operator()(ObITransCallback *callback) override
+  {
+    int ret = OB_SUCCESS;
+
+    if (NULL == callback) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected callback", KP(callback));
+    } else if (callback->need_fill_redo() && callback->need_submit_log()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "sync log fail will only touch submitted log", KPC(callback));
+    } else if (!callback->need_fill_redo() && !callback->need_submit_log()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "sync log fail will only touch unsynced log", KPC(callback));
+    } else if (!callback->need_fill_redo() && callback->need_submit_log()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "It will never on success before submit log", KPC(callback));
+    } else if (callback->need_fill_redo() && !callback->need_submit_log()) {
+      if (OB_FAIL(callback->log_sync_fail_cb())) {
+        // log_sync_fail_cb will never report error
+        TRANS_LOG(ERROR, "log sync fail cb report error", K(ret));
+      } else {
+        need_remove_callback_ = true;
+      }
+    }
+
+    return ret;
+  }
+
+  VIRTUAL_TO_STRING_KV("ObSyncLogFailFunctor", "ObSyncLogFailFunctor");
+};
+
 class ObSearchCallbackWCondFunctor : public ObITxCallbackFunctor
 {
 public:

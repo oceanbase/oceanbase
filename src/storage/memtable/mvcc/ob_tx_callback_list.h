@@ -22,6 +22,7 @@ namespace memtable
 {
 
 class ObTransCallbackMgr;
+class ObCallbackScope;
 
 class ObTxCallbackList
 {
@@ -82,6 +83,10 @@ public:
   // when switch to follower forcely.
   int clean_unlog_callbacks(int64_t &removed_cnt);
 
+  // sync_log_fail will remove all callbacks that not sync successfully. Which
+  // is called when callback is on failure.
+  int sync_log_fail(const ObCallbackScope &callbacks, int64_t &removed_cnt);
+
   // tx_calc_checksum_before_log_ts will calculate checksum during execution. It will
   // remember the intermediate results for final result.
   int tx_calc_checksum_before_log_ts(const int64_t log_ts);
@@ -113,6 +118,8 @@ public:
 
 private:
   int callback_(ObITxCallbackFunctor &func);
+  int callback_(ObITxCallbackFunctor &functor,
+                const ObCallbackScope &callbacks);
   int callback_(ObITxCallbackFunctor &func,
                 ObITransCallback *start,
                 ObITransCallback *end);
