@@ -282,11 +282,9 @@ int ObClusterVersion::get_tenant_data_version(
     if (tenant_config.is_valid() && tenant_config->compatible.value_updated()) {
       data_version = tenant_config->compatible;
     } else if (is_sys_tenant(tenant_id)
-               || is_meta_tenant(tenant_id)
-               || get_cluster_version() <= CLUSTER_VERSION_4_1_0_0) {
-      // 1. For sys/meta tenant, circular dependency problem may exist when load tenant config from inner tables.
-      //    For safety, data_version will fallback to last barrier data version until actual tenant config is loaded.
-      // 2. To compatible with upgrade path from 4.0 to 4.1
+               || is_meta_tenant(tenant_id)) {
+      // For sys/meta tenant, circular dependency problem may exist when load tenant config from inner tables.
+      // For safety, data_version will fallback to last barrier data version until actual tenant config is loaded.
       data_version = LAST_BARRIER_DATA_VERSION;
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
         share::ObTaskController::get().allow_next_syslog();

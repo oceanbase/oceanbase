@@ -336,7 +336,10 @@ def check_data_version(query_cur):
     min_cluster_version = get_version(results[0][0])
 
     # check data version
-    if min_cluster_version >= get_version("4.1.0.0"):
+    if min_cluster_version < get_version("4.1.0.0"):
+      # last barrier cluster version should be 4.1.0.0
+      fail_list.append('last barrier cluster version is 4.1.0.0. prohibit cluster upgrade from cluster version less than 4.1.0.0')
+    else:
       data_version_str = ''
       data_version = 0
       # check compatible is same
@@ -350,22 +353,26 @@ def check_data_version(query_cur):
         data_version_str = results[0][0]
         data_version = get_version(results[0][0])
 
-        # check target_data_version/current_data_version
-        sql = "select count(*) from oceanbase.__all_tenant"
-        (desc, results) = query_cur.exec_query(sql)
-        if len(results) != 1 or len(results[0]) != 1:
-          fail_list.append('result cnt not match')
+        if data_version < get_version("4.1.0.0"):
+          # last barrier data version should be 4.1.0.0
+          fail_list.append('last barrier data version is 4.1.0.0. prohibit cluster upgrade from data version less than 4.1.0.0')
         else:
-          tenant_count = results[0][0]
-
-          sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
+          # check target_data_version/current_data_version
+          sql = "select count(*) from oceanbase.__all_tenant"
           (desc, results) = query_cur.exec_query(sql)
           if len(results) != 1 or len(results[0]) != 1:
             fail_list.append('result cnt not match')
-          elif 2 * tenant_count != results[0][0]:
-            fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
           else:
-            logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
+            tenant_count = results[0][0]
+
+            sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
+            (desc, results) = query_cur.exec_query(sql)
+            if len(results) != 1 or len(results[0]) != 1:
+              fail_list.append('result cnt not match')
+            elif 2 * tenant_count != results[0][0]:
+              fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
+            else:
+              logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
 
 # 2. 检查paxos副本是否同步, paxos副本是否缺失
 def check_paxos_replica(query_cur):
@@ -398,38 +405,25 @@ def check_cluster_status(query_cur):
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 def check_tenant_status(query_cur):
-  min_cluster_version = 0
-  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
-  (desc, results) = query_cur.exec_query(sql)
-  if len(results) != 1:
-    fail_list.append('min_observer_version is not sync')
-  elif len(results[0]) != 1:
-    fail_list.append('column cnt not match')
+
+  # check tenant schema
+  (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('results len not match')
+  elif 0 != results[0][0]:
+    fail_list.append('has abnormal tenant, should stop')
   else:
-    min_cluster_version = get_version(results[0][0])
+    logging.info('check tenant status success')
 
-    # check tenant schema
-    (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
-    if len(results) != 1 or len(results[0]) != 1:
-      fail_list.append('results len not match')
-    elif 0 != results[0][0]:
-      fail_list.append('has abnormal tenant, should stop')
-    else:
-      logging.info('check tenant status success')
-
-    # check tenant info
-    # 1. don't support standby tenant upgrade from 4.0.0.0
-    # 2. don't support restore tenant upgrade
-    sub_sql = ''
-    if min_cluster_version >= get_version("4.1.0.0"):
-      sub_sql = """ and tenant_role != 'STANDBY'"""
-    (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' {0}""".format(sub_sql))
-    if len(results) != 1 or len(results[0]) != 1:
-      fail_list.append('results len not match')
-    elif 0 != results[0][0]:
-      fail_list.append('has abnormal tenant info, should stop')
-    else:
-      logging.info('check tenant info success')
+  # check tenant info
+  # don't support restore tenant upgrade
+  (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' and tenant_role != 'STANDBY'""")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('results len not match')
+  elif 0 != results[0][0]:
+    fail_list.append('has abnormal tenant info, should stop')
+  else:
+    logging.info('check tenant info success')
 
 # 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):
