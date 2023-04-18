@@ -155,7 +155,7 @@ int ObOptimizerStatsGatheringOp::inner_open()
         "ColStatNode"))) {
       LOG_WARN("fail to create column stats map", K(ret));
     }
-    LOG_TRACE("succeed to open optmizer_stats_gathering op",
+    LOG_TRACE("succeed to open optimizer_stats_gathering op",
               K(ret), K(map_size), K(MY_SPEC.column_ids_.count()), K(MY_SPEC.table_id_));
   }
   return ret;
@@ -353,7 +353,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
-    // do nothing yet, shoul use the plain stats.
+    // do nothing yet, should use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
     LOG_WARN("failed to eval expr", K(*expr));
   } else if (OB_ISNULL(datum) ) {
@@ -536,7 +536,7 @@ int ObOptimizerStatsGatheringOp::msg_end()
   int ret = OB_SUCCESS;
   if (MY_SPEC.type_ == OSG_TYPE::GATHER_OSG) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("gather osg shouln't reach here", K(ret));
+    LOG_WARN("gather osg shouldn't reach here", K(ret));
   } else {
     share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
     ObTableStatParam param;
