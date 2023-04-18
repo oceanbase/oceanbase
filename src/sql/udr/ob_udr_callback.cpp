@@ -41,16 +41,16 @@ void ObUDRAtomicOp::operator()(RuleItemKV &entry)
 ObUDRWlockAndRefGuard::~ObUDRWlockAndRefGuard()
 {
   if (NULL != rule_node_) {
-    rule_node_->dec_ref_count();
     rule_node_->unlock();
+    rule_node_->dec_ref_count();
   }
 }
 
 ObUDRRlockAndRefGuard::~ObUDRRlockAndRefGuard()
 {
   if (NULL != rule_node_) {
-    rule_node_->dec_ref_count();
     rule_node_->unlock();
+    rule_node_->dec_ref_count();
   }
 }
 
