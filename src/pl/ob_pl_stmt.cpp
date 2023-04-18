@@ -1489,8 +1489,11 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         uint64_t package_id = OB_INVALID_ID;
         if (parent_id != OB_INVALID_INDEX) {
           db_id = parent_id;
-        } else {
-          OZ (session_info.get_database_id(db_id));
+        } else if (OB_FAIL(session_info.get_database_id(db_id))) {
+          LOG_WARN("failed to get session database id", K(ret), K(db_id));
+        } else if (OB_INVALID_ID == db_id) {
+          ret = OB_ERR_NO_DB_SELECTED;
+          LOG_WARN("No database selected", K(ret));
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(schema_guard.get_package_id(
@@ -1669,7 +1672,9 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
   }
     break;
   case PKG_VAR: {
-    if (lib::is_mysql_mode()) {
+    if (lib::is_mysql_mode()
+        && get_tenant_id_by_object_id(parent_id) != OB_SYS_TENANT_ID
+        && session_info.get_effective_tenant_id() != OB_SYS_TENANT_ID) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("package is not supported in Mysql mode", K(type), K(ret));
     } else {

@@ -61,20 +61,6 @@ typedef common::ParamStore ParamStore;
 
 class ObPLCacheCtx;
 
-enum ObProcType
-{
-  INVALID_PROC_TYPE = 0,
-  STANDALONE_PROCEDURE = 1,
-  STANDALONE_FUNCTION = 2,
-  PACKAGE_PROCEDURE = 3, /* A subprogram created inside a package is a packaged subprogram */
-  PACKAGE_FUNCTION = 4,
-  NESTED_PROCEDURE = 5, /* A subprogram created inside a PL/SQL block is a nested subprogram */
-  NESTED_FUNCTION = 6,
-  STANDALONE_ANONYMOUS = 7,
-  UDT_PROCEDURE = 8,
-  UDT_FUNCTION = 9,
-};
-
 enum ObPLObjectType
 {
   INVALID_OBJECT_TYPE = -1,

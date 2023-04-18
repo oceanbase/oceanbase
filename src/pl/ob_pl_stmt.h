@@ -859,6 +859,9 @@ public:
                                         || UDT_FUNCTION == type_; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_db_id() const { return db_id_; }
+
+  virtual uint64_t get_database_id() const { return db_id_; }
+  virtual uint64_t get_package_id() const { return pkg_id_; }
   inline uint64_t get_pkg_id() const { return pkg_id_; }
   inline ObProcType get_type() const { return type_; }
   int get_idx(int64_t &idx) const;

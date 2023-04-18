@@ -30303,7 +30303,7 @@ int ObDDLService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunct
       LOG_WARN("check_udf_exist failed", K(tenant_id), K(name), K(ret));
     } else if (!is_exist) {
       if (if_exist) {
-        LOG_USER_NOTE(OB_ERR_FUNCTION_UNKNOWN, name.length(), name.ptr());
+        LOG_USER_NOTE(OB_ERR_FUNCTION_UNKNOWN, "FUNCTION", name.length(), name.ptr());
         LOG_INFO("function not exist, no need to delete it", K(tenant_id), K(name));
       } else {
         ret = OB_ERR_FUNCTION_UNKNOWN;

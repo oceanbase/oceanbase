@@ -6759,7 +6759,7 @@ int ObSPIService::resolve_ref_objects(const ParseResult &parse_result,
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(ObResolverUtils::resolve_udf(udf_node, case_mode, udf_info))) {
+            if (OB_FAIL(ObResolverUtils::resolve_udf_name_by_parse_node(udf_node, case_mode, udf_info))) {
               LOG_WARN("fail to resolve udf name", K(ret));
             } else if (udf_info.udf_database_.empty()) {
               udf_info.udf_database_ = session.get_database_name();

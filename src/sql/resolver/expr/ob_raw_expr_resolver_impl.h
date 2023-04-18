@@ -43,11 +43,14 @@ public:
   int check_first_node(const ParseNode *node);
 
   static int check_sys_func(ObQualifiedName &q_name, bool &is_sys_func);
-  static int check_pl_udf(ObQualifiedName &q_name, const ObSQLSessionInfo *session_info,
+  static int check_pl_udf(ObQualifiedName &q_name,
+                          const ObSQLSessionInfo *session_info,
                           ObSchemaChecker *schema_checker,
                           pl::ObPLBlockNS *secondary_namespace,
-                          bool &is_pl_udf);
-
+                          pl::ObProcType &proc_type);
+  int resolve_func_node_of_obj_access_idents(const ParseNode &func_node, ObQualifiedName &q_name);
+  int check_name_type(
+    ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   // types and constants
 private:
   // disallow copy
@@ -161,9 +164,7 @@ private:
   int process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr);
   int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr);
   int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
-  int check_name_type(ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   int check_pl_variable(ObQualifiedName &q_name, bool &is_pl_var);
-  int check_dll_udf(ObQualifiedName &q_name, bool &is_dll_udf);
   int is_explict_func_expr(const ParseNode &node, bool &is_func);
   int check_pseudo_column_exist(ObItemType type, ObPseudoColumnRawExpr *&expr);
   int process_pseudo_column_node(const ParseNode &node, ObRawExpr *&expr);
@@ -177,9 +178,7 @@ private:
   inline bool is_prior_expr_valid_scope(ObStmtScope scope) const;
   static bool should_not_contain_window_clause(const ObItemType func_type);
   static bool should_contain_order_by_clause(const ObItemType func_type);
-  int process_udf_node(const ParseNode *node, bool record_udf_info, ObRawExpr *&expr);
-  int resolve_udf_info(const ParseNode *node, bool record_udf_info, ObUDFInfo &udf_info,
-                       ParseNode *extra_param = NULL, ObRawExpr *extar_expr = NULL);
+  int resolve_udf_node(const ParseNode *node, ObUDFInfo &udf_info);
   int process_sqlerrm_node(const ParseNode *node, ObRawExpr *&expr);
   int process_plsql_var_node(const ParseNode *node, ObRawExpr *&expr);
   int process_call_param_node(const ParseNode *node, ObRawExpr *&expr);
@@ -210,6 +209,11 @@ private:
   int reset_aggr_sort_nulls_first(ObIArray<OrderItem> &aggr_sort_item);
   inline void set_udf_param_syntax_err(const bool val) { is_udf_param_syntax_err_ = val; }
   inline bool get_udf_param_syntax_err() { return is_udf_param_syntax_err_; }
+
+  int resolve_left_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
+  int resolve_right_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
+
+private:
   // data members
   ObExprResolveContext &ctx_;
   bool is_contains_assignment_;

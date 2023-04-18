@@ -223,11 +223,9 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
                                              sub_query_info, aggr_exprs, win_exprs,
                                              udf_info, op_exprs, user_var_exprs))) {
       LOG_WARN("resolve expr failed", K(ret));
-    } else if (udf_info.count() > 0 &&
-               OB_FAIL(ObRawExprUtils::init_udfs_info(params_, udf_info))) {
-      LOG_WARN("failed to init udf infos", K(ret));
-    } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
-      LOG_WARN("resolve columns for const expr failed", K(ret));
+    } else if (udf_info.count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("UDFInfo should not found be here!!!", K(ret));
     } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
       ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
       if (OB_ISNULL(call_expr->get_expr())) {
@@ -249,6 +247,8 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
       LOG_TRACE("set user variable with subquery", K(sub_query_info.count()), K(is_mysql_mode()));
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
+      LOG_WARN("resolve columns for const expr failed", K(ret));
     } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
       LOG_WARN("failed to formalize value expr", K(ret));
     } else {

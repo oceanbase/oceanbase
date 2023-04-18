@@ -2675,18 +2675,19 @@ MOD '(' expr ',' expr ')'
 }
 | relation_name '.' function_name '(' opt_expr_as_list ')'
 {
+  ParseNode *params = NULL;
+  ParseNode *function = NULL;
+  ParseNode *sub_obj_access_ref = NULL;
+  ParseNode *udf_node = NULL;
   if (NULL != $5)
   {
-    ParseNode *params = NULL;
     merge_nodes(params, result, T_EXPR_LIST, $5);
-    malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_UDF, 4, $3, params, $1, NULL);
-    store_pl_ref_object_symbol($$, result, REF_FUNC);
   }
-  else
-  {
-    malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_UDF, 4, $3, NULL, $1, NULL);
-    store_pl_ref_object_symbol($$, result, REF_FUNC);
-  }
+  malloc_non_terminal_node(function, result->malloc_pool_, T_FUN_SYS, 2, $3, params);
+  malloc_non_terminal_node(sub_obj_access_ref, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, function, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, $1, sub_obj_access_ref);
+  malloc_non_terminal_node(udf_node, result->malloc_pool_, T_FUN_UDF, 4, $3, params, $1, NULL);
+  store_pl_ref_object_symbol(udf_node, result, REF_FUNC);
 }
 | sys_interval_func
 {

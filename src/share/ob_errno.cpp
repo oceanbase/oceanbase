@@ -7120,10 +7120,10 @@ static const _error _error_OB_ERR_FUNCTION_UNKNOWN = {
       .mysql_errno           = ER_SP_DOES_NOT_EXIST,
       .sqlstate              = "42000",
       .str_error             = "FUNCTION does not exist",
-      .str_user_error        = "FUNCTION %.*s does not exist",
+      .str_user_error        = "%s %.*s does not exist",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5055, FUNCTION does not exist",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5055, FUNCTION %.*s does not exist"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5055, %s %.*s does not exist"
 };
 static const _error _error_OB_ERR_CREAT_MODIFY_TIME_COLUMN = {
       .error_name            = "OB_ERR_CREAT_MODIFY_TIME_COLUMN",

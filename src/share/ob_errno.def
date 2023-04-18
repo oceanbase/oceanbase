@@ -695,7 +695,7 @@ DEFINE_ERROR(OB_ERR_PASSWORD_EMPTY, -5051, -1, "HY000", "Empty password");
 DEFINE_ERROR(OB_ERR_GRANT_PRIVILEGES_TO_CREATE_TABLE, -5052, -1, "42000", "Failed to grant privelege");
 DEFINE_ERROR_EXT(OB_ERR_WRONG_DYNAMIC_PARAM, -5053, -1, "HY093", "Wrong dynamic parameters", "Incorrect arguments number to EXECUTE, need %ld arguments but give %ld");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_PARAM_SIZE, -5054, ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, "42000", "Incorrect parameter count", "Incorrect parameter count in the call to native function '%.*s'", 909, "invalid number of arguments", "invalid number of arguments in the call to native function '%.*s'");
-DEFINE_ERROR_EXT(OB_ERR_FUNCTION_UNKNOWN, -5055, ER_SP_DOES_NOT_EXIST, "42000", "FUNCTION does not exist", "FUNCTION %.*s does not exist");
+DEFINE_ERROR_EXT(OB_ERR_FUNCTION_UNKNOWN, -5055, ER_SP_DOES_NOT_EXIST, "42000", "FUNCTION does not exist", "%s %.*s does not exist");
 DEFINE_ERROR(OB_ERR_CREAT_MODIFY_TIME_COLUMN, -5056, -1, "23000", "CreateTime or ModifyTime column cannot be modified");
 DEFINE_ERROR(OB_ERR_MODIFY_PRIMARY_KEY, -5057, -1, "23000", "Primary key cannot be modified");
 DEFINE_ERROR(OB_ERR_PARAM_DUPLICATE, -5058, -1, "42000", "Duplicated parameters");

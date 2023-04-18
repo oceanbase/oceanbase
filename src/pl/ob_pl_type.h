@@ -78,6 +78,20 @@ class ObPLUserTypeTable;
 class ObUserDefinedType;
 class ObPLStmt;
 
+enum ObProcType
+{
+  INVALID_PROC_TYPE = 0,
+  STANDALONE_PROCEDURE,
+  STANDALONE_FUNCTION,
+  PACKAGE_PROCEDURE, /* A subprogram created inside a package is a packaged subprogram */
+  PACKAGE_FUNCTION,
+  NESTED_PROCEDURE, /* A subprogram created inside a PL/SQL block is a nested subprogram */
+  NESTED_FUNCTION,
+  STANDALONE_ANONYMOUS,
+  UDT_PROCEDURE,
+  UDT_FUNCTION,
+};
+
 enum ObPLType
 {
   PL_INVALID_TYPE = -1,
@@ -644,7 +658,7 @@ public:
   bool is_subprogram_var() const { return IS_SUBPROGRAM_VAR == access_type_; }
   bool is_user_var() const { return IS_USER == access_type_; }
   bool is_session_var() const { return IS_SESSION == access_type_ || IS_GLOBAL == access_type_; }
-  bool is_ns() const { return IS_DB_NS == access_type_ || IS_PKG_NS == access_type_; }
+  bool is_ns() const { return IS_DB_NS == access_type_ || IS_PKG_NS == access_type_ || IS_UDT_NS == access_type_; }
   bool is_const() const { return IS_CONST == access_type_; }
   bool is_property() const { return IS_PROPERTY == access_type_; }
   bool is_external() const

@@ -125,6 +125,8 @@ public:
   virtual int find_param_by_name(const common::ObString &name, int64_t &position) const = 0;
   virtual int get_routine_param(int64_t position, ObIRoutineParam *&param) const = 0;
   virtual const ObIRoutineParam* get_ret_info() const = 0;
+  virtual uint64_t get_database_id() const = 0;
+  virtual uint64_t get_package_id() const = 0;
   virtual void set_deterministic() = 0;
   virtual bool is_deterministic() const = 0;
   virtual void set_parallel_enable() = 0;

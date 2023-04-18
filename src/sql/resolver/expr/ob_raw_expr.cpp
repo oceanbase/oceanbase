@@ -94,7 +94,7 @@ int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRaw
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
 {
   UNUSED(mode); //TODO: @ryan.ly @yuming.wyc
-  bool maybe_column = !is_sys_func() && !is_pl_udf() && !is_dll_udf() && !is_pl_var();
+  bool maybe_column = !is_sys_func() && !is_pl_udf() && !is_dll_udf() && !is_pl_var() && !is_udf_return_access();
   for (int64_t i = 0; maybe_column && i < access_idents_.count(); ++i) {
     if (access_idents_.at(i).access_name_.empty() || access_idents_.at(i).access_index_ != OB_INVALID_INDEX) {
       maybe_column = false;
@@ -2638,7 +2638,8 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
       //do nothing
     }
     break;
-    case pl::ObObjAccessIdx::IS_UDF_NS: {
+    case pl::ObObjAccessIdx::IS_UDF_NS:
+    case pl::ObObjAccessIdx::IS_UDT_NS: {
       //do nothing
     }
     break;

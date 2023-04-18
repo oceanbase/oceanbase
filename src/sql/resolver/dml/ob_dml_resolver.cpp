@@ -1468,34 +1468,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     }
 
     if (OB_SUCC(ret) && udf_info.count() > 0) {
-      stmt_->get_query_ctx()->has_pl_udf_ = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.count(); ++i) {
-        ObUDFInfo &udf = udf_info.at(i);
-        if(OB_FAIL(ObRawExprUtils::init_udf_info(params_, udf))) {
-          LOG_WARN("resolve user defined functions failed", K(ret));
-        } else {
-          ObDMLStmt *stmt = get_stmt();
-          ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(udf_info.at(i).ref_expr_);
-          share::schema::ObSchemaGetterGuard *schema_guard = NULL;
-          uint64_t database_id = OB_INVALID_ID;
-          if (OB_ISNULL(stmt) || OB_ISNULL(udf_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("stmt or expr is null", K(stmt), K(udf_expr), K(ret));
-          } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("table schema is null", K(ret), K(schema_guard));
-          } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf_expr->get_database_name(), database_id))) {
-            LOG_WARN("failed to get database id", K(ret));
-          } else if (udf_expr->need_add_dependency()) {
-            ObSchemaObjVersion udf_version;
-            uint64_t dep_obj_id = view_ref_id_;
-            uint64_t dep_db_id = database_id;
-            OZ (udf_expr->get_schema_object_version(udf_version));
-            OZ (stmt->add_global_dependency_table(udf_version));
-            OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
-          }
-        }
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("UDFInfo should not found be here!!!", K(ret));
     }
     //try to convert ObUDFRawExpr to ObAggRawExpr for pl agg udf
     if (OB_SUCC(ret)) {
@@ -2331,22 +2305,39 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
     } else {
       if (q_name.is_access_root()
-        && is_external
-        && !params_.is_default_param_
-        && T_INTO_SCOPE != current_scope_
-        && NULL != params_.secondary_namespace_ //仅PL里的SQL出现了外部变量需要替换成QUESTIONMARK，纯SQL语境的不需要
-        && (real_ref_expr->is_const_raw_expr() //local变量
+          && is_external
+          && !params_.is_default_param_
+          && T_INTO_SCOPE != current_scope_
+          && NULL != params_.secondary_namespace_) { //仅PL里的SQL出现了外部变量需要替换成QUESTIONMARK，纯SQL语境的不需要
+        if (real_ref_expr->is_const_raw_expr() //local变量
             || real_ref_expr->is_obj_access_expr() //复杂变量
             || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package变量(system/user variable不会走到这里)
             || real_ref_expr->is_sys_func_expr()
-            || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type())) { //允许CURSOR%ROWID通过
-        /*
-         * 在已有的表达式里寻找是否有相同，如果有相同则使用同一个QuestionMark
-         * */
-        OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
-                                                         *params_.expr_factory_,
-                                                         params_.prepare_param_count_,
-                                                         real_ref_expr));
+            || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type()) { //允许CURSOR%ROWID通过
+          /*
+           * 在已有的表达式里寻找是否有相同，如果有相同则使用同一个QuestionMark
+           * */
+          OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
+                                                          *params_.expr_factory_,
+                                                           params_.prepare_param_count_,
+                                                          real_ref_expr));
+        } else if (real_ref_expr->is_udf_expr()
+                   && OB_NOT_NULL(real_ref_expr->get_param_expr(0))
+                   && real_ref_expr->get_param_expr(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
+          ObRawExpr *self = real_ref_expr->get_param_expr(0);
+          if (self->is_const_raw_expr()
+              || self->is_obj_access_expr()
+              || T_OP_GET_PACKAGE_VAR == self->get_expr_type()
+              || self->is_sys_func_expr()) {
+            OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
+                                                            *params_.expr_factory_,
+                                                             params_.prepare_param_count_,
+                                                             self));
+            OZ (ObRawExprUtils::replace_ref_column(real_ref_expr,
+                                                   real_ref_expr->get_param_expr(0),
+                                                   self));
+          }
+        }
       }
     }
   }
@@ -10160,7 +10151,9 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret), K(schema_guard));
-      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf_expr->get_database_name(), database_id))) {
+      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+                                                       udf_expr->get_database_name().empty() ? session_info_->get_database_name() : udf_expr->get_database_name(),
+                                                       database_id))) {
         LOG_WARN("failed to get database id", K(ret));
       } else if (udf_expr->need_add_dependency()) {
         uint64_t dep_obj_id = view_ref_id_;
