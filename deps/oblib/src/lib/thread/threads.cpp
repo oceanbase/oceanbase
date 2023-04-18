@@ -23,7 +23,7 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-int64_t global_thread_stack_size = ProtectedStackAllocator::adjust_size(1L << 19) - SIG_STACK_SIZE;
+int64_t global_thread_stack_size = (1L << 19) - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
 thread_local uint64_t ThreadPool::thread_idx_ = 0;
 
 // 获取线程局部的租户上下文，为线程池启动时检查使用
