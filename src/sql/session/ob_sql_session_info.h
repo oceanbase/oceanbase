@@ -45,7 +45,6 @@
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
-#include "sql/monitor/ob_sql_plan_manager.h"
 #include "storage/tx/ob_tx_free_route.h"
 
 namespace oceanbase
@@ -547,7 +546,6 @@ public:
            const ObTZInfoMap *tz_info = NULL,
            int64_t sess_create_time = 0,
            uint64_t tenant_id = OB_INVALID_TENANT_ID);
-  void destroy_session_plan_mgr();
   //for test
   int test_init(uint32_t version, uint32_t sessid, uint64_t proxy_sessid,
            common::ObIAllocator *bucket_allocator);
@@ -580,8 +578,6 @@ public:
   ObPsCache *get_ps_cache();
   obmysql::ObMySQLRequestManager *get_request_manager();
   sql::ObFLTSpanMgr *get_flt_span_manager();
-  ObPlanItemMgr *get_sql_plan_manager();
-  ObPlanItemMgr *get_plan_table_manager();
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
   void set_db_priv_set(const ObPrivSet priv_set) { db_priv_set_ = priv_set; }
   void set_show_warnings_buf(int error_code);
@@ -1040,8 +1036,6 @@ private:
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
   obmysql::ObMySQLRequestManager *request_manager_;
   sql::ObFLTSpanMgr *flt_span_mgr_;
-  ObPlanItemMgr *sql_plan_manager_;
-  ObPlanItemMgr *plan_table_manager_;
   ObPlanCache *plan_cache_;
   ObPsCache *ps_cache_;
   //记录select stmt中scan出来的结果集行数，供设置sql_calc_found_row时，found_row()使用；
@@ -1111,8 +1105,6 @@ private:
   bool is_ob20_protocol_; // mark as whether use oceanbase 2.0 protocol
 
   bool is_session_var_sync_; //session var sync support flag.
-
-  int64_t last_plan_id_; // 记录上一个计划的 plan_id，用于 show trace 中显示 sql 物理计划
 
   common::hash::ObHashSet<common::ObString> *pl_sync_pkg_vars_ = NULL;
 

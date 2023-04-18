@@ -109,6 +109,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
       plan_id_(0),
+      last_plan_id_(0),
       flt_vars_(),
       capability_(),
       proxy_capability_(),
@@ -368,6 +369,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
   plan_id_ = 0;
+  last_plan_id_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
   client_attribute_capability_.capability_ = 0;
@@ -1999,6 +2001,14 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
     sql_id_[len] = '\0';
   }
   return ret;
+}
+
+void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
+{
+  if (NULL != cur_phy_plan_) {
+    last_plan_id_ = cur_phy_plan_->get_plan_id();
+  }
+  cur_phy_plan_ = NULL;
 }
 
 // for cmd only

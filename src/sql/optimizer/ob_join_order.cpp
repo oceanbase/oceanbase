@@ -2410,7 +2410,7 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null path", K(ret));
       } else if (path->est_cost_info_.row_est_method_ == BASIC_STAT &&
-          (estimate_method == LOCAL_STORAGE || estimate_method == REMOTE_STORAGE)) {
+          (estimate_method == STORAGE_STAT)) {
         // do nothing if the path is estimated by ndv
       } else if (OB_UNLIKELY((range_prefix_count = path->range_prefix_count_) < 0)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2570,11 +2570,15 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
         LOG_WARN("failed to get index name", K(ret));
       } else { /*do nothing*/ }
 
-      if (OB_FAIL(ret)) {
-      } else if (ObOptimizerUtil::find_item(available_index_id, index_id)) {
+      if (OB_SUCC(ret)) {
         if (OB_FAIL(table_opt_info->available_index_name_.push_back(name))) {
           LOG_WARN("failed to push back index name", K(name), K(ret));
         } else { /* do nothing */ }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (ObOptimizerUtil::find_item(available_index_id, index_id)) {
+        //do nothing
       } else if (ObOptimizerUtil::find_item(unstable_index_id, index_id)) {
         if (OB_FAIL(table_opt_info->unstable_index_name_.push_back(name))) {
           LOG_WARN("failed to push back index name", K(name), K(ret));

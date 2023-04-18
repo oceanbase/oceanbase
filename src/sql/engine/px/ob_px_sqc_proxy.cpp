@@ -472,6 +472,12 @@ int ObPxSQCProxy::report(int end_ret) const
         task_tx_desc = NULL;
       }
     }
+    if (0 == i) {
+      OZ(finish_msg.fb_info_.assign(tasks.at(i).fb_info_));
+    } else {
+      OZ(finish_msg.fb_info_.merge_feedback_info(tasks.at(i).fb_info_));
+    }
+
     OZ(append(finish_msg.interm_result_ids_, task.interm_result_ids_));
   }
   if (OB_SUCCESS != ret && OB_SUCCESS == sqc_ret) {

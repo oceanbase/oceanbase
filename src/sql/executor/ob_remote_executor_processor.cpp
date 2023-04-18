@@ -697,6 +697,14 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
         if (OB_FAIL(execute_remote_plan(exec_ctx_, *plan))) {
           LOG_WARN("execute remote plan failed", K(ret), K(task), K(exec_ctx_.get_das_ctx().get_snapshot()));
+        } else if (plan->need_record_plan_info()) {
+          if(exec_ctx_.get_feedback_info().is_valid() &&
+             plan->get_logical_plan().is_valid() &&
+             OB_FAIL(plan->set_feedback_info(exec_ctx_))) {
+            LOG_WARN("failed to set feedback info", K(ret));
+          } else {
+            plan->set_record_plan_info(false);
+          }
         }
       }
       // ===============================================================
@@ -774,6 +782,10 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
                 "scanner_trans_rsult", scanner.get_trans_result(),
                 "tx_desc", *session->get_tx_desc());
     }
+  }
+  if (OB_SUCCESS == exec_errcode_ && is_execute_remote_plan()) {
+    ObExecFeedbackInfo &fb_info = scanner.get_feedback_info();
+    exec_errcode_ = fb_info.assign(exec_ctx_.get_feedback_info());
   }
   exec_ctx_.hide_session();
   // return a scanner no matter success or fail, set err_code to scanner

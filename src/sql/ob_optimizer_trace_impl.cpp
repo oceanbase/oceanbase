@@ -409,12 +409,11 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
   }
   if (OB_NOT_NULL(target_plan)) {
     ObSqlPlan sql_plan(target_plan->get_allocator());
-    sql_plan.set_session_info(target_plan->get_optimizer_context().get_session_info());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.store_sql_plan_for_explain(const_cast<ObLogPlan*>(target_plan),
-                                                    EXPLAIN_EXTENDED,
-                                                    option,
-                                                    plan_strs))) {
+    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogPlan*>(target_plan),
+                                        EXPLAIN_EXTENDED,
+                                        option,
+                                        plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     }
     OPT_TRACE_TITLE("Query Plan");

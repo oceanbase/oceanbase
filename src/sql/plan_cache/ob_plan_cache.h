@@ -368,6 +368,9 @@ public:
                         const int64_t safe_timestamp) const;
   template<typename _callback>
   int foreach_cache_obj(_callback &callback) const;
+  template<typename _callback>
+  int foreach_alloc_cache_obj(_callback &callback) const;
+
   common::ObMemAttr get_mem_attr() {
     common::ObMemAttr attr;
     attr.label_ = ObNewModIds::OB_SQL_PLAN_CACHE;
@@ -458,6 +461,16 @@ int ObPlanCache::foreach_cache_obj(_callback &callback) const
   int ret = OB_SUCCESS;
   if (OB_FAIL(co_mgr_.foreach_cache_obj(callback))) {
     _OB_LOG(WARN, "fail to traverse cache obj map");
+  }
+  return ret;
+}
+
+template<typename _callback>
+int ObPlanCache::foreach_alloc_cache_obj(_callback &callback) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(co_mgr_.foreach_alloc_cache_obj(callback))) {
+    _OB_LOG(WARN, "fail to traverse alloc cache obj map");
   }
   return ret;
 }

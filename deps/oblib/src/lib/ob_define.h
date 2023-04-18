@@ -797,7 +797,6 @@ const int64_t SYS_MAX_ALLOCATE_MEMORY = 1L << 34;
 
 // mem factor
 const double SQL_AUDIT_MEM_FACTOR = 0.1;
-const double SQL_PLAN_MEM_FACTOR = 0.1;
 const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 

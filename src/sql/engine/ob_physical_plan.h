@@ -30,6 +30,7 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define.h"
+#include "sql/monitor/ob_plan_info_manager.h"
 
 namespace oceanbase
 {
@@ -466,6 +467,10 @@ public:
       min_cluster_version_ = curr_cluster_version;
     }
   }
+  int set_logical_plan(ObLogicalPlanRawData &logical_plan);
+  inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
+  inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
+  int set_feedback_info(ObExecContext &ctx);
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -634,6 +639,7 @@ public:
   bool need_record_plan_info_;
   bool enable_append_; // for APPEND hint
   uint64_t append_table_id_;
+  ObLogicalPlanRawData logical_plan_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

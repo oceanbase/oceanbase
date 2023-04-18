@@ -114,6 +114,7 @@ private:
   virtual void record_exec_timestamp(bool is_first, ObExecTimestamp &exec_timestamp)
   { ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp); }
   int record_tx_desc();
+  int record_exec_feedback_info();
   void release();
   /* variables */
   const observer::ObGlobalContext &gctx_;

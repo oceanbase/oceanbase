@@ -40,6 +40,7 @@ class ObOpSpec;
 class ObOperator;
 class ObOpInput;
 class ObTaskInfo;
+class ObExecFeedbackNode;
 
 struct ObPhyOpSeriCtx
 {
@@ -324,6 +325,7 @@ private:
   // assign spec ptr to ObOpKitStore
   int assign_spec_ptr_recursive(ObExecContext &exec_ctx) const;
   int link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMonitorNode *&pre_node) const;
+  int create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const;
   // Data members are accessed in ObOperator class, exposed for convenience.
 public:
   // Operator type, serializing externally.
@@ -501,7 +503,8 @@ public:
   virtual int drain_exch();
 
   void set_pushdown_param_null(const common::ObIArray<ObDynamicParamSetter> &rescan_params);
-
+  void set_feedback_node_idx(int64_t idx)
+  { fb_node_idx_ = idx; }
 protected:
   int init_skip_vector();
   // Execute filter
@@ -567,6 +570,7 @@ private:
   int check_stack_once();
   int output_expr_sanity_check();
   int output_expr_sanity_check_batch();
+  int setup_op_feedback_info();
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -598,6 +602,9 @@ protected:
   bool need_init_before_get_row_;
   // gv$sql_plan_monitor
   ObMonitorNode op_monitor_info_;
+  // exec feedback info
+  int64_t fb_node_idx_;
+
   ObIOEventObserver io_event_observer_;
   // batch rows struct for get_next_row result.
   ObBatchRows brs_;

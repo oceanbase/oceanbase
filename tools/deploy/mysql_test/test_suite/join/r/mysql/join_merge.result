@@ -16,15 +16,15 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |6           |
-|1 | SORT       |    |5       |3           |
-|2 |  TABLE SCAN|bb  |5       |2           |
-|3 | SORT       |    |6       |3           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |6           |
+|1 |├─SORT             |    |5       |3           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |2           |
+|3 |└─SORT             |    |6       |3           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -49,15 +49,15 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |6           |
-|1 | SORT       |    |5       |3           |
-|2 |  TABLE SCAN|bb  |5       |2           |
-|3 | SORT       |    |6       |3           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |6           |
+|1 |├─SORT             |    |5       |3           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |2           |
+|3 |└─SORT             |    |6       |3           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -82,15 +82,15 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |6           |
-|1 | SORT       |    |5       |3           |
-|2 |  TABLE SCAN|bb  |5       |2           |
-|3 | SORT       |    |6       |3           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |6           |
+|1 |├─SORT             |    |5       |3           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |2           |
+|3 |└─SORT             |    |6       |3           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -115,15 +115,15 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |6           |
-|1 | SORT       |    |5       |3           |
-|2 |  TABLE SCAN|bb  |5       |2           |
-|3 | SORT       |    |6       |3           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |6           |
+|1 |├─SORT             |    |5       |3           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |2           |
+|3 |└─SORT             |    |6       |3           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -152,15 +152,15 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |7           |
-|1 | SORT       |    |5       |4           |
-|2 |  TABLE SCAN|bb  |5       |3           |
-|3 | SORT       |    |6       |4           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |7           |
+|1 |├─SORT             |    |5       |4           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |3           |
+|3 |└─SORT             |    |6       |4           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -185,15 +185,15 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |7           |
-|1 | SORT       |    |5       |4           |
-|2 |  TABLE SCAN|bb  |5       |3           |
-|3 | SORT       |    |6       |4           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |7           |
+|1 |├─SORT             |    |5       |4           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |3           |
+|3 |└─SORT             |    |6       |4           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -218,15 +218,15 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |7           |
-|1 | SORT       |    |5       |4           |
-|2 |  TABLE SCAN|bb  |5       |3           |
-|3 | SORT       |    |6       |4           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |7           |
+|1 |├─SORT             |    |5       |4           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |3           |
+|3 |└─SORT             |    |6       |4           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -251,15 +251,15 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 Query Plan
-============================================
-|ID|OPERATOR    |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |MERGE JOIN  |    |5       |7           |
-|1 | SORT       |    |5       |4           |
-|2 |  TABLE SCAN|bb  |5       |3           |
-|3 | SORT       |    |6       |4           |
-|4 |  TABLE SCAN|aa  |6       |3           |
-============================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |5       |7           |
+|1 |├─SORT             |    |5       |4           |
+|2 |│ └─TABLE FULL SCAN|bb  |5       |3           |
+|3 |└─SORT             |    |6       |4           |
+|4 |  └─TABLE FULL SCAN|aa  |6       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -285,18 +285,18 @@ c2	a3
 12	10
 explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
 Query Plan
-=============================================
-|ID|OPERATOR     |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------
-|0 |MERGE JOIN   |    |4       |11          |
-|1 | MERGE JOIN  |    |5       |7           |
-|2 |  SORT       |    |6       |4           |
-|3 |   TABLE SCAN|aa  |6       |3           |
-|4 |  SORT       |    |5       |4           |
-|5 |   TABLE SCAN|bb  |5       |3           |
-|6 | SORT        |    |4       |3           |
-|7 |  TABLE SCAN |cc  |4       |2           |
-=============================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |MERGE JOIN           |    |4       |11          |
+|1 |├─MERGE JOIN         |    |5       |7           |
+|2 |│ ├─SORT             |    |6       |4           |
+|3 |│ │ └─TABLE FULL SCAN|aa  |6       |3           |
+|4 |│ └─SORT             |    |5       |4           |
+|5 |│   └─TABLE FULL SCAN|bb  |5       |3           |
+|6 |└─SORT               |    |4       |3           |
+|7 |  └─TABLE FULL SCAN  |cc  |4       |2           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
@@ -329,18 +329,18 @@ c2	a3
 12	10
 explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
 Query Plan
-=============================================
-|ID|OPERATOR     |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------
-|0 |MERGE JOIN   |    |4       |11          |
-|1 | MERGE JOIN  |    |5       |7           |
-|2 |  SORT       |    |6       |4           |
-|3 |   TABLE SCAN|aa  |6       |3           |
-|4 |  SORT       |    |5       |4           |
-|5 |   TABLE SCAN|bb  |5       |3           |
-|6 | SORT        |    |4       |3           |
-|7 |  TABLE SCAN |cc  |4       |2           |
-=============================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |MERGE JOIN           |    |4       |11          |
+|1 |├─MERGE JOIN         |    |5       |7           |
+|2 |│ ├─SORT             |    |6       |4           |
+|3 |│ │ └─TABLE FULL SCAN|aa  |6       |3           |
+|4 |│ └─SORT             |    |5       |4           |
+|5 |│   └─TABLE FULL SCAN|bb  |5       |3           |
+|6 |└─SORT               |    |4       |3           |
+|7 |  └─TABLE FULL SCAN  |cc  |4       |2           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
@@ -384,14 +384,14 @@ PRIMARY KEY (`a`)
 );
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
 Query Plan
-======================
-|ID|OPERATOR    |NAME|
-----------------------
-|0 |SORT        |    |
-|1 | MERGE JOIN |    |
-|2 |  TABLE SCAN|tt1 |
-|3 |  TABLE SCAN|tt2 |
-======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─MERGE JOIN       |    |
+|2 |  ├─TABLE FULL SCAN|tt1 |
+|3 |  └─TABLE FULL SCAN|tt2 |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), rowset=256
@@ -409,13 +409,13 @@ Outputs & filters:
       range_key([tt2.a]), range(MIN ; MAX)always true
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
 Query Plan
-=============================
-|ID|OPERATOR   |NAME        |
------------------------------
-|0 |MERGE JOIN |            |
-|1 | TABLE SCAN|tt1(Reverse)|
-|2 | TABLE SCAN|tt2(Reverse)|
-=============================
+===================================
+|ID|OPERATOR         |NAME        |
+-----------------------------------
+|0 |MERGE JOIN       |            |
+|1 |├─TABLE FULL SCAN|tt1(Reverse)|
+|2 |└─TABLE FULL SCAN|tt2(Reverse)|
+===================================
 Outputs & filters:
 -------------------------------------
   0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), rowset=256
@@ -431,14 +431,14 @@ Outputs & filters:
       range_key([tt2.a]), range(MIN ; MAX)always true
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
 Query Plan
-======================
-|ID|OPERATOR    |NAME|
-----------------------
-|0 |SORT        |    |
-|1 | MERGE JOIN |    |
-|2 |  TABLE SCAN|tt1 |
-|3 |  TABLE SCAN|tt2 |
-======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─MERGE JOIN       |    |
+|2 |  ├─TABLE FULL SCAN|tt1 |
+|3 |  └─TABLE FULL SCAN|tt2 |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), rowset=256
@@ -473,21 +473,21 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -524,21 +524,21 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -575,21 +575,21 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -626,21 +626,21 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -681,21 +681,21 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -732,21 +732,21 @@ a2	b3
 12	10
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -783,21 +783,21 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -834,21 +834,21 @@ a2	b3
 10	14
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |MERGE JOIN                 |        |1       |20          |
-|1 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |   SORT                    |        |1       |9           |
-|4 |    PX PARTITION ITERATOR  |        |1       |9           |
-|5 |     TABLE SCAN            |aa      |1       |9           |
-|6 | PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |  EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |   SORT                    |        |1       |9           |
-|9 |    PX PARTITION ITERATOR  |        |1       |9           |
-|10|     TABLE SCAN            |bb      |1       |9           |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |MERGE JOIN                   |        |1       |20          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|3 |│   └─SORT                   |        |1       |9           |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
+|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    └─SORT                   |        |1       |9           |
+|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
+|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
@@ -886,27 +886,27 @@ c2	a3
 12	10
 explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
 Query Plan
-================================================================
-|ID|OPERATOR                    |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |MERGE JOIN                  |        |1       |29          |
-|1 | MERGE JOIN                 |        |1       |20          |
-|2 |  PX COORDINATOR MERGE SORT |        |1       |10          |
-|3 |   EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|4 |    SORT                    |        |1       |9           |
-|5 |     PX PARTITION ITERATOR  |        |1       |9           |
-|6 |      TABLE SCAN            |aa      |1       |9           |
-|7 |  PX COORDINATOR MERGE SORT |        |1       |10          |
-|8 |   EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|9 |    SORT                    |        |1       |9           |
-|10|     PX PARTITION ITERATOR  |        |1       |9           |
-|11|      TABLE SCAN            |bb      |1       |9           |
-|12| PX COORDINATOR MERGE SORT  |        |1       |10          |
-|13|  EXCHANGE OUT DISTR        |:EX30000|1       |10          |
-|14|   SORT                     |        |1       |9           |
-|15|    PX PARTITION ITERATOR   |        |1       |9           |
-|16|     TABLE SCAN             |cc      |1       |9           |
-================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |MERGE JOIN                     |        |1       |29          |
+|1 |├─MERGE JOIN                   |        |1       |20          |
+|2 |│ ├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|4 |│ │   └─SORT                   |        |1       |9           |
+|5 |│ │     └─PX PARTITION ITERATOR|        |1       |9           |
+|6 |│ │       └─TABLE FULL SCAN    |aa      |1       |9           |
+|7 |│ └─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|9 |│     └─SORT                   |        |1       |9           |
+|10|│       └─PX PARTITION ITERATOR|        |1       |9           |
+|11|│         └─TABLE FULL SCAN    |bb      |1       |9           |
+|12|└─PX COORDINATOR MERGE SORT    |        |1       |10          |
+|13|  └─EXCHANGE OUT DISTR         |:EX30000|1       |10          |
+|14|    └─SORT                     |        |1       |9           |
+|15|      └─PX PARTITION ITERATOR  |        |1       |9           |
+|16|        └─TABLE FULL SCAN      |cc      |1       |9           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
@@ -957,27 +957,27 @@ c2	a3
 12	10
 explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
 Query Plan
-================================================================
-|ID|OPERATOR                    |NAME    |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |MERGE JOIN                  |        |1       |29          |
-|1 | MERGE JOIN                 |        |1       |20          |
-|2 |  PX COORDINATOR MERGE SORT |        |1       |10          |
-|3 |   EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|4 |    SORT                    |        |1       |9           |
-|5 |     PX PARTITION ITERATOR  |        |1       |9           |
-|6 |      TABLE SCAN            |aa      |1       |9           |
-|7 |  PX COORDINATOR MERGE SORT |        |1       |10          |
-|8 |   EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|9 |    SORT                    |        |1       |9           |
-|10|     PX PARTITION ITERATOR  |        |1       |9           |
-|11|      TABLE SCAN            |bb      |1       |9           |
-|12| PX COORDINATOR MERGE SORT  |        |1       |10          |
-|13|  EXCHANGE OUT DISTR        |:EX30000|1       |10          |
-|14|   SORT                     |        |1       |9           |
-|15|    PX PARTITION ITERATOR   |        |1       |9           |
-|16|     TABLE SCAN             |cc      |1       |9           |
-================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |MERGE JOIN                     |        |1       |29          |
+|1 |├─MERGE JOIN                   |        |1       |20          |
+|2 |│ ├─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
+|4 |│ │   └─SORT                   |        |1       |9           |
+|5 |│ │     └─PX PARTITION ITERATOR|        |1       |9           |
+|6 |│ │       └─TABLE FULL SCAN    |aa      |1       |9           |
+|7 |│ └─PX COORDINATOR MERGE SORT  |        |1       |10          |
+|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|9 |│     └─SORT                   |        |1       |9           |
+|10|│       └─PX PARTITION ITERATOR|        |1       |9           |
+|11|│         └─TABLE FULL SCAN    |bb      |1       |9           |
+|12|└─PX COORDINATOR MERGE SORT    |        |1       |10          |
+|13|  └─EXCHANGE OUT DISTR         |:EX30000|1       |10          |
+|14|    └─SORT                     |        |1       |9           |
+|15|      └─PX PARTITION ITERATOR  |        |1       |9           |
+|16|        └─TABLE FULL SCAN      |cc      |1       |9           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
@@ -1039,17 +1039,17 @@ PRIMARY KEY (`a`)
 ) partition by hash(a) partitions 5;
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
 Query Plan
-========================================
-|ID|OPERATOR                  |NAME    |
-----------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |
-|1 | EXCHANGE OUT DISTR       |:EX10000|
-|2 |  SORT                    |        |
-|3 |   PX PARTITION ITERATOR  |        |
-|4 |    MERGE JOIN            |        |
-|5 |     TABLE SCAN           |tt1     |
-|6 |     TABLE SCAN           |tt2     |
-========================================
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |PX COORDINATOR MERGE SORT  |        |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|
+|2 |  └─SORT                   |        |
+|3 |    └─PX PARTITION ITERATOR|        |
+|4 |      └─MERGE JOIN         |        |
+|5 |        ├─TABLE FULL SCAN  |tt1     |
+|6 |        └─TABLE FULL SCAN  |tt2     |
+=========================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(tt1.a, tt1.b, tt1.c, tt1.d, tt2.a, tt2.b, tt2.c, tt2.d)]), filter(nil), rowset=256
@@ -1073,17 +1073,17 @@ Outputs & filters:
       range_key([tt2.a]), range(MIN ; MAX)always true
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
 Query Plan
-============================================
-|ID|OPERATOR                  |NAME        |
---------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |            |
-|1 | EXCHANGE OUT DISTR       |:EX10000    |
-|2 |  SORT                    |            |
-|3 |   PX PARTITION ITERATOR  |            |
-|4 |    MERGE JOIN            |            |
-|5 |     TABLE SCAN           |tt1(Reverse)|
-|6 |     TABLE SCAN           |tt2(Reverse)|
-============================================
+=============================================
+|ID|OPERATOR                   |NAME        |
+---------------------------------------------
+|0 |PX COORDINATOR MERGE SORT  |            |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000    |
+|2 |  └─SORT                   |            |
+|3 |    └─PX PARTITION ITERATOR|            |
+|4 |      └─MERGE JOIN         |            |
+|5 |        ├─TABLE FULL SCAN  |tt1(Reverse)|
+|6 |        └─TABLE FULL SCAN  |tt2(Reverse)|
+=============================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(tt1.a, tt1.b, tt1.c, tt1.d, tt2.a, tt2.b, tt2.c, tt2.d)]), filter(nil), rowset=256
@@ -1107,17 +1107,17 @@ Outputs & filters:
       range_key([tt2.a]), range(MIN ; MAX)always true
 explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
 Query Plan
-========================================
-|ID|OPERATOR                  |NAME    |
-----------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |
-|1 | EXCHANGE OUT DISTR       |:EX10000|
-|2 |  SORT                    |        |
-|3 |   PX PARTITION ITERATOR  |        |
-|4 |    MERGE JOIN            |        |
-|5 |     TABLE SCAN           |tt1     |
-|6 |     TABLE SCAN           |tt2     |
-========================================
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |PX COORDINATOR MERGE SORT  |        |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|
+|2 |  └─SORT                   |        |
+|3 |    └─PX PARTITION ITERATOR|        |
+|4 |      └─MERGE JOIN         |        |
+|5 |        ├─TABLE FULL SCAN  |tt1     |
+|6 |        └─TABLE FULL SCAN  |tt2     |
+=========================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(tt1.a, tt1.b, tt1.c, tt1.d, tt2.a, tt2.b, tt2.c, tt2.d)]), filter(nil), rowset=256
@@ -1185,11 +1185,11 @@ Query Plan
 |ID|OPERATOR                  |NAME       |
 -------------------------------------------
 |0 |PX COORDINATOR MERGE SORT |           |
-|1 | EXCHANGE OUT DISTR       |:EX10000   |
-|2 |  PX PARTITION ITERATOR   |           |
-|3 |   MERGE JOIN             |           |
-|4 |    TABLE SCAN            |t1(Reverse)|
-|5 |    TABLE SCAN            |t2(Reverse)|
+|1 |└─EXCHANGE OUT DISTR      |:EX10000   |
+|2 |  └─PX PARTITION ITERATOR |           |
+|3 |    └─MERGE JOIN          |           |
+|4 |      ├─TABLE FULL SCAN   |t1(Reverse)|
+|5 |      └─TABLE FULL SCAN   |t2(Reverse)|
 ===========================================
 Outputs & filters:
 -------------------------------------
@@ -1216,11 +1216,11 @@ Query Plan
 |ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |PX COORDINATOR MERGE SORT |        |1       |15          |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1       |15          |
-|2 |  PX PARTITION ITERATOR   |        |1       |14          |
-|3 |   MERGE JOIN             |        |1       |14          |
-|4 |    TABLE SCAN            |t1      |1       |7           |
-|5 |    TABLE SCAN            |t2      |1       |7           |
+|1 |└─EXCHANGE OUT DISTR      |:EX10000|1       |15          |
+|2 |  └─PX PARTITION ITERATOR |        |1       |14          |
+|3 |    └─MERGE JOIN          |        |1       |14          |
+|4 |      ├─TABLE FULL SCAN   |t1      |1       |7           |
+|5 |      └─TABLE FULL SCAN   |t2      |1       |7           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1276,16 +1276,16 @@ create table t9(a int primary key, b int, c int, index idx(b,c));
 ************ 测试full join
 explain select /*+use_merge(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SORT                   |    |13      |14          |
-|1 | MERGE FULL OUTER JOIN |    |13      |9           |
-|2 |  SORT                 |    |5       |3           |
-|3 |   TABLE SCAN          |t7  |5       |2           |
-|4 |  SORT                 |    |13      |5           |
-|5 |   TABLE SCAN          |t2  |13      |3           |
-=======================================================
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |SORT                    |    |13      |14          |
+|1 |└─MERGE FULL OUTER JOIN |    |13      |9           |
+|2 |  ├─SORT                |    |5       |3           |
+|3 |  │ └─TABLE FULL SCAN   |t7  |5       |2           |
+|4 |  └─SORT                |    |13      |5           |
+|5 |    └─TABLE FULL SCAN   |t2  |13      |3           |
+========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1328,14 +1328,14 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 
 explain select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-======================================================
-|ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------------
-|0 |SORT                  |    |13      |12          |
-|1 | HASH FULL OUTER JOIN |    |13      |8           |
-|2 |  TABLE SCAN          |t7  |5       |2           |
-|3 |  TABLE SCAN          |t2  |13      |3           |
-======================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT                   |    |13      |12          |
+|1 |└─HASH FULL OUTER JOIN |    |13      |8           |
+|2 |  ├─TABLE FULL SCAN    |t7  |5       |2           |
+|3 |  └─TABLE FULL SCAN    |t2  |13      |3           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1373,14 +1373,14 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 
 explain select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-======================================================
-|ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------------
-|0 |SORT                  |    |13      |12          |
-|1 | HASH FULL OUTER JOIN |    |13      |8           |
-|2 |  TABLE SCAN          |t7  |5       |2           |
-|3 |  TABLE SCAN          |t2  |13      |3           |
-======================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SORT                   |    |13      |12          |
+|1 |└─HASH FULL OUTER JOIN |    |13      |8           |
+|2 |  ├─TABLE FULL SCAN    |t7  |5       |2           |
+|3 |  └─TABLE FULL SCAN    |t2  |13      |3           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1419,16 +1419,16 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 
 explain select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-==================================================
-|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------
-|0 |SORT              |    |5       |11          |
-|1 | MERGE OUTER JOIN |    |5       |9           |
-|2 |  SORT            |    |5       |3           |
-|3 |   TABLE SCAN     |t7  |5       |2           |
-|4 |  SORT            |    |13      |5           |
-|5 |   TABLE SCAN     |t2  |13      |3           |
-==================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SORT                 |    |5       |11          |
+|1 |└─MERGE OUTER JOIN   |    |5       |9           |
+|2 |  ├─SORT             |    |5       |3           |
+|3 |  │ └─TABLE FULL SCAN|t7  |5       |2           |
+|4 |  └─SORT             |    |13      |5           |
+|5 |    └─TABLE FULL SCAN|t2  |13      |3           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1458,14 +1458,14 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 
 explain select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-=================================================
-|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SORT             |    |5       |9           |
-|1 | HASH OUTER JOIN |    |5       |8           |
-|2 |  TABLE SCAN     |t7  |5       |2           |
-|3 |  TABLE SCAN     |t2  |13      |3           |
-=================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SORT               |    |5       |9           |
+|1 |└─HASH OUTER JOIN  |    |5       |8           |
+|2 |  ├─TABLE FULL SCAN|t7  |5       |2           |
+|3 |  └─TABLE FULL SCAN|t2  |13      |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1490,21 +1490,21 @@ NULL	NULL	NULL	67	A	1	1.0000000000
 
 explain select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-========================================================
-|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------------
-|0 |SORT                    |    |5       |9           |
-|1 | NESTED-LOOP OUTER JOIN |    |5       |8           |
-|2 |  TABLE SCAN            |t7  |5       |2           |
-|3 |  MATERIAL              |    |13      |4           |
-|4 |   TABLE SCAN           |t2  |13      |3           |
-========================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |5       |9           |
+|1 |└─NESTED-LOOP OUTER JOIN |    |5       |8           |
+|2 |  ├─TABLE FULL SCAN      |t7  |5       |2           |
+|3 |  └─MATERIAL             |    |13      |4           |
+|4 |    └─TABLE FULL SCAN    |t2  |13      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
       sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
   1 - output([t2.a], [t2.b], [t7.a], [t7.b], [t2.c], [t7.c], [t7.d]), filter(nil), rowset=256
-      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), batch_join=false
+      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), use_batch=false
   2 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), rowset=256
       access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1527,8 +1527,8 @@ Query Plan
 |ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
 |0 |MERGE RIGHT OUTER JOIN |       |7       |5           |
-|1 | TABLE SCAN            |t8(idx)|6       |3           |
-|2 | TABLE SCAN            |t9(idx)|7       |3           |
+|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -1568,16 +1568,16 @@ NULL	NULL	3	1
 
 explain select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-========================================================
-|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------------
-|0 |SORT                    |    |13      |14          |
-|1 | MERGE RIGHT OUTER JOIN |    |13      |9           |
-|2 |  SORT                  |    |5       |3           |
-|3 |   TABLE SCAN           |t7  |5       |2           |
-|4 |  SORT                  |    |13      |5           |
-|5 |   TABLE SCAN           |t2  |13      |3           |
-========================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |13      |14          |
+|1 |└─MERGE RIGHT OUTER JOIN |    |13      |9           |
+|2 |  ├─SORT                 |    |5       |3           |
+|3 |  │ └─TABLE FULL SCAN    |t7  |5       |2           |
+|4 |  └─SORT                 |    |13      |5           |
+|5 |    └─TABLE FULL SCAN    |t2  |13      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1615,14 +1615,14 @@ a	b	c	a	b	c	d
 
 explain select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SORT                   |    |13      |12          |
-|1 | HASH RIGHT OUTER JOIN |    |13      |8           |
-|2 |  TABLE SCAN           |t7  |5       |2           |
-|3 |  TABLE SCAN           |t2  |13      |3           |
-=======================================================
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |SORT                    |    |13      |12          |
+|1 |└─HASH RIGHT OUTER JOIN |    |13      |8           |
+|2 |  ├─TABLE FULL SCAN     |t7  |5       |2           |
+|3 |  └─TABLE FULL SCAN     |t2  |13      |3           |
+========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
@@ -1655,21 +1655,21 @@ a	b	c	a	b	c	d
 
 explain select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-========================================================
-|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------------
-|0 |SORT                    |    |13      |11          |
-|1 | NESTED-LOOP OUTER JOIN |    |13      |7           |
-|2 |  TABLE SCAN            |t2  |13      |3           |
-|3 |  MATERIAL              |    |5       |3           |
-|4 |   TABLE SCAN           |t7  |5       |2           |
-========================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |13      |11          |
+|1 |└─NESTED-LOOP OUTER JOIN |    |13      |7           |
+|2 |  ├─TABLE FULL SCAN      |t2  |13      |3           |
+|3 |  └─MATERIAL             |    |5       |3           |
+|4 |    └─TABLE FULL SCAN    |t7  |5       |2           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=256
       sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
   1 - output([t2.a], [t2.b], [t7.a], [t7.b], [t2.c], [t7.c], [t7.d]), filter(nil), rowset=256
-      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), batch_join=false
+      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), use_batch=false
   2 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=256
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1697,13 +1697,13 @@ a	b	c	a	b	c	d
 ********** join condition 必须和 ordering 排序一致
 explain select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
 Query Plan
-==============================================
-|ID|OPERATOR   |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------
-|0 |MERGE JOIN |       |6       |6           |
-|1 | TABLE SCAN|t8(idx)|6       |3           |
-|2 | TABLE SCAN|t9(idx)|7       |3           |
-==============================================
+====================================================
+|ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |MERGE JOIN       |       |6       |6           |
+|1 |├─TABLE FULL SCAN|t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN|t9(idx)|7       |3           |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=256
@@ -1727,15 +1727,15 @@ a	b	c	a	b	c
 6	4	3	7	4	3
 explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 join t9 on t8.a = t9.b and t8.b = t9.a;
 Query Plan
-===============================================
-|ID|OPERATOR    |NAME   |EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |MERGE JOIN  |       |6       |7           |
-|1 | SORT       |       |6       |3           |
-|2 |  TABLE SCAN|t8(idx)|6       |3           |
-|3 | SORT       |       |7       |4           |
-|4 |  TABLE SCAN|t9(idx)|7       |3           |
-===============================================
+======================================================
+|ID|OPERATOR           |NAME   |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |MERGE JOIN         |       |6       |7           |
+|1 |├─SORT             |       |6       |3           |
+|2 |│ └─TABLE FULL SCAN|t8(idx)|6       |3           |
+|3 |└─SORT             |       |7       |4           |
+|4 |  └─TABLE FULL SCAN|t9(idx)|7       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=256
@@ -1762,8 +1762,8 @@ Query Plan
 |ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
 |0 |MERGE OUTER JOIN |       |6       |6           |
-|1 | TABLE SCAN      |t8(idx)|6       |3           |
-|2 | TABLE SCAN      |t9(idx)|7       |3           |
+|1 |├─TABLE FULL SCAN|t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN|t9(idx)|7       |3           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -1788,15 +1788,15 @@ a	b	c	a	b	c
 6	4	3	7	4	3
 explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 left join t9 on t8.a = t9.b and t8.b = t9.a;
 Query Plan
-====================================================
-|ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |MERGE OUTER JOIN |       |6       |7           |
-|1 | SORT            |       |6       |3           |
-|2 |  TABLE SCAN     |t8(idx)|6       |3           |
-|3 | SORT            |       |7       |4           |
-|4 |  TABLE SCAN     |t9(idx)|7       |3           |
-====================================================
+======================================================
+|ID|OPERATOR           |NAME   |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |MERGE OUTER JOIN   |       |6       |7           |
+|1 |├─SORT             |       |6       |3           |
+|2 |│ └─TABLE FULL SCAN|t8(idx)|6       |3           |
+|3 |└─SORT             |       |7       |4           |
+|4 |  └─TABLE FULL SCAN|t9(idx)|7       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=256
@@ -1828,8 +1828,8 @@ Query Plan
 |ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
 |0 |MERGE RIGHT OUTER JOIN |       |7       |6           |
-|1 | TABLE SCAN            |t8(idx)|6       |3           |
-|2 | TABLE SCAN            |t9(idx)|7       |3           |
+|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -1859,10 +1859,10 @@ Query Plan
 |ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
 |0 |MERGE RIGHT OUTER JOIN |       |7       |7           |
-|1 | SORT                  |       |6       |3           |
-|2 |  TABLE SCAN           |t8(idx)|6       |3           |
-|3 | SORT                  |       |7       |4           |
-|4 |  TABLE SCAN           |t9(idx)|7       |3           |
+|1 |├─SORT                 |       |6       |3           |
+|2 |│ └─TABLE FULL SCAN    |t8(idx)|6       |3           |
+|3 |└─SORT                 |       |7       |4           |
+|4 |  └─TABLE FULL SCAN    |t9(idx)|7       |3           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -1896,8 +1896,8 @@ Query Plan
 |ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
 |0 |MERGE RIGHT OUTER JOIN |       |7       |6           |
-|1 | TABLE SCAN            |t8(idx)|6       |3           |
-|2 | TABLE SCAN            |t9(idx)|7       |3           |
+|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -1927,10 +1927,10 @@ Query Plan
 |ID|OPERATOR              |NAME   |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
 |0 |MERGE FULL OUTER JOIN |       |7       |7           |
-|1 | SORT                 |       |6       |3           |
-|2 |  TABLE SCAN          |t8(idx)|6       |3           |
-|3 | SORT                 |       |7       |4           |
-|4 |  TABLE SCAN          |t9(idx)|7       |3           |
+|1 |├─SORT                |       |6       |3           |
+|2 |│ └─TABLE FULL SCAN   |t8(idx)|6       |3           |
+|3 |└─SORT                |       |7       |4           |
+|4 |  └─TABLE FULL SCAN   |t9(idx)|7       |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1968,15 +1968,15 @@ CREATE TABLE BB ( col_varchar_key varchar (1), col_varchar_10 varchar(10), col_v
 CREATE TABLE CC ( col_varchar_key varchar (1), col_varchar_20_key varchar(20), col_varchar_20 varchar(20), col_int_key int, col_int int, pk int, col_varchar_10 varchar(10), col_varchar_10_key varchar(10), col_varchar varchar (1), /*Indices*/ key idx3(pk, col_varchar_key ), key idx7(pk, col_varchar_20_key ), key idx1(pk, col_int_key ), primary key (pk) , key idx5(pk, col_varchar_10_key )) ;
 explain SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
 Query Plan
-=============================================================
-|ID|OPERATOR     |NAME                |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |SORT         |                    |28      |18          |
-|1 | MERGE JOIN  |                    |28      |15          |
-|2 |  TABLE SCAN |table1              |28      |4           |
-|3 |  SORT       |                    |29      |7           |
-|4 |   TABLE SCAN|table2(idx1,Reverse)|29      |4           |
-=============================================================
+=====================================================================
+|ID|OPERATOR             |NAME                |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |SORT                 |                    |28      |18          |
+|1 |└─MERGE JOIN         |                    |28      |15          |
+|2 |  ├─TABLE FULL SCAN  |table1              |28      |4           |
+|3 |  └─SORT             |                    |29      |7           |
+|4 |    └─TABLE FULL SCAN|table2(idx1,Reverse)|29      |4           |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([table1.col_varchar_10_key]), filter(nil), rowset=256

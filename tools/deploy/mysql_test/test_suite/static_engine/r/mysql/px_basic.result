@@ -49,14 +49,14 @@ set @@ob_enable_plan_cache = 0;
 
 EXPLAIN BASIC select * from t3 a ;
 Query Plan
-=====================================
-|ID|OPERATOR               |NAME    |
--------------------------------------
-|0 |PX COORDINATOR         |        |
-|1 | EXCHANGE OUT DISTR    |:EX10000|
-|2 |  PX PARTITION ITERATOR|        |
-|3 |   TABLE SCAN          |a       |
-=====================================
+=======================================
+|ID|OPERATOR                 |NAME    |
+---------------------------------------
+|0 |PX COORDINATOR           |        |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|
+|2 |  └─PX PARTITION ITERATOR|        |
+|3 |    └─TABLE FULL SCAN    |a       |
+=======================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
@@ -88,10 +88,10 @@ Query Plan
 |ID|OPERATOR                  |NAME    |
 ----------------------------------------
 |0 |PX COORDINATOR MERGE SORT |        |
-|1 | EXCHANGE OUT DISTR       |:EX10000|
-|2 |  SORT                    |        |
-|3 |   PX BLOCK ITERATOR      |        |
-|4 |    TABLE SCAN            |a       |
+|1 |└─EXCHANGE OUT DISTR      |:EX10000|
+|2 |  └─SORT                  |        |
+|3 |    └─PX BLOCK ITERATOR   |        |
+|4 |      └─TABLE FULL SCAN   |a       |
 ========================================
 Outputs & filters:
 -------------------------------------
@@ -122,20 +122,20 @@ select /*+ parallel(2) NO_USE_HASH_AGGREGATION */  a.c1,a.c2+a.c1 from t3 a grou
 ##ms receieve local order
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2=b.c1 order by a.c1,a.c2;
 Query Plan
-============================================
-|ID|OPERATOR                      |NAME    |
---------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |
-|1 | EXCHANGE OUT DISTR           |:EX10001|
-|2 |  SORT                        |        |
-|3 |   HASH RIGHT OUTER JOIN      |        |
-|4 |    EXCHANGE IN DISTR         |        |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|6 |      PX BLOCK ITERATOR       |        |
-|7 |       TABLE SCAN             |a       |
-|8 |    PX PARTITION ITERATOR     |        |
-|9 |     TABLE SCAN               |b       |
-============================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT          |        |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|
+|2 |  └─SORT                           |        |
+|3 |    └─HASH RIGHT OUTER JOIN        |        |
+|4 |      ├─EXCHANGE IN DISTR          |        |
+|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR      |        |
+|7 |      │     └─TABLE FULL SCAN      |a       |
+|8 |      └─PX PARTITION ITERATOR      |        |
+|9 |        └─TABLE FULL SCAN          |b       |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
@@ -175,20 +175,20 @@ select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c
 +----+------+
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2+2=b.c1+1 order by a.c1,a.c2+2;
 Query Plan
-===============================================
-|ID|OPERATOR                         |NAME    |
------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT        |        |
-|1 | EXCHANGE OUT DISTR              |:EX10001|
-|2 |  SORT                           |        |
-|3 |   SHARED HASH RIGHT OUTER JOIN  |        |
-|4 |    EXCHANGE IN DISTR            |        |
-|5 |     EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
-|6 |      PX BLOCK ITERATOR          |        |
-|7 |       TABLE SCAN                |a       |
-|8 |    PX BLOCK ITERATOR            |        |
-|9 |     TABLE SCAN                  |b       |
-===============================================
+====================================================
+|ID|OPERATOR                              |NAME    |
+----------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT             |        |
+|1 |└─EXCHANGE OUT DISTR                  |:EX10001|
+|2 |  └─SORT                              |        |
+|3 |    └─SHARED HASH RIGHT OUTER JOIN    |        |
+|4 |      ├─EXCHANGE IN DISTR             |        |
+|5 |      │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR         |        |
+|7 |      │     └─TABLE FULL SCAN         |a       |
+|8 |      └─PX BLOCK ITERATOR             |        |
+|9 |        └─TABLE FULL SCAN             |b       |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
@@ -227,20 +227,20 @@ select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c
 +----+------+
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on abs(a.c2)+2=b.c1 order by a.c1,a.c2+2;
 Query Plan
-============================================
-|ID|OPERATOR                      |NAME    |
---------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |
-|1 | EXCHANGE OUT DISTR           |:EX10001|
-|2 |  SORT                        |        |
-|3 |   HASH RIGHT OUTER JOIN      |        |
-|4 |    EXCHANGE IN DISTR         |        |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|6 |      PX BLOCK ITERATOR       |        |
-|7 |       TABLE SCAN             |a       |
-|8 |    PX PARTITION ITERATOR     |        |
-|9 |     TABLE SCAN               |b       |
-============================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT          |        |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|
+|2 |  └─SORT                           |        |
+|3 |    └─HASH RIGHT OUTER JOIN        |        |
+|4 |      ├─EXCHANGE IN DISTR          |        |
+|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR      |        |
+|7 |      │     └─TABLE FULL SCAN      |a       |
+|8 |      └─PX PARTITION ITERATOR      |        |
+|9 |        └─TABLE FULL SCAN          |b       |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
@@ -283,20 +283,20 @@ select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c
 ## broadcast shuffle
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
 Query Plan
-============================================
-|ID|OPERATOR                      |NAME    |
---------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |
-|1 | EXCHANGE OUT DISTR           |:EX10001|
-|2 |  SORT                        |        |
-|3 |   HASH JOIN                  |        |
-|4 |    PX PARTITION ITERATOR     |        |
-|5 |     TABLE SCAN               |b       |
-|6 |    EXCHANGE IN DISTR         |        |
-|7 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|8 |      PX BLOCK ITERATOR       |        |
-|9 |       TABLE SCAN             |a       |
-============================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT          |        |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|
+|2 |  └─SORT                           |        |
+|3 |    └─HASH JOIN                    |        |
+|4 |      ├─PX PARTITION ITERATOR      |        |
+|5 |      │ └─TABLE FULL SCAN          |b       |
+|6 |      └─EXCHANGE IN DISTR          |        |
+|7 |        └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|8 |          └─PX BLOCK ITERATOR      |        |
+|9 |            └─TABLE FULL SCAN      |a       |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
@@ -335,20 +335,20 @@ select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b wher
 
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
 Query Plan
-===============================================
-|ID|OPERATOR                         |NAME    |
------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT        |        |
-|1 | EXCHANGE OUT DISTR              |:EX10001|
-|2 |  SORT                           |        |
-|3 |   SHARED HASH JOIN              |        |
-|4 |    EXCHANGE IN DISTR            |        |
-|5 |     EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
-|6 |      PX BLOCK ITERATOR          |        |
-|7 |       TABLE SCAN                |b       |
-|8 |    PX BLOCK ITERATOR            |        |
-|9 |     TABLE SCAN                  |a       |
-===============================================
+====================================================
+|ID|OPERATOR                              |NAME    |
+----------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT             |        |
+|1 |└─EXCHANGE OUT DISTR                  |:EX10001|
+|2 |  └─SORT                              |        |
+|3 |    └─SHARED HASH JOIN                |        |
+|4 |      ├─EXCHANGE IN DISTR             |        |
+|5 |      │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR         |        |
+|7 |      │     └─TABLE FULL SCAN         |b       |
+|8 |      └─PX BLOCK ITERATOR             |        |
+|9 |        └─TABLE FULL SCAN             |a       |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
@@ -385,23 +385,23 @@ select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b wher
 
 EXPLAIN BASIC select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
 Query Plan
-=============================================
-|ID|OPERATOR                       |NAME    |
----------------------------------------------
-|0 |PX COORDINATOR MERGE SORT      |        |
-|1 | EXCHANGE OUT DISTR            |:EX10002|
-|2 |  MERGE GROUP BY               |        |
-|3 |   SORT                        |        |
-|4 |    HASH JOIN                  |        |
-|5 |     EXCHANGE IN DISTR         |        |
-|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|
-|7 |       PX BLOCK ITERATOR       |        |
-|8 |        TABLE SCAN             |a       |
-|9 |     EXCHANGE IN DISTR         |        |
-|10|      EXCHANGE OUT DISTR (HASH)|:EX10001|
-|11|       PX BLOCK ITERATOR       |        |
-|12|        TABLE SCAN             |b       |
-=============================================
+===================================================
+|ID|OPERATOR                             |NAME    |
+---------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT            |        |
+|1 |└─EXCHANGE OUT DISTR                 |:EX10002|
+|2 |  └─MERGE GROUP BY                   |        |
+|3 |    └─SORT                           |        |
+|4 |      └─HASH JOIN                    |        |
+|5 |        ├─EXCHANGE IN DISTR          |        |
+|6 |        │ └─EXCHANGE OUT DISTR (HASH)|:EX10000|
+|7 |        │   └─PX BLOCK ITERATOR      |        |
+|8 |        │     └─TABLE FULL SCAN      |a       |
+|9 |        └─EXCHANGE IN DISTR          |        |
+|10|          └─EXCHANGE OUT DISTR (HASH)|:EX10001|
+|11|            └─PX BLOCK ITERATOR      |        |
+|12|              └─TABLE FULL SCAN      |b       |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256

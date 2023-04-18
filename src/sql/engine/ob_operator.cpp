@@ -17,7 +17,7 @@
 #include "ob_operator_factory.h"
 #include "sql/engine/ob_exec_context.h"
 #include "common/ob_smart_call.h"
-#include "sql/monitor/ob_sql_plan_manager.h"
+#include "sql/engine/ob_exec_feedback_info.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase
@@ -298,6 +298,8 @@ int ObOpSpec::create_operator(ObExecContext &exec_ctx, ObOperator *&op) const
     LOG_WARN("create operator recursive failed", K(ret));
   } else if (OB_FAIL(link_sql_plan_monitor_node_recursive(exec_ctx, pre_node))) {
     LOG_WARN("fail to link sql plan monitor node recursive", K(ret));
+  } else if (OB_FAIL(create_exec_feedback_node_recursive(exec_ctx))) {
+    LOG_WARN("fail to create exec feedback node", K(ret));
   }
   LOG_TRACE("trace create operator", K(ret), K(lbt()));
   return ret;
@@ -425,6 +427,38 @@ int ObOpSpec::link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMo
   return ret;
 }
 
+int ObOpSpec::create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObOperatorKit *kit = exec_ctx.get_operator_kit(id_);
+  if (OB_ISNULL(plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy plan is null", K(ret));
+  } else if (!plan_->need_record_plan_info()) {
+  } else if (OB_ISNULL(kit)) {
+    LOG_TRACE("operator kit is NULL", K(ret));
+  } else {
+    ObExecFeedbackInfo &fb_info = exec_ctx.get_feedback_info();
+    ObExecFeedbackNode node(id_);
+    if (OB_FAIL(fb_info.add_feedback_node(node))) {
+      LOG_WARN("fail to add feedback node", K(ret));
+    } else if (OB_NOT_NULL(kit->op_)) {
+      common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
+      kit->op_->set_feedback_node_idx(nodes.count() - 1);
+    }
+    for (int i = 0; OB_SUCC(ret) && i < child_cnt_; ++i) {
+      if (nullptr == children_[i]) {
+        continue;
+      } else if (OB_FAIL(SMART_CALL(children_[i]->create_exec_feedback_node_recursive(
+            exec_ctx)))) {
+        LOG_WARN("fail to link sql plan monitor", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObOpSpec::assign_spec_ptr_recursive(ObExecContext &exec_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -487,6 +521,7 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     exch_drained_(false),
     got_first_row_(false),
     need_init_before_get_row_(true),
+    fb_node_idx_(OB_INVALID_INDEX),
     io_event_observer_(op_monitor_info_),
     cpu_begin_time_(0),
     total_time_(0),
@@ -919,6 +954,35 @@ int ObOperator::close()
       LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
     }
     IGNORE_RETURN submit_op_monitor_node();
+    IGNORE_RETURN setup_op_feedback_info();
+  }
+  return ret;
+}
+
+int ObOperator::setup_op_feedback_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(spec_.plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy plan is null", K(ret));
+  } else if (!spec_.plan_->need_record_plan_info() ||
+             OB_INVALID_INDEX == fb_node_idx_) {
+  } else {
+    ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
+    common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
+    int64_t &total_db_time = fb_info.get_total_db_time();
+    total_db_time +=  op_monitor_info_.db_time_;
+    if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
+      ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
+      node.block_time_ = op_monitor_info_.block_time_;
+      node.db_time_ = op_monitor_info_.db_time_;
+      node.op_close_time_ = op_monitor_info_.close_time_;
+      node.op_first_row_time_ = op_monitor_info_.first_row_time_;
+      node.op_last_row_time_ = op_monitor_info_.last_row_time_;
+      node.op_open_time_ = op_monitor_info_.open_time_;
+      node.output_row_count_ = op_monitor_info_.output_row_count_;
+      node.worker_count_ = 1;
+    }
   }
   return ret;
 }
@@ -955,18 +1019,6 @@ int ObOperator::submit_op_monitor_node()
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
     }
-    // ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
-    // ObPlanRealInfoMgr *plan_info = NULL;
-    // if (NULL != sql_plan_mgr) {
-    //   plan_info = sql_plan_mgr->get_plan_real_info_mgr();
-    // }
-    // if (plan_info && spec_.plan_ && spec_.plan_->need_record_plan_info()) {
-    //   IGNORE_RETURN plan_info->handle_plan_info(spec_.id_,
-    //                                             spec_.plan_->get_sql_id_string(),
-    //                                             spec_.plan_->get_plan_id(),
-    //                                             spec_.plan_->get_plan_hash_value(),
-    //                                             op_monitor_info_);
-    // }
   }
   IGNORE_RETURN try_deregister_rt_monitor_node();
   return ret;

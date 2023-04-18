@@ -36,8 +36,8 @@ Query Plan
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |HASH RIGHT SEMI JOIN |    |3       |6           |
-|1 | TABLE SCAN          |t1  |3       |2           |
-|2 | TABLE SCAN          |t2  |10      |3           |
+|1 |├─TABLE FULL SCAN    |t1  |3       |2           |
+|2 |└─TABLE FULL SCAN    |t2  |10      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -71,8 +71,8 @@ Query Plan
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |HASH RIGHT SEMI JOIN |    |3       |6           |
-|1 | TABLE SCAN          |t1  |3       |2           |
-|2 | TABLE SCAN          |t3  |10      |3           |
+|1 |├─TABLE FULL SCAN    |t1  |3       |2           |
+|2 |└─TABLE FULL SCAN    |t3  |10      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -107,8 +107,8 @@ Query Plan
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |HASH RIGHT SEMI JOIN |    |10      |15          |
-|1 | TABLE SCAN          |t0  |10      |3           |
-|2 | TABLE SCAN          |t3  |50      |7           |
+|1 |├─TABLE FULL SCAN    |t0  |10      |3           |
+|2 |└─TABLE FULL SCAN    |t3  |50      |7           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -140,13 +140,13 @@ a	b	pk1	pk2
 9	9	9	9
 explain  select * from t1 where a in (select b from t2);
 Query Plan
-================================================
-|ID|OPERATOR       |NAME |EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |HASH SEMI JOIN |     |3       |6           |
-|1 | TABLE SCAN    |t1   |3       |2           |
-|2 | TABLE SCAN    |t2(b)|10      |3           |
-================================================
+==================================================
+|ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |HASH SEMI JOIN   |     |3       |6           |
+|1 |├─TABLE FULL SCAN|t1   |3       |2           |
+|2 |└─TABLE FULL SCAN|t2(b)|10      |3           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=256
@@ -197,23 +197,23 @@ explain  select 1 from t2 where
 c2 in (select 1 from t3, t2) and
 c1 in (select convert(c6,char(1)) from t2);
 Query Plan
-=============================================================
-|ID|OPERATOR                    |NAME |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |HASH SEMI JOIN              |     |1       |6           |
-|1 | NESTED-LOOP JOIN CARTESIAN |     |1       |4           |
-|2 |  TABLE SCAN                |t2   |1       |2           |
-|3 |  MATERIAL                  |     |1       |2           |
-|4 |   SUBPLAN SCAN             |VIEW3|1       |2           |
-|5 |    TABLE SCAN              |t3   |1       |2           |
-|6 | TABLE SCAN                 |t2   |1       |2           |
-=============================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH SEMI JOIN               |     |1       |6           |
+|1 |├─NESTED-LOOP JOIN CARTESIAN |     |1       |4           |
+|2 |│ ├─TABLE FULL SCAN          |t2   |1       |2           |
+|3 |│ └─MATERIAL                 |     |1       |2           |
+|4 |│   └─SUBPLAN SCAN           |VIEW3|1       |2           |
+|5 |│     └─TABLE FULL SCAN      |t3   |1       |2           |
+|6 |└─TABLE FULL SCAN            |t2   |1       |2           |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
       equal_conds([cast(t2.c1, VARCHAR(1048576)) = cast(cast(t2.c6, CHAR(1)), VARCHAR(1048576))]), other_conds(nil)
   1 - output([t2.c1]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
   2 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=256
       access([t2.c2], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],

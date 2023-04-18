@@ -21,7 +21,7 @@
 #include "sql/session/ob_session_val_map.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/ob_sql_trans_util.h"
-
+#include "sql/engine/ob_exec_feedback_info.h"
 namespace oceanbase
 {
 namespace sql
@@ -141,6 +141,7 @@ public:
   { return implicit_cursors_.assign(implicit_cursors); }
   const common::ObIArray<sql::ObImplicitCursorInfo> &get_implicit_cursors() const
   { return implicit_cursors_; }
+  sql::ObExecFeedbackInfo &get_feedback_info() { return fb_info_; }
   //NEED_SERIALIZE_AND_DESERIALIZE;
   //TODO(yaoying.yyy): set "is_result_accurate" as macro after library is merged
   TO_STRING_KV(N_ROWSTORE, row_store_,
@@ -180,6 +181,7 @@ protected:
   common::ObFixedArray<sql::ObImplicitCursorInfo, common::ObIAllocator> implicit_cursors_;
   sql::ObChunkDatumStore datum_store_;
   obrpc::ObRpcResultCode rcode_;
+  sql::ObExecFeedbackInfo fb_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObScanner);
 };

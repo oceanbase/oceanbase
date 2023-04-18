@@ -50,7 +50,7 @@ private:
 
   static int choose_best_estimation_method(const AccessPath *path,
                                            const ObTableMetaInfo &meta,
-                                           RowCountEstMethod &method,
+                                           bool &use_storage_stat,
                                            bool &is_vt);
   
   static int choose_leader_replica(const ObCandiTabletLoc &part_loc_info,

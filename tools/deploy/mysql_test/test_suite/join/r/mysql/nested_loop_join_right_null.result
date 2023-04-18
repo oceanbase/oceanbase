@@ -17,13 +17,13 @@ insert/*trace*/ into t1(id) values (107);
 insert/*trace*/ into t2(id) values (107),(75),(1000);
 EXPLAIN select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
 Query Plan
-===========================================
-|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------
-|0 |MERGE JOIN |    |1       |4           |
-|1 | TABLE SCAN|t1  |1       |2           |
-|2 | TABLE SCAN|t2  |1       |2           |
-===========================================
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |MERGE JOIN        |    |1       |4           |
+|1 |├─TABLE RANGE SCAN|t1  |1       |2           |
+|2 |└─TABLE RANGE SCAN|t2  |1       |2           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.id], [t2.id]), filter(nil), rowset=256
@@ -47,13 +47,13 @@ select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
 
 EXPLAIN select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
 Query Plan
-===========================================
-|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------
-|0 |MERGE JOIN |    |1       |4           |
-|1 | TABLE SCAN|t1  |1       |2           |
-|2 | TABLE SCAN|t2  |1       |2           |
-===========================================
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |MERGE JOIN        |    |1       |4           |
+|1 |├─TABLE RANGE SCAN|t1  |1       |2           |
+|2 |└─TABLE RANGE SCAN|t2  |1       |2           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.id], [t2.id]), filter(nil), rowset=256
@@ -77,13 +77,13 @@ select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
 
 EXPLAIN select a.id , b.id from t1 a, t2 b where a.id = b.id and a.id>200 and a.id<200;
 Query Plan
-===========================================
-|ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------
-|0 |MERGE JOIN |    |1       |4           |
-|1 | TABLE SCAN|a   |1       |2           |
-|2 | TABLE SCAN|b   |1       |2           |
-===========================================
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |MERGE JOIN        |    |1       |4           |
+|1 |├─TABLE RANGE SCAN|a   |1       |2           |
+|2 |└─TABLE RANGE SCAN|b   |1       |2           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.id], [b.id]), filter(nil), rowset=256
@@ -111,14 +111,14 @@ Query Plan
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |    |3       |4           |
-|1 | TABLE SCAN                |b   |3       |2           |
-|2 | MATERIAL                  |    |1       |2           |
-|3 |  TABLE SCAN               |a   |1       |2           |
+|1 |├─TABLE FULL SCAN          |b   |3       |2           |
+|2 |└─MATERIAL                 |    |1       |2           |
+|3 |  └─TABLE RANGE SCAN       |a   |1       |2           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.id], [b.id]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
   1 - output([b.id]), filter(nil), rowset=256
       access([b.id]), partitions(p0)
       is_index_back=false, is_global_index=false,

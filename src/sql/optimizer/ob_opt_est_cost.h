@@ -204,8 +204,6 @@ public:
                                            const ObNewRange &range,
                                            double &count);
 
-  static const char *get_method_name(const RowCountEstMethod method);
-
   static double get_estimate_width_from_type(const ObExprResType &type);
 private:
   static ObOptEstCostModel &get_model(MODEL_TYPE model_type);

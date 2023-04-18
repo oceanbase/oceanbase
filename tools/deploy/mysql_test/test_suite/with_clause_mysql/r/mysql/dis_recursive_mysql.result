@@ -140,17 +140,17 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
-====================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |200     |62          |
+|1 |└─RECURSIVE UNION ALL  |    |200     |61          |
+|2 |  ├─TABLE FULL SCAN    |e   |1       |3           |
+|3 |  └─NESTED-LOOP JOIN   |    |199     |58          |
+|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
+|5 |    └─MATERIAL         |    |14      |5           |
+|6 |      └─TABLE FULL SCAN|e   |14      |3           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -161,7 +161,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([r.empno = e.MGR]), nl_params_(nil), batch_join=false
+      conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
@@ -221,19 +221,19 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
-|7 |   SORT             |    |199     |107         |
-|8 |    TABLE SCAN      |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |200     |125         |
+|1 |└─RECURSIVE UNION ALL    |    |200     |125         |
+|2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
+|3 |  └─MERGE JOIN           |    |199     |122         |
+|4 |    │ MATERIAL           |    |14      |7           |
+|5 |    └─│ SORT             |    |14      |5           |
+|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
+|7 |      SORT               |    |199     |107         |
+|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -309,16 +309,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -389,29 +389,29 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
-|11|   TABLE SCAN       |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |213     |42          |
+|1 |└─RECURSIVE UNION ALL    |    |213     |41          |
+|2 |  ├─NESTED-LOOP JOIN     |    |14      |9           |
+|3 |  │ ├─TABLE FULL SCAN    |e   |14      |3           |
+|4 |  │ └─MATERIAL           |    |14      |3           |
+|5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
+|6 |  └─HASH JOIN            |    |199     |32          |
+|7 |    │ MATERIAL           |    |14      |10          |
+|8 |    └─│ HASH JOIN        |    |14      |9           |
+|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
+|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
+|11|      TABLE FULL SCAN    |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
       access([rw.ename], [rw.empno], [rw.mgr])
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([e.SAL = d.SAL]), nl_params_(nil), batch_join=false
+      conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -533,16 +533,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -613,16 +613,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -695,23 +695,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
-|10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |430         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |194         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |192         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |175         |
+|9 |      ├─HASH JOIN        |    |199     |112         |
+|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|e   |5       |3           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -800,23 +800,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
-|11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |341         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |105         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |103         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |86          |
+|9 |      ├─HASH JOIN        |    |199     |23          |
+|10|      │ ├─TABLE FULL SCAN|e   |5       |3           |
+|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -905,24 +905,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |286         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |51          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |48          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |31          |
+|9 |      │ MATERIAL           |    |17      |10          |
+|10|      └─│ HASH JOIN        |    |17      |8           |
+|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
+|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -1012,24 +1012,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |289         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |53          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |51          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |34          |
+|9 |      │ MATERIAL           |    |17      |12          |
+|10|      └─│ HASH JOIN        |    |17      |11          |
+|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
+|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -1118,16 +1118,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |116         |
+|1 |└─RECURSIVE UNION ALL|    |200     |116         |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |112         |
+|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |3           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1198,16 +1198,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1279,24 +1279,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -1323,7 +1323,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -1386,24 +1386,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -1430,7 +1430,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -1491,16 +1491,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1570,16 +1570,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |27          |
+|1 |└─RECURSIVE UNION ALL|    |200     |27          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |24          |
+|4 |    ├─TABLE FULL SCAN|e   |5       |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1677,17 +1677,17 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
-====================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |200     |62          |
+|1 |└─RECURSIVE UNION ALL  |    |200     |61          |
+|2 |  ├─TABLE FULL SCAN    |e   |1       |3           |
+|3 |  └─NESTED-LOOP JOIN   |    |199     |58          |
+|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
+|5 |    └─MATERIAL         |    |14      |5           |
+|6 |      └─TABLE FULL SCAN|e   |14      |3           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1698,7 +1698,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([r.empno = e.MGR]), nl_params_(nil), batch_join=false
+      conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
@@ -1758,19 +1758,19 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
-|7 |   SORT             |    |199     |107         |
-|8 |    TABLE SCAN      |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |200     |125         |
+|1 |└─RECURSIVE UNION ALL    |    |200     |125         |
+|2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
+|3 |  └─MERGE JOIN           |    |199     |122         |
+|4 |    │ MATERIAL           |    |14      |7           |
+|5 |    └─│ SORT             |    |14      |5           |
+|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
+|7 |      SORT               |    |199     |107         |
+|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1846,16 +1846,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1926,29 +1926,29 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
-|11|   TABLE SCAN       |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |213     |42          |
+|1 |└─RECURSIVE UNION ALL    |    |213     |41          |
+|2 |  ├─NESTED-LOOP JOIN     |    |14      |9           |
+|3 |  │ ├─TABLE FULL SCAN    |e   |14      |3           |
+|4 |  │ └─MATERIAL           |    |14      |3           |
+|5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
+|6 |  └─HASH JOIN            |    |199     |32          |
+|7 |    │ MATERIAL           |    |14      |10          |
+|8 |    └─│ HASH JOIN        |    |14      |9           |
+|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
+|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
+|11|      TABLE FULL SCAN    |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
       access([rw.ename], [rw.empno], [rw.mgr])
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([e.SAL = d.SAL]), nl_params_(nil), batch_join=false
+      conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -2070,16 +2070,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -2150,16 +2150,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -2232,23 +2232,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
-|10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |430         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |194         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |192         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |175         |
+|9 |      ├─HASH JOIN        |    |199     |112         |
+|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|e   |5       |3           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2337,23 +2337,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
-|11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |341         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |105         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |103         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |86          |
+|9 |      ├─HASH JOIN        |    |199     |23          |
+|10|      │ ├─TABLE FULL SCAN|e   |5       |3           |
+|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2442,24 +2442,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |286         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |51          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |48          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |31          |
+|9 |      │ MATERIAL           |    |17      |10          |
+|10|      └─│ HASH JOIN        |    |17      |8           |
+|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
+|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2549,24 +2549,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |289         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |53          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |51          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |34          |
+|9 |      │ MATERIAL           |    |17      |12          |
+|10|      └─│ HASH JOIN        |    |17      |11          |
+|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
+|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2656,16 +2656,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |116         |
+|1 |└─RECURSIVE UNION ALL|    |200     |116         |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |112         |
+|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |3           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -2736,16 +2736,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -2817,24 +2817,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2861,7 +2861,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -2924,24 +2924,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -2968,7 +2968,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -3029,16 +3029,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3108,16 +3108,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |27          |
+|1 |└─RECURSIVE UNION ALL|    |200     |27          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |24          |
+|4 |    ├─TABLE FULL SCAN|e   |5       |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3215,17 +3215,17 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
-====================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |200     |62          |
+|1 |└─RECURSIVE UNION ALL  |    |200     |61          |
+|2 |  ├─TABLE FULL SCAN    |e   |1       |3           |
+|3 |  └─NESTED-LOOP JOIN   |    |199     |58          |
+|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
+|5 |    └─MATERIAL         |    |14      |5           |
+|6 |      └─TABLE FULL SCAN|e   |14      |3           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3236,7 +3236,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([r.empno = e.MGR]), nl_params_(nil), batch_join=false
+      conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
@@ -3296,19 +3296,19 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
-|7 |   SORT             |    |199     |107         |
-|8 |    TABLE SCAN      |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |200     |125         |
+|1 |└─RECURSIVE UNION ALL    |    |200     |125         |
+|2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
+|3 |  └─MERGE JOIN           |    |199     |122         |
+|4 |    │ MATERIAL           |    |14      |7           |
+|5 |    └─│ SORT             |    |14      |5           |
+|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
+|7 |      SORT               |    |199     |107         |
+|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3384,16 +3384,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3464,29 +3464,29 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
-|11|   TABLE SCAN       |r   |199     |1           |
-====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN SCAN             |rw  |213     |42          |
+|1 |└─RECURSIVE UNION ALL    |    |213     |41          |
+|2 |  ├─NESTED-LOOP JOIN     |    |14      |9           |
+|3 |  │ ├─TABLE FULL SCAN    |e   |14      |3           |
+|4 |  │ └─MATERIAL           |    |14      |3           |
+|5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
+|6 |  └─HASH JOIN            |    |199     |32          |
+|7 |    │ MATERIAL           |    |14      |10          |
+|8 |    └─│ HASH JOIN        |    |14      |9           |
+|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
+|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
+|11|      TABLE FULL SCAN    |r   |199     |1           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
       access([rw.ename], [rw.empno], [rw.mgr])
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-      conds([e.SAL = d.SAL]), nl_params_(nil), batch_join=false
+      conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -3608,16 +3608,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3688,16 +3688,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3770,23 +3770,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
-|10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |430         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |194         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |192         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |175         |
+|9 |      ├─HASH JOIN        |    |199     |112         |
+|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|e   |5       |3           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -3875,23 +3875,23 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
-|11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
-=====================================================
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                     |    |787     |341         |
+|1 |└─SUBPLAN SCAN           |rw  |787     |105         |
+|2 |  └─RECURSIVE UNION ALL  |    |787     |103         |
+|3 |    ├─HASH JOIN          |    |62      |16          |
+|4 |    │ ├─HASH JOIN        |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN|e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN|n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN  |n2  |17      |3           |
+|8 |    └─HASH JOIN          |    |725     |86          |
+|9 |      ├─HASH JOIN        |    |199     |23          |
+|10|      │ ├─TABLE FULL SCAN|e   |5       |3           |
+|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|12|      └─TABLE FULL SCAN  |n   |17      |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -3980,24 +3980,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |286         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |51          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |48          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |31          |
+|9 |      │ MATERIAL           |    |17      |10          |
+|10|      └─│ HASH JOIN        |    |17      |8           |
+|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
+|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4087,24 +4087,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
-|13|    TABLE SCAN       |r   |199     |1           |
-=====================================================
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SORT                       |    |787     |289         |
+|1 |└─SUBPLAN SCAN             |rw  |787     |53          |
+|2 |  └─RECURSIVE UNION ALL    |    |787     |51          |
+|3 |    ├─HASH JOIN            |    |62      |16          |
+|4 |    │ ├─HASH JOIN          |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN  |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
+|8 |    └─HASH JOIN            |    |725     |34          |
+|9 |      │ MATERIAL           |    |17      |12          |
+|10|      └─│ HASH JOIN        |    |17      |11          |
+|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
+|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
+|13|        TABLE FULL SCAN    |r   |199     |1           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4193,16 +4193,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
-|4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |116         |
+|1 |└─RECURSIVE UNION ALL|    |200     |116         |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |112         |
+|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |3           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -4273,16 +4273,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -4354,24 +4354,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4398,7 +4398,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -4461,24 +4461,24 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-===============================================================
-|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
-|10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
-===============================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SORT                               |    |787     |1813        |
+|1 |└─SUBPLAN SCAN                     |rw  |787     |1577        |
+|2 |  └─RECURSIVE UNION ALL            |    |787     |1575        |
+|3 |    ├─HASH JOIN                    |    |62      |16          |
+|4 |    │ ├─HASH JOIN                  |    |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e   |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2  |17      |3           |
+|8 |    └─HASH JOIN                    |    |725     |1558        |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|11|      │ └─MATERIAL                 |    |17      |5           |
+|12|      │   └─TABLE FULL SCAN        |n   |17      |3           |
+|13|      └─TABLE FULL SCAN            |e   |5       |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4505,7 +4505,7 @@ Outputs & filters:
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
   9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
       is_index_back=false, is_global_index=false,
@@ -4566,16 +4566,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |29          |
+|1 |└─RECURSIVE UNION ALL|    |200     |29          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |26          |
+|4 |    ├─TABLE FULL SCAN|e   |14      |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -4645,16 +4645,16 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-====================================================
-|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
-|5 |   TABLE SCAN       |r   |199     |1           |
-====================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN SCAN         |rw  |200     |27          |
+|1 |└─RECURSIVE UNION ALL|    |200     |27          |
+|2 |  ├─TABLE FULL SCAN  |e   |1       |3           |
+|3 |  └─HASH JOIN        |    |199     |24          |
+|4 |    ├─TABLE FULL SCAN|e   |5       |3           |
+|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -4753,29 +4753,29 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-==========================================================
-|ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |SORT                     |     |1190    |872         |
-|1 | SUBPLAN SCAN            |rw   |1190    |503         |
-|2 |  RECURSIVE UNION ALL    |     |1190    |500         |
-|3 |   HASH JOIN             |     |62      |16          |
-|4 |    HASH JOIN            |     |17      |8           |
-|5 |     TABLE SCAN          |e    |5       |3           |
-|6 |     TABLE SCAN          |n1   |17      |3           |
-|7 |    TABLE SCAN           |n2   |17      |3           |
-|8 |   NESTED-LOOP SEMI JOIN |     |1128    |481         |
-|9 |    HASH JOIN            |     |3383    |36          |
-|10|     MATERIAL            |     |17      |14          |
-|11|      HASH JOIN          |     |17      |10          |
-|12|       TABLE SCAN        |n    |17      |3           |
-|13|       TABLE SCAN        |e    |1       |3           |
-|14|     TABLE SCAN          |r    |199     |1           |
-|15|    MATERIAL             |     |7       |4           |
-|16|     SUBPLAN SCAN        |VIEW1|7       |4           |
-|17|      HASH GROUP BY      |     |7       |4           |
-|18|       TABLE SCAN        |t1   |7       |2           |
-==========================================================
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SORT                         |     |1190    |872         |
+|1 |└─SUBPLAN SCAN               |rw   |1190    |503         |
+|2 |  └─RECURSIVE UNION ALL      |     |1190    |500         |
+|3 |    ├─HASH JOIN              |     |62      |16          |
+|4 |    │ ├─HASH JOIN            |     |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN    |e    |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN    |n1   |17      |3           |
+|7 |    │ └─TABLE FULL SCAN      |n2   |17      |3           |
+|8 |    └─NESTED-LOOP SEMI JOIN  |     |1128    |481         |
+|9 |      ├─HASH JOIN            |     |3383    |36          |
+|10|      │ │ MATERIAL           |     |17      |14          |
+|11|      │ └─│ HASH JOIN        |     |17      |10          |
+|12|      │   │ ├─TABLE FULL SCAN|n    |17      |3           |
+|13|      │   │ └─TABLE FULL SCAN|e    |1       |3           |
+|14|      │   TABLE FULL SCAN    |r    |199     |1           |
+|15|      └─MATERIAL             |     |7       |4           |
+|16|        └─SUBPLAN SCAN       |VIEW1|7       |4           |
+|17|          └─HASH GROUP BY    |     |7       |4           |
+|18|            └─TABLE FULL SCAN|t1   |7       |2           |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4800,7 +4800,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
-      conds([e.EMPno > VIEW1.c1]), nl_params_(nil), batch_join=false
+      conds([e.EMPno > VIEW1.c1]), nl_params_(nil), use_batch=false
   9 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -4868,33 +4868,33 @@ with RECURSIVE rw (empno, mgr, iters, sal) AS
   FROM rw
   ORDER BY 1, 3;
 Query Plan
-==================================================================
-|ID|OPERATOR                       |NAME   |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------
-|0 |SORT                           |       |1190    |968         |
-|1 | SUBPLAN SCAN                  |rw     |1190    |598         |
-|2 |  RECURSIVE UNION ALL          |       |1190    |595         |
-|3 |   HASH JOIN                   |       |62      |16          |
-|4 |    HASH JOIN                  |       |17      |8           |
-|5 |     TABLE SCAN                |e      |5       |3           |
-|6 |     TABLE SCAN                |n1     |17      |3           |
-|7 |    TABLE SCAN                 |n2     |17      |3           |
-|8 |   NESTED-LOOP SEMI JOIN       |       |1128    |577         |
-|9 |    NESTED-LOOP JOIN CARTESIAN |       |3383    |132         |
-|10|     HASH JOIN                 |       |3383    |36          |
-|11|      MATERIAL                 |       |17      |14          |
-|12|       HASH JOIN               |       |17      |10          |
-|13|        TABLE SCAN             |n      |17      |3           |
-|14|        TABLE SCAN             |e      |1       |3           |
-|15|      TABLE SCAN               |r      |199     |1           |
-|16|     MATERIAL                  |       |1       |2           |
-|17|      SUBPLAN SCAN             |VIEW2  |1       |2           |
-|18|       TABLE SCAN              |disemp1|1       |2           |
-|19|    MATERIAL                   |       |7       |4           |
-|20|     SUBPLAN SCAN              |VIEW1  |7       |4           |
-|21|      HASH GROUP BY            |       |7       |4           |
-|22|       TABLE SCAN              |t1     |7       |2           |
-==================================================================
+======================================================================
+|ID|OPERATOR                           |NAME   |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |SORT                               |       |1190    |968         |
+|1 |└─SUBPLAN SCAN                     |rw     |1190    |598         |
+|2 |  └─RECURSIVE UNION ALL            |       |1190    |595         |
+|3 |    ├─HASH JOIN                    |       |62      |16          |
+|4 |    │ ├─HASH JOIN                  |       |17      |8           |
+|5 |    │ │ ├─TABLE FULL SCAN          |e      |5       |3           |
+|6 |    │ │ └─TABLE FULL SCAN          |n1     |17      |3           |
+|7 |    │ └─TABLE FULL SCAN            |n2     |17      |3           |
+|8 |    └─NESTED-LOOP SEMI JOIN        |       |1128    |577         |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |       |3383    |132         |
+|10|      │ ├─HASH JOIN                |       |3383    |36          |
+|11|      │ │ │ MATERIAL               |       |17      |14          |
+|12|      │ │ └─│ HASH JOIN            |       |17      |10          |
+|13|      │ │   │ ├─TABLE FULL SCAN    |n      |17      |3           |
+|14|      │ │   │ └─TABLE FULL SCAN    |e      |1       |3           |
+|15|      │ │   TABLE FULL SCAN        |r      |199     |1           |
+|16|      │ └─MATERIAL                 |       |1       |2           |
+|17|      │   └─SUBPLAN SCAN           |VIEW2  |1       |2           |
+|18|      │     └─TABLE FULL SCAN      |disemp1|1       |2           |
+|19|      └─MATERIAL                   |       |7       |4           |
+|20|        └─SUBPLAN SCAN             |VIEW1  |7       |4           |
+|21|          └─HASH GROUP BY          |       |7       |4           |
+|22|            └─TABLE FULL SCAN      |t1     |7       |2           |
+======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.empno], [rw.mgr], [rw.iters], [rw.sal]), filter(nil), rowset=256
@@ -4919,9 +4919,9 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
-      conds([e.EMPno > VIEW1.c1]), nl_params_(nil), batch_join=false
+      conds([e.EMPno > VIEW1.c1]), nl_params_(nil), use_batch=false
   9 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  11 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256

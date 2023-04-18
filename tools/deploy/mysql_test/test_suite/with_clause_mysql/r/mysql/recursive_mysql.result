@@ -1789,36 +1789,36 @@ select cte3.a+1,cte3.b+1,cte3.c+1 from cte3, cte2 where cte2.a < 3 and cte3.a < 
 SELECT cte1.a, cte1.b FROM cte1 JOIN cte3
 on cte1.a < cte3.c;
 Query Plan
-====================================
-|ID|OPERATOR                  |NAME|
-------------------------------------
-|0 |NESTED-LOOP JOIN          |    |
-|1 | SUBPLAN SCAN             |cte3|
-|2 |  RECURSIVE UNION ALL     |    |
-|3 |   RECURSIVE UNION ALL    |    |
-|4 |    RECURSIVE UNION ALL   |    |
-|5 |     EXPRESSION           |    |
-|6 |     TABLE SCAN           |cte1|
-|7 |    TABLE SCAN            |cte2|
-|8 |   NESTED-LOOP JOIN       |    |
-|9 |    TABLE SCAN            |cte3|
-|10|    MATERIAL              |    |
-|11|     SUBPLAN SCAN         |cte2|
-|12|      RECURSIVE UNION ALL |    |
-|13|       RECURSIVE UNION ALL|    |
-|14|        EXPRESSION        |    |
-|15|        TABLE SCAN        |cte1|
-|16|       TABLE SCAN         |cte2|
-|17| MATERIAL                 |    |
-|18|  SUBPLAN SCAN            |cte1|
-|19|   RECURSIVE UNION ALL    |    |
-|20|    EXPRESSION            |    |
-|21|    TABLE SCAN            |cte1|
-====================================
+===========================================
+|ID|OPERATOR                         |NAME|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN                 |    |
+|1 |├─SUBPLAN SCAN                   |cte3|
+|2 |│ └─RECURSIVE UNION ALL          |    |
+|3 |│   ├─RECURSIVE UNION ALL        |    |
+|4 |│   │ ├─RECURSIVE UNION ALL      |    |
+|5 |│   │ │ ├─EXPRESSION             |    |
+|6 |│   │ │ └─TABLE FULL SCAN        |cte1|
+|7 |│   │ └─TABLE FULL SCAN          |cte2|
+|8 |│   └─NESTED-LOOP JOIN           |    |
+|9 |│     ├─TABLE FULL SCAN          |cte3|
+|10|│     └─MATERIAL                 |    |
+|11|│       └─SUBPLAN SCAN           |cte2|
+|12|│         └─RECURSIVE UNION ALL  |    |
+|13|│           ├─RECURSIVE UNION ALL|    |
+|14|│           │ ├─EXPRESSION       |    |
+|15|│           │ └─TABLE FULL SCAN  |cte1|
+|16|│           └─TABLE FULL SCAN    |cte2|
+|17|└─MATERIAL                       |    |
+|18|  └─SUBPLAN SCAN                 |cte1|
+|19|    └─RECURSIVE UNION ALL        |    |
+|20|      ├─EXPRESSION               |    |
+|21|      └─TABLE FULL SCAN          |cte1|
+===========================================
 Outputs & filters:
 -------------------------------------
   0 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
-      conds([cte1.a < cte3.c]), nl_params_(nil), batch_join=false
+      conds([cte1.a < cte3.c]), nl_params_(nil), use_batch=false
   1 - output([cte3.c]), filter(nil), rowset=256
       access([cte3.c])
   2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1835,7 +1835,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)
   8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256
-      conds([cte3.a < cte2.b]), nl_params_(nil), batch_join=false
+      conds([cte3.a < cte2.b]), nl_params_(nil), use_batch=false
   9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
       access([cte3.a], [cte3.b], [cte3.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],

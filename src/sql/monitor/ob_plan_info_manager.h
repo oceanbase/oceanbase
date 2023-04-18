@@ -1,100 +1,17 @@
 // Copyright 2010-2016 Alibaba Inc. All Rights Reserved.
 // Author:
 //   zhenling.zzg
-// this file defines interface of plan real info manager
+// this file defines interface of plan info manager
 
 #ifndef SRC_OBSERVER_PLAN_INFO_MGR_H_
 #define SRC_OBSERVER_PLAN_INFO_MGR_H_
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "observer/mysql/ob_ra_queue.h"
-#include "lib/task/ob_timer.h"
+#include "lib/allocator/ob_allocator.h"
+#include "lib/container/ob_iarray.h"
 
 namespace oceanbase
 {
-namespace common
-{
-  class ObConcurrentFIFOAllocator;
-}
-
 namespace sql
 {
-class ObMonitorNode;
-struct ObPlanRealInfo {
-  ObPlanRealInfo();
-  virtual ~ObPlanRealInfo();
-  void reset();
-  int64_t get_extra_size() const;
-
-  int64_t plan_id_;
-  char* sql_id_;
-  int64_t sql_id_len_;
-  uint64_t plan_hash_;
-  int id_;
-  int64_t real_cost_;
-  int64_t real_cardinality_;
-  int64_t cpu_cost_;
-  int64_t io_cost_;
-
-  TO_STRING_KV(
-    K_(plan_id),
-    K_(real_cost),
-    K_(real_cardinality),
-    K_(cpu_cost),
-    K_(io_cost)
-  );
-};
-struct ObPlanRealInfoRecord
-{
-  ObPlanRealInfoRecord();
-  virtual ~ObPlanRealInfoRecord();
-  virtual void destroy();
-  TO_STRING_KV(
-    K_(data)
-  );
-  ObPlanRealInfo data_;
-  common::ObConcurrentFIFOAllocator *allocator_;
-};
-
-class ObPlanRealInfoMgr
-{
-public:
-  typedef common::ObRaQueue::Ref Ref;
-
-public:
-  ObPlanRealInfoMgr(common::ObConcurrentFIFOAllocator *allocator);
-  virtual ~ObPlanRealInfoMgr();
-  int init(uint64_t tenant_id,
-           const int64_t queue_size);
-  void destroy();
-  int handle_plan_info(int64_t id,
-                       const ObString& sql_id,
-                       uint64_t plan_id,
-                       uint64_t plan_hash,
-                       const ObMonitorNode &plan_info);
-
-  common::ObConcurrentFIFOAllocator *get_allocator();
-  void* alloc(const int64_t size);
-  void free(void *ptr);
-  int get(const int64_t idx, void *&record, Ref* ref);
-  int revert(Ref* ref);
-  int64_t release_old(int64_t limit);
-  void clear_queue();
-
-  int64_t get_start_idx() const;
-  int64_t get_end_idx() const;
-  int64_t get_size_used();
-  int64_t get_capacity();
-  bool is_valid() const;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPlanRealInfoMgr);
-
-private:
-  common::ObConcurrentFIFOAllocator *allocator_;
-  common::ObRaQueue queue_;
-  bool destroyed_;
-  bool inited_;
-};
 
 struct ObSqlPlanItem {
   ObSqlPlanItem();
@@ -102,12 +19,6 @@ struct ObSqlPlanItem {
   void reset();
   int64_t get_extra_size() const;
 
-  int64_t plan_id_;
-  char* sql_id_;
-  int64_t sql_id_len_;
-  int64_t db_id_;
-  uint64_t plan_hash_;
-  int64_t gmt_create_;
   char* operation_;
   int64_t operation_len_;
   char* options_;
@@ -132,7 +43,9 @@ struct ObSqlPlanItem {
   int search_columns_;
   bool is_last_child_;
   int64_t cost_;
+  int64_t real_cost_;
   int64_t cardinality_;
+  int64_t real_cardinality_;
   int64_t bytes_;
   int64_t rowset_;
   char* other_tag_;
@@ -168,69 +81,40 @@ struct ObSqlPlanItem {
   int64_t other_xml_len_;
 
   TO_STRING_KV(
-    K_(plan_id)
+    K_(id)
   );
 };
-struct ObSqlPlanItemRecord
+
+struct ObLogicalPlanHead
 {
-  ObSqlPlanItemRecord();
-  virtual ~ObSqlPlanItemRecord();
-  virtual void destroy();
-  TO_STRING_KV(
-    K_(data)
-  );
-  ObSqlPlanItem data_;
-  common::ObConcurrentFIFOAllocator *allocator_;
+  ObLogicalPlanHead();
+  virtual ~ObLogicalPlanHead();
+  void reset();
+  struct PlanItemPos
+  {
+    PlanItemPos();
+    virtual ~PlanItemPos();
+    void reset();
+    int64_t offset_;
+    int64_t length_;
+  };
+  int64_t count_;                 //operator count
+  PlanItemPos *plan_item_pos_;    //operator data position in buffer
 };
 
-class ObPlanItemMgr
+struct ObLogicalPlanRawData
 {
-public:
-  typedef common::ObRaQueue::Ref Ref;
-
-public:
-  ObPlanItemMgr(common::ObConcurrentFIFOAllocator *allocator);
-  virtual ~ObPlanItemMgr();
-  int init(uint64_t tenant_id,
-           const int64_t queue_size);
-  void destroy();
-  int handle_plan_item(const ObSqlPlanItem &plan_item);
-  int get_plan(int64_t plan_id,
-               ObIArray<ObSqlPlanItem*> &plan);
-  int get_plan(const ObString &sql_id,
-               int64_t plan_id,
-               ObIArray<ObSqlPlanItem*> &plan);
-  int get_plan_by_hash(const ObString &sql_id,
-                       uint64_t plan_hash,
-                       ObIArray<ObSqlPlanItem*> &plan);
-
-  common::ObConcurrentFIFOAllocator *get_allocator();
-  void* alloc(const int64_t size);
-  void free(void *ptr);
-  int get(const int64_t idx, void *&record, Ref* ref);
-  int revert(Ref* ref);
-  int64_t release_old(int64_t limit);
-  void clear_queue();
-
-  int64_t get_start_idx() const;
-  int64_t get_end_idx() const;
-  int64_t get_size_used();
-  int64_t get_capacity();
-  int64_t get_next_plan_id();
-  int64_t get_last_plan_id();
+  ObLogicalPlanRawData();
+  virtual ~ObLogicalPlanRawData();
+  void reset();
   bool is_valid() const;
-  TO_STRING_KV(
-    K_(plan_id_increment)
-  );
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPlanItemMgr);
-
-private:
-  common::ObConcurrentFIFOAllocator *allocator_;
-  common::ObRaQueue queue_;
-  int64_t plan_id_increment_;
-  bool destroyed_;
-  bool inited_;
+  int compress_logical_plan(ObIAllocator &allocator, ObIArray<ObSqlPlanItem*> &plan_items);
+  int uncompress_logical_plan(ObIAllocator &allocator, ObIArray<ObSqlPlanItem*> &plan_items);
+  char *logical_plan_;        //serialize and compress data
+  int64_t logical_plan_len_;  //compress data length
+  //uncompress data length, used for uncompress function
+  //if values is -1, logical plan not be compressed
+  int64_t uncompress_len_;
 };
 
 } // end of namespace sql

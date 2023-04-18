@@ -11,19 +11,19 @@ select /*+ USE_PX parallel(3) */* from
 (select c1,count(c2) c2 from t1 group by c1)c) a join
 (select c1,count(*) c2 from t2 group by c1)b on a.c1=b.c1 ;
 Query Plan
-===========================================
-|ID|OPERATOR                     |NAME    |
--------------------------------------------
-|0 |PX COORDINATOR               |        |
-|1 | EXCHANGE OUT DISTR          |:EX10001|
-|2 |  HASH JOIN                  |        |
-|3 |   PX PARTITION ITERATOR     |        |
-|4 |    TABLE SCAN               |t1      |
-|5 |   EXCHANGE IN DISTR         |        |
-|6 |    EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|7 |     PX BLOCK ITERATOR       |        |
-|8 |      TABLE SCAN             |t2      |
-===========================================
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |PX COORDINATOR                   |        |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|
+|2 |  └─HASH JOIN                    |        |
+|3 |    ├─PX PARTITION ITERATOR      |        |
+|4 |    │ └─TABLE FULL SCAN          |t1      |
+|5 |    └─EXCHANGE IN DISTR          |        |
+|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|7 |        └─PX BLOCK ITERATOR      |        |
+|8 |          └─TABLE FULL SCAN      |t2      |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
@@ -63,24 +63,24 @@ c1	c2	c1	c2
 explain basic
 select a.c2,count(*) from (select /*+ USE_PX parallel(3) PQ_DISTRIBUTE(b HASH HASH) */a.c1,a.c2,b.c1 c3,b.c2 c4 from t1 a join t2 b on a.c1=b.c1)a group by a.c2;
 Query Plan
-==================================================
-|ID|OPERATOR                            |NAME    |
---------------------------------------------------
-|0 |PX COORDINATOR                      |        |
-|1 | EXCHANGE OUT DISTR                 |:EX10002|
-|2 |  HASH GROUP BY                     |        |
-|3 |   EXCHANGE IN DISTR                |        |
-|4 |    EXCHANGE OUT DISTR (HASH)       |:EX10001|
-|5 |     HASH GROUP BY                  |        |
-|6 |      HASH JOIN                     |        |
-|7 |       PART JOIN FILTER CREATE      |:BF0000 |
-|8 |        EXCHANGE IN DISTR           |        |
-|9 |         EXCHANGE OUT DISTR (PKEY)  |:EX10000|
-|10|          PX BLOCK ITERATOR         |        |
-|11|           TABLE SCAN               |b       |
-|12|       PX PARTITION HASH JOIN-FILTER|:BF0000 |
-|13|        TABLE SCAN                  |a       |
-==================================================
+=========================================================
+|ID|OPERATOR                                   |NAME    |
+---------------------------------------------------------
+|0 |PX COORDINATOR                             |        |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10002|
+|2 |  └─HASH GROUP BY                          |        |
+|3 |    └─EXCHANGE IN DISTR                    |        |
+|4 |      └─EXCHANGE OUT DISTR (HASH)          |:EX10001|
+|5 |        └─HASH GROUP BY                    |        |
+|6 |          └─HASH JOIN                      |        |
+|7 |            ├─PART JOIN FILTER CREATE      |:BF0000 |
+|8 |            │ └─EXCHANGE IN DISTR          |        |
+|9 |            │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|10|            │     └─PX BLOCK ITERATOR      |        |
+|11|            │       └─TABLE FULL SCAN      |b       |
+|12|            └─PX PARTITION HASH JOIN-FILTER|:BF0000 |
+|13|              └─TABLE FULL SCAN            |a       |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256

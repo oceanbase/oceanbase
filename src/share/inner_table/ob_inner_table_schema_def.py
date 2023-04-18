@@ -5666,7 +5666,10 @@ def_table_schema(
   ('action', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
   ('module', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
   ('client_info', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
-  ('sql_trace', 'bool')
+  ('sql_trace', 'bool'),
+  ('plan_id', 'int'),
+  ('tenant_id', 'int'),
+  ('effective_tenant_id', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11331,8 +11334,72 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12358', all_def_keywords['__all_tenant']))
 
-# 12359 __all_virtual_sql_plan
-# 12360 __all_virtual_plan_table
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id = 'OB_INVALID_ID',
+  table_name    = '__all_virtual_sql_plan',
+  table_id      = 12359,
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('plan_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+  ],
+  normal_columns = [
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('db_id', 'int'),
+    ('plan_hash', 'uint'),
+    ('gmt_create', 'timestamp'),
+
+    ('operator', 'varchar:255'),
+    ('options', 'varchar:255'),
+    ('object_node', 'varchar:40'),
+    ('object_id', 'int'),
+    ('object_owner', 'varchar:128'),
+    ('object_name', 'varchar:128'),
+    ('object_alias', 'varchar:261'),
+    ('object_type', 'varchar:20'),
+    ('optimizer', 'varchar:4000'),
+
+    ('id', 'int'),
+    ('parent_id', 'int'),
+    ('depth', 'int'),
+    ('position', 'int'),
+    ('search_columns', 'int'),
+    ('is_last_child', 'int'),
+    ('cost', 'bigint'),
+    ('real_cost', 'bigint'),
+    ('cardinality', 'bigint'),
+    ('real_cardinality', 'bigint'),
+    ('bytes', 'bigint'),
+    ('rowset', 'int'),
+
+    ('other_tag', 'varchar:4000'),
+    ('partition_start', 'varchar:4000'),
+    ('partition_stop', 'varchar:4000'),
+    ('partition_id', 'int'),
+    ('other', 'varchar:4000'),
+    ('distribution', 'varchar:64'),
+    ('cpu_cost', 'bigint'),
+    ('io_cost', 'bigint'),
+    ('temp_space', 'bigint'),
+    ('access_predicates', 'varchar:4000'),
+    ('filter_predicates', 'varchar:4000'),
+    ('startup_predicates', 'varchar:4000'),
+    ('projection', 'varchar:4000'),
+    ('special_predicates', 'varchar:4000'),
+    ('time', 'int'),
+    ('qblock_name','varchar:128'),
+    ('remarks', 'varchar:4000'),
+    ('other_xml', 'varchar:4000')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed'
+)
+# 12360 abandoned
 # 12361 abandoned
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -11746,8 +11813,8 @@ def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15282', all
 
 # 15283: __all_virtual_tenant_info_agent
 
-# def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
-# def_table_schema(**gen_oracle_mapping_virtual_table_def('15285', all_def_keywords['__all_virtual_plan_table']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
+# 15285 abandoned
 # 15286 abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15287', all_def_keywords['__all_virtual_trans_scheduler'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288', all_def_keywords['__all_virtual_ls_arb_replica_task'])))
@@ -24510,8 +24577,110 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21341 GV$OB_SQL_PLAN
-# 21342 V$OB_SQL_PLAN
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_SQL_PLAN',
+  table_id        = '21341',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        PLAN_ID,
+                        SQL_ID,
+                        DB_ID,
+                        PLAN_HASH,
+                        GMT_CREATE,
+                        OPERATOR,
+                        OBJECT_NODE,
+                        OBJECT_ID,
+                        OBJECT_OWNER,
+                        OBJECT_NAME,
+                        OBJECT_ALIAS,
+                        OBJECT_TYPE,
+                        OPTIMIZER,
+                        ID,
+                        PARENT_ID,
+                        DEPTH,
+                        POSITION,
+                        COST,
+                        REAL_COST,
+                        CARDINALITY,
+                        REAL_CARDINALITY,
+                        IO_COST,
+                        CPU_COST,
+                        BYTES,
+                        ROWSET,
+                        OTHER_TAG,
+                        PARTITION_START,
+                        OTHER,
+                        ACCESS_PREDICATES,
+                        FILTER_PREDICATES,
+                        STARTUP_PREDICATES,
+                        PROJECTION,
+                        SPECIAL_PREDICATES,
+                        QBLOCK_NAME,
+                        REMARKS,
+                        OTHER_XML
+                    FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id  = 'OB_INVALID_ID',
+  table_name     = 'V$OB_SQL_PLAN',
+  table_id       = '21342',
+  gm_columns     = [],
+  normal_columns = [],
+  rowkey_columns = [],
+  table_type     = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                      SQL_ID,
+                      DB_ID,
+                      PLAN_HASH,
+                      PLAN_ID,
+                      GMT_CREATE,
+                      OPERATOR,
+                      OBJECT_NODE,
+                      OBJECT_ID,
+                      OBJECT_OWNER,
+                      OBJECT_NAME,
+                      OBJECT_ALIAS,
+                      OBJECT_TYPE,
+                      OPTIMIZER,
+                      ID,
+                      PARENT_ID,
+                      DEPTH,
+                      POSITION,
+                      COST,
+                      REAL_COST,
+                      CARDINALITY,
+                      REAL_CARDINALITY,
+                      IO_COST,
+                      CPU_COST,
+                      BYTES,
+                      ROWSET,
+                      OTHER_TAG,
+                      PARTITION_START,
+                      OTHER,
+                      ACCESS_PREDICATES,
+                      FILTER_PREDICATES,
+                      STARTUP_PREDICATES,
+                      PROJECTION,
+                      SPECIAL_PREDICATES,
+                      QBLOCK_NAME,
+                      REMARKS,
+                      OTHER_XML
+    FROM OCEANBASE.GV$OB_SQL_PLAN
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 # 21343 abandoned
 # 21344 abandoned
 
@@ -48578,8 +48747,114 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 28172 GV$OB_SQL_PLAN
-# 28173 V$OB_SQL_PLAN
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name      = 'GV$OB_SQL_PLAN',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28172',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        DB_ID,
+                        SQL_ID,
+                        PLAN_HASH,
+                        PLAN_ID,
+                        GMT_CREATE,
+                        OPERATOR,
+                        OBJECT_NODE,
+                        OBJECT_ID,
+                        OBJECT_OWNER,
+                        OBJECT_NAME,
+                        OBJECT_ALIAS,
+                        OBJECT_TYPE,
+                        OPTIMIZER,
+                        ID,
+                        PARENT_ID,
+                        DEPTH,
+                        POSITION,
+                        COST,
+                        REAL_COST,
+                        CARDINALITY,
+                        REAL_CARDINALITY,
+                        IO_COST,
+                        CPU_COST,
+                        BYTES,
+                        ROWSET,
+                        OTHER_TAG,
+                        PARTITION_START,
+                        OTHER,
+                        ACCESS_PREDICATES,
+                        FILTER_PREDICATES,
+                        STARTUP_PREDICATES,
+                        PROJECTION,
+                        SPECIAL_PREDICATES,
+                        QBLOCK_NAME,
+                        REMARKS,
+                        OTHER_XML
+                    FROM SYS.ALL_VIRTUAL_SQL_PLAN
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name     = 'V$OB_SQL_PLAN',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28173',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                      DB_ID,
+                      SQL_ID,
+                      PLAN_HASH,
+                      PLAN_ID,
+                      GMT_CREATE,
+                      OPERATOR,
+                      OBJECT_NODE,
+                      OBJECT_ID,
+                      OBJECT_OWNER,
+                      OBJECT_NAME,
+                      OBJECT_ALIAS,
+                      OBJECT_TYPE,
+                      OPTIMIZER,
+                      ID,
+                      PARENT_ID,
+                      DEPTH,
+                      POSITION,
+                      COST,
+                      REAL_COST,
+                      CARDINALITY,
+                      REAL_CARDINALITY,
+                      IO_COST,
+                      CPU_COST,
+                      BYTES,
+                      ROWSET,
+                      OTHER_TAG,
+                      PARTITION_START,
+                      OTHER,
+                      ACCESS_PREDICATES,
+                      FILTER_PREDICATES,
+                      STARTUP_PREDICATES,
+                      PROJECTION,
+                      SPECIAL_PREDICATES,
+                      QBLOCK_NAME,
+                      REMARKS,
+                      OTHER_XML
+    FROM SYS.GV$OB_SQL_PLAN
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 # 28174 abandoned
 # 28175 abandoned
 

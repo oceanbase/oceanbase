@@ -899,7 +899,7 @@ public:
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
-  void reset_cur_phy_plan_to_null() { cur_phy_plan_ = NULL; }
+  void reset_cur_phy_plan_to_null();
 
   void get_flt_span_id(ObString &span_id) const;
   void get_flt_trace_id(ObString &trace_id) const;
@@ -1138,6 +1138,7 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
+  uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
@@ -1974,6 +1975,7 @@ private:
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
+  uint64_t last_plan_id_;
 
   ObFLTVars flt_vars_;
   //=======================ObProxy && OCJ related============================

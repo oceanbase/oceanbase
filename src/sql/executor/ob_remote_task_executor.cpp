@@ -115,6 +115,13 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
                                         has_transfer_err,
                                         plan_ctx->get_phy_plan());
       ret = COVER_SUCC(tmp_ret);
+
+      if (OB_SUCC(ret)) {
+        ObExecFeedbackInfo &fb_info = handler->get_result()->get_feedback_info();
+        if (OB_FAIL(query_ctx.get_feedback_info().merge_feedback_info(fb_info))) {
+          LOG_WARN("fail to merge exec feedback info", K(ret));
+        }
+      }
       NG_TRACE_EXT(remote_task_completed, OB_ID(ret), ret,
                    OB_ID(runner_svr), task_info->get_task_location().get_server(),
                    OB_ID(task), task);

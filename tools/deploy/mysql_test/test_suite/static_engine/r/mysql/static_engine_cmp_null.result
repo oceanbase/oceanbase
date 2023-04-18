@@ -41,11 +41,11 @@ insert into t values (NULL, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.0, 1.00, 1.000, 1.0000,
 explain_protocol: 2
 EXPLAIN select NULL = tinyint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.tinyint_t]), filter(nil), rowset=256
@@ -60,11 +60,11 @@ select NULL = tinyint_t from t limit 1;
 +------------------+
 EXPLAIN select NULL =  smallint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.smallint_t]), filter(nil), rowset=256
@@ -79,11 +79,11 @@ select NULL =  smallint_t from t limit 1;
 +--------------------+
 EXPLAIN select NULL =  mediumint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.mediumint_t]), filter(nil), rowset=256
@@ -98,11 +98,11 @@ select NULL =  mediumint_t from t limit 1;
 +---------------------+
 EXPLAIN select NULL =  int32_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.int32_t]), filter(nil), rowset=256
@@ -117,11 +117,11 @@ select NULL =  int32_t from t limit 1;
 +-----------------+
 EXPLAIN select NULL =  bigint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.bigint_t]), filter(nil), rowset=256
@@ -136,11 +136,11 @@ select NULL =  bigint_t from t limit 1;
 +------------------+
 EXPLAIN select NULL = utinyint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.utinyint_t]), filter(nil), rowset=256
@@ -155,11 +155,11 @@ select NULL = utinyint_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL =  usmallint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.usmallint_t]), filter(nil), rowset=256
@@ -174,11 +174,11 @@ select NULL =  usmallint_t from t limit 1;
 +---------------------+
 EXPLAIN select NULL =  umedium_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.umedium_t]), filter(nil), rowset=256
@@ -193,11 +193,11 @@ select NULL =  umedium_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL =  uint32_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.uint32_t]), filter(nil), rowset=256
@@ -212,11 +212,11 @@ select NULL =  uint32_t from t limit 1;
 +------------------+
 EXPLAIN select NULL =  ubigint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.ubigint_t]), filter(nil), rowset=256
@@ -231,11 +231,11 @@ select NULL =  ubigint_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL = float_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.float_t]), filter(nil), rowset=256
@@ -250,11 +250,11 @@ select NULL = float_t from t limit 1;
 +----------------+
 EXPLAIN select NULL =  ufloat_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.ufloat_t]), filter(nil), rowset=256
@@ -269,11 +269,11 @@ select NULL =  ufloat_t from t limit 1;
 +------------------+
 EXPLAIN select NULL = double_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.double_t]), filter(nil), rowset=256
@@ -288,11 +288,11 @@ select NULL = double_t from t limit 1;
 +-----------------+
 EXPLAIN select NULL =  udouble_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.udouble_t]), filter(nil), rowset=256
@@ -307,11 +307,11 @@ select NULL =  udouble_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL = number_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.number_t]), filter(nil), rowset=256
@@ -326,11 +326,11 @@ select NULL = number_t from t limit 1;
 +-----------------+
 EXPLAIN select NULL =  unumber_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.unumber_t]), filter(nil), rowset=256
@@ -345,11 +345,11 @@ select NULL =  unumber_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL = datetime_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.datetime_t]), filter(nil), rowset=256
@@ -364,11 +364,11 @@ select NULL = datetime_t from t limit 1;
 +-------------------+
 EXPLAIN select NULL =  timestamp_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.timestamp_t]), filter(nil), rowset=256
@@ -383,11 +383,11 @@ select NULL =  timestamp_t from t limit 1;
 +---------------------+
 EXPLAIN select NULL =  date_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.date_t]), filter(nil), rowset=256
@@ -402,11 +402,11 @@ select NULL =  date_t from t limit 1;
 +----------------+
 EXPLAIN select NULL =  time_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.time_t]), filter(nil), rowset=256
@@ -421,11 +421,11 @@ select NULL =  time_t from t limit 1;
 +----------------+
 EXPLAIN select NULL =  year_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.year_t]), filter(nil), rowset=256
@@ -440,11 +440,11 @@ select NULL =  year_t from t limit 1;
 +----------------+
 EXPLAIN select NULL = varchar_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.varchar_t]), filter(nil), rowset=256
@@ -459,11 +459,11 @@ select NULL = varchar_t from t limit 1;
 +------------------+
 EXPLAIN select NULL =  char_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.char_t]), filter(nil), rowset=256
@@ -478,11 +478,11 @@ select NULL =  char_t from t limit 1;
 +----------------+
 EXPLAIN select NULL =  tinytext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.tinytext_t]), filter(nil), rowset=256
@@ -497,11 +497,11 @@ select NULL =  tinytext_t from t limit 1;
 +--------------------+
 EXPLAIN select NULL =  mediumtext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.mediumtext_t]), filter(nil)
@@ -516,11 +516,11 @@ select NULL =  mediumtext_t from t limit 1;
 +----------------------+
 EXPLAIN select NULL =  longtext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.longtext_t]), filter(nil)
@@ -535,11 +535,11 @@ select NULL =  longtext_t from t limit 1;
 +--------------------+
 EXPLAIN select NULL = bit_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.bit_t]), filter(nil), rowset=256
@@ -554,11 +554,11 @@ select NULL = bit_t from t limit 1;
 +--------------+
 EXPLAIN select NULL =  enum_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.enum_t]), filter(nil), rowset=256
@@ -573,11 +573,11 @@ select NULL =  enum_t from t limit 1;
 +----------------+
 EXPLAIN select NULL =  set_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([NULL = t.set_t]), filter(nil), rowset=256
@@ -593,11 +593,11 @@ select NULL =  set_t from t limit 1;
 
 EXPLAIN select tinyint_t = tinyint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.tinyint_t]), filter(nil), rowset=256
@@ -612,11 +612,11 @@ select tinyint_t = tinyint_t from t limit 1;
 +-----------------------+
 EXPLAIN select tinyint_t =  smallint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.smallint_t]), filter(nil), rowset=256
@@ -631,11 +631,11 @@ select tinyint_t =  smallint_t from t limit 1;
 +-------------------------+
 EXPLAIN select tinyint_t =  mediumint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.mediumint_t]), filter(nil), rowset=256
@@ -650,11 +650,11 @@ select tinyint_t =  mediumint_t from t limit 1;
 +--------------------------+
 EXPLAIN select tinyint_t =  int32_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.int32_t]), filter(nil), rowset=256
@@ -669,11 +669,11 @@ select tinyint_t =  int32_t from t limit 1;
 +----------------------+
 EXPLAIN select tinyint_t =  bigint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.bigint_t]), filter(nil), rowset=256
@@ -688,11 +688,11 @@ select tinyint_t =  bigint_t from t limit 1;
 +-----------------------+
 EXPLAIN select tinyint_t = utinyint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.utinyint_t]), filter(nil), rowset=256
@@ -707,11 +707,11 @@ select tinyint_t = utinyint_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t =  usmallint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.usmallint_t]), filter(nil), rowset=256
@@ -726,11 +726,11 @@ select tinyint_t =  usmallint_t from t limit 1;
 +--------------------------+
 EXPLAIN select tinyint_t =  umedium_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.umedium_t]), filter(nil), rowset=256
@@ -745,11 +745,11 @@ select tinyint_t =  umedium_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t =  uint32_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.uint32_t]), filter(nil), rowset=256
@@ -764,11 +764,11 @@ select tinyint_t =  uint32_t from t limit 1;
 +-----------------------+
 EXPLAIN select tinyint_t =  ubigint_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.ubigint_t]), filter(nil), rowset=256
@@ -783,11 +783,11 @@ select tinyint_t =  ubigint_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t = float_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.float_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
@@ -802,11 +802,11 @@ select tinyint_t = float_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t =  ufloat_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.ufloat_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
@@ -821,11 +821,11 @@ select tinyint_t =  ufloat_t from t limit 1;
 +-----------------------+
 EXPLAIN select tinyint_t = double_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = t.double_t]), filter(nil), rowset=256
@@ -840,11 +840,11 @@ select tinyint_t = double_t from t limit 1;
 +----------------------+
 EXPLAIN select tinyint_t =  udouble_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.udouble_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
@@ -859,11 +859,11 @@ select tinyint_t =  udouble_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t = number_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = t.number_t]), filter(nil), rowset=256
@@ -878,11 +878,11 @@ select tinyint_t = number_t from t limit 1;
 +----------------------+
 EXPLAIN select tinyint_t =  unumber_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.unumber_t, DECIMAL(10, 0))]), filter(nil), rowset=256
@@ -897,11 +897,11 @@ select tinyint_t =  unumber_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t = datetime_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DATETIME(-1, -1)) = t.datetime_t]), filter(nil), rowset=256
@@ -916,11 +916,11 @@ select tinyint_t = datetime_t from t limit 1;
 +------------------------+
 EXPLAIN select tinyint_t =  timestamp_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, TIMESTAMP(-1, -1)) = t.timestamp_t]), filter(nil), rowset=256
@@ -935,11 +935,11 @@ select tinyint_t =  timestamp_t from t limit 1;
 +--------------------------+
 EXPLAIN select tinyint_t =  date_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DATE(-1, -1)) = t.date_t]), filter(nil), rowset=256
@@ -954,11 +954,11 @@ select tinyint_t =  date_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t =  time_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, TIME(-1, -1)) = t.time_t]), filter(nil), rowset=256
@@ -973,11 +973,11 @@ select tinyint_t =  time_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t =  year_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.year_t, DECIMAL(4, 0))]), filter(nil), rowset=256
@@ -992,11 +992,11 @@ select tinyint_t =  year_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t = varchar_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.varchar_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
@@ -1011,11 +1011,11 @@ select tinyint_t = varchar_t from t limit 1;
 +-----------------------+
 EXPLAIN select tinyint_t =  char_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.char_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
@@ -1030,11 +1030,11 @@ select tinyint_t =  char_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t =  tinytext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.tinytext_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
@@ -1049,11 +1049,11 @@ select tinyint_t =  tinytext_t from t limit 1;
 +-------------------------+
 EXPLAIN select tinyint_t =  mediumtext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.mediumtext_t, DECIMAL(-1, -1))]), filter(nil)
@@ -1068,11 +1068,11 @@ select tinyint_t =  mediumtext_t from t limit 1;
 +---------------------------+
 EXPLAIN select tinyint_t =  longtext_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.longtext_t, DECIMAL(-1, -1))]), filter(nil)
@@ -1087,11 +1087,11 @@ select tinyint_t =  longtext_t from t limit 1;
 +-------------------------+
 EXPLAIN select tinyint_t = bit_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.bit_t, DECIMAL(1, 0))]), filter(nil), rowset=256
@@ -1106,11 +1106,11 @@ select tinyint_t = bit_t from t limit 1;
 +-------------------+
 EXPLAIN select tinyint_t =  enum_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.enum_t]), filter(nil), rowset=256
@@ -1125,11 +1125,11 @@ select tinyint_t =  enum_t from t limit 1;
 +---------------------+
 EXPLAIN select tinyint_t =  set_t from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t.tinyint_t = t.set_t]), filter(nil), rowset=256
@@ -1356,11 +1356,11 @@ select (1, 1) != (2, null) from dual;
 
 EXPLAIN select (1, 1) = (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) = (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1375,11 +1375,11 @@ select (1, 1) = (1, tinyint_t) from t limit 1;
 +-------------------------+
 EXPLAIN select (1, 1) = (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) = (2, t.tinyint_t)]), filter(nil), rowset=256
@@ -1395,11 +1395,11 @@ select (1, 1) = (2, tinyint_t) from t limit 1;
 
 EXPLAIN select (1, 1) < (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) < (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1414,11 +1414,11 @@ select (1, 1) < (1, tinyint_t) from t limit 1;
 +-------------------------+
 EXPLAIN select (1, 1) < (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) < (2, t.tinyint_t)]), filter(nil), rowset=256
@@ -1434,11 +1434,11 @@ select (1, 1) < (2, tinyint_t) from t limit 1;
 
 EXPLAIN select (1, 1) <= (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) <= (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1453,11 +1453,11 @@ select (1, 1) <= (1, tinyint_t) from t limit 1;
 +--------------------------+
 EXPLAIN select (1, 1) <= (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) <= (2, t.tinyint_t)]), filter(nil), rowset=256
@@ -1473,11 +1473,11 @@ select (1, 1) <= (2, tinyint_t) from t limit 1;
 
 EXPLAIN select (1, 1) > (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) > (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1492,11 +1492,11 @@ select (1, 1) > (1, tinyint_t) from t limit 1;
 +-------------------------+
 EXPLAIN select (1, 1) > (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) > (2, t.tinyint_t)]), filter(nil), rowset=256
@@ -1512,11 +1512,11 @@ select (1, 1) > (2, tinyint_t) from t limit 1;
 
 EXPLAIN select (1, 1) >= (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) >= (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1531,11 +1531,11 @@ select (1, 1) >= (1, tinyint_t) from t limit 1;
 +--------------------------+
 EXPLAIN select (1, 1) >= (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) >= (2, t.tinyint_t)]), filter(nil), rowset=256
@@ -1551,11 +1551,11 @@ select (1, 1) >= (2, tinyint_t) from t limit 1;
 
 EXPLAIN select (1, 1) != (1, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) != (1, t.tinyint_t)]), filter(nil), rowset=256
@@ -1570,11 +1570,11 @@ select (1, 1) != (1, tinyint_t) from t limit 1;
 +--------------------------+
 EXPLAIN select (1, 1) != (2, tinyint_t) from t limit 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t   |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([(1, 1) != (2, t.tinyint_t)]), filter(nil), rowset=256

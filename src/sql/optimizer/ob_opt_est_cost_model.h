@@ -35,9 +35,7 @@ enum RowCountEstMethod
   INVALID_METHOD = 0,
   DEFAULT_STAT,
   BASIC_STAT,    //use min/max/ndv to estimate row count
-  HISTOGRAM,     //place holder
-  LOCAL_STORAGE, //use local storage layer to estimate row count
-  REMOTE_STORAGE //use remote storage layer to estimate row count
+  STORAGE_STAT, //use storage layer to estimate row count
 };
 
 // all the table meta info need to compute cost
@@ -969,10 +967,6 @@ protected:
   int cost_local_order_sort_inner(const common::ObIArray<sql::ObExprResType> &types,
 																	double row_count,
 																	double &cost);
-
-  // estimate cost for virtual table
-  int cost_virtual_table(ObCostTableScanInfo &est_cost_info,
-                        double &cost);
 
   // estimate cost for non-virtual table
   int cost_normal_table(ObCostTableScanInfo &est_cost_info,

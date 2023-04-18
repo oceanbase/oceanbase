@@ -32,6 +32,8 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
+#include "sql/engine/ob_exec_feedback_info.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -126,7 +128,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
     need_record_plan_info_(false),
     enable_append_(false),
-    append_table_id_(0)
+    append_table_id_(0),
+    logical_plan_()
 {
 }
 
@@ -216,6 +219,7 @@ void ObPhysicalPlan::reset()
   tx_id_ = -1;
   tm_sessid_ = -1;
   need_record_plan_info_ = false;
+  logical_plan_.reset();
 }
 
 void ObPhysicalPlan::destroy()
@@ -1187,6 +1191,76 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         pos += 1;
         stat_.plan_tmp_tbl_name_str_len_ = static_cast<int32_t>(pos);
       }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlan::set_logical_plan(ObLogicalPlanRawData &logical_plan)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  if (OB_ISNULL(buf = (char*)allocator_.alloc(logical_plan.logical_plan_len_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret));
+  } else {
+    if (NULL != logical_plan_.logical_plan_) {
+      allocator_.free(logical_plan_.logical_plan_);
+    }
+    MEMCPY(buf, logical_plan.logical_plan_, logical_plan.logical_plan_len_);
+    logical_plan_ = logical_plan;
+    logical_plan_.logical_plan_ = buf;
+  }
+  return ret;
+}
+
+int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t plan_open_time = 0;
+  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+  ObSEArray<ObSqlPlanItem*, 4> plan_items;
+  ObExecFeedbackInfo &feedback_info = ctx.get_feedback_info();
+  const common::ObIArray<ObExecFeedbackNode> &feedback_nodes = feedback_info.get_feedback_nodes();
+  if (OB_FAIL(logical_plan_.uncompress_logical_plan(ctx.get_allocator(), plan_items))) {
+    LOG_WARN("failed to uncompress logical plan", K(ret));
+  } else if (feedback_nodes.count() != plan_items.count()) {
+    ret = OB_SUCCESS;
+    LOG_WARN("unexpect feedback node count", K(ret));
+  } else if (!feedback_nodes.empty()) {
+    plan_open_time = feedback_nodes.at(0).op_open_time_;
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
+    const ObExecFeedbackNode &feedback_node = feedback_nodes.at(i);
+    ObSqlPlanItem *plan_item = plan_items.at(i);
+    if (OB_ISNULL(plan_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null plan item", K(ret));
+    } else if (feedback_node.op_id_ != plan_item->id_) {
+       ret = OB_SUCCESS;
+      LOG_WARN("unexpect feedback node info", K(ret));
+    } else {
+      int64_t real_cost = 0;
+      if (0 != feedback_node.output_row_count_ &&
+          0 != feedback_node.op_last_row_time_) {
+        real_cost = feedback_node.op_last_row_time_ - plan_open_time;
+      } else if (0 != feedback_node.op_close_time_) {
+        real_cost = feedback_node.op_close_time_ - plan_open_time;
+      }
+      plan_item->real_cardinality_ = feedback_node.output_row_count_;
+      plan_item->real_cost_ = real_cost;
+      plan_item->cpu_cost_ = feedback_node.db_time_ / cpu_khz;
+      plan_item->io_cost_ = feedback_node.block_time_ / cpu_khz;
+      plan_item->search_columns_ = feedback_node.worker_count_;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObLogicalPlanRawData new_logical_plan;
+    if (OB_FAIL(new_logical_plan.compress_logical_plan(ctx.get_allocator(), plan_items))) {
+      LOG_WARN("failed to compress logical plan", K(ret));
+    } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
+      LOG_WARN("failed to set logical plan", K(ret));
     }
   }
   return ret;

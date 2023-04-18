@@ -39,9 +39,12 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
   // the storage estimation is an advanced tech, which introduces more accurate results
   // but it has serveral limitations, hence we check its usage here
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    RowCountEstMethod method;
+    bool use_storage_stat = false;
     bool use_default_vt = false;
-    if (OB_FAIL(choose_best_estimation_method(paths.at(i), meta, method, use_default_vt))) {
+    if (OB_FAIL(choose_best_estimation_method(paths.at(i),
+                                              meta,
+                                              use_storage_stat,
+                                              use_default_vt))) {
       LOG_WARN("failed to choose best estimation method", K(ret));
     } else if (use_default_vt) {
       if (OB_FAIL(process_vtable_estimation(paths.at(i)))) {
@@ -49,7 +52,7 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
       }
     } else if (OB_FAIL(process_statistics_estimation(meta, paths.at(i)))) {
       LOG_WARN("failed to process statistics estimation", K(ret));
-    } else if (method != RowCountEstMethod::LOCAL_STORAGE) {
+    } else if (!use_storage_stat) {
       // do nothing
     } else if (OB_FAIL(tmp.push_back(paths.at(i)))) {
       LOG_WARN("failed to push back path", K(ret));
@@ -66,21 +69,22 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
 
 int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path,
                                                           const ObTableMetaInfo &meta,
-                                                          RowCountEstMethod &method,
+                                                          bool &use_storage_stat,
                                                           bool &use_default_vt)
 {
   int ret = OB_SUCCESS;
   const ObTablePartitionInfo *part_info = NULL;
+  use_storage_stat = false;
   if (OB_ISNULL(path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access path is invalid", K(ret), K(path));
   } else if (is_virtual_table(path->ref_table_id_) &&
              !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
     use_default_vt = !meta.has_opt_stat_;
-    method = meta.has_opt_stat_ ? RowCountEstMethod::BASIC_STAT : RowCountEstMethod::DEFAULT_STAT;
+    use_storage_stat = false;
   } else {
     if (meta.is_empty_table_) {
-      method = RowCountEstMethod::BASIC_STAT;
+      use_storage_stat = false;
     } else if (OB_ISNULL(part_info = path->table_partition_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table partition info is null", K(ret), K(part_info));
@@ -90,9 +94,9 @@ int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path
       if (partition_count > 1 ||
           scan_range_count <= 0 ||
           scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
-        method = RowCountEstMethod::BASIC_STAT;
+        use_storage_stat = false;
       } else {
-        method = RowCountEstMethod::LOCAL_STORAGE;
+        use_storage_stat = true;
       }
     }
   }
@@ -107,8 +111,9 @@ int ObAccessPathEstimation::process_vtable_estimation(AccessPath *path)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("path is null", K(ret), K(path));
   } else {
-    const ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
-    if (est_cost_info.ranges_.empty()) {
+    ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
+    est_cost_info.batch_type_ = ObSimpleBatch::T_SCAN;
+    if (est_cost_info.ranges_.empty() || est_cost_info.prefix_filters_.empty()) {
       output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
       LOG_TRACE("OPT:[VT] virtual table without range, use default stat", K(output_row_count));
     } else {
@@ -242,8 +247,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   if (!need_fallback) {
     for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
       const ObBatchEstTasks *task = tasks.at(i);
-      RowCountEstMethod est_method = (task->addr_ == ctx.get_local_server_addr() ?
-            RowCountEstMethod::LOCAL_STORAGE : RowCountEstMethod::REMOTE_STORAGE);
+      RowCountEstMethod est_method = RowCountEstMethod::STORAGE_STAT;
       for (int64_t j = 0; OB_SUCC(ret) && j < task->paths_.count(); ++j) {
         const obrpc::ObEstPartResElement &res = task->res_.index_param_res_.at(j);
         AccessPath *path = task->paths_.at(j);

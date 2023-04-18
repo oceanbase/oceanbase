@@ -37,22 +37,38 @@ using oceanbase::share::schema::ObSchemaGetterGuard;
 const char *ObLogTableScan::get_name() const
 {
   bool is_get = false;
+  bool is_range = false;
   const char *name = NULL;
   int ret = OB_SUCCESS;
   SampleInfo::SampleMethod sample_method = get_sample_info().method_;
-  if (NULL != pre_query_range_ && OB_FAIL(get_pre_query_range()->is_get(is_get))) {
-    // is_get always return true
-    LOG_WARN("failed to get is_get", K(ret));
-    is_get = false;
+  if (NULL != pre_query_range_) {
+    if (OB_FAIL(get_pre_query_range()->is_get(is_get))) {
+      // is_get always return true
+      LOG_WARN("failed to get is_get", K(ret));
+    } else if (range_conds_.count() > 0) {
+      is_range = true;
+    }
   }
   if (sample_method != SampleInfo::NO_SAMPLE) {
-    name = (sample_method == SampleInfo::ROW_SAMPLE) ? "ROW SAMPLE SCAN" : "BLOCK SAMPLE SCAN";
+    name = (sample_method == SampleInfo::ROW_SAMPLE) ? "TABLE ROW SAMPLE SCAN" : "TABLE BLOCK SAMPLE SCAN";
   } else if (is_skip_scan()) {
-    name = use_das() ? "DISTRIBUTED INDEX SKIP SCAN" : "INDEX SKIP SCAN";
+    name = use_das() ? "DISTRIBUTED TABLE SKIP SCAN" : "TABLE SKIP SCAN";
   } else if (use_das()) {
-    name = is_get ? "DISTRIBUTED TABLE GET" : "DISTRIBUTED TABLE SCAN";
+    if (is_get) {
+      name = "DISTRIBUTED TABLE GET";
+    } else if (is_range) {
+      name = "DISTRIBUTED TABLE RANGE SCAN";
+    } else {
+      name = "DISTRIBUTED TABLE FULL SCAN";
+    }
   } else {
-    name = is_get ? "TABLE GET" : "TABLE SCAN";
+    if (is_get) {
+      name = "TABLE GET";
+    } else if (is_range) {
+      name = "TABLE RANGE SCAN";
+    } else {
+      name = "TABLE FULL SCAN";
+    }
   }
   return name;
 }
@@ -1283,48 +1299,11 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
                                                  int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ObString index_selection_method_name;
-  ObString heuristic_rule_name;
   if (OB_NOT_NULL(table_opt_info_)) {
-    switch (table_opt_info_->optimization_method_) {
-      case OptimizationMethod::MAX_METHOD:
-        index_selection_method_name = "max_method";
-        break;
-      case OptimizationMethod::COST_BASED:
-        index_selection_method_name = "cost_based";
-        break;
-      case OptimizationMethod::RULE_BASED:
-        index_selection_method_name = "rule_based";
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknown index selection method", K(table_opt_info_->optimization_method_));
-        break;
-    }
-    switch (table_opt_info_->heuristic_rule_) {
-      case HeuristicRule::MAX_RULE:
-        heuristic_rule_name = "max_rule";
-        break;
-      case HeuristicRule::UNIQUE_INDEX_WITHOUT_INDEXBACK:
-        heuristic_rule_name = "unique_index_without_indexback";
-        break;
-      case HeuristicRule::UNIQUE_INDEX_WITH_INDEXBACK:
-        heuristic_rule_name = "unique_index_with_indexback";
-        break;
-      case HeuristicRule::VIRTUAL_TABLE_HEURISTIC:
-        heuristic_rule_name = "virtual_table_prefix";
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknown heuristic rule", K(table_opt_info_->heuristic_rule_));
-    }
     // print detail info of index selection method
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF("%.*s:", table_name_.length(), table_name_.ptr()))) {
+    } else if (OB_FAIL(BUF_PRINTF("  %.*s:", table_name_.length(), table_name_.ptr()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_UNLIKELY(estimate_method_ < 0 || estimate_method_ > 5)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid array pos", K(estimate_method_), K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
@@ -1360,32 +1339,6 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
     } else if (OB_FAIL(BUF_PRINTF("output_rows:%ld",
                             static_cast<int64_t>(output_row_count_)))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("est_method:%s",
-                            ObOptEstCost::get_method_name(estimate_method_)))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("optimization_method:%.*s",
-                                  index_selection_method_name.length(),
-                                  index_selection_method_name.ptr()))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OptimizationMethod::MAX_METHOD == table_opt_info_->optimization_method_) {
-      // do nothing
-    } else if (OptimizationMethod::RULE_BASED == table_opt_info_->optimization_method_) {
-      if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("heuristic_rule:%.*s", heuristic_rule_name.length(),
-                              heuristic_rule_name.ptr()))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else { /* do nothing*/ }
     } else {
       // print available index id
       if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
@@ -1458,35 +1411,6 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
           LOG_WARN("BUF_PRINTF fails", K(ret));
         } else { /* Do nothing */ }
       }
-      // print est row count infos
-      if (OB_FAIL(ret) || est_records_.count() <= 0) {
-      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("table_id:%ld:",
-                                    est_records_.at(0).table_id_))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("estimation info:"))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < est_records_.count(); ++i) {
-        const ObEstRowCountRecord &record = est_records_.at(i);
-        if (OB_FAIL(BUF_PRINTF("(table_type:%ld, version:%ld-%ld-%ld, logical_rc:%ld, physical_rc:%ld)%s",
-                              record.table_type_,
-                              record.version_range_.base_version_,
-                              record.version_range_.multi_version_start_,
-                              record.version_range_.snapshot_version_,
-                              record.logical_row_count_,
-                              record.physical_row_count_,
-                              i == est_records_.count() - 1 ? "]" : ",\n"))) {
-          LOG_WARN("BUF PRINTF fails", K(ret));
-        } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-          LOG_WARN("BUF_PRINTF fails", K(ret));
-        } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-          LOG_WARN("BUF_PRINTF fails", K(ret));
-        }
-      }
     }
   }
   return ret;
@@ -1533,6 +1457,7 @@ int ObLogTableScan::print_ranges(char *buf,
                                  const ObIArray<ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
+  int64_t ori_pos = pos;
   for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     if (i >= 1) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
@@ -1543,6 +1468,11 @@ int ObLogTableScan::print_ranges(char *buf,
     if (OB_SUCC(ret)) {
       pos += ranges.at(i).to_plain_string(buf + pos, buf_len - pos);
     }
+  }
+  if (OB_FAIL(ret)) {
+    pos = ori_pos;
+    BUF_PRINTF("(too many ranges)");
+    ret = OB_SUCCESS;
   }
   return ret;
 }

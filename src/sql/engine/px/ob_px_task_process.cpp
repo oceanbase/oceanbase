@@ -453,6 +453,8 @@ int ObPxTaskProcess::do_process()
 
   // for transaction
   (void)record_tx_desc();
+  // for exec feedback info
+  (void)record_exec_feedback_info();
 
   LOG_TRACE("TIMERECORD ", "reserve:=0 name:=TASK dfoid:",dfo_id,"sqcid:",
            sqc_id,"taskid:", task_id,"end:", ObTimeUtility::current_time(),
@@ -475,6 +477,22 @@ int ObPxTaskProcess::do_process()
 
   LOG_TRACE("notify SQC task exit", K(dfo_id), K(sqc_id), K(task_id), K(ret));
 
+  return ret;
+}
+
+int ObPxTaskProcess::record_exec_feedback_info()
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *cur_exec_ctx = nullptr;
+  CK (OB_NOT_NULL(arg_.sqc_task_ptr_));
+  CK (OB_NOT_NULL(cur_exec_ctx = arg_.exec_ctx_));
+  if (OB_SUCC(ret)) {
+    ObExecFeedbackInfo &fb_info = cur_exec_ctx->get_feedback_info();
+    if (fb_info.get_feedback_nodes().count() > 0 &&
+        fb_info.is_valid()) {
+      OZ(arg_.sqc_task_ptr_->get_feedback_info().assign(fb_info));
+    }
+  }
   return ret;
 }
 

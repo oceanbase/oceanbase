@@ -195,7 +195,6 @@
 #include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
-#include "observer/virtual_table/ob_all_virtual_plan_table.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
 
 namespace oceanbase
@@ -2300,24 +2299,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          // case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
-          //   ObAllVirtualSqlPlan *sql_plan_table = NULL;
-          //   if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
-          //     sql_plan_table->set_allocator(&allocator);
-          //     sql_plan_table->set_addr(addr_);
-          //     vt_iter = static_cast<ObVirtualTableIterator *>(sql_plan_table);
-          //   }
-          //   break;
-          // }
-          // case OB_ALL_VIRTUAL_PLAN_TABLE_TID: {
-          //   ObAllVirtualPlanTable *plan_table = NULL;
-          //   if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanTable, plan_table))) {
-          //     plan_table->set_allocator(&allocator);
-          //     plan_table->set_plan_table_mgr(session->get_plan_table_manager());;
-          //     vt_iter = static_cast<ObVirtualTableIterator *>(plan_table);
-          //   }
-          //   break;
-          // }
+          case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
+            ObAllVirtualSqlPlan *sql_plan_table = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
+              sql_plan_table->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(sql_plan_table);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_THREAD_TID: {
             ObAllVirtualThread *all_virtual_thread = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualThread, all_virtual_thread))) {

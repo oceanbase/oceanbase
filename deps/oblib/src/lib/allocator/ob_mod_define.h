@@ -710,7 +710,6 @@ LABEL_ITEM_DEF(OB_SQL_PS_SQL_META, SqlPsSqlMeta)
 LABEL_ITEM_DEF(OB_SQL_PX_BLOOM_FILTER, SqlPxBloomFilte)
 LABEL_ITEM_DEF(OB_PS_SESSION_INFO_ARRAY, PsSessiInfoArra)
 LABEL_ITEM_DEF(OB_CONNECT_BY_PUMP, ConnectByPump)
-LABEL_ITEM_DEF(OB_SQL_PLAN, LogPlanManger)
 
 //mpimodules
 LABEL_ITEM_DEF(OB_MPI_INTERM_RESULT, MpiIntermResult)
@@ -1300,7 +1299,7 @@ struct InnerModIds
   #undef LABEL_ITEM_DEF
   };
   enum { LABEL_COUNT_LIMIT = InnerModIds::OB_MOD_END };
-  STATIC_ASSERT(LABEL_COUNT_LIMIT == 1034, "forbidden to add new label!!!");
+  STATIC_ASSERT(LABEL_COUNT_LIMIT == 1033, "forbidden to add new label!!!");
 };
 
 #define ObNewModIds ObModIds

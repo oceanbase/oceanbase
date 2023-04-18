@@ -36,12 +36,12 @@ KEY `idx_v5_v6_v2_v3_v4` (v5, v6, v2, v3, v4),
 KEY `idx_v6_v2_v3_v4_v5` (v6, v2, v3, v4, v5));
 explain select v1, tenant_id from skyline_int group by v3 order by v3;
 Query Plan
-================================================================
-|ID|OPERATOR      |NAME                  |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |MERGE GROUP BY|                      |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v2)|1       |2           |
-================================================================
+===================================================================
+|ID|OPERATOR         |NAME                  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                      |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v2)|1       |2           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -52,12 +52,12 @@ Outputs & filters:
       range_key([skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v3, v4 order by v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+======================================================================
+|ID|OPERATOR         |NAME                     |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                         |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -65,16 +65,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v4, v3 order by v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+======================================================================
+|ID|OPERATOR         |NAME                     |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                         |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -82,16 +82,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v3, v4, v5 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -99,16 +99,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v3, v5, v4 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -116,16 +116,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id, v6 from skyline_int group by v3, v5, v4 order by v3;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE GROUP BY|                               |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
-=========================================================================
+============================================================================
+|ID|OPERATOR         |NAME                           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                               |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=256
@@ -133,16 +133,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v4, v3, v5 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -150,16 +150,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v4, v5, v3 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -167,16 +167,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v5, v3, v4 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -184,16 +184,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v5, v4, v3 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -201,16 +201,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select sum(v1), tenant_id from skyline_int group by v6, v5, v4, v3 having sum(v1) > 100 order by v3;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE GROUP BY|                               |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
-=========================================================================
+============================================================================
+|ID|OPERATOR         |NAME                           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                               |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(skyline_int.v1)], [skyline_int.tenant_id]), filter([T_FUN_SUM(skyline_int.v1) > cast(100, DECIMAL(3, 0))]), rowset=256
@@ -218,19 +218,19 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 group by will decide which index to use
 explain select max(v1), tenant_id from skyline_int join other on v4 = c1 and v3 = c2 and v2 = c3 group by v3, v2;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c3_c2)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v2_v3_v4)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c3_c2)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v2_v3_v4)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -245,18 +245,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c1 and v2 = c3 group by v3, v4, v2;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v4_v2_v3)|1       |2           |
-|3 |  TABLE SCAN  |other                    |1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v4_v2_v3)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other                    |1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -267,22 +267,22 @@ Outputs & filters:
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   3 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -297,18 +297,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3, v4;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -323,18 +323,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v4, v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -349,18 +349,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -375,18 +375,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3 order by c2, c3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -401,18 +401,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c1 and v2 = c2 group by v2, v4;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c3_c2)         |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v4_v2_v3)|1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c3_c2)         |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v4_v2_v3)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -427,18 +427,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)            |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -453,18 +453,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v5 = c1 group by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)            |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -479,18 +479,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)            |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -505,18 +505,18 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v4, v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other(idx_c2_c3)            |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -531,19 +531,19 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |5           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other                       |1       |2           |
-|3 |  SORT        |                            |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |MERGE GROUP BY       |                            |1       |5           |
+|1 |└─MERGE JOIN         |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN  |other                       |1       |2           |
+|3 |  └─SORT             |                            |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -560,19 +560,19 @@ Outputs & filters:
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v5, v4, v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |5           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other                       |1       |2           |
-|3 |  SORT        |                            |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |MERGE GROUP BY       |                            |1       |5           |
+|1 |└─MERGE JOIN         |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN  |other                       |1       |2           |
+|3 |  └─SORT             |                            |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -589,18 +589,18 @@ Outputs & filters:
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v3;
 Query Plan
-================================================================
-|ID|OPERATOR      |NAME                  |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |MERGE GROUP BY|                      |1       |4           |
-|1 | MERGE JOIN   |                      |1       |4           |
-|2 |  TABLE SCAN  |other                 |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v2)|1       |2           |
-================================================================
+=====================================================================
+|ID|OPERATOR           |NAME                  |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                      |1       |4           |
+|1 |└─MERGE JOIN       |                      |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other                 |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v2)|1       |2           |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -618,14 +618,14 @@ Outputs & filters:
       range_key([skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v4, v3;
 Query Plan
-===================================================================
-|ID|OPERATOR      |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE GROUP BY|                         |1       |4           |
-|1 | MERGE JOIN   |                         |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|1       |2           |
-|3 |  TABLE SCAN  |other                    |1       |2           |
-===================================================================
+========================================================================
+|ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                         |1       |4           |
+|1 |└─MERGE JOIN       |                         |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other                    |1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -636,22 +636,22 @@ Outputs & filters:
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4;
 Query Plan
-=====================================================================
-|ID|OPERATOR     |NAME                        |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |HASH GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN  |                            |1       |4           |
-|2 |  TABLE SCAN |other                       |1       |2           |
-|3 |  TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-=====================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |HASH GROUP BY      |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other                       |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -666,19 +666,19 @@ Outputs & filters:
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4 order by v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | SORT         |                            |1       |4           |
-|2 |  MERGE JOIN  |                            |1       |4           |
-|3 |   TABLE SCAN |other                       |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |MERGE GROUP BY       |                            |1       |4           |
+|1 |└─SORT               |                            |1       |4           |
+|2 |  └─MERGE JOIN       |                            |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                       |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -695,18 +695,18 @@ Outputs & filters:
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-|3 |  TABLE SCAN  |other                       |1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other                       |1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -717,29 +717,28 @@ Outputs & filters:
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id, v6 from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |SORT          |                               |1       |4           |
-|1 | HASH GROUP BY|                               |1       |4           |
-|2 |  MERGE JOIN  |                               |1       |4           |
-|3 |   TABLE SCAN |other                          |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
-=========================================================================
+================================================================================
+|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                 |                               |1       |4           |
+|1 |└─HASH GROUP BY      |                               |1       |4           |
+|2 |  └─MERGE JOIN       |                               |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                          |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
+================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=256
       sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
-  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil),
-rowset=256
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=256
       group([skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v1]), filter(nil), rowset=256
       equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
@@ -751,18 +750,18 @@ rowset=256
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v3) from skyline_int join other on v3 = c1 order by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |other                       |1       |2           |
-|3 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE DISTINCT     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other                       |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3]), filter(nil), rowset=256
@@ -777,19 +776,19 @@ Outputs & filters:
   3 - output([skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5;
 Query Plan
-=======================================================================
-|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |SORT           |                            |1       |4           |
-|1 | MERGE DISTINCT|                            |1       |4           |
-|2 |  MERGE JOIN   |                            |1       |4           |
-|3 |   TABLE SCAN  |other                       |1       |2           |
-|4 |   TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-=======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |SORT                 |                            |1       |4           |
+|1 |└─MERGE DISTINCT     |                            |1       |4           |
+|2 |  └─MERGE JOIN       |                            |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                       |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4]), filter(nil), rowset=256
@@ -806,19 +805,19 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5, v6;
 Query Plan
-==========================================================================
-|ID|OPERATOR       |NAME                           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------
-|0 |SORT           |                               |1       |4           |
-|1 | MERGE DISTINCT|                               |1       |4           |
-|2 |  MERGE JOIN   |                               |1       |4           |
-|3 |   TABLE SCAN  |other                          |1       |2           |
-|4 |   TABLE SCAN  |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-==========================================================================
+================================================================================
+|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                 |                               |1       |4           |
+|1 |└─MERGE DISTINCT     |                               |1       |4           |
+|2 |  └─MERGE JOIN       |                               |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                          |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4]), filter(nil), rowset=256
@@ -835,19 +834,19 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v5, v4, v3 from skyline_int join other on v4 = c1 order by v3;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |SORT          |                            |1       |4           |
-|1 | HASH DISTINCT|                            |1       |4           |
-|2 |  MERGE JOIN  |                            |1       |4           |
-|3 |   TABLE SCAN |other                       |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |SORT                 |                            |1       |4           |
+|1 |└─HASH DISTINCT      |                            |1       |4           |
+|2 |  └─MERGE JOIN       |                            |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                       |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
@@ -864,19 +863,19 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v5, v4, v3 from other left join skyline_int on v4 = c1 order by v3;
 Query Plan
-===========================================================================
-|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------
-|0 |MERGE DISTINCT     |                            |1       |4           |
-|1 | SORT              |                            |1       |4           |
-|2 |  MERGE OUTER JOIN |                            |1       |4           |
-|3 |   TABLE SCAN      |other                       |1       |2           |
-|4 |   TABLE SCAN      |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-===========================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |MERGE DISTINCT       |                            |1       |4           |
+|1 |└─SORT               |                            |1       |4           |
+|2 |  └─MERGE OUTER JOIN |                            |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                       |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
@@ -893,19 +892,19 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v4, v5, v6 from other left join skyline_int on v4 = c1 and v5 = c2 order by v4, v5, v6;
 Query Plan
-==============================================================================
-|ID|OPERATOR           |NAME                           |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------------
-|0 |MERGE DISTINCT     |                               |1       |4           |
-|1 | SORT              |                               |1       |4           |
-|2 |  MERGE OUTER JOIN |                               |1       |4           |
-|3 |   TABLE SCAN      |other                          |1       |2           |
-|4 |   TABLE SCAN      |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-==============================================================================
+================================================================================
+|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |MERGE DISTINCT       |                               |1       |4           |
+|1 |└─SORT               |                               |1       |4           |
+|2 |  └─MERGE OUTER JOIN |                               |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                          |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
@@ -922,16 +921,16 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v4, v5 from skyline_int union select c1, c2, c3 from other;
 Query Plan
 ============================================================================
 |ID|OPERATOR            |NAME                        |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                            |2       |4           |
-|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-|2 | TABLE SCAN         |other                       |1       |2           |
+|1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+|2 |└─TABLE FULL SCAN   |other                       |1       |2           |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -939,8 +938,8 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -951,8 +950,8 @@ Query Plan
 |ID|OPERATOR                |NAME                           |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------------
 |0 |MERGE INTERSECT DISTINCT|                               |1       |4           |
-|1 | TABLE SCAN             |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-|2 | TABLE SCAN             |skyline_int(idx_v3_v4_v5_v2)   |1       |2           |
+|1 |├─TABLE FULL SCAN       |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+|2 |└─TABLE FULL SCAN       |skyline_int(idx_v3_v4_v5_v2)   |1       |2           |
 ===================================================================================
 Outputs & filters:
 -------------------------------------
@@ -960,21 +959,21 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v4, v5, v6 from skyline_int union select v2, v3, v4 from skyline_int;
 Query Plan
 ===============================================================================
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                               |2       |4           |
-|1 | TABLE SCAN         |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-|2 | TABLE SCAN         |skyline_int(idx_v2_v3_v4)      |1       |2           |
+|1 |├─TABLE FULL SCAN   |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+|2 |└─TABLE FULL SCAN   |skyline_int(idx_v2_v3_v4)      |1       |2           |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -982,36 +981,36 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 = 100 and v5 = 100 order by v3, v4, v5;
 Query Plan
-==================================================================
-|ID|OPERATOR  |NAME                        |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------
-|0 |TABLE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-==================================================================
+========================================================================
+|ID|OPERATOR        |NAME                        |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,100,MIN,MIN,MIN
-; 100,100,100,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,100,MIN,
+      MIN,MIN ; 100,100,100,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 = 100], [skyline_int.v5 = 100])
 explain select v3, v4, v5 from skyline_int where v3 in (100, 200, 300) group by v3, v4, v5 order by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1019,17 +1018,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MIN,MIN,MIN,MIN,MIN
-; 100,MAX,MAX,MAX,MAX,MAX), (200,MIN,MIN,MIN,MIN,MIN ; 200,MAX,MAX,MAX,MAX,MAX), (300,MIN,MIN,MIN,MIN,MIN ; 300,MAX,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MIN,MIN,MIN,
+      MIN,MIN ; 100,MAX,MAX,MAX,MAX,MAX), (200,MIN,MIN,MIN,MIN,MIN ; 200,MAX,MAX,MAX,MAX,MAX), (300,MIN,MIN,MIN,MIN,MIN ; 300,MAX,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 IN (100, 200, 300)])
 explain select distinct v3, v4, v5 from skyline_int where v3 in (100, 200, 300) order by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1037,17 +1036,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MIN,MIN,MIN,MIN,MIN
-; 100,MAX,MAX,MAX,MAX,MAX), (200,MIN,MIN,MIN,MIN,MIN ; 200,MAX,MAX,MAX,MAX,MAX), (300,MIN,MIN,MIN,MIN,MIN ; 300,MAX,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MIN,MIN,MIN,
+      MIN,MIN ; 100,MAX,MAX,MAX,MAX,MAX), (200,MIN,MIN,MIN,MIN,MIN ; 200,MAX,MAX,MAX,MAX,MAX), (300,MIN,MIN,MIN,MIN,MIN ; 300,MAX,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 IN (100, 200, 300)])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v4, v3, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1055,17 +1054,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,MAX,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,
+      MAX,MAX ; 100,MAX,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100])
 explain select v4, v5, v6 from skyline_int where v3 = 100 group by v3, v5;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE GROUP BY|                               |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
-=========================================================================
+============================================================================
+|ID|OPERATOR         |NAME                           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                               |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
@@ -1073,16 +1072,16 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter([skyline_int.v3 = 100]), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int where v4 = 100;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE DISTINCT   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1090,16 +1089,16 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v5]), filter([skyline_int.v4 = 100]), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int where v4 > 100 and v4 < 200;
 Query Plan
-=====================================================================
-|ID|OPERATOR     |NAME                        |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |HASH DISTINCT|                            |1       |3           |
-|1 | TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-=====================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |HASH DISTINCT     |                            |1       |3           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1107,17 +1106,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,
+      MAX,MAX ; 200,MIN,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2;
 Query Plan
-===================================================================
-|ID|OPERATOR   |NAME                        |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |SORT       |                            |1       |2           |
-|1 | TABLE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-===================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |SORT              |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1125,17 +1124,17 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,
+      MAX,MAX ; 200,MIN,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2 limit 100;
 Query Plan
-===================================================================
-|ID|OPERATOR   |NAME                        |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |TOP-N SORT |                            |1       |2           |
-|1 | TABLE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-===================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |TOP-N SORT        |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1143,17 +1142,17 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,
+      MAX,MAX ; 200,MIN,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1161,17 +1160,17 @@ Outputs & filters:
   1 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter([skyline_int.v5 = 100]), rowset=256
       access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2 limit 100;
 Query Plan
-=======================================================================
-|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |LIMIT          |                            |1       |2           |
-|1 | MERGE GROUP BY|                            |1       |2           |
-|2 |  TABLE SCAN   |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-=======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT              |                            |1       |2           |
+|1 |└─MERGE GROUP BY   |                            |1       |2           |
+|2 |  └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1181,19 +1180,19 @@ Outputs & filters:
   2 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter([skyline_int.v5 = 100]), rowset=256
       access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3, v4;
 Query Plan
-========================================================================
-|ID|OPERATOR     |NAME                           |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |SORT         |                               |1       |4           |
-|1 | MERGE JOIN  |                               |1       |4           |
-|2 |  TABLE SCAN |other                          |1       |2           |
-|3 |  SORT       |                               |1       |2           |
-|4 |   TABLE SCAN|skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
-========================================================================
+================================================================================
+|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                 |                               |1       |4           |
+|1 |└─MERGE JOIN         |                               |1       |4           |
+|2 |  ├─TABLE FULL SCAN  |other                          |1       |2           |
+|3 |  └─SORT             |                               |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
+================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v6]), filter(nil), rowset=256
@@ -1210,18 +1209,18 @@ Outputs & filters:
   4 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3;
 Query Plan
-=======================================================================
-|ID|OPERATOR    |NAME                           |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |MERGE JOIN  |                               |1       |4           |
-|1 | TABLE SCAN |other                          |1       |2           |
-|2 | SORT       |                               |1       |2           |
-|3 |  TABLE SCAN|skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
-=======================================================================
+==============================================================================
+|ID|OPERATOR           |NAME                           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------
+|0 |MERGE JOIN         |                               |1       |4           |
+|1 |├─TABLE FULL SCAN  |other                          |1       |2           |
+|2 |└─SORT             |                               |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v5_v6_v2_v3_v4)|1       |2           |
+==============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v6]), filter(nil), rowset=256
@@ -1236,19 +1235,19 @@ Outputs & filters:
   3 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5, v6;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |SORT          |                               |1       |4           |
-|1 | HASH DISTINCT|                               |1       |4           |
-|2 |  MERGE JOIN  |                               |1       |4           |
-|3 |   TABLE SCAN |other                          |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-=========================================================================
+================================================================================
+|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                 |                               |1       |4           |
+|1 |└─HASH DISTINCT      |                               |1       |4           |
+|2 |  └─MERGE JOIN       |                               |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other                          |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1265,18 +1264,18 @@ Outputs & filters:
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 group by v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-|3 |  TABLE SCAN  |other                       |1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other                       |1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
@@ -1287,22 +1286,22 @@ Outputs & filters:
   2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select distinct v4, v5 from skyline_int join other where skyline_int.v4 = other.c1;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-|3 |  TABLE SCAN  |other                       |1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE DISTINCT     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other                       |1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1313,21 +1312,21 @@ Outputs & filters:
   2 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select v4, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5;
 Query Plan
-===================================================================
-|ID|OPERATOR   |NAME                        |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |MERGE JOIN |                            |1       |4           |
-|1 | TABLE SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
-|2 | TABLE SCAN|other                       |1       |2           |
-===================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE JOIN       |                            |1       |4           |
+|1 |├─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |2           |
+|2 |└─TABLE FULL SCAN|other                       |1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1336,8 +1335,8 @@ Outputs & filters:
   1 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1348,10 +1347,10 @@ Query Plan
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                               |2       |6           |
-|1 | MERGE JOIN         |                               |1       |4           |
-|2 |  TABLE SCAN        |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
-|3 |  TABLE SCAN        |other                          |1       |2           |
-|4 | TABLE SCAN         |other                          |1       |2           |
+|1 |├─MERGE JOIN        |                               |1       |4           |
+|2 |│ ├─TABLE FULL SCAN |skyline_int(idx_v4_v5_v6_v2_v3)|1       |2           |
+|3 |│ └─TABLE FULL SCAN |other                          |1       |2           |
+|4 |└─TABLE FULL SCAN   |other                          |1       |2           |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -1362,8 +1361,8 @@ Outputs & filters:
   2 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1374,12 +1373,12 @@ Outputs & filters:
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select v1, tenant_id from skyline_int group by v2, v3, v4 order by v2, v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v2_v3_v4_v5)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v2_v3_v4_v5)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), rowset=256
@@ -1387,16 +1386,16 @@ Outputs & filters:
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v2, v3, v4, v5 from skyline_int group by v2, v3, v4;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v2_v3_v4_v5)|1       |2           |
-======================================================================
+=========================================================================
+|ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v2_v3_v4_v5)|1       |2           |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1404,16 +1403,16 @@ Outputs & filters:
   1 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain (select c1, c2, c3 from other group by c1, c2) union select c1, c2, c3 from other group by c1, c2;
 Query Plan
 =====================================================
 |ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |MERGE UNION DISTINCT|     |2       |4           |
-|1 | TABLE SCAN         |other|1       |2           |
-|2 | TABLE SCAN         |other|1       |2           |
+|1 |├─TABLE FULL SCAN   |other|1       |2           |
+|2 |└─TABLE FULL SCAN   |other|1       |2           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -1428,12 +1427,12 @@ Outputs & filters:
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select distinct v3, v4, v5 from skyline_int order by v3, v4, v5, v6;
 Query Plan
-=========================================================================
-|ID|OPERATOR      |NAME                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE DISTINCT|                               |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
-=========================================================================
+============================================================================
+|ID|OPERATOR         |NAME                           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |MERGE DISTINCT   |                               |1       |2           |
+|1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |2           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1441,16 +1440,16 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
+      MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v4 from skyline_int union select  distinct c2, c3 from other;
 Query Plan
 =========================================================================
 |ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                         |2       |4           |
-|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|1       |2           |
-|2 | TABLE SCAN         |other(idx_c2_c3)         |1       |2           |
+|1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v2)|1       |2           |
+|2 |└─TABLE FULL SCAN   |other(idx_c2_c3)         |1       |2           |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1458,8 +1457,8 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1470,8 +1469,8 @@ Query Plan
 |ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                         |2       |4           |
-|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|1       |2           |
-|2 | TABLE SCAN         |other(idx_c2_c3)         |1       |2           |
+|1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v2)|1       |2           |
+|2 |└─TABLE FULL SCAN   |other(idx_c2_c3)         |1       |2           |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1479,8 +1478,8 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1491,8 +1490,8 @@ Query Plan
 |ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                         |2       |4           |
-|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|1       |2           |
-|2 | TABLE SCAN         |other(idx_c2_c3)         |1       |2           |
+|1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v2)|1       |2           |
+|2 |└─TABLE FULL SCAN   |other(idx_c2_c3)         |1       |2           |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1500,33 +1499,33 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4;
 Query Plan
-=============================================================================
-|ID|OPERATOR                |NAME                     |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------
-|0 |MERGE GROUP BY          |                         |1       |18          |
-|1 | NESTED-LOOP JOIN       |                         |1       |18          |
-|2 |  TABLE SCAN            |skyline_int(idx_v3_v4_v2)|1       |2           |
-|3 |  DISTRIBUTED TABLE SCAN|other(idx_c2)            |1       |16          |
-=============================================================================
+=====================================================================================
+|ID|OPERATOR                        |NAME                     |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------
+|0 |MERGE GROUP BY                  |                         |1       |18          |
+|1 |└─NESTED-LOOP JOIN              |                         |1       |18          |
+|2 |  ├─TABLE FULL SCAN             |skyline_int(idx_v3_v4_v2)|1       |2           |
+|3 |  └─DISTRIBUTED TABLE RANGE SCAN|other(idx_c2)            |1       |16          |
+=====================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.tenant_id]), filter(nil), rowset=256
       group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.tenant_id]), filter(nil), rowset=256
-      conds(nil), nl_params_([skyline_int.v3]), batch_join=true
+      conds(nil), nl_params_([skyline_int.v3(:0)]), use_batch=true
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
   3 - output(nil), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1534,25 +1533,25 @@ true
       range_cond([:0 = other.c2])
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4, v5;
 Query Plan
-================================================================================
-|ID|OPERATOR                |NAME                        |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------------
-|0 |MERGE GROUP BY          |                            |1       |18          |
-|1 | NESTED-LOOP JOIN       |                            |1       |18          |
-|2 |  TABLE SCAN            |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-|3 |  DISTRIBUTED TABLE SCAN|other(idx_c2)               |1       |16          |
-================================================================================
+========================================================================================
+|ID|OPERATOR                        |NAME                        |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------------------
+|0 |MERGE GROUP BY                  |                            |1       |18          |
+|1 |└─NESTED-LOOP JOIN              |                            |1       |18          |
+|2 |  ├─TABLE FULL SCAN             |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+|3 |  └─DISTRIBUTED TABLE RANGE SCAN|other(idx_c2)               |1       |16          |
+========================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.tenant_id]), filter(nil), rowset=256
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.tenant_id]), filter(nil), rowset=256
-      conds(nil), nl_params_([skyline_int.v3]), batch_join=true
+      conds(nil), nl_params_([skyline_int.v3(:0)]), use_batch=true
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output(nil), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1560,14 +1559,14 @@ Outputs & filters:
       range_cond([:0 = other.c2])
 explain select /*use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 and skyline_int.v4 = other.c3 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE GROUP BY|                            |1       |4           |
-|1 | MERGE JOIN   |                            |1       |4           |
-|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-|3 |  TABLE SCAN  |other(idx_c2_c3)            |1       |2           |
-======================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                            |1       |4           |
+|1 |└─MERGE JOIN       |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+|3 |  └─TABLE FULL SCAN|other(idx_c2_c3)            |1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.tenant_id]), filter(nil), rowset=256
@@ -1578,22 +1577,22 @@ Outputs & filters:
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_hash(skyline_int other)*/ v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
 Query Plan
-====================================================================
-|ID|OPERATOR    |NAME                        |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT        |                            |1       |4           |
-|1 | HASH JOIN  |                            |1       |4           |
-|2 |  TABLE SCAN|other(idx_c2)               |1       |2           |
-|3 |  TABLE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-====================================================================
+===========================================================================
+|ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |SORT               |                            |1       |4           |
+|1 |└─HASH JOIN        |                            |1       |4           |
+|2 |  ├─TABLE FULL SCAN|other(idx_c2)               |1       |2           |
+|3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+===========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
@@ -1607,19 +1606,19 @@ Outputs & filters:
   3 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select /*+use_hash(skyline_int other)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |4           |
-|1 | SORT         |                            |1       |4           |
-|2 |  HASH JOIN   |                            |1       |4           |
-|3 |   TABLE SCAN |other(idx_c2)               |1       |2           |
-|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+=============================================================================
+|ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |MERGE DISTINCT       |                            |1       |4           |
+|1 |└─SORT               |                            |1       |4           |
+|2 |  └─HASH JOIN        |                            |1       |4           |
+|3 |    ├─TABLE FULL SCAN|other(idx_c2)               |1       |2           |
+|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
@@ -1635,20 +1634,20 @@ Outputs & filters:
   4 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
-; MAX,MAX,MAX,MAX,MAX,MAX)always true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select /*+leading(other skyline_int) use_hash(other skyline_int)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 union select c2, c3 from other;
 Query Plan
-=========================================================================
-|ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                         |2       |6           |
-|1 | TABLE SCAN         |other(idx_c2_c3)         |1       |2           |
-|2 | SORT               |                         |1       |4           |
-|3 |  HASH JOIN         |                         |1       |4           |
-|4 |   TABLE SCAN       |other(idx_c2)            |1       |2           |
-|5 |   TABLE SCAN       |skyline_int(idx_v3_v4_v2)|1       |2           |
-=========================================================================
+==========================================================================
+|ID|OPERATOR             |NAME                     |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT |                         |2       |6           |
+|1 |├─TABLE FULL SCAN    |other(idx_c2_c3)         |1       |2           |
+|2 |└─SORT               |                         |1       |4           |
+|3 |  └─HASH JOIN        |                         |1       |4           |
+|4 |    ├─TABLE FULL SCAN|other(idx_c2)            |1       |2           |
+|5 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1667,16 +1666,16 @@ Outputs & filters:
   5 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
-true
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,
+      MAX,MAX)always true
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1684,17 +1683,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,MAX,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,
+      MAX,MAX ; 100,MAX,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1702,17 +1701,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,MAX,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,
+      MIN,MIN ; 100,MAX,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 < 100 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1720,17 +1719,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,MAX,MAX
-; 100,100,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,
+      MAX,MAX ; 100,100,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 < 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 <= 100 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1738,17 +1737,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,MAX,MAX
-; 100,100,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,
+      MAX,MAX ; 100,100,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 <= 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 < 1000 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1756,17 +1755,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,1000,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,
+      MAX,MAX ; 100,1000,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100], [skyline_int.v4 < 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 < 1000 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1774,17 +1773,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,1000,MIN,MIN,MIN,MIN),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,
+      MIN,MIN ; 100,1000,MIN,MIN,MIN,MIN),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100], [skyline_int.v4 < 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 <= 1000 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1792,17 +1791,17 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,1000,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,
+      MAX,MAX ; 100,1000,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100], [skyline_int.v4 <= 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 <= 1000 group by v3, v4, v5;
 Query Plan
-======================================================================
-|ID|OPERATOR      |NAME                        |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |MERGE DISTINCT|                            |1       |2           |
-|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |2           |
-======================================================================
+==========================================================================
+|ID|OPERATOR          |NAME                        |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |1       |2           |
+|1 |└─TABLE RANGE SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |2           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
@@ -1810,8 +1809,8 @@ Outputs & filters:
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
       is_index_back=false, is_global_index=false,
-      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,1000,MAX,MAX,MAX,MAX),
+      range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,
+      MIN,MIN ; 100,1000,MAX,MAX,MAX,MAX),
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100], [skyline_int.v4 <= 1000])
 set @@recyclebin = 'off';
 drop database hualong;

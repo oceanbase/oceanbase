@@ -169,11 +169,11 @@ explain basic with
   cte2 AS (select c1 from cte1)
 select * from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -267,12 +267,12 @@ with cte(a) as (select * from (with cteb(a) as (select 1 from dual) select * fro
 ##   带有聚合
 explain basic with cte as (select count(*) from t1) select * from cte;
 Query Plan
-=========================
-|ID|OPERATOR       |NAME|
--------------------------
-|0 |SCALAR GROUP BY|    |
-|1 | TABLE SCAN    |t1  |
-=========================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SCALAR GROUP BY  |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
@@ -294,11 +294,11 @@ explain basic with
   cte1 AS ( select c1 as col1 from t1 where c1 > 1)
 select col1 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 1]), rowset=256
@@ -324,11 +324,11 @@ explain basic with
   cte1 AS ( select * from t1 where c1+'1'<=3)
 select c1 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([cast(t1.c1, DOUBLE(-1, -1)) + cast('1', DOUBLE(-1, -1)) <= cast(3, DOUBLE(-1, -1))]), rowset=256
@@ -350,12 +350,12 @@ explain basic with
   cte1 AS ( select 1 as c1, 2 as c2 from t1 group by c1)
 select c1 from cte1;
 Query Plan
-=======================
-|ID|OPERATOR     |NAME|
------------------------
-|0 |HASH GROUP BY|    |
-|1 | TABLE SCAN  |t1  |
-=======================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH GROUP BY    |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
@@ -388,11 +388,11 @@ explain basic with
   cte1 AS ( select c1, c2 from t1 where t1.c1 > 2)
 select c1 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 2]), rowset=256
@@ -418,12 +418,12 @@ explain basic with
   cte1 AS ( select c1, c2 + 1 as c3 from t1 order by c2)
 select c1 from cte1;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |SORT       |    |
-|1 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SORT             |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -451,14 +451,14 @@ explain basic with
   cte2 AS (select * from t1 left join t2 on t1.c1=t2.c21 order by t1.c1)
 select c1 from cte2;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |SORT             |    |
-|1 | HASH OUTER JOIN |    |
-|2 |  TABLE SCAN     |t1  |
-|3 |  TABLE SCAN     |t2  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH OUTER JOIN  |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -496,18 +496,18 @@ explain basic with
   cte0 AS (select /*+ use_nl(t1 t2) */ * from t2, t1 where t1.c1 = t2.c21)
 select * from cte0;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |NESTED-LOOP JOIN |    |
-|1 | TABLE SCAN      |t2  |
-|2 | MATERIAL        |    |
-|3 |  TABLE SCAN     |t1  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |NESTED-LOOP JOIN   |    |
+|1 |├─TABLE FULL SCAN  |t2  |
+|2 |└─MATERIAL         |    |
+|3 |  └─TABLE FULL SCAN|t1  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-      conds([t1.c1 = t2.c21]), nl_params_(nil), batch_join=false
+      conds([t1.c1 = t2.c21]), nl_params_(nil), use_batch=false
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -536,13 +536,13 @@ select * from cte0;
 ##   hint对cte定义表进行使用，对比与MySQL的一致
 explain basic with cte0 AS (select * from t2) select /*+ leading(t2 cte0) use_nl(cte0)*/ * from cte0, t1 where cte0.c21 = t1.c1;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t2  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -578,13 +578,13 @@ explain basic WITH cte AS
 )
 SELECT col1, col2 FROM cte;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |UNION ALL  |    |
-|1 | EXPRESSION|    |
-|2 | EXPRESSION|    |
-=====================
+======================
+|ID|OPERATOR    |NAME|
+----------------------
+|0 |UNION ALL   |    |
+|1 |├─EXPRESSION|    |
+|2 |└─EXPRESSION|    |
+======================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -615,13 +615,13 @@ explain basic WITH cte AS
 )
 select c1, c2 from cte;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |UNION ALL  |    |
-|1 | TABLE SCAN|t1  |
-|2 | TABLE SCAN|t2  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |UNION ALL        |    |
+|1 |├─TABLE FULL SCAN|t1  |
+|2 |└─TABLE FULL SCAN|t2  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -671,14 +671,14 @@ Query Plan
 |ID|OPERATOR                   |NAME|
 -------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |    |
-|1 | TABLE SCAN                |t1  |
-|2 | MATERIAL                  |    |
-|3 |  TABLE SCAN               |t1  |
+|1 |├─TABLE FULL SCAN          |t1  |
+|2 |└─MATERIAL                 |    |
+|3 |  └─TABLE FULL SCAN        |t1  |
 =====================================
 Outputs & filters:
 -------------------------------------
   0 - output([1], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
   1 - output(nil), filter([t1.c1 IS NOT NULL]), rowset=256
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
@@ -709,11 +709,11 @@ select * from cte, t1 where t1.c1 = cte.col;
 ##   PART 4.2 有针对某一个分区的操作
 explain basic with cte0 as (select * from t3 partition(p0)) select cte0.c1 from cte0;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t3  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t3  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1]), filter(nil), rowset=256
@@ -732,11 +732,11 @@ with cte0 as (select * from t3 partition(p0)) select cte0.c1 from cte0;
 
 explain basic with cte as (select * from t5 partition(p0)) select * from cte;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t5  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t5  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), rowset=256
@@ -760,11 +760,11 @@ explain basic WITH
   cte1 AS (select * from t1)
 select c1, c2, c3 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -792,11 +792,11 @@ explain basic with
   cte1 AS ( select c1 + 1 as col1 from t1)
 select col1 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1]), filter(nil), rowset=256
@@ -822,11 +822,11 @@ explain basic with
   cte1 AS ( select c1 + 1 as col1 from t1)
 select * from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1]), filter(nil), rowset=256
@@ -852,11 +852,11 @@ explain basic with
   cte1 AS ( select c1 + 1 as col1 from t1)
 select col1+3 from cte1;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1 + 3]), filter(nil), rowset=256
@@ -883,11 +883,11 @@ explain basic with
   cte AS (select 1 from t1)
 select * from cte;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
@@ -913,12 +913,12 @@ select * from cte;
 explain basic WITH cte2 AS (select c1 from t1)
 select c1 from cte2 order by c1;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |SORT       |    |
-|1 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SORT             |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -945,13 +945,13 @@ select c1 from cte2 order by c1;
 explain basic WITH cte2 AS (select c1 from t1)
 select z1.c1 from cte2 z1, t2 where z1.c1 in (1,4,7,11) and z1.c1 = t2.c21;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t2  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -979,13 +979,13 @@ explain basic WITH
   cte1 AS (SELECT c1 as abc, c2 FROM t1)
 select abc from cte1, t2 where abc in (1,4,7) and cte1.abc = t2.c21;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t2  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -1014,12 +1014,12 @@ explain basic WITH
   cte1 (name1, name2) AS (select c1, c2 from t1)
 select name1 from cte1 where name1 in (1,4,11) order by name2;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |SORT       |    |
-|1 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SORT             |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -1045,16 +1045,16 @@ Query Plan
 |ID|OPERATOR                   |NAME |
 --------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |     |
-|1 | TABLE SCAN                |t2   |
-|2 | MATERIAL                  |     |
-|3 |  SUBPLAN SCAN             |VIEW1|
-|4 |   SCALAR GROUP BY         |     |
-|5 |    TABLE SCAN             |t1   |
+|1 |├─TABLE FULL SCAN          |t2   |
+|2 |└─MATERIAL                 |     |
+|3 |  └─SUBPLAN SCAN           |VIEW1|
+|4 |    └─SCALAR GROUP BY      |     |
+|5 |      └─TABLE FULL SCAN    |t1   |
 ======================================
 Outputs & filters:
 -------------------------------------
   0 - output([VIEW1.count(*)]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
   1 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1085,13 +1085,13 @@ with cte as (select * from t1) select (select count(*) from cte) from t2;
 explain basic with cte AS (select c1 from t1) 
 select cte.c1 from cte z1, cte where z1.c1 = cte.c1;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t1  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t1  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -1121,15 +1121,15 @@ select cte.c1 from cte z1, cte where z1.c1 = cte.c1;
 explain basic with cte AS (select c1 from t1) 
 select /*+no_rewrite()*/ cte.c1 from cte z1, cte where z1.c1 = cte.c1;
 Query Plan
-=======================
-|ID|OPERATOR     |NAME|
------------------------
-|0 |HASH JOIN    |    |
-|1 | SUBPLAN SCAN|cte |
-|2 |  TABLE SCAN |t1  |
-|3 | SUBPLAN SCAN|cte |
-|4 |  TABLE SCAN |t1  |
-=======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |HASH JOIN          |    |
+|1 |├─SUBPLAN SCAN     |cte |
+|2 |│ └─TABLE FULL SCAN|t1  |
+|3 |└─SUBPLAN SCAN     |cte |
+|4 |  └─TABLE FULL SCAN|t1  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([cte.c1]), filter(nil), rowset=256
@@ -1165,14 +1165,14 @@ explain basic with
   cte1 AS( select * from t1)
 select * from cte1 left join t2 on cte1.c1=t2.c21 where t2.c21 != cte1.c1 order by cte1.c1;
 Query Plan
-======================
-|ID|OPERATOR    |NAME|
-----------------------
-|0 |SORT        |    |
-|1 | HASH JOIN  |    |
-|2 |  TABLE SCAN|t1  |
-|3 |  TABLE SCAN|t2  |
-======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH JOIN        |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
@@ -1199,14 +1199,14 @@ select * from cte1 left join t2 on cte1.c1=t2.c21 where t2.c21 != cte1.c1 order 
 explain basic WITH cte2 AS (select * from t3)
 select * from cte2 partition(p0);
 Query Plan
-=====================================
-|ID|OPERATOR               |NAME    |
--------------------------------------
-|0 |PX COORDINATOR         |        |
-|1 | EXCHANGE OUT DISTR    |:EX10000|
-|2 |  PX PARTITION ITERATOR|        |
-|3 |   TABLE SCAN          |t3      |
-=====================================
+=======================================
+|ID|OPERATOR                 |NAME    |
+---------------------------------------
+|0 |PX COORDINATOR           |        |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|
+|2 |  └─PX PARTITION ITERATOR|        |
+|3 |    └─TABLE FULL SCAN    |t3      |
+=======================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t3.c1, t3.c2)]), filter(nil), rowset=256
@@ -1237,11 +1237,11 @@ explain basic WITH
   cte2 AS (SELECT c21, c22 FROM t2) 
 select c21 from cte2;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t2  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t2  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c21]), filter(nil), rowset=256
@@ -1269,11 +1269,11 @@ explain basic WITH
   cte2 AS (select * from t1)
 select c1, c2, c3 from cte2;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -1302,13 +1302,13 @@ explain basic WITH
 SELECT b, d FROM cte1 JOIN cte2
 on cte1.a = cte2.c;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t1  |
-|2 | TABLE SCAN|t2  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t1  |
+|2 |└─TABLE FULL SCAN|t2  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [t2.c22]), filter(nil), rowset=256
@@ -1344,14 +1344,14 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select * from cte1 left join cte2 on cte1.a=cte2.c order by cte1.a;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |SORT             |    |
-|1 | HASH OUTER JOIN |    |
-|2 |  TABLE SCAN     |t1  |
-|3 |  TABLE SCAN     |t2  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH OUTER JOIN  |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256
@@ -1388,13 +1388,13 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select t11.c11 as c111 from (select c1 as c11, c2 from t1) t11 join cte2 on t11.c2=cte2.c;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t2  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -1423,13 +1423,13 @@ explain basic WITH
 SELECT b, d FROM cte1 JOIN cte2
 on cte1.a = cte2.c;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t1  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t1  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [t1.c2]), filter(nil), rowset=256
@@ -1467,18 +1467,18 @@ explain basic WITH
 SELECT a, b, e, f FROM cte1 JOIN cte3
 on cte1.a < cte3.e;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |NESTED-LOOP JOIN |    |
-|1 | TABLE SCAN      |t1  |
-|2 | MATERIAL        |    |
-|3 |  TABLE SCAN     |t1  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |NESTED-LOOP JOIN   |    |
+|1 |├─TABLE FULL SCAN  |t1  |
+|2 |└─MATERIAL         |    |
+|3 |  └─TABLE FULL SCAN|t1  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c1 + 1 * 2], [t1.c2 - 1 * 3]), filter(nil), rowset=256
-      conds([t1.c1 < t1.c1 + 1 * 2]), nl_params_(nil), batch_join=false
+      conds([t1.c1 < t1.c1 + 1 * 2]), nl_params_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1556,19 +1556,19 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
 Query Plan
-===========================
-|ID|OPERATOR        |NAME |
----------------------------
-|0 |HASH SEMI JOIN  |     |
-|1 | TABLE SCAN     |t1   |
-|2 | SUBPLAN SCAN   |VIEW1|
-|3 |  SUBPLAN FILTER|     |
-|4 |   TABLE SCAN   |t2   |
-|5 |   LIMIT        |     |
-|6 |    UNION ALL   |     |
-|7 |     TABLE SCAN |t1   |
-|8 |     TABLE SCAN |t1   |
-===========================
+====================================
+|ID|OPERATOR                 |NAME |
+------------------------------------
+|0 |HASH SEMI JOIN           |     |
+|1 |├─TABLE FULL SCAN        |t1   |
+|2 |└─SUBPLAN SCAN           |VIEW1|
+|3 |  └─SUBPLAN FILTER       |     |
+|4 |    ├─TABLE FULL SCAN    |t2   |
+|5 |    └─LIMIT              |     |
+|6 |      └─UNION ALL        |     |
+|7 |        ├─TABLE FULL SCAN|t1   |
+|8 |        └─TABLE FULL SCAN|t1   |
+====================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
@@ -1580,7 +1580,7 @@ Outputs & filters:
   2 - output([VIEW1.d]), filter(nil), rowset=256
       access([VIEW1.d])
   3 - output([t2.c22]), filter(nil), rowset=256
-      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   4 - output([t2.c22]), filter(nil), startup_filter([:0]), rowset=256
       access([t2.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1611,23 +1611,23 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select /*+no_rewrite()*/ 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
 Query Plan
-=========================
-|ID|OPERATOR       |NAME|
--------------------------
-|0 |SUBPLAN FILTER |    |
-|1 | SUBPLAN SCAN  |cte1|
-|2 |  TABLE SCAN   |t1  |
-|3 | SUBPLAN FILTER|    |
-|4 |  TABLE SCAN   |t2  |
-|5 |  LIMIT        |    |
-|6 |   UNION ALL   |    |
-|7 |    TABLE SCAN |t1  |
-|8 |    TABLE SCAN |t1  |
-=========================
+=================================
+|ID|OPERATOR               |NAME|
+---------------------------------
+|0 |SUBPLAN FILTER         |    |
+|1 |├─SUBPLAN SCAN         |cte1|
+|2 |│ └─TABLE FULL SCAN    |t1  |
+|3 |└─SUBPLAN FILTER       |    |
+|4 |  ├─TABLE FULL SCAN    |t2  |
+|5 |  └─LIMIT              |    |
+|6 |    └─UNION ALL        |    |
+|7 |      ├─TABLE FULL SCAN|t1  |
+|8 |      └─TABLE FULL SCAN|t1  |
+=================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter([cte1.a = ANY(subquery(1))]), rowset=256
-      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), batch_das=false
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
   1 - output([cte1.a]), filter(nil), rowset=256
       access([cte1.a])
   2 - output([t1.c1]), filter(nil), rowset=256
@@ -1635,7 +1635,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c22]), filter(nil), rowset=256
-      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   4 - output([t2.c22]), filter(nil), startup_filter([:0]), rowset=256
       access([t2.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1666,14 +1666,14 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select * from cte1 left join cte2 on cte1.a=cte2.c where cte1.b != cte2.d order by cte1.a;
 Query Plan
-======================
-|ID|OPERATOR    |NAME|
-----------------------
-|0 |SORT        |    |
-|1 | HASH JOIN  |    |
-|2 |  TABLE SCAN|t1  |
-|3 |  TABLE SCAN|t2  |
-======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH JOIN        |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256
@@ -1705,13 +1705,13 @@ select c1 from cte2
 UNION all
 select c21 from t2;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |UNION ALL  |    |
-|1 | TABLE SCAN|t1  |
-|2 | TABLE SCAN|t2  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |UNION ALL        |    |
+|1 |├─TABLE FULL SCAN|t1  |
+|2 |└─TABLE FULL SCAN|t2  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=256
@@ -1751,14 +1751,14 @@ select /*+no_rewrite()*/ c1 from cte2
 UNION all
 select c21 from t2;
 Query Plan
-=======================
-|ID|OPERATOR     |NAME|
------------------------
-|0 |UNION ALL    |    |
-|1 | SUBPLAN SCAN|cte2|
-|2 |  TABLE SCAN |t1  |
-|3 | TABLE SCAN  |t2  |
-=======================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |UNION ALL          |    |
+|1 |├─SUBPLAN SCAN     |cte2|
+|2 |│ └─TABLE FULL SCAN|t1  |
+|3 |└─TABLE FULL SCAN  |t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=256
@@ -1802,8 +1802,8 @@ Query Plan
 |ID|OPERATOR               |NAME|
 ---------------------------------
 |0 |HASH INTERSECT DISTINCT|    |
-|1 | TABLE SCAN            |t1  |
-|2 | TABLE SCAN            |t2  |
+|1 |├─TABLE FULL SCAN      |t1  |
+|2 |└─TABLE FULL SCAN      |t2  |
 =================================
 Outputs & filters:
 -------------------------------------
@@ -1845,11 +1845,11 @@ with cte(a) as (select 1 from dual) select * from (with cteb(a) as (select 1 fro
 explain basic with cte as (select c21 from t2)
 select * from (with cte as (select c1 from t1) select * from cte) t;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
@@ -1874,11 +1874,11 @@ select * from (with cte as (select c1 from t1) select * from cte) t;
 explain basic with cte as (select c21 from t2)
 select * from (with cte1 as (select c1 from t1) select * from cte) t;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t2  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t2  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c21]), filter(nil), rowset=256
@@ -1903,14 +1903,14 @@ select * from (with cte1 as (select c1 from t1) select * from cte) t;
 explain basic with cte as (select c21 from t2)
 select * from (with cte as (select c1 from t1) select * from (with cte as (select c1 from t3) select * from cte) cte) t;
 Query Plan
-=====================================
-|ID|OPERATOR               |NAME    |
--------------------------------------
-|0 |PX COORDINATOR         |        |
-|1 | EXCHANGE OUT DISTR    |:EX10000|
-|2 |  PX PARTITION ITERATOR|        |
-|3 |   TABLE SCAN          |t3      |
-=====================================
+=======================================
+|ID|OPERATOR                 |NAME    |
+---------------------------------------
+|0 |PX COORDINATOR           |        |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|
+|2 |  └─PX PARTITION ITERATOR|        |
+|3 |    └─TABLE FULL SCAN    |t3      |
+=======================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t3.c1)]), filter(nil), rowset=256
@@ -1965,8 +1965,8 @@ Query Plan
 |ID|OPERATOR              |NAME|
 --------------------------------
 |0 |HASH RIGHT OUTER JOIN |    |
-|1 | TABLE SCAN           |t2  |
-|2 | TABLE SCAN           |t1  |
+|1 |├─TABLE FULL SCAN     |t2  |
+|2 |└─TABLE FULL SCAN     |t1  |
 ================================
 Outputs & filters:
 -------------------------------------
@@ -2006,14 +2006,14 @@ select t3.*, t4.* from
 on t4.c21=t3.c1
 order by t4.c22;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |SORT             |    |
-|1 | HASH OUTER JOIN |    |
-|2 |  TABLE SCAN     |t1  |
-|3 |  TABLE SCAN     |t2  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH OUTER JOIN  |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t2  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t2.c21], [t2.c22]), filter(nil), rowset=256
@@ -2043,11 +2043,11 @@ order by t4.c22;
 ##   PART 3.3 inline cte中定义表名与已有表名重名，这里应该是查询了t1才对
 explain basic select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 1000) t;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256
@@ -2063,17 +2063,17 @@ select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 10
 ##   PART 3.4 inline cte出现在field list
 explain basic select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000), t2.* from t2;
 Query Plan
-========================
-|ID|OPERATOR      |NAME|
-------------------------
-|0 |SUBPLAN FILTER|    |
-|1 | TABLE SCAN   |t2  |
-|2 | TABLE SCAN   |t1  |
-========================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([:0], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
-      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil), batch_das=false
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -2098,11 +2098,11 @@ select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000)
 ##   PART 3.5 inline cte之后看看列能否正常使用
 explain basic select t3.* from ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 where t3.c1 > 0;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 0], [t1.c1 > 1000]), rowset=256
@@ -2122,14 +2122,14 @@ explain basic select t3.*, t4.* from
 on t4.a=t3.c1 
 order by t4.b;
 Query Plan
-===========================
-|ID|OPERATOR         |NAME|
----------------------------
-|0 |SORT             |    |
-|1 | HASH OUTER JOIN |    |
-|2 |  TABLE SCAN     |t1  |
-|3 |  TABLE SCAN     |t1  |
-===========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |SORT               |    |
+|1 |└─HASH OUTER JOIN  |    |
+|2 |  ├─TABLE FULL SCAN|t1  |
+|3 |  └─TABLE FULL SCAN|t1  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c1], [t1.c2]), filter(nil), rowset=256
@@ -2158,13 +2158,13 @@ order by t4.b;
 ##   PART 3.6 inline cte别名后与外部cte做join
 explain basic with cte as (select * from t1) select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
 Query Plan
-=====================
-|ID|OPERATOR   |NAME|
----------------------
-|0 |HASH JOIN  |    |
-|1 | TABLE SCAN|t2  |
-|2 | TABLE SCAN|t1  |
-=====================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |├─TABLE FULL SCAN|t2  |
+|2 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -2288,12 +2288,12 @@ ERROR HY000: View's SELECT and view's field list have different column counts
 ##   cte的列名已经无法在被使用了，这种用法比较特殊
 explain basic with cte as (select count(*) as k from t1) select * from cte where k = 1;
 Query Plan
-=========================
-|ID|OPERATOR       |NAME|
--------------------------
-|0 |SCALAR GROUP BY|    |
-|1 | TABLE SCAN    |t1  |
-=========================
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SCALAR GROUP BY  |    |
+|1 |└─TABLE FULL SCAN|t1  |
+===========================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter([T_FUN_COUNT_SUM(T_FUN_COUNT(*)) = 1]), rowset=256
@@ -2316,11 +2316,11 @@ explain basic WITH
   cte0 AS ( select * from t1)
 select * from cte0 for update;
 Query Plan
-====================
-|ID|OPERATOR  |NAME|
---------------------
-|0 |TABLE SCAN|t1  |
-====================
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -2347,18 +2347,19 @@ select * from cte0 for update;
 ##############################
 explain basic insert into t1 with cte as (select * from t1) SELECT * FROM cte;
 Query Plan
-==================================
-|ID|OPERATOR     |NAME           |
-----------------------------------
-|0 |INSERT       |               |
-|1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
-|2 |  TABLE SCAN |t1             |
-==================================
+========================================
+|ID|OPERATOR           |NAME           |
+----------------------------------------
+|0 |INSERT             |               |
+|1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|
+|2 |  └─TABLE FULL SCAN|t1             |
+========================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,
+      PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
@@ -2369,18 +2370,19 @@ insert into t1 with cte as (select * from t1) SELECT * FROM cte;
 
 explain basic insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
 Query Plan
-==================================
-|ID|OPERATOR     |NAME           |
-----------------------------------
-|0 |INSERT       |               |
-|1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
-|2 |  TABLE SCAN |t2             |
-==================================
+========================================
+|ID|OPERATOR           |NAME           |
+----------------------------------------
+|0 |INSERT             |               |
+|1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|
+|2 |  └─TABLE FULL SCAN|t2             |
+========================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.a)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.b)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.a)])
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.a)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.b)], [column_conv(INT,
+      PS:(11,0),NULL,ANONYMOUS_VIEW1.a)])
   1 - output([ANONYMOUS_VIEW1.a], [ANONYMOUS_VIEW1.b], [ANONYMOUS_VIEW1.a]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.a], [ANONYMOUS_VIEW1.b], [ANONYMOUS_VIEW1.a])
   2 - output([t2.c21], [t2.c22], [t2.c21]), filter(nil), rowset=256
@@ -2420,24 +2422,24 @@ select * from t1;
 ##############################
 explain basic update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
 Query Plan
-============================================
-|ID|OPERATOR                          |NAME|
---------------------------------------------
-|0 |UPDATE                            |    |
-|1 | NESTED-LOOP OUTER JOIN CARTESIAN |    |
-|2 |  TABLE SCAN                      |t1  |
-|3 |  MATERIAL                        |    |
-|4 |   SUBPLAN SCAN                   |cte |
-|5 |    SCALAR GROUP BY               |    |
-|6 |     TABLE SCAN                   |t2  |
-============================================
+=============================================
+|ID|OPERATOR                           |NAME|
+---------------------------------------------
+|0 |UPDATE                             |    |
+|1 |└─NESTED-LOOP OUTER JOIN CARTESIAN |    |
+|2 |  ├─TABLE FULL SCAN                |t1  |
+|3 |  └─MATERIAL                       |    |
+|4 |    └─SUBPLAN SCAN                 |cte |
+|5 |      └─SCALAR GROUP BY            |    |
+|6 |        └─TABLE FULL SCAN          |t2  |
+=============================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)}), hash_distinct}]),
       update([t1.c1=column_conv(INT,PS:(11,0),NULL,cast(cte.count(*)+99, INT(-1, 0)))])
   1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [cte.count(*)+99]), filter(nil), rowset=256
-      conds(nil), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), use_batch=false
   2 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 2]), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
@@ -2484,13 +2486,13 @@ select * from t1;
 ##############################
 explain basic with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from t1 group by c1 order by c1) select * from cte;
 Query Plan
-========================
-|ID|OPERATOR      |NAME|
-------------------------
-|0 |MERGE GROUP BY|    |
-|1 | SORT         |    |
-|2 |  TABLE SCAN  |t1  |
-========================
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE GROUP BY     |    |
+|1 |└─SORT             |    |
+|2 |  └─TABLE FULL SCAN|t1  |
+=============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), rowset=256
@@ -2516,15 +2518,15 @@ with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else
 
 explain basic with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
 Query Plan
-========================
-|ID|OPERATOR      |NAME|
-------------------------
-|0 |MERGE GROUP BY|    |
-|1 | SORT         |    |
-|2 |  HASH JOIN   |    |
-|3 |   TABLE SCAN |t2  |
-|4 |   TABLE SCAN |t1  |
-========================
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |MERGE GROUP BY       |    |
+|1 |└─SORT               |    |
+|2 |  └─HASH JOIN        |    |
+|3 |    ├─TABLE FULL SCAN|t2  |
+|4 |    └─TABLE FULL SCAN|t1  |
+===============================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), rowset=256
@@ -2558,22 +2560,22 @@ with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) selec
 ##############################
 explain basic delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t1 )) select * from cte);
 Query Plan
-============================
-|ID|OPERATOR          |NAME|
-----------------------------
-|0 |DELETE            |    |
-|1 | NESTED-LOOP JOIN |    |
-|2 |  SUBPLAN SCAN    |cte |
-|3 |   SCALAR GROUP BY|    |
-|4 |    TABLE SCAN    |t1  |
-|5 |  TABLE SCAN      |t1  |
-============================
+=================================
+|ID|OPERATOR               |NAME|
+---------------------------------
+|0 |DELETE                 |    |
+|1 |└─NESTED-LOOP JOIN     |    |
+|2 |  ├─SUBPLAN SCAN       |cte |
+|3 |  │ └─SCALAR GROUP BY  |    |
+|4 |  │   └─TABLE FULL SCAN|t1  |
+|5 |  └─TABLE FULL SCAN    |t1  |
+=================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}])
   1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-      conds([t1.c1 = cte.max( c1 )]), nl_params_(nil), batch_join=false
+      conds([t1.c1 = cte.max( c1 )]), nl_params_(nil), use_batch=false
   2 - output([cte.max( c1 )]), filter(nil), rowset=256
       access([cte.max( c1 )])
   3 - output([T_FUN_MAX(T_FUN_MAX(t1.c1))]), filter(nil), rowset=256
@@ -2590,22 +2592,22 @@ delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t
 
 explain basic delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select * from cte);
 Query Plan
-============================
-|ID|OPERATOR          |NAME|
-----------------------------
-|0 |DELETE            |    |
-|1 | NESTED-LOOP JOIN |    |
-|2 |  SUBPLAN SCAN    |cte |
-|3 |   SCALAR GROUP BY|    |
-|4 |    TABLE SCAN    |t1  |
-|5 |  TABLE SCAN      |t1  |
-============================
+=================================
+|ID|OPERATOR               |NAME|
+---------------------------------
+|0 |DELETE                 |    |
+|1 |└─NESTED-LOOP JOIN     |    |
+|2 |  ├─SUBPLAN SCAN       |cte |
+|3 |  │ └─SCALAR GROUP BY  |    |
+|4 |  │   └─TABLE FULL SCAN|t1  |
+|5 |  └─TABLE FULL SCAN    |t1  |
+=================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}])
   1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-      conds([t1.c1 = cte.a]), nl_params_(nil), batch_join=false
+      conds([t1.c1 = cte.a]), nl_params_(nil), use_batch=false
   2 - output([cte.a]), filter(nil), rowset=256
       access([cte.a])
   3 - output([T_FUN_MAX(T_FUN_MAX(t1.c1))]), filter(nil), rowset=256

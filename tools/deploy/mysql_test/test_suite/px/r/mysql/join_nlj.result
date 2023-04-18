@@ -70,27 +70,27 @@ insert into score values
 (64, 'MA', 87);
 explain select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
 Query Plan
-=======================================================================
-|ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |0       |11          |
-|1 | EXCHANGE OUT DISTR                |:EX10001|0       |11          |
-|2 |  NESTED-LOOP JOIN                 |        |0       |11          |
-|3 |   PX BLOCK ITERATOR               |        |1       |6           |
-|4 |    TABLE SCAN                     |score   |1       |6           |
-|5 |   MATERIAL                        |        |1       |6           |
-|6 |    EXCHANGE IN DISTR              |        |1       |6           |
-|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |6           |
-|8 |      PX BLOCK ITERATOR            |        |1       |6           |
-|9 |       TABLE SCAN                  |stu     |1       |6           |
-=======================================================================
+============================================================================
+|ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |PX COORDINATOR                          |        |0       |11          |
+|1 |└─EXCHANGE OUT DISTR                    |:EX10001|0       |11          |
+|2 |  └─NESTED-LOOP JOIN                    |        |0       |11          |
+|3 |    ├─PX BLOCK ITERATOR                 |        |1       |6           |
+|4 |    │ └─TABLE FULL SCAN                 |score   |1       |6           |
+|5 |    └─MATERIAL                          |        |1       |6           |
+|6 |      └─EXCHANGE IN DISTR               |        |1       |6           |
+|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |6           |
+|8 |          └─PX BLOCK ITERATOR           |        |1       |6           |
+|9 |            └─TABLE FULL SCAN           |stu     |1       |6           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256
   1 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256
       dop=2
   2 - output([stu.sid], [score.sid], [score.subject], [score.score], [stu.cls], [stu.name]), filter(nil), rowset=256
-      conds([stu.sid != score.sid]), nl_params_(nil), batch_join=false
+      conds([stu.sid != score.sid]), nl_params_(nil), use_batch=false
   3 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
   4 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
@@ -135,19 +135,19 @@ sid	name	cls	sid	subject	score
 11	a1	1	64	MA	87
 explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 Query Plan
-====================================================================
-|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |PX COORDINATOR                  |        |1       |10          |
-|1 | EXCHANGE OUT DISTR             |:EX10001|1       |9           |
-|2 |  SHARED HASH JOIN              |        |1       |8           |
-|3 |   EXCHANGE IN DISTR            |        |1       |6           |
-|4 |    EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |6           |
-|5 |     PX BLOCK ITERATOR          |        |1       |6           |
-|6 |      TABLE SCAN                |score   |1       |6           |
-|7 |   PX BLOCK ITERATOR            |        |1       |2           |
-|8 |    TABLE GET                   |teacher |1       |2           |
-====================================================================
+========================================================================
+|ID|OPERATOR                            |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |1       |10          |
+|1 |└─EXCHANGE OUT DISTR                |:EX10001|1       |9           |
+|2 |  └─SHARED HASH JOIN                |        |1       |8           |
+|3 |    ├─EXCHANGE IN DISTR             |        |1       |6           |
+|4 |    │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |6           |
+|5 |    │   └─PX BLOCK ITERATOR         |        |1       |6           |
+|6 |    │     └─TABLE FULL SCAN         |score   |1       |6           |
+|7 |    └─PX BLOCK ITERATOR             |        |1       |2           |
+|8 |      └─TABLE GET                   |teacher |1       |2           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
