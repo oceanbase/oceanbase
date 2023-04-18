@@ -1468,11 +1468,7 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_READ_WEAK = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_CHECKSUM = 1;
-    if (is_monotonic_weak_read) {
-      server_proxy_cap_flag.cap_flags_.OB_CAP_SAFE_WEAK_READ = 1;
-    } else {
-      server_proxy_cap_flag.cap_flags_.OB_CAP_SAFE_WEAK_READ = 0;
-    }
+    server_proxy_cap_flag.cap_flags_.OB_CAP_SAFE_WEAK_READ = 0;
     server_proxy_cap_flag.cap_flags_.OB_CAP_PRIORITY_HIT = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_CHECKSUM_SWITCH = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_EXTRA_OK_PACKET_FOR_OCJ = 1;
