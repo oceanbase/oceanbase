@@ -687,11 +687,16 @@ int ObMemtableCtx::sync_log_succ(const int64_t log_ts, const ObCallbackScope &ca
 
 void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
 {
+  int ret = OB_SUCCESS;
   if (!callbacks.is_empty()) {
     set_partial_rollbacked();
   }
   if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
-    log_gen_.sync_log_fail(callbacks);
+    if (OB_FAIL(reuse_log_generator_())) {
+      TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
+    } else {
+      log_gen_.sync_log_fail(callbacks);
+    }
   } else {
     if (!callbacks.is_empty()) {
       TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
