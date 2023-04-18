@@ -588,6 +588,8 @@ private:
       const ObTabletBindingInfo *&binding_info,
       const share::ObTabletAutoincSeq *&auto_inc_seq);
 
+  static int check_real_leader_for_4377_(const ObLSID ls_id);
+
   static int build_create_sstable_param_for_migration(
       const blocksstable::ObMigrationSSTableParam &migrate_sstable_param,
       ObTabletCreateSSTableParam &create_sstable_param);
