@@ -728,9 +728,8 @@ void ObPLContext::destory(
               LOG_DEBUG("explicit end trans success!", K(ret));
             }
           } else { // 不确定上层是否会扔回队列重试,因此失败了一定要走同步提交
-            if (session_info.get_in_transaction()) {
-              tmp_ret = implicit_end_trans(session_info, ctx, ret != OB_SUCCESS);
-            }
+            // always call commit/rollback txn in order to reset txn because of autocommit
+            tmp_ret = implicit_end_trans(session_info, ctx, ret != OB_SUCCESS);
           }
           ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
