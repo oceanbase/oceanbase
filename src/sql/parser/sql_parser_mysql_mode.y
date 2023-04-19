@@ -1009,7 +1009,11 @@ INTNUM { $$ = $1; $$->param_num_ = 1;}
 ;
 
 expr_const:
-literal { $$ = $1; }
+literal
+{
+  $$ = $1;
+  CHECK_MYSQL_COMMENT(result, $$);
+}
 | SYSTEM_VARIABLE { $$ = $1; }
 | QUESTIONMARK { $$ = $1; }
 | global_or_session_alias '.' column_name

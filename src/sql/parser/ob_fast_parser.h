@@ -455,7 +455,7 @@ protected:
 	// Used to process '\"' and keep all characters before the next '\"'
 	int process_double_quote();
 	// Until "*/" appears, all characters before it should be ignored
-	int process_comment_content();
+	int process_comment_content(bool is_mysql_comment = false);
 	/**
 	 * Used to check the escape character encountered in the string
 	 * Character sets marked with escape_with_backslash_is_dangerous, such as
@@ -533,7 +533,6 @@ protected:
 	bool is_batched_multi_stmt_split_on_;
 	bool is_udr_mode_;
 	QuestionMarkDefNameCtx *def_name_ctx_;
-	bool is_mysql_compatible_comment_;
 	int64_t cur_token_begin_pos_;
 	int64_t copy_begin_pos_;
 	int64_t copy_end_pos_;
