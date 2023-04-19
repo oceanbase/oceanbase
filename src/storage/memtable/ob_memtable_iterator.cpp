@@ -390,9 +390,6 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
 
       row_.scan_index_ = 0;
       row = &row_;
-      if (context_->query_flag_.iter_uncommitted_row() && !is_committed) { // set for mark deletion
-        row_.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
-      }
     }
   }
   if (OB_FAIL(ret)) {
