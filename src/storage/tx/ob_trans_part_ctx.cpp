@@ -4608,8 +4608,8 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     if (OB_SUCC(ret)) {
       if ((!commit_log.get_multi_source_data().empty() || !exec_info_.multi_data_source_.empty())
           && is_incomplete_replay_ctx_) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
+        // ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
                   K(commit_log), KPC(this));
       }
     }
@@ -4795,8 +4795,8 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     if (OB_SUCC(ret)) {
       if ((!abort_log.get_multi_source_data().empty() || !exec_info_.multi_data_source_.empty())
           && is_incomplete_replay_ctx_) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
+        // ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(offset),
                   K(abort_log), KPC(this));
       }
     }
@@ -4897,8 +4897,8 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
 
   if (OB_SUCC(ret)) {
     if (is_incomplete_replay_ctx_) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(lsn),
+      // ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "mds part_ctx can not replay from the middle", K(ret), K(timestamp), K(lsn),
                 K(log), KPC(this));
     }
   }
