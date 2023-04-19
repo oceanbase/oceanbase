@@ -3485,6 +3485,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                 LOG_WARN("failed to fill_cursor, check if need retry",
                         K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
                         K(sql_stmt), K(stmt_id), K(exec_params));
+                ret = cli_ret;
+                ctx->exec_ctx_->get_sql_ctx()->clear();
+                ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
               }
             }
           }
