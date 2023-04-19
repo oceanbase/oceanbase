@@ -1825,6 +1825,16 @@ int ObTransService::handle_tx_batch_req(int msg_type,
 #undef CASE__
   return ret;
 }
+
+#define COMMON_RETRYABLE_ERROR(ret)             \
+  (OB_NOT_MASTER == ret                         \
+   || OB_EAGAIN == ret                          \
+   || OB_NEED_RETRY == ret                      \
+   || OB_LS_NOT_EXIST == ret                    \
+   || OB_PARTITION_NOT_EXIST == ret             \
+   || OB_TENANT_NOT_EXIST == ret                \
+   )
+
 int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                                             const int64_t epoch,
                                             const transaction::ObTransID &tx_id,
@@ -1845,17 +1855,9 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
     } else if (tx->op_sn_ > request_id) {
       TRANS_LOG(WARN, "receive old rpc result msg",
                 K(ret), K_(tx->op_sn), K(request_id), K(tx_id));
-    } else if (status == OB_TRANS_RPC_TIMEOUT) {
-      // ignore, waiter will drive retry
-    } else if (status == OB_NEED_RETRY) {
-      // ignore, waiter will retry periodically
-      // FIXME: may cause rollback slow
-    } else if (status == OB_NOT_MASTER) {
-      // ignore, waiter will drive retry
-    } else if (status == OB_LS_NOT_EXIST || status == OB_PARTITION_NOT_EXIST) {
-      TRANS_LOG(WARN, "ls not exist on receiver", K(status), K(ls_id), K(tx_id), K(addr));
-    } else if (status == OB_TENANT_NOT_EXIST) {
-      TRANS_LOG(WARN, "tenant not exist on receiver", K(status), K(ls_id), K(tx_id), K(addr));
+    } else if (status == OB_TRANS_RPC_TIMEOUT || COMMON_RETRYABLE_ERROR(status)) {
+      TRANS_LOG(WARN, "rollback savepoint on ls return an retryable error",
+                K(status), K(ls_id), K(tx_id), K(addr));
     } else if (status == OB_SUCCESS) {
       ObTxLSEpochPair pair(ls_id, epoch);
       if (tx->brpc_mask_set_.is_mask(pair)) {
@@ -2045,7 +2047,9 @@ int ObTransService::gen_trans_id_(ObTransID &trans_id)
 
 bool ObTransService::commit_need_retry_(const int ret)
 {
-  return OB_NOT_MASTER == ret || OB_BLOCK_FROZEN == ret || OB_TX_NOLOGCB == ret || OB_EAGAIN == ret;
+  return OB_TX_NOLOGCB == ret
+    || OB_BLOCK_FROZEN == ret
+    || COMMON_RETRYABLE_ERROR(ret);
 }
 
 int ObTransService::get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, int64_t &min_prepare_version)
