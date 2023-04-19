@@ -106,7 +106,7 @@ public:
   static int check_need_utf8(ObRawExpr *expr, bool &is_nstring);
 
   static inline bool is_binary_string(const ObExprResType &type) {
-    return CS_TYPE_BINARY == type.get_collation_type() && ob_is_string_tc(type.get_type());
+    return CS_TYPE_BINARY == type.get_collation_type() && (ObVarcharType == type.get_type() || ObHexStringType == type.get_type());
   }
 
   static inline bool is_binary_compatible(const ObExprResType &type) {

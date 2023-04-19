@@ -611,13 +611,13 @@ int ObKVCacheStore::try_flush_washable_mb(
             retire_list.push(&handle->retire_link_);
           } else if (force_flush) {
             ret = OB_ERR_UNEXPECTED;
-            COMMON_LOG(ERROR, "Fail to try wash memblock.", K(ret), K(tenant_id), KPC(handle), K(status),
+            COMMON_LOG(WARN, "Fail to try wash memblock.", K(ret), K(tenant_id), KPC(handle), K(status),
                        K(ref_cnt), KPC(handle->inst_));
           }
         } else {
           if (force_flush) {
             ret = OB_ERR_UNEXPECTED;
-            COMMON_LOG(ERROR, "Can not sync wash memblock of erased tenant", K(ret), K(tenant_id), KPC(handle),
+            COMMON_LOG(WARN, "Can not sync wash memblock of erased tenant", K(ret), K(tenant_id), KPC(handle),
                        K(status), K(ref_cnt), KPC(handle->inst_));
           }
           COMMON_LOG(DEBUG, "Cannot flush memblock", K(tenant_id), K(cache_id), K(ref_cnt), K(status),

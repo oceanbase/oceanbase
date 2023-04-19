@@ -61,20 +61,6 @@ typedef common::ParamStore ParamStore;
 
 class ObPLCacheCtx;
 
-enum ObProcType
-{
-  INVALID_PROC_TYPE = 0,
-  STANDALONE_PROCEDURE = 1,
-  STANDALONE_FUNCTION = 2,
-  PACKAGE_PROCEDURE = 3, /* A subprogram created inside a package is a packaged subprogram */
-  PACKAGE_FUNCTION = 4,
-  NESTED_PROCEDURE = 5, /* A subprogram created inside a PL/SQL block is a nested subprogram */
-  NESTED_FUNCTION = 6,
-  STANDALONE_ANONYMOUS = 7,
-  UDT_PROCEDURE = 8,
-  UDT_FUNCTION = 9,
-};
-
 enum ObPLObjectType
 {
   INVALID_OBJECT_TYPE = -1,
@@ -838,7 +824,12 @@ public:
   int get_var(int64_t var_idx, ObObjParam& result);
   int set_var(int64_t var_idx, const ObObjParam& value);
   ObPLExecCtx& get_exec_ctx() { return ctx_; }
-  int check_pl_udt_priv(share::schema::ObSchemaGetterGuard &guard,
+  int check_pl_execute_priv(ObSchemaGetterGuard &guard,
+                                          const uint64_t tenant_id,
+                                          const uint64_t user_id,
+                                          const ObSchemaObjVersion &schema_obj,
+                                          const ObIArray<uint64_t> &role_id_array);
+  int check_pl_priv(share::schema::ObSchemaGetterGuard &guard,
                         const uint64_t tenant_id,
                         const uint64_t user_id,
                         const sql::DependenyTableStore &dep_obj);

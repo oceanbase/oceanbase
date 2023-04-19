@@ -1,257 +1,18 @@
 // Copyright 2010-2016 Alibaba Inc. All Rights Reserved.
 // Author:
 //   zhenling.zzg
-// this file defines implementation of plan real info manager
+// this file defines implementation of plan info manager
 
 
 #define USING_LOG_PREFIX SQL
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/thread/thread_mgr.h"
-#include "common/object/ob_object.h"
 #include "ob_plan_info_manager.h"
-#include "lib/ob_running_mode.h"
-#include "util/easy_time.h"
-#include "lib/rc/ob_rc.h"
+#include "lib/compress/ob_compressor.h"
+#include "lib/compress/ob_compressor_pool.h"
 #include "observer/ob_server.h"
-
 namespace oceanbase
 {
 namespace sql
 {
-
-ObPlanRealInfo::ObPlanRealInfo()
-{
-  reset();
-}
-
-ObPlanRealInfo::~ObPlanRealInfo()
-{
-}
-
-void ObPlanRealInfo::reset()
-{
-  plan_id_ = 0;
-  sql_id_ = NULL;
-  sql_id_len_ = 0;
-  plan_hash_ = 0;
-  id_ = 0;
-  real_cost_ = 0;
-  real_cardinality_ = 0;
-  cpu_cost_ = 0;
-  io_cost_ = 0;
-}
-
-int64_t ObPlanRealInfo::get_extra_size() const
-{
-  return sql_id_len_;
-}
-
-ObPlanRealInfoRecord::ObPlanRealInfoRecord()
-  :allocator_(NULL)
-{
-
-}
-
-ObPlanRealInfoRecord::~ObPlanRealInfoRecord()
-{
-  destroy();
-}
-
-void ObPlanRealInfoRecord::destroy()
-{
-  if (NULL != allocator_) {
-    allocator_->free(this);
-  }
-}
-
-ObPlanRealInfoMgr::ObPlanRealInfoMgr(ObConcurrentFIFOAllocator *allocator)
-  :allocator_(allocator),
-  queue_(),
-  destroyed_(false),
-  inited_(false)
-{
-}
-
-ObPlanRealInfoMgr::~ObPlanRealInfoMgr()
-{
-  if (inited_) {
-    destroy();
-  }
-}
-
-int ObPlanRealInfoMgr::init(uint64_t tenant_id,
-                      const int64_t queue_size)
-{
-  int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(queue_.init(ObModIds::OB_SQL_PLAN,
-                                 queue_size,
-                                 tenant_id))) {
-    SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
-  } else {
-    inited_ = true;
-    destroyed_ = false;
-  }
-  if ((OB_FAIL(ret)) && (!inited_)) {
-    destroy();
-  }
-  return ret;
-}
-
-void ObPlanRealInfoMgr::destroy()
-{
-  if (!destroyed_) {
-    clear_queue();
-    queue_.destroy();
-    inited_ = false;
-    destroyed_ = true;
-  }
-}
-
-int ObPlanRealInfoMgr::handle_plan_info(int64_t id,
-                                        const ObString& sql_id,
-                                        uint64_t plan_id,
-                                        uint64_t plan_hash,
-                                        const ObMonitorNode &plan_info)
-{
-  int ret = OB_SUCCESS;
-  ObPlanRealInfoRecord *record = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-  } else {
-    char *buf = NULL;
-    //alloc mem from allocator
-    int64_t pos = sizeof(ObPlanRealInfoRecord);
-    int64_t total_size = sizeof(ObPlanRealInfoRecord) +
-                         sql_id.length();
-    if (NULL == (buf = (char*)alloc(total_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      if (REACH_TIME_INTERVAL(100 * 1000)) {
-        SERVER_LOG(WARN, "alloc mem failed", K(total_size), K(ret));
-      }
-    } else {
-      uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
-      int64_t row_count = plan_info.output_row_count_;
-      int64_t cpu_time = plan_info.db_time_*1000 / cpu_khz;
-      int64_t io_time = plan_info.block_time_*1000 / cpu_khz;
-      int64_t open_time = plan_info.open_time_;
-      int64_t last_row_time = plan_info.last_row_time_;
-      int64_t real_time = 0;
-      if (last_row_time > open_time) {
-        real_time = last_row_time - open_time;
-      }
-      record = new(buf)ObPlanRealInfoRecord();
-      record->allocator_ = allocator_;
-      record->data_.id_ = id;
-      record->data_.plan_id_ = plan_id;
-      record->data_.plan_hash_ = plan_hash;
-      record->data_.real_cost_ = real_time;
-      record->data_.real_cardinality_ = row_count;
-      record->data_.io_cost_ = io_time;
-      record->data_.cpu_cost_ = cpu_time;
-      if ((sql_id.length() > 0) && (NULL != sql_id.ptr())) {
-        MEMCPY(buf + pos, sql_id.ptr(), sql_id.length());
-        record->data_.sql_id_ = buf + pos;
-        pos += sql_id.length();
-        record->data_.sql_id_len_ = sql_id.length();
-      }
-    }
-    //push into queue
-    if (OB_SUCC(ret)) {
-      int64_t req_id = 0;
-      if (OB_FAIL(queue_.push(record, req_id))) {
-        if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-          SERVER_LOG(WARN, "push into queue failed", K(ret));
-        }
-        free(record);
-        record = NULL;
-      }
-    }
-  }
-  return ret;
-}
-
-ObConcurrentFIFOAllocator *ObPlanRealInfoMgr::get_allocator()
-{
-  return allocator_;
-}
-
-void* ObPlanRealInfoMgr::alloc(const int64_t size)
-{
-  void *ret = NULL;
-  if (allocator_ != NULL) {
-    ret = allocator_->alloc(size);
-  }
-  return ret;
-}
-
-void ObPlanRealInfoMgr::free(void *ptr)
-{
-  if (allocator_ != NULL) {
-    allocator_->free(ptr);
-    ptr = NULL;
-  }
-}
-
-int ObPlanRealInfoMgr::get(const int64_t idx, void *&record, Ref* ref)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == (record = queue_.get(idx, ref))) {
-    ret = OB_ENTRY_NOT_EXIST;
-  }
-  return ret;
-}
-
-int ObPlanRealInfoMgr::revert(Ref* ref)
-{
-  queue_.revert(ref);
-  return OB_SUCCESS;
-}
-
-int64_t ObPlanRealInfoMgr::release_old(int64_t limit)
-{
-  void* req = NULL;
-  int64_t count = 0;
-  while(count < limit && NULL != (req = queue_.pop())) {
-    free(req);
-    ++count;
-  }
-  return count;
-}
-
-void ObPlanRealInfoMgr::clear_queue()
-{
-  (void)release_old(INT64_MAX);
-}
-
-bool ObPlanRealInfoMgr::is_valid() const
-{
-  return inited_ && !destroyed_;
-}
-
-int64_t ObPlanRealInfoMgr::get_start_idx() const
-{
-  return (int64_t)queue_.get_pop_idx();
-}
-
-int64_t ObPlanRealInfoMgr::get_end_idx() const
-{
-  return (int64_t)queue_.get_push_idx();
-}
-
-int64_t ObPlanRealInfoMgr::get_size_used()
-{
-  return (int64_t)queue_.get_size();
-}
-
-int64_t ObPlanRealInfoMgr::get_capacity()
-{
-  return (int64_t)queue_.get_capacity();
-}
-
 ObSqlPlanItem::ObSqlPlanItem()
 {
   reset();
@@ -263,12 +24,6 @@ ObSqlPlanItem::~ObSqlPlanItem()
 
 void ObSqlPlanItem::reset()
 {
-  plan_id_ = 0;
-  db_id_ = 0;
-  sql_id_ = NULL;
-  sql_id_len_ = 0;
-  plan_hash_ = 0;
-  gmt_create_ = 0;
   operation_ = NULL;
   operation_len_ = 0;
   options_ = NULL;
@@ -293,7 +48,9 @@ void ObSqlPlanItem::reset()
   is_last_child_ = false;
   search_columns_ = 0;
   cost_ = 0;
+  real_cost_ = 0;
   cardinality_ = 0;
+  real_cardinality_ = 0;
   bytes_ = 0;
   rowset_ = 1;
   other_tag_ = NULL;
@@ -331,8 +88,7 @@ void ObSqlPlanItem::reset()
 
 int64_t ObSqlPlanItem::get_extra_size() const
 {
-  return sql_id_len_ +
-        operation_len_ +
+  return operation_len_ +
         options_len_ +
         object_node_len_ +
         object_owner_len_ +
@@ -355,107 +111,127 @@ int64_t ObSqlPlanItem::get_extra_size() const
         other_xml_len_;
 }
 
-ObSqlPlanItemRecord::ObSqlPlanItemRecord()
-  :allocator_(NULL)
+ObLogicalPlanHead::ObLogicalPlanHead()
+{
+  reset();
+}
+
+ObLogicalPlanHead::~ObLogicalPlanHead()
 {
 
 }
 
-ObSqlPlanItemRecord::~ObSqlPlanItemRecord()
+void ObLogicalPlanHead::reset()
 {
-  destroy();
+  count_ = 0;
+  plan_item_pos_ = NULL;
 }
 
-void ObSqlPlanItemRecord::destroy()
+ObLogicalPlanHead::PlanItemPos::PlanItemPos()
 {
-  if (NULL != allocator_) {
-    allocator_->free(this);
-  }
+  reset();
 }
 
-
-ObPlanItemMgr::ObPlanItemMgr(ObConcurrentFIFOAllocator *allocator)
-  :allocator_(allocator),
-  queue_(),
-  plan_id_increment_(0),
-  destroyed_(false),
-  inited_(false)
+ObLogicalPlanHead::PlanItemPos::~PlanItemPos()
 {
+
 }
 
-ObPlanItemMgr::~ObPlanItemMgr()
+void ObLogicalPlanHead::PlanItemPos::reset()
 {
-  if (inited_) {
-    destroy();
-  }
+  offset_ = 0;
+  length_ = 0;
 }
 
-int ObPlanItemMgr::init(uint64_t tenant_id,
-                        const int64_t queue_size)
+ObLogicalPlanRawData::ObLogicalPlanRawData()
+{
+  reset();
+}
+
+ObLogicalPlanRawData::~ObLogicalPlanRawData()
+{
+
+}
+
+void ObLogicalPlanRawData::reset()
+{
+  logical_plan_ = NULL;
+  logical_plan_len_ = 0;
+  uncompress_len_ = 0;
+}
+
+bool ObLogicalPlanRawData::is_valid() const
+{
+  return NULL != logical_plan_;
+}
+
+int ObLogicalPlanRawData::compress_logical_plan(ObIAllocator &allocator,
+                                                ObIArray<ObSqlPlanItem*> &plan_items)
 {
   int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(queue_.init(ObModIds::OB_SQL_PLAN,
-                                 queue_size,
-                                 tenant_id))) {
-    SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
-  } else {
-    inited_ = true;
-    destroyed_ = false;
-  }
-  if ((OB_FAIL(ret)) && (!inited_)) {
-    destroy();
-  }
-  return ret;
-}
-
-void ObPlanItemMgr::destroy()
-{
-  if (!destroyed_) {
-    clear_queue();
-    queue_.destroy();
-    inited_ = false;
-    destroyed_ = true;
-  }
-}
-
-int ObPlanItemMgr::handle_plan_item(const ObSqlPlanItem &plan_item)
-{
-  int ret = OB_SUCCESS;
-  ObSqlPlanItemRecord *record = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-  } else {
-    char *buf = NULL;
-    //alloc mem from allocator
-    int64_t pos = sizeof(ObSqlPlanItemRecord);
-    int64_t total_size = sizeof(ObSqlPlanItemRecord) +
-                          plan_item.get_extra_size();
-    if (NULL == (buf = (char*)alloc(total_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      if (REACH_TIME_INTERVAL(100 * 1000)) {
-        SERVER_LOG(WARN, "alloc mem failed", K(total_size), K(ret));
-      }
+  //step 1: serialize logical plan
+  char *buf = NULL;
+  ObLogicalPlanHead *head = NULL;
+  int64_t head_size = sizeof(ObLogicalPlanHead) +
+    plan_items.count() * sizeof(ObLogicalPlanHead::PlanItemPos);
+  int64_t total_size = 0;
+  int64_t buf_pos = head_size;
+  total_size += head_size;
+  //calculate logical plan length
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
+    if (OB_ISNULL(plan_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null plan item", K(ret));
     } else {
-      record = new(buf)ObSqlPlanItemRecord();
-      record->allocator_ = allocator_;
-      record->data_ = plan_item;
+      total_size += sizeof(ObSqlPlanItem) + plan_items.at(i)->get_extra_size();
+    }
+  }
+  //alloc memory
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (NULL == (buf = (char*)allocator.alloc(total_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    if (REACH_TIME_INTERVAL(100 * 1000)) {
+      LOG_WARN("alloc mem failed", K(total_size), K(ret));
+    }
+  } else {
+    //init operator count
+    head = new(buf)ObLogicalPlanHead();
+    head->count_ = plan_items.count();
+    head->plan_item_pos_ = reinterpret_cast<ObLogicalPlanHead::PlanItemPos*>(
+                              buf + sizeof(ObLogicalPlanHead));
+  }
+  //serialize each operator
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan_items.count(); ++i) {
+    ObSqlPlanItem* plan_item = plan_items.at(i);
+    if (OB_ISNULL(plan_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null plan item", K(ret));
+    } else {
+      //init operator map info
+      ObLogicalPlanHead::PlanItemPos *plan_item_pos = head->plan_item_pos_ + i;
+      plan_item_pos->offset_ = buf_pos;
+      plan_item_pos->length_ = sizeof(ObSqlPlanItem) + plan_item->get_extra_size();
+      //init operator basic info
+      ObSqlPlanItem *new_plan_item = new(buf+buf_pos)ObSqlPlanItem();
+      *new_plan_item = *plan_item;
+      buf_pos += sizeof(ObSqlPlanItem);
       #define DEEP_COPY_DATA(value)                                               \
       do {                                                                        \
-        if (pos + plan_item.value##len_ > total_size) {                           \
+        if (OB_FAIL(ret)) {                                                       \
+        } else if (buf_pos + plan_item->value##len_ > total_size) {               \
           ret = OB_ERR_UNEXPECTED;                                                \
-          LOG_WARN("unexpect record size", K(pos), K(plan_item.value##len_),      \
-                                           K(total_size), K(ret));                \
-        } else if ((plan_item.value##len_ > 0) && (NULL != plan_item.value)) {    \
-          MEMCPY(buf + pos, plan_item.value, plan_item.value##len_);              \
-          record->data_.value = buf + pos;                                        \
-          pos += plan_item.value##len_;                                           \
+          LOG_WARN("unexpect record size", K(buf_pos), K(plan_item->value##len_), \
+                                          K(total_size), K(ret));                 \
+        } else if ((plan_item->value##len_ > 0) && (NULL != plan_item->value)) {  \
+          MEMCPY(buf + buf_pos, plan_item->value, plan_item->value##len_);        \
+          new_plan_item->value = reinterpret_cast<char*>(buf_pos);                \
+          buf_pos += plan_item->value##len_;                                      \
         } else {                                                                  \
-          record->data_.value = buf + pos;                                        \
+          new_plan_item->value = reinterpret_cast<char*>(buf_pos);                \
         }                                                                         \
       } while(0);
-      DEEP_COPY_DATA(sql_id_);
+      //copy buffer data and convert ptr to offset
       DEEP_COPY_DATA(operation_);
       DEEP_COPY_DATA(options_);
       DEEP_COPY_DATA(object_node_);
@@ -478,198 +254,144 @@ int ObPlanItemMgr::handle_plan_item(const ObSqlPlanItem &plan_item)
       DEEP_COPY_DATA(remarks_);
       DEEP_COPY_DATA(other_xml_);
     }
-    //push into queue
-    if (OB_SUCC(ret)) {
-      int64_t req_id = 0;
-      if (OB_FAIL(queue_.push(record, req_id))) {
-        if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-          SERVER_LOG(WARN, "push into queue failed", K(ret));
+  }
+  //step 2: compress data
+  common::ObCompressorType compressor_type = LZ4_COMPRESSOR;
+  common::ObCompressor *compressor = NULL;
+  char *compress_buf = NULL;
+  int64_t compress_size = total_size * 2;
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+                                                                             compressor))) {
+    LOG_WARN("fail to get compressor", K(compressor_type), K(ret));
+  } else if (OB_ISNULL(compressor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null compressor", K(ret));
+  } else if (NULL == (compress_buf = (char*)allocator.alloc(compress_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    if (REACH_TIME_INTERVAL(100 * 1000)) {
+      LOG_WARN("alloc mem failed", K(compress_size), K(ret));
+    }
+  } else if (OB_FAIL(compressor->compress(buf,
+                                          total_size,
+                                          compress_buf,
+                                          compress_size,
+                                          compress_size))) {
+    LOG_WARN("failed to compress data", K(ret));
+  } else if (compress_size >= total_size) {
+    //will not use compress buffer
+    logical_plan_ = buf;
+    logical_plan_len_ = total_size;
+    uncompress_len_ = -1;
+    allocator.free(compress_buf);
+    compress_buf = NULL;
+  } else {
+    //use compress buffer
+    logical_plan_ = compress_buf;
+    logical_plan_len_ = compress_size;
+    uncompress_len_ = total_size;
+    allocator.free(buf);
+    buf = NULL;
+  }
+  return ret;
+}
+
+int ObLogicalPlanRawData::uncompress_logical_plan(ObIAllocator &allocator,
+                                                  ObIArray<ObSqlPlanItem*> &plan_items)
+{
+  int ret = OB_SUCCESS;
+  //step 1: uncompress data
+  common::ObCompressorType compressor_type = LZ4_COMPRESSOR;
+  common::ObCompressor *compressor = NULL;
+  char *uncompress_buf = NULL;
+  int64_t uncompress_size = uncompress_len_;
+  if (NULL == logical_plan_ || logical_plan_len_ <= 0) {
+    //do nothing
+  } else if (uncompress_len_ < 0) {
+    //do not need decompress
+    uncompress_buf = logical_plan_;
+    uncompress_size = logical_plan_len_;
+  } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+                                                                             compressor))) {
+    LOG_WARN("fail to get compressor", K(compressor_type), K(ret));
+  } else if (OB_ISNULL(compressor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null compressor", K(ret));
+  } else if (NULL == (uncompress_buf = (char*)allocator.alloc(uncompress_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    if (REACH_TIME_INTERVAL(100 * 1000)) {
+      LOG_WARN("alloc mem failed", K(uncompress_size), K(ret));
+    }
+  } else if (OB_FAIL(compressor->decompress(logical_plan_,
+                                            logical_plan_len_,
+                                            uncompress_buf,
+                                            uncompress_size,
+                                            uncompress_size))) {
+    LOG_WARN("failed to compress data", K(ret));
+  }
+  if (OB_FAIL(ret) || NULL == uncompress_buf) {
+    //do nothing
+  } else {
+    //step 2: deserialize logical plan
+    //get logical plan head info
+    ObLogicalPlanHead *head = NULL;
+    head = reinterpret_cast<ObLogicalPlanHead*>(uncompress_buf);
+    head->plan_item_pos_ = reinterpret_cast<ObLogicalPlanHead::PlanItemPos*>(
+                              uncompress_buf + sizeof(ObLogicalPlanHead));
+    //deserialize each operator info
+    for (int64_t i = 0; OB_SUCC(ret) && i < head->count_; ++i) {
+      //get operator map info
+      ObLogicalPlanHead::PlanItemPos *plan_item_pos = head->plan_item_pos_ + i;
+      if (plan_item_pos->offset_ < 0 ||
+          plan_item_pos->offset_ + plan_item_pos->length_ > uncompress_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("broken compressed data", K(ret));
+      } else {
+        ObSqlPlanItem *plan_item = reinterpret_cast<ObSqlPlanItem*>(
+                                    uncompress_buf+plan_item_pos->offset_);
+        #define CONVERT_OFFSET_TO_PTR(value)                                                  \
+        do {                                                                                  \
+          int64_t offset = reinterpret_cast<int64_t>(plan_item->value);                       \
+          if (OB_FAIL(ret)) {                                                                 \
+          } else if (offset + plan_item->value##len_ > uncompress_size) {                     \
+            ret = OB_ERR_UNEXPECTED;                                                          \
+            LOG_WARN("unexpect record size", K(offset), K(plan_item->value##len_),            \
+                                            K(uncompress_size), K(ret));                      \
+          } else {                                                                            \
+            plan_item->value = uncompress_buf + offset;                                       \
+          }                                                                                   \
+        } while(0);
+        //convert offset to ptr
+        CONVERT_OFFSET_TO_PTR(operation_);
+        CONVERT_OFFSET_TO_PTR(options_);
+        CONVERT_OFFSET_TO_PTR(object_node_);
+        CONVERT_OFFSET_TO_PTR(object_owner_);
+        CONVERT_OFFSET_TO_PTR(object_name_);
+        CONVERT_OFFSET_TO_PTR(object_alias_);
+        CONVERT_OFFSET_TO_PTR(object_type_);
+        CONVERT_OFFSET_TO_PTR(optimizer_);
+        CONVERT_OFFSET_TO_PTR(other_tag_);
+        CONVERT_OFFSET_TO_PTR(partition_start_);
+        CONVERT_OFFSET_TO_PTR(partition_stop_);
+        CONVERT_OFFSET_TO_PTR(other_);
+        CONVERT_OFFSET_TO_PTR(distribution_);
+        CONVERT_OFFSET_TO_PTR(access_predicates_);
+        CONVERT_OFFSET_TO_PTR(filter_predicates_);
+        CONVERT_OFFSET_TO_PTR(startup_predicates_);
+        CONVERT_OFFSET_TO_PTR(projection_);
+        CONVERT_OFFSET_TO_PTR(special_predicates_);
+        CONVERT_OFFSET_TO_PTR(qblock_name_);
+        CONVERT_OFFSET_TO_PTR(remarks_);
+        CONVERT_OFFSET_TO_PTR(other_xml_);
+        if (OB_SUCC(ret) &&
+            OB_FAIL(plan_items.push_back(plan_item))) {
+          LOG_WARN("failed to push back plan item", K(ret));
         }
-        free(record);
-        record = NULL;
       }
     }
   }
   return ret;
-}
-
-int ObPlanItemMgr::get_plan(int64_t plan_id,
-                           ObIArray<ObSqlPlanItem*> &plan)
-{
-  int ret = OB_SUCCESS;
-  plan.reuse();
-  int64_t start_idx = get_start_idx();
-  int64_t end_idx = get_end_idx();
-  void *rec = NULL;
-  Ref ref;
-  for (int64_t cur_id=start_idx;
-       (OB_ENTRY_NOT_EXIST == ret || OB_SUCCESS == ret) && cur_id < end_idx;
-       ++cur_id) {
-    ref.reset();
-    ret = get(cur_id, rec, &ref);
-    if (OB_SUCC(ret) && NULL != rec) {
-      ObSqlPlanItemRecord *record = static_cast<ObSqlPlanItemRecord*>(rec);
-      if (record->data_.plan_id_ != plan_id) {
-        //do nothing
-      } else if (OB_FAIL(plan.push_back(&record->data_))) {
-        LOG_WARN("failed to push back plan item", K(ret));
-      }
-    }
-    if (ref.idx_ != -1) {
-      revert(&ref);
-    }
-  }
-  return ret;
-}
-
-int ObPlanItemMgr::get_plan(const ObString &sql_id,
-                           int64_t plan_id,
-                           ObIArray<ObSqlPlanItem*> &plan)
-{
-  int ret = OB_SUCCESS;
-  plan.reuse();
-  int64_t start_idx = get_start_idx();
-  int64_t end_idx = get_end_idx();
-  void *rec = NULL;
-  Ref ref;
-  for (int64_t cur_id=start_idx;
-       (OB_ENTRY_NOT_EXIST == ret || OB_SUCCESS == ret) && cur_id < end_idx;
-       ++cur_id) {
-    ref.reset();
-    ret = get(cur_id, rec, &ref);
-    if (OB_SUCC(ret) && NULL != rec) {
-      ObSqlPlanItemRecord *record = static_cast<ObSqlPlanItemRecord*>(rec);
-      if (record->data_.plan_id_ != plan_id ||
-          sql_id.case_compare(ObString(record->data_.sql_id_len_,record->data_.sql_id_)) != 0) {
-        //do nothing
-      } else if (OB_FAIL(plan.push_back(&record->data_))) {
-        LOG_WARN("failed to push back plan item", K(ret));
-      }
-    }
-    if (ref.idx_ != -1) {
-      revert(&ref);
-    }
-  }
-  return ret;
-}
-
-int ObPlanItemMgr::get_plan_by_hash(const ObString &sql_id,
-                                   uint64_t plan_hash,
-                                   ObIArray<ObSqlPlanItem*> &plan)
-{
-  int ret = OB_SUCCESS;
-  plan.reuse();
-  int64_t start_idx = get_start_idx();
-  int64_t end_idx = get_end_idx();
-  void *rec = NULL;
-  Ref ref;
-  for (int64_t cur_id=start_idx;
-       (OB_ENTRY_NOT_EXIST == ret || OB_SUCCESS == ret) && cur_id < end_idx;
-       ++cur_id) {
-    ref.reset();
-    ret = get(cur_id, rec, &ref);
-    if (OB_SUCC(ret) && NULL != rec) {
-      ObSqlPlanItemRecord *record = static_cast<ObSqlPlanItemRecord*>(rec);
-      if (record->data_.plan_hash_ != plan_hash ||
-          sql_id.case_compare(ObString(record->data_.sql_id_len_,record->data_.sql_id_)) != 0) {
-        //do nothing
-      } else if (OB_FAIL(plan.push_back(&record->data_))) {
-        LOG_WARN("failed to push back plan item", K(ret));
-      }
-    }
-    if (ref.idx_ != -1) {
-      revert(&ref);
-    }
-  }
-  return ret;
-}
-
-ObConcurrentFIFOAllocator *ObPlanItemMgr::get_allocator()
-{
-  return allocator_;
-}
-
-void* ObPlanItemMgr::alloc(const int64_t size)
-{
-  void *ret = NULL;
-  if (allocator_ != NULL) {
-    ret = allocator_->alloc(size);
-  }
-  return ret;
-}
-
-void ObPlanItemMgr::free(void *ptr)
-{
-  if (allocator_ != NULL) {
-    allocator_->free(ptr);
-    ptr = NULL;
-  }
-}
-
-int ObPlanItemMgr::get(const int64_t idx, void *&record, Ref* ref)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == (record = queue_.get(idx, ref))) {
-    ret = OB_ENTRY_NOT_EXIST;
-  }
-  return ret;
-}
-
-int ObPlanItemMgr::revert(Ref* ref)
-{
-  queue_.revert(ref);
-  return OB_SUCCESS;
-}
-
-int64_t ObPlanItemMgr::release_old(int64_t limit)
-{
-  void* req = NULL;
-  int64_t count = 0;
-  while(count < limit && NULL != (req = queue_.pop())) {
-    free(req);
-    ++count;
-  }
-  return count;
-}
-
-void ObPlanItemMgr::clear_queue()
-{
-  (void)release_old(INT64_MAX);
-}
-
-bool ObPlanItemMgr::is_valid() const
-{
-  return inited_ && !destroyed_;
-}
-
-int64_t ObPlanItemMgr::get_start_idx() const
-{
-  return (int64_t)queue_.get_pop_idx();
-}
-
-int64_t ObPlanItemMgr::get_end_idx() const
-{
-  return (int64_t)queue_.get_push_idx();
-}
-
-int64_t ObPlanItemMgr::get_size_used()
-{
-  return (int64_t)queue_.get_size();
-}
-
-int64_t ObPlanItemMgr::get_capacity()
-{
-  return (int64_t)queue_.get_capacity();
-}
-
-int64_t ObPlanItemMgr::get_next_plan_id()
-{
-  return ++plan_id_increment_;
-}
-
-int64_t ObPlanItemMgr::get_last_plan_id()
-{
-  return plan_id_increment_;
 }
 
 } // end of namespace sql

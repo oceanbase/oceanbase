@@ -485,24 +485,21 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                            const ColumnsFieldIArray *fields)
 {
   int ret = OB_SUCCESS;
-
+  ObArenaAllocator allocator;
+  ObNewRow tmp_row;
+  bool has_charset_convert = false;
   if (OB_ISNULL(fields) || row.get_count() != fields->count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fields is null", K(ret), KP(fields));
-  }
-  lib::ContextParam param;
-  param.set_mem_attr(session.get_effective_tenant_id(),
-      ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
-    .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-    .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE)
-    .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  CREATE_WITH_TEMP_CONTEXT(param) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count(); ++i) {
-      ObObj &value = row.get_cell(i);
+  } else if (OB_FAIL(ob_write_row(allocator, row, tmp_row))) {
+    LOG_WARN("deep copy row fail.", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
+      ObObj &value = tmp_row.get_cell(i);
+      ObCharsetType charset_type = CHARSET_INVALID;
       // need at ps mode
       if (value.get_type() != fields->at(i).type_.get_type()) {
-        ObCastCtx cast_ctx(&THIS_WORKER.get_sql_arena_allocator(),
-                            NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
+        ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
         if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                           cast_ctx,
                                           value,
@@ -511,29 +508,25 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                     K(value.get_type()), K(fields->at(i).type_.get_type()));
         }
       }
-      ObCharsetType charset_type = CHARSET_INVALID;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
       } else {
         if (ob_is_string_tc(value.get_type())
             && CS_TYPE_INVALID != value.get_collation_type()
-            && OB_FAIL(value.convert_string_value_charset(charset_type,
-                  THIS_WORKER.get_sql_arena_allocator()))) {
+            && OB_FAIL(value.convert_string_value_charset(charset_type, allocator))) {
           LOG_WARN("convert string value charset failed", K(ret), K(value));
         } else if (value.is_clob_locator()
-                    && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type,
-                                THIS_WORKER.get_sql_arena_allocator()))) {
+                    && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type, allocator))) {
           LOG_WARN("convert lob value charset failed", K(ret));
         } else if (ob_is_text_tc(value.get_type())
-                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type,
-                                THIS_WORKER.get_sql_arena_allocator(), &session))) {
+                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type, allocator, &session))) {
           LOG_WARN("convert text value charset failed", K(ret));
         }
         if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::process_lob_locator_results(value,
                                     session.is_client_use_lob_locator(),
                                     session.is_client_support_lob_locatorv2(),
-                                    &THIS_WORKER.get_sql_arena_allocator(),
+                                    &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         }
@@ -542,7 +535,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-      ObSMRow sm_row(obmysql::BINARY, row, dtc_params, fields);
+      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields);
       obmysql::OMPKRow rp(sm_row);
       if (OB_FAIL(response_packet(rp, &session))) {
         ret = OB_ERR_UNEXPECTED;

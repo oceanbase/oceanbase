@@ -21,12 +21,12 @@ index k4(c1,c2,c3,c4),
 index k5(c1,c2,c3,c4,c5));
 explain select count(*) from t1;
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SCALAR GROUP BY|      |1       |2           |
-|1 | TABLE SCAN    |t1(k1)|1       |2           |
-=================================================
+===================================================
+|ID|OPERATOR         |NAME  |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SCALAR GROUP BY  |      |1       |2           |
+|1 |└─TABLE FULL SCAN|t1(k1)|1       |2           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
@@ -37,11 +37,11 @@ Outputs & filters:
       range_key([t1.c1], [t1.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
 explain select * from t1 where c1 = 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k1)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k1)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -51,11 +51,11 @@ Outputs & filters:
       range_cond([t1.c1 = 1])
 explain select * from t1 where c1 < 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k1)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k1)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -65,11 +65,11 @@ Outputs & filters:
       range_cond([t1.c1 < 1])
 explain select * from t1 where c1 > 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k1)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k1)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -79,11 +79,11 @@ Outputs & filters:
       range_cond([t1.c1 > 1])
 explain select * from t1 where c1 > 1 and c1 < 10;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k1)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k1)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -93,11 +93,11 @@ Outputs & filters:
       range_cond([t1.c1 > 1], [t1.c1 < 10])
 explain select * from t1 where c1 = 1 and c2 < 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k2)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k2)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -107,11 +107,11 @@ Outputs & filters:
       range_cond([t1.c1 = 1], [t1.c2 < 1])
 explain select * from t1 where c1 = 1 and c2 = 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k2)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k2)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -121,11 +121,11 @@ Outputs & filters:
       range_cond([t1.c1 = 1], [t1.c2 = 1])
 explain select * from t1 where c1 = 1 and c2 = 1 and c3 < 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k3)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k3)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -135,11 +135,11 @@ Outputs & filters:
       range_cond([t1.c1 = 1], [t1.c2 = 1], [t1.c3 < 1])
 explain select * from t1 where c1 = 1 and c2 = 1 and c3 = 1;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(k3)|1       |5           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(k3)|1       |5           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), rowset=256
@@ -149,12 +149,12 @@ Outputs & filters:
       range_cond([t1.c1 = 1], [t1.c2 = 1], [t1.c3 = 1])
 explain select count(*) from t2;
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SCALAR GROUP BY|      |1       |2           |
-|1 | TABLE SCAN    |t2(k1)|1       |2           |
-=================================================
+===================================================
+|ID|OPERATOR         |NAME  |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SCALAR GROUP BY  |      |1       |2           |
+|1 |└─TABLE FULL SCAN|t2(k1)|1       |2           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
@@ -165,11 +165,11 @@ Outputs & filters:
       range_key([t2.c1], [t2.c6], [t2.c7]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t2 where c1 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=256
@@ -179,11 +179,11 @@ Outputs & filters:
       range_cond([t2.c1 = 1])
 explain select * from t2 where c1 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=256
@@ -193,11 +193,11 @@ Outputs & filters:
       range_cond([t2.c1 < 1])
 explain select * from t2 where c1 > 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=256
@@ -207,11 +207,11 @@ Outputs & filters:
       range_cond([t2.c1 > 1])
 explain select * from t2 where c1 > 1 and c1 < 10;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), rowset=256
@@ -221,11 +221,11 @@ Outputs & filters:
       range_cond([t2.c1 > 1], [t2.c1 < 10])
 explain select * from t2 where c1 = 1 and c2 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 < 1]), rowset=256
@@ -235,11 +235,11 @@ Outputs & filters:
       range_cond([t2.c1 = 1])
 explain select * from t2 where c1 = 1 and c2 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 = 1]), rowset=256
@@ -249,11 +249,11 @@ Outputs & filters:
       range_cond([t2.c1 = 1])
 explain select * from t2 where c1 = 1 and c2 = 1 and c3 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c3 < 1], [t2.c2 = 1]), rowset=256
@@ -263,11 +263,11 @@ Outputs & filters:
       range_cond([t2.c1 = 1])
 explain select * from t2 where c1 = 1 and c2 = 1 and c3 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t2  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t2  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter([t2.c2 = 1], [t2.c3 = 1]), rowset=256
@@ -277,12 +277,12 @@ Outputs & filters:
       range_cond([t2.c1 = 1])
 explain select count(*) from t3;
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SCALAR GROUP BY|      |1       |2           |
-|1 | TABLE SCAN    |t3(k1)|1       |2           |
-=================================================
+===================================================
+|ID|OPERATOR         |NAME  |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SCALAR GROUP BY  |      |1       |2           |
+|1 |└─TABLE FULL SCAN|t3(k1)|1       |2           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
@@ -293,11 +293,11 @@ Outputs & filters:
       range_key([t3.c1], [t3.c2], [t3.c6]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t3 where c1 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -307,11 +307,11 @@ Outputs & filters:
       range_cond([t3.c1 = 1])
 explain select * from t3 where c1 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -321,11 +321,11 @@ Outputs & filters:
       range_cond([t3.c1 < 1])
 explain select * from t3 where c1 > 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -335,11 +335,11 @@ Outputs & filters:
       range_cond([t3.c1 > 1])
 explain select * from t3 where c1 > 1 and c1 < 10;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -349,11 +349,11 @@ Outputs & filters:
       range_cond([t3.c1 > 1], [t3.c1 < 10])
 explain select * from t3 where c1 = 1 and c2 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -363,11 +363,11 @@ Outputs & filters:
       range_cond([t3.c1 = 1], [t3.c2 < 1])
 explain select * from t3 where c1 = 1 and c2 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), rowset=256
@@ -377,11 +377,11 @@ Outputs & filters:
       range_cond([t3.c1 = 1], [t3.c2 = 1])
 explain select * from t3 where c1 = 1 and c2 = 1 and c3 < 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 < 1]), rowset=256
@@ -391,11 +391,11 @@ Outputs & filters:
       range_cond([t3.c1 = 1], [t3.c2 = 1])
 explain select * from t3 where c1 = 1 and c2 = 1 and c3 = 1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t3  |1       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t3  |1       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 = 1]), rowset=256

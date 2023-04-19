@@ -19,6 +19,7 @@
 #include "lib/stat/ob_latch_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/ob_lib_config.h"
+#include "lib/thread/thread.h"
 
 namespace oceanbase
 {
@@ -181,6 +182,23 @@ private:
   bool is_atomic_;
   //Do you need statistics
   bool need_record_;
+};
+
+class ObSleepEventGuard : public ObWaitEventGuard
+{
+public:
+  explicit ObSleepEventGuard(
+    const int64_t event_no,
+    const uint64_t timeout_ms = 0,
+    const int64_t sleep_us = 0
+  ) : ObWaitEventGuard(event_no, timeout_ms, sleep_us, 0, 0, false)
+  {
+    lib::Thread::sleep_us_ = sleep_us;
+  }
+  ~ObSleepEventGuard()
+  {
+    lib::Thread::sleep_us_ = 0;
+  }
 };
 
 class ObMaxWaitGuard

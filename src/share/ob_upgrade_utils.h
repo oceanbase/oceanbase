@@ -165,11 +165,12 @@ class ObUpgradeChecker
 {
 public:
   static bool check_data_version_exist(const uint64_t version);
+  static bool check_cluster_version_exist(const uint64_t version);
   static int get_data_version_by_cluster_version(
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 2;
+  static const int64_t DATA_VERSION_NUM = 3;
   static const uint64_t UPGRADE_PATH[DATA_VERSION_NUM];
 };
 
@@ -188,6 +189,7 @@ private:
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
 };
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 0, 0)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

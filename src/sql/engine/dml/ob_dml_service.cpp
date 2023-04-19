@@ -174,9 +174,15 @@ int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
         ObObj *tmp_obj_ptr = tmp_table_rowkey.get_obj_ptr();
         for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
           ObExpr *expr = row.at(i);
-          ObDatum &col_datum = expr->locate_expr_datum(eval_ctx);
-          if (OB_FAIL(col_datum.to_obj(tmp_obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
-            LOG_WARN("convert datum to obj failed", K(ret));
+          ObDatum *col_datum = nullptr;
+          if (OB_ISNULL(expr)) {
+            LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
+          } else if (OB_FAIL(expr->eval(eval_ctx, col_datum))) {
+            LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
+          } else if (OB_ISNULL(col_datum)) {
+            LOG_WARN("evaluated column datum in rowkey is nullptr", K(ret), K(i));
+          } else if (OB_FAIL(col_datum->to_obj(tmp_obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
+            LOG_WARN("convert datum to obj failed", K(ret), K(i));
           }
         }
 
@@ -1561,7 +1567,7 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()), K(dml_rtctx.get_cached_row_size()));
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()), K(dml_rtctx.get_row_buffer_size()));
       }
       dml_rtctx.das_ref_.set_frozen_node();
     }

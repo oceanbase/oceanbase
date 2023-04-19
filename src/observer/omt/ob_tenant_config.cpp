@@ -327,7 +327,8 @@ int ObTenantConfig::publish_special_config_after_dump()
 
 int ObTenantConfig::add_extra_config(const char *config_str,
                                      int64_t version /* = 0 */ ,
-                                     bool check_name /* = false */)
+                                     bool check_name /* = false */,
+                                     bool check_unit /* = true */)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -388,6 +389,9 @@ int ObTenantConfig::add_extra_config(const char *config_str,
             (*pp_item)->set_version(version);
             LOG_INFO("Load tenant config dump value succ", K(name), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
           }
+        } else if (check_unit && !(*pp_item)->check_unit(value)) {
+          ret = OB_INVALID_CONFIG;
+          LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else {
           if (!(*pp_item)->set_value(value)) {
             ret = OB_INVALID_CONFIG;

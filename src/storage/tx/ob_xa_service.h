@@ -152,16 +152,6 @@ public:
   int delete_xa_branch(const uint64_t tenant_id,
                        const ObXATransID &xid,
                        const bool is_tightly_coupled);
-  int insert_xa_pending_record(const uint64_t tenant_id,
-                               const ObXATransID &xid,
-                               const ObTransID &trans_id,
-                               const share::ObLSID &coordinator,
-                               const common::ObAddr &sche_addr);
-  int query_xa_coordinator_with_trans_id(const uint64_t tenant_id,
-                                         const ObTransID &trans_id,
-                                         share::ObLSID &coordinator);
-  int delete_xa_pending_record(const uint64_t tenant_id,
-                               const ObTransID &tx_id);
   // query coord from tenant table global transaction
   int query_xa_coord_from_tableone(const uint64_t tenant_id,
                                    const ObXATransID &xid,
@@ -169,10 +159,6 @@ public:
                                    ObTransID &trans_id,
                                    int64_t &state,
                                    int64_t &end_flag);
-  int query_xa_coordinator_with_xid(const uint64_t tenant_id,
-                                    const ObXATransID &xid,
-                                    ObTransID &trans_id,
-                                    share::ObLSID &coordinator);
   int query_sche_and_coord(const uint64_t tenant_id,
                            const ObXATransID &xid,
                            ObAddr &scheduler_addr,
@@ -184,6 +170,11 @@ public:
                    const share::ObLSID &coordinator,
                    const bool has_tx_level_temp_table,
                    int64_t &affected_rows);
+  void insert_record_for_standby(const uint64_t tenant_id,
+                                 const ObXATransID &xid,
+                                 const ObTransID &trans_id,
+                                 const share::ObLSID &coordinator,
+                                 const ObAddr &sche_addr);
 private:
   int local_one_phase_xa_commit_ (const ObXATransID &xid,
                                   const ObTransID &trans_id,
@@ -235,13 +226,6 @@ private:
                            const int64_t timeout_us,
                            const int64_t request_id,
                            bool &has_tx_level_temp_table);
-  int xa_rollback_for_pending_trans_(const ObXATransID &xid,
-                                     const ObTransID &tx_id,
-                                     const int64_t timeout_us,
-                                     const uint64_t tenant_id,
-                                     const int64_t request_id,
-                                     const bool is_tightly_coupled,
-                                     const share::ObLSID &coord);
   int two_phase_xa_rollback_(const ObXATransID &xid,
                              const ObTransID &tx_id,
                              const int64_t timeout_us,

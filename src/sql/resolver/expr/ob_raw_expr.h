@@ -949,14 +949,10 @@ struct ObUDFInfo
     is_contain_self_param_(false),
     is_udt_udf_inside_pkg_(false),
     is_new_keyword_used_(false),
-    flag_(0),
-    self_arg_(NULL) {}
+    flag_(0) {}
 
   void set_is_udf_udt_static() {
     flag_ |= UDF_UDT_STATIC;
-  }
-  bool is_udf_udt_static() const {
-    return is_udt_udf_ && !!(flag_ & UDF_UDT_STATIC);
   }
   bool is_udf_udt_member() const {
     return is_udt_udf_ && !(flag_ & UDF_UDT_STATIC);
@@ -1013,7 +1009,6 @@ struct ObUDFInfo
   bool is_udt_udf_inside_pkg_;
   bool is_new_keyword_used_;  // if in NEW obj(...) form
   uint64_t flag_;
-  ObRawExpr *self_arg_; // if this is udt routine, it has self argument
 };
 
 enum AccessNameType
@@ -1082,6 +1077,7 @@ public:
   inline void set_type_method() { type_ = TYPE_METHOD; }
   inline void set_cursor_attr() { type_ = CURSOR_ATTR; }
   inline void set_udt_ns() { type_ = UDT_NS; }
+  inline bool is_unknown() const { return UNKNOWN == type_; }
   inline bool is_sys_func() const { return SYS_FUNC == type_; }
   inline bool is_dll_udf() const { return DLL_UDF == type_; }
   inline bool is_pl_udf() const { return PL_UDF == type_; }
@@ -1150,7 +1146,21 @@ public:
   }
 
   void format_qualified_name(common::ObNameCaseMode mode);
-  inline bool is_sys_func() const { return 1 == access_idents_.count() && access_idents_.at(0).is_sys_func(); }
+  inline bool is_unknown() const
+  {
+    bool bret = true;
+    for (int64_t i = 0; bret && i < access_idents_.count(); ++i) {
+      if (!access_idents_.at(i).is_unknown()) {
+        bret = false;
+        break;
+      }
+    }
+    return bret;
+  }
+  inline bool is_sys_func() const
+  {
+    return 1 == access_idents_.count() && access_idents_.at(0).is_sys_func();
+  }
   inline bool is_pl_udf() const
   {
     bool bret = !access_idents_.empty()
@@ -3841,6 +3851,7 @@ public:
                                             K_(is_aggr_udf_distinct),
                                             K_(loc),
                                             K_(is_udt_cons),
+                                            K_(params_desc_v2),
                                             N_CHILDREN, exprs_);
 private:
   uint64_t udf_id_;

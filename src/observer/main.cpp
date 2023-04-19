@@ -394,6 +394,10 @@ void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
 }
 int main(int argc, char *argv[])
 {
+  if (0 != pthread_getname_np(pthread_self(), ob_get_tname(), OB_THREAD_NAME_BUF_LEN)) {
+    snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "observer");
+  }
+  ObStackHeaderGuard stack_header_guard;
 #ifndef OB_USE_ASAN
   init_malloc_hook();
 #endif

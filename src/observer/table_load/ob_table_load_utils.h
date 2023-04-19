@@ -6,6 +6,7 @@
 
 #include "lib/container/ob_iarray.h"
 #include "share/table/ob_table_load_array.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -51,6 +52,7 @@ public:
   static int deep_copy(const blocksstable::ObStorageDatum &src, blocksstable::ObStorageDatum &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObDatumRowkey &src, blocksstable::ObDatumRowkey &dest, common::ObIAllocator &allocator);
   static int deep_copy(const blocksstable::ObDatumRange &src, blocksstable::ObDatumRange &dest, common::ObIAllocator &allocator);
+  static int deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSessionInfo &dest, common::ObIAllocator &allocator);
 
   template<class T>
   static int deep_copy(const table::ObTableLoadArray<T> &src, table::ObTableLoadArray<T> &dest, common::ObIAllocator &allocator);
@@ -60,10 +62,10 @@ public:
 
   template<class T>
   static int deep_copy(const common::ObIArray<T> &src, table::ObTableLoadArray<T> &dest, common::ObIAllocator &allocator);
-
   static bool is_local_addr(const common::ObAddr &addr);
-  static int init_session_info(uint64_t user_id, sql::ObSQLSessionInfo &session_info);
-
+  static int create_session_info(uint64_t user_id, sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx);
+  static int create_session_info(sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx);
+  static void free_session_info(sql::ObSQLSessionInfo *session_info, const sql::ObFreeSessionCtx &free_session_ctx);
   static const int64_t CREDENTIAL_BUF_SIZE = 256;
   static int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database_id,
                                  int64_t expire_ts, uint64_t user_token,

@@ -37,7 +37,6 @@ private:
   const ObGlobalContext &gctx_;
   common::ObArenaAllocator allocator_;
   table::ObTableApiCredential credential_;
-  sql::ObSQLSessionInfo session_info_;
   common::ObArray<int64_t> idx_array_;
   ObTableLoadTableCtx *table_ctx_;
 };

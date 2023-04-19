@@ -227,8 +227,44 @@ public:
   void enable_record_stat(bool enable) { record_stat_ = enable; }
   bool need_record_stat() const { return record_stat_; }
   uint32_t val() const { return lock_; }
-  static thread_local uint32_t* current_lock;
+  OB_INLINE static int reg_lock(uint32_t* latch_addr)
+  {
+    int ret = -1;
+    if (max_lock_slot_idx < sizeof(current_locks) / sizeof(uint32_t*)) {
+      ret = max_lock_slot_idx++;
+      current_locks[ret] = latch_addr;
+    } else {
+      for (auto i = 0; -1 == ret && i < sizeof(current_locks) / sizeof(uint32_t*); ++i) {
+        if (OB_ISNULL(current_locks[i]) || 0 == *current_locks[i]) {
+          ret = i;
+          current_locks[i] = latch_addr;
+        }
+      }
+    }
+    return ret;
+  }
+  OB_INLINE static int unreg_lock(uint32_t* latch_addr)
+  {
+    int ret = -1;
+    for (int8_t i = max_lock_slot_idx - 1; -1 == ret && i >= 0; --i) {
+      if (latch_addr == current_locks[i]) {
+        ret = i;
+        current_locks[i] = nullptr;
+        if (ret == max_lock_slot_idx - 1) {
+          --max_lock_slot_idx;
+        }
+      }
+    }
+    return ret;
+  }
+  OB_INLINE static void clear_lock()
+  {
+    MEMSET(current_locks, 0, max_lock_slot_idx * sizeof(current_locks[0]));
+    max_lock_slot_idx = 0;
+  }
+  static thread_local uint32_t* current_locks[16];
   static thread_local uint32_t* current_wait;
+  static thread_local int8_t max_lock_slot_idx;
 private:
   template<typename LowTryLock>
   OB_INLINE int low_lock(
@@ -459,7 +495,7 @@ OB_INLINE uint64_t ObLatchMutex::low_try_lock(const int64_t max_spin_cnt, const 
   for (; spin_cnt < max_spin_cnt; ++spin_cnt) {
     if (0 == lock_.val()) {
       if (ATOMIC_BCAS(&lock_.val(), 0, lock_value)) {
-        ObLatch::current_lock = (uint32_t*)(&lock_.val());
+        IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)(&lock_.val()));
         break;
       }
     }
@@ -521,7 +557,7 @@ inline int ObLatch::LowTryRDLock::operator()(volatile uint32_t *latch,
       conflict = false;
       if (ATOMIC_BCAS(latch, lock, lock + 1)) {
         ret = OB_SUCCESS;
-        ObLatch::current_lock = (uint32_t*)latch;
+        IGNORE_RETURN unreg_lock((uint32_t*)latch);
       }
     } else {
       conflict = true;
@@ -544,7 +580,7 @@ inline int ObLatch::LowTryWRLock::operator()(volatile uint32_t *latch,
     conflict = false;
     if (ATOMIC_BCAS(latch, lock, (lock | (WRITE_MASK | uid)))) {
       ret = OB_SUCCESS;
-      ObLatch::current_lock = (uint32_t*)latch;
+      IGNORE_RETURN unreg_lock((uint32_t*)latch);
     }
   } else {
     conflict = true;

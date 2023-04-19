@@ -34,12 +34,10 @@ int ObTableLoadAbortP::process()
         ret = OB_SUCCESS;
       }
     } else {
-      if (OB_FAIL(ObTableLoadUtils::init_session_info(credential_.user_id_, session_info_))) {
-        LOG_WARN("fail to init session info", KR(ret));
-      } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+      if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
       } else {
-        ObTableLoadCoordinator::abort_ctx(table_ctx, session_info_);
+        ObTableLoadCoordinator::abort_ctx(table_ctx);
       }
     }
     if (OB_NOT_NULL(table_ctx)) {

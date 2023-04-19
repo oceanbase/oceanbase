@@ -25,8 +25,8 @@ Query Plan
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
 |0 |MERGE UNION DISTINCT|    |10      |6           |
-|1 | TABLE SCAN         |t4  |5       |3           |
-|2 | TABLE SCAN         |t4  |5       |3           |
+|1 |├─TABLE FULL SCAN   |t4  |5       |3           |
+|2 |└─TABLE FULL SCAN   |t4  |5       |3           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -54,14 +54,14 @@ select * from t4 union select * from t4;
 EXPLAIN select /*+ index(t4 idx_t4_c2c3) */ * from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ * from t4 order by 1,2,3;
 Query Plan
-================================================================
-|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SORT                 |               |10      |7           |
-|1 | MERGE UNION DISTINCT|               |10      |6           |
-|2 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |3           |
-|3 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |3           |
-================================================================
+=================================================================
+|ID|OPERATOR              |NAME           |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                  |               |10      |7           |
+|1 |└─MERGE UNION DISTINCT|               |10      |6           |
+|2 |  ├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |3           |
+|3 |  └─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |3           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -91,14 +91,14 @@ select /*+ index(t4 idx_t4_c2c3) */ * from t4 order by 1,2,3;
 EXPLAIN select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 union 
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 order by 2,1;
 Query Plan
-================================================================
-|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SORT                 |               |10      |6           |
-|1 | MERGE UNION DISTINCT|               |10      |5           |
-|2 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
-|3 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
-================================================================
+=================================================================
+|ID|OPERATOR              |NAME           |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                  |               |10      |6           |
+|1 |└─MERGE UNION DISTINCT|               |10      |5           |
+|2 |  ├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
+|3 |  └─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -128,14 +128,14 @@ select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 order by 2,1;
 EXPLAIN select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 union 
 select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 order by 1,2;
 Query Plan
-================================================================
-|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SORT                 |               |10      |6           |
-|1 | MERGE UNION DISTINCT|               |10      |5           |
-|2 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
-|3 |  TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
-================================================================
+=================================================================
+|ID|OPERATOR              |NAME           |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                  |               |10      |6           |
+|1 |└─MERGE UNION DISTINCT|               |10      |5           |
+|2 |  ├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
+|3 |  └─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -169,8 +169,8 @@ Query Plan
 |ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|               |10      |6           |
-|1 | TABLE SCAN         |t4(idx_t4_c2c3)|5       |3           |
-|2 | TABLE SCAN         |t4(idx_t4_c2c3)|5       |3           |
+|1 |├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |3           |
+|2 |└─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -203,8 +203,8 @@ Query Plan
 |ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|               |10      |5           |
-|1 | TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
-|2 | TABLE SCAN         |t4(idx_t4_c2c3)|5       |2           |
+|1 |├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
+|2 |└─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |2           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -232,14 +232,14 @@ select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 order by 1;
 EXPLAIN select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 order by 1;
 Query Plan
-===============================================================
-|ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                |               |10      |7           |
-|1 | HASH UNION DISTINCT|               |10      |7           |
-|2 |  TABLE SCAN        |t4(idx_t4_c2c3)|5       |2           |
-|3 |  TABLE SCAN        |t4(idx_t4_c2c3)|5       |2           |
-===============================================================
+================================================================
+|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                 |               |10      |7           |
+|1 |└─HASH UNION DISTINCT|               |10      |7           |
+|2 |  ├─TABLE FULL SCAN  |t4(idx_t4_c2c3)|5       |2           |
+|3 |  └─TABLE FULL SCAN  |t4(idx_t4_c2c3)|5       |2           |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=256
@@ -268,14 +268,14 @@ select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 order by 1;
 EXPLAIN select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 order by 1;
 Query Plan
-===============================================================
-|ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                |               |10      |7           |
-|1 | HASH UNION DISTINCT|               |10      |7           |
-|2 |  TABLE SCAN        |t4(idx_t4_c2c3)|5       |2           |
-|3 |  TABLE SCAN        |t4(idx_t4_c2c3)|5       |2           |
-===============================================================
+================================================================
+|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                 |               |10      |7           |
+|1 |└─HASH UNION DISTINCT|               |10      |7           |
+|2 |  ├─TABLE FULL SCAN  |t4(idx_t4_c2c3)|5       |2           |
+|3 |  └─TABLE FULL SCAN  |t4(idx_t4_c2c3)|5       |2           |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=256
@@ -305,15 +305,15 @@ select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 order by 1;
 EXPLAIN select /*+ index(x idx_t4_c2c3) */ c3,c1,c2 from t4 x union  
 select /*+ index(y idx_t4_c2c3) */ c3,c2,c1 from t4 y order by 1,2,3;
 Query Plan
-===============================================================
-|ID|OPERATOR             |NAME          |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                 |              |10      |8           |
-|1 | MERGE UNION DISTINCT|              |10      |6           |
-|2 |  TABLE SCAN         |x(idx_t4_c2c3)|5       |3           |
-|3 |  SORT               |              |5       |3           |
-|4 |   TABLE SCAN        |y(idx_t4_c2c3)|5       |3           |
-===============================================================
+================================================================
+|ID|OPERATOR              |NAME          |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                  |              |10      |8           |
+|1 |└─MERGE UNION DISTINCT|              |10      |6           |
+|2 |  ├─TABLE FULL SCAN   |x(idx_t4_c2c3)|5       |3           |
+|3 |  └─SORT              |              |5       |3           |
+|4 |    └─TABLE FULL SCAN |y(idx_t4_c2c3)|5       |3           |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -354,9 +354,9 @@ Query Plan
 |ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|               |10      |6           |
-|1 | TABLE SCAN         |t4(idx_t4_c2c3)|5       |3           |
-|2 | SORT               |               |5       |3           |
-|3 |  TABLE SCAN        |t4(idx_t4_c2c3)|5       |3           |
+|1 |├─TABLE FULL SCAN   |t4(idx_t4_c2c3)|5       |3           |
+|2 |└─SORT              |               |5       |3           |
+|3 |  └─TABLE FULL SCAN |t4(idx_t4_c2c3)|5       |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -396,13 +396,14 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |6       |45          |
-|1 | EXPRESSION       |    |6       |1           |
+|1 |└─EXPRESSION      |    |6       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t5: ({t5: (t5.__pk_increment, t5.c, t5.c2, t5.c3)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.c)], [column_conv(INT,PS:(11,0),NULL,__values.c2)], [column_conv(INT,PS:(11,0),NULL,__values.c3)])
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.c)], [column_conv(INT,PS:(11,0),NULL,__values.c2)], [column_conv(INT,PS:(11,
+      0),NULL,__values.c3)])
   1 - output([__values.c], [__values.c2], [__values.c3]), filter(nil)
       values({1, 2, 3}, {2, 3, 4}, {0, 1, 2}, {3, 4, 5}, {0, 2, 3}, {2, 4, 5})
 insert into t5 values(1,2,3),(2,3,4),(0,1,2),(3,4,5),(0,2,3),(2,4,5);
@@ -411,14 +412,14 @@ create index idx_t5_c2 on t5(c2);
 EXPLAIN select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 union 
 select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 order by 1,2;
 Query Plan
-=============================================================
-|ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |SORT                |             |12      |39          |
-|1 | HASH UNION DISTINCT|             |12      |37          |
-|2 |  TABLE SCAN        |t5(idx_t5_c2)|6       |17          |
-|3 |  TABLE SCAN        |t5(idx_t5_c2)|6       |17          |
-=============================================================
+==============================================================
+|ID|OPERATOR             |NAME         |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |SORT                 |             |12      |39          |
+|1 |└─HASH UNION DISTINCT|             |12      |37          |
+|2 |  ├─TABLE FULL SCAN  |t5(idx_t5_c2)|6       |17          |
+|3 |  └─TABLE FULL SCAN  |t5(idx_t5_c2)|6       |17          |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -451,8 +452,8 @@ Query Plan
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|             |12      |5           |
-|1 | TABLE SCAN         |t5(idx_t5_c2)|6       |2           |
-|2 | TABLE SCAN         |t5(idx_t5_c2)|6       |2           |
+|1 |├─TABLE FULL SCAN   |t5(idx_t5_c2)|6       |2           |
+|2 |└─TABLE FULL SCAN   |t5(idx_t5_c2)|6       |2           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -486,7 +487,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |32      |210         |
-|1 | EXPRESSION       |    |32      |1           |
+|1 |└─EXPRESSION      |    |32      |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -495,8 +496,8 @@ Outputs & filters:
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.c1)], [column_conv(INT,PS:(11,0),NULL,__values.c2)])
   1 - output([__values.c1], [__values.c2]), filter(nil)
       values({10, 20}, {10, 30}, {20, 10}, {20, 5}, {10, 30}, {40, 5}, {10, 8}, {10, 20}, {1, 0}, {0, 1}, {20, 80}, {10, 5}, {10, 5}, {30, 20}, {30, 1},
-{30, 5}, {10, 20}, {10, 30}, {20, 10}, {20, 5}, {10, 30}, {40, 5}, {10, 8}, {20, 80}, {10, 5}, {10, 5}, {30, 20}, {30, 1}, {1, 0}, {0, 1}, {0, 0}, {30,
-5})
+       {30, 5}, {10, 20}, {10, 30}, {20, 10}, {20, 5}, {10, 30}, {40, 5}, {10, 8}, {20, 80}, {10, 5}, {10, 5}, {30, 20}, {30, 1}, {1, 0}, {0, 1}, {0, 0}, {30,
+       5})
 insert into t6 values(10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(10,20),(1,0),(0,1),(20,80),(10,5),(10,5),(30,20),(30,1),(30,5),
     (10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(20,80),(10,5),(10,5),(30,20),(30,1),(1,0),(0,1),(0,0),(30,5);
 #3.1 可以优化, 14 rows
@@ -506,8 +507,8 @@ Query Plan
 |ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|               |64      |12          |
-|1 | TABLE SCAN         |t6(idx_t6_c1c2)|32      |4           |
-|2 | TABLE SCAN         |t6(idx_t6_c1c2)|32      |4           |
+|1 |├─TABLE FULL SCAN   |t6(idx_t6_c1c2)|32      |4           |
+|2 |└─TABLE FULL SCAN   |t6(idx_t6_c1c2)|32      |4           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -543,14 +544,14 @@ select c1,c2 from t6 union select c1,c2 from t6 order by 1,2;
 #3.2 可以优化, 14 rows
 EXPLAIN select c2,c1 from t6 union select c2,c1 from t6 order by 1,2;
 Query Plan
-================================================================
-|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SORT                 |               |64      |21          |
-|1 | MERGE UNION DISTINCT|               |64      |12          |
-|2 |  TABLE SCAN         |t6(idx_t6_c1c2)|32      |4           |
-|3 |  TABLE SCAN         |t6(idx_t6_c1c2)|32      |4           |
-================================================================
+=================================================================
+|ID|OPERATOR              |NAME           |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                  |               |64      |21          |
+|1 |└─MERGE UNION DISTINCT|               |64      |12          |
+|2 |  ├─TABLE FULL SCAN   |t6(idx_t6_c1c2)|32      |4           |
+|3 |  └─TABLE FULL SCAN   |t6(idx_t6_c1c2)|32      |4           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -591,9 +592,9 @@ Query Plan
 |ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|               |64      |16          |
-|1 | TABLE SCAN         |t6(idx_t6_c1c2)|32      |4           |
-|2 | SORT               |               |32      |8           |
-|3 |  TABLE SCAN        |t6(idx_t6_c1c2)|32      |4           |
+|1 |├─TABLE FULL SCAN   |t6(idx_t6_c1c2)|32      |4           |
+|2 |└─SORT              |               |32      |8           |
+|3 |  └─TABLE FULL SCAN |t6(idx_t6_c1c2)|32      |4           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -640,14 +641,14 @@ select c2,c1 from t6 union select c1,c2 from t6 order by 1,2;
 #3.4 不能优化, 有计算列的情况, 23 rows, 14
 EXPLAIN select c2,c1 from t6 union select 0+c1,c2 from t6 order by 1,2;
 Query Plan
-===============================================================
-|ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                |               |64      |34          |
-|1 | HASH UNION DISTINCT|               |64      |25          |
-|2 |  TABLE SCAN        |t6(idx_t6_c1c2)|32      |4           |
-|3 |  TABLE SCAN        |t6             |32      |4           |
-===============================================================
+================================================================
+|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                 |               |64      |34          |
+|1 |└─HASH UNION DISTINCT|               |64      |25          |
+|2 |  ├─TABLE FULL SCAN  |t6(idx_t6_c1c2)|32      |4           |
+|3 |  └─TABLE FULL SCAN  |t6             |32      |4           |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -692,14 +693,14 @@ select c2,c1 from t6 union select 0+c1,c2 from t6 order by 1,2;
 
 EXPLAIN select c1,c2,c1,c2 from t6 union select 0+c1,c2,c1,c2 from t6 order by 1,2,3,4;
 Query Plan
-===============================================================
-|ID|OPERATOR            |NAME           |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |SORT                |               |64      |35          |
-|1 | HASH UNION DISTINCT|               |64      |26          |
-|2 |  TABLE SCAN        |t6(idx_t6_c1c2)|32      |4           |
-|3 |  TABLE SCAN        |t6(idx_t6_c1c2)|32      |4           |
-===============================================================
+================================================================
+|ID|OPERATOR             |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SORT                 |               |64      |35          |
+|1 |└─HASH UNION DISTINCT|               |64      |26          |
+|2 |  ├─TABLE FULL SCAN  |t6(idx_t6_c1c2)|32      |4           |
+|3 |  └─TABLE FULL SCAN  |t6(idx_t6_c1c2)|32      |4           |
+================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
@@ -744,20 +745,20 @@ create index idx_t7_c2c1 on t7(c2,c1,c3) local;
 EXPLAIN select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
 select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10 order by 1,2,3;
 Query Plan
-====================================================================
-|ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                     |               |2       |21          |
-|1 | HASH UNION DISTINCT     |               |2       |21          |
-|2 |  PX COORDINATOR         |               |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000       |1       |10          |
-|4 |    PX PARTITION ITERATOR|               |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-|6 |  PX COORDINATOR         |               |1       |10          |
-|7 |   EXCHANGE OUT DISTR    |:EX20000       |1       |10          |
-|8 |    PX PARTITION ITERATOR|               |1       |9           |
-|9 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-====================================================================
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |SORT                         |               |2       |21          |
+|1 |└─HASH UNION DISTINCT        |               |2       |21          |
+|2 |  ├─PX COORDINATOR           |               |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|6 |  └─PX COORDINATOR           |               |1       |10          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
+|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
+|9 |        └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|1       |9           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -804,26 +805,26 @@ EXPLAIN select xx.c2,xx.c1 from
  select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10) xx,
 t7 yy where xx.c2 = yy.c2 order by 1,2;
 Query Plan
-======================================================================
-|ID|OPERATOR                   |NAME           |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |SORT                       |               |1       |30          |
-|1 | HASH JOIN                 |               |1       |30          |
-|2 |  PX COORDINATOR           |               |1       |9           |
-|3 |   EXCHANGE OUT DISTR      |:EX10000       |1       |9           |
-|4 |    PX PARTITION ITERATOR  |               |1       |9           |
-|5 |     TABLE SCAN            |yy(idx_t7_c2c1)|1       |9           |
-|6 |  SUBPLAN SCAN             |xx             |2       |21          |
-|7 |   HASH UNION DISTINCT     |               |2       |21          |
-|8 |    PX COORDINATOR         |               |1       |10          |
-|9 |     EXCHANGE OUT DISTR    |:EX20000       |1       |10          |
-|10|      PX PARTITION ITERATOR|               |1       |9           |
-|11|       TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-|12|    PX COORDINATOR         |               |1       |10          |
-|13|     EXCHANGE OUT DISTR    |:EX30000       |1       |10          |
-|14|      PX PARTITION ITERATOR|               |1       |9           |
-|15|       TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-======================================================================
+============================================================================
+|ID|OPERATOR                         |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                             |               |1       |30          |
+|1 |└─HASH JOIN                      |               |1       |30          |
+|2 |  ├─PX COORDINATOR               |               |1       |9           |
+|3 |  │ └─EXCHANGE OUT DISTR         |:EX10000       |1       |9           |
+|4 |  │   └─PX PARTITION ITERATOR    |               |1       |9           |
+|5 |  │     └─TABLE FULL SCAN        |yy(idx_t7_c2c1)|1       |9           |
+|6 |  └─SUBPLAN SCAN                 |xx             |2       |21          |
+|7 |    └─HASH UNION DISTINCT        |               |2       |21          |
+|8 |      ├─PX COORDINATOR           |               |1       |10          |
+|9 |      │ └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
+|10|      │   └─PX PARTITION ITERATOR|               |1       |9           |
+|11|      │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|12|      └─PX COORDINATOR           |               |1       |10          |
+|13|        └─EXCHANGE OUT DISTR     |:EX30000       |1       |10          |
+|14|          └─PX PARTITION ITERATOR|               |1       |9           |
+|15|            └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|1       |9           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([xx.c2], [xx.c1]), filter(nil), rowset=256
@@ -889,20 +890,20 @@ t7 yy where xx.c2 = yy.c2 order by 1,2;
 EXPLAIN select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
 select /*+ index(t7 idx_t7_c2c1) */  c2,c1,c3 from t7 order by 1,2,3;
 Query Plan
-====================================================================
-|ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                     |               |2       |21          |
-|1 | HASH UNION DISTINCT     |               |2       |21          |
-|2 |  PX COORDINATOR         |               |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000       |1       |10          |
-|4 |    PX PARTITION ITERATOR|               |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-|6 |  PX COORDINATOR         |               |1       |10          |
-|7 |   EXCHANGE OUT DISTR    |:EX20000       |1       |10          |
-|8 |    PX PARTITION ITERATOR|               |1       |9           |
-|9 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-====================================================================
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |SORT                         |               |2       |21          |
+|1 |└─HASH UNION DISTINCT        |               |2       |21          |
+|2 |  ├─PX COORDINATOR           |               |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|6 |  └─PX COORDINATOR           |               |1       |10          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
+|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -944,20 +945,20 @@ select /*+ index(t7 idx_t7_c2c1) */  c2,c1,c3 from t7 order by 1,2,3;
 
 EXPLAIN select c1 from t7 union select c1 from t7 order by 1;
 Query Plan
-====================================================================
-|ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                     |               |2       |19          |
-|1 | HASH UNION DISTINCT     |               |2       |19          |
-|2 |  PX COORDINATOR         |               |1       |9           |
-|3 |   EXCHANGE OUT DISTR    |:EX10000       |1       |9           |
-|4 |    PX PARTITION ITERATOR|               |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-|6 |  PX COORDINATOR         |               |1       |9           |
-|7 |   EXCHANGE OUT DISTR    |:EX20000       |1       |9           |
-|8 |    PX PARTITION ITERATOR|               |1       |9           |
-|9 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-====================================================================
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |SORT                         |               |2       |19          |
+|1 |└─HASH UNION DISTINCT        |               |2       |19          |
+|2 |  ├─PX COORDINATOR           |               |1       |9           |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |9           |
+|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|6 |  └─PX COORDINATOR           |               |1       |9           |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |9           |
+|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=256
@@ -997,20 +998,20 @@ select c1 from t7 union select c1 from t7 order by 1;
 EXPLAIN select /*+ index(t7 idx_t7_c2c1) */  c1,c2,c3 from t7 union
 select /*+ index(t7 idx_t7_c2c1) */ c1,c2,c3 from t7 order by 1,2,3;
 Query Plan
-====================================================================
-|ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                     |               |2       |21          |
-|1 | HASH UNION DISTINCT     |               |2       |21          |
-|2 |  PX COORDINATOR         |               |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000       |1       |10          |
-|4 |    PX PARTITION ITERATOR|               |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-|6 |  PX COORDINATOR         |               |1       |10          |
-|7 |   EXCHANGE OUT DISTR    |:EX20000       |1       |10          |
-|8 |    PX PARTITION ITERATOR|               |1       |9           |
-|9 |     TABLE SCAN          |t7(idx_t7_c2c1)|1       |9           |
-====================================================================
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |SORT                         |               |2       |21          |
+|1 |└─HASH UNION DISTINCT        |               |2       |21          |
+|2 |  ├─PX COORDINATOR           |               |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|6 |  └─PX COORDINATOR           |               |1       |10          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
+|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1061,17 +1062,17 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |11      |77          |
-|1 | EXPRESSION       |    |11      |1           |
+|1 |└─EXPRESSION      |    |11      |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{t72: ({t72: (t72.__pk_increment, t72.c1, t72.c2, t72.c3)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.c1)], [column_conv(DECIMAL,PS:(10,2),NULL,__values.c2)],
-[column_conv(INT,PS:(11,0),NULL,__values.c3)])
+       [column_conv(INT,PS:(11,0),NULL,__values.c3)])
   1 - output([__values.c1], [__values.c2], [__values.c3]), filter(nil)
       values({'11', 1.2, 1}, {'22', 2.3, 2}, {'33', 3.4, 3}, {'44', 4.5, 4}, {'55', 5.6, 5}, {'12', 1.244, 4}, {'22', 2.3, 3}, {'3', 3.4, 2}, {'44', 4.5,
-4}, {'56', 56, 1}, {'44', 4.5, 4})
+       4}, {'56', 56, 1}, {'44', 4.5, 4})
 insert into t72 values('11', 1.2, 1),('22', 2.3, 2),('33', 3.4, 3), ('44', 4.5, 4), ('55', 5.6, 5),
 ('12', 1.244, 4),('22', 2.3, 3),('3', 3.4, 2), ('44', 4.5, 4), ('56', 56, 1),('44', 4.5, 4);
 create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
@@ -1079,17 +1080,17 @@ create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
 Query Plan
-========================================================================
-|ID|OPERATOR                 |NAME               |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |SORT                     |                   |11      |19          |
-|1 | HASH UNION DISTINCT     |                   |11      |16          |
-|2 |  PX COORDINATOR         |                   |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000           |1       |10          |
-|4 |    PX PARTITION ITERATOR|                   |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c3c2c1)  |1       |9           |
-|6 |  TABLE SCAN             |t72(idx_t72_c3c2c1)|10      |3           |
-========================================================================
+============================================================================
+|ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                         |                   |11      |19          |
+|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
+|2 |  ├─PX COORDINATOR           |                   |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1129,17 +1130,17 @@ select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
 Query Plan
-========================================================================
-|ID|OPERATOR                 |NAME               |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |SORT                     |                   |11      |18          |
-|1 | HASH UNION DISTINCT     |                   |11      |16          |
-|2 |  PX COORDINATOR         |                   |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000           |1       |10          |
-|4 |    PX PARTITION ITERATOR|                   |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c3c2c1)  |1       |9           |
-|6 |  TABLE SCAN             |t72(idx_t72_c3c2c1)|10      |3           |
-========================================================================
+============================================================================
+|ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                         |                   |11      |18          |
+|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
+|2 |  ├─PX COORDINATOR           |                   |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1181,17 +1182,17 @@ create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
 Query Plan
-========================================================================
-|ID|OPERATOR                 |NAME               |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |SORT                     |                   |11      |19          |
-|1 | HASH UNION DISTINCT     |                   |11      |16          |
-|2 |  PX COORDINATOR         |                   |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000           |1       |10          |
-|4 |    PX PARTITION ITERATOR|                   |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c3c2c1)  |1       |9           |
-|6 |  TABLE SCAN             |t72(idx_t72_c3c2c1)|10      |3           |
-========================================================================
+============================================================================
+|ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                         |                   |11      |19          |
+|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
+|2 |  ├─PX COORDINATOR           |                   |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1231,17 +1232,17 @@ select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5  union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
 Query Plan
-========================================================================
-|ID|OPERATOR                 |NAME               |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |SORT                     |                   |11      |18          |
-|1 | HASH UNION DISTINCT     |                   |11      |16          |
-|2 |  PX COORDINATOR         |                   |1       |10          |
-|3 |   EXCHANGE OUT DISTR    |:EX10000           |1       |10          |
-|4 |    PX PARTITION ITERATOR|                   |1       |9           |
-|5 |     TABLE SCAN          |t7(idx_t7_c3c2c1)  |1       |9           |
-|6 |  TABLE SCAN             |t72(idx_t72_c3c2c1)|10      |3           |
-========================================================================
+============================================================================
+|ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------
+|0 |SORT                         |                   |11      |18          |
+|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
+|2 |  ├─PX COORDINATOR           |                   |1       |10          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
+============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1287,7 +1288,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |11      |77          |
-|1 | EXPRESSION       |    |11      |1           |
+|1 |└─EXPRESSION      |    |11      |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -1303,7 +1304,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |11      |77          |
-|1 | EXPRESSION       |    |11      |1           |
+|1 |└─EXPRESSION      |    |11      |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -1319,14 +1320,14 @@ create index idx_test2_d1d2 on test2(d1 asc, d2 asc);
 #5.1 最后加了排序, which can't be optimized...
 EXPLAIN select c2, c1 from test1 union select d2,d1 from test2 order by c2,c1;
 Query Plan
-======================================================================
-|ID|OPERATOR             |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |SORT                 |                     |22      |9           |
-|1 | MERGE UNION DISTINCT|                     |22      |7           |
-|2 |  TABLE SCAN         |test1(idx_test1_c1c2)|11      |3           |
-|3 |  TABLE SCAN         |test2(idx_test2_d1d2)|11      |3           |
-======================================================================
+=======================================================================
+|ID|OPERATOR              |NAME                 |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |SORT                  |                     |22      |9           |
+|1 |└─MERGE UNION DISTINCT|                     |22      |7           |
+|2 |  ├─TABLE FULL SCAN   |test1(idx_test1_c1c2)|11      |3           |
+|3 |  └─TABLE FULL SCAN   |test2(idx_test2_d1d2)|11      |3           |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1363,8 +1364,8 @@ Query Plan
 |ID|OPERATOR            |NAME                 |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
 |0 |MERGE UNION DISTINCT|                     |22      |7           |
-|1 | TABLE SCAN         |test1(idx_test1_c1c2)|11      |3           |
-|2 | TABLE SCAN         |test2(idx_test2_d1d2)|11      |3           |
+|1 |├─TABLE FULL SCAN   |test1(idx_test1_c1c2)|11      |3           |
+|2 |└─TABLE FULL SCAN   |test2(idx_test2_d1d2)|11      |3           |
 =====================================================================
 Outputs & filters:
 -------------------------------------
@@ -1396,14 +1397,14 @@ select c2, c1 from test1 union select d2,d1 from test2 order by c1,c2;
 #5.3 最后的排序由于是逆序不能被优化掉
 EXPLAIN select c2, c1 from test1 union select d2,d1 from test2 order by c1 desc,c2 desc;
 Query Plan
-======================================================================
-|ID|OPERATOR             |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |SORT                 |                     |22      |9           |
-|1 | MERGE UNION DISTINCT|                     |22      |7           |
-|2 |  TABLE SCAN         |test1(idx_test1_c1c2)|11      |3           |
-|3 |  TABLE SCAN         |test2(idx_test2_d1d2)|11      |3           |
-======================================================================
+=======================================================================
+|ID|OPERATOR              |NAME                 |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |SORT                  |                     |22      |9           |
+|1 |└─MERGE UNION DISTINCT|                     |22      |7           |
+|2 |  ├─TABLE FULL SCAN   |test1(idx_test1_c1c2)|11      |3           |
+|3 |  └─TABLE FULL SCAN   |test2(idx_test2_d1d2)|11      |3           |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1436,14 +1437,14 @@ select c2, c1 from test1 union select d2,d1 from test2 order by c1 desc,c2 desc;
 #5.4 整数的查询项, 6 rows, 10, 4 rows
 EXPLAIN select 1, c1 from test1 union select 2,d1 from test2 order by 1,2;
 Query Plan
-======================================================================
-|ID|OPERATOR             |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |SORT                 |                     |22      |7           |
-|1 | MERGE UNION DISTINCT|                     |22      |5           |
-|2 |  TABLE SCAN         |test1(idx_test1_c1c2)|11      |3           |
-|3 |  TABLE SCAN         |test2(idx_test2_d1d2)|11      |3           |
-======================================================================
+=======================================================================
+|ID|OPERATOR              |NAME                 |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |SORT                  |                     |22      |7           |
+|1 |└─MERGE UNION DISTINCT|                     |22      |5           |
+|2 |  ├─TABLE FULL SCAN   |test1(idx_test1_c1c2)|11      |3           |
+|3 |  └─TABLE FULL SCAN   |test2(idx_test2_d1d2)|11      |3           |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1471,14 +1472,14 @@ select 1, c1 from test1 union select 2,d1 from test2 order by 1,2;
 
 EXPLAIN select 1, c2 from test1 union select d1,d2 from test2 order by 1,2;
 Query Plan
-=====================================================
-|ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                |     |22      |13          |
-|1 | HASH UNION DISTINCT|     |22      |11          |
-|2 |  TABLE SCAN        |test1|11      |3           |
-|3 |  TABLE SCAN        |test2|11      |3           |
-=====================================================
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT                 |     |22      |13          |
+|1 |└─HASH UNION DISTINCT|     |22      |11          |
+|2 |  ├─TABLE FULL SCAN  |test1|11      |3           |
+|3 |  └─TABLE FULL SCAN  |test2|11      |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1509,14 +1510,14 @@ select 1, c2 from test1 union select d1,d2 from test2 order by 1,2;
 +------+------+
 EXPLAIN select mod(c1,2),mod(c2,2) from test1 union select mod(d1,2),mod(d2,2) from test2 order by 1,2;
 Query Plan
-=====================================================
-|ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                |     |22      |14          |
-|1 | HASH UNION DISTINCT|     |22      |11          |
-|2 |  TABLE SCAN        |test1|11      |3           |
-|3 |  TABLE SCAN        |test2|11      |3           |
-=====================================================
+======================================================
+|ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT                 |     |22      |14          |
+|1 |└─HASH UNION DISTINCT|     |22      |11          |
+|2 |  ├─TABLE FULL SCAN  |test1|11      |3           |
+|3 |  └─TABLE FULL SCAN  |test2|11      |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1549,13 +1550,14 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |3       |26          |
-|1 | EXPRESSION       |    |3       |1           |
+|1 |└─EXPRESSION      |    |3       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{x1: ({x1: (x1.__pk_increment, x1.c1, x1.c2, x1.c3)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.c1)], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,__values.c2)], [column_conv(INT,PS:(11,0),NULL,__values.c3)])
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.c1)], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,__values.c2)], [column_conv(INT,
+      PS:(11,0),NULL,__values.c3)])
   1 - output([__values.c1], [__values.c2], [__values.c3]), filter(nil)
       values({1, 'xx2', 3}, {2, 'xxx3', 4}, {3, 'aaa4', 5})
 insert into x1 values(1,'xx2',3),(2,'xxx3',4),(3,'aaa4',5);
@@ -1565,13 +1567,14 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |3       |26          |
-|1 | EXPRESSION       |    |3       |1           |
+|1 |└─EXPRESSION      |    |3       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       columns([{x2: ({x2: (x2.__pk_increment, x2.d1, x2.d2, x2.d3)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.d1)], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,__values.d2)], [column_conv(INT,PS:(11,0),NULL,__values.d3)])
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.d1)], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,__values.d2)], [column_conv(INT,
+      PS:(11,0),NULL,__values.d3)])
   1 - output([__values.d1], [__values.d2], [__values.d3]), filter(nil)
       values({11, 'xx2', 3}, {2, 'xx3', 4}, {3, 'aaa4', 5})
 insert into x2 values(11,'xx2',3),(2,'xx3',4),(3,'aaa4',5);
@@ -1581,9 +1584,9 @@ Query Plan
 |ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
 |0 |MERGE UNION DISTINCT|       |6       |5           |
-|1 | TABLE SCAN         |x2(ix2)|3       |2           |
-|2 | SORT               |       |3       |3           |
-|3 |  TABLE SCAN        |x1     |3       |2           |
+|1 |├─TABLE FULL SCAN   |x2(ix2)|3       |2           |
+|2 |└─SORT              |       |3       |3           |
+|3 |  └─TABLE FULL SCAN |x1     |3       |2           |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -1609,15 +1612,15 @@ select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 
 +------+------+
 EXPLAIN select c3, c2 from x1 union select /*+ index(x2 ix2) */ d3, d2 from x2 order by 1,2;
 Query Plan
-========================================================
-|ID|OPERATOR             |NAME   |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------
-|0 |SORT                 |       |6       |6           |
-|1 | MERGE UNION DISTINCT|       |6       |5           |
-|2 |  TABLE SCAN         |x2(ix2)|3       |2           |
-|3 |  SORT               |       |3       |3           |
-|4 |   TABLE SCAN        |x1     |3       |2           |
-========================================================
+=========================================================
+|ID|OPERATOR              |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT                  |       |6       |6           |
+|1 |└─MERGE UNION DISTINCT|       |6       |5           |
+|2 |  ├─TABLE FULL SCAN   |x2(ix2)|3       |2           |
+|3 |  └─SORT              |       |3       |3           |
+|4 |    └─TABLE FULL SCAN |x1     |3       |2           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1651,7 +1654,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |5       |39          |
-|1 | EXPRESSION       |    |5       |1           |
+|1 |└─EXPRESSION      |    |5       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -1667,7 +1670,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |5       |39          |
-|1 | EXPRESSION       |    |5       |1           |
+|1 |└─EXPRESSION      |    |5       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -1684,16 +1687,16 @@ EXPLAIN SELECT c1, c2 FROM (
   (SELECT c1, c2 FROM ts2 ORDER BY c2 DESC, c1 LIMIT 1)
 ) AS res order by 1,2;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SORT                 |    |6       |6           |
-|1 | MERGE UNION DISTINCT|    |6       |5           |
-|2 |  TOP-N SORT         |    |1       |2           |
-|3 |   TABLE SCAN        |ts2 |5       |2           |
-|4 |  SORT               |    |5       |3           |
-|5 |   TABLE SCAN        |ts1 |5       |2           |
-=====================================================
+======================================================
+|ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT                  |    |6       |6           |
+|1 |└─MERGE UNION DISTINCT|    |6       |5           |
+|2 |  ├─TOP-N SORT        |    |1       |2           |
+|3 |  │ └─TABLE FULL SCAN |ts2 |5       |2           |
+|4 |  └─SORT              |    |5       |3           |
+|5 |    └─TABLE FULL SCAN |ts1 |5       |2           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
@@ -1734,15 +1737,15 @@ CREATE TABLE T3 (PK INT PRIMARY KEY, C1 INT, C2 INT);
 
 EXPLAIN SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1 UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
 Query Plan
-====================================================
-|ID|OPERATOR     |NAME       |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------
-|0 |HASH DISTINCT|           |1       |7           |
-|1 | UNION ALL   |           |5       |6           |
-|2 |  TABLE SCAN |t1(Reverse)|1       |2           |
-|3 |  TABLE SCAN |t2         |2       |2           |
-|4 |  TABLE SCAN |t3         |2       |2           |
-====================================================
+==========================================================
+|ID|OPERATOR           |NAME       |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------
+|0 |HASH DISTINCT      |           |1       |7           |
+|1 |└─UNION ALL        |           |5       |6           |
+|2 |  ├─TABLE FULL SCAN|t1(Reverse)|1       |2           |
+|3 |  ├─TABLE FULL SCAN|t2         |2       |2           |
+|4 |  └─TABLE FULL SCAN|t3         |2       |2           |
+==========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
@@ -1827,67 +1830,66 @@ EXPLAIN SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, 
              pk) TUT WHERE pk in (9727744 ,7826688 ,1657856 ,  55039 ,  50631)
   ORDER BY col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk;
 Query Plan
-==========================================================================
-|ID|OPERATOR                |NAME                  |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------
-|0 |SORT                    |                      |1       |31          |
-|1 | SUBPLAN SCAN           |TUT                   |1       |31          |
-|2 |  MERGE UNION DISTINCT  |                      |1       |31          |
-|3 |   TABLE SCAN           |table2_bigint(Reverse)|5       |4           |
-|4 |   SORT                 |                      |1       |26          |
-|5 |    MERGE UNION DISTINCT|                      |1       |26          |
-|6 |     TABLE GET          |table2_bigint         |5       |16          |
-|7 |     SORT               |                      |1       |9           |
-|8 |      TOP-N SORT        |                      |1       |8           |
-|9 |       TABLE SCAN       |table100_bigint       |1       |8           |
-==========================================================================
+===============================================================================
+|ID|OPERATOR                     |NAME                  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |SORT                         |                      |1       |31          |
+|1 |└─SUBPLAN SCAN               |TUT                   |1       |31          |
+|2 |  └─MERGE UNION DISTINCT     |                      |1       |31          |
+|3 |    ├─TABLE FULL SCAN        |table2_bigint(Reverse)|5       |4           |
+|4 |    └─SORT                   |                      |1       |26          |
+|5 |      └─MERGE UNION DISTINCT |                      |1       |26          |
+|6 |        ├─TABLE GET          |table2_bigint         |5       |16          |
+|7 |        └─SORT               |                      |1       |9           |
+|8 |          └─TOP-N SORT       |                      |1       |8           |
+|9 |            └─TABLE FULL SCAN|table100_bigint       |1       |8           |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([TUT.col_bigint], [TUT.col_bigint_signed], [TUT.col_bigint_unsigned], [TUT.col_char_20], [TUT.col_decimal_20_0], [TUT.col_decimal_20_0_signed],
-[TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6], [TUT.pk]), filter(nil), rowset=256
+       [TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6], [TUT.pk]), filter(nil), rowset=256
       sort_keys([TUT.col_bigint, ASC], [TUT.col_bigint_signed, ASC], [TUT.col_bigint_unsigned, ASC], [TUT.col_char_20, ASC], [TUT.col_decimal_20_0, ASC],
-[TUT.col_decimal_20_0_signed, ASC], [TUT.col_decimal_20_0_unsigned, ASC], [TUT.col_timestamp_6, ASC], [TUT.pk, ASC])
+       [TUT.col_decimal_20_0_signed, ASC], [TUT.col_decimal_20_0_unsigned, ASC], [TUT.col_timestamp_6, ASC], [TUT.pk, ASC])
   1 - output([TUT.pk], [TUT.col_bigint], [TUT.col_bigint_signed], [TUT.col_bigint_unsigned], [TUT.col_char_20], [TUT.col_decimal_20_0], [TUT.col_decimal_20_0_signed],
-[TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6]), filter(nil), rowset=256
+       [TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6]), filter(nil), rowset=256
       access([TUT.pk], [TUT.col_bigint], [TUT.col_bigint_signed], [TUT.col_bigint_unsigned], [TUT.col_char_20], [TUT.col_decimal_20_0], [TUT.col_decimal_20_0_signed],
-[TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6])
+       [TUT.col_decimal_20_0_unsigned], [TUT.col_timestamp_6])
   2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])], [UNION([9])]), filter([UNION([9])
-IN (9727744, 7826688, 1657856, 55039, 50631)]), rowset=256
+      IN (9727744, 7826688, 1657856, 55039, 50631)]), rowset=256
   3 - output([table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0],
-[table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter([cast(table2_bigint.col_decimal_20_0_unsigned,
-DECIMAL(20, 0)) != cast(99999, DECIMAL(5, 0))]), rowset=256
+       [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), f
+      ilter([cast(table2_bigint.col_decimal_20_0_unsigned, DECIMAL(20, 0)) != cast(99999, DECIMAL(5, 0))]), rowset=256
       access([table2_bigint.pk], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned],
-[table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), partitions(p0)
+       [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), p
+      artitions(p0)
       limit(5), offset(1), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
-  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])], [UNION([9])]), filter(nil),
-rowset=256
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])], [UNION([9])]), filter(nil), rowset=256
       sort_keys([UNION([9]), DESC], [UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC], [UNION([5]), ASC], [UNION([6]), ASC], [UNION([7]),
-ASC], [UNION([8]), ASC])
+       ASC], [UNION([8]), ASC])
   5 - output([UNION([9])], [UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter([UNION([9])
-IN (9727744, 7826688, 1657856, 55039, 50631)]), rowset=256
+      IN (9727744, 7826688, 1657856, 55039, 50631)]), rowset=256
   6 - output([table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0],
-[table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter(nil), rowset=256
+       [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter(nil), rowset=256
       access([table2_bigint.pk], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20],
-[table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6]),
-partitions(p0)
+       [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6]), p
+      artitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([table2_bigint.pk]), range[9727744 ; 9727744], [7826688 ; 7826688], [1657856 ; 1657856], [55039 ; 55039], [50631 ; 50631],
       range_cond([table2_bigint.pk IN (9727744, 7826688, 1657856, 55039, 50631)], [table2_bigint.pk IN (9727744, 7826688, 1657856, 55039, 50631)])
   7 - output([table100_bigint.col_bigint], [table100_bigint.col_bigint_signed], [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0],
-[table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6], [table100_bigint.pk]), filter(nil),
-rowset=256
+       [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6], [table100_bigint.pk]), filter(nil), rowset=256
       sort_keys([table100_bigint.pk, ASC])
   8 - output([table100_bigint.pk], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed], [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20],
-[table100_bigint.col_decimal_20_0], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]),
-filter(nil), rowset=256
+       [table100_bigint.col_decimal_20_0], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), filter(nil), rowset=256
       sort_keys([table100_bigint.col_bigint_signed, ASC], [table100_bigint.col_decimal_20_0_signed, ASC], [table100_bigint.col_decimal_20_0, ASC], [table100_bigint.pk,
-DESC]), topn(7)
+       DESC]), topn(7)
   9 - output([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
-[table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), filter([table100_bigint.col_decimal_20_0_signed
-= cast(ROUND(SIGN(table100_bigint.col_decimal_20_0)), DECIMAL(-1, 0))]), rowset=256
+       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), f
+      ilter([table100_bigint.col_decimal_20_0_signed = cast(ROUND(SIGN(table100_bigint.col_decimal_20_0)), DECIMAL(-1, 0))]), rowset=256
       access([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
-[table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), partitions(p0)
+       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), p
+      artitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true
 SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk

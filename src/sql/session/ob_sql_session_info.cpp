@@ -129,8 +129,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       config_provider_(NULL),
       request_manager_(NULL),
       flt_span_mgr_(NULL),
-      sql_plan_manager_(NULL),
-      plan_table_manager_(NULL),
       plan_cache_(NULL),
       ps_cache_(NULL),
       found_rows_(1),
@@ -151,7 +149,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       pl_ps_protocol_(false),
       is_ob20_protocol_(false),
       is_session_var_sync_(false),
-      last_plan_id_(0),
       pl_sync_pkg_vars_(NULL),
       inner_conn_(NULL),
       encrypt_info_(),
@@ -232,19 +229,6 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     }
   }
   return ret;
-}
-
-void ObSQLSessionInfo::destroy_session_plan_mgr()
-{
-  int ret = OB_SUCCESS;
-  if (NULL != plan_table_manager_) {
-    MTL_SWITCH(get_priv_tenant_id()) {
-      ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
-      if (sql_plan_mgr != NULL) {
-        sql_plan_mgr->destroy_plan_table_manager(plan_table_manager_);
-      }
-    }
-  }
 }
 
 //for test
@@ -343,8 +327,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     int temp_ret = OB_SUCCESS;
     sql_req_level_ = 0;
     optimizer_tracer_.reset();
-    sql_plan_manager_ = NULL;
-    destroy_session_plan_mgr();
     expect_group_id_ = OB_INVALID_ID;
     group_id_not_expected_ = false;
     //call at last time
@@ -443,7 +425,6 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
     reset(skip_sys_var);
-    destroy_session_plan_mgr();
     is_inited_ = false;
     sql_req_level_ = 0;
   }
@@ -777,35 +758,6 @@ sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
     }
   }
   return flt_span_mgr_;
-}
-
-ObPlanItemMgr* ObSQLSessionInfo::get_sql_plan_manager()
-{
-  int ret = OB_SUCCESS;
-  if (NULL == sql_plan_manager_) {
-    MTL_SWITCH(get_priv_tenant_id()) {
-      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
-      if (sql_plan_mgr != NULL) {
-        sql_plan_manager_ = sql_plan_mgr->get_plan_item_mgr();
-      }
-    }
-  }
-  return sql_plan_manager_;
-}
-
-ObPlanItemMgr* ObSQLSessionInfo::get_plan_table_manager()
-{
-  int ret = OB_SUCCESS;
-  if (NULL == plan_table_manager_) {
-    MTL_SWITCH(get_priv_tenant_id()) {
-      ObSqlPlanMgr* sql_plan_mgr = MTL(ObSqlPlanMgr*);
-      if (NULL != sql_plan_mgr &&
-          OB_FAIL(sql_plan_mgr->init_plan_table_manager(plan_table_manager_))) {
-        LOG_WARN("failed to init plan table manager", K(ret));
-      }
-    }
-  }
-  return plan_table_manager_;
 }
 
 void ObSQLSessionInfo::set_show_warnings_buf(int error_code)

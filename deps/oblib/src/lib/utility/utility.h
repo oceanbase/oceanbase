@@ -182,7 +182,7 @@ void max(T, T) = delete;
 template<oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id = oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ObWaitEventGuard wait_guard(event_id, 0, (int64_t)v);
+  oceanbase::common::ObSleepEventGuard wait_guard(event_id, 0, (int64_t)v);
   ::usleep(v);
 }
 

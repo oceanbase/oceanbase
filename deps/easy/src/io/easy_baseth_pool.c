@@ -25,6 +25,9 @@ static void easy_baseth_pool_invoke_debug(struct ev_loop *loop);
 static int easy_monitor_interval = 100;
 static const int64_t easy_monitor_signal = 34;
 
+int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                      void *(*start_routine) (void *), void *arg);
+void ob_set_thread_name(const char* type);
 /**
  * start
  */
@@ -239,7 +242,7 @@ static void *easy_baseth_pool_monitor_func(void *args)
     int64_t                 loopcnts[tp->thread_count];
     int64_t                 slowcnts[tp->thread_count];
 
-    prctl(PR_SET_NAME, "EasyBasethPoolMonitor");
+    ob_set_thread_name("EasyBasethPoolMonitor");
 
     memset(loopcnts, 0, sizeof(loopcnts));
     memset(slowcnts, 0, sizeof(slowcnts));
@@ -319,7 +322,7 @@ void easy_baseth_pool_monitor(easy_thread_pool_t *tp)
       sigemptyset(&sa.sa_mask);
       rc = sigaction(easy_monitor_signal, &sa, NULL);
 
-      err = pthread_create(&tp->monitor_tid, NULL, easy_baseth_pool_monitor_func, tp);
+      err = ob_pthread_create(&tp->monitor_tid, NULL, easy_baseth_pool_monitor_func, tp);
       if (err != 0) {
         tp->monitor_tid = 0;
         easy_error_log("sigaction: %d, monitor_thread: 0x%lx, err:%d, errno:%d", rc, tp->monitor_tid, err, errno);

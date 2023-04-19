@@ -20,11 +20,13 @@ using namespace common;
 const static int64_t EXPLAIN_FORMAT = 0;
 const static int64_t EXPLAIN_DISPLAY_OPTION = 1;
 const static int64_t EXPLAIN_CHILD_STMT = 2;
+const static int64_t EXPLAIN_INTO_TABLE = 3;
+const static int64_t EXPLAIN_STMT_ID = 4;
 int ObExplainResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObExplainStmt *explain_stmt = NULL;
-  if (!(T_EXPLAIN == parse_tree.type_  && 3 == parse_tree.num_child_)) {
+  if (!(T_EXPLAIN == parse_tree.type_  && 5 == parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid EXPLAIN syntax",
              "type", parse_tree.type_,
@@ -33,9 +35,10 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
     ret = OB_SQL_RESOLVER_NO_MEMORY;
     LOG_WARN("failed to create explain stmt");
   } else {
-
     ParseNode *child_node = parse_tree.children_[EXPLAIN_CHILD_STMT];
     ObStmt *child_stmt = NULL;
+    ObExplainDisplayOpt opt;
+    opt.with_tree_line_ = true;
     if (OB_ISNULL(child_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("empty parse tree for stmt");
@@ -66,33 +69,41 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
           case T_OUTLINE:
           {
             explain_stmt->set_explain_format(EXPLAIN_OUTLINE);
+            opt.with_tree_line_ = true;
           } break;
           case T_EXTENDED:
           {
             explain_stmt->set_explain_format(EXPLAIN_EXTENDED);
+            opt.with_tree_line_ = true;
           } break;
           case T_PARTITIONS:
           {
             explain_stmt->set_explain_format(EXPLAIN_PARTITIONS);
+            opt.with_tree_line_ = true;
           } break;
           case T_TRADITIONAL:
           {
             explain_stmt->set_explain_format(EXPLAIN_TRADITIONAL);
+            opt.with_tree_line_ = true;
           } break;
           case T_FORMAT_JSON:
           {
             explain_stmt->set_explain_format(EXPLAIN_FORMAT_JSON);
+            opt.with_tree_line_ = false;
           } break;
           case T_BASIC: {
             explain_stmt->set_explain_format(EXPLAIN_BASIC);
+            opt.with_tree_line_ = true;
             break;
           }
           case T_EXTENDED_NOADDR: {
             explain_stmt->set_explain_format(EXPLAIN_EXTENDED_NOADDR);
+            opt.with_tree_line_ = true;
             break;
           }
           case T_PLANREGRESS: {
             explain_stmt->set_explain_format(EXPLAIN_PLANREGRESS);
+            opt.with_tree_line_ = true;
             break;
           }
           default:
@@ -105,7 +116,6 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
     }
     ParseNode *opt_node = parse_tree.children_[EXPLAIN_DISPLAY_OPTION];
     if (OB_SUCC(ret) && NULL != opt_node) {
-      ObExplainDisplayOpt opt;
       switch (opt_node->type_) {
       case T_PRETTY_COLOR:
         opt.with_color_ = true;
@@ -117,9 +127,19 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected display option", K(ret), K(opt_node->type_));
       }
-      if (OB_SUCC(ret)) {
-        explain_stmt->set_display_opt(opt);
-      }
+    }
+    if (OB_SUCC(ret)) {
+      explain_stmt->set_display_opt(opt);
+    }
+    ParseNode *into_table_node = parse_tree.children_[EXPLAIN_INTO_TABLE];
+    if (OB_SUCC(ret) && NULL != into_table_node) {
+      ObString into_table(into_table_node->str_len_, into_table_node->str_value_);
+      explain_stmt->set_into_table(into_table);
+    }
+    ParseNode *statement_id_node = parse_tree.children_[EXPLAIN_STMT_ID];
+    if (OB_SUCC(ret) && NULL != statement_id_node) {
+      ObString statement_id(statement_id_node->str_len_, statement_id_node->str_value_);
+      explain_stmt->set_statement_id(statement_id);
     }
   }
 

@@ -729,7 +729,6 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_pkg_body_udf(is_pkg_body_udf));
   OX (udf_raw_expr->set_type_id(type_id));
   OX (udf_raw_expr->set_is_aggregate_udf(is_pl_agg));
-  LOG_DEBUG("resolve_udf_common_info!!!", K(type_id), K(is_pl_agg));
   return ret;
 }
 
@@ -787,11 +786,10 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
       OX (udf_raw_expr->set_is_return_sys_cursor(true));
     }
     SET_RES_TYPE_BY_PL_TYPE(result_type, ret_pl_type);
-    if (lib::is_oracle_mode()
-        && OB_INVALID_ID != static_cast<const ObRoutineInfo *> (func_info)->get_package_id()
-        && is_sys_tenant(
-            pl::get_tenant_id_by_object_id(
-              static_cast<const ObRoutineInfo *>(func_info)->get_package_id()))
+    if (OB_SUCC(ret)
+        && lib::is_oracle_mode()
+        && OB_INVALID_ID != func_info->get_package_id()
+        && is_sys_tenant(pl::get_tenant_id_by_object_id(func_info->get_package_id()))
         && OB_NOT_NULL(ret_pl_type.get_data_type())
         && !(ret_pl_type.get_data_type()->get_meta_type().get_type() == ObLongTextType)
         && ob_is_string_type(ret_pl_type.get_data_type()->get_meta_type().get_type())) {
@@ -803,13 +801,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
     OX (udf_raw_expr->set_pls_type(ret_pl_type.get_pl_integer_type()));
     if (OB_FAIL(ret)) {
     } else if (!ret_pl_type.is_obj_type()) {
-      // if (ret_pl_type.is_udt_type()) {
-        OX (result_type.set_udt_id(ret_pl_type.get_user_type_id()));
-      // } else {
-      //   ret = OB_NOT_SUPPORTED;
-      //   LOG_WARN("not supported other type as function return type",
-      //            K(ret), K(ret_pl_type));
-      // }
+      OX (result_type.set_udt_id(ret_pl_type.get_user_type_id()));
     } else if (result_type.is_enum_or_set()) {
       const ObRoutineParam* r_param = static_cast<const ObRoutineParam*>(ret_param);
       CK (OB_NOT_NULL(r_param));
@@ -989,7 +981,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
       OZ (udf_raw_expr->add_param_expr(param_exprs.at(i)));
       OZ (udf_raw_expr->add_param_name(param_names.at(i)));
     }
-    CK ((udf_info.udf_param_num_ + param_exprs.count()) == udf_raw_expr->get_param_count());
+    OV ((udf_info.udf_param_num_ + param_exprs.count()) == udf_raw_expr->get_param_count(),
+      OB_ERR_UNEXPECTED, K(udf_info.udf_param_num_), K(param_exprs.count()), K(udf_raw_expr->get_param_count()));
   }
   if (OB_SUCC(ret)
       && (func_info->get_param_count() != udf_info.udf_param_num_ + param_exprs.count())) {
@@ -1125,7 +1118,7 @@ do {                                                                            
     }
   }
   OZ (pl::ObPLResolver::resolve_nocopy_params(func_info, udf_info));
-  CK (udf_raw_expr->get_params_desc().count() == udf_raw_expr->get_param_count());
+  OV (udf_raw_expr->get_params_desc().count() == udf_raw_expr->get_param_count(), OB_ERR_UNEXPECTED, KPC(udf_raw_expr));
   return ret;
 }
 
@@ -1152,135 +1145,29 @@ int ObRawExprUtils::rebuild_expr_params(ObUDFInfo &udf_info,
   return ret;
 }
 
-int ObRawExprUtils::init_udf_info(ObResolverParams &params,
-                                  ObUDFInfo &udf_info)
+int ObRawExprUtils::resolve_udf_info(common::ObIAllocator &allocator,
+                                     sql::ObRawExprFactory &expr_factory,
+                                     sql::ObSQLSessionInfo &session_info,
+                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     ObUDFInfo &udf_info)
 {
   int ret = OB_SUCCESS;
-  ObString db_name;
-  ObString package_name;
-  ObString udf_name;
-  CK (OB_NOT_NULL(params.schema_checker_));
-  CK (OB_NOT_NULL(params.session_info_));
-  CK (OB_NOT_NULL(params.allocator_));
-  CK (OB_NOT_NULL(GCTX.sql_proxy_));
-  OZ (ObResolverUtils::resolve_udf_name(*params.schema_checker_,
-                                        *params.session_info_,
-                                        udf_info,
-                                        db_name,
-                                        package_name,
-                                        udf_name));
-  if (OB_SUCC(ret) && db_name.empty()) {
-    db_name = params.session_info_->get_database_name();
-  }
-  if (OB_SUCC(ret) && db_name.empty()) {
-    ret = OB_ERR_NO_DB_SELECTED;
-    LOG_WARN("no database selected", K(ret), K(db_name));
-  }
-  if(OB_SUCC(ret)) {
-    const ObPackageInfo *package_info = NULL;
-    const ObRoutineInfo *func_info = NULL;
-    ObSEArray<ObRawExpr*, 8> expr_params;
-    if (OB_FAIL(rebuild_expr_params(udf_info, params.expr_factory_, expr_params))) {
-      LOG_WARN("failed to rebuild expr params", K(ret), K(udf_info));
-    } else if (OB_FAIL(ObResolverUtils::get_routine(params,
-                                             params.session_info_->get_effective_tenant_id(),
-                                             params.session_info_->get_database_name(),
-                                             db_name,
-                                             package_name,
-                                             udf_name,
-                                             ROUTINE_FUNCTION_TYPE,
-                                             expr_params,
-                                             func_info))) {
-      ret = OB_ERR_SP_DOES_NOT_EXIST == ret ? OB_ERR_FUNCTION_UNKNOWN : ret;
-      LOG_WARN("failed to get routine info",
-               K(db_name), K(udf_info.udf_package_), K(udf_info.udf_name_), K(ret));
-    } else if (OB_ISNULL(func_info)) {
-      ret = OB_ERR_FUNCTION_UNKNOWN;
-      LOG_WARN("stored function not exists", K(ret), K(udf_info.udf_name_), K(db_name));
-      LOG_USER_ERROR(OB_ERR_FUNCTION_UNKNOWN, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
-    } else if (!func_info->is_function()) {
-      ret = OB_ERR_FUNCTION_UNKNOWN;
-      LOG_WARN("user define function must be stored function, but got a procedure",
-               K(ret), K(db_name), K(package_name), K(udf_name), K(func_info->is_function()));
-      LOG_USER_ERROR(OB_ERR_FUNCTION_UNKNOWN, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+  pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
+  pl::ObPLResolver pl_resolver(allocator,
+                               session_info,
+                               schema_guard,
+                               dummy_pkg_guard,
+                               *GCTX.sql_proxy_,
+                               expr_factory,
+                               NULL,
+                               false);
+  HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
+    ObSEArray<pl::ObObjAccessIdx, 1> access_idxs;
+    if (OB_FAIL(pl_resolver.init(func_ast))) {
+      LOG_WARN("pl resolver init failed", K(ret));
+    } else if (OB_FAIL(pl_resolver.resolve_udf_info(udf_info, access_idxs, func_ast))) {
+      LOG_WARN("failed to resolve udf info", K(ret));
     }
-    if (OB_SUCC(ret) && func_info->is_udt_routine() && !func_info->is_udt_static_routine()) {
-      ret = OB_ERR_CALL_WRONG_ARG;
-      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, func_info->get_routine_name().length(),
-                                            func_info->get_routine_name().ptr());
-    }
-    if (OB_SUCC(ret) && func_info->is_udt_routine()) {
-      udf_info.is_udt_udf_ = true;
-    }
-    if (OB_SUCC(ret) && OB_INVALID_ID != func_info->get_package_id()) {
-      CK (OB_NOT_NULL(params.schema_checker_));
-      CK (OB_NOT_NULL(params.schema_checker_->get_schema_guard()));
-      OZ (params.schema_checker_->get_schema_guard()
-            ->get_package_info(func_info->get_tenant_id(),
-                               func_info->get_package_id(), package_info));
-      CK (OB_NOT_NULL(package_info));
-    }
-    OZ (resolve_udf_common_info(db_name,
-                                package_name,
-                                OB_INVALID_ID == func_info->get_package_id()
-                                  ? func_info->get_routine_id()
-                                    : func_info->get_subprogram_id(),
-                                func_info->get_package_id(),
-                                ObArray<int64_t>(),
-                                OB_INVALID_ID == func_info->get_package_id()
-                                  ? func_info->get_schema_version()
-                                    : common::OB_INVALID_VERSION,
-                                OB_INVALID_ID == func_info->get_package_id()
-                                  ? common::OB_INVALID_VERSION
-                                    : package_info->get_schema_version(),
-                                func_info->is_deterministic(),
-                                func_info->is_parallel_enable(),
-                                false, /*is_pkg_body_udf*/
-                                func_info->is_aggregate(),
-                                func_info->get_type_id(),
-                                udf_info));
-    OZ (resolve_udf_param_types(func_info,
-                                *(params.schema_checker_->get_schema_mgr()),
-                                *(params.session_info_),
-                                *(params.allocator_),
-                                *(GCTX.sql_proxy_),
-                                udf_info));
-    OZ (resolve_udf_param_exprs(params, func_info, udf_info));
-  }
-  return ret;
-}
-
-int ObRawExprUtils::init_udfs_info(ObResolverParams &params,
-                                   ObIArray<ObUDFInfo> &udfs_info)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < udfs_info.count(); ++i) {
-    if (OB_FAIL(init_udf_info(params, udfs_info.at(i)))) {
-      LOG_WARN("init user define function failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObRawExprUtils::init_udf_info(pl::ObPLResolveCtx &resolve_ctx,
-                                  sql::ObRawExprFactory &expr_factory,
-                                  ObUDFInfo &udf_info)
-{
-  int ret = OB_SUCCESS;
-  ObResolverParams params;
-  ObSchemaChecker schema_checker;
-  if (OB_FAIL(schema_checker.init(resolve_ctx.schema_guard_))) {
-    LOG_WARN("failed to init schema checker", K(ret));
-  } else {
-    params.schema_checker_ = &(schema_checker);
-    params.session_info_ = &(resolve_ctx.session_info_);
-    params.allocator_ = &(resolve_ctx.allocator_);
-    params.is_prepare_protocol_ = resolve_ctx.is_prepare_protocol_;
-    params.expr_factory_ = &(expr_factory);
-    params.sql_proxy_ = &(resolve_ctx.sql_proxy_);
-  }
-  if (OB_SUCC(ret) && OB_FAIL(init_udf_info(params, udf_info))) {
-    LOG_WARN("failed to init udf info", K(ret));
   }
   return ret;
 }

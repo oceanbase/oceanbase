@@ -70,17 +70,17 @@ insert into score values
 (64, 'MA', 87);
 explain select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid = score.sid;
 Query Plan
-===========================================================
-|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |PX COORDINATOR         |        |1       |13          |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1       |12          |
-|2 |  PX PARTITION ITERATOR|        |1       |11          |
-|3 |   MERGE JOIN          |        |1       |11          |
-|4 |    TABLE SCAN         |score   |1       |6           |
-|5 |    SORT               |        |1       |6           |
-|6 |     TABLE SCAN        |stu     |1       |6           |
-===========================================================
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |13          |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |12          |
+|2 |  └─PX PARTITION ITERATOR|        |1       |11          |
+|3 |    └─MERGE JOIN         |        |1       |11          |
+|4 |      ├─TABLE FULL SCAN  |score   |1       |6           |
+|5 |      └─SORT             |        |1       |6           |
+|6 |        └─TABLE FULL SCAN|stu     |1       |6           |
+=============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256

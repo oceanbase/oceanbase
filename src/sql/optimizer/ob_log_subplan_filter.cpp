@@ -182,7 +182,7 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(BUF_PRINTF(", "))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("batch_das=%s",
+  } else if (OB_FAIL(BUF_PRINTF("use_batch=%s",
             enable_das_batch_rescans_ ? "true" : "false"))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else { /* Do nothing */ }

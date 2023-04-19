@@ -671,35 +671,6 @@ int ObOptEstCost::stat_estimate_single_range_rc(const ObCostTableScanInfo &est_c
   return ret;
 }
 
-const char * ObOptEstCost::get_method_name(const RowCountEstMethod method)
-{
-  const char *ret = "unknown";
-  switch (method) {
-    case INVALID_METHOD:
-      ret = "invalid_method";
-      break;
-    case DEFAULT_STAT:
-      ret = "default_stat";
-      break;
-    case BASIC_STAT:
-      ret = "basic_stat";
-      break;
-    case HISTOGRAM:
-      ret = "histogram";
-      break;
-    case LOCAL_STORAGE:
-      ret = "local_storage";
-      break;
-    case REMOTE_STORAGE:
-      ret = "remote_storage";
-      break;
-    default:
-      ret = "unknown";
-      break;
-  }
-  return ret;
-}
-
 ObOptEstCostModel &ObOptEstCost::get_model(MODEL_TYPE model_type)
 {
   if (VECTOR_MODEL == model_type) {

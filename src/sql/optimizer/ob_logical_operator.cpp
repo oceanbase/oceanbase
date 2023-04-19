@@ -57,7 +57,6 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/ob_log_merge.h"
-#include "sql/monitor/ob_sql_plan_manager.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::share;

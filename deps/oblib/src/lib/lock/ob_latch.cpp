@@ -22,8 +22,9 @@ namespace oceanbase
 namespace common
 {
 bool USE_CO_LATCH = false;
-thread_local uint32_t* ObLatch::current_lock = nullptr;
+thread_local uint32_t* ObLatch::current_locks[16];
 thread_local uint32_t* ObLatch::current_wait = nullptr;
+thread_local int8_t ObLatch::max_lock_slot_idx = 0;
 
 class ObLatchWaitEventGuard : public ObWaitEventGuard
 {
@@ -72,7 +73,7 @@ int ObLatchMutex::try_lock(
     if (!ATOMIC_BCAS(&lock_.val(), 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
     } else {
-      ObLatch::current_lock = (uint32_t*)&lock_.val();
+      IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&lock_.val());
     }
     if (need_record_stat()) {
       TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
@@ -183,7 +184,7 @@ int ObLatchMutex::unlock()
 {
   int ret = OB_SUCCESS;
   uint32_t lock = ATOMIC_SET(&lock_.val(), 0);
-  ObLatch::current_lock = nullptr;
+  IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&lock_.val());
   if (OB_UNLIKELY(0 == lock)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid lock,", K(lock), K(ret));
@@ -609,7 +610,7 @@ int ObLatch::try_rdlock(const uint32_t latch_id)
           ++i;
           if (ATOMIC_BCAS(&lock_, lock, lock + 1)) {
             ret = OB_SUCCESS;
-            ObLatch::current_lock = (uint32_t*)&lock_;
+            IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
             break;
           }
         }
@@ -639,7 +640,7 @@ int ObLatch::try_wrlock(const uint32_t latch_id, const uint32_t *puid)
     if (!ATOMIC_BCAS(&lock_, 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
     } else {
-      ObLatch::current_lock = (uint32_t*)&lock_;
+      IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
     }
     if (need_record_stat()) {
       TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
@@ -710,7 +711,7 @@ int ObLatch::wr2rdlock(const uint32_t *puid)
       lock = lock_;
       PAUSE();
     }
-    ObLatch::current_lock = (uint32_t*)&lock_;
+    IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
     bool only_rd_wait = true;
     if (OB_FAIL(ObLatchWaitQueue::get_instance().wake_up(*this, only_rd_wait))) {
       COMMON_LOG(ERROR, "Fail to wake up latch wait queue, ", K(this), K(ret));
@@ -732,11 +733,11 @@ int ObLatch::unlock(const uint32_t *puid)
       COMMON_LOG(ERROR, "The latch is not write locked by the uid, ", K(uid), K(wid), KCSTRING(lbt()), K(ret));
     } else {
       lock = ATOMIC_ANDF(&lock_, WAIT_MASK);
-      ObLatch::current_lock = nullptr;
+      IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
     }
   } else if ((lock & (~WAIT_MASK)) > 0) {
     lock = ATOMIC_AAF(&lock_, -1);
-    ObLatch::current_lock = nullptr;
+    IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid lock,", K(lock), K(ret));

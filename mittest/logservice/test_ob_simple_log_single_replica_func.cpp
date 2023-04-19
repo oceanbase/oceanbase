@@ -620,9 +620,94 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
   sleep(1);
   EXPECT_EQ(OB_ERR_UNEXPECTED, restart_paxos_groups());
   system(log_fd);
+  PALF_LOG(INFO, "first restart_paxos_groups");
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
-  PalfHandleImplGuard leader;
-  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+
+  // 验证切文件过程中宕机重启
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 33, id, MAX_LOG_BODY_SIZE));
+    wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
+    block_id_t min_block_id, max_block_id;
+    LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+    LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
+    EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+    EXPECT_EQ(1, max_block_id);
+    // 模拟只switch block，但没有更新manifest, 此时manifest依旧是1, 宕机重启后由于2号文件为空，manifest会被更新为2
+    EXPECT_EQ(OB_SUCCESS, log_storage->truncate(LSN(PALF_BLOCK_SIZE)));
+    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(1));
+    EXPECT_EQ(PALF_BLOCK_SIZE, log_storage->curr_block_writable_size_);
+    EXPECT_EQ(1, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+  }
+  PALF_LOG(INFO, "second restart_paxos_groups");
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    //检查manifest是否为3
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
+    EXPECT_EQ(2, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+  }
+  PALF_LOG(INFO, "third restart_paxos_groups");
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  // 验证重启后新建日志流
+  {
+    PalfHandleImplGuard leader;
+    id = ATOMIC_AAF(&palf_id_, 1);
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 66, id, MAX_LOG_BODY_SIZE));
+    wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
+    EXPECT_EQ(OB_ITER_END, read_log(leader));
+  }
+  // 验证truncate或flashback过程中，修改完manifest后，删除文件前宕机重启（删除1个文件）
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    block_id_t min_block_id, max_block_id;
+    // 此时manifest为3
+    LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+    LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
+    EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+    EXPECT_EQ(2, max_block_id);
+    EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+    // truncate 或 flashback会先更新manifest为2
+    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(2));
+    EXPECT_EQ(2, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+  }
+  // 验证truncate或flashback过程中，修改完manifest后，truncaet/flashback正好将最后一个文件空
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    block_id_t min_block_id, max_block_id;
+    // 此时manifest为2
+    LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+    LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
+    EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+    EXPECT_EQ(2, max_block_id);
+    // 尽管manifest为2，但在这种场景下，2号文件是可以删除的
+    EXPECT_EQ(2, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+    EXPECT_EQ(OB_SUCCESS, log_storage->truncate(LSN(2*PALF_BLOCK_SIZE)));
+    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(2));
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    block_id_t min_block_id, max_block_id;
+    // 重启之后，由于磁盘上最大的文件为2，同时该文件为空，此时会更新manifest为3
+    LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+    LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
+    EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+    EXPECT_EQ(2, max_block_id);
+    EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
+    EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+  }
 }
 
 TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator)

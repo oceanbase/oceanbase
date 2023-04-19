@@ -482,10 +482,9 @@ int ObTableScanSpec::explain_index_selection_info(
   int ret = OB_SUCCESS;
   if (OB_FAIL(BUF_PRINTF(
                 "table_rows:%ld, physical_range_rows:%ld, logical_range_rows:%ld, "
-                "index_back_rows:%ld, output_rows:%ld, est_method:%s",
+                "index_back_rows:%ld, output_rows:%ld",
                 table_row_count_, phy_query_range_row_count_, query_range_row_count_,
-                index_back_row_count_, output_row_count_,
-                ObOptEstCost::get_method_name(estimate_method_)))) {
+                index_back_row_count_, output_row_count_))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   }
   if (OB_SUCC(ret) && available_index_name_.count() > 0) {

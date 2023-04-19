@@ -92,6 +92,7 @@ ob_set_subtarget(ob_sql dtl
 ob_set_subtarget(ob_sql engine
   engine/ob_des_exec_context.cpp
   engine/ob_exec_context.cpp
+  engine/ob_exec_feedback_info.cpp
   engine/ob_operator.cpp
   engine/ob_operator_factory.cpp
   engine/ob_phy_operator_type.cpp
@@ -784,7 +785,6 @@ ob_set_subtarget(ob_sql monitor
   monitor/flt/ob_flt_extra_info.cpp
   monitor/flt/ob_flt_span_mgr.cpp
   monitor/flt/ob_flt_utils.cpp
-  monitor/ob_sql_plan_manager.cpp
   monitor/ob_sql_plan.cpp
   monitor/ob_plan_info_manager.cpp
 )

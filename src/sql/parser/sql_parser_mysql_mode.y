@@ -34,7 +34,7 @@
 
 extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
 
-#define GEN_EXPLAN_STMT(no_use, explain_stmt, explain_type, display_type, stmt) \
+#define GEN_EXPLAN_STMT(no_use, explain_stmt, explain_type, display_type, stmt, into_table, set_statement_id) \
   (void)(no_use); \
   ParseNode *type_node = NULL; \
   ParseNode *display_node = NULL; \
@@ -44,8 +44,8 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
   if (0 != display_type) { \
     malloc_terminal_node(display_node, result->malloc_pool_, display_type); \
   } \
-  malloc_non_terminal_node(explain_stmt, result->malloc_pool_, T_EXPLAIN, 3, \
-                           type_node, display_node, stmt);
+  malloc_non_terminal_node(explain_stmt, result->malloc_pool_, T_EXPLAIN, 5, \
+                           type_node, display_node, stmt, into_table, set_statement_id);
 
 %}
 
@@ -330,7 +330,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION STOP STORAGE STORAGE_FORMAT_VERSION STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG 
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
@@ -1009,7 +1009,11 @@ INTNUM { $$ = $1; $$->param_num_ = 1;}
 ;
 
 expr_const:
-literal { $$ = $1; }
+literal
+{
+  $$ = $1;
+  CHECK_MYSQL_COMMENT(result, $$);
+}
 | SYSTEM_VARIABLE { $$ = $1; }
 | QUESTIONMARK { $$ = $1; }
 | global_or_session_alias '.' column_name
@@ -2675,18 +2679,19 @@ MOD '(' expr ',' expr ')'
 }
 | relation_name '.' function_name '(' opt_expr_as_list ')'
 {
+  ParseNode *params = NULL;
+  ParseNode *function = NULL;
+  ParseNode *sub_obj_access_ref = NULL;
+  ParseNode *udf_node = NULL;
   if (NULL != $5)
   {
-    ParseNode *params = NULL;
     merge_nodes(params, result, T_EXPR_LIST, $5);
-    malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_UDF, 4, $3, params, $1, NULL);
-    store_pl_ref_object_symbol($$, result, REF_FUNC);
   }
-  else
-  {
-    malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_UDF, 4, $3, NULL, $1, NULL);
-    store_pl_ref_object_symbol($$, result, REF_FUNC);
-  }
+  malloc_non_terminal_node(function, result->malloc_pool_, T_FUN_SYS, 2, $3, params);
+  malloc_non_terminal_node(sub_obj_access_ref, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, function, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, $1, sub_obj_access_ref);
+  malloc_non_terminal_node(udf_node, result->malloc_pool_, T_FUN_UDF, 4, $3, params, $1, NULL);
+  store_pl_ref_object_symbol(udf_node, result, REF_FUNC);
 }
 | sys_interval_func
 {
@@ -9392,7 +9397,7 @@ expr %prec LOWER_PARENS
     }
     else
     {
-      if (0 == $$->str_len_) {
+      if (0 == $1->str_len_) {
         $$->str_value_ = $1->str_value_;
         $$->str_len_ = $1->str_len_;
       } else {
@@ -10779,38 +10784,42 @@ explain_or_desc relation_factor opt_desc_column_option
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_COLUMNS, 4, $$, $2, NULL, $3);
 }
 
-| explain_or_desc explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, 0, $2); }
-| explain_or_desc PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, T_PRETTY, $3); }
-| explain_or_desc PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, T_PRETTY_COLOR, $3); }
+| explain_or_desc explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, 0, $2, NULL, NULL);}
+| explain_or_desc PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, T_PRETTY, $3, NULL, NULL);}
+| explain_or_desc PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, T_PRETTY_COLOR, $3, NULL, NULL);}
 
-| explain_or_desc BASIC explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, 0, $3); }
-| explain_or_desc BASIC PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, T_PRETTY, $4); }
-| explain_or_desc BASIC PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, T_PRETTY_COLOR, $4); }
+| explain_or_desc BASIC explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, 0, $3, NULL, NULL);}
+| explain_or_desc BASIC PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc BASIC PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_BASIC, T_PRETTY_COLOR, $4, NULL, NULL);}
 
-| explain_or_desc OUTLINE explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, 0, $3); }
-| explain_or_desc OUTLINE PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, T_PRETTY, $4); }
-| explain_or_desc OUTLINE PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, T_PRETTY_COLOR, $4); }
+| explain_or_desc OUTLINE explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, 0, $3, NULL, NULL);}
+| explain_or_desc OUTLINE PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc OUTLINE PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_OUTLINE, T_PRETTY_COLOR, $4, NULL, NULL);}
 
-| explain_or_desc EXTENDED explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, 0, $3); }
-| explain_or_desc EXTENDED PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, T_PRETTY, $4); }
-| explain_or_desc EXTENDED PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, T_PRETTY_COLOR, $4); }
+| explain_or_desc EXTENDED explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, 0, $3, NULL, NULL);}
+| explain_or_desc EXTENDED PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc EXTENDED PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED, T_PRETTY_COLOR, $4, NULL, NULL);}
 
-| explain_or_desc EXTENDED_NOADDR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, 0, $3); }
-| explain_or_desc EXTENDED_NOADDR PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, T_PRETTY, $4); }
-| explain_or_desc EXTENDED_NOADDR PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, T_PRETTY_COLOR, $4); }
+| explain_or_desc EXTENDED_NOADDR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, 0, $3, NULL, NULL);}
+| explain_or_desc EXTENDED_NOADDR PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc EXTENDED_NOADDR PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_EXTENDED_NOADDR, T_PRETTY_COLOR, $4, NULL, NULL);}
 
-| explain_or_desc PLANREGRESS explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, 0, $3); }
-| explain_or_desc PLANREGRESS PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, T_PRETTY, $4); }
-| explain_or_desc PLANREGRESS PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, T_PRETTY_COLOR, $4); }
+| explain_or_desc PLANREGRESS explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, 0, $3, NULL, NULL);}
+| explain_or_desc PLANREGRESS PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc PLANREGRESS PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PLANREGRESS, T_PRETTY_COLOR, $4, NULL, NULL);}
 
-| explain_or_desc PARTITIONS explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, 0, $3); }
-| explain_or_desc PARTITIONS PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, T_PRETTY, $4); }
-| explain_or_desc PARTITIONS PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, T_PRETTY_COLOR, $4); }
+| explain_or_desc PARTITIONS explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, 0, $3, NULL, NULL);}
+| explain_or_desc PARTITIONS PRETTY explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, T_PRETTY, $4, NULL, NULL);}
+| explain_or_desc PARTITIONS PRETTY_COLOR explainable_stmt { GEN_EXPLAN_STMT($1, $$, T_PARTITIONS, T_PRETTY_COLOR, $4, NULL, NULL);}
+
+| explain_or_desc SET STATEMENT_ID COMP_EQ literal explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, 0, $6, NULL, $5); }
+| explain_or_desc INTO relation_name explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, 0, $4, $3, 0); }
+| explain_or_desc INTO relation_name SET STATEMENT_ID COMP_EQ literal explainable_stmt { GEN_EXPLAN_STMT($1, $$, 0, 0, $8, $3, $7); }
 
 | explain_or_desc FORMAT COMP_EQ format_name explainable_stmt
 {
   (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_EXPLAIN, 3, $4, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXPLAIN, 5, $4, NULL, $5, NULL, NULL);
 }
 ;
 
@@ -17308,6 +17317,7 @@ ACCOUNT
 |       BACKED
 |       NAMESPACE
 |       LIB
+|       STATEMENT_ID
 ;
 
 unreserved_keyword_special:

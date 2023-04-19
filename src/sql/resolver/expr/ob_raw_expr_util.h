@@ -807,9 +807,11 @@ public:
   static int rebuild_expr_params(ObUDFInfo &udf_info,
                                  sql::ObRawExprFactory *expr_factory,
                                  common::ObIArray<sql::ObRawExpr*> &expr_params);
-  static int init_udf_info(ObResolverParams &params, ObUDFInfo &udf_info);
-  static int init_udf_info(pl::ObPLResolveCtx &resolve_ctx, sql::ObRawExprFactory &expr_factory, ObUDFInfo &udf_info);
-  static int init_udfs_info(ObResolverParams &params, common::ObIArray<ObUDFInfo> &udfs_info);
+  static int resolve_udf_info(common::ObIAllocator &allocator,
+                              sql::ObRawExprFactory &expr_factory,
+                              sql::ObSQLSessionInfo &session_info,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              ObUDFInfo &udf_info);
   //判断expr里是否包含字符串前缀的表达式
   static bool has_prefix_str_expr(const ObRawExpr &expr,
                                   const ObColumnRefRawExpr &orig_column_expr,

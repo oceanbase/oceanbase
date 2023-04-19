@@ -520,7 +520,7 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
 
 int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
-  int64_t value = ObConfigCapacityParser::get(str, valid);
+  int64_t value = ObConfigCapacityParser::get(str, valid, false);
   if (!valid) {
       OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set capacity error", "name", name(), K(str), K(valid));
   }

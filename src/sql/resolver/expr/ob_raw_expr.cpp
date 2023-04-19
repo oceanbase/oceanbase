@@ -94,7 +94,7 @@ int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRaw
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
 {
   UNUSED(mode); //TODO: @ryan.ly @yuming.wyc
-  bool maybe_column = !is_sys_func() && !is_pl_udf() && !is_dll_udf() && !is_pl_var();
+  bool maybe_column = !is_sys_func() && !is_pl_udf() && !is_dll_udf() && !is_pl_var() && !is_udf_return_access();
   for (int64_t i = 0; maybe_column && i < access_idents_.count(); ++i) {
     if (access_idents_.at(i).access_name_.empty() || access_idents_.at(i).access_index_ != OB_INVALID_INDEX) {
       maybe_column = false;
@@ -2638,7 +2638,8 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
       //do nothing
     }
     break;
-    case pl::ObObjAccessIdx::IS_UDF_NS: {
+    case pl::ObObjAccessIdx::IS_UDF_NS:
+    case pl::ObObjAccessIdx::IS_UDT_NS: {
       //do nothing
     }
     break;
@@ -4203,7 +4204,7 @@ int ObCollectionConstructRawExpr::get_schema_object_version(share::schema::ObSch
   CK (coll_schema_version_ != OB_INVALID_VERSION);
   CK (udt_id_ != common::OB_INVALID_ID);
   OX (obj_version.object_id_ = udt_id_);
-  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
   OX (obj_version.version_ = coll_schema_version_);
 
   return ret;
@@ -4296,7 +4297,7 @@ int ObObjectConstructRawExpr::get_schema_object_version(share::schema::ObSchemaO
   CK (object_schema_version_ != OB_INVALID_VERSION);
   CK (udt_id_ != common::OB_INVALID_ID);
   OX (obj_version.object_id_ = udt_id_);
-  OX (obj_version.object_type_ = share::schema::DEPENDENCY_FUNCTION);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
   OX (obj_version.version_ = object_schema_version_);
 
   return ret;

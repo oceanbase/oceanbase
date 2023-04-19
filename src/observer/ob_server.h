@@ -239,6 +239,7 @@ public:
   sql::ObConnectResourceMgr& get_conn_res_mgr() { return conn_res_mgr_; }
   obrpc::ObTableRpcProxy &get_table_rpc_proxy() { return table_rpc_proxy_; }
   share::ObLocationService &get_location_service() { return location_service_; }
+  bool is_arbitration_mode() const;
 private:
   int stop();
 
@@ -300,7 +301,6 @@ private:
   int parse_mode();
 
   // ------------------------------- arb server start ------------------------------------
-  bool is_arbitration_mode() const;
   int start_sig_worker_and_handle();
   int init_server_in_arb_mode();
   int start_server_in_arb_mode();

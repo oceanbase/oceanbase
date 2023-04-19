@@ -15,6 +15,8 @@ namespace sql
 class ObLogPlan;
 class ObSQLSessionInfo;
 class ObLogicalOperator;
+class ObPhysicalPlan;
+class ObExecContext;
 struct ObSqlPlanItem;
 struct ObQueryCtx;
 struct ObExplainDisplayOpt;
@@ -116,13 +118,13 @@ private:
 public:
   ObSqlPlan(common::ObIAllocator &allocator);
   virtual ~ObSqlPlan();
-  int store_sql_plan(ObLogPlan* plan,
-                     int64_t plan_id,
-                     uint64_t plan_hash,
-                     ObString &sql_id);
+  int store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan);
 
-  int store_sql_plan_for_explain(ObLogPlan* plan,
+  int store_sql_plan_for_explain(ObExecContext *ctx,
+                                 ObLogPlan* plan,
                                  ExplainType type,
+                                 const ObString& plan_table,
+                                 const ObString& statement_id,
                                  const ObExplainDisplayOpt& option,
                                  ObIArray<common::ObString> &plan_strs);
 
@@ -131,25 +133,11 @@ public:
                      const ObExplainDisplayOpt& option,
                      ObIArray<common::ObString> &plan_strs);
 
-  int get_sql_plan(const ObString &sql_id,
-                   int64_t plan_id,
-                   ExplainType type,
-                   const ObExplainDisplayOpt& option,
-                   ObIArray<ObPlanRealInfo> &plan_infos,
-                   PlanText &plan_text);
 
-  int get_sql_plan_by_hash(const ObString &sql_id,
-                          uint64_t plan_hash,
-                          ExplainType type,
-                          const ObExplainDisplayOpt& option,
-                          ObIArray<ObPlanRealInfo> &plan_infos,
-                          PlanText &plan_text);
-
-  int get_last_explain_plan(ExplainType type,
-                            const ObExplainDisplayOpt& option,
-                            PlanText &plan_text);
-
-  void set_session_info(ObSQLSessionInfo *session_info);
+  int format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+                      ExplainType type,
+                      const ObExplainDisplayOpt& option,
+                      PlanText &plan_text);
 
   static int get_plan_outline_info_one_line(PlanText &plan_text,
                                             ObLogPlan* plan);
@@ -161,13 +149,14 @@ public:
                                   ObIArray<common::ObString> &plan_strs);
 
 private:
-  int set_plan_id_for_explain(ObIArray<ObSqlPlanItem*> &sql_plan_infos);
+  int inner_store_sql_plan_for_explain(ObExecContext *ctx,
+                                      const ObString& plan_table,
+                                      const ObString& statement_id,
+                                      ObIArray<ObSqlPlanItem*> &sql_plan_infos);
 
-  int set_plan_id_for_excute(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
-                             int64_t plan_id,
-                             uint64_t plan_hash,
-                             ObString &sql_id,
-                             PlanText &plan_text);
+  int escape_quotes(ObSqlPlanItem &plan_item);
+
+  int inner_escape_quotes(char* &ptr, int64_t &length);
 
   int get_sql_plan_infos(PlanText &plan_text,
                          ObLogPlan* plan,
@@ -224,21 +213,12 @@ private:
                             int64_t &pos,
                             const ObExprConstraint &info);
 
-  int inner_store_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos, bool for_explain);
-
-  int format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
-                      ExplainType type,
-                      const ObExplainDisplayOpt& option,
-                      ObIArray<ObPlanRealInfo> &plan_infos,
-                      PlanText &plan_text);
-
   int get_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                                const ObExplainDisplayOpt& option,
                                PlanFormatHelper &format_helper);
 
   int get_real_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                                     const ObExplainDisplayOpt& option,
-                                    ObIArray<ObPlanRealInfo> &plan_infos,
                                     PlanFormatHelper &format_helper);
 
   int get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
@@ -255,7 +235,6 @@ private:
 
   int format_real_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                             const ObExplainDisplayOpt& option,
-                            ObIArray<ObPlanRealInfo> &plan_infos,
                             PlanText &plan_text);
 
   int format_plan_output(ObIArray<ObSqlPlanItem*> &sql_plan_infos, PlanText &plan_text);
@@ -276,17 +255,26 @@ private:
                                 int64_t info_idx,
                                 json::Value *&ret_val);
 
+  bool is_exchange_out_operator(ObSqlPlanItem *item);
+
   int init_buffer(PlanText &plan_text);
 
   void destroy_buffer(PlanText &plan_text);
 
   int refine_buffer(PlanText &plan_text);
 
+public:
+  static int format_one_output_expr(char *buf,
+                                    int64_t buf_len,
+                                    int64_t &pos,
+                                    int &line_begin_pos,
+                                    const char* expr_info,
+                                    int expr_len);
+
   DISALLOW_COPY_AND_ASSIGN(ObSqlPlan);
 
 private:
   common::ObIAllocator &allocator_;
-  ObSQLSessionInfo *session_info_;
 };
 
 } // end of namespace sql

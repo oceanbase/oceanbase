@@ -2631,7 +2631,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
         ObLLVMValue array_value;
         ObLLVMValue nocopy_array_value;
         uint64_t package_id = s.get_package_id();
-        package_id = 1 == s.get_is_object_udf()
+        package_id = (1 == s.get_is_object_udf())
                           ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
         if (OB_FAIL(args.push_back(generator_.get_vars().at(generator_.CTX_IDX)))) { //PL的执行环境
           LOG_WARN("push_back error", K(ret));

@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX CLIENT
 
 #include "ob_table_load_rpc_struct.h"
+#include "observer/table_load/ob_table_load_utils.h"
 
 namespace oceanbase
 {
@@ -30,21 +31,57 @@ OB_SERIALIZE_MEMBER(ObTableLoadBeginResult,
                     status_,
                     error_code_);
 
-OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerRequest,
-                    credential_,
-                    table_id_,
-                    config_,
-                    column_count_,
-                    dup_action_,
-                    px_mode_,
-                    online_opt_stat_gather_,
-                    dest_table_id_,
-                    task_id_,
-                    schema_version_,
-                    snapshot_version_,
-                    data_version_,
-                    partition_id_array_,
-                    target_partition_id_array_);
+OB_DEF_SERIALIZE(ObTableLoadPreBeginPeerRequest)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, credential_, table_id_, config_, column_count_, dup_action_, px_mode_,
+              online_opt_stat_gather_, snapshot_version_, dest_table_id_, task_id_, schema_version_,
+              snapshot_version_, data_version_, partition_id_array_, target_partition_id_array_);
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret));
+    } else {
+      OB_UNIS_ENCODE(*session_info_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObTableLoadPreBeginPeerRequest)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, credential_, table_id_, config_, column_count_, dup_action_, px_mode_,
+              online_opt_stat_gather_, snapshot_version_, dest_table_id_, task_id_, schema_version_,
+              snapshot_version_, data_version_, partition_id_array_, target_partition_id_array_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(observer::ObTableLoadUtils::create_session_info(session_info_, free_session_ctx_))) {
+      LOG_WARN("fail to init session info", KR(ret));
+    } else {
+      OB_UNIS_DECODE(*session_info_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTableLoadPreBeginPeerRequest)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, credential_, table_id_, config_, column_count_, dup_action_,
+              px_mode_, online_opt_stat_gather_, snapshot_version_, dest_table_id_, task_id_,
+              schema_version_, snapshot_version_, data_version_, partition_id_array_,
+              target_partition_id_array_);
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret), K(session_info_));
+    } else {
+      OB_UNIS_ADD_LEN(*session_info_);
+    }
+  }
+  return len;
+}
 
 OB_SERIALIZE_MEMBER(ObTableLoadPreBeginPeerResult,
                     ret_code_);

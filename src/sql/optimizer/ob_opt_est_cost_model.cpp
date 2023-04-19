@@ -1164,44 +1164,14 @@ int ObOptEstCostModel::cost_table(ObCostTableScanInfo &est_cost_info,
 																	double &index_back_cost)
 {
   int ret = OB_SUCCESS;
-  if (is_virtual_table(est_cost_info.ref_table_id_) &&
-      (est_cost_info.row_est_method_ == RowCountEstMethod::INVALID_METHOD ||
-       est_cost_info.row_est_method_ == RowCountEstMethod::DEFAULT_STAT)) {
-    if (OB_FAIL(cost_virtual_table(est_cost_info, cost))) {
-      LOG_WARN("failed to estimate virtual table cost", K(ret));
-    } else {
-      index_back_cost = 0;
-    }
-  } else {
-    if (OB_FAIL(cost_normal_table(est_cost_info,
-                                  parallel,
-                                  query_range_row_count,
-                                  phy_query_range_row_count,
-                                  cost,
-                                  index_back_cost))) {
-      LOG_WARN("failed to estimate table cost", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-// estimate cost for virtual table
-int ObOptEstCostModel::cost_virtual_table(ObCostTableScanInfo &est_cost_info,
-                                     			double &cost)
-{
-  int ret = OB_SUCCESS;
-  if (0 == est_cost_info.ranges_.count()) {
-    cost = VIRTUAL_INDEX_GET_COST * static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
-    LOG_TRACE("OPT:[VT] virtual table without range, use default stat", K(cost));
-  } else {
-    cost = VIRTUAL_INDEX_GET_COST * static_cast<double>(est_cost_info.ranges_.count());
-    // refine the cost if it is not exact match
-    if (!est_cost_info.is_unique_) {
-      cost *= 100.0;
-    }
-    LOG_TRACE("OPT:[VT] virtual table with range, init est", K(cost),
-               K(est_cost_info.ranges_.count()));
-  }
+  if (OB_FAIL(cost_normal_table(est_cost_info,
+                                parallel,
+                                query_range_row_count,
+                                phy_query_range_row_count,
+                                cost,
+                                index_back_cost))) {
+    LOG_WARN("failed to estimate table cost", K(ret));
+  } else { /*do nothing*/ }
   return ret;
 }
 

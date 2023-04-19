@@ -3460,6 +3460,7 @@ int ObTransformPreProcess::calc_policy_function(ObDMLStmt &stmt,
   if (OB_ISNULL(ctx_)
       || OB_ISNULL(session_info = ctx_->session_info_)
       || OB_ISNULL(schema_checker = ctx_->schema_checker_)
+      || OB_ISNULL(schema_checker->get_schema_guard())
       || OB_ISNULL(expr_factory = ctx_->expr_factory_)
       || OB_ISNULL(ctx_->exec_ctx_)
       || OB_ISNULL(ctx_->allocator_)) {
@@ -3504,7 +3505,8 @@ int ObTransformPreProcess::calc_policy_function(ObDMLStmt &stmt,
     } else if (OB_FAIL(udf_expr->add_param_expr(object_name_expr))) {
       LOG_WARN("failed to add param expr", K(object_name_expr), K(ret));
     } else if (FALSE_IT(udf_info.ref_expr_ = udf_expr)) {
-    } else if (OB_FAIL(ObRawExprUtils::init_udf_info(params, udf_info))) {
+    } else if (OB_FAIL(ObRawExprUtils::resolve_udf_info(
+        *params.allocator_, *params.expr_factory_, *params.session_info_, *params.schema_checker_->get_schema_guard(), udf_info))) {
       LOG_WARN("failed to init udf_info", K(udf_info), K(ret));
     } else if (OB_FAIL(udf_expr->formalize(session_info))) {
       LOG_WARN("failed to formalize", K(ret));

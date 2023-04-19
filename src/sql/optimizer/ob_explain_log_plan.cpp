@@ -68,11 +68,15 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       values_op = static_cast<ObLogValues*>(top);
       values_op->set_explain_plan(child_plan);
       ObSqlPlan sql_plan(get_allocator());
-      sql_plan.set_session_info(optimizer_context_.get_session_info());
       ObExplainLogPlan *explain_plan = static_cast<ObExplainLogPlan*>(child_plan);
       ObSEArray<common::ObString, 64> plan_strs;
-      if (OB_FAIL(sql_plan.store_sql_plan_for_explain(child_plan,
+      const ObString& into_table = explain_stmt->get_into_table();
+      const ObString& statement_id = explain_stmt->get_statement_id();
+      if (OB_FAIL(sql_plan.store_sql_plan_for_explain(get_optimizer_context().get_exec_ctx(),
+                                                      child_plan,
                                                       explain_stmt->get_explain_type(),
+                                                      0 == into_table.length() ? "PLAN_TABLE" : into_table,
+                                                      0 == statement_id.length() ? "" : statement_id,
                                                       explain_stmt->get_display_opt(),
                                                       plan_strs))) {
         LOG_WARN("failed to store sql plan", K(ret));

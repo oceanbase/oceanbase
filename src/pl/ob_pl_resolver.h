@@ -116,6 +116,26 @@ public:
   bool is_sync_package_var_;
 };
 
+class ObPLMockSelfArg
+{
+public:
+  ObPLMockSelfArg(
+    const ObIArray<ObObjAccessIdx> &access_idxs, ObSEArray<ObRawExpr*, 4> &expr_params, ObRawExprFactory &expr_factory)
+    : access_idxs_(access_idxs),
+      expr_params_(expr_params),
+      expr_factory_(expr_factory),
+      mark_only_(false),
+      mocked_(false) {}
+  int mock();
+  ~ObPLMockSelfArg();
+private:
+  const ObIArray<ObObjAccessIdx> &access_idxs_;
+  ObSEArray<ObRawExpr*, 4> &expr_params_;
+  ObRawExprFactory &expr_factory_;
+  bool mark_only_;
+  bool mocked_;
+};
+
 class ObPLPackageAST;
 class ObPLResolver
 {
@@ -304,6 +324,10 @@ public:
   int resolve_sqlcode_or_sqlerrm(sql::ObQualifiedName &q_name,
                                  ObPLCompileUnitAST &unit_ast,
                                  sql::ObRawExpr *&expr);
+  int resolve_construct(const ObQualifiedName &q_name,
+                                    const ObUDFInfo &udf_info,
+                                    const ObUserDefinedType &user_type,
+                                    ObRawExpr *&expr);
   int resolve_construct(const sql::ObQualifiedName &q_name,
                         const sql::ObUDFInfo &udf_info,
                         ObRawExpr *&expr);
@@ -506,6 +530,11 @@ public:
   int check_static_bool_expr(const ObRawExpr *expr, bool &is_static_bool_expr);
 
   static int adjust_routine_param_type(ObPLDataType &type);
+
+  int resolve_udf_info(
+    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func);
+
+  int construct_name(ObString &database_name, ObString &package_name, ObString &routine_name, ObSqlString &object_name);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -624,9 +653,12 @@ private:
                   sql::ObRawExpr *&expr,
                   bool for_write = false);
   int resolve_udf_without_brackets(sql::ObQualifiedName &q_name, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr);
-  int resolve_udf(sql::ObUDFInfo &udf_info,
-                  const ObIArray<ObString> &access_name,
-                  ObPLCompileUnitAST &func);
+  int make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&expr);
+  int add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                            ObIArray<ObRawExpr*> &expr_params,
+                            ObIArray<ObObjAccessIdx> &access_idxs,
+                            ObUDFInfo &udf_info,
+                            ObPLCompileUnitAST &func);
   int resolve_qualified_identifier(sql::ObQualifiedName &q_name,
                                            ObIArray<sql::ObQualifiedName> &columns,
                                            ObIArray<ObRawExpr*> &real_exprs,
@@ -909,12 +941,9 @@ private:
                               ObParamExternType type,
                               uint64_t obj_id,
                               ObPLExternTypeInfo &extern_type_info);
-  int check_is_udt_routine(const ObObjAccessIdent &access_ident, // 当前正在resolve的ident
+  int check_is_udt_routine(const ObObjAccessIdent &access_ident,
                            const ObPLBlockNS &ns,
                            ObIArray<ObObjAccessIdx> &access_idxs,
-                           ObObjAccessIdx &access_id,
-                           ObString &udt_type_name,
-                           uint64_t &udt_id,
                            bool &is_routine);
   static int get_number_literal_value(ObRawExpr *expr, int64_t &result);
   int check_assign_type(const ObPLDataType &dest_data_type, const ObRawExpr *right_expr);
@@ -967,6 +996,10 @@ private:
                                    ObPLFunctionAST &func,
                                    int64_t &idx);
   int check_update_column(const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs);
+  static int get_udt_names(ObSchemaGetterGuard &schema_guard,
+                           const uint64_t udt_id,
+                           ObString &database_name,
+                           ObString &udt_name);
   static int get_udt_database_name(ObSchemaGetterGuard &schema_guard,
                                    const uint64_t udt_id, ObString &db_name);
   static bool check_with_rowid(const ObString &routine_name,
@@ -974,6 +1007,71 @@ private:
   static int recursive_replace_expr(ObRawExpr *expr,
                                     ObQualifiedName &qualified_name,
                                     ObRawExpr *real_expr);
+
+  int replace_udf_param_expr(ObQualifiedName &q_name,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
+  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
+  int get_names_by_access_ident(ObObjAccessIdent &access_ident,
+                                ObIArray<ObObjAccessIdx> &access_idxs,
+                                ObString &database_name,
+                                ObString &package_name,
+                                ObString &routine_name);
+  int check_routine_callable(const ObPLBlockNS &ns,
+                             ObIArray<ObObjAccessIdx> &access_idxs,
+                             ObIArray<ObRawExpr*> &expr_params,
+                             const ObIRoutineInfo &routine_info);
+  int resolve_routine(ObObjAccessIdent &access_ident,
+                      const ObPLBlockNS &ns,
+                      ObIArray<ObObjAccessIdx> &access_idxs,
+                      ObPLCompileUnitAST &func);
+
+  int resolve_function(ObObjAccessIdent &access_ident,
+                       ObIArray<ObObjAccessIdx> &access_idxs,
+                       const ObIRoutineInfo *routine_info,
+                       ObPLCompileUnitAST &func);
+
+  int resolve_procedure(ObObjAccessIdent &access_ident,
+                        ObIArray<ObObjAccessIdx> &access_idxs,
+                        const ObIRoutineInfo *routine_info,
+                        ObProcType routine_type);
+
+  int resolve_construct(ObObjAccessIdent &access_ident,
+                        const ObPLBlockNS &ns,
+                        ObIArray<ObObjAccessIdx> &access_idxs,
+                        uint64_t user_type_id,
+                        ObPLCompileUnitAST &func);
+
+  int resolve_self_element_access(ObObjAccessIdent &access_ident,
+                                  const ObPLBlockNS &ns,
+                                  ObIArray<ObObjAccessIdx> &access_idxs,
+                                  ObPLCompileUnitAST &func);
+
+  int build_current_access_idx(uint64_t parent_id,
+                               ObObjAccessIdx &access_idx,
+                               ObObjAccessIdent &access_ident,
+                               const ObPLBlockNS &ns,
+                               ObIArray<ObObjAccessIdx> &access_idxs,
+                               ObPLCompileUnitAST &func);
+
+  int build_collection_index_expr(ObObjAccessIdent &access_ident,
+                                  ObObjAccessIdx &access_idx,
+                                  const ObPLBlockNS &ns,
+                                  ObIArray<ObObjAccessIdx> &access_idxs,
+                                  const ObUserDefinedType &user_type,
+                                  ObPLCompileUnitAST &func);
+
+  int build_access_idx_sys_func(uint64_t parent_id, ObObjAccessIdx &access_idx);
+
+  int resolve_composite_access(ObObjAccessIdent &access_ident,
+                               ObIArray<ObObjAccessIdx> &access_idxs,
+                               const ObPLBlockNS &ns,
+                               ObPLCompileUnitAST &func);
+
+  int init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &access_ident);
+
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;

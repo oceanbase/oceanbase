@@ -569,10 +569,9 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
   if (!backup_file_desc.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_file_desc));
-  } else if (CLUSTER_VERSION_4_0_0_0 > backup_file_desc.cluster_version_
-          || CLUSTER_VERSION_4_1_0_0 < backup_file_desc.cluster_version_) { // TODO(chongrong.th) wait yanmu provide the check cluster version exist interface
+  } else if (!ObUpgradeChecker::check_cluster_version_exist(backup_file_desc.cluster_version_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data version are not exist", K(ret));
+    LOG_WARN("cluster version are not exist", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cluster version of backup set");
   } else if (!ObUpgradeChecker::check_data_version_exist(backup_file_desc.tenant_compatible_)) {
     ret = OB_INVALID_ARGUMENT;

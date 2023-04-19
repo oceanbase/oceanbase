@@ -25,10 +25,10 @@ namespace compaction
 class ObMediumCompactionScheduleFunc
 {
 public:
-  ObMediumCompactionScheduleFunc(ObLS &ls, ObTablet *tablet)
+  ObMediumCompactionScheduleFunc(ObLS &ls, ObTabletHandle &tablet_handle)
     : allocator_("MediumSchedule"),
       ls_(ls),
-      tablet_(tablet),
+      tablet_handle_(tablet_handle),
       filters_inited_(false),
       filters_()
   {}
@@ -63,6 +63,8 @@ public:
   int check_medium_finish(const ObLSLocality &ls_locality);
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
+
+  void get_tablet_handle(ObTabletHandle &tablet_handle) { tablet_handle = tablet_handle_; }
 
 protected:
   static int get_status_from_inner_table(
@@ -141,7 +143,7 @@ protected:
 private:
   ObArenaAllocator allocator_;
   ObLS &ls_;
-  ObTablet *tablet_;
+  ObTabletHandle tablet_handle_;
   bool filters_inited_;
   share::ObTabletReplicaFilterHolder filters_;
 };

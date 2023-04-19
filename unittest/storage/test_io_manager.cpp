@@ -433,7 +433,7 @@ TEST_F(TestIOStruct, IOCalibration)
   ASSERT_FALSE(bench.is_inited_);
 
   ObIOBenchResult item;
-  ASSERT_SUCC(ObIOCalibration::parse_calibration_string("READ:4096:120:100000", item));
+  ASSERT_SUCC(ObIOCalibration::parse_calibration_string("READ:4096M:120:100000", item));
   ASSERT_TRUE(item.is_valid());
   ASSERT_SUCC(ObIOCalibration::parse_calibration_string("read:4K:10ms:1000", item));
   ASSERT_TRUE(item.is_valid());

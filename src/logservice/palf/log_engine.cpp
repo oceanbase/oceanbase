@@ -90,11 +90,11 @@ int LogEngine::init(const int64_t palf_id,
                     const int64_t log_meta_storage_block_ize)
 {
   int ret = OB_SUCCESS;
-  auto log_meta_storage_update_manifest_cb = [](const block_id_t max_block_id) {
+  auto log_meta_storage_update_manifest_cb = [](const block_id_t max_block_id, const bool in_restart) {
     // do nothing
     return OB_SUCCESS;
   };
-  auto log_storage_update_manifest_cb = [this](const block_id_t max_block_id) {
+  auto log_storage_update_manifest_cb = [this](const block_id_t max_block_id, const bool in_restart) {
     return this->update_manifest(max_block_id);
   };
   if (IS_INIT) {
@@ -185,17 +185,28 @@ int LogEngine::load(const int64_t palf_id,
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("load", 0);
-  auto log_meta_storage_update_manifest_cb = [&](const block_id_t max_block_id) {
+  block_id_t expected_next_block_id = LOG_INVALID_BLOCK_ID;
+  auto log_meta_storage_update_manifest_cb = [](const block_id_t new_expected_next_block_id, const bool in_restart) {
     // do nothing
     return OB_SUCCESS;
   };
-  auto log_storage_update_manifest_cb = [&](const block_id_t max_block_id) {
-    return this->update_manifest(max_block_id);
+  auto log_storage_update_manifest_cb = [&expected_next_block_id, this](const block_id_t new_expected_next_block_id, const bool in_restart) {
+    int ret = OB_SUCCESS;
+    if (in_restart) {
+      if (new_expected_next_block_id == expected_next_block_id + 1) {
+        PALF_LOG(INFO, "need update_manifest in restart", K(in_restart), K(new_expected_next_block_id), K(expected_next_block_id));
+        ret = this->update_manifest(new_expected_next_block_id);
+      } else {
+        PALF_LOG(INFO, "no need update_manifest in restart", K(in_restart), K(new_expected_next_block_id), K(expected_next_block_id));
+      }
+    } else {
+      ret = this->update_manifest(new_expected_next_block_id);
+    }
+    return ret;
   };
   LSN last_group_entry_header_lsn;
   LSN last_meta_entry_start_lsn;
   LogMetaEntryHeader unused_meta_entry_header;
-  block_id_t expected_next_block_id = LOG_INVALID_BLOCK_ID;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogEngine has initted!!!", K(ret), K(palf_id));
@@ -779,7 +790,10 @@ int LogEngine::update_base_lsn_used_for_gc(const LSN &lsn)
 int LogEngine::update_manifest(const block_id_t block_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_meta_storage_.update_manifest_used_for_meta_storage(block_id))) {
+  if (!is_valid_block_id(block_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument!!!", KPC(this), K(block_id));
+  } else if (OB_FAIL(log_meta_storage_.update_manifest_used_for_meta_storage(block_id))) {
     PALF_LOG(WARN, "update_manifest_used_for_meta_storage failed", K(ret), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(INFO,
@@ -1378,7 +1392,7 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     //
     // Ensure that:
     // 1. check LogStorage integrity only when 'expected_next_block_id' is greater than
-    // 'base_block_id';
+    // 'base_block_id', consider rebuild, all blocks on disk may be deleted.;
     // 2. 'min_block_id' must be smaller than or equal to 'base_block_id';
     // 3. the last block is integral, means that 'max_block_id' is ethier equal to
     // 'expected_next_block_id'(last block is
@@ -1437,13 +1451,17 @@ bool LogEngine::check_last_block_whether_is_integrity_(const block_id_t expected
                                                        const block_id_t max_block_id,
                                                        const LSN &log_storage_tail)
 {
-  // 1. 'expected_next_block_id' == 'max_block_id' + 1, last block is not empty
-  // 2. 'expected_next_block_id' == 'max_block_id', last block is empty(no data and LogBlockHeader)
-  // 3. 'expected_next_block_id' < 'max_block_id', means there is a 'truncate' opt.
+  // NB:
+  // 1. 'expected_next_block_id' == 'max_block_id' + 1, normal case
+  // 2. 'expected_next_block_id' <= 'max_block_id', means:
+  //    1. a 'truncate' or 'flashback' opt before stop palf, we need update manifest first,
+  //       and stop palf before delete blocks on disk, 'expected_next_block_id' is smaller
+  //       than or equal to 'max_block_id'.
+  //    2. a switch block opt before stop palf, and just create new block on disk success,
+  //       expected_next_block_id is equal to 'max_block_id', and 'max_block_id' is empty,
+  //       we need update manifest to max_block_id + 1 in process of restart.
   return expected_next_block_id == max_block_id + 1
-         || (expected_next_block_id == max_block_id
-             && LSN(max_block_id * PALF_BLOCK_SIZE) == log_storage_tail)
-         || expected_next_block_id < max_block_id;
+         || expected_next_block_id <= max_block_id;
 }
 
 void LogEngine::reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id, const SCN &min_block_max_scn)

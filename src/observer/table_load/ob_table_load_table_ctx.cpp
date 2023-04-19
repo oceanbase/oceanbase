@@ -27,11 +27,13 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
   : coordinator_ctx_(nullptr),
     store_ctx_(nullptr),
     job_stat_(nullptr),
+    session_info_(nullptr),
     allocator_("TLD_TableCtx"),
     ref_count_(0),
     is_dirty_(false),
     is_inited_(false)
 {
+  free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
 }
 
 ObTableLoadTableCtx::~ObTableLoadTableCtx()
@@ -39,13 +41,14 @@ ObTableLoadTableCtx::~ObTableLoadTableCtx()
   destroy();
 }
 
-int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param)
+int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param,
+                                                            sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTableCtx init twice", KR(ret));
-  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || !ddl_param.is_valid() || nullptr == session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(ddl_param));
   } else {
@@ -66,6 +69,10 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
       LOG_WARN("fail to init allocator", KR(ret));
     } else if (OB_FAIL(register_job_stat())) {
       LOG_WARN("fail to register job stat", KR(ret));
+    } else if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info_, free_session_ctx_))) {
+      LOG_WARN("fail to create session info", KR(ret));
+    } else if (OB_FAIL(ObTableLoadUtils::deep_copy(session_info, session_info_, allocator_))) {
+      LOG_WARN("fail to deep copy", KR(ret));
     } else {
       is_inited_ = true;
     }
@@ -242,6 +249,10 @@ void ObTableLoadTableCtx::destroy()
     store_ctx_->~ObTableLoadStoreCtx();
     allocator_.free(store_ctx_);
     store_ctx_ = nullptr;
+  }
+  if (nullptr != session_info_) {
+    observer::ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
+    session_info_ = nullptr;
   }
   unregister_job_stat();
   is_inited_ = false;

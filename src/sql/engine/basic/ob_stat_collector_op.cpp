@@ -253,6 +253,7 @@ int ObStatCollectorOp::generate_sample_partition_range(int64_t batch_size)
       ret = OB_ITER_END;
     }
   }
+  LOG_INFO("dynamic sample ranges", K(exist_sample_row_), "sample_ranges", ctx_.get_partition_ranges());
   return ret;
 }
 

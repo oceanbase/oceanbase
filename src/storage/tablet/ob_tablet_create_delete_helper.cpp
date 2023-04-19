@@ -639,7 +639,7 @@ int ObTabletCreateDeleteHelper::do_commit_create_tablet(
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx id does not equal", K(ret), K(key), K(trans_flags), K(tx_data));
-    print_memtables_for_table(tablet_handle);
+    tablet_handle.get_obj()->print_memtables_for_table();
   } else if (OB_UNLIKELY(ObTabletStatus::CREATING != tx_data.tablet_status_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(key), K(trans_flags), K(tx_data));
@@ -924,7 +924,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx id does not equal", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
-    print_memtables_for_table(tablet_handle);
+    tablet_handle.get_obj()->print_memtables_for_table();
   } else if (OB_UNLIKELY(ObTabletStatus::CREATING != tx_data.tablet_status_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
@@ -1161,7 +1161,7 @@ int ObTabletCreateDeleteHelper::do_commit_remove_tablet(
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx id does not equal", K(ret), K(key), K(trans_flags), K(tx_data));
-    print_memtables_for_table(tablet_handle);
+    tablet_handle.get_obj()->print_memtables_for_table();
   } else if (OB_UNLIKELY(ObTabletStatus::DELETING != tx_data.tablet_status_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
@@ -1259,7 +1259,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
     is_valid = false;
     LOG_INFO("tx id does not equal", K(ret), K(key), K(trans_flags), K(tx_data));
-    print_memtables_for_table(tablet_handle);
+    tablet_handle.get_obj()->print_memtables_for_table();
   } else if (OB_UNLIKELY(ObTabletStatus::DELETING != tx_data.tablet_status_)) {
     is_valid = false;
     LOG_INFO("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
@@ -2557,20 +2557,6 @@ int ObTabletCreateDeleteHelper::prepare_data_for_binding_info(const ObTabletID &
   }
 
   return ret;
-}
-
-void ObTabletCreateDeleteHelper::print_memtables_for_table(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  common::ObSArray<storage::ObITable *> memtables;
-  if (!tablet_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet_handle is not valid", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_memtables(memtables, true))) {
-    LOG_WARN("failed to get_memtables", K(ret), K(tablet_handle));
-  } else {
-    LOG_INFO("memtables print", K(memtables), K(tablet_handle));
-  }
 }
 
 } // namespace storage

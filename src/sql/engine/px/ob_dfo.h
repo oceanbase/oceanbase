@@ -30,6 +30,7 @@
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/px/ob_px_bloom_filter.h"
+#include "sql/engine/ob_exec_feedback_info.h"
 #include "sql/das/ob_das_define.h"
 namespace oceanbase
 {
@@ -739,8 +740,11 @@ public:
       temp_table_id_(common::OB_INVALID_ID),
       interm_result_ids_(),
       tx_desc_(NULL),
-      is_use_local_thread_(false)
-  {}
+      is_use_local_thread_(false),
+      fb_info_()
+  {
+
+  }
   ~ObPxTask() = default;
   ObPxTask &operator=(const ObPxTask &other)
   {
@@ -765,6 +769,7 @@ public:
     interm_result_ids_.assign(other.interm_result_ids_);
     tx_desc_ = other.tx_desc_;
     is_use_local_thread_ = other.is_use_local_thread_;
+    fb_info_.assign(other.fb_info_);
     return *this;
   }
 public:
@@ -787,7 +792,8 @@ public:
                K_(temp_table_id),
                K_(interm_result_ids),
                K_(tx_desc),
-               K_(is_use_local_thread));
+               K_(is_use_local_thread),
+               K_(fb_info));
   dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
   dtl::ObDtlChannelInfo &get_task_channel_info() { return task_ch_info_; }
   void set_task_channel(dtl::ObDtlChannel *ch) { task_channel_ = ch; }
@@ -827,6 +833,7 @@ public:
   transaction::ObTxDesc *&get_tx_desc() { return tx_desc_; }
   void set_use_local_thread(bool flag) { is_use_local_thread_ = flag; }
   bool is_use_local_thread() { return is_use_local_thread_; }
+  ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
 public:
   // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
@@ -854,6 +861,7 @@ public:
   common::ObSEArray<uint64_t, 8> interm_result_ids_;  //返回每个task生成的结果集
   transaction::ObTxDesc *tx_desc_; // transcation information
   bool is_use_local_thread_;
+  ObExecFeedbackInfo fb_info_; //for feedback info
 };
 
 class ObPxRpcInitTaskArgs

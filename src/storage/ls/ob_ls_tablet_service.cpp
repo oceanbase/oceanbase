@@ -3696,9 +3696,13 @@ int ObLSTabletService::check_old_row_legitimacy(
                 "dml_type", run_ctx.dml_flag_);
     }
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
+      int tmp_ret = OB_SUCCESS;
       if (is_udf) {
         ret = OB_ERR_INDEX_KEY_NOT_FOUND;
         LOG_WARN("index key not found on udf column", K(ret), K(old_row));
+      } else if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
+        ret = tmp_ret;
+        LOG_WARN("check real leader for 4377 found exception", K(ret), K(old_row), K(data_table));
       } else {
         ObString func_name = ObString::make_string("check_old_row_legitimacy");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
@@ -6337,5 +6341,35 @@ int ObLSTabletService::set_frozen_for_all_memtables()
   }
   return ret;
 }
+
+int ObLSTabletService::check_real_leader_for_4377_(const ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSService* ls_srv = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  int64_t epoch = 0;
+  bool is_real_leader = false;
+
+  if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("MTL(ObLSService*) fail, MTL not init?", K(ret));
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id,
+                                    ls_handle,
+                                    ObLSGetMod::TRANS_MOD))) {
+    LOG_ERROR("ls_srv->get_ls() fail", KR(ret));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid ls", KR(ret));
+  } else if (OB_FAIL(ls->get_tx_svr()->get_tx_ls_log_adapter()->get_role(is_real_leader, epoch))) {
+    LOG_WARN("get replica status fail", K(ret), KPC(ls));
+  } else if (!is_real_leader) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("get follower status during 4377", K(ret), KPC(ls));
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

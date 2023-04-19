@@ -217,7 +217,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
     LogStorage *log_storage = &leader1.get_palf_handle_impl()->log_engine_.log_storage_;
     EXPECT_LE(2, log_storage->block_mgr_.max_block_id_);
     EXPECT_EQ(OB_SUCCESS, log_storage->block_mgr_.create_tmp_block_handler(2));
-    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_cb_(3));
+    EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(3));
     EXPECT_EQ(OB_SUCCESS, log_storage->block_mgr_.delete_block_from_back_to_front_until(2));
     {
       LogBlockMgr *block_mgr = &log_storage->block_mgr_;

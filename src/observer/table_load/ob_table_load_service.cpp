@@ -335,24 +335,17 @@ void ObTableLoadService::abort_all_ctx()
   if (OB_FAIL(manager_.remove_all_table_ctx(table_ctx_array))) {
     LOG_WARN("fail to remove all table ctx list", KR(ret));
   } else {
-    SMART_VAR(sql::ObSQLSessionInfo, session_info)
-    {
-      if (OB_FAIL(ObTableLoadUtils::init_session_info(OB_SERVER_USER_ID, session_info))) {
-        LOG_WARN("fail to init session info", KR(ret));
-      } else {
-        for (int i = 0; i < table_ctx_array.count(); ++i) {
-          ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-          // abort coordinator
-          if (nullptr != table_ctx->coordinator_ctx_) {
-            ObTableLoadCoordinator::abort_ctx(table_ctx, session_info);
-          }
-          // abort store
-          else if (nullptr != table_ctx->store_ctx_) {
-            ObTableLoadStore::abort_ctx(table_ctx);
-          }
-          manager_.put_table_ctx(table_ctx);
-        }
+    for (int i = 0; i < table_ctx_array.count(); ++i) {
+      ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
+      // abort coordinator
+      if (nullptr != table_ctx->coordinator_ctx_) {
+        ObTableLoadCoordinator::abort_ctx(table_ctx);
       }
+      // abort store
+      else if (nullptr != table_ctx->store_ctx_) {
+        ObTableLoadStore::abort_ctx(table_ctx);
+      }
+      manager_.put_table_ctx(table_ctx);
     }
   }
 }

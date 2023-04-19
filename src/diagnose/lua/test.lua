@@ -307,19 +307,18 @@ print_to_client("select_schema_slot")
 select_schema_slot(para)
 
 para = {}
-para["limit"] = {10}
+para["limit"] = {}
 para["dump"] = true
 para["select"] = {
     "tname",
     "tid",
     "thread_base",
     "loop_ts",
-    "lock_addr",
-    "lock_val",
-    "wait_addr",
-    "wait_val",
-    "is_blocking",
-    "has_req"
+    "latch_hold",
+    "latch_wait",
+    "trace_id",
+    "status",
+    "wait_event"
 }
 print_to_client("dump_thread_info")
 dump_thread_info(para)

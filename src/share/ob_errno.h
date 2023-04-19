@@ -831,6 +831,8 @@ constexpr int OB_ERR_SCHEMA_HISTORY_EMPTY = -5489;
 constexpr int OB_ERR_TABLE_NAME_NOT_IN_LIST = -5490;
 constexpr int OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = -5491;
 constexpr int OB_ERR_MYSQL_CHARACTER_SET_MISMATCH = -5492;
+constexpr int OB_ERR_RENAME_PARTITION_NAME_DUPLICATE = -5493;
+constexpr int OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE = -5494;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2302,7 +2304,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GRANT_PRIVILEGES_TO_CREATE_TABLE__USER_ERROR_MSG "Failed to grant privelege"
 #define OB_ERR_WRONG_DYNAMIC_PARAM__USER_ERROR_MSG "Incorrect arguments number to EXECUTE, need %ld arguments but give %ld"
 #define OB_ERR_PARAM_SIZE__USER_ERROR_MSG "Incorrect parameter count in the call to native function '%.*s'"
-#define OB_ERR_FUNCTION_UNKNOWN__USER_ERROR_MSG "FUNCTION %.*s does not exist"
+#define OB_ERR_FUNCTION_UNKNOWN__USER_ERROR_MSG "%s %.*s does not exist"
 #define OB_ERR_CREAT_MODIFY_TIME_COLUMN__USER_ERROR_MSG "CreateTime or ModifyTime column cannot be modified"
 #define OB_ERR_MODIFY_PRIMARY_KEY__USER_ERROR_MSG "Primary key cannot be modified"
 #define OB_ERR_PARAM_DUPLICATE__USER_ERROR_MSG "Duplicated parameters"
@@ -2709,6 +2711,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_NAME_NOT_IN_LIST__USER_ERROR_MSG "table name not in FROM list"
 #define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__USER_ERROR_MSG "DEFAULT partition must be last partition specified"
 #define OB_ERR_MYSQL_CHARACTER_SET_MISMATCH__USER_ERROR_MSG "Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call."
+#define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
+#define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4346,7 +4350,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GRANT_PRIVILEGES_TO_CREATE_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5052, Failed to grant privelege"
 #define OB_ERR_WRONG_DYNAMIC_PARAM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5053, Incorrect arguments number to EXECUTE, need %ld arguments but give %ld"
 #define OB_ERR_PARAM_SIZE__ORA_USER_ERROR_MSG "ORA-00909: invalid number of arguments in the call to native function '%.*s'"
-#define OB_ERR_FUNCTION_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5055, FUNCTION %.*s does not exist"
+#define OB_ERR_FUNCTION_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5055, %s %.*s does not exist"
 #define OB_ERR_CREAT_MODIFY_TIME_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5056, CreateTime or ModifyTime column cannot be modified"
 #define OB_ERR_MODIFY_PRIMARY_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5057, Primary key cannot be modified"
 #define OB_ERR_PARAM_DUPLICATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5058, Duplicated parameters"
@@ -4753,6 +4757,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_NAME_NOT_IN_LIST__ORA_USER_ERROR_MSG "ORA-00964: table name not in FROM list"
 #define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__ORA_USER_ERROR_MSG "ORA-14318: DEFAULT partition must be last partition specified"
 #define OB_ERR_MYSQL_CHARACTER_SET_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5492, Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call."
+#define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14082: New partition name %.*s must differ from that of any other partition or subpartition of the object."
+#define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14263: New subpartition name %.*s must differ from that of any other partition or subpartition of the object."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5799,7 +5805,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2040];
+extern int g_all_ob_errnos[2042];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

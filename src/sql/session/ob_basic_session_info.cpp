@@ -109,6 +109,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
       plan_id_(0),
+      last_plan_id_(0),
       flt_vars_(),
       capability_(),
       proxy_capability_(),
@@ -368,6 +369,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
   plan_id_ = 0;
+  last_plan_id_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
   client_attribute_capability_.capability_ = 0;
@@ -2001,6 +2003,14 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   return ret;
 }
 
+void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
+{
+  if (NULL != cur_phy_plan_) {
+    last_plan_id_ = cur_phy_plan_->get_plan_id();
+  }
+  cur_phy_plan_ = NULL;
+}
+
 // for cmd only
 void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
 {
@@ -3381,6 +3391,11 @@ int ObBasicSessionInfo::get_max_allowed_packet(int64_t &max_allowed_pkt) const
 int ObBasicSessionInfo::get_net_buffer_length(int64_t &net_buffer_len) const
 {
   return get_int64_sys_var(SYS_VAR_NET_BUFFER_LENGTH, net_buffer_len);
+}
+
+int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const
+{
+  return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
 }
 
 ////////////////////////////////////////////////////////////////

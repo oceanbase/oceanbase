@@ -12,6 +12,7 @@
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -28,7 +29,7 @@ class ObTableLoadTableCtx : public common::ObDLinkBase<ObTableLoadTableCtx>
 public:
   ObTableLoadTableCtx();
   ~ObTableLoadTableCtx();
-  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param);
+  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param, sql::ObSQLSessionInfo *session_info);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -52,7 +53,6 @@ public:
 private:
   int register_job_stat();
   void unregister_job_stat();
-
 public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
@@ -61,6 +61,8 @@ public:
   ObTableLoadStoreCtx *store_ctx_; // 只在数据节点构造
   sql::ObLoadDataGID gid_;
   sql::ObLoadDataStat *job_stat_;
+  sql::ObSQLSessionInfo *session_info_;
+  sql::ObFreeSessionCtx free_session_ctx_;
 private:
   // 只在初始化的时候使用, 线程不安全
   common::ObArenaAllocator allocator_;

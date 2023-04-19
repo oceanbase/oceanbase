@@ -270,6 +270,8 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
   } else if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy plan ctx NULL", K(ret));
+  } else if (OB_FAIL(ctx.get_feedback_info().merge_feedback_info(pkt.fb_info_))) {
+    LOG_WARN("fail to merge feedback info", K(ret));
   } else if (OB_ISNULL(session->get_tx_desc())) {
   } else if (OB_FAIL(MTL(transaction::ObTransService*)
                      ->add_tx_exec_result(*session->get_tx_desc(),
@@ -315,6 +317,8 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
                  OB_ID(sqc_id), sqc->get_sqc_id());
 
     LOG_TRACE("[MSG] sqc finish", K(*edge), K(*sqc));
+    LOG_TRACE("on_sqc_finish_msg update feedback info",
+        K(pkt.fb_info_), K(ctx.get_feedback_info()));
   }
 
   if (OB_SUCC(ret)) {
@@ -663,6 +667,8 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinish
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr session", K(ret));
+  } else if (OB_FAIL(ctx.get_feedback_info().merge_feedback_info(pkt.fb_info_))) {
+    LOG_WARN("fail to merge feedback info", K(ret));
   } else if (OB_ISNULL(session->get_tx_desc())) {
   } else if (OB_FAIL(MTL(transaction::ObTransService*)
                      ->add_tx_exec_result(*session->get_tx_desc(),
@@ -696,6 +702,8 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinish
                  OB_ID(sqc_id), sqc->get_sqc_id());
 
     LOG_TRACE("terminate msg : sqc finish", K(*edge), K(*sqc));
+    LOG_TRACE("on_sqc_finish_msg update feedback info",
+        K(pkt.fb_info_), K(ctx.get_feedback_info()));
   }
 
   if (OB_SUCC(ret)) {

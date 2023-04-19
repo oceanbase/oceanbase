@@ -165,6 +165,10 @@ public:
                     const ObMulSourceDataNotifyArg &arg,
                     ObPartTransCtx *part_ctx,
                     int64_t &total_time);
+  static int notify_table_lock(const ObTxBufferNodeArray &array,
+                               const ObMulSourceDataNotifyArg &arg,
+                               ObPartTransCtx *part_ctx,
+                               int64_t &total_time);
 private:
   static void ob_abort_log_cb_notify_(const NotifyType type, int err_code, bool for_replay);
   static int notify_table_lock(const NotifyType type,

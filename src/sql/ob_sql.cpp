@@ -82,7 +82,6 @@
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/ob_optimizer_trace_impl.h"
-#include "sql/monitor/ob_sql_plan_manager.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
 
@@ -3018,13 +3017,9 @@ int ObSql::generate_plan(ParseResult &parse_result,
     END_OPT_TRACE(session_info);
     if (OB_SUCC(ret) && session_info->is_user_session()) {
       ObSqlPlan sql_plan(result.get_mem_pool());
-      sql_plan.set_session_info(session_info);
-      ObString sql_id(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_);
       if (!stmt->is_explain_stmt() && !stmt->is_help_stmt()) {
         if (OB_FAIL(sql_plan.store_sql_plan(logical_plan,
-                                phy_plan->get_plan_id(),
-                                phy_plan->get_plan_hash_value(),
-                                sql_id))) {
+                                            phy_plan))) {
           LOG_WARN("failed to store sql plan", K(ret));
         } else {
           phy_plan->set_record_plan_info(true);

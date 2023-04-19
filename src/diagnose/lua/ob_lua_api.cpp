@@ -1846,6 +1846,9 @@ int select_schema_slot(lua_State *L)
   return 1;
 }
 
+#define GET_OTHER_TSI_ADDR(type, var_name, addr) \
+const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
+type var_name = *(type*)(thread_base + var_name##_offset);
 // list{list, list...} = dump_threads_info()
 int dump_thread_info(lua_State *L)
 {
@@ -1858,71 +1861,112 @@ int dump_thread_info(lua_State *L)
       "tid",
       "thread_base",
       "loop_ts",
-      "lock_addr",
-      "lock_val",
-      "wait_addr",
-      "wait_val",
-      "is_blocking",
-      "has_req"
+      "latch_hold",
+      "latch_wait",
+      "trace_id",
+      "status",
+      "wait_event"
     };
     LuaVtableGenerator gen(L, columns);
-    int64_t tname_offset = (int64_t)ob_get_tname() - (int64_t)pthread_self();
-    int64_t tid_offset = (int64_t)(&get_tid_cache()) - (int64_t)pthread_self();
-    int64_t loop_ts_offset = (int64_t)(&oceanbase::lib::Thread::loop_ts_) - (int64_t)pthread_self();
-    int64_t lock_offset = (int64_t)(&ObLatch::current_lock) - (int64_t)pthread_self();
-    int64_t wait_offset = (int64_t)(&ObLatch::current_wait) - (int64_t)pthread_self();
-    int64_t worker_offset = (int64_t)(&oceanbase::lib::Worker::self_) - (int64_t)pthread_self();
-    for(auto* header = g_stack_mgr.begin(); header != g_stack_mgr.end() && !gen.is_end(); header = header->next_) {
+    StackMgr::Guard guard(g_stack_mgr);
+    for(auto* header = *guard; OB_NOT_NULL(header) && !gen.is_end(); header = guard.next()) {
       auto* thread_base = (char*)(header->pth_);
       if (OB_NOT_NULL(thread_base)) {
         // avoid SMART_CALL stack
-        char* tname = thread_base + tname_offset;
-        int64_t tid = *(int64_t*)(thread_base + tid_offset);
-        int64_t loop_ts = *(int64_t*)(thread_base + loop_ts_offset);
-        uint32_t* lock_addr = *(uint32_t**)(thread_base + lock_offset);
-        uint32_t* wait_addr = *(uint32_t**)(thread_base + wait_offset);
-        auto* worker_self = *(Worker**)(thread_base + worker_offset);
-        char addr[32];
         gen.next_row();
         // tname
+        GET_OTHER_TSI_ADDR(char*, tname, ob_get_tname());
+        // PAY ATTENTION HERE
+        tname = thread_base + tname_offset;
         gen.next_column(tname);
         // tid
+        GET_OTHER_TSI_ADDR(int64_t, tid, &get_tid_cache());
         gen.next_column(tid);
         // thread_base
-        snprintf(addr, 32, "%p", thread_base);
-        gen.next_column(addr);
-        // loop_ts
-        gen.next_column(loop_ts);
-        // lock_addr
-        // lock_val
-        if (OB_NOT_NULL(lock_addr)) {
-          snprintf(addr, 32, "%p", lock_addr);
+        {
+          char addr[32];
+          snprintf(addr, 32, "%p", thread_base);
           gen.next_column(addr);
-          gen.next_column(*lock_addr);
-        } else {
-          gen.next_column("NULL");
-          gen.next_column("NULL");
         }
-        // wait_addr
-        // wait_val
+        // loop_ts
+        GET_OTHER_TSI_ADDR(int64_t, loop_ts, &oceanbase::lib::Thread::loop_ts_);
+        gen.next_column(loop_ts);
+        // latch_hold
+        {
+          GET_OTHER_TSI_ADDR(uint32_t**, locks_addr, &ObLatch::current_locks);
+          locks_addr = (uint32_t**)(thread_base + locks_addr_offset);
+          char addrs[256];
+          addrs[0] = 0;
+          for (auto i = 0, offset1 = 0; i < sizeof(ObLatch::current_locks) / sizeof(uint32_t*); ++i) {
+            if (OB_NOT_NULL(locks_addr[i])) {
+              offset1 = snprintf(addrs + offset1, 256 - offset1, "%p ", locks_addr[i]);
+            }
+          }
+          if (0 == addrs[0]) {
+            gen.next_column("NULL");
+          } else {
+            gen.next_column(addrs);
+          }
+        }
+        // latch_wait
+        GET_OTHER_TSI_ADDR(uint32_t*, wait_addr, &ObLatch::current_wait);
         if (OB_NOT_NULL(wait_addr)) {
+          char addr[32];
           snprintf(addr, 32, "%p", wait_addr);
           gen.next_column(addr);
-          gen.next_column(*wait_addr);
         } else {
           gen.next_column("NULL");
-          gen.next_column("NULL");
         }
-        // is_blocking
-        // has_req
-        if (OB_NOT_NULL(worker_self)) {
-          gen.next_column(worker_self->is_blocking());
-          gen.next_column(worker_self->has_req_flag());
-        } else {
-          gen.next_column("NULL");
-          gen.next_column("NULL");
+        // trace_id
+        {
+          GET_OTHER_TSI_ADDR(ObCurTraceId::TraceId, trace_id, ObCurTraceId::get_trace_id());
+          char trace_id_buf[40];
+          IGNORE_RETURN trace_id.to_string(trace_id_buf, 40);
+          gen.next_column(trace_id_buf);
         }
-
+        // status
+        {
+          GET_OTHER_TSI_ADDR(pthread_t, join_addr, &Thread::thread_joined_);
+          GET_OTHER_TSI_ADDR(int64_t, sleep_us, &Thread::sleep_us_);
+          GET_OTHER_TSI_ADDR(bool, is_blocking, &Thread::is_blocking_);
+          const char* status_str = nullptr;
+          if (0 != join_addr) {
+            status_str = "Join";
+          } else if (0 != sleep_us) {
+            status_str = "Sleep";
+          } else if (is_blocking) {
+            status_str = "Wait";
+          } else {
+            status_str = "Run";
+          }
+          gen.next_column(status_str);
+        }
+        // wait_event
+        {
+          GET_OTHER_TSI_ADDR(uint32_t*, wait_addr, &ObLatch::current_wait);
+          GET_OTHER_TSI_ADDR(pthread_t, join_addr, &Thread::thread_joined_);
+          GET_OTHER_TSI_ADDR(int64_t, sleep_us, &Thread::sleep_us_);
+          char wait_event[32];
+          wait_event[0] = '\0';
+          if (0 != join_addr) {
+            IGNORE_RETURN snprintf(wait_event, 32, "thread %u", *(uint32_t*)(thread_base + tid_offset));
+          } else if (0 != sleep_us) {
+            IGNORE_RETURN snprintf(wait_event, 32, "%ld us", sleep_us);
+          } else if (OB_NOT_NULL(wait_addr)) {
+            bool has_segv = false;
+            uint32_t val = 0;
+            do_with_crash_restore([&] {
+              val = *wait_addr;
+            }, has_segv);
+            if (has_segv) {
+            } else if (0 != (val & (1<<30))) {
+              IGNORE_RETURN snprintf(wait_event, 32, "wrlock on %u", val & 0x3fffffff);
+            } else {
+              IGNORE_RETURN snprintf(wait_event, 32, "%u rdlocks", val & 0x3fffffff);
+            }
+          }
+          gen.next_column(wait_event);
+        }
         gen.row_end();
       }
     }

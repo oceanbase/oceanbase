@@ -27,6 +27,7 @@
 #include "lib/worker.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread.h"
+#include "lib/thread/protected_stack_allocator.h"
 
 using namespace oceanbase::lib;
 
@@ -246,6 +247,7 @@ void *ObBaseLogWriter::flush_log_thread(void *arg)
   if (OB_ISNULL(arg)) {
     LOG_STDERR("invalid argument, arg = %p\n", arg);
   } else {
+    ObStackHeaderGuard stack_header_guard;
     pthread_cleanup_push(cleanup_log_thread, arg);
     ObBaseLogWriter *log_writer = reinterpret_cast<ObBaseLogWriter*> (arg);
     lib::set_thread_name(log_writer->thread_name_);

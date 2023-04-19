@@ -1061,7 +1061,7 @@ a	f8()
 3	1
 drop function f1|
 select * from v1|
-ERROR 42000: FUNCTION f1 does not exist
+ERROR 42000: FUNCTION test.f1 does not exist
 create function f1() returns int
 return (select sum(data) from t1) + (select sum(data) from v1)|
 select f1()|

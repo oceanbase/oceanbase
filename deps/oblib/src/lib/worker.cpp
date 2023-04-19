@@ -47,7 +47,6 @@ Worker::Worker()
       st_current_priority_(0),
       session_(nullptr),
       cur_request_(nullptr),
-      is_blocking_(false),
       worker_level_(INT32_MAX),
       curr_request_level_(0),
       group_id_(0),

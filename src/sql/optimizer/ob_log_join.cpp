@@ -209,7 +209,7 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("batch_join=%s", can_use_batch_nlj_? "true" : "false"))) {
+      } else if (OB_FAIL(BUF_PRINTF("use_batch=%s", can_use_batch_nlj_? "true" : "false"))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else { /* Do nothing */ }
     } else if (HASH_JOIN == get_join_algo()) {

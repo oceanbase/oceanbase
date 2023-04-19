@@ -335,7 +335,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       ObSchemaObjVersion obj_version;
       obj_version.object_id_ = proc_info->get_routine_id();
-      obj_version.object_type_ = DEPENDENCY_PROCEDURE;
+      obj_version.object_type_ = proc_info->is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION;
       obj_version.version_ = proc_info->get_schema_version();
       OZ (stmt->add_global_dependency_table(obj_version));
     }

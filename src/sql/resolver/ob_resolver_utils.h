@@ -534,15 +534,8 @@ public:
   static bool is_restore_user(ObSQLSessionInfo &session_info);
   static bool is_drc_user(ObSQLSessionInfo &session_info);
   static int set_sync_ddl_id_str(ObSQLSessionInfo *session_info, common::ObString &ddl_id_str);
-  static int resolve_udf_name(ObSchemaChecker &schema_checker,
-                              const ObSQLSessionInfo &session_info,
-                              const ObUDFInfo &udf_info,
-                              common::ObString &db_name,
-                              common::ObString &pkg_name,
-                              common::ObString &udf_name);
-  static int resolve_udf(const ParseNode *node,
-		                     const common::ObNameCaseMode case_mode,
-                         ObUDFInfo& udf_info);
+  static int resolve_udf_name_by_parse_node(
+    const ParseNode *node, const common::ObNameCaseMode case_mode, ObUDFInfo& udf_info);
   // for create table with fk in oracle mode
   static int check_dup_foreign_keys_exist(
              const common::ObSArray<obrpc::ObCreateForeignKeyArg> &fk_args);
@@ -596,6 +589,8 @@ public:
       const share::schema::ObColumnSchemaV2 *column = NULL);
   static int get_columns_name_from_index_table_schema(const share::schema::ObTableSchema &index_table_schema,
                                                       ObIArray<ObString> &index_columns_name);
+  static int transform_sys_func_to_objaccess(
+    common::ObIAllocator *allocator, const ParseNode *sys_func, ParseNode *&obj_access);
   static int transform_func_sys_to_udf(common::ObIAllocator *allocator,
                                        const ParseNode *func_sys,
                                        const common::ObString &db_name,

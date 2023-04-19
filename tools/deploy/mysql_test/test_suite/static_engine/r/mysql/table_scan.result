@@ -20,11 +20,11 @@ set @@ob_enable_plan_cache = 0;
 explain_protocol: 2
 EXPLAIN select * from t1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |7       |3           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |7       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter(nil), rowset=256
@@ -45,11 +45,11 @@ select * from t1;
 +----+----+------+------+------------+
 EXPLAIN select * from t1 order by c1 desc, c2 desc;
 Query Plan
-=================================================
-|ID|OPERATOR  |NAME       |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE SCAN|t1(Reverse)|7       |3           |
-=================================================
+======================================================
+|ID|OPERATOR       |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE FULL SCAN|t1(Reverse)|7       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter(nil), rowset=256
@@ -70,11 +70,11 @@ select * from t1 order by c1 desc, c2 desc;
 +----+----+------+------+------------+
 EXPLAIN select * from t1 where c1 + c2 < 10;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |3       |3           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |3       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter([t1.c1 + t1.c2 < cast(10, DECIMAL(2, 0))]), rowset=256
@@ -92,11 +92,11 @@ select * from t1 where c1 + c2 < 10;
 +----+----+------+------+------------+
 EXPLAIN select * from t1 limit 2;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |2       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |2       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter(nil), rowset=256
@@ -112,11 +112,11 @@ select * from t1 limit 2;
 +----+----+------+------+------------+
 EXPLAIN select * from t1 where c1 = 5;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |2       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |2       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter(nil), rowset=256
@@ -133,11 +133,11 @@ select * from t1 where c1 = 5;
 +----+----+------+------+------------+
 EXPLAIN select * from t1 where c1 = 5 or c1 = 7;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |4       |2           |
-==========================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |4       |2           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter(nil), rowset=256
@@ -168,7 +168,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2]), range[2,4 ; 2,4], [7,5 ; 7,5], [8,7 ; 8,7],
       range_cond([(T_OP_OR, t1.c1 = cast(2, DECIMAL(1, 0)) AND t1.c2 = cast(4, DECIMAL(1, 0)), t1.c1 = cast(7, DECIMAL(1, 0)) AND t1.c2 = cast(5, DECIMAL(1,
-0)), t1.c1 = cast(8, DECIMAL(1, 0)) AND t1.c2 = cast(7, DECIMAL(1, 0)))])
+       0)), t1.c1 = cast(8, DECIMAL(1, 0)) AND t1.c2 = cast(7, DECIMAL(1, 0)))])
 select * from t1 where (c1 = 2 and c2 = 4) or (c1 = 7 and c2 = 5) or (c1 = 8 and c2 = 7);
 +----+----+------+------+------------+
 | c1 | c2 | c3   | c4   | c5         |
@@ -179,15 +179,15 @@ select * from t1 where (c1 = 2 and c2 = 4) or (c1 = 7 and c2 = 5) or (c1 = 8 and
 
 EXPLAIN select * from t1 where c2  = 2 and c1 + c2 < 10 and c4 > c3;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(i1)|1       |4           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(i1)|1       |4           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter([t1.c1 + cast(cast(2, DECIMAL(1, 0)), DECIMAL(10, 0)) < cast(10, DECIMAL(2, 0))], [t1.c4
-> t1.c3]), rowset=256
+      > t1.c3]), rowset=256
       access([t1.c1], [t1.c2], [t1.c4], [t1.c3], [t1.c5]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,false],
       range_key([t1.c2], [t1.c1]), range(2,MIN ; 2,MAX),
@@ -202,11 +202,11 @@ select * from t1 where c2  = 2 and c1 + c2 < 10 and c4 > c3;
 
 EXPLAIN select c1, c2 from t1 where c2 > 4;
 Query Plan
-============================================
-|ID|OPERATOR  |NAME  |EST.ROWS|EST.TIME(us)|
---------------------------------------------
-|0 |TABLE SCAN|t1(i1)|3       |2           |
-============================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(i1)|3       |2           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
@@ -232,7 +232,7 @@ Query Plan
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
 |0 |DISTRIBUTED INSERT|    |7       |51          |
-|1 | EXPRESSION       |    |7       |1           |
+|1 |└─EXPRESSION      |    |7       |1           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -247,11 +247,11 @@ insert into t1 values(1,1,1), (2,2,2), (3,3,3), (4,4,4),(5,5,5), (6,6,6), (7,7,7
 # case 1: index back with before_index_back_filter
 EXPLAIN select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c1 <  4;
 Query Plan
-=============================================
-|ID|OPERATOR  |NAME   |EST.ROWS|EST.TIME(us)|
----------------------------------------------
-|0 |TABLE SCAN|t1(idx)|1       |4           |
-=============================================
+===================================================
+|ID|OPERATOR        |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(idx)|1       |4           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 < 4]), rowset=256
@@ -271,11 +271,11 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c1 <  4;
 # case 2: index back without before_index_back_filter
 EXPLAIN select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c3 <  4;
 Query Plan
-=============================================
-|ID|OPERATOR  |NAME   |EST.ROWS|EST.TIME(us)|
----------------------------------------------
-|0 |TABLE SCAN|t1(idx)|1       |18          |
-=============================================
+===================================================
+|ID|OPERATOR        |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(idx)|1       |18          |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c3 < 4]), rowset=256
@@ -293,11 +293,11 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c3 <  4;
 
 EXPLAIN select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
 Query Plan
-=============================================
-|ID|OPERATOR  |NAME   |EST.ROWS|EST.TIME(us)|
----------------------------------------------
-|0 |TABLE SCAN|t1(idx)|2       |8           |
-=============================================
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|t1(idx)|2       |8           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c3 != 1]), rowset=256

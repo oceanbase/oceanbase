@@ -16,6 +16,7 @@
 #include <functional>
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/lock/ob_latch.h"
 
 namespace oceanbase {
 namespace lib {
@@ -50,6 +51,7 @@ public:
   {
     int64_t ret = loop_ts_;
     loop_ts_ = t;
+    ObLatch::clear_lock();
     return ret;
   }
 
@@ -59,7 +61,9 @@ public:
   }
 public:
   static thread_local int64_t loop_ts_;
-
+  static thread_local pthread_t thread_joined_;
+  static thread_local int64_t sleep_us_;
+  static thread_local bool is_blocking_;
 private:
   static void* __th_start(void *th);
   void destroy_stack();

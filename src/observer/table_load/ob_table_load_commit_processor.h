@@ -30,7 +30,6 @@ private:
 private:
   const ObGlobalContext &gctx_;
   table::ObTableApiCredential credential_;
-  sql::ObSQLSessionInfo session_info_;
 };
 
 class ObTableLoadCommitPeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_COMMIT_PEER> >

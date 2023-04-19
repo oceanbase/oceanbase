@@ -25,6 +25,7 @@
 #include "common/row/ob_row.h"
 #include "lib/compress/ob_compress_util.h"
 #include "storage/tx/ob_trans_define.h"
+#include "sql/engine/ob_exec_feedback_info.h"
 
 namespace oceanbase
 {
@@ -378,7 +379,8 @@ public:
         sqc_affected_rows_(0),
         dml_row_info_(),
         temp_table_id_(common::OB_INVALID_ID),
-        interm_result_ids_() {}
+        interm_result_ids_(),
+        fb_info_() {}
   virtual ~ObPxFinishSqcResultMsg() = default;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -390,6 +392,7 @@ public:
     trans_result_.reset();
     task_monitor_info_array_.reset();
     dml_row_info_.reset();
+    fb_info_.reset();
   }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
 public:
@@ -402,6 +405,7 @@ public:
   ObPxDmlRowInfo dml_row_info_; // SQC存在DML算子时, 需要统计行 信息
   uint64_t temp_table_id_;
   ObSEArray<uint64_t, 8> interm_result_ids_;
+  ObExecFeedbackInfo fb_info_;
 };
 
 class ObPxFinishTaskResultMsg

@@ -1007,4 +1007,12 @@ do {\
     }                                                                           \
   } while(0);                                                                   \
 
+// if the const is in /*! xx**/, we should ignore the const in fast parser.
+#define CHECK_MYSQL_COMMENT(p, node)\
+  do {\
+    if (p->mysql_compatible_comment_) {\
+      node->is_hidden_const_ = 1;\
+    }\
+  } while(0);\
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */

@@ -66,7 +66,10 @@ private:
     ACTION,
     MODULE,
     CLIENT_INFO,
-    SQL_TRACE
+    SQL_TRACE,
+    PLAN_ID,
+    TENANT_ID,
+    EFFECTIVE_TENANT_ID
   };
   class FillScanner
   {

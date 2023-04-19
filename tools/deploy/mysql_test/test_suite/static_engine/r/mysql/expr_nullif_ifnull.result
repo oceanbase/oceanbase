@@ -7319,11 +7319,11 @@ insert into t1 values('1901-01-01', 1901);
 explain_protocol: 2
 EXPLAIN select nullif(c1, c2) from t1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=256
@@ -7338,11 +7338,11 @@ select nullif(c1, c2) from t1;
 +---------------------------+
 EXPLAIN select nullif(c2, c1) from t1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=256
@@ -7357,11 +7357,11 @@ select nullif(c2, c1) from t1;
 +----------------+
 EXPLAIN select nullif(c1, c1) from t1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=256
@@ -7376,11 +7376,11 @@ select nullif(c1, c1) from t1;
 +----------------+
 EXPLAIN select nullif(c2, c2) from t1;
 Query Plan
-==========================================
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------
-|0 |TABLE SCAN|t1  |1       |2           |
-==========================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |2           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=256

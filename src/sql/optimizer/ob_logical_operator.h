@@ -30,7 +30,7 @@
 #include "sql/ob_sql_context.h"
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/monitor/ob_sql_plan.h"
-#include "sql/monitor/ob_sql_plan_manager.h"
+#include "sql/monitor/ob_plan_info_manager.h"
 namespace oceanbase
 {
 namespace sql
@@ -109,6 +109,10 @@ struct partition_location
         ret = OB_ERR_UNEXPECTED;                                            \
       } else if (OB_FAIL(exec_params.at(i)->get_ref_expr()                  \
                          ->get_name(buf, buf_len, pos, type))) {            \
+      } else if (OB_FAIL(BUF_PRINTF("("))) { /* Do nothing */               \
+      } else if (OB_FAIL(exec_params.at(i)                                  \
+                         ->get_name(buf, buf_len, pos, type))) {            \
+      } else if (OB_FAIL(BUF_PRINTF(")"))) { /* Do nothing */               \
       } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */               \
       } else if (i < N - 1) {                                               \
         ret = BUF_PRINTF(", ");                                             \

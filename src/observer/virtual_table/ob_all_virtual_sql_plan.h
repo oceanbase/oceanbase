@@ -6,7 +6,7 @@
 #define SRC_OBSERVER_VIRTUAL_SQL_PLAN_H_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
-#include "observer/mysql/ob_ra_queue.h"
+#include "sql/plan_cache/ob_plan_cache.h"
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
 
@@ -14,8 +14,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObPlanItemMgr;
-class ObSqlPlanItemRecord;
+struct ObSqlPlanItem;
 }
 namespace common
 {
@@ -29,6 +28,7 @@ class ObTenantSpaceFetcher;
 
 namespace observer
 {
+
 class ObAllVirtualSqlPlan : public common::ObVirtualTableScannerIterator
 {
 public:
@@ -37,28 +37,27 @@ public:
 
   int inner_open();
   virtual void reset();
-  inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
-  virtual int set_ip(common::ObAddr *addr);
-  int check_ip_and_port(bool &is_valid);
   virtual int inner_get_next_row(common::ObNewRow *&row);
 
 private:
-  int extract_tenant_ids();
-  int fill_cells(sql::ObSqlPlanItemRecord &record);
+  int fill_cells(sql::ObSqlPlanItem *plan_item);
+  int extract_tenant_and_plan_id(const common::ObIArray<common::ObNewRange> &ranges);
+  int dump_all_tenant_plans();
+  int dump_tenant_plans(int64_t tenant_id);
+  int prepare_next_plan();
 
 private:
   enum WAIT_COLUMN
   {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
+    PLAN_ID,
     SVR_IP,
     SVR_PORT,
-    PLAN_ITEM_ID,
     SQL_ID,
     DB_ID,
-    PLAN_ID,
     PLAN_HASH,
     GMT_CREATE,
-    OPERATION,
+    OPERATOR,
     OPTIONS,
     OBJECT_NODE,
     OBJECT_ID,
@@ -66,14 +65,17 @@ private:
     OBJECT_NAME,
     OBJECT_ALIAS,
     OBJECT_TYPE,
-    OPTIMZIER,
+    OPTIMIZER,
     ID,
     PARENT_ID,
     DEPTH,
     POSITION,
     SEARCH_COLUMNS,
+    IS_LAST_CHILD,
     COST,
+    REAL_COST,
     CARDINALITY,
+    REAL_CARDINALITY,
     BYTES,
     ROWSET,
     OTHER_TAG,
@@ -97,27 +99,45 @@ private:
   };
 
   const static int64_t KEY_TENANT_ID_IDX = 0;
-  const static int64_t KEY_IP_IDX        = 1;
-  const static int64_t KEY_PORT_IDX      = 2;
+  const static int64_t KEY_PLAN_ID_IDX   = 1;
+  const static int64_t KEY_IP_IDX        = 2;
+  const static int64_t KEY_PORT_IDX      = 3;
   const static int64_t ROWKEY_COUNT      = 4;
 
+  struct PlanInfo {
+    PlanInfo();
+    virtual ~PlanInfo();
+    void reset();
+    int64_t plan_id_;
+    int64_t tenant_id_;
+    TO_STRING_KV(
+      K_(plan_id),
+      K_(tenant_id)
+    );
+  };
+
+  struct DumpAllPlan
+  {
+    DumpAllPlan();
+    virtual ~DumpAllPlan();
+    void reset();
+    int operator()(common::hash::HashMapPair<sql::ObCacheObjID, sql::ObILibCacheObject *> &entry);
+    ObSEArray<PlanInfo, 8> *plan_ids_;
+    int64_t tenant_id_;
+  };
+
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSqlPlan);
-  sql::ObPlanItemMgr *sql_plan_mgr_;
-  int64_t start_id_;
-  int64_t end_id_;
-  int64_t cur_id_;
-  common::ObRaQueue::Ref ref_;
-  common::ObAddr *addr_;
-  common::ObString ipstr_;
-  int32_t port_;
-  char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
-
-  bool is_first_get_;
-
-  common::ObSEArray<uint64_t, 16> tenant_id_array_;
-  int64_t tenant_id_array_idx_;
-
-  share::ObTenantSpaceFetcher *with_tenant_ctx_;
+  ObSEArray<PlanInfo, 8> plan_ids_;
+  int64_t plan_idx_;
+  //current scan plan info
+  ObSEArray<sql::ObSqlPlanItem*, 10> plan_items_;
+  int64_t plan_item_idx_;
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t db_id_;
+  uint64_t plan_hash_;
+  int64_t  gmt_create_;
+  int64_t tenant_id_;
+  int64_t plan_id_;
 };
 }
 }

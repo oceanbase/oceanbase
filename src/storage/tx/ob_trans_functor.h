@@ -30,6 +30,7 @@
 #include "storage/tx/ob_tx_stat.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
+#include "storage/tx/ob_xa_service.h"
 
 namespace oceanbase
 {
@@ -761,6 +762,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     bool bool_ret = false;
+    // threshold for primary tenant inserting inner table
+    int64_t INSERT_INTERNAL_FOR_PRIMARY = 10 * 60 * 1000 * 1000L;
 
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       ret = OB_INVALID_ARGUMENT;
@@ -811,8 +814,14 @@ public:
           TRANS_LOG_RET(WARN, ret, "ObTxStat init error", K(ret), KPC(tx_ctx));
         } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
-        } else {
-          // do nothing
+        } else if (!tx_stat.xid_.empty() && tx_stat.coord_ == tx_stat.ls_id_ && (int64_t)ObTxState::REDO_COMPLETE == tx_stat.state_
+                   && (!MTL_IS_PRIMARY_TENANT() || (TxCtxRoleState::LEADER == tx_stat.role_state_
+                   && tx_stat.last_request_ts_ < ObClockGenerator::getClock() - INSERT_INTERNAL_FOR_PRIMARY))) {
+          MTL(ObXAService *)->insert_record_for_standby(tx_stat.tenant_id_,
+                                                        tx_stat.xid_,
+                                                        tx_stat.tx_id_,
+                                                        tx_stat.coord_,
+                                                        tx_stat.scheduler_addr_);
         }
       }
     }

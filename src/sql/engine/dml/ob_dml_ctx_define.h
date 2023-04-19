@@ -953,7 +953,7 @@ struct ObDMLRtCtx
   bool need_non_sub_full_task()
   { return das_task_status_.need_non_sub_full_task(); }
   void add_cached_row_size(const int64_t row_size) { cached_row_size_ += row_size; }
-  int64_t get_cached_row_size() const { return cached_row_size_; }
+  int64_t get_row_buffer_size() const { return cached_row_size_; }
 
   ObDASRef das_ref_;
   DasTaskStatus das_task_status_;

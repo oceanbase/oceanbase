@@ -432,10 +432,13 @@ int64_t ObCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   int64_t total_cost = 0;
+  if (idx_ > DAG_WAIT_TO_SCHEDULE && click_poinsts_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
+    fmt_ts_to_meaningful_str(buf, buf_len, pos, "wait_schedule_time", click_poinsts_[DAG_WAIT_TO_SCHEDULE]);
+  }
   for (int64_t idx = COMPACTION_POLICY; idx < idx_; ++idx) {
     total_cost += click_poinsts_[idx];
   }
-  if (total_cost > 0) {
+  if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD) {
     float ratio = 0;
     for (int64_t idx = COMPACTION_POLICY; idx < idx_; ++idx) {
       const uint32_t time_interval = click_poinsts_[idx];
@@ -453,9 +456,7 @@ int64_t ObCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
   if (pos != 0 && pos < buf_len) {
     buf[pos - 1] = ';';
   }
-  if (idx_ > DAG_WAIT_TO_SCHEDULE && click_poinsts_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
-    fmt_ts_to_meaningful_str(buf, buf_len, pos, "wait_schedule_time", click_poinsts_[DAG_WAIT_TO_SCHEDULE]);
-  }
+
   if (pos != 0 && pos < buf_len) {
     pos -= 1;
   }
@@ -700,7 +701,8 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("medium compaction info is invalid", K(ret), KPC(this), K(medium_list), KPC(medium_info_ptr));
   } else if (medium_info_ptr->contain_parallel_range_
-      && OB_FAIL(parallel_merge_ctx_.init(*medium_info_ptr))) {
+      && !parallel_merge_ctx_.is_valid()
+      && OB_FAIL(parallel_merge_ctx_.init(*medium_info_ptr))) { // may init twice after swap tablet
     LOG_WARN("failed to init parallel merge ctx", K(ret), KPC(medium_info_ptr));
   } else {
     void *buf = nullptr;

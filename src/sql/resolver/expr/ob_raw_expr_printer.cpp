@@ -3131,13 +3131,15 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else {
     if (!print_params_.for_dblink_ &&
-        !expr->get_database_name().empty()) {
+        !expr->get_database_name().empty() &&
+         expr->get_database_name().case_compare("oceanbase") != 0) {
       PRINT_QUOT;
       DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
       PRINT_QUOT;
       DATA_PRINTF(".");
     }
-    if (!expr->get_package_name().empty()) {
+    if (!expr->get_package_name().empty() &&
+        !expr->get_is_udt_cons()) {
       PRINT_QUOT;
       DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_package_name()));
       PRINT_QUOT;
@@ -3156,6 +3158,8 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     for (int64_t  i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (params_type.at(i).is_null()) { // default parameter, do not print
         // do nothing ...
+      } else if (0 == i && expr->get_is_udt_cons()) {
+        // do not print construnct null self argument
       } else {
         if (!params_name.at(i).empty()) {
           PRINT_QUOT;

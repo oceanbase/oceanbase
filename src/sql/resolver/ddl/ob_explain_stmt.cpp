@@ -54,7 +54,7 @@ int64_t ObExplainStmt::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(explain_query_stmt_)) {
     databuff_printf(buf, buf_len, pos, "explain query stmt is null");
   } else {
-    J_KV(N_EXPLAIN_STMT, explain_query_stmt_);
+    J_KV(K_(into_table), K_(statement_id), N_EXPLAIN_STMT, explain_query_stmt_);
   }
   J_OBJ_END();
   return pos;
