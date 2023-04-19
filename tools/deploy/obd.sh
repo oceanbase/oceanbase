@@ -595,7 +595,7 @@ function main() {
   if [[ -f ${OBD_LOCAL_VERSION_PATH} ]]
   then
     obd_local_version=`cat ${OBD_LOCAL_VERSION_PATH}`
-    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E 'ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+'`
+    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E '^ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+' | head -n1`
     obd_deps_version=${obd_deps_version/-/.}
     if [[ ${obd_local_version} != ${obd_deps_version} ]]
     then
