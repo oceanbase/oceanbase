@@ -72,6 +72,7 @@ template <class T, size_t tag>
 ObDITls<T, tag>::~ObDITls()
 {
   if (is_valid()) {
+    lib::ObDisableDiagnoseGuard disable_diagnose_guard;
     ob_delete(instance_);
     instance_ = nullptr;
   }
