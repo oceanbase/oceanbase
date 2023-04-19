@@ -351,7 +351,7 @@ int ObMicroBlockIndexMgr::cal_border_row_count(const ObStoreRange& range, const 
       if (gap_size >= common::OB_SKIP_RANGE_LIMIT) {
         physical_row_count -= gap_size;
       }
-      physical_row_count += row_count_delta_;
+      physical_row_count += (row_count_delta_ * count) / micro_count_;
     }
   }
   return ret;
