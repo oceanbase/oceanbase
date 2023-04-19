@@ -131,7 +131,7 @@ private:
 class ReadBuffer
 {
 public:
-  enum { IO_BUFFER_SIZE = 1<<16 };
+  enum { IO_BUFFER_SIZE = (1<<15) - 128};
   ReadBuffer(int fd): fd_(fd), has_EAGAIN_(false), request_more_data_(false),
                 alloc_buf_(NULL), buf_end_(NULL), cur_buf_(NULL), data_end_(NULL),
                 consume_sz_(0)
