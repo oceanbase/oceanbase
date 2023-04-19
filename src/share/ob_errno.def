@@ -1768,6 +1768,8 @@ DEFINE_ERROR(OB_TRANSFER_SYS_ERROR, -7109, -1, "HY000", "transfer system error")
 DEFINE_ERROR(OB_TRANSFER_MEMBER_LIST_NOT_SAME, -7110, -1, "HY000", "transfer src ls and dest ls member list not same");
 DEFINE_ERROR(OB_ERR_UNEXPECTED_LOCK_OWNER, -7111, -1, "HY000", "lock owner id is not expected");
 DEFINE_ERROR(OB_LS_TRANSFER_SCN_TOO_SMALL, -7112, -1, "HY000", "change member list compare ls transfer scn too small");
+DEFINE_ERROR(OB_TABLET_TRANSFER_SEQ_NOT_MATCH, -7113, -1, "HY000", "compare tablet transfer seq not match");
+DEFINE_ERROR(OB_TRANSFER_DETECT_ACTIVE_TRANS, -7114, -1, "HY000", "transfer detect active trans");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
