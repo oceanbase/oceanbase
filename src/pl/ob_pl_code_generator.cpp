@@ -3421,6 +3421,8 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_query"), ft, spi_service_.spi_query_))) {
@@ -3460,6 +3462,8 @@ int ObPLCodeGenerator::init_spi_service()
     } else if (OB_FAIL(arg_types.push_back(bool_type_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -5188,11 +5192,13 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     }
     if (OB_SUCC(ret)) {
       if (s.get_params().empty()) {
+        OZ (args.push_back(for_update));
         OZ (get_helper().create_call(ObString("spi_query"), get_spi_service().spi_query_, args, ret_err));
       } else { //有外部变量，走prepare/execute接口
         ObLLVMValue is_forall;
         OZ (get_helper().get_int8(static_cast<int64_t>(s.is_forall_sql()), is_forall));
         OZ (args.push_back(is_forall));
+        OZ (args.push_back(for_update));
         OZ (get_helper().create_call(ObString("spi_execute"), get_spi_service().spi_execute_, args, ret_err));
       }
     }

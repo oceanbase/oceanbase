@@ -1474,6 +1474,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
   bool is_forbid_anony_parameter = block->is_forbid_anony_parameter_;
+  int64_t old_worker_timeout_ts = 0;
   /* !!!
    * PL，req_timeinfo_guard一定要在执行前定义
    * !!!
@@ -1491,7 +1492,20 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
 
   if (OB_SUCC(ret)) {
     ParamStore exec_params((ObWrapperAllocator(ctx.get_allocator())));
-    if (!is_forbid_anony_parameter && lib::is_oracle_mode()) {
+    if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
+      // set work timeout for compile it only top level store routine
+      int64_t pl_block_timeout = 0;
+      int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
+      old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+      OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
+      if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
+        pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+      }
+      OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!is_forbid_anony_parameter && lib::is_oracle_mode()) {
       OZ (parameter_anonymous_block(ctx, block, exec_params, ctx.get_allocator(), cacheobj_guard));
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       CK (OB_NOT_NULL(routine));
@@ -1514,6 +1528,10 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
         OZ (compiler.compile(block, *routine, NULL, false));
         OX (routine->set_debug_priv());
       }
+    }
+    // restore work timeout
+    if (old_worker_timeout_ts != 0) {
+      THIS_WORKER.set_timeout_ts(old_worker_timeout_ts);
     }
 
     // prepare it.
@@ -1587,6 +1605,7 @@ int ObPL::execute(ObExecContext &ctx,
   FLTSpanGuard(pl_entry);
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
+  int64_t old_worker_timeout_ts = 0;
 
   /* !!!
    * PL，req_timeinfo_guard一定要在执行前定义
@@ -1594,6 +1613,17 @@ int ObPL::execute(ObExecContext &ctx,
    */
   observer::ObReqTimeGuard req_timeinfo_guard;
   CHECK_COMPATIBILITY_MODE(ctx.get_my_session());
+  if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
+    // set work timeout for compile it only top level store routine
+    int64_t pl_block_timeout = 0;
+    int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
+    old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+    OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
+    if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
+      pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+    }
+    OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
+  }
 
   // get from cache or compile it ...
   OZ (get_pl_function(ctx, params, stmt_id, sql, cacheobj_guard));
@@ -1601,6 +1631,11 @@ int ObPL::execute(ObExecContext &ctx,
   CK (OB_NOT_NULL(routine));
   OX (out_args = routine->get_out_args());
   CK (OB_NOT_NULL(ctx.get_package_guard()));
+
+  // restore work timeout
+  if (old_worker_timeout_ts != 0) {
+    THIS_WORKER.set_timeout_ts(old_worker_timeout_ts);
+  }
 
   // prepare it...
   if (OB_SUCC(ret)) {
@@ -1660,11 +1695,23 @@ int ObPL::execute(ObExecContext &ctx,
   ObPLFunction *routine = NULL;
   ObPLFunction *local_routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
-
+  int64_t old_worker_timeout_ts = 0;
   /* !!!
   * PL，req_timeinfo_guard一定要在执行前定义
   * !!!
   */
+  if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
+    // set work timeout for compile it only top level store routine
+    int64_t pl_block_timeout = 0;
+    int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
+    old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+    OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
+    if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
+      pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+    }
+    OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
+  }
+
   observer::ObReqTimeGuard req_timeinfo_guard;
   SMART_VAR(ObPLContext, stack_ctx) {
     LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
@@ -1684,6 +1731,10 @@ int ObPL::execute(ObExecContext &ctx,
                         cacheobj_guard,
                         local_routine),
           K(routine_id), K(subprogram_path));
+    // restore work timeout
+    if (old_worker_timeout_ts != 0) {
+      THIS_WORKER.set_timeout_ts(old_worker_timeout_ts);
+    }
     // if the routine comes from local, guard needn't to manage it.
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(local_routine)) {

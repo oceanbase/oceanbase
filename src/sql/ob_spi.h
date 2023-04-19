@@ -187,7 +187,7 @@ private:
   int end_nested_session(ObSQLSessionInfo &session);
   int alloc_saved_value(sql::ObSQLSessionInfo::StmtSavedValue *&session_value);
 public:
-  static int check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type);
+  static int check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type, bool for_update = false);
   int start_trans(ObExecContext &ctx);
   int set_cursor_env(ObSQLSessionInfo &session);
   int reset_cursor_env(ObSQLSessionInfo &session);
@@ -195,7 +195,7 @@ public:
                         stmt::StmtType type = stmt::StmtType::T_NONE,
                         bool is_for_update = false);
   void end_cursor_stmt(pl::ObPLExecCtx *pl_ctx, int &result);
-  int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type);
+  int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type, bool for_update);
   void end_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, int &result);
 private:
   bool is_inited_;
@@ -357,7 +357,8 @@ public:
                        int64_t type_count = 0,
                        const bool *exprs_not_null_flag = NULL,
                        const int64_t *pl_integer_ranges = NULL,
-                       bool is_bulk = false);
+                       bool is_bulk = false,
+                       bool for_update = false);
   static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_prepare(common::ObIAllocator &allocator,
                          ObSQLSessionInfo &session,
@@ -380,7 +381,8 @@ public:
                          const bool *exprs_not_null_flag,
                          const int64_t *pl_integer_rangs,
                          bool is_bulk = false,
-                         bool is_forall = false);
+                         bool is_forall = false,
+                         bool for_update = false);
 
   static int spi_execute_immediate(pl::ObPLExecCtx *ctx,
                                    const ObSqlExpression *sql,
@@ -728,7 +730,8 @@ private:
                                const bool *exprs_not_null_flag,
                                const int64_t *pl_integer_rangs,
                                int64_t is_bulk,
-                               bool is_forall = false);
+                               bool is_forall = false,
+                               bool for_update = false);
 
   static int dbms_cursor_execute(pl::ObPLExecCtx *ctx,
                                  const ObString ps_sql,
