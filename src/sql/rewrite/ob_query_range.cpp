@@ -4533,8 +4533,8 @@ int ObQueryRange::try_link_and_next(ObKeyPart *l_key_part, ObKeyPart *r_key_part
     int64_t r_offset = r_key_part->pos_.offset_;
     if (!is_contain(l_key_part->in_keypart_->offsets_, r_offset)) {
       is_happened = true;
-      int64_t l_min_offset = r_key_part->in_keypart_->get_min_offset();
-      if (r_offset < l_min_offset) {
+      int64_t l_min_offset = l_key_part->in_keypart_->get_min_offset();
+      if (l_min_offset < r_offset) {
         res_key_part = l_key_part;
         res_key_part->and_next_ = r_key_part;
       } else {
