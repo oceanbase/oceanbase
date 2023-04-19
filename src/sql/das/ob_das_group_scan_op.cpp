@@ -349,7 +349,6 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
 
     if(lookup_group_cnt_ >= index_group_cnt_ && OB_ITER_END == ret && !index_end_) {
       ret = OB_SUCCESS;
-      state_ = INDEX_SCAN;
     }
   }
 
