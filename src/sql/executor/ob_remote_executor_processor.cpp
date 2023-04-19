@@ -168,6 +168,8 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     exec_ctx_.set_my_session(session_info);
     exec_ctx_.show_session();
     exec_ctx_.get_sql_ctx()->session_info_ = session_info;
+    exec_ctx_.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
+
     vt_ctx.session_ = session_info;
     vt_ctx.vt_iter_factory_ = &vt_iter_factory_;
     vt_ctx.schema_guard_ = &schema_guard_;

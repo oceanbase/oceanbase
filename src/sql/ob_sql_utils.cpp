@@ -669,6 +669,9 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                     (NULL != out_ctx ? out_ctx->get_min_cluster_version() : GET_MIN_CLUSTER_VERSION()))) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
         exec_ctx.set_my_session(session);
+        exec_ctx.set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+                                        ObModIds::OB_SQL_EXEC_CONTEXT,
+                                        ObCtxIds::EXECUTE_CTX_ID));
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         if (NULL != out_ctx) {
           exec_ctx.set_sql_ctx(out_ctx->get_sql_ctx());
@@ -903,6 +906,9 @@ int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allo
     } else {
       exec_ctx = new(exec_ctx)ObExecContext(allocator);
       exec_ctx->set_my_session(default_session);
+      exec_ctx->set_mem_attr(ObMemAttr(tenant_id,
+                                       ObModIds::OB_SQL_EXEC_CONTEXT,
+                                       ObCtxIds::EXECUTE_CTX_ID));
       expr_ctx.exec_ctx_ = exec_ctx;
       expr_ctx.exec_ctx_->set_my_session(default_session);
     }
