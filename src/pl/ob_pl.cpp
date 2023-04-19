@@ -104,6 +104,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_reset_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
                                 (void*)(sql::ObSPIService::spi_copy_datum));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
+                                (void*)(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
                                 (void*)(sql::ObSPIService::spi_sub_nestedtable));
   jit::ObLLVMHelper::add_symbol(ObString("spi_alloc_complex_var"),

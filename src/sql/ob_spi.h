@@ -549,6 +549,9 @@ public:
                             ObDataType *dest_type,
                             uint64_t package_id = OB_INVALID_ID);
 
+  static int spi_destruct_obj(pl::ObPLExecCtx *ctx,
+                              ObObj *obj);
+
   static int spi_build_record_type(common::ObIAllocator &allocator,
                                    ObSQLSessionInfo &session,
                                    share::schema::ObSchemaGetterGuard &schema_guard,

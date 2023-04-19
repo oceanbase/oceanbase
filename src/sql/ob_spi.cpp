@@ -4806,6 +4806,23 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
+                                   ObObj *obj)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(obj));
+  if (OB_SUCC(ret) &&
+      obj->is_pl_extend() &&
+      obj->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+    OZ (ObUserDefinedType::destruct_obj(*obj, ctx->exec_ctx_->get_my_session()));
+  }
+
+  SET_SPI_STATUS;
+  return ret;
+}
+
 int ObSPIService::spi_interface_impl(pl::ObPLExecCtx* ctx, int64_t func_addr)
 {
   int ret = OB_SUCCESS;

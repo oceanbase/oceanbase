@@ -3743,6 +3743,13 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_copy_datum"), ft, spi_service_.spi_copy_datum_));
   }
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type)); //函数第一个参数必须是基础环境信息隐藏参数
+    OZ (arg_types.push_back(obj_pointer_type)); //src
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_destruct_obj"), ft, spi_service_.spi_destruct_obj_));
+  }
 
   if (OB_SUCC(ret)) {
     arg_types.reset();
@@ -7648,6 +7655,20 @@ int ObPLCodeGenerator::generate_out_param(
                                   s.get_block()->in_notfound(),
                                   s.get_block()->in_warning(),
                                   OB_INVALID_ID));
+        if (OB_SUCC(ret) && PL_CALL == s.get_type()) {
+          ObSEArray<jit::ObLLVMValue, 2> args;
+
+          OZ (args.push_back(get_vars()[CTX_IDX]));
+          OZ (args.push_back(src_datum));
+          if (OB_SUCC(ret)) {
+            jit::ObLLVMValue ret_err;
+            if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
+              LOG_WARN("failed to create call", K(ret));
+            } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+              LOG_WARN("failed to check success", K(ret));
+            } else { /*do nothing*/ }
+          }
+        }
       }
     } else { //处理基础类型的出参
       ObSEArray<ObLLVMValue, 4> args;
