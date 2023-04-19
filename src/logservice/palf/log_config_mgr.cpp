@@ -1365,7 +1365,7 @@ int LogConfigMgr::append_config_meta_(const int64_t curr_proposal_id,
     PALF_LOG(WARN, "renew_config_change_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(log_ms_meta_.generate(curr_proposal_id, log_ms_meta_.curr_, new_config_info,
       prev_log_proposal_id_, prev_lsn_, prev_mode_pid_))) {
-    PALF_LOG(ERROR, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K_(self), K(args));
+    PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K_(self), K(args));
   } else {
     // 1. For normal config changing, memberlist in memory takes effect right now.
     // 2. For degrading operation, memberlist in memory will not be changed until the memberlist
