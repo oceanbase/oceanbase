@@ -1184,6 +1184,9 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
     is_prepared = false;
     prepare_version.set_max();
   }
+  if (is_prepared && OB_INVALID_SCN_VAL == prepare_version.get_val_for_gts()) {
+    TRANS_LOG(ERROR, "invalid prepare version", K(cur_state));
+  }
 
   return ret;
 }
