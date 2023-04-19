@@ -26017,9 +26017,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      CASE WHEN
-      A.DATABASE_NAME = '__public' THEN
-      'PUBLIC' ELSE A.DATABASE_NAME END AS OWNER,
+      A.DATABASE_NAME AS OWNER,
       A.SYNONYM_NAME AS SYNONYM_NAME,
       CAST(CASE WHEN INSTR(A.OBJECT_NAME, '@') = 0
            THEN B.DATABASE_NAME
@@ -27873,9 +27871,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      CASE WHEN
-      A.DATABASE_NAME = '__public' THEN
-      'PUBLIC' ELSE A.DATABASE_NAME END AS OWNER,
+      A.DATABASE_NAME AS OWNER,
       A.SYNONYM_NAME AS SYNONYM_NAME,
       CAST(CASE WHEN INSTR(A.OBJECT_NAME, '@') = 0
            THEN B.DATABASE_NAME
