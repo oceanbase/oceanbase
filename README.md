@@ -1,6 +1,6 @@
 <p align="center">
     <a href="https://github.com/oceanbase/oceanbase">
-        <img alt="OceanBase Logo" src="docs/Oceanbase-LogoRGB.svg" width="50%" />
+        <img alt="OceanBase Logo" src="images/logo.svg" width="50%" />
     </a>
 </p>
 <p align="center">
@@ -21,6 +21,9 @@
     </a>
     <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
         <img alt="Chinese doc" src="https://img.shields.io/badge/文档-简体中文-blue" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/actions/workflows/compile.yml">
+        <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
     </a>
     <a href="https://github.com/oceanbase/oceanbase/commits/master">
         <img alt="last commit" src="https://img.shields.io/github/last-commit/oceanbase/oceanbase/master" />
@@ -43,13 +46,6 @@
 See [key features](https://en.oceanbase.com/product/opensource) to learn more details.
 
 # System architecture
-The operation of an OceanBase Database is supported by different components in the storage, replication, transaction, SQL, and access layers:
-* **Storage layer**: Stores the data of a table or a table partition.
-* **Replication layer**: Ensures data consistency between replicas of a partition based on consensus algorithms.
-* **Transaction layer**: Ensures the atomicity and isolation of the modifications to one or multiple partitions.
-* **SQL layer**: Translates SQL queries into executions over the storage.
-* **Access layer**: Forwards user queries to the appropriate OceanBase Database instances for processing.
-
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
 
 [Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
@@ -63,30 +59,30 @@ You can quickly deploy a standalone OceanBase Database to experience with the fo
 
 ```shell
 # download and install all-in-one package (internet connection is required)
-$> bash -c "$(curl -s https://obbusiness-private.oss-cn-shanghai.aliyuncs.com/download-center/opensource/oceanbase-all-in-one/installer.sh)"
-$> source ~/.oceanbase-all-in-one/bin/env.sh
+bash -c "$(curl -s https://obbusiness-private.oss-cn-shanghai.aliyuncs.com/download-center/opensource/oceanbase-all-in-one/installer.sh)"
+source ~/.oceanbase-all-in-one/bin/env.sh
 
 # quickly deploy OceanBase database
-$> obd demo
+obd demo
 ```
 ### 🐳 Deploy by docker
 
 1. Pull OceanBase image (optional)
 ```shell
-$> docker pull oceanbase/oceanbase-ce
+docker pull oceanbase/oceanbase-ce
 ```
 2. Start an OceanBase Database instance
 ```shell
 # Deploy an instance with the maximum specifications supported by the container.
-$> docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
+docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
 # Or deploy a mini standalone instance.
-$> docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
 ```
 3. Connect to the OceanBase Database instance
 ```shell
-$> docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
-$> docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
-$> docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
+docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
+docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
+docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
 ```
 
 See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850) for more details.
@@ -98,8 +94,6 @@ See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/C
 # Roadmap
 
 See [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects).
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
-
 # Case study
 
 See [success stories](https://en.oceanbase.com/customer/home).
@@ -118,5 +112,5 @@ Join the OceanBase community via:
 
 * [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
 * [Chinese User Forum](https://ask.oceanbase.com/)
-* DingTalk Group: 33254054 ([QR code](docs/DingTalk.JPG))
+* DingTalk Group: 33254054 ([QR code](images/dingtalk.svg))
 * WeChat Group (Add the assistant with WeChat ID: OBCE666)
