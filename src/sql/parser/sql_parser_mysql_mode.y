@@ -9396,7 +9396,7 @@ expr %prec LOWER_PARENS
     }
     else
     {
-      if (0 == $$->str_len_) {
+      if (0 == $1->str_len_) {
         $$->str_value_ = $1->str_value_;
         $$->str_len_ = $1->str_len_;
       } else {
