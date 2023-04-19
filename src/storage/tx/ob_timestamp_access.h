@@ -14,6 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_TIMESTAMP_ACCESS_
 
 #include "share/rc/ob_tenant_base.h"
+#include "common/ob_role.h"
 
 namespace oceanbase
 {
@@ -48,6 +49,39 @@ public:
   ServiceType get_service_type() const { return service_type_; }
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
   int get_number(const int64_t base_id, int64_t &gts);
+  void get_virtual_info(int64_t &ts_value,
+                        ServiceType &service_type,
+                        common::ObRole &role,
+                        int64_t &proposal_id);
+  static const char *service_type_to_cstr(const ServiceType service_type)
+  {
+    const char *str;
+    switch (service_type) {
+      case ServiceType::FOLLOWER:
+        str = "FOLLOWER";
+        break;
+      case ServiceType::GTS_LEADER:
+        str = "GTS_LEADER";
+        break;
+      case ServiceType::STS_LEADER:
+        str = "STS_LEADER";
+        break;
+      default:
+        str = "UNKNOWN";
+        break;
+    }
+    return str;
+  }
+  static const char *ts_type_to_cstr(bool is_primary)
+  {
+    const char *str;
+    if (is_primary) {
+      str = "GTS";
+    } else {
+      str = "STS";
+    }
+    return str;
+  }
 private:
   ServiceType service_type_;
 };

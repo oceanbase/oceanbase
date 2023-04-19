@@ -62,6 +62,7 @@ public:
   int64_t get_limited_id() const { return limited_id_; }
   static SCN get_sts_start_scn(const SCN &max_sys_ls_scn)
   { return SCN::plus(max_sys_ls_scn, 2 * TIMESTAMP_PREALLOCATED_RANGE); };
+  void get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id);
 private:
   ObGtsResponseRpc rpc_;
   int handle_local_request_(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);

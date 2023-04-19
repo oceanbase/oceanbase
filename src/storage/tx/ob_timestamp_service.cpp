@@ -200,5 +200,17 @@ int ObTimestampService::switch_to_leader()
   return ret;
 }
 
+void ObTimestampService::get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  ts_value = last_id_;
+  if (OB_FAIL(check_and_fill_ls())) {
+    TRANS_LOG(WARN, "ls set fail", K(ret));
+  } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
+    TRANS_LOG(WARN, "get ls role fail", K(ret));
+  }
+  TRANS_LOG(INFO, "gts get virtual info", K(ret), K_(last_id), K(ts_value), K(role), K(proposal_id));
+}
+
 }
 }

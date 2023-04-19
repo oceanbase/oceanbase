@@ -117,6 +117,7 @@
 #include "observer/virtual_table/ob_iterate_virtual_table.h"
 #include "observer/virtual_table/ob_iterate_private_virtual_table.h" // ObIteratePrivateVirtualTable
 #include "observer/virtual_table/ob_all_virtual_id_service.h"
+#include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/virtual_table/ob_core_meta_table.h"
 #include "rootserver/virtual_table/ob_virtual_core_inner_table.h"
@@ -2027,6 +2028,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualIDService construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(id_service);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_TID: {
+            ObAllVirtualTimestampService *timestamp_service = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTimestampService, timestamp_service))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTimestampService construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(timestamp_service);
             }
             break;
           }
