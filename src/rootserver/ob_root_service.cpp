@@ -9032,6 +9032,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
         valid = valid && ObConfigFreezeTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
         if (!valid) {
           ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant freeze_trigger_percentage which should smaller than writing_throttling_trigger_percentage");
           LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
         }
       }
@@ -9041,6 +9042,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
         valid = valid && ObConfigWriteThrottleTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
         if (!valid) {
           ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant writing_throttling_trigger_percentage which should greater than freeze_trigger_percentage");
           LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
         }
       }
