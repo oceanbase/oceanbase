@@ -4754,7 +4754,6 @@ int ObRawExprUtils::build_op_pseudo_column_expr(ObRawExprFactory &expr_factory,
 {
   int ret = OB_SUCCESS;
   CK(NULL != expr_name);
-  CK(ObNullType != res_type.get_type());
 
   OZ(expr_factory.create_raw_expr(expr_type, expr));
   CK(NULL != expr);
