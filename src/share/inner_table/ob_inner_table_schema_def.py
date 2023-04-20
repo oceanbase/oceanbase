@@ -11564,7 +11564,7 @@ def_table_schema(
 
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
 # 12397: __all_virtual_px_p2p_datahub
-
+# 12398: __all_virtual_column_group
 #
 # 余留位置
 #
@@ -11873,6 +11873,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15383: __all_virtual_resource_pool_sys_agent
 # 15384: __all_virtual_px_p2p_datahub
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
+# 15386: __all_virtual_column_group
 
 ################################################################################
 # System View (20000,30000]
