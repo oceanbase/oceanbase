@@ -252,6 +252,22 @@ int DRLSInfo::get_ls_status_info(
   return ret;
 }
 
+int DRLSInfo::get_inner_ls_info(share::ObLSInfo &inner_ls_info) const
+{
+  int ret = OB_SUCCESS;
+  inner_ls_info.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!inner_ls_info_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(inner_ls_info));
+  } else if (OB_FAIL(inner_ls_info.assign(inner_ls_info_))) {
+    LOG_WARN("fail to assign ls info", KR(ret), K_(inner_ls_info));
+  }
+  return ret;
+}
+
 int DRLSInfo::fill_servers()
 {
   int ret = OB_SUCCESS;
@@ -431,27 +447,6 @@ int DRLSInfo::build_disaster_ls_info(
                 &server->v_, &unit->v_, &unit_in_group->v_))) {
           LOG_WARN("fail to append replica server/unit stat", KR(ret),
                    "server_stat_info", server->v_, "unit_stat_info", unit->v_);
-        } else if (ls_replica.get_in_member_list()) {
-          ++member_list_cnt_;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // TODO: find latest leader
-      const share::ObLSReplica *leader_replica = nullptr;
-      int tmp_ret = inner_ls_info_.find_leader(leader_replica);
-      if (OB_SUCCESS == tmp_ret && nullptr != leader_replica) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < leader_replica->get_member_list().count(); ++i) {
-          const share::ObLSReplica *replica = nullptr;
-          const common::ObAddr &server = leader_replica->get_member_list().at(i).get_server();
-          const int64_t member_time_us = leader_replica->get_member_list().at(i).get_timestamp();
-          tmp_ret = inner_ls_info_.find(server, replica);
-          if (OB_SUCCESS == tmp_ret) {
-            // replica exists, bypass
-          } else {
-            ret = tmp_ret;
-            LOG_WARN("fail to find replica", KR(ret));
-          }
         }
       }
     }
@@ -460,6 +455,7 @@ int DRLSInfo::build_disaster_ls_info(
       int tmp_ret = inner_ls_info_.find_leader(leader_replica);
       if (OB_SUCCESS == tmp_ret && nullptr != leader_replica) {
         paxos_replica_number_ = leader_replica->get_paxos_replica_number();
+        member_list_cnt_ = leader_replica->get_member_list().count();
         has_leader_ = true;
       }
     }
@@ -491,17 +487,17 @@ int DRLSInfo::get_leader_and_member_list(
   const ObLSReplica *leader_replica = nullptr;
   if (OB_FAIL(inner_ls_info_.find_leader(leader_replica))) {
     LOG_WARN("fail to find leader", KR(ret));
-  } else if (OB_UNLIKELY(nullptr == leader_replica)) {
+  } else if (OB_ISNULL(leader_replica)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("leader replica ptr is null", KR(ret));
+    LOG_WARN("leader replica ptr is null", KR(ret), KP(leader_replica));
   } else {
     leader_addr = leader_replica->get_server();
-    for (int64_t i = 0; OB_SUCC(ret) && i < inner_ls_info_.get_replicas().count(); ++i) {
-      const ObLSReplica &replica = inner_ls_info_.get_replicas().at(i);
-      if (!replica.get_in_member_list()) {
-        // bypass
-      } else if (OB_FAIL(member_list.add_server(replica.get_server()))) {
-        LOG_WARN("fail to add server to member list", KR(ret));
+    FOREACH_CNT_X(m, leader_replica->get_member_list(), OB_SUCC(ret)) {
+      if (OB_ISNULL(m)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid SimpleMember", KR(ret), KP(m));
+      } else if (OB_FAIL(member_list.add_member(ObMember(m->get_server(), m->get_timestamp())))) {
+        LOG_WARN("fail to add server to member list", KR(ret), KPC(m));
       }
     }
   }

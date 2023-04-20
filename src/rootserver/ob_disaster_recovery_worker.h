@@ -692,7 +692,7 @@ private:
   };
 private:
   int check_stop() const;
-  
+
   static int check_ls_locality_match_(
       DRLSInfo &dr_ls_info,
       ObUnitManager &unit_mgr,
@@ -704,11 +704,11 @@ private:
       DRLSInfo &dr_ls_info);
 
   int start();
-  
+
   void statistic_remain_dr_task();
-  
+
   void statistic_total_dr_task(const int64_t task_cnt);
-  
+
   int try_ls_disaster_recovery(
       const bool only_for_display,
       DRLSInfo &dr_ls_info,
@@ -732,29 +732,29 @@ private:
       DRLSInfo &dr_ls_info,
       int64_t &acc_dr_task);
 
-  int check_need_generate_remove_permanent_offline_replicas(
-      const int64_t index,
+  int do_single_replica_permanent_offline_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
       DRLSInfo &dr_ls_info,
-      share::ObLSReplica *&ls_replica,
-      DRServerStatInfo *&server_stat_info,
-      DRUnitStatInfo *&unit_stat_info,
-      DRUnitStatInfo *&unit_in_group_stat_info,
-      bool &need_generate);
+      const bool only_for_display,
+      const ObReplicaType &replica_type,
+      const ObMember &member_to_remove,
+      int64_t &acc_dr_task);
+
+  int check_ls_only_in_member_list_(
+      const DRLSInfo &dr_ls_info);
 
   int check_can_generate_task(
       const int64_t acc_dr_task,
       const bool need_check_has_leader_while_remove_replica,
       const bool is_high_priority_task,
-      const DRServerStatInfo &server_stat_info,
+      const ObAddr &server_addr,
       DRLSInfo &dr_ls_info,
       ObDRTaskKey &task_key,
       bool &can_generate);
 
   int construct_extra_infos_to_build_remove_paxos_replica_task(
       const DRLSInfo &dr_ls_info,
-      const share::ObLSReplica &ls_replica,
-      uint64_t &tenant_id,
-      share::ObLSID &ls_id,
       share::ObTaskId &task_id,
       int64_t &new_paxos_replica_number,
       int64_t &old_paxos_replica_number,
