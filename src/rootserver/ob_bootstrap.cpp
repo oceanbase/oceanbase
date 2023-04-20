@@ -693,7 +693,7 @@ int ObBootstrap::create_all_core_table_partition()
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to start trans", KR(ret));
-    } else if (OB_FAIL(table_creator.init())) {
+    } else if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init tablet creator", KR(ret));
     } else {
       // create all core table partition
@@ -742,7 +742,7 @@ int ObBootstrap::create_all_partitions()
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to start trans", KR(ret));
-    } else if (OB_FAIL(table_creator.init())) {
+    } else if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init tablet creator", KR(ret));
     } else {
       // create core table partition

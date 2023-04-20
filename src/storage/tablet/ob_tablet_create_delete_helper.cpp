@@ -32,6 +32,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/scn.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -115,7 +116,9 @@ int ObTabletCreateDeleteHelper::prepare_create_tablets(
     }
   } else {
     // NOT in clog replaying procedure
-    if (OB_FAIL(do_prepare_create_tablets(arg, trans_flags))) {
+    if (OB_FAIL(check_create_new_tablets(arg))) {
+      LOG_WARN("failed to check crate new tablets", K(ret), K(trans_flags), K(PRINT_CREATE_ARG(arg)));
+    } else if (OB_FAIL(do_prepare_create_tablets(arg, trans_flags))) {
       LOG_WARN("failed to do prepare create tablets", K(ret), K(trans_flags), K(PRINT_CREATE_ARG(arg)));
     } else {
       LOG_INFO("succeeded to prepare create tablets", K(ret), K(trans_flags), K(PRINT_CREATE_ARG(arg)));
@@ -1503,6 +1506,60 @@ int ObTabletCreateDeleteHelper::create_sstable(
       LOG_WARN("failed to init sstable", K(ret), K(param));
     } else {
       table_handle = handle;
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObUnitInfoGetter::ObTenantConfig unit;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  int64_t tablet_cnt_per_gb = 20000; // default value
+  bool skip_check = !arg.need_check_tablet_cnt_;
+
+  // skip hidden tablet creation or truncate tablet creation
+  for (int64_t i = 0; OB_SUCC(ret) && !skip_check && i < arg.table_schemas_.count(); ++i) {
+    if (arg.table_schemas_[i].is_user_hidden_table()
+      || OB_INVALID_VERSION != arg.table_schemas_[i].get_truncate_version()) {
+      skip_check = true;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (skip_check) {
+  } else {
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("get invalid tenant config", K(ret));
+      } else {
+        tablet_cnt_per_gb = tenant_config->_max_tablet_cnt_per_gb;
+      }
+    }
+
+    if (FAILEDx(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
+      if (OB_TENANT_NOT_IN_SERVER != ret) {
+        LOG_WARN("failed to get tenant unit", K(ret), K(tenant_id));
+      } else {
+        // during restart, tenant unit not ready, skip check
+        ret = OB_SUCCESS;
+      }
+    } else {
+      const double memory_limit = unit.config_.memory_size();
+      const int64_t max_tablet_cnt = memory_limit / (1 << 30) * tablet_cnt_per_gb;
+      const int64_t cur_tablet_cnt = t3m->get_total_tablet_cnt();
+      const int64_t inc_tablet_cnt = arg.get_tablet_count();
+
+      if (OB_UNLIKELY(cur_tablet_cnt + inc_tablet_cnt >= max_tablet_cnt)) {
+        ret = OB_TOO_MANY_PARTITIONS_ERROR;
+        LOG_WARN("too many partitions of tenant", K(ret), K(tenant_id), K(memory_limit), K(tablet_cnt_per_gb),
+        K(max_tablet_cnt), K(cur_tablet_cnt), K(inc_tablet_cnt));
+      }
     }
   }
 

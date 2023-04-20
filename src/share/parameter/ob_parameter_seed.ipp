@@ -433,6 +433,9 @@ DEF_INT(_storage_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "[0, 5
          "maximum memory for storage meta, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage, 0 means no limit to storage meta memory",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_max_tablet_cnt_per_gb, OB_TENANT_PARAMETER, "20000", "[1000, 50000)",
+         "The maximum number of tablets supported per 1GB of memory by tenant unit. Range: [1000, 50000)",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ////  rootservice config
 DEF_TIME(lease_time, OB_CLUSTER_PARAMETER, "10s", "[1s, 5m]",
          "Lease for current heartbeat. If the root server does not received any heartbeat "

@@ -335,7 +335,7 @@ int TestLobCommon::build_lob_tablet_arg(
       lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
     STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", K(ret), K(table_schema));

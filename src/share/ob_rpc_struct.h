@@ -3062,7 +3062,8 @@ public:
   void reset();
   int assign(const ObBatchCreateTabletArg &arg);
   int init_create_tablet(const share::ObLSID &id_,
-                         const share::SCN &major_frozen_scn);
+                         const share::SCN &major_frozen_scn,
+                         const bool need_check_tablet_cnt);
   int64_t get_tablet_count() const;
   DECLARE_TO_STRING;
 
@@ -3071,6 +3072,7 @@ public:
   share::SCN major_frozen_scn_;
   common::ObSArray<share::schema::ObTableSchema> table_schemas_;
   common::ObSArray<ObCreateTabletInfo> tablets_;
+  bool need_check_tablet_cnt_;
 };
 
 struct ObBatchRemoveTabletArg
