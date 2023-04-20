@@ -864,8 +864,9 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
                                       : index_ctdef_->result_output_.count();
   ObObj *obj_ptr = nullptr;
   void *buf = nullptr;
+  common::ObArenaAllocator& lookup_alloc = lookup_memctx_->get_arena_allocator();
   ObNewRange lookup_range;
-  if (OB_ISNULL(buf = lookup_rtdef_->scan_allocator_.alloc(sizeof(ObObj) * rowkey_cnt))) {
+  if (OB_ISNULL(buf = lookup_alloc.alloc(sizeof(ObObj) * rowkey_cnt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
   } else {
@@ -880,7 +881,7 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
       ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
       if (OB_FAIL(col_datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("convert datum to obj failed", K(ret));
-      } else if (OB_FAIL(ob_write_obj(lookup_rtdef_->scan_allocator_, tmp_obj, obj_ptr[i]))) {
+      } else if (OB_FAIL(ob_write_obj(lookup_alloc, tmp_obj, obj_ptr[i]))) {
         LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
       }
     }
