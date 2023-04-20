@@ -45,7 +45,7 @@ public:
   void set_host(const common::ObAddr &host);
   void loop();
 
-  size_t size() const
+  int64_t size() const
   {
     return queue_.size();
   }

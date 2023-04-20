@@ -117,8 +117,8 @@ int dispatch_req(ObRequest& req)
     ret = OB_TENANT_NOT_IN_SERVER;
   } else if (is_meta_tenant(tenant_id)) {
     // cannot login meta tenant
-    ret = OB_TENANT_NOT_IN_SERVER;
     LOG_WARN("cannot login meta tenant", K(ret), K(tenant_id));
+    ret = OB_TENANT_NOT_IN_SERVER;
   } else if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
     MTL_SWITCH(tenant_id) {
       QueueThread *mysql_queue = MTL(QueueThread *);
@@ -504,11 +504,11 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
           // do nothing
         } else {
           if (OB_TENANT_NOT_IN_SERVER == ret) {
-            LOG_WARN("cannot dispatch success", K(ret), K(req));
+            LOG_WARN("fail to dispatch to tenant", K(ret), K(req));
             // set OB_SUCCESS to go normal procedure
             ret = OB_SUCCESS;
           }
-          if (!mysql_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
+          if (OB_SUCC(ret) && !mysql_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
             ret = OB_QUEUE_OVERFLOW;
             EVENT_INC(MYSQL_DELIVER_FAIL);
             LOG_ERROR("deliver request fail", K(req));
