@@ -48,10 +48,13 @@ public:
   ObPartitionMerger();
   virtual ~ObPartitionMerger();
   virtual void reset();
-  virtual int merge_partition(ObTabletMergeCtx &ctx, const int64_t idx) = 0;
+  virtual int merge_partition(
+      ObTabletMergeCtx &ctx,
+      const int64_t idx,
+      const bool force_flat_format = false) = 0;
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(task_idx), K_(data_store_desc), K_(minimum_iters), K_(merge_info));
 protected:
-  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx) = 0;
+  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx, const bool force_flat_format) = 0;
   virtual int inner_process(const blocksstable::ObDatumRow &row) = 0;
   virtual int close();
   virtual int process(const blocksstable::ObMicroBlock &micro_block);
@@ -97,10 +100,14 @@ class ObPartitionMajorMerger : public ObPartitionMerger
 public:
   ObPartitionMajorMerger();
   ~ObPartitionMajorMerger();
-  virtual int merge_partition(ObTabletMergeCtx &ctx, const int64_t idx) override;
+  virtual void reset() override;
+  virtual int merge_partition(
+      ObTabletMergeCtx &ctx,
+      const int64_t idx,
+      const bool force_flat_format = false) override;
   INHERIT_TO_STRING_KV("ObPartitionMajorMerger", ObPartitionMerger, KPC(merge_progress_));
 protected:
-  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx) override;
+  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx, const bool force_flat_format) override;
   virtual int inner_process(const blocksstable::ObDatumRow &row) override;
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) override;
   virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &rewrite) override;
@@ -120,11 +127,14 @@ public:
   ObPartitionMinorMerger();
   ~ObPartitionMinorMerger();
   virtual void reset() override;
-  virtual int merge_partition(ObTabletMergeCtx &ctx, const int64_t idx) override;
+  virtual int merge_partition(
+      ObTabletMergeCtx &ctx,
+      const int64_t idx,
+      const bool force_flat_format = false) override;
   INHERIT_TO_STRING_KV("ObPartitionMinorMerger", ObPartitionMerger, K_(minimum_iter_idxs),
                        K_(need_build_bloom_filter), KP_(cols_id_map));
 protected:
-  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx) override;
+  virtual int open(ObTabletMergeCtx &ctx, const int64_t idx, const bool force_flat_format) override;
   virtual int close() override;
   virtual int inner_process(const blocksstable::ObDatumRow &row) override;
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) override;

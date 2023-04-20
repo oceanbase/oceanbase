@@ -669,6 +669,13 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     } else {
       // Print status of current encoders for debugging
       print_micro_block_encoder_status();
+      if (OB_BUF_NOT_ENOUGH == ret) {
+        // buffer not enough when building a block with pivoted rows, probably caused by estimate
+        // maximum block size after encoding failed, rewrite errno with OB_ENCODING_EST_SIZE_OVERFLOW
+        // to force compaction task retry with flat row store type.
+        ret = OB_ENCODING_EST_SIZE_OVERFLOW;
+        LOG_WARN("build block failed by probably estimated maximum encoding data size overflow", K(ret));
+      }
     }
 
     if (OB_SUCC(ret)) {

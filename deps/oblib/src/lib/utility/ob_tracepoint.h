@@ -621,6 +621,7 @@ class EventTable
       EN_SCHEDULE_MEDIUM_COMPACTION = 709,
       EN_SCHEDULE_MAJOR_GET_TABLE_SCHEMA = 710,
       EN_SKIP_INDEX_MAJOR = 711,
+      EN_BUILD_DATA_MICRO_BLOCK = 712,
 
       // please add new trace point after 750
       EN_SESSION_LEAK_COUNT_THRESHOLD = 751,
