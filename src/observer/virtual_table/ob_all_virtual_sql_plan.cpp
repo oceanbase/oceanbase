@@ -424,10 +424,7 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
     } else if (start_key_obj_ptr[KEY_TENANT_ID_IDX].is_min_value() &&
                end_key_obj_ptr[KEY_TENANT_ID_IDX].is_max_value()) {
       is_always_true = true;
-      if (!is_sys_tenant(effective_tenant_id_)) {
-        ret = OB_ERR_NO_PRIVILEGE;
-        SERVER_LOG(WARN, "only sys tenant can read all tenant plan", K(ret));
-      } else if (OB_FAIL(dump_all_tenant_plans())) {
+      if (OB_FAIL(dump_all_tenant_plans())) {
         SERVER_LOG(WARN, "failed to dump all tenant plans", K(ret));
       }
     } else if (start_key_obj_ptr[KEY_TENANT_ID_IDX].is_max_value() &&
@@ -449,8 +446,7 @@ int ObAllVirtualSqlPlan::extract_tenant_and_plan_id(const common::ObIArray<commo
         int64_t tenant_id = start_key_obj_ptr[KEY_TENANT_ID_IDX].get_int();
         if (tenant_id != effective_tenant_id_ &&
             !is_sys_tenant(effective_tenant_id_)) {
-          ret = OB_ERR_NO_PRIVILEGE;
-          SERVER_LOG(WARN, "only sys tenant can read other tenant plan", K(ret));
+          //do nothing
         } else if (start_key_obj_ptr[KEY_PLAN_ID_IDX].is_min_value() &&
                    end_key_obj_ptr[KEY_PLAN_ID_IDX].is_max_value()) {
           if (OB_FAIL(dump_tenant_plans(tenant_id))) {
@@ -491,10 +487,15 @@ int ObAllVirtualSqlPlan::dump_all_tenant_plans()
 {
   int ret = OB_SUCCESS;
   // get all tenant ids
-  omt::TenantIdList id_list(16, NULL, ObNewModIds::OB_COMMON_ARRAY);
-  GCTX.omt_->get_tenant_ids(id_list);
-  for (int64_t i = 0; OB_SUCC(ret) && i < id_list.size(); i++) {
-    if (OB_FAIL(dump_tenant_plans(id_list.at(i)))) {
+  ObSEArray<uint64_t, 4> all_tenant_ids;
+  if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(all_tenant_ids))) {
+    SERVER_LOG(WARN, "failed to get all tenant ids", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_tenant_ids.count(); i++) {
+    if (all_tenant_ids.at(i) != effective_tenant_id_ &&
+        !is_sys_tenant(effective_tenant_id_)) {
+      //do nothing
+    } else if (OB_FAIL(dump_tenant_plans(all_tenant_ids.at(i)))) {
       SERVER_LOG(WARN, "failed to dump tenant` plan", K(ret), K(i));
     }
   }
