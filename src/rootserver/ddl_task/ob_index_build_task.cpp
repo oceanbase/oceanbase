@@ -171,6 +171,11 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         parallelism_,
         root_service_,
         inner_sql_exec_addr_);
+    if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
+      task->~ObIndexSSTableBuildTask();
+      task = nullptr;
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "failed to set nls format");
+    }
   }
   return task;
 }
