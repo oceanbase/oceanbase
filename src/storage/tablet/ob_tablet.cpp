@@ -1927,6 +1927,33 @@ int ObTablet::release_memtables()
   return ret;
 }
 
+int ObTablet::wait_release_memtables()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else {
+    const int64_t start = ObTimeUtility::current_time();
+    do {
+      if (OB_FAIL(memtable_mgr->release_memtables())) {
+        const int64_t cost_time = ObTimeUtility::current_time() - start;
+        if (cost_time > 1000 * 1000) {
+          if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
+            LOG_WARN("failed to release memtables", K(ret), KPC(memtable_mgr));
+          }
+        }
+      }
+    } while (OB_FAIL(ret));
+  }
+
+  return ret;
+}
+
 int ObTablet::reset_storage_related_member()
 {
   int ret = OB_SUCCESS;
@@ -3351,23 +3378,6 @@ int ObTablet::clear_memtables_on_table_store() // be careful to call this func
   }
   return ret;
 }
-int ObTablet::remove_memtables_from_data_checkpoint()
-{
-  int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->remove_memtables_from_data_checkpoint())){
-    LOG_WARN("failed to remove memtables from data_checkpoint", K(ret));
-  }
-
-  return ret;
-}
-
 // only check storage_schema & medium_list when ha_status is none
 int ObTablet::check_valid() const
 {
