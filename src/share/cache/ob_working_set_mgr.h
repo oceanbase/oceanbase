@@ -74,7 +74,7 @@ public:
 
   // implemnt functions of ObIKVCacheStore<WorkingSetMB>
   virtual bool add_handle_ref(WorkingSetMB *ws_mb);
-  virtual void de_handle_ref(WorkingSetMB *ws_mb);
+  virtual void de_handle_ref(WorkingSetMB *ws_mb, const bool do_retire);
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
       const int64_t block_size, WorkingSetMB *&ws_mb);
   virtual int free(WorkingSetMB *ws_mb);

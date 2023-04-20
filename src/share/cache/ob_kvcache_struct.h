@@ -220,12 +220,12 @@ public:
                              ObKVMemBlockHandle *&mb_handle) = 0;
   virtual int alloc_mbhandle(ObKVCacheInst &inst, ObKVMemBlockHandle *&mb_handle) = 0;
   virtual int alloc_mbhandle(const ObKVCacheInstKey &inst_key, ObKVMemBlockHandle *&mb_handle) = 0;
-  virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle) = 0;
+  virtual int free_mbhandle(ObKVMemBlockHandle *mb_handle, const bool do_retire) = 0;
   virtual int mark_washable(ObKVMemBlockHandle *mb_handle) = 0;
 
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num) = 0;
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle) = 0;
-  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle) = 0;
+  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) = 0;
 
   virtual int64_t get_block_size() const = 0;
 };
