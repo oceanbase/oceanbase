@@ -10004,6 +10004,7 @@ int ObJoinOrder::check_subquery_in_join_condition(const ObJoinType join_type,
 
 int ObJoinOrder::extract_used_columns(const uint64_t table_id,
                                       const uint64_t ref_table_id,
+                                      bool only_normal_ref_expr,
                                       ObIArray<uint64_t> &column_ids,
                                       ObIArray<ColumnItem> &columns)
 {
@@ -10046,8 +10047,11 @@ int ObJoinOrder::extract_used_columns(const uint64_t table_id,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column item or item expr is NULL", K(ret), K(col_item));
         } else if (col_item->table_id_ == table_id &&
-                   col_item->expr_->is_explicited_reference() ) {
-          if( OB_FAIL(add_var_to_array_no_dup(column_ids, col_item->expr_->get_column_id()))) {
+                   col_item->expr_->is_explicited_reference() &&
+                   !col_item->expr_->is_only_referred_by_stored_gen_col()) {
+          if (only_normal_ref_expr && !col_item->expr_->is_referred_by_normal()) {
+            //do nothing
+          } else if( OB_FAIL(add_var_to_array_no_dup(column_ids, col_item->expr_->get_column_id()))) {
             LOG_WARN("Fail to add column id", K(ret));
           } else if (OB_FAIL(columns.push_back(*col_item))) {
             LOG_WARN("failed to pushback column item", K(ret));
@@ -10090,6 +10094,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
     LOG_WARN("failed to get index schema", K(ret));
   } else if (OB_FAIL(extract_used_columns(table_id,
                                           ref_table_id,
+                                          true,
                                           column_ids,
                                           dummy_columns))) {
     LOG_WARN("failed to extract column ids", K(table_id), K(ref_table_id), K(ret));
@@ -10482,6 +10487,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
       ObSEArray<ColumnItem, 2> dummy_columns;
       if (OB_FAIL(extract_used_columns(table_id,
                                       ref_table_id,
+                                      index_id != ref_table_id && !ap->est_cost_info_.index_meta_info_.is_index_back_,
                                       ap->est_cost_info_.access_columns_,
                                       dummy_columns))) {
         LOG_WARN("failed to extract used column ids", K(ret));
