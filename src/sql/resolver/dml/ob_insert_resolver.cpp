@@ -1404,6 +1404,7 @@ int ObInsertResolver::resolve_insert_values(const ParseNode* node)
   int ret = OB_SUCCESS;
   ObInsertStmt* insert_stmt = get_insert_stmt();
   ObArray<ObRawExpr*> value_row;
+  ObArray<int64_t> value_idxs; //store the old order of columns in values_desc
   uint64_t value_count = OB_INVALID_ID;
   if (OB_ISNULL(insert_stmt) || OB_ISNULL(node) || T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1422,6 +1423,36 @@ int ObInsertResolver::resolve_insert_values(const ParseNode* node)
      * If the VALUES clause of an INSERT statement contains a record variable, no other
      * variable or value is allowed in the clause.
      */
+  }
+  if (OB_SUCC(ret)) {
+    //move generated columns behind basic columns before resolve values
+    ObArray<ObColumnRefRawExpr*> tmp_values_desc;
+    if (OB_FAIL(value_idxs.reserve(insert_stmt->get_values_desc().count()))) {
+      LOG_WARN("fail to reserve memory", K(ret));
+    } else if (OB_FAIL(tmp_values_desc.reserve(insert_stmt->get_values_desc().count()))) {
+      LOG_WARN("fail to reserve memory", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < 2; ++i) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < insert_stmt->get_values_desc().count(); ++j) {
+        if (OB_ISNULL(insert_stmt->get_values_desc().at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("inalid value desc", K(j), K(insert_stmt->get_values_desc()));
+        } else if ((i == 0 && !insert_stmt->get_values_desc().at(j)->is_generated_column())
+                   || (i == 1 && insert_stmt->get_values_desc().at(j)->is_generated_column())) {
+          if (OB_FAIL(tmp_values_desc.push_back(insert_stmt->get_values_desc().at(j)))) {
+            LOG_WARN("fail to push back values_desc_", K(ret));
+          } else if (OB_FAIL(value_idxs.push_back(j))) {
+            LOG_WARN("fail to push back value index", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      insert_stmt->get_values_desc().reuse();
+      if (OB_FAIL(append(insert_stmt->get_values_desc(), tmp_values_desc))) {
+        LOG_WARN("fail to append new values_desc");
+      }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
     ParseNode* vector_node = node->children_[i];
@@ -1443,16 +1474,17 @@ int ObInsertResolver::resolve_insert_values(const ParseNode* node)
         ObRawExpr* expr = NULL;
         ObRawExpr* tmp_expr = NULL;
         const ObColumnRefRawExpr* column_expr = NULL;
-        if (OB_ISNULL(vector_node->children_[j]) || OB_ISNULL(column_expr = insert_stmt->get_values_desc().at(j))) {
+        ParseNode * value_node = vector_node->num_child_ == 1 ? vector_node->children_[0] : vector_node->children_[value_idxs.at(j)];
+        if (OB_ISNULL(value_node) || OB_ISNULL(column_expr = insert_stmt->get_values_desc().at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("inalid children node", K(j), K(vector_node));
-        } else if (T_EMPTY == vector_node->children_[j]->type_) {
+        } else if (T_EMPTY == value_node->type_) {
           // nothing todo
         } else {
           uint64_t column_id = column_expr->get_column_id();
           ObDefaultValueUtils utils(insert_stmt, &params_, this);
           bool is_generated_column = false;
-          if (OB_FAIL(resolve_sql_expr(*(vector_node->children_[j]), expr))) {
+          if (OB_FAIL(resolve_sql_expr(*(value_node), expr))) {
             LOG_WARN("resolve sql expr failed", K(ret));
           } else if (OB_ISNULL(expr)) {
             ret = OB_ERR_UNEXPECTED;
