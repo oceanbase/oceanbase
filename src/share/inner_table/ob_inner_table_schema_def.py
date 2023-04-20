@@ -11861,6 +11861,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
 
+# 15305: __all_virtual_obj_lock
 
 # [15306, 15375] for oracle inner_table index
 # 15376: __all_virtual_log_restore_source
