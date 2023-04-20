@@ -6670,7 +6670,8 @@ int ObPLResolver::resolve_cursor_formal_param(
         }
 
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(current_block_->get_namespace().add_symbol(param_name, param_type, default_expr))) {
+          if (OB_FAIL(current_block_->get_namespace().add_symbol(param_name, param_type, default_expr,
+                                                                 false, false, false, true))) {
             LOG_WARN("failed to add symbol", K(param_name), K(param_type), K(default_expr), K(ret));
           } else if (OB_FAIL(params.push_back(current_block_->get_namespace().get_symbol_table()->get_count() - 1))) {
             LOG_WARN("push back error", K(params), K(param_type), K(default_expr), K(ret));

@@ -183,6 +183,8 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
       if (var_type.is_cursor_type()
           && OB_FAIL(resolve_ctx.session_info_.init_cursor_cache())) {
         LOG_WARN("failed to init cursor cache", K(ret));
+      } else if (var->is_formal_param()) {
+        // cursor formal param will as variable added to symbol, skip cursor formal param init
       } else if (OB_FAIL(var_type.init_session_var(resolve_ctx,
                                             var_type.is_cursor_type() ?
                                               package_state.get_pkg_cursor_allocator()
