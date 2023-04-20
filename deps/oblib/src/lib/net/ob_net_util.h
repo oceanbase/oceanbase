@@ -34,10 +34,11 @@ namespace obsys {
 
 class ObNetUtil {
 public:
-    static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len);
+    static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len, bool *is_linklocal=nullptr);
     static uint32_t get_local_addr_ipv4(const char *dev_name);
     static std::string addr_to_string(uint64_t ipport);
     static uint64_t ip_to_addr(uint32_t ip, int port);
+    static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len);
 };
 
 }

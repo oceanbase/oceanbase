@@ -135,7 +135,8 @@ public:
       startup_mode_(NULL),
       log_level_(0),
       use_ipv6_(false),
-      flashback_scn_(0)
+      flashback_scn_(0),
+      local_ip_(NULL)
   {
   }
   ObServerOptions(int rpc_port,
@@ -153,7 +154,8 @@ public:
                   int8_t log_level,
                   const char *mode,
                   bool use_ipv6,
-                  int64_t flashback_scn)
+                  int64_t flashback_scn,
+                  const char *local_ip)
   {
     rpc_port_ = rpc_port;
     elect_port_ = elect_port;
@@ -171,6 +173,7 @@ public:
     log_level_ = log_level;
     use_ipv6_ = use_ipv6;
     flashback_scn_ = flashback_scn;
+    local_ip_ = local_ip;
   }
   virtual ~ObServerOptions() {}
 
@@ -190,6 +193,7 @@ public:
   int8_t log_level_;
   bool use_ipv6_;
   int64_t flashback_scn_;
+  const char *local_ip_;
 };
 
 enum ObServerMode {

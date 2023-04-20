@@ -107,6 +107,7 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+local_ip
 location_cache_cpu_quota
 location_cache_refresh_min_interval
 location_cache_refresh_rpc_timeout
@@ -187,6 +188,7 @@ server_balance_disk_tolerance_percent
 server_check_interval
 server_cpu_quota_max
 server_cpu_quota_min
+server_id
 server_permanent_offline_time
 sql_login_thread_count
 sql_net_thread_count

@@ -1415,11 +1415,16 @@ int ObServer::init_config()
     config_.mysql_port.set_version(start_time_);
   }
 
+  if (opts_.local_ip_ && strlen(opts_.local_ip_) > 0) {
+    config_.local_ip.set_value(opts_.local_ip_);
+    config_.local_ip.set_version(start_time_);
+  }
+
   if (opts_.devname_ && strlen(opts_.devname_) > 0) {
     config_.devname.set_value(opts_.devname_);
     config_.devname.set_version(start_time_);
   } else {
-    if (!has_config_file) {
+    if (!has_config_file && 0 == strlen(config_.local_ip)) {
       const char *devname = get_default_if();
       if (devname && '\0' != devname[0]) {
         LOG_INFO("guess interface name", K(devname));
@@ -1491,6 +1496,49 @@ int ObServer::init_config()
 
   config_.print();
 
+  // local_ip is a critical parameter, if if is set, then verify it; otherwise, set it via devname.
+  if (strlen(config_.local_ip) > 0) {
+    char if_name[MAX_IFNAME_LENGTH] = { '\0' };
+    if (0 != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name))) {
+      // if it is incorrect, then ObServer should not be started.
+      ret = OB_ERR_OBSERVER_START;
+      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip is not a valid IP for this machine, local_ip", config_.local_ip.get_value());
+    } else {
+      if (0 != strcmp(config_.devname, if_name)) {
+        // this is done to ensure the consistency of local_ip and devname.
+        LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
+                    config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
+      }
+      // unconditionally call set_value to ensure that devname is written to the configuration file.
+      config_.devname.set_value(if_name);
+      config_.devname.set_version(start_time_);
+    }
+  } else {
+    if (config_.use_ipv6) {
+      char ipv6[MAX_IP_ADDR_LENGTH] = { '\0' };
+      if (0 != obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6))) {
+        ret = OB_ERROR;
+        _LOG_ERROR("call get_local_addr_ipv6 failed, devname:%s, errno:%d.", config_.devname.get_value(), errno);
+      } else {
+        config_.local_ip.set_value(ipv6);
+        config_.local_ip.set_version(start_time_);
+        _LOG_INFO("set local_ip via devname, local_ip:%s, devname:%s.", ipv6, config_.devname.get_value());
+      }
+    } else {
+      uint32_t ipv4_binary = obsys::ObNetUtil::get_local_addr_ipv4(config_.devname);
+      char ipv4[INET_ADDRSTRLEN] = { '\0' };
+      if (nullptr == inet_ntop(AF_INET, (void *)&ipv4_binary, ipv4, sizeof(ipv4))) {
+        ret = OB_ERROR;
+        _LOG_ERROR("call inet_ntop failed, devname:%s, ipv4_binary:0x%08x, errno:%d.",
+                   config_.devname.get_value(), ipv4_binary, errno);
+      } else {
+        config_.local_ip.set_value(ipv4);
+        config_.local_ip.set_version(start_time_);
+        _LOG_INFO("set local_ip via devname, local_ip:%s, devname:%s.", ipv4, config_.devname.get_value());
+      }
+    }
+  }
+
   if (OB_FAIL(ret)) {
     // nop
   } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
@@ -1501,13 +1549,17 @@ int ObServer::init_config()
     LOG_ERROR("set running mode failed", KR(ret));
   } else {
     int32_t local_port = static_cast<int32_t>(config_.rpc_port);
-    if (config_.use_ipv6) {
+    if (strlen(config_.local_ip) > 0) {
+      self_addr_.set_ip_addr(config_.local_ip, local_port);
+    } else {
+      if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = { '\0' };
       obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
       self_addr_.set_ip_addr(ipv6, local_port);
-    } else {
-      int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
-      self_addr_.set_ipv4_addr(ipv4, local_port);
+      } else {
+        int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
+        self_addr_.set_ipv4_addr(ipv4, local_port);
+      }
     }
 
     const char *syslog_file_info = ObServerUtils::build_syslog_file_info(self_addr_);
@@ -2135,6 +2187,7 @@ int ObServer::init_global_context()
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
+  gctx_.server_id_ = config_.server_id;
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
     ret = OB_INVALID_ARGUMENT;

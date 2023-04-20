@@ -46,7 +46,8 @@ ObHeartBeatProcess::ObHeartBeatProcess(const ObGlobalContext &gctx,
     newest_lease_info_version_(0),
     gctx_(gctx),
     schema_updater_(schema_updater),
-    lease_state_mgr_(lease_state_mgr)
+    lease_state_mgr_(lease_state_mgr),
+    server_id_persist_task_()
 {
 }
 
@@ -173,6 +174,15 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
                  "old_id", GCTX.server_id_,
                  "new_id", lease_response.server_id_);
         GCTX.server_id_ = lease_response.server_id_;
+        GCONF.server_id = lease_response.server_id_;
+        const int64_t delay = 0;
+        const bool repeat = false;
+        if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
+          server_id_persist_task_.enable_need_retry_flag();
+          LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
+        } else {
+          server_id_persist_task_.disable_need_retry_flag();
+        }
       }
     }
 
@@ -213,6 +223,14 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
     // generate the task for refreshing the Tenant-level configuration
     if (OB_SUCCESS != (tmp_ret = OTC_MGR.got_versions(lease_response.tenant_config_version_))) {
       LOG_WARN("tenant got versions failed", K(tmp_ret));
+    }
+
+    if (server_id_persist_task_.is_need_retry()) {
+      if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
+        LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
+      } else {
+        server_id_persist_task_.disable_need_retry_flag();
+      }
     }
   }
   return ret;
@@ -295,6 +313,27 @@ void ObHeartBeatProcess::ObZoneLeaseInfoUpdateTask::runTimerTask()
       if (OB_FAIL(hb_process_.try_update_infos())) {
         LOG_WARN("try_update_infos failed", KR(ret));
       }
+    }
+  }
+}
+
+void ObHeartBeatProcess::ObServerIdPersistTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  bool need_retry = false;
+  if (OB_NOT_NULL(GCTX.config_mgr_)) {
+    if (OB_FAIL(GCTX.config_mgr_->dump2file())) {
+      need_retry = true;
+      LOG_WARN("dump server id to file failed", K(ret));
+    }
+  } else {
+    need_retry = true;
+    LOG_WARN("GCTX.config_mgr_ is NULL, observer may not init");
+  }
+  if (need_retry) {
+    // retry server id persistence task in 1s later
+    if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, *this, 1000 * 1000L, false))) {
+      LOG_WARN("Reschedule server id persistence task failed", K(ret));
     }
   }
 }

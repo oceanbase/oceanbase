@@ -811,7 +811,7 @@ int ObIOCalibration::parse_calibration_table(ObIOAbility &io_ability)
   sqlclient::ObMySQLResult *result = nullptr;
   SMART_VAR(ObISQLClient::ReadResult, res) {
     ObSqlString sql_string;
-    char ip_str[32] = { 0 };
+    char ip_str[INET6_ADDRSTRLEN] = { 0 };
     const ObAddr &self_addr = OBSERVER.get_self();
     if (OB_UNLIKELY(!self_addr.ip_to_string(ip_str, sizeof(ip_str)))) {
       ret = OB_ERR_UNEXPECTED;
