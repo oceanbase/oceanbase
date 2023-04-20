@@ -640,16 +640,16 @@ int ObMySQLUtil::time_cell_str(
         LOG_WARN("convert usec to timestamp failed", K(ret));
       } else {
         timelen = 12;
+        int ob_time_day = ob_time.parts_[DT_DATE] + ob_time.parts_[DT_HOUR] / 24;
+        int ob_time_hour = ob_time.parts_[DT_HOUR] % 24;
         if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {  // length
           LOG_WARN("fail to store int", K(ret));
         } else if (OB_FAIL(ObMySQLUtil::store_int1(
                        buf, len, static_cast<int8_t>(DT_MODE_NEG & ob_time.mode_), pos))) {  // is_negative(1)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(
-                       buf, len, static_cast<int32_t>(ob_time.parts_[DT_DATE]), pos))) {  // days(4)
+        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time_day), pos))) {  // days(4)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {  // hour(1)
+        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time_hour), pos))) {  // hour(1)
           LOG_WARN("fail to store int", K(ret));
         } else if (OB_FAIL(ObMySQLUtil::store_int1(
                        buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {  // minute(1)
