@@ -1437,7 +1437,8 @@ int ObPLComposite::copy_element(const ObObj &src,
 {
   int ret = OB_SUCCESS;
   if (src.is_ext()) {
-      ObPLComposite *dest_composite = reinterpret_cast<ObPLComposite*>(dest.get_ext());
+      ObPLComposite *dest_composite
+        = (dest.get_ext() == src.get_ext()) ? NULL : reinterpret_cast<ObPLComposite*>(dest.get_ext());
       ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
       CK (OB_NOT_NULL(src_composite));
       OZ (ObPLComposite::deep_copy(*src_composite,
@@ -1447,6 +1448,19 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    session,
                                    need_new_allocator));
       CK (OB_NOT_NULL(dest_composite));
+      if (src.get_ext() == dest.get_ext()) {
+        OZ (ObPLComposite::deep_copy(*dest_composite,
+                                     src_composite,
+                                     allocator,
+                                     ns,
+                                     session,
+                                     need_new_allocator));
+        OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
+                            src.get_meta().get_extend_type(),
+                            src.get_val_len()));
+        OZ (ObUserDefinedType::destruct_obj(dest, session));
+        OX (dest_composite = src_composite);
+      }
       OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                           src.get_meta().get_extend_type(),
                           src.get_val_len()));
