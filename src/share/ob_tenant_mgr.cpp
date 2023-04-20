@@ -20,18 +20,6 @@
 #include "observer/ob_server_struct.h"         // GCTX
 #include "share/ob_tenant_mgr.h"
 
-int64_t get_virtual_memory_used()
-{
-  constexpr int BUFFER_SIZE = 128;
-  char filename[BUFFER_SIZE];
-  int64_t page_cnt = 0;
-  snprintf(filename, BUFFER_SIZE, "/proc/%d/statm", getpid());
-  FILE *statm = fopen(filename, "r");
-  fscanf(statm, "%ld", &page_cnt);
-  fclose(statm);
-  return page_cnt * sysconf(_SC_PAGESIZE);
-}
-
 namespace oceanbase
 {
 namespace lib
