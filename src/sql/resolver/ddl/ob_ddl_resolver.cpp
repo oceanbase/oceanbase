@@ -8444,7 +8444,13 @@ int ObDDLResolver::resolve_partition_node(ObPartitionedStmt *stmt,
   }
 
   if (OB_SUCC(ret) && !common::is_virtual_table(table_id_)) {
-    if (table_schema.get_all_part_num() > (lib::is_oracle_mode()
+    int64_t partnum = 0;
+    if (stmt->use_def_sub_part()) {
+      partnum = table_schema.get_partition_num() * table_schema.get_def_sub_part_num();
+    } else {
+      partnum = table_schema.get_all_part_num();
+    }
+    if (partnum > (lib::is_oracle_mode()
         ? common::OB_MAX_PARTITION_NUM_ORACLE : common::OB_MAX_PARTITION_NUM_MYSQL)) {
       ret = common::OB_TOO_MANY_PARTITIONS_ERROR;
     }
