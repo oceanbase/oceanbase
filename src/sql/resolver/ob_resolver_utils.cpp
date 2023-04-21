@@ -879,6 +879,16 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     ObRawExpr *first_arg = expr_params.at(0);
     if (first_arg->has_flag(IS_UDT_UDF_SELF_PARAM)) {
       // do nothing, may be we can check if routine is static or not
+    } else if (routine_info->is_udt_cons()) {
+      if (expr_params.count() > 0 && 1 == routine_info->get_param_count()) {
+        ret = OB_ERR_SP_WRONG_ARG_NUM;
+        LOG_WARN("argument count not match",
+                  K(ret), K(expr_params.count()), K(routine_info->get_param_count()));
+      } else {
+        // construct function & no self real paremeter
+        OX (match_info.match_info_.at(0) = (ObRoutineMatchInfo::MatchInfo(false, ObExtendType, ObExtendType)));
+        OX (offset = 1);
+      }
     } else if (routine_info->is_udt_routine()
                && !routine_info->is_udt_static_routine()
                && expr_params.count() != routine_info->get_param_count()) {
@@ -893,8 +903,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
         OZ (get_type_and_type_id(first_arg, src_type, src_type_id));
       }
       if (OB_SUCC(ret)
-          && (src_type_id != routine_info->get_package_id()
-              || routine_info->is_udt_cons())) {
+          && (src_type_id != routine_info->get_package_id())) {
         // set first param matched
         OX (match_info.match_info_.at(0) = (ObRoutineMatchInfo::MatchInfo(false, src_type, src_type)));
         OX (offset = 1);

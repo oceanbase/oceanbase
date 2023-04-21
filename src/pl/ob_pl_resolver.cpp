@@ -8899,11 +8899,11 @@ int ObPLResolver::resolve_inner_call(
       OZ (obj_access_idents.at(i).extract_params(0, expr_params));
       OX (idx_cnt = (idx_cnt >= access_idxs.count()) ? 0 : idx_cnt);
       if (OB_SUCC(ret)
-          && expr_params.count() > 0
+          && (expr_params.count() > 0 || obj_access_idents.at(i).has_brackets_)
           && !access_idxs.at(idx_cnt).is_procedure()
           && !access_idxs.at(idx_cnt).is_system_procedure()
           && !access_idxs.at(idx_cnt).is_type_method()
-          && !access_idxs.at(idx_cnt).var_type_.is_composite_type()) {
+          && (!access_idxs.at(idx_cnt).var_type_.is_composite_type() || 0 == expr_params.count())) {
         ret = OB_ERR_OUT_OF_SCOPE;
         LOG_WARN("PLS-00225: subprogram or cursor reference is out of scope", K(ret), K(access_idxs.at(access_idxs.count()-1)));
         LOG_USER_ERROR(OB_ERR_OUT_OF_SCOPE, obj_access_idents.at(i).access_name_.length(), obj_access_idents.at(i).access_name_.ptr());
@@ -9413,6 +9413,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
     } else if (T_SP_CPARAM_LIST == node.children_[0]->type_) {
       ParseNode *params_node = node.children_[0];
       ObObjAccessIdent param_access;
+      obj_access_idents.at(obj_access_idents.count() -1).has_brackets_ = true;
       for (int64_t param_idx = 0; OB_SUCC(ret) && param_idx < params_node->num_child_; ++param_idx) {
         ObRawExpr *expr = NULL;
         if (OB_FAIL(resolve_expr(params_node->children_[param_idx], func, expr,
@@ -9458,6 +9459,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
             = obj_access_idents.at(obj_access_idents.count()-1).params_;
         int64_t current_level = current_params.empty()
             ? 0 : current_params.at(current_params.count() - 1).second + 1;
+        obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = true;
         for (int64_t param_idx = 0; OB_SUCC(ret) && param_idx < params_node->num_child_; ++param_idx) {
           ObRawExpr *expr = NULL;
           if (OB_FAIL(resolve_expr(params_node->children_[param_idx], func, expr,
@@ -9476,8 +9478,6 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
               if (OB_FAIL(param_access.params_.push_back(param))) {
                 LOG_WARN("push back access ident failed", K(ret));
               }
-              // ret = OB_ERR_UNEXPECTED;
-              // LOG_ERROR("Why am I here???", K(node.children_[0]->type_), K(ret));
             }
           }
         }

@@ -1039,14 +1039,16 @@ public:
         access_index_(common::OB_INVALID_INDEX),
         udf_info_(),
         sys_func_expr_(NULL),
-        params_() {}
+        params_(),
+        has_brackets_(false) {}
   ObObjAccessIdent(const common::ObString &name, int64_t index = common::OB_INVALID_INDEX)
     : type_(UNKNOWN),
       access_name_(name),
       access_index_(index),
       udf_info_(),
       sys_func_expr_(NULL),
-      params_() {}
+      params_(),
+      has_brackets_(false) {}
   virtual ~ObObjAccessIdent() {}
 
   int assign(const ObObjAccessIdent &other)
@@ -1056,6 +1058,7 @@ public:
     access_index_ = other.access_index_;
     udf_info_ = other.udf_info_;
     sys_func_expr_ = other.sys_func_expr_;
+    has_brackets_ = other.has_brackets_;
     return params_.assign(other.params_);
   }
   ObObjAccessIdent &operator =(const ObObjAccessIdent &other)
@@ -1105,6 +1108,7 @@ public:
   ObSysFunRawExpr *sys_func_expr_;
   //a.f(x,y)(m,n)里的x、y、m、n都是f的参数，但是x、y的param_level_是0，m、n是1
   common::ObSEArray<std::pair<ObRawExpr*, int64_t>, 4, common::ModulePageAllocator, true> params_;
+  bool has_brackets_; // may has empty (), record it.
 };
 
 class ObColumnRefRawExpr;
