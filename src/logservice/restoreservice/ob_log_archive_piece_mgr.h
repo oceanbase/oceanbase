@@ -197,7 +197,7 @@ private:
 
     void reset();
     bool is_valid() const;
-    bool is_fronze_() const { return State::FROZEN == state_; }
+    bool is_frozen_() const { return State::FROZEN == state_; }
     bool is_empty_() const { return State::EMPTY == state_; }
     bool is_low_bound_() const { return State::LOW_BOUND == state_; }
     bool is_gc_() const { return State::GC == state_; }
