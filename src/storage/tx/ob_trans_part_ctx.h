@@ -503,6 +503,10 @@ private:
   bool is_2pc_logging_() const
   { return sub_state_.is_state_log_submitting() || sub_state_.is_gts_waiting(); }
 
+  int notify_table_lock_(const SCN &log_ts,
+                         const bool for_replay,
+                         const ObTxBufferNodeArray &notify_array,
+                         const bool is_force_kill);
   int notify_data_source_(const NotifyType type,
                           const share::SCN &log_ts,
                           const bool for_replay,

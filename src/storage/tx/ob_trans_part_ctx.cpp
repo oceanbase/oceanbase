@@ -4648,10 +4648,15 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
         (exec_info_.need_checksum_ && !is_incomplete_replay_ctx_ ? commit_log.get_checksum() : 0);
     mt_ctx_.set_replay_compact_version(replay_compact_version);
 
-    if (OB_FAIL(trans_replay_commit_(ctx_tx_data_.get_commit_version(),
-                                     timestamp,
-                                     cluster_version_,
-                                     checksum))) {
+    if (OB_FAIL(notify_table_lock_(timestamp,
+                                   true,
+                                   exec_info_.multi_data_source_,
+                                   false /* not a force kill */))) {
+      TRANS_LOG(WARN, "notify table lock failed", KR(ret), "context", *this);
+    } else if (OB_FAIL(trans_replay_commit_(ctx_tx_data_.get_commit_version(),
+                                            timestamp,
+                                            cluster_version_,
+                                            checksum))) {
       TRANS_LOG(WARN, "trans replay commit failed", KR(ret), "context", *this);
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT,
                                          timestamp,
@@ -5768,6 +5773,40 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
     } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, SCN(), false,
                                            tmp_array))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+    }
+  }
+  return ret;
+}
+
+int ObPartTransCtx::notify_table_lock_(const SCN &log_ts,
+                                       const bool for_replay,
+                                       const ObTxBufferNodeArray &notify_array,
+                                       const bool is_force_kill)
+{
+  int ret = OB_SUCCESS;
+  if (is_exiting_ && sub_state_.is_force_abort()) {
+    // do nothing
+  } else {
+    ObMulSourceDataNotifyArg arg;
+    arg.tx_id_ = trans_id_;
+    arg.scn_ = log_ts;
+    arg.trans_version_ = ctx_tx_data_.get_commit_version();
+    arg.for_replay_ = for_replay;
+    // table lock only need tx end
+    arg.notify_type_ = NotifyType::TX_END;
+    arg.is_force_kill_ = is_force_kill;
+
+    int64_t total_time = 0;
+
+    if (OB_FAIL(ObMulSourceTxDataNotifier::notify_table_lock(notify_array,
+                                                             arg,
+                                                             this,
+                                                             total_time))) {
+      TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
+    }
+    if (notify_array.count() > 0) {
+      TRANS_LOG(INFO, "notify MDS table lock", K(ret), K(trans_id_), K(ls_id_),
+                K(log_ts), K(notify_array.count()), K(notify_array), K(total_time));
     }
   }
   return ret;
