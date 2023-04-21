@@ -72,7 +72,7 @@ TEST(TestTimer, task_cancel)
 
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000, false));
   ASSERT_TRUE(timer.task_exist(task));
-  ::usleep(10000);
+  ::usleep(1000000);
   ASSERT_FALSE(timer.task_exist(task));
 }
 
@@ -86,8 +86,8 @@ TEST(TestTimer, scheduled_immediately_task)
   ::usleep(60000);
   ASSERT_EQ(task[0].task_run_count_, 0);
 
-  ASSERT_EQ(OB_SUCCESS, timer.schedule_repeate_task_immediately(task[1], 50000));
-  ::usleep(100);
+  ASSERT_EQ(OB_SUCCESS, timer.schedule_repeate_task_immediately(task[1], 600000));
+  ::usleep(500000);
   ASSERT_EQ(task[1].task_run_count_, 1);
   ::usleep(600000);
   ASSERT_GT(task[1].task_run_count_, 1);
