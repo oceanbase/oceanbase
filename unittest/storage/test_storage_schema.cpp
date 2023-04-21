@@ -299,7 +299,8 @@ TEST_F(TestStorageSchema, test_storage_schema_list_in_memtable)
   ASSERT_EQ(OB_ERR_UNEXPECTED, source_data.inner_mark_unit_sync_finish(
       list_pos,
       storage_schema.get_version(), // invalid version
-      true));
+      true,
+      0));
 
   ASSERT_EQ(OB_SUCCESS, source_data.save_multi_source_data_unit(&storage_schema, is_callback));
 
@@ -310,7 +311,8 @@ TEST_F(TestStorageSchema, test_storage_schema_list_in_memtable)
   ASSERT_EQ(OB_SUCCESS, source_data.inner_mark_unit_sync_finish(
       list_pos,
       storage_schema.get_version(),
-      true));
+      true,
+      0));
   ASSERT_EQ(OB_SUCCESS, source_data.get_multi_source_data_unit(&read_storage_schema, &allocator_));
   ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, read_storage_schema));
   ASSERT_EQ(true, source_data.has_multi_source_data_unit(pos));
@@ -332,7 +334,8 @@ TEST_F(TestStorageSchema, test_storage_schema_list_in_memtable)
   ASSERT_EQ(OB_ERR_UNEXPECTED, source_data.inner_mark_unit_sync_finish(
       list_pos,
       storage_schema.get_version() + 1, // invalid version
-      true));
+      true,
+      0));
 
   storage_schema.set_sync_finish(false);
   ASSERT_EQ(OB_SUCCESS, source_data.save_multi_source_data_unit(&storage_schema, true));

@@ -159,7 +159,8 @@ void ObMultiSourceData::inner_release_rest_unit_data(
 int ObMultiSourceData::inner_mark_unit_sync_finish(
     const int64_t list_pos,
     const int64_t unit_version,
-    bool save_last_flag)
+    bool save_last_flag,
+    const int unsync_cnt_for_multi_data)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(list_pos < 0 || list_pos >= MAX_LIST_COUNT)) {
@@ -176,6 +177,7 @@ int ObMultiSourceData::inner_mark_unit_sync_finish(
           KPC(last_item));
     } else {
       last_item->set_sync_finish(true);
+      last_item->set_unsync_cnt_for_multi_data(unsync_cnt_for_multi_data);
 
       if (save_last_flag) {
         (void)inner_release_rest_unit_data(list_pos, unit_version);
