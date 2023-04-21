@@ -73,7 +73,8 @@ int ObLSDDLLogHandler::offline()
     is_online_ = false;
   }
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
-  if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     while (OB_SUCC(ret)) {
