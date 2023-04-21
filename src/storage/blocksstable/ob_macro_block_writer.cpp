@@ -947,6 +947,13 @@ int ObMacroBlockWriter::build_micro_block()
     }
     data_block_pre_warmer_.reuse();
   }
+
+#ifdef ERRSIM
+  if (data_store_desc_->encoding_enabled()) {
+    ret = OB_E(EventTable::EN_BUILD_DATA_MICRO_BLOCK) ret;
+  }
+#endif
+
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
     if (data_store_desc_->need_build_hash_index_for_micro_block_) {

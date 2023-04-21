@@ -262,6 +262,7 @@ constexpr int OB_DISK_HUNG = -4392;
 constexpr int OB_ERR_OBSERVER_START = -4393;
 constexpr int OB_ERR_OBSERVER_STOP = -4394;
 constexpr int OB_ERR_OBSERVICE_START = -4395;
+constexpr int OB_ENCODING_EST_SIZE_OVERFLOW = -4397;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2065,6 +2066,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OBSERVER_STOP__USER_ERROR_MSG "observer stop process failure"
 #define OB_ERR_OBSERVICE_START__USER_ERROR_MSG "observice start process has failure"
 #define OB_ERR_THREAD_PANIC__USER_ERROR_MSG "Worker thread pannic, thread may be terminated or hung"
+#define OB_ENCODING_EST_SIZE_OVERFLOW__USER_ERROR_MSG "Encoding estimated size overflow"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -4105,6 +4107,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OBSERVER_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4394, observer stop process failure"
 #define OB_ERR_OBSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4395, observice start process has failure"
 #define OB_ERR_THREAD_PANIC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4396, Worker thread pannic, thread may be terminated or hung"
+#define OB_ENCODING_EST_SIZE_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4397, Encoding estimated size overflow"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -5787,7 +5790,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2036];
+extern int g_all_ob_errnos[2037];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

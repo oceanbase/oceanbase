@@ -64,6 +64,7 @@ public:
   static void print_macro_block_header(const storage::ObLinkedMacroBlockHeader *linked_macro_header);
   static void print_index_row_header(const ObIndexBlockRowHeader *idx_row_header);
   static void print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo *minor_meta);
+  static void print_macro_meta(const ObDataMacroBlockMeta *macro_meta);
   static void print_store_row(
       const blocksstable::ObDatumRow *row,
       const ObObjMeta *obj_metas,

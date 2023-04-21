@@ -48,7 +48,8 @@ public:
   int get_next_micro_block_data(ObMicroBlockData &micro_block);
   int get_macro_block_header(ObSSTableMacroBlockHeader &macro_header);
   int get_micro_block_count(int64_t &micro_block_count);
-  int get_index_block(ObMicroBlockData &micro_block);
+  int get_index_block(ObMicroBlockData &micro_block, const bool is_macro_meta_block = false);
+  int get_macro_meta_block(ObMicroBlockData &micro_block);
   bool is_left_border() const { return iter_idx_ == begin_idx_; }
   bool is_right_border() const { return iter_idx_ == end_idx_; }
   TO_STRING_KV(KP_(macro_block_buf), K_(macro_block_buf_size), K_(common_header),
@@ -95,7 +96,7 @@ public:
       const bool need_check_integrity = false);
   int get_next_row(const ObDatumRow *&row);
   // switch to iterate leaf index block in data macro block
-  int open_leaf_index_micro_block();
+  int open_leaf_index_micro_block(const bool is_macro_meta = false);
   int open_next_micro_block();
 
   int get_macro_block_header(ObSSTableMacroBlockHeader &macro_header);

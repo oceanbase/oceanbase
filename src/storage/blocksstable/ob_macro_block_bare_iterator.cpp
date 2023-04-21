@@ -216,7 +216,7 @@ int ObMicroBlockBareIterator::get_micro_block_count(int64_t &micro_block_count)
   return ret;
 }
 
-int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block)
+int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block, const bool is_macro_meta_block)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!macro_block_header_.is_valid())) {
@@ -227,8 +227,10 @@ int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block)
     LOG_WARN("Unexpected null index block", K(ret), K_(macro_block_header));
   } else {
     ObMicroBlockHeader header;
-    const int64_t index_block_offset = macro_block_header_.fixed_header_.idx_block_offset_;
-    int64_t micro_buf_size = macro_block_header_.fixed_header_.idx_block_size_;
+    const int64_t index_block_offset = is_macro_meta_block ? macro_block_header_.fixed_header_.meta_block_offset_
+        : macro_block_header_.fixed_header_.idx_block_offset_;
+    int64_t micro_buf_size = is_macro_meta_block ? macro_block_header_.fixed_header_.meta_block_size_
+        : macro_block_header_.fixed_header_.idx_block_size_;
     const char *micro_buf = macro_block_buf_ + index_block_offset;
     int64_t pos = 0;
     bool is_compressed = false;
@@ -443,7 +445,7 @@ int ObMacroBlockRowBareIterator::get_next_row(const ObDatumRow *&row)
   return ret;
 }
 
-int ObMacroBlockRowBareIterator::open_leaf_index_micro_block()
+int ObMacroBlockRowBareIterator::open_leaf_index_micro_block(const bool is_macro_meta)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -453,7 +455,7 @@ int ObMacroBlockRowBareIterator::open_leaf_index_micro_block()
     ret = OB_ITER_STOP;
     LOG_WARN("Previous block iterate not finished",
         K(ret), K_(curr_block_row_idx), K_(curr_block_row_cnt));
-  } else if (OB_FAIL(micro_iter_.get_index_block(curr_micro_block_data_))) {
+  } else if (OB_FAIL(micro_iter_.get_index_block(curr_micro_block_data_, is_macro_meta))) {
     LOG_WARN("Fail to get leaf index block data", K(ret));
   } else if (OB_UNLIKELY(!curr_micro_block_data_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;

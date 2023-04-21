@@ -1485,8 +1485,24 @@ int ObTabletMergeTask::process()
     STORAGE_LOG(WARN, "Unexpected null partition merger", K(ret));
   } else {
     if (OB_FAIL(merger_->merge_partition(*ctx_, idx_))) {
-      STORAGE_LOG(WARN, "failed to merge partition", K(ret));
-    } else {
+      if (is_major_merge_type(ctx_->param_.merge_type_) && OB_ENCODING_EST_SIZE_OVERFLOW == ret) {
+        STORAGE_LOG(WARN, "failed to merge partition with possibly encoding error, "
+            "retry with flat row store type", K(ret), KPC(ctx_), K_(idx));
+        merger_->reset();
+        const bool force_flat_format = true;
+        if (OB_FAIL(merger_->merge_partition(*ctx_, idx_, force_flat_format))) {
+          if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret || OB_IO_ERROR == ret) {
+            STORAGE_LOG(WARN, "retry merge partition with flat row store type failed", K(ret));
+          } else {
+            STORAGE_LOG(ERROR, "retry merge partition with flat row store type failed", K(ret));
+          }
+        }
+      } else {
+        STORAGE_LOG(WARN, "failed to merge partition", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this);
     }
     merger_->reset();
