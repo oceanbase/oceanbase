@@ -915,7 +915,7 @@ int ObLogReplayService::check_can_submit_log_replay_task_(ObLogReplayTask *repla
   }
   if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
     CLOG_LOG(INFO, "submit replay task need retry", K(ret), KPC(replay_status), KPC(replay_task),
-             K(is_wait_barrier), K(is_tenant_out_of_mem));
+             K(is_wait_barrier), K(is_tenant_out_of_mem), "pending_task_size", get_pending_task_size());
   }
   return ret;
 }
