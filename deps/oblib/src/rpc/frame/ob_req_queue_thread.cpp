@@ -42,6 +42,7 @@ ObReqQueue::ObReqQueue(int queue_capacity)
 
 ObReqQueue::~ObReqQueue()
 {
+  LOG_INFO("begin to destroy queue", K(queue_.size()));
   queue_.destroy();
 }
 
@@ -163,16 +164,20 @@ void ObReqQueue::loop()
 
     if (!wait_finish_) {
       LOG_INFO("exiting queue thread without wait finish", K(queue_.size()));
-    } else if (0 < queue_.size()) {
+    } else {
       LOG_INFO("exiting queue thread and wait remain finish", K(queue_.size()));
       // Process remains if we should wait until all task has been
       // processed before exiting this thread. Previous return code
       // isn't significant, we just ignore it to make progress. When
       // queue pop a normal task we process it until pop fails.
       ret = OB_SUCCESS;
-      while (OB_SUCC(ret)) {
+      while (queue_.size() > 0 && OB_SUCC(ret)) {
         if (OB_FAIL(queue_.pop(task, timeout))) {
           LOG_DEBUG("queue pop task fail", K(&queue_));
+          if(OB_ENTRY_NOT_EXIST == ret) {
+            // lightyqueue may return OB_ENTRY_NOT_EXIST when tasks existing
+            ret = OB_SUCCESS;
+          }
         } else if (NULL != task) {
           process_task(task);  // ignore return code.
         } else {

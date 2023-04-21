@@ -571,7 +571,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     }
     //  print the length of varchar only in print detail mode,
     //  because there have been many test cases with varchar type before the varchar length info is added into column meta
-    if (oceanbase::obmysql::MYSQL_TYPE_VAR_STRING == ctype || oceanbase::obmysql::MYSQL_TYPE_BIT == ctype) {
+    if (oceanbase::obmysql::MYSQL_TYPE_VAR_STRING == ctype) {
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_define_length:%ld", column_index, col_data_length);
     }
     else if ((oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype) || (oceanbase::obmysql::MYSQL_TYPE_SET == ctype)) {
@@ -596,6 +596,12 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       // Not sure if MYSQL_TYPE_DECIMAL is deprecated, DECIMAL in mysql & oracle mode should be MYSQL_TYPE_NEWDECIMAL
       ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);
       ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_scale:%ld", column_index, scale);
+    } else if (oceanbase::obmysql::MYSQL_TYPE_TIMESTAMP == ctype ||
+               oceanbase::obmysql::MYSQL_TYPE_DATETIME == ctype ||
+               oceanbase::obmysql::MYSQL_TYPE_TIME == ctype) {
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_scale:%ld", column_index, scale);
+    } else if (oceanbase::obmysql::MYSQL_TYPE_BIT == ctype) {
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);
     } else { }
   }
   if (is_generated_column) {

@@ -64,7 +64,7 @@ int ObShowCreateTable::inner_get_next_row(common::ObNewRow *&row)
       ret = OB_TABLE_NOT_EXIST;
       SERVER_LOG(WARN, "fail to get table schema", K(ret), K(show_table_id));
     } else {
-      if (OB_FAIL(fill_row_cells(show_table_id, *table_schema))) {
+      if (OB_FAIL(fill_row_cells_with_retry(show_table_id, *table_schema))) {
         SERVER_LOG(WARN, "fail to fill row cells", K(ret),
                   K(show_table_id), K(table_schema->get_table_name_str()));
       } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
@@ -109,13 +109,54 @@ int ObShowCreateTable::calc_show_table_id(uint64_t &show_table_id)
   return ret;
 }
 
-int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
-                                      const ObTableSchema &table_schema)
+int ObShowCreateTable::fill_row_cells_with_retry(const uint64_t show_table_id,
+                                                 const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_retry_times = 10; // max buf_size is 1G byte
+  int64_t table_def_buf_size = 1024 * 1024; // Unit is byte, initial buf_size is 1M byte
+  bool need_retry = false;
+  int64_t retry_times = 0;
+  char *table_def_buf = NULL;
+
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN,"allocator_ isn't init", K(ret), K(allocator_));
+  } else {
+    do {
+      need_retry = false;
+      if (OB_ISNULL(table_def_buf = static_cast<char *>(allocator_->alloc(table_def_buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SERVER_LOG(ERROR, "fail to alloc table_def_buf", K(ret), K(table_def_buf_size));
+      } else if (OB_FAIL(fill_row_cells_inner(
+                         show_table_id, table_schema, table_def_buf_size, table_def_buf))) {
+        SERVER_LOG(WARN, "fill_row_cells_inner failed",
+                  K(ret), K(show_table_id), K(retry_times), K(table_def_buf_size));
+        // if buf_size is not enough, we will expand that and retry until reach the max_retry_times
+        if (OB_SIZE_OVERFLOW == ret && retry_times < max_retry_times) {
+          need_retry = true;
+          table_def_buf_size *= 2;
+          ++retry_times;
+          if (NULL != table_def_buf) {
+            allocator_->free(table_def_buf);
+            table_def_buf = NULL;
+          }
+        }
+      }
+    } while (need_retry);
+  }
+
+  return ret;
+}
+
+int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
+                                            const ObTableSchema &table_schema,
+                                            const int64_t table_def_buf_size,
+                                            char *table_def_buf)
 {
   int ret = OB_SUCCESS;
   uint64_t cell_idx = 0;
-  char *table_def_buf = NULL;
-  int64_t table_def_buf_size = OB_MAX_VARCHAR_LENGTH;
+
   bool strict_mode = false;
   bool is_oracle_mode = false;
   if (OB_UNLIKELY(NULL == schema_guard_
@@ -131,15 +172,15 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
                K(allocator_),
                K(cur_row_.cells_));
   } else if (OB_UNLIKELY(cur_row_.count_ < output_column_ids_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN,
-                   "cells count is less than output column count",
-                   K(ret),
-                   K(cur_row_.count_),
-                   K(output_column_ids_.count()));
-  } else if (OB_UNLIKELY(NULL == (table_def_buf = static_cast<char *>(allocator_->alloc(table_def_buf_size))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SERVER_LOG(ERROR, "fail to alloc table_def_buf", K(ret));
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN,
+               "cells count is less than output column count",
+               K(ret),
+               K(cur_row_.count_),
+               K(output_column_ids_.count()));
+  } else if (OB_ISNULL(table_def_buf)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "table_def_buf is null", K(ret), K(table_def_buf_size));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     SERVER_LOG(WARN, "failed to check if oracle mode", K(ret));
   } else if (OB_FAIL(session_->get_show_ddl_in_compat_mode(strict_mode))) {
@@ -147,7 +188,6 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
   } else {
     //_show_ddl_in_compat_mode do not support oracle mode now
     strict_mode &= !is_oracle_mode;
-
     for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch(col_id) {
@@ -171,7 +211,7 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
             if (OB_FAIL(schema_printer.print_view_definiton(effective_tenant_id_,
                                                             show_table_id,
                                                             table_def_buf,
-                                                            OB_MAX_VARCHAR_LENGTH,
+                                                            table_def_buf_size,
                                                             pos))) {
               SERVER_LOG(WARN, "Generate view definition failed",
                          KR(ret), K(effective_tenant_id_), K(show_table_id));
@@ -180,7 +220,7 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
             if (OB_FAIL(schema_printer.print_index_table_definition(effective_tenant_id_,
                                                                     show_table_id,
                                                                     table_def_buf,
-                                                                    OB_MAX_VARCHAR_LENGTH,
+                                                                    table_def_buf_size,
                                                                     pos,
                                                                     TZ_INFO(session_),
                                                                     false))) {
@@ -193,7 +233,7 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
             if (OB_FAIL(schema_printer.print_table_definition(effective_tenant_id_,
                                                               show_table_id,
                                                               table_def_buf,
-                                                              OB_MAX_VARCHAR_LENGTH,
+                                                              table_def_buf_size,
                                                               pos,
                                                               TZ_INFO(session_),
                                                               default_length_semantics,

@@ -52,5 +52,18 @@ int ObTimestampAccess::get_number(const int64_t base_id, int64_t &gts)
   return ret;
 }
 
+void ObTimestampAccess::get_virtual_info(int64_t &ts_value,
+                                         ServiceType &service_type,
+                                         common::ObRole &role,
+                                         int64_t &proposal_id)
+{
+  service_type = service_type_;
+  if (MTL_IS_PRIMARY_TENANT()) {
+    MTL(ObTimestampService *)->get_virtual_info(ts_value, role, proposal_id);
+  } else {
+    MTL(ObStandbyTimestampService *)->get_virtual_info(ts_value, role, proposal_id);
+  }
+}
+
 }
 }

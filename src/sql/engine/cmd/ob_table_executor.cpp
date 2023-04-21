@@ -433,6 +433,10 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           LOG_DEBUG("CTAS all done", K(ins_sql), K(affected_rows), K(lib::is_oracle_mode()));
         }
 
+        if (OB_ERR_TABLE_EXIST == ret && create_table_arg.if_not_exist_) {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("table exists, force return success after cleanup", K(create_table_name));
+        }
       } else {
         LOG_DEBUG("table exists, no need to CTAS", K(create_table_res.table_id_));
       }

@@ -1268,18 +1268,16 @@ int ObSubPlanFilterOp::prepare_onetime_exprs_inner()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  ObDatum copyed;
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.onetime_exprs_.count(); ++i) {
     const ObDynamicParamSetter &setter = MY_SPEC.onetime_exprs_.at(i);
     ObDatum *datum = NULL;
     if (OB_FAIL(setter.src_->eval(eval_ctx_, datum))) {
       LOG_WARN("expression evaluate failed", K(ret));
-    } else if (OB_FAIL(copyed.deep_copy(*datum, ctx_.get_allocator()))) {
-      LOG_WARN("datum deep copy failed", K(ret));
-    } else if (OB_FAIL(setter.update_dynamic_param(eval_ctx_, copyed))) {
+    } else if (OB_FAIL(setter.update_dynamic_param(eval_ctx_, *datum))) {
       LOG_WARN("update dynamic param store failed", K(ret));
     }
   }
+
   return ret;
 }
 

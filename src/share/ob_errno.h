@@ -833,6 +833,7 @@ constexpr int OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = -5491;
 constexpr int OB_ERR_MYSQL_CHARACTER_SET_MISMATCH = -5492;
 constexpr int OB_ERR_RENAME_PARTITION_NAME_DUPLICATE = -5493;
 constexpr int OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE = -5494;
+constexpr int OB_ERR_INVALID_WAIT_INTERVAL = -5495;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1381,6 +1382,8 @@ constexpr int OB_TRANSFER_SYS_ERROR = -7109;
 constexpr int OB_TRANSFER_MEMBER_LIST_NOT_SAME = -7110;
 constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
 constexpr int OB_LS_TRANSFER_SCN_TOO_SMALL = -7112;
+constexpr int OB_TABLET_TRANSFER_SEQ_NOT_MATCH = -7113;
+constexpr int OB_TRANSFER_DETECT_ACTIVE_TRANS = -7114;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -2713,6 +2716,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MYSQL_CHARACTER_SET_MISMATCH__USER_ERROR_MSG "Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call."
 #define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
 #define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
+#define OB_ERR_INVALID_WAIT_INTERVAL__USER_ERROR_MSG "missing or invalid WAIT interval"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3318,6 +3322,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_MEMBER_LIST_NOT_SAME__USER_ERROR_MSG "transfer src ls and dest ls member list not same"
 #define OB_ERR_UNEXPECTED_LOCK_OWNER__USER_ERROR_MSG "lock owner id is not expected"
 #define OB_LS_TRANSFER_SCN_TOO_SMALL__USER_ERROR_MSG "change member list compare ls transfer scn too small"
+#define OB_TABLET_TRANSFER_SEQ_NOT_MATCH__USER_ERROR_MSG "compare tablet transfer seq not match"
+#define OB_TRANSFER_DETECT_ACTIVE_TRANS__USER_ERROR_MSG "transfer detect active trans"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -4759,6 +4765,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MYSQL_CHARACTER_SET_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5492, Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call."
 #define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14082: New partition name %.*s must differ from that of any other partition or subpartition of the object."
 #define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14263: New subpartition name %.*s must differ from that of any other partition or subpartition of the object."
+#define OB_ERR_INVALID_WAIT_INTERVAL__ORA_USER_ERROR_MSG "ORA-30005: missing or invalid WAIT interval"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5364,6 +5371,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_MEMBER_LIST_NOT_SAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7110, transfer src ls and dest ls member list not same"
 #define OB_ERR_UNEXPECTED_LOCK_OWNER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7111, lock owner id is not expected"
 #define OB_LS_TRANSFER_SCN_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7112, change member list compare ls transfer scn too small"
+#define OB_TABLET_TRANSFER_SEQ_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7113, compare tablet transfer seq not match"
+#define OB_TRANSFER_DETECT_ACTIVE_TRANS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7114, transfer detect active trans"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5805,7 +5814,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2042];
+extern int g_all_ob_errnos[2045];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

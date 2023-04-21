@@ -11539,9 +11539,32 @@ def_table_schema(
 # 12392: __all_virtual_kv_connection
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 # 12394: __all_virtual_ls_transfer_member_list_lock_info
-# 12395: __all_virtual_timestamp_service
+
+def_table_schema(
+  owner             = 'lixinze.lxz',
+  table_name        = '__all_virtual_timestamp_service',
+  table_id          = '12395',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ts_value', 'int'),
+    ('ts_type', 'varchar:100'),
+    ('service_role', 'varchar:100'),
+    ('role', 'varchar:100'),
+    ('service_epoch', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
 # 12397: __all_virtual_px_p2p_datahub
+
 #
 # 余留位置
 #
@@ -11849,6 +11872,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15382: __all_virtual_transfer_task_history
 # 15383: __all_virtual_resource_pool_sys_agent
 # 15384: __all_virtual_px_p2p_datahub
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 
 ################################################################################
 # System View (20000,30000]
@@ -25931,7 +25955,32 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
-# 21404: V$OB_TIMESTAMP_SERVICE
+
+def_table_schema(
+  owner           = 'lixinze.lxz',
+  table_name      = 'V$OB_TIMESTAMP_SERVICE',
+  table_id        = '21404',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TS_TYPE,
+      TS_VALUE,
+      SVR_IP,
+      SVR_PORT
+    FROM
+      oceanbase.__all_virtual_timestamp_service
+    WHERE
+      ROLE = 'LEADER' AND SERVICE_EPOCH =
+      (SELECT MAX(SERVICE_EPOCH) FROM
+      oceanbase.__all_virtual_timestamp_service)
+""".replace("\n", " ")
+)
+
 # 21405: DBA_OB_BALANCE_JOBS
 # 21406: CDB_OB_BALANCE_JOBS
 # 21407: DBA_OB_BALANCE_JOB_HISTORY
@@ -25968,9 +26017,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      CASE WHEN
-      A.DATABASE_NAME = '__public' THEN
-      'PUBLIC' ELSE A.DATABASE_NAME END AS OWNER,
+      A.DATABASE_NAME AS OWNER,
       A.SYNONYM_NAME AS SYNONYM_NAME,
       CAST(CASE WHEN INSTR(A.OBJECT_NAME, '@') = 0
            THEN B.DATABASE_NAME
@@ -27824,9 +27871,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT
-      CASE WHEN
-      A.DATABASE_NAME = '__public' THEN
-      'PUBLIC' ELSE A.DATABASE_NAME END AS OWNER,
+      A.DATABASE_NAME AS OWNER,
       A.SYNONYM_NAME AS SYNONYM_NAME,
       CAST(CASE WHEN INSTR(A.OBJECT_NAME, '@') = 0
            THEN B.DATABASE_NAME
@@ -49016,7 +49061,33 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 # 28190:  V$OB_ARBITRATION_MEMBER_INFO
 # 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
 # 28192:  V$OB_ARBITRATION_SERVICE_STATUS
-# 28193:  V$OB_TIMESTAMP_SERVICE
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  table_name      = 'V$OB_TIMESTAMP_SERVICE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28193',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TS_TYPE,
+      TS_VALUE,
+      SVR_IP,
+      SVR_PORT
+    FROM
+      SYS.ALL_VIRTUAL_TIMESTAMP_SERVICE
+    WHERE
+      ROLE = 'LEADER' AND SERVICE_EPOCH =
+      (SELECT MAX(SERVICE_EPOCH) FROM
+      SYS.ALL_VIRTUAL_TIMESTAMP_SERVICE)
+""".replace("\n", " ")
+)
 
 ################################################################################
 # Lob Table (50000, 70000)

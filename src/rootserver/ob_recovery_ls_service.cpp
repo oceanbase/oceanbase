@@ -411,7 +411,7 @@ int ObRecoveryLSService::get_min_data_version_(uint64_t &compatible)
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
       ObSqlString sql;
-      if (OB_FAIL(sql.assign_fmt("select value from %s where tenant_id = '%lu' and name = 'compatible' ",
+      if (OB_FAIL(sql.assign_fmt("select value as compatible from %s where tenant_id = '%lu' and name = 'compatible' ",
                                  OB_TENANT_PARAMETER_TNAME, tenant_id_))) {
         LOG_WARN("fail to generate sql", KR(ret), K_(tenant_id));
       } else if (OB_FAIL(proxy_->read(result, exec_tenant_id, sql.ptr()))) {
@@ -466,7 +466,7 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
       ret = EAGAIN;
       LOG_WARN("data_version not match, run upgrade end later",
                KR(ret), K_(tenant_id), K(target_data_version), K(current_data_version),
-               K(DATA_CURRENT_VERSION));
+               K(DATA_CURRENT_VERSION), K(min_data_version));
     } else {
       HEAP_VAR(obrpc::ObAdminSetConfigItem, item) {
       ObSchemaGetterGuard guard;
@@ -496,6 +496,9 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
         LOG_WARN("fail to push back item", KR(ret), K(item));
       } else if (OB_FAIL(rs_rpc_proxy_->timeout(timeout).admin_set_config(arg))) {
         LOG_WARN("fail to set config", KR(ret), K(arg), K(timeout));
+      } else {
+        LOG_INFO("upgrade end", KR(ret), K(arg), K(timeout), K_(tenant_id), K(target_data_version),
+                 K(current_data_version), K(DATA_CURRENT_VERSION), K(min_data_version));
       }
       } // end HEAP_VAR
     }

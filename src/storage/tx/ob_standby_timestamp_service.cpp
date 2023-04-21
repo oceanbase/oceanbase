@@ -307,7 +307,20 @@ int ObStandbyTimestampService::check_leader(bool &leader)
   return ret;
 }
 
-
+void ObStandbyTimestampService::get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  ts_value = last_id_;
+  bool is_leader = false;
+  if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::GTS_LS, role, proposal_id))) {
+    TRANS_LOG(WARN, "get ObStandbyTimestampService role fail", KR(ret));
+  } else if (role == LEADER && proposal_id != epoch_) {
+    role = FOLLOWER;
+    proposal_id = epoch_;
+  }
+  TRANS_LOG(INFO, "sts get virtual info", K(ret), K_(last_id), K(ts_value),
+                  K(role), K(proposal_id), K_(epoch), K_(switch_to_leader_ts));
+}
 
 }
 }

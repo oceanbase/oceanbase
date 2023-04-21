@@ -159,7 +159,7 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
 
     SMART_VAR(ObSPIResultSet, spi_result) {
       OZ (spi_result.init(*session));
-      OZ (spi_result.start_nested_stmt_if_need(&pl_exec_ctx, static_cast<stmt::StmtType>(info->type_)));
+      OZ (spi_result.start_nested_stmt_if_need(&pl_exec_ctx, static_cast<stmt::StmtType>(info->type_), false));
 
       if (OB_SUCC(ret)) {
         ObSPIOutParams out_params;

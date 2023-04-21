@@ -1110,6 +1110,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.tx_lock_timeout_ = lookup_rtdef_->tx_lock_timeout_;
   scan_param_.index_id_ = lookup_ctdef_->ref_table_id_;
   scan_param_.is_get_ = lookup_ctdef_->is_get_;
+  scan_param_.is_for_foreign_check_ = lookup_rtdef_->is_for_foreign_check_;
   scan_param_.timeout_ = lookup_rtdef_->timeout_ts_;
   scan_param_.scan_flag_ = lookup_rtdef_->scan_flag_;
   scan_param_.reserved_cell_count_ = lookup_ctdef_->access_column_ids_.count();
@@ -1131,7 +1132,9 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
-
+  if (lookup_rtdef_->is_for_foreign_check_) {
+    scan_param_.trans_desc_ = tx_desc_;
+  }
   // lookup to main table should invoke multi get
   scan_param_.is_get_ = true;
 

@@ -1246,6 +1246,13 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             if (parse_result.is_dynamic_sql_) {
               context.is_dynamic_sql_ = true;
             }
+            bool for_update = false;
+            if (stmt::T_SELECT == stmt_type &&
+                PARSE_SELECT_MAX_IDX == parse_result.result_tree_->children_[0]->num_child_ &&
+                NULL != parse_result.result_tree_->children_[0]->children_[PARSE_SELECT_FOR_UPD]) {
+              for_update = true;
+            }
+            result.get_external_retrieve_info().is_select_for_update_ = for_update;
             param_cnt = parse_result.question_mark_ctx_.count_;
             normalized_sql = context.is_dynamic_sql_ && parse_result.no_param_sql_len_ > 0
               ? ObString(parse_result.no_param_sql_len_, parse_result.no_param_sql_) : sql;

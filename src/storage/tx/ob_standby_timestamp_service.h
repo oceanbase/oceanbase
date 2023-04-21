@@ -70,6 +70,7 @@ public:
   int check_leader(bool &leader);
   int get_number(int64_t &gts);
   int64_t get_last_id() const { return last_id_; }
+  void get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id);
   TO_STRING_KV(K_(inited), K_(last_id), K_(tenant_id), K_(epoch), K_(self), K_(switch_to_leader_ts));
 private:
   int query_and_update_last_id();

@@ -225,7 +225,7 @@ int ObSPIResultSet::alloc_saved_value(sql::ObSQLSessionInfo::StmtSavedValue *&se
   return ret;
 }
 
-int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type)
+int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type, bool for_update)
 {
   int ret = OB_SUCCESS;
   stmt::StmtType parent_stmt_type = stmt::T_NONE;
@@ -257,6 +257,11 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtT
                  K(ret), K(stmt_type), K(exec_ctx.get_sql_ctx()),
                  K(&exec_ctx), K(exec_ctx.get_my_session()->get_cur_exec_ctx()));
       }
+    } else if (stmt::T_SELECT == parent_stmt_type && stmt::T_SELECT == stmt_type && for_update && lib::is_oracle_mode()) {
+      ret = OB_ERR_CANNOT_PERFORM_DML_INSIDE_QUERY;
+      LOG_WARN("ORA-14551: cannot perform a DML operation inside a query",
+                 K(ret), K(stmt_type), K(exec_ctx.get_sql_ctx()),
+                 K(&exec_ctx), K(exec_ctx.get_my_session()->get_cur_exec_ctx()));
     } else if (ObStmt::is_ddl_stmt(stmt_type, false) || ObStmt::is_tcl_stmt(stmt_type)) {
       ret = lib::is_oracle_mode() ? OB_NOT_SUPPORTED : OB_ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG;
       LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
@@ -353,7 +358,7 @@ void ObSPIResultSet::end_cursor_stmt(ObPLExecCtx *pl_ctx, int &result)
   return;
 }
 
-int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type)
+int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type, bool for_update)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -366,7 +371,7 @@ int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, stmt::StmtTyp
   } else if (OB_NOT_NULL(pl_ctx->exec_ctx_->get_pl_stack_ctx())
              && pl_ctx->exec_ctx_->get_pl_stack_ctx()->in_nested_sql_ctrl()) {
     // 嵌套的顶层语句一定是一个DML语句, 并且开启了事务, 此时走fast_select流程
-    OZ (check_nested_stmt_legal(*pl_ctx->exec_ctx_, stmt_type));
+    OZ (check_nested_stmt_legal(*pl_ctx->exec_ctx_, stmt_type, for_update));
     OZ (begin_nested_session(*session));
     OX (session->set_query_start_time(ObTimeUtility::current_time()));
     OX (need_end_nested_stmt_ = EST_END_NESTED_SESSION);
@@ -1328,7 +1333,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     const bool *exprs_not_null_flag,
                                     const int64_t *pl_integer_ranges,
                                     int64_t is_bulk,
-                                    bool is_forall)
+                                    bool is_forall,
+                                    bool for_update)
 {
   int ret = OB_SUCCESS;
   ObWarningBuffer* wb = NULL;
@@ -1356,7 +1362,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
     stmt::StmtType stmt_type = stmt::T_NONE;
     bool is_diagnostics_stmt = false;
     OZ (spi_result.init(*session));
-    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type)));
+    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type), for_update));
 
     if (OB_SUCC(ret)) {
       int64_t row_count = 0;
@@ -1570,7 +1576,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
 
   HEAP_VAR(ObSPIResultSet, spi_result) {
     OZ (spi_result.init(*session));
-    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type)));
+    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type), cursor.is_for_update()));
     if (OB_SUCC(ret)) {
       int64_t row_count = 0;
       ObQueryRetryCtrl retry_ctrl;
@@ -1793,7 +1799,8 @@ int ObSPIService::spi_query(ObPLExecCtx *ctx,
                             int64_t type_count,
                             const bool *exprs_not_null_flag,
                             const int64_t *pl_integer_ranges,
-                            bool is_bulk)
+                            bool is_bulk,
+                            bool for_update)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_query);
@@ -1801,7 +1808,7 @@ int ObSPIService::spi_query(ObPLExecCtx *ctx,
                         into_exprs, into_count,
                         column_types, type_count,
                         exprs_not_null_flag,
-                        pl_integer_ranges, is_bulk),
+                        pl_integer_ranges, is_bulk, false, for_update),
                         sql, type);
   return ret;
 }
@@ -1818,13 +1825,14 @@ int ObSPIService::spi_execute(ObPLExecCtx *ctx,
                               const bool *exprs_not_null_flag,
                               const int64_t *pl_integer_ranges,
                               bool is_bulk,
-                              bool is_forall)
+                              bool is_forall,
+                              bool for_update)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_execute);
   OZ (spi_inner_execute(ctx, NULL, ps_sql, type, param_exprs, param_count,
                         into_exprs, into_count, column_types, type_count,
-                        exprs_not_null_flag, pl_integer_ranges, is_bulk, is_forall));
+                        exprs_not_null_flag, pl_integer_ranges, is_bulk, is_forall, for_update));
   return ret;
 }
 
@@ -1899,7 +1907,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
         if (OB_SUCC(ret)) {
           OZ (ob_write_string(allocator, pl_prepare_result.result_set_->get_stmt_ps_sql(), prepare_result.ps_sql_));
           prepare_result.type_ = pl_prepare_result.result_set_->get_stmt_type();
-          prepare_result.for_update_ = false; //Mysql模式不支持可更新游标
+          prepare_result.for_update_ = pl_prepare_result.result_set_->get_is_select_for_update();
           prepare_result.has_hidden_rowid_ = false;
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(resolve_exec_params(parse_result,
@@ -2478,7 +2486,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
         }
       }
       OX (session->set_stmt_type(saved_stmt_type));
-      OZ (spi_result.start_nested_stmt_if_need(ctx, stmt_type));
+      OZ (spi_result.start_nested_stmt_if_need(ctx, stmt_type, for_update));
 
       // Step2: execute dynamic SQL now!
       if (OB_FAIL(ret)) {
@@ -3313,7 +3321,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
       } else { //MySQL Cursor/Updated Cursor/Server Cursor(REF_CURSOR, PACKAGE CURSOR)
         HEAP_VAR(ObSPIResultSet, spi_result) {
           OZ (spi_result.init(*session_info));
-          OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type)));
+          OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type), for_update));
           int64_t old_query_start_time = session_info->get_query_start_time();
           // query_start_time_ set to 0 in begin_nested_session, here we reset it.
           session_info->set_query_start_time(ObTimeUtility::current_time());
@@ -3580,7 +3588,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
       uint64_t size = 0;
       OZ (session->get_tmp_table_size(size));
       OZ (spi_result.init(*ctx->exec_ctx_->get_my_session()));
-      OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type)),
+      OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type), for_update),
           sql_stmt, ps_sql, exec_params);
 
       if (OB_SUCC(ret)) {
@@ -4802,6 +4810,23 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
       }
     }
   }
+  SET_SPI_STATUS;
+  return ret;
+}
+
+int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
+                                   ObObj *obj)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(obj));
+  if (OB_SUCC(ret) &&
+      obj->is_pl_extend() &&
+      obj->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+    OZ (ObUserDefinedType::destruct_obj(*obj, ctx->exec_ctx_->get_my_session()));
+  }
+
   SET_SPI_STATUS;
   return ret;
 }
