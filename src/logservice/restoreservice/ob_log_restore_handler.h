@@ -151,7 +151,7 @@ public:
   // return true only if in restore state and all replicas have restore and replay finish
   int check_restore_done(const share::SCN &recovery_end_scn, bool &done);
   // @brief set error if error occurs in log restore
-  void mark_error(share::ObTaskId &trace_id, const int ret_code);
+  void mark_error(share::ObTaskId &trace_id, const int ret_code, const palf::LSN &lsn);
   // @brief get restore error for report
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   // @brief Before the standby tenant switchover to primary, check if all primary logs are restored in the standby
@@ -182,6 +182,7 @@ private:
   int check_replay_done_(const share::SCN &scn, bool &done);
   int check_replica_replay_done_(const share::SCN &scn, common::ObMemberList &member_list, bool &done);
   int check_member_list_change_(common::ObMemberList &member_list, bool &member_list_change);
+  bool restore_to_end_unlock_() const;
 
 private:
   ObRemoteLogParent *parent_;
