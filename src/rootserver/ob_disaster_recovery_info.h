@@ -201,6 +201,7 @@ public:
       DRUnitStatInfo *&unit_in_group_stat_info);
   int get_ls_status_info(
       const share::ObLSStatusInfo *&ls_status_info);
+  int get_inner_ls_info(share::ObLSInfo &inner_ls_info) const;
   int get_leader(
       common::ObAddr &leader_addr) const;
   int get_leader_and_member_list(
