@@ -150,11 +150,8 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
 
     if (!GCONF.enable_sql_audit) {
       tlog_ = NULL;
-    } else if (OB_ISNULL(tlog_ = ObTransTraceLogFactory::alloc())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObTransTraceLog error", KR(ret), KP_(tlog));
     } else {
-      // do nothing
+      tlog_ = &trace_log_;
     }
 
     is_inited_ = true;
@@ -239,7 +236,6 @@ void ObPartTransCtx::destroy()
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
-      ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
 

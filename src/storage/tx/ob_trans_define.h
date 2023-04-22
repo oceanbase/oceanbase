@@ -683,11 +683,11 @@ private:
 
 typedef common::ObReserveArenaAllocator<1024> ObTxReserveArenaAllocator;
 
-class ObTransTraceLog : public common::ObTraceEventRecorderBase<100, 4000>
+class ObTransTraceLog : public common::ObTraceEventRecorder
 {
 public:
   ObTransTraceLog()
-      : common::ObTraceEventRecorderBase<100, 4000>::ObTraceEventRecorderBase(
+      : common::ObTraceEventRecorder::ObTraceEventRecorderBase(
           true, common::ObLatchIds::TRANS_TRACE_RECORDER_LOCK) {}
   ~ObTransTraceLog() {}
   void destroy() {}
