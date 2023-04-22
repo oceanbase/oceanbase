@@ -1207,7 +1207,9 @@ int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
     PALF_LOG(ERROR, "alloc_log_io_flush_log_task failed", K(ret));
   } else if (OB_FAIL(flush_log_task->init(flush_log_cb_ctx, write_buf))) {
     PALF_LOG(ERROR, "init LogIOFlushLogTask failed", K(ret));
-  } else {
+  } else {/*do nothing*/}
+  if (OB_FAIL(ret) && NULL != flush_log_task) {
+    alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
   }
   return ret;
 }
@@ -1220,10 +1222,13 @@ int LogEngine::generate_truncate_log_task_(const TruncateLogCbCtx &truncate_log_
   if (NULL == (truncate_log_task = alloc_mgr_->alloc_log_io_truncate_log_task(palf_id_, palf_epoch_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(ERROR, "alloc_log_io_truncate_log_task failed", K(ret));
-  } else if (truncate_log_task->init(truncate_log_cb_ctx)) {
+  } else if (OB_FAIL(truncate_log_task->init(truncate_log_cb_ctx))) {
     PALF_LOG(ERROR, "init LogIOTruncateLogTask failed", K(ret), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(TRACE, "generate_truncate_log_task_ success", K(ret), K_(palf_id), K_(is_inited));
+  }
+  if (OB_FAIL(ret) && NULL != truncate_log_task) {
+    alloc_mgr_->free_log_io_truncate_log_task(truncate_log_task);
   }
   return ret;
 }
@@ -1239,7 +1244,9 @@ int LogEngine::generate_truncate_prefix_blocks_task_(
     PALF_LOG(ERROR, "alloc_log_io_truncate_prefix_blocks_task failed", K(ret));
   } else if (OB_FAIL(truncate_prefix_blocks_task->init(truncate_prefix_blocks_ctx))) {
     PALF_LOG(ERROR, "init LogIOTruncatePrefixBlocksTask failed", K(ret), K_(palf_id), K_(is_inited));
-  } else {
+  } else {/*do nothing*/}
+  if (OB_FAIL(ret) && NULL != truncate_prefix_blocks_task) {
+    alloc_mgr_->free_log_io_truncate_prefix_blocks_task(truncate_prefix_blocks_task);
   }
   return ret;
 }
@@ -1265,15 +1272,22 @@ int LogEngine::generate_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx
     PALF_LOG(ERROR, "allocate memory failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (OB_FAIL(serialize_log_meta_(log_meta, buf, buf_len))) {
     PALF_LOG(ERROR, "serialize_log_meta_ failed", K(ret), K_(palf_id), K_(is_inited), K(log_meta));
-  } else if (OB_FAIL(flush_meta_task->init(flush_meta_cb_ctx,
-          buf, buf_len))) {
+  } else if (OB_FAIL(flush_meta_task->init(flush_meta_cb_ctx, buf, buf_len))) {
     PALF_LOG(ERROR, "init LogIOFlushMetaTask failed", K(ret));
   } else {
     PALF_LOG(TRACE, "generate_flush_meta_task_ success", K(ret), K_(palf_id), K_(is_inited));
   }
-  if (OB_FAIL(ret) && NULL != buf) {
-    mtl_free(buf);
+
+  if (OB_FAIL(ret)) {
+    //free memory
+    if (NULL != buf) {
+      mtl_free(buf);
+    }
+    if (NULL != flush_meta_task) {
+      alloc_mgr_->free_log_io_flush_meta_task(flush_meta_task);
+    }
   }
+
   return ret;
 }
 
@@ -1294,6 +1308,9 @@ int LogEngine::generate_flashback_task_(const FlashbackCbCtx &flashback_cb_ctx,
     PALF_LOG(ERROR, "init LogIOFlashbackTask failed", K(ret));
   } else {
     PALF_LOG(TRACE, "generate_flashback_task_ hsuccess", K(ret), KPC(this));
+  }
+  if (OB_FAIL(ret) && NULL != flashback_task) {
+    alloc_mgr_->free_log_io_flashback_task(flashback_task);
   }
   return ret;
 }
