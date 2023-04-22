@@ -415,7 +415,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "data_corrupted");
   ObTimeGuard guard("data_corrupted", 0);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "start advance_base_lsn", K(id));
   int64_t leader_idx = 0;

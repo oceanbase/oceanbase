@@ -698,7 +698,7 @@ int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry,
   } else if (OB_FAIL(LogChecksum::verify_accum_checksum(
                 accumlate_checksum_, data_checksum,
                 expected_verify_checksum, new_accumlate_checksum))) {
-    PALF_LOG(ERROR, "verify accumlate checksum failed", K(ret), KPC(this), K(entry));
+    PALF_LOG(WARN, "verify accumlate checksum failed", K(ret), KPC(this), K(entry));
   } else {
     PALF_LOG(TRACE, "verify_accum_checksum_ success", K(ret), KPC(this), K(entry));
   }
