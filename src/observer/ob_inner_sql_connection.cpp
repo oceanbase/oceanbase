@@ -201,7 +201,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     tid_ = GETTID();
     if (NULL == extern_session || 0 != EVENT_CALL(EventTable::EN_INNER_SQL_CONN_LEAK_CHECK)) {
       // Only backtrace internal used connection to avoid performance problems.
-      bt_size_ = backtrace(bt_addrs_, MAX_BT_SIZE);
+      bt_size_ = ob_backtrace(bt_addrs_, MAX_BT_SIZE);
     }
     config_ = config;
     associated_client_ = client_addr;
@@ -2317,13 +2317,7 @@ void ObInnerSQLConnection::dump_conn_bt_info()
   int64_t pos = 0;
   (void)ObTimeUtility2::usec_to_str(init_timestamp_, buf_time, OB_MAX_TIMESTAMP_LENGTH, pos);
   pos = 0;
-  for (int i = 0; i < bt_size_; ++i) {
-    if (OB_UNLIKELY(pos + 1 > BUF_SIZE)) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "buf is not large enough", K(pos), K(BUF_SIZE));
-    } else {
-      (void)databuff_printf(buf_bt, BUF_SIZE, pos, "%p ", bt_addrs_[i]);
-    }
-  }
+  parray(buf_bt, BUF_SIZE, (int64_t*)*&bt_addrs_, bt_size_);
   LOG_WARN_RET(OB_SUCCESS, "dump inner sql connection backtrace", "tid", tid_, "init time", buf_time, "backtrace", buf_bt);
 }
 

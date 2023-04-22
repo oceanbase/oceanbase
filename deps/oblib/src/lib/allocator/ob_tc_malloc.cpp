@@ -142,6 +142,7 @@ void  __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool
   #ifndef OB_USE_ASAN
   abort_unless(OB_SUCCESS == install_ob_signal_handler());
   #endif
+  init_proc_map_info();
 }
 
 int64_t get_virtual_memory_used(int64_t *resident_size)

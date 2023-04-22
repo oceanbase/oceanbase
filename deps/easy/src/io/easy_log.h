@@ -59,10 +59,8 @@ typedef enum {
 #define easy_trace_log(format, args...) easy_common_log(EASY_LOG_TRACE, format, ## args)
 #define SYS_ERROR(format...) easy_error_log(format)
 // 打印backtrace
-#define EASY_PRINT_BT(format, args...)                                                        \
-    {char _buffer_stack_[256];{void *array[10];int i, idx=0, n = backtrace(array, 10);        \
-            for (i = 0; i < n; i++) idx += lnprintf(idx+_buffer_stack_, 25, "%p ", array[i]);}\
-        easy_log_format(EASY_LOG_OFF, __FILE__, __LINE__, __FUNCTION__, "%s" format, _buffer_stack_, ## args);}
+#define EASY_PRINT_BT(format, args...) \
+  {easy_log_format(EASY_LOG_OFF, __FILE__, __LINE__, __FUNCTION__, "%s" format, easy_lbt(), ## args);}
 
 extern easy_log_level_t easy_log_level;
 extern easy_log_format_pt easy_log_format;

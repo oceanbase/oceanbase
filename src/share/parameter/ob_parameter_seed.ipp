@@ -1416,3 +1416,6 @@ DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000"
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
+         "Decide whether to let the backtrace function take effect",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

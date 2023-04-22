@@ -1310,7 +1310,7 @@ char *lbt_oblog()
   //in this function and functions called.
   static __thread void *addrs[100];
   static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = backtrace(addrs, 100);
+  int size = ob_backtrace(addrs, 100);
   char **res = backtrace_symbols(addrs, 100);
   int64_t pos = 0;
 

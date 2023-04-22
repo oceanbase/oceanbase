@@ -158,8 +158,8 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
 #define ob_malloc_sample_backtrace(obj, size)                                                       \
   {                                                                                                 \
     if (OB_UNLIKELY(obj->on_malloc_sample_)) {                                                      \
-      void *addrs[100];                                                                 \
-      int bt_len = backtrace(addrs, ARRAYSIZEOF(addrs));                                            \
+      void *addrs[100];                                                                             \
+      int bt_len = OB_BACKTRACE_M(addrs, ARRAYSIZEOF(addrs));                                       \
       MEMCPY(&obj->data_[size], (char*)addrs, AOBJECT_BACKTRACE_SIZE);                              \
       if (AOBJECT_BACKTRACE_COUNT > bt_len) {                                                       \
         reinterpret_cast<void*&>(obj->data_[size + bt_len * sizeof(void*)]) = nullptr;              \

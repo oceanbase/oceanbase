@@ -244,6 +244,7 @@ _chunk_row_store_mem_limit
 _ctx_memory_limit
 _data_storage_io_timeout
 _enable_adaptive_compaction
+_enable_backtrace_function
 _enable_block_file_punch_hole
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
