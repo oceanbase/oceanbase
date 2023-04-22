@@ -757,6 +757,9 @@ function main() {
     graph)
     graph
     ;;
+    display-trace)
+    obd display-trace ${extra_args}
+    ;;
     *)
     echo "Unknown command: $command"
     help_info
