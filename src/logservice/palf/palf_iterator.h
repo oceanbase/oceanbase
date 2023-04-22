@@ -27,7 +27,7 @@ template <class PalfIteratorStorage, class LogEntryType>
 class PalfIterator
 {
 public:
-  PalfIterator() : iterator_storage_(), iterator_impl_(), is_inited_(false) {}
+  PalfIterator() : iterator_storage_(), iterator_impl_(), need_print_error_(true), is_inited_(false) {}
   ~PalfIterator() {destroy();}
 
   int init(const LSN &start_offset,
@@ -97,12 +97,12 @@ public:
   {
     int ret = OB_SUCCESS;
     const share::SCN replayable_point_scn = SCN::max_scn();
+    bool iterate_end_by_replayable_point = false;
+    SCN next_min_scn;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-    } else if (OB_FAIL(iterator_impl_.next(replayable_point_scn)) && OB_ITER_END != ret) {
-      PALF_LOG(WARN, "PalfIterator next failed", K(ret), KPC(this));
     } else {
-      PALF_LOG(TRACE, "PalfIterator next success", K(ret), KPC(this));
+      ret = next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point);
     }
     return ret;
   }
@@ -121,12 +121,12 @@ public:
   int next(const share::SCN &replayable_point_scn)
   {
     int ret = OB_SUCCESS;
+    bool iterate_end_by_replayable_point = false;
+    SCN next_min_scn;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-    } else if (OB_FAIL(iterator_impl_.next(replayable_point_scn)) && OB_ITER_END != ret) {
-      PALF_LOG(WARN, "PalfIterator next failed", K(ret), KPC(this));
     } else {
-      PALF_LOG(TRACE, "PalfIterator next success", K(ret), KPC(this));
+      ret = next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point);
     }
     return ret;
   }
@@ -144,7 +144,9 @@ public:
   //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
   //                  user need used a new iterator to read data again)
   //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
-  int next(const share::SCN &replayable_point_scn, share::SCN &next_min_scn, bool &iterate_end_by_replayable_point)
+  int next(const share::SCN &replayable_point_scn,
+           share::SCN &next_min_scn,
+           bool &iterate_end_by_replayable_point)
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
@@ -152,6 +154,7 @@ public:
     } else if (OB_FAIL(iterator_impl_.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))
         && OB_ITER_END != ret) {
       PALF_LOG(WARN, "PalfIterator next failed", K(ret), KPC(this));
+      print_error_log(ret);
     } else {
       PALF_LOG(TRACE, "PalfIterator next success", K(iterator_impl_), K(ret), KPC(this),
                K(replayable_point_scn), K(next_min_scn), K(iterate_end_by_replayable_point));
@@ -243,6 +246,16 @@ public:
   {
     return iterator_impl_.get_curr_read_lsn();
   }
+  void print_error_log(int ret) const
+  {
+    if (need_print_error_ && (OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret)) {
+      PALF_LOG_RET(ERROR, ret, "invliad data or checksum error!!!", KPC(this));
+    }
+  }
+  void set_need_print_error(const bool need_print_error)
+  {
+    need_print_error_ = need_print_error;
+  }
   TO_STRING_KV(K_(iterator_impl));
 
 private:
@@ -271,6 +284,7 @@ private:
 private:
   PalfIteratorStorage iterator_storage_;
   LogIteratorImpl<LogEntryType> iterator_impl_;
+  bool need_print_error_;
   bool is_inited_;
 };
 

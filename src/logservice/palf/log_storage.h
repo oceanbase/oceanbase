@@ -260,6 +260,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
   update_log_tail_guarded_by_lock_(LSN((max_block_id + 1) * logical_block_size_));
   // the last block may has not valid data, we need iterate prev block
   // for GC, we must ensure that the block which include 'max_committed_lsn' will no be reused
+  const bool need_print_error = false;
   while (OB_SUCC(ret) && true == is_valid_block_id(iterate_block_id)
          && iterate_block_id >= min_block_id) {
     // NB: 'log_tail_' need point to the tail of 'iterate_block_id', because 'pread' interface
@@ -272,6 +273,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
     if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this))) {
       PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K(start_lsn));
     } else {
+      iterator.set_need_print_error(need_print_error);
       EntryType curr_entry;
       LSN curr_lsn;
       while (OB_SUCC(ret) && OB_SUCC(iterator.next())) {
@@ -283,7 +285,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
         }
       }
       if (OB_ITER_END == ret
-          || (OB_INVALID_DATA == ret && true == iterator.check_is_the_last_entry())) {
+          || ((OB_CHECKSUM_ERROR == ret || OB_INVALID_DATA == ret) && true == iterator.check_is_the_last_entry())) {
         ret = OB_SUCCESS;
         // NB: lsn is valid when there are some valid data in last block, otherwise, we need
         // iterate prev block.
