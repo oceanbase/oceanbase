@@ -89,8 +89,6 @@ public:
                             int64_t &buf_pos,
                             ObRedoLogSubmitHelper &helper,
                             const bool log_for_lock_node = true) = 0;
-  virtual int audit_partition(const enum transaction::ObPartitionAuditOperator op,
-                              const int64_t count) = 0;
   common::ActiveResource resource_link_;
 };
 

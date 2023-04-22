@@ -91,12 +91,18 @@ public:
   bool enable_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
+    if (get_cpu_num() <= 8) {
+      v = !_enable_defensive_check;
+    }
     return v > 0;
   }
 
   bool enable_strict_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
+    if (get_cpu_num() <= 8) {
+      v = !_enable_defensive_check;
+    }
     return v == 2;
   }
 

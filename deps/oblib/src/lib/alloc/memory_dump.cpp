@@ -22,6 +22,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/utility/ob_print_utils.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -170,14 +171,10 @@ void ObMemoryDump::destroy()
 int ObMemoryDump::push(void *task)
 {
   int ret = OB_SUCCESS;
-  const bool enable_dump = lib::is_trace_log_enabled();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == task) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (!enable_dump) {
-    // do nothing
-    free_task(task);
   } else {
     ret = queue_.push(task);
     if (OB_SIZE_OVERFLOW == ret) {
@@ -203,14 +200,13 @@ void ObMemoryDump::run1()
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   int ret = OB_SUCCESS;
   lib::set_thread_name("MemoryDump");
-  static int64_t last_dump_ts = ObTimeUtility::current_time();
-  const bool enable_dump = lib::is_trace_log_enabled();
-  while (!has_set_stop() && enable_dump) {
+  static int64_t last_dump_ts = common::ObClockGenerator::getClock();
+  while (!has_set_stop()) {
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, 100 * 1000))) {
       handle(task);
     } else if (OB_ENTRY_NOT_EXIST == ret) {
-      int64_t current_ts = ObTimeUtility::current_time();
+      int64_t current_ts = common::ObClockGenerator::getClock();
       if (current_ts - last_dump_ts > STAT_LABEL_INTERVAL) {
         auto *task = alloc_task();
         if (OB_ISNULL(task)) {
@@ -223,6 +219,8 @@ void ObMemoryDump::run1()
           }
         }
         last_dump_ts = current_ts;
+      } else {
+        ob_usleep(current_ts - last_dump_ts);
       }
     }
   }

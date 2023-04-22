@@ -173,7 +173,6 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_scheduler_status();
-  void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
 

@@ -148,7 +148,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     mt_ctx_.set_trans_ctx(this);
     mt_ctx_.set_for_replay(is_follower_());
 
-    if (!GCONF.enable_sql_audit) {
+    if (!lib::is_trace_log_enabled()) {
       tlog_ = NULL;
     } else {
       tlog_ = &trace_log_;
