@@ -71,7 +71,7 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
       LOG_WARN("fail to register job stat", KR(ret));
     } else if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info_, free_session_ctx_))) {
       LOG_WARN("fail to create session info", KR(ret));
-    } else if (OB_FAIL(ObTableLoadUtils::deep_copy(session_info, session_info_, allocator_))) {
+    } else if (OB_FAIL(ObTableLoadUtils::deep_copy(*session_info, *session_info_, allocator_))) {
       LOG_WARN("fail to deep copy", KR(ret));
     } else {
       is_inited_ = true;
