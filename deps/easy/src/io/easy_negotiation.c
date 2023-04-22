@@ -221,7 +221,7 @@ int net_send_negotiate_message(uint8_t negotiation_enable, int fd, uint64_t magi
             while ((send_bytes = send(fd, buf, encode_len, 0)) < 0 && errno == EINTR);
 
             if (send_bytes != encode_len) {
-                easy_error_log("send negotiate msg failed. addr: %s,errno:%s", addr_str, strerror(errno));
+                easy_warn_log("send negotiate msg failed. addr: %s, errno:%s", addr_str, strerror(errno));
                 return -1;
             } else {
                 easy_info_log("eio:%#llx, thread index:%hhu, send:%d bytes,  send negotiation success. addr:%s!", (unsigned long long)ne_msg.msg_body.eio_magic,
