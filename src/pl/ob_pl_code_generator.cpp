@@ -1446,7 +1446,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, p_result_obj));
       if (OB_SUCC(ret) && lib::is_oracle_mode()) { // check logic need before store function ret value
         if (generator_.get_ast().is_autonomous() &&
-            s.get_level() <= 1 &&
             OB_FAIL(generator_.generate_check_autonomos(s))) {
           LOG_WARN("failed to generate_check_autonomos", K(ret));
         }
