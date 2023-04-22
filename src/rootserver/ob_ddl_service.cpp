@@ -470,7 +470,8 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
         LOG_WARN("failed to insert_ori_schema_version!", K(ret));
       }
       if (OB_SUCC(ret) && index_schema.has_tablet()
-          && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard))) {
+          && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard,
+                                         true/*need_check_tablet_cnt*/))) {
         LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
       }
     }
@@ -570,7 +571,7 @@ int ObDDLService::create_index_table(
     if (OB_SUCC(ret)) {
       if (OB_SUCC(ret)) {
         if (OB_FAIL(create_table_in_trans(table_schema,
-                ddl_stmt_str, &sql_trans, schema_guard))) {
+                ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
           LOG_WARN("create_table_in_trans failed", KR(ret), K(ddl_stmt_str), K(table_schema));
         }
       }
@@ -1769,7 +1770,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(drop_trigger_in_drop_table(trans, ddl_operator, schema_guard,
                                                           *old_view_schema, false))) {
-              // 兼容oracle,create or replace view时drop trigger，且不进回收站
+              // 兼容oracle,create or replace view时drop trigger, 且不进回收站
               LOG_WARN("failed to drop trigger", KR(ret), K(old_view_schema->get_table_id()));
             } else if (OB_FAIL(ddl_operator.drop_table(*old_view_schema, trans))) {
               LOG_WARN("failed to drop old view schema", KR(ret));
@@ -1991,7 +1992,8 @@ int ObDDLService::create_table_in_trans(
     ObTableSchema &table_schema,
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const bool need_check_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -2029,7 +2031,7 @@ int ObDDLService::create_table_in_trans(
       }
     }
     if (OB_SUCC(ret) && table_schema.has_tablet()
-        && OB_FAIL(create_index_tablet(table_schema, trans, schema_guard))) {
+        && OB_FAIL(create_index_tablet(table_schema, trans, schema_guard, need_check_tablet_cnt))) {
       LOG_WARN("fail to create_index_tablet", KR(ret), K(table_schema));
     }
     if (OB_ISNULL(sql_trans) && trans.is_started()) {
@@ -4709,7 +4711,8 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
 
 int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                                       ObMySQLTransaction &trans,
-                                      share::schema::ObSchemaGetterGuard &schema_guard)
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      const bool need_check_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t tenant_id = index_schema.get_tenant_id();
@@ -4736,7 +4739,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
-    if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
+    if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -4940,7 +4943,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                 // The index data is stored separately from the main table,
                 // the partition needs to be built, and insert ori_schema_version in the outer insert
                 if (index_schema.has_tablet()
-                    && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard))) {
+                    && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/))) {
                   LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
                 }
                 if (OB_SUCC(ret)) {
@@ -5746,7 +5749,7 @@ int ObDDLService::gen_mock_fk_parent_table_for_replacing_mock_fk_parent_table(
     LOG_WARN("check_fk_columns_type_for_replacing_mock_fk_parent_table failed", K(ret), K(real_parent_table), KPC(mock_fk_parent_table_ptr));
   } else {
     const ObIArray<ObForeignKeyInfo> &ori_mock_fk_infos_array = mock_fk_parent_table_ptr->get_foreign_key_infos();
-    // modify the parent column id of fk，make it fit with real parent table
+    // modify the parent column id of fk, make it fit with real parent table
     // mock_column_id -> column_name -> real_column_id
     bool is_column_exist = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < ori_mock_fk_infos_array.count(); ++i) {
@@ -14319,7 +14322,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
           has_tablet = is_system_table(table_id);
         }
         if (!has_tablet) {
-        } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard))) {
+        } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard, false/*need_check_tablet_cnt*/))) {
           LOG_WARN("create table tablets failed", K(ret), K(this_table));
         } else {}
         if (OB_SUCC(ret)) {
@@ -19725,7 +19728,8 @@ int ObDDLService::rebuild_index_in_trans(
   } else if (OB_FAIL(generate_tablet_id(index_schema))) {
     LOG_WARN("failed to generate tablet id", K(ret));
   } else if (OB_FAIL(create_table_in_trans(index_schema,
-                              ddl_stmt_str, &trans, schema_guard))) {
+                              ddl_stmt_str, &trans, schema_guard,
+                              false/*need_check_tablet_cnt*/))) {
     LOG_WARN("create_table_in_trans failed", K(index_schema), KR(ret), K(ddl_stmt_str));
   }
 
@@ -20012,7 +20016,8 @@ int ObDDLService::add_table_schema(
   int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, NULL, schema_guard))) {
+  } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, NULL, schema_guard,
+                                           false/*need_check_tablet_cnt*/))) {
     LOG_WARN("create_table_in_trans failed", KR(ret), K(table_schema));
   }
   LOG_INFO("[UPGRADE] add inner table", KR(ret),
