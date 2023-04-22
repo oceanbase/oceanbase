@@ -306,7 +306,7 @@ int ObTxTable::gen_create_tablet_arg_(
                                              false/*is_create_bind_hidden_tablets*/))) {
     LOG_WARN("create tablet info init failed", K(ret), K(tablet_ids), K(tablet_id));
   // create ObBatchCreateTabletArg
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, SCN::base_scn()))) {
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, SCN::base_scn(), false/*need_check_tablet_cnt*/))) {
     LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     LOG_WARN("add table schema failed", K(ret), K(table_schema));

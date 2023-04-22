@@ -108,8 +108,11 @@ DEF_TO_STRING(ObTabletCreatorArg)
 
 /////////////////////////////////////////////////////////
 
-int ObBatchCreateTabletHelper::init(const share::ObLSID &ls_key, const int64_t tenant_id,
-    const SCN &major_frozen_scn)
+int ObBatchCreateTabletHelper::init(
+  const share::ObLSID &ls_key,
+  const int64_t tenant_id,
+  const SCN &major_frozen_scn,
+  const bool need_check_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   const int64_t bucket_count = hash::cal_next_prime(100);
@@ -117,8 +120,7 @@ int ObBatchCreateTabletHelper::init(const share::ObLSID &ls_key, const int64_t t
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_key));
-  } else if (OB_FAIL(arg_.init_create_tablet(ls_key,
-                                             major_frozen_scn))) {
+  } else if (OB_FAIL(arg_.init_create_tablet(ls_key, major_frozen_scn, need_check_tablet_cnt))) {
     LOG_WARN("failed to init create tablet", KR(ret), K(tenant_id), K(ls_key), K(major_frozen_scn));
   } else if (OB_FAIL(table_schemas_map_.create(bucket_count, "CreateTablet", "CreateTablet"))) {
     LOG_WARN("failed to create hashmap", KR(ret));
@@ -218,9 +220,10 @@ void ObTabletCreator::reset()
     }
   }
   args_map_.clear();
+  need_check_tablet_cnt_ = false;
 }
 
-int ObTabletCreator::init()
+int ObTabletCreator::init(const bool need_check_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -229,6 +232,7 @@ int ObTabletCreator::init()
   } else if (OB_FAIL(args_map_.create(MAP_BUCKET_NUM, "TabletCtr"))) {
     LOG_WARN("fail to create args map", KR(ret));
   } else {
+    need_check_tablet_cnt_ = need_check_tablet_cnt;
     inited_ = true;
   }
   return ret;
@@ -253,7 +257,7 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate new arg", KR(ret), KP(batch_arg));
     } else if (FALSE_IT(batch_arg = new (arg_buf)ObBatchCreateTabletHelper())) {
-    } else if (OB_FAIL(batch_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_))) {
+    } else if (OB_FAIL(batch_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_, need_check_tablet_cnt_))) {
       LOG_WARN("failed to init batch arg helper", KR(ret), K(arg));
     } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, batch_arg, 0/*not overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(arg));
@@ -272,7 +276,7 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate new arg", KR(ret));
     } else if (FALSE_IT(new_arg = new (arg_buf)ObBatchCreateTabletHelper())) {
-    } else if (OB_FAIL(new_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_))) {
+    } else if (OB_FAIL(new_arg->init(arg.ls_key_, tenant_id_, major_frozen_scn_, need_check_tablet_cnt_))) {
       LOG_WARN("failed to init batch arg helper", KR(ret), K(arg));
     } else if (FALSE_IT(new_arg->next_ = batch_arg)) {
     } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, new_arg, 1/*not overwrite*/))) {

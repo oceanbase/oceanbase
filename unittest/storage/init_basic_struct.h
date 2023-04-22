@@ -109,7 +109,7 @@ int gen_create_tablet_arg(const int64_t tenant_id,
           false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", KR(ret), K(index_tablet_ids),
         K(tablet_id), K(index_tablet_schema_idxs));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn(), false/*need_check_tablet_cnt*/))) {
     STORAGE_LOG(WARN, "failed to init create tablet", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", KR(ret), K(table_schema));

@@ -25,13 +25,13 @@ ObTableCreator::~ObTableCreator()
 {
 }
 
-int ObTableCreator::init()
+int ObTableCreator::init(const bool need_tablet_cnt_check)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableCreator init twice", KR(ret));
-  } else if (OB_FAIL(tablet_creator_.init())) {
+  } else if (OB_FAIL(tablet_creator_.init(need_tablet_cnt_check))) {
     LOG_WARN("fail to init tablet creator", KR(ret));
   } else {
     inited_ = true;

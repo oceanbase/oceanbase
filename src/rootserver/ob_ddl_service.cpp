@@ -1898,7 +1898,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                   schema_guard,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
-        if (OB_FAIL(table_creator.init())) {
+        if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -4736,7 +4736,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
-    if (OB_FAIL(table_creator.init())) {
+    if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -8505,7 +8505,7 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
     int64_t last_schema_version = OB_INVALID_VERSION;
     if (OB_FAIL(get_last_schema_version(last_schema_version))) {
       LOG_WARN("fail to get last schema version", KR(ret));
-    } else if (OB_FAIL(table_creator.init())) {
+    } else if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -10287,6 +10287,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                      || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
                      || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
             SCN frozen_scn;
+            const bool need_check_tablet_cnt = obrpc::ObAlterTableArg::ADD_PARTITION == alter_table_arg.alter_part_type_
+                     || obrpc::ObAlterTableArg::ADD_SUB_PARTITION == alter_table_arg.alter_part_type_;
             if (OB_ISNULL(GCTX.root_service_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("root service is null", KR(ret));
@@ -10301,7 +10303,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               if (OB_ISNULL(tmp_table_schema)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("table schem is null", KR(ret), K(inc_table_schema_ptrs));
-              } else if (OB_FAIL(table_creator.init())) {
+              } else if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
                 LOG_WARN("fail to init table creator", KR(ret));
               } else if (OB_FAIL(new_table_tablet_allocator.init())) {
                 LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -12994,7 +12996,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
 
-        if (OB_FAIL(table_creator.init())) {
+        if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -13636,7 +13638,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
 
-    if (OB_FAIL(table_creator.init())) {
+    if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -16143,7 +16145,7 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
         LOG_WARN("fail to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
         ObTableCreator table_creator(tenant_id, frozen_scn, *GCTX.lst_operator_, trans);
-        if (OB_FAIL(table_creator.init())) {
+        if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
           LOG_WARN("table_creator init failed", KR(ret), K(tenant_id));
         } else if (1 == create_table_count && create_table_schema_ptrs.at(0)->is_global_index_table()) {
           if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(*create_table_schema_ptrs.at(0), orig_ls_id_array))) {
@@ -20971,7 +20973,7 @@ int ObDDLService::create_tenant_sys_tablets(
     ObArray<uint64_t> index_tids;
     if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
       LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(table_creator.init())) {
+    } else if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init tablet creator", KR(ret), K(tenant_id));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));

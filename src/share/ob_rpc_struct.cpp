@@ -6923,6 +6923,7 @@ void ObBatchCreateTabletArg::reset()
   major_frozen_scn_.reset();
   tablets_.reset();
   table_schemas_.reset();
+  need_check_tablet_cnt_ = false;
 }
 
 int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
@@ -6938,6 +6939,7 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
   } else {
     id_ = arg.id_;
     major_frozen_scn_ = arg.major_frozen_scn_;
+    need_check_tablet_cnt_ = arg.need_check_tablet_cnt_;
   }
   return ret;
 }
@@ -6961,7 +6963,10 @@ int ObContextDDLArg::assign(const ObContextDDLArg &other)
   return ret;
 }
 
-int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const SCN &major_frozen_scn)
+int ObBatchCreateTabletArg::init_create_tablet(
+  const share::ObLSID &id,
+  const SCN &major_frozen_scn,
+  const bool need_check_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid() || !major_frozen_scn.is_valid())) {
@@ -6970,6 +6975,7 @@ int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const SC
   } else {
     id_ = id;
     major_frozen_scn_ = major_frozen_scn;
+    need_check_tablet_cnt_ = need_check_tablet_cnt;
   }
   return ret;
 }
@@ -6987,12 +6993,12 @@ int64_t ObBatchCreateTabletArg::get_tablet_count() const
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(major_frozen_scn), K_(tablets));
+  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(tablets));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER(ObBatchCreateTabletArg, id_, major_frozen_scn_,
-    tablets_, table_schemas_);
+    tablets_, table_schemas_, need_check_tablet_cnt_);
 
 OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_, addr_);
 bool ObCreateLSResult::is_valid() const
