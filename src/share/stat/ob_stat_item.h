@@ -201,9 +201,6 @@ public:
                ObOptColumnStat *stat) :
     ObStatColItem(param, stat)
   {}
-
-  // always need to deduce table avg row length
-  virtual bool is_needed() const override { return true; }
   const char *get_fmt() const
   {
     return lib::is_oracle_mode() ? " AVG(SYS_OP_OPNSIZE(\"%.*s\"))"

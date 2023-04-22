@@ -564,25 +564,12 @@ int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifi
         && (cur_table = table_item_iter.get_next_table_item()) != nullptr) {
       if (!q_name.tbl_name_.empty()) {
         if (cur_table->is_joined_table()) {
-          const JoinedTable *joined_table = reinterpret_cast<const JoinedTable*>(cur_table);
-          if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("left or right table of joined table is NULL", K(ret), 
-                KP(joined_table->left_table_), KP(joined_table->right_table_));
-          } else if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_, q_name.tbl_name_,
-                                                            joined_table->left_table_->get_object_name(),
-                                                            OB_TABLE_NAME_CLASS, is_match))) {
-            LOG_WARN("table name case compare failed", K(ret),
-                K(q_name.tbl_name_), K(joined_table->left_table_->get_object_name()));
-          } else if (is_match) {
-            table_item = joined_table->left_table_;
-          } else if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_, q_name.tbl_name_,
-                                                            joined_table->right_table_->get_object_name(),
-                                                            OB_TABLE_NAME_CLASS, is_match))) {
-            LOG_WARN("table name case compare failed", K(ret),
-                K(q_name.tbl_name_), K(joined_table->right_table_->get_object_name()));
-          } else if (is_match) {
-            table_item = joined_table->right_table_;
+          if (OB_FAIL(check_rowid_existence_in_joined_table(params_.session_info_,
+                                                            q_name.tbl_name_,
+                                                            reinterpret_cast<const JoinedTable*>(cur_table),
+                                                            is_match,
+                                                            table_item))) {
+            LOG_WARN("failed to check rowid existence in joined table", K(ret));
           }
         } else if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_,
                                                           q_name.tbl_name_,
@@ -601,6 +588,64 @@ int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifi
         LOG_WARN("column in all tables is ambiguous", K(ret), K(q_name));
       }
     }
+  }
+  return ret;
+}
+
+int ObColumnNamespaceChecker::check_rowid_existence_in_joined_table(const ObSQLSessionInfo *session_info,
+                                                                    const ObString &tbl_name,
+                                                                    const JoinedTable *joined_table,
+                                                                    bool &found_it,
+                                                                    const TableItem *&table_item)
+{
+  int ret = OB_SUCCESS;
+  if (found_it) {
+    //do nothing
+  } else if (OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(joined_table));
+  } else if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left or right table of joined table is NULL", K(ret), KP(joined_table->left_table_),
+                                                            KP(joined_table->right_table_));
+  } else if (!joined_table->left_table_->is_joined_table() &&
+             OB_FAIL(ObResolverUtils::name_case_cmp(session_info,
+                                                    tbl_name,
+                                                    joined_table->left_table_->get_object_name(),
+                                                    OB_TABLE_NAME_CLASS,
+                                                    found_it))) {
+    LOG_WARN("table name case compare failed", K(ret), K(tbl_name),
+                                               K(joined_table->left_table_->get_object_name()));
+  } else if (found_it) {
+    table_item = joined_table->left_table_;
+  } else if (joined_table->left_table_->is_joined_table() &&
+             OB_FAIL(SMART_CALL(check_rowid_existence_in_joined_table(session_info,
+                                                                      tbl_name,
+                                                                      reinterpret_cast<const JoinedTable*>(joined_table->left_table_),
+                                                                      found_it,
+                                                                      table_item)))) {
+    LOG_WARN("failed to check rowid existence in joined table", K(ret));
+  } else if (found_it) {
+    //do nothing
+  } else if (!joined_table->right_table_->is_joined_table() &&
+             OB_FAIL(ObResolverUtils::name_case_cmp(session_info,
+                                                    tbl_name,
+                                                    joined_table->right_table_->get_object_name(),
+                                                    OB_TABLE_NAME_CLASS,
+                                                    found_it))) {
+    LOG_WARN("table name case compare failed", K(ret), K(tbl_name),
+                                               K(joined_table->right_table_->get_object_name()));
+  } else if (found_it) {
+    table_item = joined_table->right_table_;
+  } else if (joined_table->right_table_->is_joined_table() &&
+             OB_FAIL(SMART_CALL(check_rowid_existence_in_joined_table(session_info,
+                                                                      tbl_name,
+                                                                      reinterpret_cast<const JoinedTable*>(joined_table->right_table_),
+                                                                      found_it,
+                                                                      table_item)))) {
+    LOG_WARN("failed to check rowid existence in joined table", K(ret));
+  } else if (found_it) {
+    //do nothing
   }
   return ret;
 }

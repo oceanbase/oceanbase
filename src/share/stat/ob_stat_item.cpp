@@ -720,7 +720,9 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
   } else {
     col_stat_->get_histogram().get_buckets().reset();
     col_stat_->get_histogram().set_bucket_cnt(hybrid_hist.get_buckets().count());
-    if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
+    if (hybrid_hist.get_buckets().empty()) {
+      //do nothing, maybe the sample data is all null
+    } else if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
       LOG_WARN("failed to prepare allocate buckets", K(ret));
     } else if (OB_FAIL(col_stat_->get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
       LOG_WARN("failed to assign buckets", K(ret));

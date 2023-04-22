@@ -306,7 +306,7 @@ do {                                                                            
     } else if (OB_UNLIKELY(!result->pl_parse_info_.is_pl_parse_ && 0 != result->question_mark_ctx_.count_)) {  \
        /* 如果是PL过来的sql语句，不要检查：*/ \
       yyerror(NULL, result, "Unknown column '?'\n");               \
-      YYABORT_UNEXPECTED;                                        \
+      YYABORT_PARSE_SQL_ERROR;                                        \
     } else {                                                     \
       node->value_ = result->question_mark_ctx_.count_;                \
     }                                                            \
