@@ -140,6 +140,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_io_worker_(),
                              block_gc_timer_task_(),
                              log_updater_(),
+                             monitor_(NULL),
                              disk_options_wrapper_(),
                              check_disk_print_log_interval_(OB_INVALID_TIMESTAMP),
                              self_(),
@@ -166,7 +167,8 @@ int PalfEnvImpl::init(
     const int64_t tenant_id,
     rpc::frame::ObReqTransport *transport,
     common::ObILogAllocator *log_alloc_mgr,
-    ILogBlockPool *log_block_pool)
+    ILogBlockPool *log_block_pool,
+    PalfMonitorCb *monitor)
 {
   int ret = OB_SUCCESS;
   int pret = 0;
@@ -180,10 +182,10 @@ int PalfEnvImpl::init(
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "PalfEnvImpl is inited twiced", K(ret));
   } else if (OB_ISNULL(base_dir) || !self.is_valid() || NULL == transport
-             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool)) {
+             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), K(base_dir), K(self), KP(transport),
-             KP(log_alloc_mgr), KP(log_block_pool));
+             KP(log_alloc_mgr), KP(log_block_pool), KP(monitor));
   } else if (OB_FAIL(fetch_log_engine_.init(this, log_alloc_mgr))) {
     PALF_LOG(ERROR, "FetchLogEngine init failed", K(ret));
   } else if (OB_FAIL(log_rpc_.init(self, cluster_id, tenant_id, transport))) {
@@ -221,6 +223,7 @@ int PalfEnvImpl::init(
   } else {
     log_alloc_mgr_ = log_alloc_mgr;
     log_block_pool_ = log_block_pool;
+    monitor_ = monitor;
     self_ = self;
     tenant_id_ = tenant_id;
     is_inited_ = true;
@@ -300,6 +303,7 @@ void PalfEnvImpl::destroy()
   log_updater_.destroy();
   log_rpc_.destroy();
   log_alloc_mgr_ = NULL;
+  monitor_ = NULL;
   self_.reset();
   log_dir_[0] = '\0';
   tmp_log_dir_[0] = '\0';
@@ -369,6 +373,8 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(palf_handle_impl->set_monitor_cb(monitor_))) {
+    PALF_LOG(WARN, "set_monitor_cb failed", K(ret), K(palf_id), KP_(monitor));
   } else {
     palf_handle_impl->set_scan_disk_log_finished();
     ipalf_handle_impl = palf_handle_impl;
@@ -933,6 +939,7 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));
   } else {
+    (void) tmp_palf_handle_impl->set_monitor_cb(monitor_);
     (void) tmp_palf_handle_impl->set_scan_disk_log_finished();
     palf_handle_impl_map_.revert(tmp_palf_handle_impl);
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;

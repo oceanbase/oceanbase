@@ -55,6 +55,7 @@ public:
                              rpc::frame::ObReqTransport *transport,
                              common::ObILogAllocator *alloc_mgr,
                              ILogBlockPool *log_block_pool,
+                             PalfMonitorCb *monitor,
                              PalfEnv *&palf_env);
   // static interface
   // destroy the palf env, and set "palf_env" to NULL.

@@ -182,7 +182,8 @@ public:
            const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport,
            common::ObILogAllocator *alloc_mgr,
-           ILogBlockPool *log_block_pool);
+           ILogBlockPool *log_block_pool,
+           PalfMonitorCb *monitor);
 
   // start函数包含两层含义：
   //
@@ -315,6 +316,7 @@ private:
   LogIOWorker log_io_worker_;
   BlockGCTimerTask block_gc_timer_task_;
   LogUpdater log_updater_;
+  PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
   int64_t check_disk_print_log_interval_;

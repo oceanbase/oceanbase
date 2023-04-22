@@ -51,7 +51,7 @@ PalfHandleImpl::PalfHandleImpl()
     fs_cb_wrapper_(),
     role_change_cb_wrpper_(),
     rebuild_cb_wrapper_(),
-    lc_cb_(NULL),
+    plugins_(),
     last_locate_scn_(),
     last_send_mode_meta_time_us_(OB_INVALID_TIMESTAMP),
     last_locate_block_(LOG_INVALID_BLOCK_ID),
@@ -221,7 +221,7 @@ void PalfHandleImpl::destroy()
     is_inited_ = false;
     diskspace_enough_ = true;
     cached_is_in_sync_ = false;
-    lc_cb_ = NULL;
+    plugins_.destroy();
     self_.reset();
     palf_id_ = INVALID_PALF_ID;
     fetch_log_engine_ = NULL;
@@ -2017,17 +2017,10 @@ int PalfHandleImpl::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
   } else if (OB_ISNULL(lc_cb)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(lc_cb))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(lc_cb), K_(plugins));
   } else {
-    WLockGuard guard(lock_);
-    if (OB_NOT_NULL(lc_cb_)) {
-      ret = OB_NOT_SUPPORTED;
-      PALF_LOG(WARN, "lc_cb_ is not NULL, can't register", KR(ret), KPC(this));
-    } else if (OB_FAIL(sw_.set_location_cache_cb(lc_cb))) {
-      PALF_LOG(WARN, "sw_.set_location_cache_cb failed", KR(ret), KPC(this));
-    } else {
-      lc_cb_ = lc_cb;
-      PALF_LOG(INFO, "set_location_cache_cb success", KPC(this), KP_(lc_cb));
-    }
+    PALF_LOG(INFO, "set_location_cache_cb success", KPC(this), K_(plugins), KP(lc_cb));
   }
   return ret;
 }
@@ -2067,13 +2060,40 @@ int PalfHandleImpl::reset_election_priority()
 int PalfHandleImpl::reset_location_cache_cb()
 {
   int ret = OB_SUCCESS;
+  PalfLocationCacheCb *loc_cb = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(sw_.reset_location_cache_cb())) {
-    PALF_LOG(WARN, "sw_.reset_location_cache_cb failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.del_plugin(loc_cb))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::set_monitor_cb(PalfMonitorCb *monitor_cb)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
+  } else if (OB_ISNULL(monitor_cb)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(monitor_cb))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(monitor_cb), K_(plugins));
   } else {
-    WLockGuard guard(lock_);
-    lc_cb_ = NULL;
+    PALF_LOG(INFO, "set_monitor_cb success", KPC(this), K_(plugins), KP(monitor_cb));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::reset_monitor_cb()
+{
+  int ret = OB_SUCCESS;
+  PalfMonitorCb *monitor_cb = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(plugins_.del_plugin(monitor_cb))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
   }
   return ret;
 }
@@ -2398,7 +2418,7 @@ int PalfHandleImpl::do_init_mem_(
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(sw_.init(palf_id, self, &state_mgr_, &config_mgr_, &mode_mgr_,
-          &log_engine_, &fs_cb_wrapper_, alloc_mgr, palf_base_info, is_normal_replica))) {
+          &log_engine_, &fs_cb_wrapper_, alloc_mgr, &plugins_, palf_base_info, is_normal_replica))) {
     PALF_LOG(WARN, "sw_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(election_.init_and_start(palf_id,
                                               election_timer,
@@ -2412,10 +2432,10 @@ int PalfHandleImpl::do_init_mem_(
   }))) {
     PALF_LOG(WARN, "election_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(state_mgr_.init(palf_id, self, log_meta.get_log_prepare_meta(), log_meta.get_log_replica_property_meta(),
-          &election_, &sw_, &reconfirm_, &log_engine_, &config_mgr_, &mode_mgr_, &role_change_cb_wrpper_))) {
+          &election_, &sw_, &reconfirm_, &log_engine_, &config_mgr_, &mode_mgr_, &role_change_cb_wrpper_, &plugins_))) {
     PALF_LOG(WARN, "state_mgr_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(config_mgr_.init(palf_id, self, log_meta.get_log_config_meta(), &log_engine_,
-          &sw_, &state_mgr_, &election_, &mode_mgr_, &reconfirm_))) {
+          &sw_, &state_mgr_, &election_, &mode_mgr_, &reconfirm_, &plugins_))) {
     PALF_LOG(WARN, "config_mgr_ init failed", K(ret), K(palf_id));
   } else if (is_normal_replica && OB_FAIL(reconfirm_.init(palf_id, self, &sw_, &state_mgr_, &config_mgr_, &mode_mgr_, &log_engine_))) {
     PALF_LOG(WARN, "reconfirm_ init failed", K(ret), K(palf_id));
@@ -2426,7 +2446,6 @@ int PalfHandleImpl::do_init_mem_(
     fetch_log_engine_ = fetch_log_engine;
     allocator_ = alloc_mgr;
     self_ = self;
-    lc_cb_ = NULL;
     has_set_deleted_ = false;
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
@@ -4274,9 +4293,7 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn, LSN &end_lsn)
   end_lsn.reset();
   // use lc_cb_ in here without rlock is safe, because we don't reset lc_cb_
   // until this PalfHandleImpl is destoryed.
-  if (OB_ISNULL(lc_cb_)) {
-    CLOG_LOG(TRACE, "lc_cb_ is NULL, skip", K(ret), K_(self), K_(palf_id));
-  } else if (OB_FAIL(lc_cb_->nonblock_get_leader(palf_id_, leader))) {
+  if (OB_FAIL(plugins_.nonblock_get_leader(palf_id_, leader))) {
     CLOG_LOG(WARN, "get_leader failed", K(ret), K_(self), K_(palf_id));
     need_renew_leader = true;
   } else if (false == leader.is_valid()) {
@@ -4289,7 +4306,7 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn, LSN &end_lsn)
     end_lsn = resp.end_lsn_;
   }
   if (need_renew_leader && palf_reach_time_interval(500 * 1000, last_renew_loc_time_us_)) {
-    (void) lc_cb_->nonblock_renew_leader(palf_id_);
+    (void) plugins_.nonblock_renew_leader(palf_id_);
   }
   return ret;
 }

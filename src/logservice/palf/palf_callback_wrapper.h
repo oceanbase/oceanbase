@@ -16,7 +16,9 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/ob_errno.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "palf_callback.h"
+#include "share/ob_delegate.h"
 namespace oceanbase
 {
 namespace palf
@@ -82,6 +84,48 @@ public:
 private:
   ObDList<PalfRebuildCbNode> list_;
   ObSpinLock lock_;
+};
+
+#define PALF_PLUGINS_DELEGATE_PTR(delegate_obj, lock_, func_name)   \
+  template <typename ...Args>                                       \
+  int func_name(Args &&...args) {                                   \
+    int ret = OB_SUCCESS;                                           \
+    common::RWLock::RLockGuard guard(lock_);                        \
+    if (OB_UNLIKELY(OB_ISNULL(delegate_obj))) {                     \
+      ret = OB_NOT_INIT;                                            \
+    } else {                                                        \
+      ret = delegate_obj->func_name(std::forward<Args>(args)...);   \
+    }                                                               \
+    return ret;                                                     \
+  }
+
+class LogPlugins
+{
+public:
+  LogPlugins();
+  ~LogPlugins();
+  void destroy();
+  template<typename T>
+  int add_plugin(T *plugin);
+  template<typename T>
+  int del_plugin(T *plugin);
+
+  PALF_PLUGINS_DELEGATE_PTR(loc_cb_, loc_lock_, get_leader);
+  PALF_PLUGINS_DELEGATE_PTR(loc_cb_, loc_lock_, nonblock_get_leader);
+  PALF_PLUGINS_DELEGATE_PTR(loc_cb_, loc_lock_, nonblock_renew_leader);
+
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_role_change_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, add_log_write_stat);
+
+  PALF_PLUGINS_DELEGATE_PTR(palflite_monitor_, palflite_monitor_lock_, record_create_or_delete_event);
+  TO_STRING_KV(KP_(loc_cb), KP_(palf_monitor), KP_(palflite_monitor));
+private:
+  common::RWLock loc_lock_;
+  PalfLocationCacheCb *loc_cb_;
+  common::RWLock palf_monitor_lock_;
+  PalfMonitorCb *palf_monitor_;
+  common::RWLock palflite_monitor_lock_;
+  PalfLiteMonitorCb *palflite_monitor_;
 };
 } // end namespace palf
 } // end namespace oceanbase

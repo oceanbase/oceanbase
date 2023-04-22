@@ -215,7 +215,8 @@ public:
                    LogStateMgr *state_mgr,
                    election::Election *election,
                    LogModeMgr *mode_mgr,
-                   LogReconfirm *reconfirm);
+                   LogReconfirm *reconfirm,
+                   LogPlugins *plugins);
   virtual void destroy();
 
   // require caller holds WLock in PalfHandleImpl
@@ -557,6 +558,7 @@ private:
   election::Election* election_;
   LogModeMgr *mode_mgr_;
   LogReconfirm *reconfirm_;
+  LogPlugins *plugins_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogConfigMgr);
 };

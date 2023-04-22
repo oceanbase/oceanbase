@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOGSERVICE_PALF_CALLBACK_
 #define OCEANBASE_LOGSERVICE_PALF_CALLBACK_
 #include <stdint.h>
+#include "common/ob_role.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/list/ob_dlink_node.h"
 #include "lib/utility/ob_print_utils.h"
@@ -52,6 +53,34 @@ public:
   virtual int get_leader(const int64_t id, common::ObAddr &leader) = 0;
   virtual int nonblock_get_leader(const int64_t id, common::ObAddr &leader) = 0;
   virtual int nonblock_renew_leader(const int64_t id) = 0;
+};
+
+class PalfMonitorCb
+{
+public:
+  // record events
+  virtual int record_role_change_event(const int64_t palf_id,
+                                       const common::ObRole &prev_role,
+                                       const palf::ObReplicaState &prev_state,
+                                       const common::ObRole &curr_role,
+                                       const palf::ObReplicaState &curr_state,
+                                       const char *extra_info = "") = 0;
+  // performance statistic
+  virtual int add_log_write_stat(const int64_t palf_id, const int64_t log_write_size) = 0;
+};
+
+class PalfLiteMonitorCb
+{
+public:
+  // @desc: record creating or deleting events
+  // add/remove cluster: valid cluster_id, invalid tenant_id, invalid ls_id,
+  // add/remove tenant: valid cluster_id, valid tenant_id, invalid ls_id,
+  // add/remove ls: valid cluster_id, valid tenant_id, valid ls_id,
+  virtual int record_create_or_delete_event(const int64_t cluster_id,
+                                            const uint64_t tenant_id,
+                                            const int64_t ls_id,
+                                            const bool is_create,
+                                            const char *extra_info) = 0;
 };
 
 } // end namespace palf

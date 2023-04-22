@@ -39,6 +39,12 @@ namespace palf
 
 #define PALF_EVENT(info_string, palf_id, args...) FLOG_INFO("[PALF_EVENT] "info_string, "palf_id", palf_id, args)
 
+#define PALF_EVENT_REPORT_INFO_KV(args...) \
+const int64_t MAX_INFO_LENGTH = 512; \
+char EXTRA_INFOS[MAX_INFO_LENGTH]; \
+int64_t pos = 0; \
+::oceanbase::common::databuff_print_kv(EXTRA_INFOS, MAX_INFO_LENGTH, pos, ##args); \
+
 typedef int FileDesc;
 typedef uint64_t block_id_t ;
 typedef uint64_t offset_t;

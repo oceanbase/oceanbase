@@ -56,7 +56,8 @@ public:
            LogEngine *log_engine,
            LogConfigMgr *mm,
            LogModeMgr *mode_mgr_,
-           palf::PalfRoleChangeCbWrapper *palf_role_change_cb);
+           palf::PalfRoleChangeCbWrapper *palf_role_change_cb,
+           LogPlugins *plugins);
   virtual bool is_state_changed();
   virtual int switch_state();
   virtual int handle_prepare_request(const common::ObAddr &new_leader,
@@ -168,6 +169,7 @@ private:
   LogModeMgr *mode_mgr_;
   palf::PalfRoleChangeCbWrapper *palf_role_change_cb_;
   election::Election* election_;
+  LogPlugins *plugins_;
   union
   {
     int64_t role_state_val_;

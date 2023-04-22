@@ -31,6 +31,7 @@
 #include "ob_location_adapter.h"
 #include "ob_log_flashback_service.h"                  // ObLogFlashbackService
 #include "ob_log_handler.h"
+#include "ob_log_monitor.h"
 
 namespace oceanbase
 {
@@ -228,6 +229,7 @@ private:
   cdc::ObCdcService cdc_service_;
   ObLogRestoreService restore_service_;
   ObLogFlashbackService flashback_service_;
+  ObLogMonitor monitor_;
   ObSpinLock update_palf_opts_lock_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogService);

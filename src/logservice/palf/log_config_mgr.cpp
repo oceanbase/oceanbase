@@ -79,6 +79,7 @@ LogConfigMgr::LogConfigMgr()
       election_(NULL),
       mode_mgr_(NULL),
       reconfirm_(NULL),
+      plugins_(NULL),
       is_inited_(false)
 {}
 
@@ -96,7 +97,8 @@ int LogConfigMgr::init(const int64_t palf_id,
                        LogStateMgr *state_mgr,
                        election::Election* election,
                        LogModeMgr *mode_mgr,
-                       LogReconfirm *reconfirm)
+                       LogReconfirm *reconfirm,
+                       LogPlugins *plugins)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -109,10 +111,13 @@ int LogConfigMgr::init(const int64_t palf_id,
              OB_ISNULL(sw) ||
              OB_ISNULL(state_mgr) ||
              OB_ISNULL(election) ||
-             OB_ISNULL(mode_mgr)) {
+             OB_ISNULL(mode_mgr) ||
+             OB_ISNULL(reconfirm) ||
+             OB_ISNULL(plugins)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K(palf_id), K(self),
-        K(log_ms_meta), K(log_engine), K(sw), K(state_mgr), K(election), K(mode_mgr));
+        K(log_ms_meta), KP(log_engine), KP(sw), KP(state_mgr), KP(election), KP(mode_mgr),
+        KP(reconfirm), KP(plugins));
   } else if (OB_FAIL(paxos_member_region_map_.init("LogRegionMap", OB_MAX_MEMBER_NUMBER))) {
     PALF_LOG(WARN, "paxos_member_region_map_ init failed", K(palf_id));
   } else {
@@ -126,6 +131,7 @@ int LogConfigMgr::init(const int64_t palf_id,
     election_ = election;
     mode_mgr_ = mode_mgr;
     reconfirm_ = reconfirm;
+    plugins_ = plugins;
     if (true == log_ms_meta.curr_.is_valid()) {
       if (OB_FAIL(append_config_info_(log_ms_meta.curr_))) {
         PALF_LOG(WARN, "append_config_info_ failed", K(ret), K(palf_id), K(log_ms_meta));
@@ -156,6 +162,7 @@ void LogConfigMgr::destroy()
     sw_ = NULL;
     log_engine_ = NULL;
     reconfirm_ = NULL;
+    plugins_ = NULL;
     register_time_us_ = OB_INVALID_TIMESTAMP;
     parent_.reset();
     parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;

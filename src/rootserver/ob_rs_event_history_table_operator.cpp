@@ -23,10 +23,11 @@ int ObRsEventHistoryTableOperator::init(common::ObMySQLProxy &proxy,
                                         const common::ObAddr &self_addr)
 {
   int ret = OB_SUCCESS;
+  const bool is_rs_event = true;
+  const bool is_server_event = false;
+  set_addr(self_addr, is_rs_event, is_server_event);
   if (OB_FAIL(ObEventHistoryTableOperator::init(proxy))) {
   } else {
-    const bool is_rs_event = true;
-    set_addr(self_addr, is_rs_event);
     set_event_table(share::OB_ALL_ROOTSERVICE_EVENT_HISTORY_TNAME);
   }
   return ret;

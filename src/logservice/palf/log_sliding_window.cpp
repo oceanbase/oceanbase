@@ -76,6 +76,7 @@ LogSlidingWindow::LogSlidingWindow()
     mm_(NULL),
     mode_mgr_(NULL),
     log_engine_(NULL),
+    plugins_(NULL),
     lsn_allocator_(),
     group_buffer_(),
     last_submit_info_lock_(common::ObLatchIds::PALF_SW_SUBMIT_INFO_LOCK),
@@ -113,8 +114,6 @@ LogSlidingWindow::LogSlidingWindow()
     submit_log_handling_lease_(),
     last_fetch_log_renew_leader_ts_us_(OB_INVALID_TIMESTAMP),
     end_lsn_stat_time_us_(OB_INVALID_TIMESTAMP),
-    lc_cb_lock_(common::ObLatchIds::PALF_SW_LOC_CB_LOCK),
-    lc_cb_(NULL),
     reconfirm_fetch_dest_(),
     is_truncating_(false),
     is_rebuilding_(false),
@@ -142,10 +141,10 @@ void LogSlidingWindow::destroy()
   sw_.destroy();
   group_buffer_.destroy();
   match_lsn_map_.destroy();
-  lc_cb_ = NULL;
   reconfirm_fetch_dest_.reset();
   state_mgr_ = NULL;
   log_engine_ = NULL;
+  plugins_ = NULL;
   mm_ = NULL;
   mode_mgr_ = NULL;
 }
@@ -208,6 +207,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
                            LogEngine *log_engine,
                            palf::PalfFSCbWrapper *palf_fs_cb,
                            common::ObILogAllocator *alloc_mgr,
+                           LogPlugins *plugins,
                            const PalfBaseInfo &palf_base_info,
                            const bool is_normal_replica)
 {
@@ -222,10 +222,11 @@ int LogSlidingWindow::init(const int64_t palf_id,
              || NULL == mm
              || NULL == mode_mgr
              || NULL == log_engine
-             || NULL == palf_fs_cb) {
+             || NULL == palf_fs_cb
+             || NULL == plugins) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K(palf_id), K(self), K(palf_base_info),
-        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb));
+        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb), KP(plugins));
   } else if (is_normal_replica && OB_FAIL(do_init_mem_(palf_id, palf_base_info, alloc_mgr))) {
     PALF_LOG(WARN, "do_init_mem_ failed", K(ret), K(palf_id));
   } else {
@@ -236,6 +237,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
     mode_mgr_ = mode_mgr;
     log_engine_ = log_engine;
     palf_fs_cb_ = palf_fs_cb;
+    plugins_ = plugins;
 
     last_submit_lsn_ = prev_log_info.lsn_;
     last_submit_end_lsn_ = palf_base_info.curr_lsn_;
@@ -1951,12 +1953,10 @@ int LogSlidingWindow::get_fetch_log_dst_(common::ObAddr &fetch_dst) const
     fetch_dst = parent;
   } else if (state_mgr_leader.is_valid()) {
     fetch_dst = state_mgr_leader;
-  } else if (OB_ISNULL(lc_cb_)) {
-    PALF_LOG(TRACE, "lc_cb_ is NULL", K(ret), K_(palf_id), K_(self));
   } else if (palf_reach_time_interval(PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US, last_fetch_log_renew_leader_ts_us_) &&
-             OB_FAIL(lc_cb_->nonblock_renew_leader(palf_id_))) {
+             OB_FAIL(plugins_->nonblock_renew_leader(palf_id_))) {
     PALF_LOG(WARN, "nonblock_renew_leader failed", KR(ret), K_(palf_id), K_(self));
-  } else if (OB_FAIL(lc_cb_->nonblock_get_leader(palf_id_, fetch_dst))) {
+  } else if (OB_FAIL(plugins_->nonblock_get_leader(palf_id_, fetch_dst))) {
     if (palf_reach_time_interval(5 * 1000 * 1000, lc_cb_get_warn_time_)) {
       PALF_LOG(WARN, "nonblock_get_leader failed", KR(ret), K_(palf_id), K_(self));
     }
@@ -4120,39 +4120,6 @@ void LogSlidingWindow::LogTaskGuard::revert_log_task() {
   }
   sw_ = NULL;
   log_id_ = -1;
-}
-
-int LogSlidingWindow::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(lc_cb)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), K_(palf_id), K_(self));
-  } else {
-    ObSpinLockGuard guard(lc_cb_lock_);
-    if (OB_NOT_NULL(lc_cb_)) {
-      ret = OB_NOT_SUPPORTED;
-      PALF_LOG(WARN, "lc_cb_ is not NULL, can't register", KR(ret), K_(palf_id), K_(self));
-    } else {
-      lc_cb_ = lc_cb;
-      PALF_LOG(INFO, "set_location_cache_cb success", K_(palf_id), K_(self), KP_(lc_cb));
-    }
-  }
-  return ret;
-}
-
-int LogSlidingWindow::reset_location_cache_cb()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSpinLockGuard guard(lc_cb_lock_);
-    lc_cb_ = NULL;
-  }
-  return ret;
 }
 
 int LogSlidingWindow::get_min_scn_from_buf_(const LogGroupEntryHeader &header,

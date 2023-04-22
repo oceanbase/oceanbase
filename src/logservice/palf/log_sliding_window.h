@@ -159,6 +159,7 @@ public:
                    LogEngine *log_engine,
                    palf::PalfFSCbWrapper *palf_fs_cb,
                    common::ObILogAllocator *alloc_mgr,
+                   LogPlugins *plugins,
                    const PalfBaseInfo &palf_base_info,
                    const bool is_normal_replica);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
@@ -248,9 +249,6 @@ public:
   virtual int get_ack_info_array(LogMemberAckInfoList &ack_info_array) const;
   virtual int pre_check_before_degrade_upgrade(const LogMemberAckInfoList &servers,
                                                bool is_degrade);
-  // location cache will be removed TODO by yunlong
-  virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
-  virtual int reset_location_cache_cb();
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   virtual int try_send_committed_info(const common::ObAddr &server,
                                       const LSN &log_lsn,
@@ -436,6 +434,7 @@ private:
   LogConfigMgr *mm_;
   LogModeMgr *mode_mgr_;
   LogEngine *log_engine_;
+  LogPlugins *plugins_;
   palf::PalfFSCbWrapper *palf_fs_cb_;
   LSNAllocator lsn_allocator_;
   LogGroupBuffer group_buffer_;
@@ -509,9 +508,6 @@ private:
   // last_renew_leader_ts in fetch_log
   mutable int64_t last_fetch_log_renew_leader_ts_us_;
   int64_t end_lsn_stat_time_us_;
-  // location ptr, will be removed. TODO by yunlong
-  mutable common::ObSpinLock lc_cb_lock_;
-  PalfLocationCacheCb *lc_cb_;
   // fetch log dest server for reconfirm
   common::ObAddr reconfirm_fetch_dest_;
   // whether sw is executing trucnation

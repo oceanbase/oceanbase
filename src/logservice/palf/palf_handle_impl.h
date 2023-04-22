@@ -780,6 +780,8 @@ public:
   int unregister_rebuild_cb(palf::PalfRebuildCbNode *rebuild_cb) override final;
   int set_location_cache_cb(PalfLocationCacheCb *lc_cb) override final;
   int reset_location_cache_cb() override final;
+  int set_monitor_cb(PalfMonitorCb *monitor_cb);
+  int reset_monitor_cb();
   int set_election_priority(election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;
   // ==================== Callback end ========================
@@ -1107,7 +1109,7 @@ private:
   palf::PalfFSCbWrapper fs_cb_wrapper_;
   palf::PalfRoleChangeCbWrapper role_change_cb_wrpper_;
   palf::PalfRebuildCbWrapper rebuild_cb_wrapper_;
-  PalfLocationCacheCb *lc_cb_;
+  LogPlugins plugins_;
   // ======optimization for locate_by_scn_coarsely=========
   mutable SpinLock last_locate_lock_;
   share::SCN last_locate_scn_;

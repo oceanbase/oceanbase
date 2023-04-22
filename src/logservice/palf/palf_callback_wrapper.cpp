@@ -168,5 +168,125 @@ int PalfRebuildCbWrapper::on_rebuild(const int64_t id, const LSN &lsn)
   return ret;
 }
 
+
+LogPlugins::LogPlugins()
+  : loc_lock_(),
+    loc_cb_(NULL),
+    palf_monitor_lock_(),
+    palf_monitor_(NULL),
+    palflite_monitor_lock_(),
+    palflite_monitor_(NULL) { }
+
+LogPlugins::~LogPlugins()
+{
+  destroy();
+}
+
+void LogPlugins::destroy()
+{
+  {
+    common::RWLock::WLockGuard guard(loc_lock_);
+    loc_cb_ = NULL;
+  }
+  {
+    common::RWLock::WLockGuard guard(palf_monitor_lock_);
+    palf_monitor_ = NULL;
+  }
+  {
+    common::RWLock::WLockGuard guard(palflite_monitor_lock_);
+    palflite_monitor_ = NULL;
+  }
+}
+
+template<>
+int LogPlugins::add_plugin(PalfLocationCacheCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(loc_lock_);
+  if (OB_ISNULL(plugin)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "Palf plugin is NULL", KP(plugin));
+  } else if (OB_NOT_NULL(loc_cb_)) {
+    ret = OB_OP_NOT_ALLOW;
+    PALF_LOG(INFO, "Palf plugin is not NULL", KP(plugin), KP_(loc_cb));
+  } else {
+    loc_cb_ = plugin;
+    PALF_LOG(INFO, "add_plugin success", KP(plugin));
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::del_plugin(PalfLocationCacheCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(loc_lock_);
+  if (OB_NOT_NULL(loc_cb_)) {
+    PALF_LOG(INFO, "del_plugin success", KP_(loc_cb));
+    loc_cb_ = NULL;
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::add_plugin(PalfMonitorCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(palf_monitor_lock_);
+  if (OB_ISNULL(plugin)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "Palf plugin is NULL", KP(plugin));
+  } else if (OB_NOT_NULL(palf_monitor_)) {
+    ret = OB_OP_NOT_ALLOW;
+    PALF_LOG(INFO, "Palf plugin is not NULL", KP(plugin), KP_(palf_monitor));
+  } else {
+    palf_monitor_ = plugin;
+    PALF_LOG(INFO, "add_plugin success", KP(plugin));
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::del_plugin(PalfMonitorCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(palf_monitor_lock_);
+  if (OB_NOT_NULL(palf_monitor_)) {
+    PALF_LOG(INFO, "del_plugin success", KP_(palf_monitor));
+    palf_monitor_ = NULL;
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::add_plugin(PalfLiteMonitorCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(palf_monitor_lock_);
+  if (OB_ISNULL(plugin)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "Palf plugin is NULL", KP(plugin));
+  } else if (OB_NOT_NULL(palflite_monitor_)) {
+    ret = OB_OP_NOT_ALLOW;
+    PALF_LOG(INFO, "Palf plugin is not NULL", KP(plugin), KP_(loc_cb));
+  } else {
+    palflite_monitor_ = plugin;
+    PALF_LOG(INFO, "add_plugin success", KP(plugin));
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::del_plugin(PalfLiteMonitorCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(palf_monitor_lock_);
+  if (OB_NOT_NULL(palflite_monitor_)) {
+    PALF_LOG(INFO, "del_plugin success", KP_(palflite_monitor));
+    palflite_monitor_ = NULL;
+  }
+  return ret;
+}
+
 }; // end namespace palf
 }; // end namespace oceanbase
