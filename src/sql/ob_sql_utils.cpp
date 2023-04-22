@@ -3813,7 +3813,7 @@ int ObSQLUtils::handle_audit_record(
     /*do nothing*/
   } else if (GCONF.enable_sql_audit) {
     if (session.get_local_ob_enable_sql_audit()) {
-      FETCH_ENTITY(TENANT_SPACE, session.get_effective_tenant_id())
+      FETCH_ENTITY(TENANT_SPACE, session.get_priv_tenant_id())
       {
         ObMySQLRequestManager* req_manager = MTL_GET(ObMySQLRequestManager*);
         if (nullptr == req_manager) {
