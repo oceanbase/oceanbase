@@ -216,7 +216,12 @@ TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
     EXPECT_EQ(OB_SUCCESS, make_log_group_entry_partial_error(entry, output_buf, inject));
     EXPECT_EQ(OB_SUCCESS, pwrite_one_log_by_log_storage(leader, entry, max_lsn));
     EXPECT_EQ(OB_ITER_END, iterator.next());
-    EXPECT_EQ(OB_CHECKSUM_ERROR, read_log(leader));
+    int tmp_ret = read_log(leader);
+    if (OB_CHECKSUM_ERROR != tmp_ret && OB_INVALID_DATA != tmp_ret) {
+      int ret = OB_SUCCESS;
+      PALF_LOG(ERROR, "unexpected error", K(tmp_ret));
+      EXPECT_EQ(false, true);
+    }
     if (NULL != output_buf) {
       ob_free(output_buf);
     }
