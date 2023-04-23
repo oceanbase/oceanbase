@@ -492,6 +492,7 @@ public:
     is_result_accurate = sys_vars_cache_.get_is_result_accurate();
     return common::OB_SUCCESS;
   }
+  int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
   bool is_query_killed() const;
