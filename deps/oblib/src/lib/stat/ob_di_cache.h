@@ -185,7 +185,7 @@ class ObDIThreadTenantCache: public ObDINode<ObDIThreadTenantCache>
 {
 public:
   static const int64_t DEFAULT_TENANT_NUM = 4;
-  static const int64_t MAX_TENANT_NUM_PER_SERVER = 128;
+  static const int64_t MAX_TENANT_NUM_PER_SERVER = 64;
 
   ObDIThreadTenantCache();
   virtual ~ObDIThreadTenantCache();
