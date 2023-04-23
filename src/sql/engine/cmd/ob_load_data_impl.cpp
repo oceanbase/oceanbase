@@ -1954,6 +1954,10 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       ctx.get_physical_plan_ctx()->set_row_matched_count(box.data_trimer.get_lines_count());
     }
 
+    if (OB_NOT_NULL(ctx.get_my_session())) {
+      ctx.get_my_session()->reset_cur_phy_plan_to_null();
+    }
+
     if (OB_FAIL(ret)) {
       LOG_WARN("LOAD DATA execute failed, ", K(ret));
     }
