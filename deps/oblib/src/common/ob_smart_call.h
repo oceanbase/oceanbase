@@ -21,8 +21,8 @@ namespace oceanbase
 {
 namespace common
 {
-static constexpr int64_t ALL_STACK_LIMIT = 12L << 20;
-static constexpr int64_t STACK_PER_EXTEND = (4L << 20) - ACHUNK_PRESERVE_SIZE;
+static constexpr int64_t ALL_STACK_LIMIT = 10L << 20;
+static constexpr int64_t STACK_PER_EXTEND = (2L << 20) - ACHUNK_PRESERVE_SIZE;
 static constexpr int64_t STACK_RESERVED_SIZE = 128L << 10;
 RLOCAL_EXTERN(int64_t, all_stack_size);
 
