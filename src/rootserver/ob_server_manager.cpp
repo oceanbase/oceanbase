@@ -822,8 +822,7 @@ int ObServerManager::try_modify_recovery_server_takenover_by_rs(
 int ObServerManager::receive_hb(
     const ObLeaseRequest &lease_request,
     uint64_t &server_id,
-    bool &to_alive,
-    bool &update_delay_time_flag)
+    bool &to_alive)
 {
   int ret = OB_SUCCESS;
   bool zone_exist = true;
@@ -994,17 +993,6 @@ int ObServerManager::receive_hb(
         }
       } else {
         status_ptr->last_hb_time_ = now;
-        if (update_delay_time_flag) {
-          const int64_t current_rs_time = ObTimeUtility::current_time();
-          int64_t server_behind_time = current_rs_time - (lease_request.current_server_time_ + lease_request.round_trip_time_ / 2);
-          if (std::abs(server_behind_time) > GCONF.rpc_timeout) {
-            LOG_WARN("clock between rs and server not sync", "ret", OB_ERR_UNEXPECTED, K(lease_request), K(current_rs_time));
-          }
-          if (OB_FAIL(set_server_delay_time(server_behind_time, lease_request.round_trip_time_, *status_ptr))) {
-            LOG_WARN("set server delay time failed", K(ret), K(server_behind_time),
-                     "round_trip_time", lease_request.round_trip_time_);
-          }
-        }
       }
       if (OB_SUCC(ret)) {
         if (ObServerStatus::OB_HEARTBEAT_ALIVE == status_ptr->hb_status_
@@ -1013,24 +1001,6 @@ int ObServerManager::receive_hb(
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObServerManager::set_server_delay_time(const int64_t server_behind_time,
-                                          const int64_t round_trip_time,
-                                          ObServerStatus &server_status)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (round_trip_time < 0 ) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("round_trip_time is invalid", K(ret), K(round_trip_time));
-  } else {
-    server_status.last_server_behind_time_ = server_behind_time;
-    server_status.last_round_trip_time_ = round_trip_time;
   }
   return ret;
 }

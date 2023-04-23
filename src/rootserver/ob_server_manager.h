@@ -89,8 +89,7 @@ public:
   // server_id is OB_INVALID_ID before build server manager from __all_server
   int receive_hb(const share::ObLeaseRequest &lease_request,
                  uint64_t &server_id,
-                 bool &to_alive,
-                 bool &update_delay_time_flag);
+                 bool &to_alive);
   int get_server_id(
       const common::ObAddr &server,
       uint64_t &server_id) const;
@@ -201,9 +200,6 @@ protected:
                         const int64_t hb_timestamp,
                         const bool with_rootserver,
                         share::ObServerStatus &server_status);
-  int set_server_delay_time(const int64_t server_behind_time,
-                            const int64_t round_trip_time,
-                            share::ObServerStatus &server_status);
   int reset_existing_rootserver();
   int try_delete_server_working_dir(
       const common::ObZone &zone,

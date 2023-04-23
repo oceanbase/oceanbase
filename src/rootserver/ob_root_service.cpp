@@ -1837,13 +1837,12 @@ int ObRootService::request_heartbeats()
         lease_request.reset();
         int temp_ret = OB_SUCCESS;
         bool to_alive = false;
-        bool update_delay_time_flag = false;
         if (OB_SUCCESS != (temp_ret = rpc_proxy_.to(status->server_).timeout(rpc_timeout)
                            .request_heartbeat(lease_request))) {
           LOG_WARN("request_heartbeat failed", "server", status->server_,
                    K(rpc_timeout), K(temp_ret));
         } else if (OB_SUCCESS != (temp_ret = server_manager_.receive_hb(
-                    lease_request, server_id, to_alive, update_delay_time_flag))) {
+                    lease_request, server_id, to_alive))) {
           LOG_WARN("receive hb failed", K(lease_request), K(temp_ret));
         }
         ret = (OB_SUCCESS != ret) ? ret : temp_ret;
@@ -2202,7 +2201,6 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
   ObServerStatus server_stat;
   uint64_t server_id = OB_INVALID_ID;
   bool to_alive = false;
-  bool update_delay_time_flag = true;
   DEBUG_SYNC(HANG_HEART_BEAT_ON_RS);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2210,7 +2208,7 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
   } else if (!lease_request.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid lease_request", K(lease_request), K(ret));
-  } else if (OB_FAIL(server_manager_.receive_hb(lease_request, server_id, to_alive, update_delay_time_flag))) {
+  } else if (OB_FAIL(server_manager_.receive_hb(lease_request, server_id, to_alive))) {
     LOG_WARN("server manager receive hb failed", K(lease_request), K(ret));
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;

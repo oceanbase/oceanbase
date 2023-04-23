@@ -55,7 +55,7 @@ void ObRefreshSchemaStatusTimerTask::runTimerTask()
 ObLeaseStateMgr::ObLeaseStateMgr()
   : inited_(false), stopped_(false), lease_response_(), lease_expire_time_(0),
     hb_timer_(), cluster_info_timer_(), merge_timer_(), rs_mgr_(NULL), rpc_proxy_(NULL), heartbeat_process_(NULL),
-    hb_(), renew_timeout_(RENEW_TIMEOUT), ob_service_(NULL), avg_calculator_(),
+    hb_(), renew_timeout_(RENEW_TIMEOUT), ob_service_(NULL),
     baseline_schema_version_(0), heartbeat_expire_time_(0)
 {
 }
@@ -104,8 +104,6 @@ int ObLeaseStateMgr::init(
     LOG_WARN("cluster_info_timer_ init failed", KR(ret));
   } else if (OB_FAIL(merge_timer_.init("MergeTimer"))) {
     LOG_WARN("merge_timer_ init failed", KR(ret));
-  } else if (OB_FAIL(avg_calculator_.init(STORE_RTT_NUM))) {
-    LOG_WARN("avg calculator init fail", K(ret));
   } else {
     rs_mgr_ = rs_mgr;
     rpc_proxy_ = rpc_proxy;
@@ -314,7 +312,6 @@ int ObLeaseStateMgr::do_renew_lease()
   int ret = OB_SUCCESS;
   ObLeaseRequest lease_request;
   ObLeaseResponse lease_response;
-  double avg_round_trip_time = 0;
   ObAddr rs_addr;
   NG_TRACE(do_renew_lease_begin);
   if (!inited_) {
@@ -324,16 +321,10 @@ int ObLeaseStateMgr::do_renew_lease()
     LOG_WARN("init lease request failed", K(ret));
   } else if (OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", K(ret));
-  } else if (OB_FAIL(avg_calculator_.get_avg(avg_round_trip_time))) {
-    LOG_WARN("get avg round_trip_time fail", K(ret));
   } else {
     NG_TRACE(send_heartbeat_begin);
-    lease_request.round_trip_time_ = static_cast<int64_t>(avg_round_trip_time);
-    const int64_t begin = ObTimeUtility::current_time();
-    lease_request.current_server_time_ = begin;
     ret = rpc_proxy_->to(rs_addr).timeout(renew_timeout_)
         .renew_lease(lease_request, lease_response);
-    const int64_t end = ObTimeUtility::current_time();
     if (lease_response.lease_expire_time_ > 0) {
       // for compatible with old version
       lease_response.heartbeat_expire_time_ = lease_response.lease_expire_time_;
@@ -361,8 +352,6 @@ int ObLeaseStateMgr::do_renew_lease()
         LOG_DEBUG("renew_lease from  master_rs successfully", K(rs_addr));
         if (OB_FAIL(set_lease_response(lease_response))) {
           LOG_WARN("fail to set lease response", K(ret));
-        } else if (OB_FAIL(avg_calculator_.calc_avg(end - begin))) {
-          LOG_WARN("calculate avg round_trip_time fail", K(ret), "current_rtt", end - begin);
         } else if (OB_FAIL(heartbeat_process_->do_heartbeat_event(lease_response_))) {
           LOG_WARN("fail to process new lease info", K_(lease_response), K(ret));
         }
@@ -410,72 +399,6 @@ void ObLeaseStateMgr::HeartBeat::runTimerTask()
   } else if (OB_FAIL(lease_state_mgr_->renew_lease())) {
     LOG_WARN("fail to renew lease", K(ret));
   }
-}
-
-ObLeaseStateMgr::AvgCalculator::AvgCalculator()
-  : calc_buffer_(), inited_(false),
-    limit_num_(0), head_(0), avg_(0)
-{
-}
-
-ObLeaseStateMgr::AvgCalculator::~AvgCalculator()
-{
-  calc_buffer_.destroy();
-}
-
-int ObLeaseStateMgr::AvgCalculator::init(int64_t limit_num)
-{
-  int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
-  } else {
-    limit_num_ = limit_num;
-    inited_ = true;
-    head_ = 0;
-    avg_ = 0;
-  }
-  return ret;
-}
-
-int ObLeaseStateMgr::AvgCalculator::get_avg(double &avg)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    avg = avg_;
-  }
-  return ret;
-}
-
-int ObLeaseStateMgr::AvgCalculator::calc_avg(int64_t new_value)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (0 == limit_num_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("limit num should not be zero", K(ret));
-  } else if (calc_buffer_.count() > limit_num_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("array size is out of limit", K(ret), K(limit_num_), "array_size", calc_buffer_.count());
-  } else if (calc_buffer_.count() < limit_num_) {
-    if (OB_FAIL(calc_buffer_.push_back(new_value))) {
-      LOG_WARN("array push_back fail", K(ret));
-    } else {
-      double num = static_cast<double>(calc_buffer_.count());
-      avg_ = (num - 1) / num * avg_ + static_cast<double>(new_value) / num;
-    }
-  } else if (calc_buffer_.count() == limit_num_) {
-    int64_t old_value = calc_buffer_[head_];
-    calc_buffer_.at(head_) = new_value;
-    avg_ += (static_cast<double>(new_value - old_value) / static_cast<double>(limit_num_));
-    head_ = (head_ + 1) % limit_num_;
-  }
-  return ret;
 }
 
 }//end namespace observer
