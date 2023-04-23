@@ -484,7 +484,7 @@ int ObLoadDataDirectImpl::DataDescIterator::get_next_data_desc(DataDesc &data_de
  */
 
 ObLoadDataDirectImpl::DataBuffer::DataBuffer()
-  : allocator_("MTL_DataBuffer"), file_buffer_(nullptr), pos_(0), is_end_file_(false)
+  : file_buffer_(nullptr), pos_(0), is_end_file_(false)
 {
 }
 
@@ -506,10 +506,10 @@ void ObLoadDataDirectImpl::DataBuffer::reset()
 {
   if (nullptr != file_buffer_) {
     file_buffer_->~ObLoadFileBuffer();
+    ob_free(file_buffer_);
     file_buffer_ = nullptr;
   }
   pos_ = 0;
-  allocator_.reset();
 }
 
 int ObLoadDataDirectImpl::DataBuffer::init(int64_t capacity)
@@ -524,9 +524,9 @@ int ObLoadDataDirectImpl::DataBuffer::init(int64_t capacity)
   } else {
     const int64_t alloc_size =
       MIN(capacity + sizeof(ObLoadFileBuffer), ObLoadFileBuffer::MAX_BUFFER_SIZE);
-    allocator_.set_tenant_id(MTL_ID());
+    ObMemAttr attr(MTL_ID(), "MTL_DataBuffer");
     void *buf = nullptr;
-    if (OB_ISNULL(buf = allocator_.alloc(alloc_size))) {
+    if (OB_ISNULL(buf = ob_malloc(alloc_size, attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", KR(ret), K(alloc_size));
     } else {
