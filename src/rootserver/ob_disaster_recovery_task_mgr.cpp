@@ -486,9 +486,9 @@ int ObDRTaskQueue::handle_not_in_progress_task(
     DLIST_FOREACH(t, schedule_list_) {
       int tmp_ret = OB_SUCCESS;
       need_cleaning = false;
+      DEBUG_SYNC(BEFORE_CHECK_CLEAN_DRTASK);
       if (OB_SUCCESS != (tmp_ret = check_task_need_cleaning_(*t, need_cleaning, ret_comment))) {
         LOG_WARN("fail to check this task exist for cleaning", KR(tmp_ret), KPC(t));
-      
       } else if (need_cleaning
                  && OB_SUCCESS != (tmp_ret = task_mgr.async_add_cleaning_task_to_updater(
                                          t->get_task_id(),
@@ -680,13 +680,13 @@ void ObDRTaskMgr::stop()
 {
   loaded_ = false;
   stopped_ = true;
-  for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
-    queues_[i].reuse();
-  }
   ObRsReentrantThread::stop();
   disaster_recovery_task_table_updater_.stop();
   ObThreadCondGuard guard(cond_);
   cond_.broadcast();
+  for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
+    queues_[i].reuse();
+  }
   FLOG_INFO("success to stop ObDRTaskMgr");
 }
 
