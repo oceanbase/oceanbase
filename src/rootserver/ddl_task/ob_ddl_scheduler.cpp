@@ -1990,7 +1990,7 @@ int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
       LOG_WARN("failed to init longops stat", K(ret), KPC(ddl_task));
     } else if (OB_FAIL(longops_mgr.register_longops(longops_stat))) {
       if (OB_ENTRY_EXIST == ret) {
-        LOG_WARN("longops already registered", K(ret));
+        LOG_INFO("longops for this ddl task already registered", K(*ddl_task));
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to register longops", K(ret));
